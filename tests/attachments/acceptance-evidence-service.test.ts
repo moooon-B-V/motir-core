@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // acceptanceEvidenceService (Story MOTIR-1627 · Subtask MOTIR-1629) against a
 // REAL Postgres. The Blob adapter is the ONE mocked external (no network); every
@@ -170,9 +171,15 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
     );
 
     // The panel read (and its count) never surface the acceptance video.
-    const listed = await attachmentRepository.listByWorkItem(story.id);
+    const listed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listByWorkItem(story.id, undefined, tx),
+    );
     expect(listed).toHaveLength(0);
-    expect(await attachmentRepository.countByWorkItem(story.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(story.id, tx),
+      ),
+    ).toBe(0);
   });
 });
 

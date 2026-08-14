@@ -46,6 +46,7 @@ import type { WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { everyConditionShape } from '../../helpers/filterAstSamples';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.2 · Subtask 6.2.1 — the saved-filter persistence + permission
 // layer. Real Postgres (no mocks except getWorkspaceContext for the route
@@ -668,17 +669,31 @@ describe('durability — stale referents degrade, corrupt envelopes recover type
     expect(resolved.astError).toBeNull();
     expect(resolved.ast).toEqual(staleAst);
     // The resolved AST compiles and matches NOTHING — never an error.
-    const matches = await workItemRepository.countProjectIssues(t.fx.projectId, t.fx.workspaceId, {
-      ast: resolved.ast!,
-    });
+    const matches = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(
+        t.fx.projectId,
+        t.fx.workspaceId,
+        {
+          ast: resolved.ast!,
+        },
+        tx,
+      ),
+    );
     expect(matches).toBe(0);
     // Control: the same read with a live referent matches the seeded item.
-    const live = await workItemRepository.countProjectIssues(t.fx.projectId, t.fx.workspaceId, {
-      ast: {
-        combinator: 'and',
-        conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
-      },
-    });
+    const live = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(
+        t.fx.projectId,
+        t.fx.workspaceId,
+        {
+          ast: {
+            combinator: 'and',
+            conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
+          },
+        },
+        tx,
+      ),
+    );
     expect(live).toBe(1);
   });
 
@@ -734,7 +749,9 @@ describe('built-in defaults — resolve through the same reads, reject every wri
 
   it('"My open issues" pins the CURRENT user + the project’s done-category keys', async () => {
     const t = await makeTeam();
-    const statuses = await workflowsRepository.findStatuses(t.fx.projectId, t.fx.workspaceId);
+    const statuses = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      workflowsRepository.findStatuses(t.fx.projectId, t.fx.workspaceId, tx),
+    );
     const doneKeys = statuses.filter((s) => s.category === 'done').map((s) => s.key);
     expect(doneKeys.length).toBeGreaterThan(0);
     const resolved = await savedFiltersService.resolve(

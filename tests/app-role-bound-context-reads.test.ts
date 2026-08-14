@@ -24,10 +24,8 @@ import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubsc
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { makeWorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from './helpers/adminDb';
 import { isAppRoleTestMode } from './helpers/parallelDb';
@@ -330,54 +328,6 @@ describe('savedFilterSubscriptionRepository.countByFilter — the delete warning
       fx.ctx,
     );
     expect(mine).toEqual({ schedule: 'weekly', weekday: 2, hour: 8 });
-  });
-});
-
-describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
-  // ⚠️ DELIBERATELY UNBOUND, and both arms are asserted. The optional `tx` is what
-  // `tests/rls/singletonReadScan.ts` recognises as BINDABLE, so it has to stay —
-  // but once every production call site threads a `tx`, the `db` arm has no
-  // caller left and would go uncovered against the file's ≥90% branch floor.
-  //
-  // The assertion is split by role rather than weakened, because the two answers
-  // are BOTH the contract: on the bypass role the fallback reads normally; on
-  // `motir_app` it binds nothing, the policy sees NULL, and the honest answer is
-  // the EMPTY one. Asserting rows here would be asserting that a path with no
-  // binding at all somehow works — the vacuous-pass shape this story exists to
-  // remove.
-  it('resolves to the singleton, and returns the empty answer under the app role', async () => {
-    const fx = await makeWorkItemFixture({ identifier: 'SFE' });
-    const filter = await savedFiltersService.create(
-      fx.projectIdentifier,
-      { name: 'Fallback', visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
-      fx.ctx,
-    );
-    await savedFilterSubscriptionsService.subscribe(
-      fx.projectIdentifier,
-      filter.id,
-      { schedule: 'daily', hour: 9 },
-      fx.ctx,
-    );
-
-    const listArgs = {
-      projectId: fx.projectId,
-      actorUserId: fx.ownerId,
-      actorIsAdmin: true,
-      view: 'all' as const,
-    };
-    const rows = await savedFilterRepository.listPage({ ...listArgs, take: 10 });
-    const total = await savedFilterRepository.countVisible(listArgs);
-    const subs = await savedFilterSubscriptionRepository.countByFilter(filter.id);
-
-    if (isAppRoleTestMode()) {
-      expect(rows).toEqual([]);
-      expect(total).toBe(0);
-      expect(subs).toBe(0);
-    } else {
-      expect(rows.map((r) => r.name)).toEqual(['Fallback']);
-      expect(total).toBe(1);
-      expect(subs).toBe(1);
-    }
   });
 });
 
@@ -767,7 +717,9 @@ describe('workItemRepository.findByIds — one read, five consuming surfaces', (
     );
     expect(bound.map((r) => r.title)).toEqual(['Must land first']);
 
-    const unbound = await workItemRepository.findByIds([blocker.id]);
+    const unbound = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByIds([blocker.id], tx),
+    );
     if (isAppRoleTestMode()) {
       expect(unbound).toEqual([]);
     } else {

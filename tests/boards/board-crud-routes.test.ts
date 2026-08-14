@@ -8,6 +8,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { BoardSummaryDto } from '@/lib/dto/boards';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Board CRUD API routes (Story 3.7 · Subtask 3.7.3) — /api/boards (GET list,
 // POST create) + /api/boards/[id] (PATCH rename/set-default, DELETE). Real
@@ -71,7 +72,9 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
   await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId: ws.workspace.id, role: 'member' },
   });
-  const board = await boardRepository.findDefaultForProject(project.id, ws.workspace.id);
+  const board = await withWorkspaceServiceContext(ws.workspace.id, (tx) =>
+    boardRepository.findDefaultForProject(project.id, ws.workspace.id, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
 
   const fx = {

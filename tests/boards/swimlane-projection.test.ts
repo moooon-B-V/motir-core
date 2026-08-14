@@ -13,6 +13,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // boardsService.getBoard — swimlane projection (Story 3.3 · Subtask 3.3.4). Real
 // Postgres (no mocks), per CLAUDE.md. createTestProject auto-seeds the default
@@ -238,10 +239,30 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
     // A board with no mapped statuses (and a load-more with no ids) never hits
     // the DB — the empty-input guards return [] (mirrors the
     // findBlockerStatesForItems([]) short-circuit).
-    expect(await workItemRepository.aggregateBoardLanesByAssignee('p', 'w', [])).toEqual([]);
-    expect(await workItemRepository.aggregateBoardLanesByPriority('p', 'w', [])).toEqual([]);
-    expect(await workItemRepository.aggregateBoardLanesByEpic('p', 'w', [])).toEqual([]);
-    expect(await workItemRepository.findEpicAncestors([], 'w')).toEqual([]);
+    // Bound to a REAL workspace (MOTIR-2830) even though the ids are fake: these
+    // assert a SHORT-CIRCUIT, and an unbound read returns [] as well, so without
+    // a binding each one would pass for the wrong reason.
+    const fx = await makeFixture('swl-shortcircuit@example.com');
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateBoardLanesByAssignee('p', 'w', [], undefined, undefined, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateBoardLanesByPriority('p', 'w', [], undefined, undefined, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateBoardLanesByEpic('p', 'w', [], undefined, undefined, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findEpicAncestors([], 'w', tx),
+      ),
+    ).toEqual([]);
   });
 
   it('is workspace-scoped: epic ancestry never crosses tenants', async () => {

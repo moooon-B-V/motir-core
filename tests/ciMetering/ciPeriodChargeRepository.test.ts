@@ -111,17 +111,23 @@ describe('findForPeriod', () => {
       ciPeriodChargeRepository.ensureRow(organizationId, PERIOD, tx),
     );
 
-    // The un-scoped read path (the billing panel's, MOTIR-1903) — no tx argument.
-    const row = await ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD);
+    // The billing panel's read path (MOTIR-1903), bound to the ORG — the table is
+    // org-scoped, so a workspace context would bind the wrong GUC (MOTIR-2830).
+    const row = await withOrgServiceWriteContext(organizationId, (tx) =>
+      ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD, tx),
+    );
     expect(row).toMatchObject({ organizationId, chargedCredits: 0 });
   });
 
   it('returns null for a period the org has never metered', async () => {
     const organizationId = await seedOrgId();
     expect(
-      await ciPeriodChargeRepository.findForPeriod(
-        organizationId,
-        new Date('2026-01-01T00:00:00.000Z'),
+      await withOrgServiceWriteContext(organizationId, (tx) =>
+        ciPeriodChargeRepository.findForPeriod(
+          organizationId,
+          new Date('2026-01-01T00:00:00.000Z'),
+          tx,
+        ),
       ),
     ).toBeNull();
   });
@@ -146,7 +152,11 @@ describe('markPendingDebit / settleDebit', () => {
         tx,
       ),
     );
-    expect(await ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD)).toMatchObject({
+    expect(
+      await withOrgServiceWriteContext(organizationId, (tx) =>
+        ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD, tx),
+      ),
+    ).toMatchObject({
       pendingDebitRef: 'org:2026-07:0-150',
       pendingDebitCredits: 150,
       debitedCredits: 0,
@@ -158,7 +168,11 @@ describe('markPendingDebit / settleDebit', () => {
         tx,
       ),
     );
-    expect(await ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD)).toMatchObject({
+    expect(
+      await withOrgServiceWriteContext(organizationId, (tx) =>
+        ciPeriodChargeRepository.findForPeriod(organizationId, PERIOD, tx),
+      ),
+    ).toMatchObject({
       pendingDebitRef: null,
       pendingDebitCredits: 0,
       debitedCredits: 150,

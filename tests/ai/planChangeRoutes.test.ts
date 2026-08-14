@@ -5,6 +5,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Route-level tests for the plan-change conversation endpoints (Story 7.30 ·
 // MOTIR-1728) — `POST /api/ai/plan-change/session`, `…/session/turns`, and
@@ -178,7 +179,11 @@ describe('POST /api/ai/plan-change/session/submit', () => {
     // The project-wide submit echoes the job's Plan too (MOTIR-1745) — the same
     // `{ jobId, planId }` pair the anchored path and the three REST submits return.
     expect(dto.planId).toBe(
-      (await planRepository.findBySourceJobId('job-augment-1', fx.workspaceId))?.id,
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          planRepository.findBySourceJobId('job-augment-1', fx.workspaceId, tx),
+        )
+      )?.id,
     );
     expect(dto.session.lastJobId).toBe('job-augment-1');
     expect(dto.session.turnCount).toBe(3); // two user turns + the submission marker

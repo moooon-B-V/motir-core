@@ -6,6 +6,7 @@ import { pmTierForOrg } from '@/lib/billing/entitlements';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 
 // Transport + end-to-end tests for POST /api/internal/billing/ai-included-seat
 // (Subtask 8.1.24). Proves the service-bearer gate (401), the typed-error → HTTP
@@ -69,14 +70,22 @@ describe('POST /api/internal/billing/ai-included-seat', () => {
   it('sets the flag → the org resolves to `scaled` (caps lifted) with NO scaled-tracker sub', async () => {
     const orgId = await makeOrg();
     // Baseline: a fresh org is bounded `free`.
-    expect(pmTierForOrg(await organizationRepository.findCapContext(orgId))).toBe('free');
+    expect(
+      pmTierForOrg(
+        await withOrgServiceWriteContext(orgId, (tx) =>
+          organizationRepository.findCapContext(orgId, tx),
+        ),
+      ),
+    ).toBe('free');
 
     const res = await POST(req({ organizationId: orgId, included: true }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ organizationId: orgId, aiIncludedSeat: true });
 
     // The paid-AI seat lifts the caps — distinct column from scaledTrackerSubscription.
-    const ctx = await organizationRepository.findCapContext(orgId);
+    const ctx = await withOrgServiceWriteContext(orgId, (tx) =>
+      organizationRepository.findCapContext(orgId, tx),
+    );
     expect(ctx.aiIncludedSeat).toBe(true);
     expect(ctx.scaledTrackerSubscription).toBeNull();
     expect(pmTierForOrg(ctx)).toBe('scaled');
@@ -88,6 +97,12 @@ describe('POST /api/internal/billing/ai-included-seat', () => {
     const res = await POST(req({ organizationId: orgId, included: false }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ organizationId: orgId, aiIncludedSeat: false });
-    expect(pmTierForOrg(await organizationRepository.findCapContext(orgId))).toBe('free');
+    expect(
+      pmTierForOrg(
+        await withOrgServiceWriteContext(orgId, (tx) =>
+          organizationRepository.findCapContext(orgId, tx),
+        ),
+      ),
+    ).toBe('free');
   });
 });

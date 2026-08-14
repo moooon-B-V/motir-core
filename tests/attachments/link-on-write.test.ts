@@ -10,6 +10,7 @@ import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Link-on-write integration tests (Story 5.2 · Subtask 5.2.3) against a REAL
 // Postgres: the embeds-are-attachments rule across every body-write path —
@@ -342,9 +343,15 @@ describe('commentRepository 5.2.3 leaves', () => {
       fx.ctx,
     );
 
-    const replies = await commentRepository.listReplies(root.id);
+    const replies = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      commentRepository.listReplies(root.id, tx),
+    );
     expect(replies.map((r) => r.bodyMd)).toEqual(['first reply', 'second reply']);
-    expect(await commentRepository.listReplies(replies[0]!.id)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.listReplies(replies[0]!.id, tx),
+      ),
+    ).toEqual([]);
   });
 
   it('someBodyReferences scopes to the work item', async () => {
@@ -353,8 +360,20 @@ describe('commentRepository 5.2.3 leaves', () => {
     const b = await createIssue(fx);
     await commentsService.addComment(a.id, { bodyMd: 'holds NEEDLE-token' }, fx.ctx);
 
-    expect(await commentRepository.someBodyReferences(a.id, 'NEEDLE-token')).toBe(true);
-    expect(await commentRepository.someBodyReferences(b.id, 'NEEDLE-token')).toBe(false);
-    expect(await commentRepository.someBodyReferences(a.id, 'absent-token')).toBe(false);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.someBodyReferences(a.id, 'NEEDLE-token', tx),
+      ),
+    ).toBe(true);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.someBodyReferences(b.id, 'NEEDLE-token', tx),
+      ),
+    ).toBe(false);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.someBodyReferences(a.id, 'absent-token', tx),
+      ),
+    ).toBe(false);
   });
 });

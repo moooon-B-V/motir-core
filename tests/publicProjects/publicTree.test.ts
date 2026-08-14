@@ -11,6 +11,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.14 · Subtask 6.14.10 — the PUBLIC, expandable work-item TREE. The
 // hierarchy is the surface 6.14.5 / 6.14.6 / 6.14.9 assume. The load-bearing
@@ -210,25 +211,30 @@ describe('workItemRepository public tree level — the excludeIds predicate', ()
   it('countPublicProjectTreeLevel excludes hidden descendants from a level total', async () => {
     const fx = await makePublicProjectFixture();
     const t = await buildTree(fx);
-    const hidden = await workItemRepository.findPublicHiddenDescendantIds(
-      fx.projectId,
-      fx.workspaceId,
+    const hidden = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findPublicHiddenDescendantIds(fx.projectId, fx.workspaceId, tx),
     );
 
     // The private STORY's child level: with the exclusion the task is gone (0),
     // without it (a member, []), the task is counted (1).
-    const excludedCount = await workItemRepository.countPublicProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      t.privStory.id,
-      hidden,
+    const excludedCount = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countPublicProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        t.privStory.id,
+        hidden,
+        tx,
+      ),
     );
     expect(excludedCount).toBe(0);
-    const memberCount = await workItemRepository.countPublicProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      t.privStory.id,
-      [],
+    const memberCount = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countPublicProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        t.privStory.id,
+        [],
+        tx,
+      ),
     );
     expect(memberCount).toBe(1);
   });

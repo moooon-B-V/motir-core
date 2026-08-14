@@ -12,6 +12,7 @@ import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { DistributionDto } from '@/lib/dto/reports';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.3 · Subtask 6.3.2 — reportsService.getDistribution. Real Postgres.
 // Asserts the STATISTIC MATRIX driven FROM the registry (the totality-guard
@@ -90,7 +91,9 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
     const byStatus = await expectOk(
       reportsService.getDistribution({ projectId: fx.projectId }, 'status', fx.ctx),
     );
-    const statuses = await workflowsRepository.findStatuses(fx.projectId, fx.workspaceId);
+    const statuses = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workflowsRepository.findStatuses(fx.projectId, fx.workspaceId, tx),
+    );
     const done = statuses.find((s) => s.key === 'done')!;
     expect(segment(byStatus, 'done')).toMatchObject({ count: 1, label: done.label });
 

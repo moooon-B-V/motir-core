@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { PrismaClient, Prisma } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { db } from '@/lib/db';
@@ -236,7 +237,9 @@ describe('workItemRepository.lockById', () => {
 
     await Promise.all([bump(150), bump(0)]);
 
-    const final = await workItemRepository.findById(item.id);
+    const final = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(item.id, tx),
+    );
     expect(final?.title).toBe('baseXX');
   });
 });
@@ -246,11 +249,15 @@ describe('workItemRepository.findByIdentifier', () => {
     const fx = await makeFixture();
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Found me' });
 
-    const found = await workItemRepository.findByIdentifier(fx.project.id, 'PROD-1');
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(fx.project.id, 'PROD-1', tx),
+    );
     expect(found?.id).toBe(epic.id);
     expect(found?.identifier).toBe('PROD-1');
 
-    const missing = await workItemRepository.findByIdentifier(fx.project.id, 'PROD-999');
+    const missing = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(fx.project.id, 'PROD-999', tx),
+    );
     expect(missing).toBeNull();
   });
 });
@@ -263,7 +270,11 @@ describe('workItemRepository.findByIds', () => {
     const c = await createWorkItem(fx, { kind: 'task', title: 'C', parentId: b.id });
 
     // Empty input short-circuits without issuing a query.
-    expect(await workItemRepository.findByIds([])).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findByIds([], tx),
+      ),
+    ).toEqual([]);
 
     // A single IN(...) round-trip resolves every requested id; the method
     // makes no ordering promise, so we compare as sets.
@@ -279,7 +290,9 @@ describe('workItemRepository.findByIds', () => {
       // Call through the repository (which uses the `db` singleton); the
       // logged client is used only to prove the single-query shape via an
       // identical query on the same data.
-      rows = await workItemRepository.findByIds([c.id, a.id, b.id]);
+      rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findByIds([c.id, a.id, b.id], tx),
+      );
       const loggedRows = await (loggedDb as unknown as typeof db).workItem.findMany({
         where: { id: { in: [c.id, a.id, b.id] } },
       });
@@ -309,17 +322,31 @@ describe('workItemRepository.findByProjectFiltered — filters', () => {
     );
     await db.$transaction((tx) => workItemRepository.archive(gone.id, tx));
 
-    const all = await workItemRepository.findByProjectFiltered(fx.project.id);
+    const all = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(fx.project.id, undefined, tx),
+    );
     expect(all.map((r) => r.id).sort()).toEqual([open.id, done.id].sort()); // archived excluded
 
-    const byStatus = await workItemRepository.findByProjectFiltered(fx.project.id, {
-      status: 'done',
-    });
+    const byStatus = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(
+        fx.project.id,
+        {
+          status: 'done',
+        },
+        tx,
+      ),
+    );
     expect(byStatus.map((r) => r.id)).toEqual([done.id]);
 
-    const byAssignee = await workItemRepository.findByProjectFiltered(fx.project.id, {
-      assigneeId: fx.owner.id,
-    });
+    const byAssignee = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(
+        fx.project.id,
+        {
+          assigneeId: fx.owner.id,
+        },
+        tx,
+      ),
+    );
     expect(byAssignee.map((r) => r.id)).toEqual([done.id]);
   });
 });
@@ -331,10 +358,14 @@ describe('workItemRepository.findByProject — pagination', () => {
     const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
     const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
 
-    const firstTwo = await workItemRepository.findByProject(fx.project.id, { take: 2 });
+    const firstTwo = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProject(fx.project.id, { take: 2 }, tx),
+    );
     expect(firstTwo.map((r) => r.id)).toEqual([a.id, b.id]);
 
-    const afterB = await workItemRepository.findByProject(fx.project.id, { cursor: b.id });
+    const afterB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProject(fx.project.id, { cursor: b.id }, tx),
+    );
     expect(afterB.map((r) => r.id)).toEqual([c.id]);
   });
 });
@@ -347,11 +378,15 @@ describe('workItemRepository.findSiblings', () => {
     const s2 = await createWorkItem(fx, { kind: 'story', title: 'S2', parentId: epic.id });
 
     // Called WITHOUT a tx (the `db`-singleton read path).
-    const childSiblings = await workItemRepository.findSiblings(fx.project.id, epic.id);
+    const childSiblings = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSiblings(fx.project.id, epic.id, tx),
+    );
     expect(childSiblings.map((r) => r.id)).toEqual([s1.id, s2.id]);
 
     // Top-level siblings: parentId null is project-scoped, so only this epic.
-    const topSiblings = await workItemRepository.findSiblings(fx.project.id, null);
+    const topSiblings = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSiblings(fx.project.id, null, tx),
+    );
     expect(topSiblings.map((r) => r.id)).toEqual([epic.id]);
   });
 });
@@ -365,7 +400,9 @@ describe('workItemRepository.findChildren', () => {
     // A grandchild must NOT appear (findChildren is one level only).
     await createWorkItem(fx, { kind: 'task', title: 'GC', parentId: s1.id });
 
-    const children = await workItemRepository.findChildren(epic.id);
+    const children = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findChildren(epic.id, tx),
+    );
     expect(children.map((r) => r.id)).toEqual([s1.id, s2.id]);
   });
 });

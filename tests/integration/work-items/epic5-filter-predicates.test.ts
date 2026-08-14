@@ -8,6 +8,7 @@ import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser } from '../../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import {
   makeWorkItemFixture as makeFixture,
   createTestWorkItem as createWorkItem,
@@ -513,16 +514,27 @@ describe('stale referents degrade to match-nothing — never an error (the 6.2 d
 describe('the bulk-id reads (coverage-gate contracts)', () => {
   it('empty input is an empty result, ids are tenancy-scoped', async () => {
     const s = await seedEpic5();
-    expect(await labelRepository.findByIds([], s.fx.projectId)).toEqual([]);
     expect(
-      await customFieldOptionRepository.findByIds([], s.fx.projectId, s.fx.workspaceId),
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        labelRepository.findByIds([], s.fx.projectId, tx),
+      ),
     ).toEqual([]);
-    const labels = await labelRepository.findByIds([s.labels.perf, 'nope'], s.fx.projectId);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        customFieldOptionRepository.findByIds([], s.fx.projectId, s.fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
+    const labels = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      labelRepository.findByIds([s.labels.perf, 'nope'], s.fx.projectId, tx),
+    );
     expect(labels.map((l) => l.id)).toEqual([s.labels.perf]);
-    const options = await customFieldOptionRepository.findByIds(
-      [s.options.high, 'nope'],
-      s.fx.projectId,
-      s.fx.workspaceId,
+    const options = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      customFieldOptionRepository.findByIds(
+        [s.options.high, 'nope'],
+        s.fx.projectId,
+        s.fx.workspaceId,
+        tx,
+      ),
     );
     expect(options.map((o) => o.id)).toEqual([s.options.high]);
   });

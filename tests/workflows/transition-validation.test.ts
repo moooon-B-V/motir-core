@@ -15,6 +15,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Transition validation + the gated work_item.status write (Story 2.2 ·
 // Subtask 2.2.4). Real Postgres — runs in CI. Projects come from
@@ -62,8 +63,11 @@ async function makeFixture(email = 'tv-a@example.com'): Promise<Fixture> {
   return { ctx, workspaceId: ws.workspace.id, projectId: project.id, itemId: item.id };
 }
 
-async function revisionCount(itemId: string): Promise<number> {
-  return (await workItemRevisionRepository.listByWorkItem(itemId)).length;
+async function revisionCount(itemId: string, workspaceId: string): Promise<number> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(itemId, {}, tx),
+  );
+  return rows.length;
 }
 
 describe('createWorkItem seeds the workflow initial status', () => {
@@ -97,12 +101,14 @@ describe('createWorkItem seeds the workflow initial status', () => {
 describe('updateStatus — restricted mode (the default seed)', () => {
   it('a legal transition (todo→in_progress) succeeds and writes ONE updated revision', async () => {
     const fx = await makeFixture();
-    const before = await revisionCount(fx.itemId); // the 'created' revision
+    const before = await revisionCount(fx.itemId, fx.workspaceId); // the 'created' revision
 
     const updated = await workItemsService.updateStatus(fx.itemId, 'in_progress', fx.ctx);
     expect(updated.status).toBe('in_progress');
 
-    const revs = await workItemRevisionRepository.listByWorkItem(fx.itemId);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(fx.itemId, {}, tx),
+    );
     expect(revs.length).toBe(before + 1);
     const latest = revs[0]!; // newest-first
     expect(latest.changeKind).toBe('updated');
@@ -130,10 +136,10 @@ describe('updateStatus — restricted mode (the default seed)', () => {
 
   it('a no-op transition (to the current status) succeeds WITHOUT writing a revision', async () => {
     const fx = await makeFixture();
-    const before = await revisionCount(fx.itemId);
+    const before = await revisionCount(fx.itemId, fx.workspaceId);
     const same = await workItemsService.updateStatus(fx.itemId, 'todo', fx.ctx);
     expect(same.status).toBe('todo');
-    expect(await revisionCount(fx.itemId)).toBe(before);
+    expect(await revisionCount(fx.itemId, fx.workspaceId)).toBe(before);
   });
 });
 
@@ -196,7 +202,9 @@ describe('updateStatus — atomicity (status + revision in one transaction)', ()
     // Status unchanged — the rollback undid the (otherwise-valid) status write.
     expect((await workItemsService.getWorkItem(fx.itemId, fx.ctx)).status).toBe('todo');
     // No 'updated' revision persisted (only the original 'created').
-    const revs = await workItemRevisionRepository.listByWorkItem(fx.itemId);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(fx.itemId, {}, tx),
+    );
     expect(revs.every((r) => r.changeKind !== 'updated')).toBe(true);
   });
 });

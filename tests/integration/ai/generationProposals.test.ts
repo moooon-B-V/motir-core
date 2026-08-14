@@ -9,6 +9,7 @@ import { PATCH as proposalsPATCH } from '@/app/api/internal/ai/plan-proposals/[i
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // CONTRACT TEST — the internal incremental-proposals seam (Subtask 7.4.4 ·
 // MOTIR-846) end-to-end through the REAL route, against a real Postgres. It is
@@ -92,7 +93,9 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(body.planItemIds).toHaveLength(2);
 
     // The ids ARE the appended PlanItems, in append order (epic then story).
-    const items = await planItemRepository.findByPlan(planId);
+    const items = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
     expect(items.map((i) => i.id)).toEqual(body.planItemIds);
     expect(items.every((i) => i.op === 'add' && i.workItemId === null)).toBe(true);
     expect((items[0]!.proposedFields as { title: string }).title).toBe('Epic: Auth');
@@ -142,7 +145,9 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     const b2 = await r2.json();
     expect(b2.planned).toBe(true);
 
-    const items = await planItemRepository.findByPlan(planId);
+    const items = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
     const story = items.find((i) => (i.proposedFields as { title?: string })?.title === 'Story');
     expect(story!.parentRef).toBe(`planItem:${epicPlanItemId}`);
 
@@ -336,7 +341,9 @@ describe('PATCH /api/internal/ai/plan-proposals/[itemId] — generation-time dee
     });
 
     // Persisted, still a proposal, plan still open.
-    const item = await planItemRepository.findById(itemId);
+    const item = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findById(itemId, tx),
+    );
     expect((item!.proposedFields as { descriptionMd?: string }).descriptionMd).toBe(
       'Full body written in Phase 2.',
     );
@@ -500,13 +507,17 @@ describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolatio
     expect(b2.planId).toBe(planB);
     expect(b2.planned).toBe(true);
     expect(b2.planItemIds).toHaveLength(FRONTIER.length);
-    const resolvedB = await planRepository.findBySourceJobId(job2, fx.ctx.workspaceId);
+    const resolvedB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(job2, fx.ctx.workspaceId, tx),
+    );
     expect(resolvedB!.id).toBe(planB);
     expect(resolvedB!.id).not.toBe(planA);
 
     // The RESULTING (re-run) plan holds each frontier `add` EXACTLY ONCE — no
     // duplicates — and the failed run's 3 partial proposals did NOT leak in.
-    const itemsB = await planItemRepository.findByPlan(planB);
+    const itemsB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planB, tx),
+    );
     expect(itemsB).toHaveLength(FRONTIER.length);
     expect(itemsB.every((i) => i.op === 'add' && i.workItemId === null)).toBe(true);
     const titlesB = itemsB.map((i) => (i.proposedFields as { title: string }).title);
@@ -515,7 +526,9 @@ describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolatio
 
     // The abandoned plan stays ISOLATED: still `generating`, still exactly its 3
     // partial proposals — the re-run never appended into it.
-    const itemsA = await planItemRepository.findByPlan(planA);
+    const itemsA = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planA, tx),
+    );
     expect(itemsA).toHaveLength(3);
     const abandoned = await adminDb.plan.findFirst({ where: { id: planA } });
     expect(abandoned!.status).toBe('generating');

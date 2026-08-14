@@ -19,6 +19,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // boardsService board LIFECYCLE — multiple boards per project (Story 3.7 ·
 // Subtask 3.7.3): createBoard (seed columns) / listBoards / setDefaultBoard /
@@ -75,7 +76,9 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
-  const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
+  const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    boardRepository.findDefaultForProject(project.id, workspaceId, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
 
   return {
@@ -90,7 +93,9 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
 describe('boardsService.createBoard (Subtask 3.7.3)', () => {
   it('creates a NON-default board with default columns seeded off the workflow', async () => {
     const fx = await makeFixture('create');
-    const defaultCols = await boardColumnRepository.findByBoard(fx.defaultBoardId, fx.workspaceId);
+    const defaultCols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.defaultBoardId, fx.workspaceId, tx),
+    );
 
     const created = await boardsService.createBoard(fx.projectId, { name: 'Triage' }, fx.ownerCtx);
 
@@ -100,10 +105,14 @@ describe('boardsService.createBoard (Subtask 3.7.3)', () => {
 
     // It seeded one column per workflow status (same shape as the default board),
     // each mapped to exactly one status.
-    const cols = await boardColumnRepository.findByBoard(created.id, fx.workspaceId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(created.id, fx.workspaceId, tx),
+    );
     expect(cols).toHaveLength(defaultCols.length);
     expect(defaultCols.length).toBeGreaterThan(0);
-    const mappings = await boardColumnStatusRepository.findByBoard(created.id, fx.workspaceId);
+    const mappings = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByBoard(created.id, fx.workspaceId, tx),
+    );
     expect(mappings).toHaveLength(cols.length);
 
     // The project's default is unchanged (still exactly one default).
@@ -210,11 +219,21 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
     await boardsService.deleteBoard(triage.id, fx.ownerCtx);
 
     // The board + its column/config rows are gone (FK cascade)…
-    expect(await boardRepository.findById(triage.id, fx.workspaceId)).toBeNull();
-    expect(await boardColumnRepository.findByBoard(triage.id, fx.workspaceId)).toHaveLength(0);
-    expect(await boardColumnStatusRepository.findByBoard(triage.id, fx.workspaceId)).toHaveLength(
-      0,
-    );
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        boardRepository.findById(triage.id, fx.workspaceId, tx),
+      ),
+    ).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        boardColumnRepository.findByBoard(triage.id, fx.workspaceId, tx),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        boardColumnStatusRepository.findByBoard(triage.id, fx.workspaceId, tx),
+      ),
+    ).toHaveLength(0);
     // …the issue survives, and the default board is untouched.
     const workItemRow = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(workItemRow).not.toBeNull();
@@ -244,7 +263,11 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
       LastBoardError,
     );
     // Still there.
-    expect(await boardRepository.findById(fx.defaultBoardId, fx.workspaceId)).not.toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        boardRepository.findById(fx.defaultBoardId, fx.workspaceId, tx),
+      ),
+    ).not.toBeNull();
   });
 
   it('denies a member (403) and 404s a cross-workspace board', async () => {

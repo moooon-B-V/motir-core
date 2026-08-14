@@ -1,5 +1,4 @@
 import type { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import type { DesignEvidenceWithAssets } from '@/lib/mappers/designEvidenceMappers';
 
 // Single-op data access for the `design_evidence` / `design_asset` tables
@@ -35,24 +34,38 @@ export const designEvidenceRepository = {
    * transaction (the read guards the subsequent write); the pure-read panel path
    * uses the `db` singleton under an already-bound workspace context.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async findCurrentByWorkItem(
     workItemId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<DesignEvidenceWithAssets | null> {
-    const client = tx ?? db;
-    return client.designEvidence.findFirst({
+    return tx.designEvidence.findFirst({
       where: { workItemId, isCurrent: true },
       include: WITH_ASSETS,
     });
   },
 
   /** One result by id, with its assets (the re-read after asset inserts). */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async findById(
     id: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<DesignEvidenceWithAssets | null> {
-    const client = tx ?? db;
-    return client.designEvidence.findUnique({ where: { id }, include: WITH_ASSETS });
+    return tx.designEvidence.findUnique({ where: { id }, include: WITH_ASSETS });
   },
 
   /**

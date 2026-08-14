@@ -8,6 +8,11 @@ import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldD
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
+import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
+import { encodeFilterParam } from '@/lib/filters/ast';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -69,6 +74,12 @@ function expectFallbackCount(value: number, seeded: number): void {
   if (isAppRoleTestMode()) expect(value).toBe(0);
   else expect(value).toBe(seeded);
 }
+
+/** A trivially-valid stored filter — the criteria are not what these cases test. */
+const KIND_TASK_FILTER_PARAM = encodeFilterParam({
+  combinator: 'and',
+  conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
+});
 
 async function seedItem(identifier: string): Promise<{ fx: WorkItemFixture; itemId: string }> {
   const fx = await makeWorkItemFixture({ identifier });
@@ -143,16 +154,14 @@ describe('the remaining fallback arms this story left without a caller', () => {
       },
     });
 
+    // Only the methods that still HAVE a fallback arm. `findById` and
+    // `findManyByIds` now REQUIRE a `tx` (tightened on `main` while this branch
+    // was open), which is the better end state — a required parameter cannot be
+    // forgotten — and it removes them from this file's subject rather than
+    // needing a case here.
     expectFallbackAnswer(await attachmentRepository.listByWorkItem(itemId, {}), 1);
     expectFallbackCount(await attachmentRepository.countByWorkItem(itemId), 1);
-    expectFallbackAnswer(
-      await attachmentRepository.findManyByIds(fx.workspaceId, [attachment.id]),
-      1,
-    );
-
-    const one = await attachmentRepository.findById(attachment.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(attachment.id);
+    expect(attachment.id).toBeTruthy();
   });
 
   it('customFieldDefinitionRepository — the project’s fields and one by id', async () => {
@@ -309,5 +318,62 @@ describe('workItemRepository — the filter guard the coverage sweep surfaced', 
         },
       }),
     ).rejects.toBeInstanceOf(UnknownFilterOperatorError);
+  });
+});
+
+// ── Moved here from `app-role-bound-context-reads.test.ts` (MOTIR-2815) ──────
+//
+// It is the same subject as everything above — a deliberately UNBOUND read with
+// a per-role assertion — and it was the only such case in a file whose whole job
+// is BOUND reads. MOTIR-2797's test-call-site guard adjudicates at FILE level, so
+// leaving it there would have meant exempting 46 bound assertions to excuse four
+// unbound ones. Moving it lets that file stay fully guarded and puts this one
+// where its adjudication is honest.
+
+describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
+  // ⚠️ DELIBERATELY UNBOUND, and both arms are asserted. The optional `tx` is what
+  // `tests/rls/singletonReadScan.ts` recognises as BINDABLE, so it has to stay —
+  // but once every production call site threads a `tx`, the `db` arm has no
+  // caller left and would go uncovered against the file's ≥90% branch floor.
+  //
+  // The assertion is split by role rather than weakened, because the two answers
+  // are BOTH the contract: on the bypass role the fallback reads normally; on
+  // `motir_app` it binds nothing, the policy sees NULL, and the honest answer is
+  // the EMPTY one. Asserting rows here would be asserting that a path with no
+  // binding at all somehow works — the vacuous-pass shape this story exists to
+  // remove.
+  it('resolves to the singleton, and returns the empty answer under the app role', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFE' });
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'Fallback', visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+      fx.ctx,
+    );
+    await savedFilterSubscriptionsService.subscribe(
+      fx.projectIdentifier,
+      filter.id,
+      { schedule: 'daily', hour: 9 },
+      fx.ctx,
+    );
+
+    const listArgs = {
+      projectId: fx.projectId,
+      actorUserId: fx.ownerId,
+      actorIsAdmin: true,
+      view: 'all' as const,
+    };
+    const rows = await savedFilterRepository.listPage({ ...listArgs, take: 10 });
+    const total = await savedFilterRepository.countVisible(listArgs);
+    const subs = await savedFilterSubscriptionRepository.countByFilter(filter.id);
+
+    if (isAppRoleTestMode()) {
+      expect(rows).toEqual([]);
+      expect(total).toBe(0);
+      expect(subs).toBe(0);
+    } else {
+      expect(rows.map((r) => r.name)).toEqual(['Fallback']);
+      expect(total).toBe(1);
+      expect(subs).toBe(1);
+    }
   });
 });

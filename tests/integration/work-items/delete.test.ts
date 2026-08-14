@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -67,8 +68,14 @@ async function makeTree(fx: WorkItemFixture) {
   return { epic, story, sub1, sub2, story2 };
 }
 
-async function exists(id: string): Promise<boolean> {
-  return (await workItemRepository.findById(id)) !== null;
+// Takes the workspace explicitly: the read is bound (MOTIR-2835), and this
+// helper sits at module scope where no fixture is in lexical reach.
+async function exists(id: string, workspaceId: string): Promise<boolean> {
+  return (
+    (await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findById(id, tx),
+    )) !== null
+  );
 }
 
 describe('deleteWorkItem — subtree cascade', () => {
@@ -79,12 +86,12 @@ describe('deleteWorkItem — subtree cascade', () => {
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
     // The deleted root + every descendant are gone…
-    expect(await exists(story.id)).toBe(false);
-    expect(await exists(sub1.id)).toBe(false);
-    expect(await exists(sub2.id)).toBe(false);
+    expect(await exists(story.id, fx.workspaceId)).toBe(false);
+    expect(await exists(sub1.id, fx.workspaceId)).toBe(false);
+    expect(await exists(sub2.id, fx.workspaceId)).toBe(false);
     // …while the parent and the sibling subtree survive.
-    expect(await exists(epic.id)).toBe(true);
-    expect(await exists(story2.id)).toBe(true);
+    expect(await exists(epic.id, fx.workspaceId)).toBe(true);
+    expect(await exists(story2.id, fx.workspaceId)).toBe(true);
   });
 
   it('deletes a top-level root (epic) with its entire tree in one statement', async () => {
@@ -94,7 +101,7 @@ describe('deleteWorkItem — subtree cascade', () => {
     await workItemsService.deleteWorkItem(epic.id, fx.ctx);
 
     for (const id of [epic.id, story.id, sub1.id, sub2.id, story2.id]) {
-      expect(await exists(id)).toBe(false);
+      expect(await exists(id, fx.workspaceId)).toBe(false);
     }
   });
 
@@ -121,9 +128,17 @@ describe('deleteWorkItem — subtree cascade', () => {
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
     // No orphaned links survive on the outside endpoint; the endpoint itself lives.
-    expect(await workItemLinkRepository.findByFromItem(outside.id)).toHaveLength(0);
-    expect(await workItemLinkRepository.findByToItem(outside.id)).toHaveLength(0);
-    expect(await exists(outside.id)).toBe(true);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(outside.id, undefined, tx),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByToItem(outside.id, undefined, tx),
+      ),
+    ).toHaveLength(0);
+    expect(await exists(outside.id, fx.workspaceId)).toBe(true);
   });
 });
 
@@ -141,7 +156,9 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(epic.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(epic.id, {}, tx),
+    );
     const del = revs.find((r) => r.changeKind === 'deleted');
     expect(del).toBeDefined();
     expect(del!.changedById).toBe(fx.ownerId);
@@ -161,9 +178,11 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(sub1.id, fx.ctx);
 
-    const del = (await workItemRevisionRepository.listByWorkItem(story.id)).find(
-      (r) => r.changeKind === 'deleted',
-    );
+    const del = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(story.id, {}, tx),
+      )
+    ).find((r) => r.changeKind === 'deleted');
     expect(del).toBeDefined();
     const from = (del!.diff as { deleted: { from: string } }).deleted.from;
     expect(from).toContain(sub1.identifier);
@@ -182,13 +201,15 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
-    const del = (await workItemRevisionRepository.listByWorkItem(epic.id)).find(
-      (r) => r.changeKind === 'deleted',
-    );
+    const del = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(epic.id, {}, tx),
+      )
+    ).find((r) => r.changeKind === 'deleted');
     const from = (del!.diff as { deleted: { from: string } }).deleted.from;
     expect(from).toContain('+1 descendant');
     expect(from).not.toContain('descendants');
-    expect(await exists(onlyChild.id)).toBe(false);
+    expect(await exists(onlyChild.id, fx.workspaceId)).toBe(false);
   });
 
   it('a root delete (no parent) succeeds with no anchor revision', async () => {
@@ -214,8 +235,8 @@ describe('deleteWorkItem — permission gate', () => {
       PermissionDeniedError,
     );
     // The transaction rolled back — the subtree is untouched.
-    expect(await exists(story.id)).toBe(true);
-    expect(await exists(sub1.id)).toBe(true);
+    expect(await exists(story.id, fx.workspaceId)).toBe(true);
+    expect(await exists(sub1.id, fx.workspaceId)).toBe(true);
   });
 });
 
@@ -236,7 +257,7 @@ describe('deleteWorkItem — races translate to typed errors', () => {
       WorkItemNotFoundError,
     );
     // The item in the other workspace is untouched.
-    expect(await exists(item.id)).toBe(true);
+    expect(await exists(item.id, fx.workspaceId)).toBe(true);
   });
 });
 
@@ -261,9 +282,9 @@ describe('getDeletePreview — cascade impact', () => {
       liveByKind: { subtask: 2 },
     });
     // It's a READ — the subtree is untouched.
-    expect(await exists(story.id)).toBe(true);
-    expect(await exists(sub1.id)).toBe(true);
-    expect(await exists(sub2.id)).toBe(true);
+    expect(await exists(story.id, fx.workspaceId)).toBe(true);
+    expect(await exists(sub1.id, fx.workspaceId)).toBe(true);
+    expect(await exists(sub2.id, fx.workspaceId)).toBe(true);
   });
 
   it('breaks the descendants down across kinds for a top-level root', async () => {
@@ -311,9 +332,9 @@ describe('getDeletePreview — cascade impact', () => {
     expect(preview.liveDescendantCount).toBe(3);
     expect(preview.liveByKind).toEqual({ story: 1, subtask: 2 });
     // Sanity: the still-live children are really sub1 / sub2 (untouched read).
-    expect(await exists(sub1.id)).toBe(true);
-    expect(await exists(sub2.id)).toBe(true);
-    expect(await exists(story2.id)).toBe(true);
+    expect(await exists(sub1.id, fx.workspaceId)).toBe(true);
+    expect(await exists(sub2.id, fx.workspaceId)).toBe(true);
+    expect(await exists(story2.id, fx.workspaceId)).toBe(true);
   });
 
   it('counts only the non-archived descendants in the live split (mixed subtree)', async () => {
@@ -364,8 +385,8 @@ describe('getDeletePreview — cascade impact', () => {
     expect(preview.descendantCount).toBe(2);
     expect(preview.liveDescendantCount).toBe(2); // sub1 + sub2, root excluded
     expect(preview.liveByKind).toEqual({ subtask: 2 });
-    expect(await exists(sub1.id)).toBe(true);
-    expect(await exists(sub2.id)).toBe(true);
+    expect(await exists(sub1.id, fx.workspaceId)).toBe(true);
+    expect(await exists(sub2.id, fx.workspaceId)).toBe(true);
   });
 
   it('rejects a non-admin member with the work_item:delete refusal (no impact-preview leak)', async () => {

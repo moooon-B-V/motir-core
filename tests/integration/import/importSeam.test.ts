@@ -18,6 +18,7 @@ import type {
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestUser } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // ── Story-816 (issue importer) INTEGRATION SEAM (MOTIR-944 · 7.16.8) ─────────
 //
@@ -221,7 +222,9 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     );
     expect(summaryOf(events).counts).toMatchObject({ created: 1, failed: 0 });
 
-    const map = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-100');
+    const map = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-100', tx),
+    );
     const item = await db.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
 
     // Scalar field mapping.
@@ -262,7 +265,9 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
       [makeSourceIssue({ externalId: 'U-1', title: 'Nobody here', assigneeEmail: 'ghost@x.io' })],
       { ...MAPPING, unmatchedUserPolicy: 'unassign' },
     );
-    const mapA = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-1');
+    const mapA = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-1', tx),
+    );
     const itemA = await db.workItem.findUniqueOrThrow({ where: { id: mapA!.workItemId } });
     expect(itemA.assigneeId).toBeNull();
     expect(
@@ -277,7 +282,9 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
       [makeSourceIssue({ externalId: 'U-2', title: 'Falls to me', assigneeEmail: 'ghost@x.io' })],
       { ...MAPPING, unmatchedUserPolicy: 'importing_user' },
     );
-    const mapB = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-2');
+    const mapB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-2', tx),
+    );
     const itemB = await db.workItem.findUniqueOrThrow({ where: { id: mapB!.workItemId } });
     expect(itemB.assigneeId).toBe(fx.ownerId);
     expect(
@@ -305,7 +312,9 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
         (e) => e.type === 'item' && e.warnings.some((w) => /subtask needs a parent/i.test(w)),
       ),
     ).toBe(true);
-    const map = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ORPHAN');
+    const map = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ORPHAN', tx),
+    );
     const item = await db.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
     expect(item.kind).toBe('task');
     expect(item.parentId).toBeNull();
@@ -334,9 +343,15 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     );
     expect(summaryOf(events).counts).toMatchObject({ created: 3, failed: 0 });
 
-    const parentMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'PARENT');
-    const childMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'CHILD');
-    const sibMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'SIB');
+    const parentMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'PARENT', tx),
+    );
+    const childMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'CHILD', tx),
+    );
+    const sibMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'SIB', tx),
+    );
     const child = await db.workItem.findUniqueOrThrow({ where: { id: childMap!.workItemId } });
     // Restored to subtask AND parented to the story (deferred-parent path).
     expect(child.kind).toBe('subtask');
@@ -422,7 +437,9 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
   it('a source-side change UPDATEs exactly that one item in place; unchanged issues stay no-ops', async () => {
     const fx = await makeWorkItemFixture();
     await runOnce(fx, await makeDraftImport(fx), ISSUES, MAPPING);
-    const before = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
+    const before = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
 
     const run = summaryOf(
       await runOnce(
@@ -440,7 +457,9 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
     expect(await workItemCount(fx)).toBe(3);
     expect(await mappingRowCount(fx)).toBe(3);
 
-    const after = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
     expect(after!.workItemId).toBe(before!.workItemId); // same work item, in place
     const edited = await db.workItem.findUniqueOrThrow({ where: { id: after!.workItemId } });
     expect(edited.title).toBe('First (edited)');
@@ -449,7 +468,9 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
   it('does NOT clobber local edits — a Motir-owned field the importer never syncs survives a re-run UPDATE', async () => {
     const fx = await makeWorkItemFixture();
     await runOnce(fx, await makeDraftImport(fx), [ISSUES[0]!], MAPPING);
-    const map = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
+    const map = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
 
     // A local estimate/points edit — fields the importer does NOT own.
     await db.workItem.update({

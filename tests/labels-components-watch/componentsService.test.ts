@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { User, WorkItem } from '@/generated/prisma/client';
+import type { Prisma, User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { componentsService, COMPONENT_NAME_MAX_LENGTH } from '@/lib/services/componentsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -31,6 +31,7 @@ import {
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // componentsService (Story 5.4 · Subtask 5.4.3) — the taxonomy BUSINESS
 // rules over the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the
@@ -113,8 +114,10 @@ async function ownerCreate(
 }
 
 /** The `{ components: … }` diffs among the item's revisions, oldest-first. */
-async function componentDiffsOf(workItemId: string): Promise<unknown[]> {
-  const rows = await workItemRevisionRepository.listByWorkItem(workItemId);
+async function componentDiffsOf(workItemId: string, workspaceId: string): Promise<unknown[]> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+  );
   return [...rows]
     .reverse()
     .map((r) => r.diff as Record<string, unknown>)
@@ -268,7 +271,7 @@ describe('componentsService — per-issue assignment', () => {
     // A no-change set writes nothing.
     await componentsService.setComponents(s.issue.id, [api.id], s.memberCtx);
 
-    expect(await componentDiffsOf(s.issue.id)).toEqual([
+    expect(await componentDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
       { added: ['API', 'Web'] },
       { removed: ['Web'] },
     ]);
@@ -288,7 +291,10 @@ describe('componentsService — per-issue assignment', () => {
     const removedAgain = await componentsService.removeComponent(s.issue.id, api.id, s.memberCtx);
     expect(removedAgain).toEqual([]); // no-op
 
-    expect(await componentDiffsOf(s.issue.id)).toEqual([{ added: ['API'] }, { removed: ['API'] }]);
+    expect(await componentDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
+      { added: ['API'] },
+      { removed: ['API'] },
+    ]);
   });
 
   it("rejects another project's component (422) and an unknown id (404)", async () => {
@@ -333,7 +339,11 @@ describe('componentsService.deleteComponent — the move-or-remove flow', () => 
     const api = await ownerCreate(s, 'API');
     const receipt = await componentsService.deleteComponent(api.id, {}, s.fx.ctx);
     expect(receipt).toEqual({ deletedId: api.id, affectedCount: 0, movedToComponentId: null });
-    expect(await componentRepository.findById(api.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        componentRepository.findById(api.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('REMOVE branch: detaches the in-use component, issues untouched, count reported', async () => {
@@ -371,9 +381,13 @@ describe('componentsService.deleteComponent — the move-or-remove flow', () => 
     );
     expect(receipt).toEqual({ deletedId: api.id, affectedCount: 2, movedToComponentId: web.id });
 
-    const moved = await componentRepository.listByWorkItem(s.issue.id);
+    const moved = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      componentRepository.listByWorkItem(s.issue.id, tx),
+    );
     expect(moved.map((c) => c.id)).toEqual([web.id]); // repointed
-    const kept = await componentRepository.listByWorkItem(both.id);
+    const kept = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      componentRepository.listByWorkItem(both.id, tx),
+    );
     expect(kept.map((c) => c.id)).toEqual([web.id]); // duplicate-join skipped + swept
   });
 
@@ -514,6 +528,20 @@ describe('createWorkItem — components at create + the default-assignee rule', 
 
 describe('componentRepository.findByIds — the empty-input guard', () => {
   it('returns [] for [] without touching the database', async () => {
-    expect(await componentRepository.findByIds([])).toEqual([]);
+    // The `tx` is a client whose every access throws, NOT a real context: the
+    // claim is that the empty-input arm returns before touching the database,
+    // and opening a real transaction to satisfy the binding would contradict
+    // exactly that. A throwing client PROVES the short-circuit; a real one
+    // could not distinguish it from a query that returned no rows.
+    const exploding = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('findByIds([]) touched the database — the short-circuit is gone');
+        },
+      },
+    ) as Prisma.TransactionClient;
+
+    expect(await componentRepository.findByIds([], exploding)).toEqual([]);
   });
 });

@@ -44,13 +44,20 @@ export const customFieldValueRepository = {
    * computed against the row the upsert/delete replaces, under the work
    * item's FOR UPDATE lock. Served by the [workItemId, fieldId] unique.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async findByWorkItemAndField(
     workItemId: string,
     fieldId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<CustomFieldValueWithRefs | null> {
-    const client = tx ?? db;
-    return client.customFieldValue.findUnique({
+    return tx.customFieldValue.findUnique({
       where: { workItemId_fieldId: { workItemId, fieldId } },
       include: {
         valueOption: true,
@@ -147,14 +154,21 @@ export const customFieldValueRepository = {
    * caller). Empty-input guard: an empty id set short-circuits to [] with
    * no query.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async countGroupedByField(
     fieldIds: string[],
     workspaceId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<{ fieldId: string; count: number }[]> {
     if (fieldIds.length === 0) return [];
-    const client = tx ?? db;
-    const grouped = await client.customFieldValue.groupBy({
+    const grouped = await tx.customFieldValue.groupBy({
       by: ['fieldId'],
       where: { fieldId: { in: fieldIds }, workspaceId },
       _count: { _all: true },
@@ -171,14 +185,21 @@ export const customFieldValueRepository = {
    * the caller). Empty-input guard: an empty id set short-circuits to []
    * with no query. Served by [fieldId, valueOptionId]'s second column.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async countGroupedByOption(
     optionIds: string[],
     workspaceId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<{ optionId: string; count: number }[]> {
     if (optionIds.length === 0) return [];
-    const client = tx ?? db;
-    const grouped = await client.customFieldValue.groupBy({
+    const grouped = await tx.customFieldValue.groupBy({
       by: ['valueOptionId'],
       where: { valueOptionId: { in: optionIds }, workspaceId },
       _count: { _all: true },

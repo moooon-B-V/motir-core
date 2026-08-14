@@ -5,6 +5,7 @@ import {
 } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import { customFieldValueRepository } from '@/lib/repositories/customFieldValueRepository';
@@ -115,8 +116,10 @@ async function makeIssue(fx: WorkItemFixture): Promise<string> {
 }
 
 /** The revisions AFTER the 'created' one — i.e. the value-set entries. */
-async function valueRevisions(workItemId: string) {
-  const rows = await workItemRevisionRepository.listByWorkItem(workItemId);
+async function valueRevisions(workItemId: string, workspaceId: string) {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+  );
   return rows.filter((r) => r.changeKind === 'updated');
 }
 
@@ -131,11 +134,13 @@ describe('setValue — text', () => {
     const dto = await customFieldValuesService.setValue(itemId, field.id, '  Acme Corp  ', fx.ctx);
     expect(dto).toMatchObject({ text: 'Acme Corp', number: null, date: null });
 
-    const row = await customFieldValueRepository.findByWorkItemAndField(itemId, field.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+    );
     expect(row?.valueText).toBe('Acme Corp');
     expect(row?.workspaceId).toBe(fx.workspaceId);
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(1);
     expect(revs[0]!.diff).toEqual({ 'customFields.customer': { from: null, to: 'Acme Corp' } });
     expect(revs[0]!.changedById).toBe(fx.ctx.userId);
@@ -148,7 +153,7 @@ describe('setValue — text', () => {
     await customFieldValuesService.setValue(itemId, field.id, 'same', fx.ctx);
     const dto = await customFieldValuesService.setValue(itemId, field.id, 'same', fx.ctx);
     expect(dto?.text).toBe('same');
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 
   it('clears via null — the row is DELETED (no tombstone) and the diff records to: null', async () => {
@@ -159,9 +164,13 @@ describe('setValue — text', () => {
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.customer': { from: 'Acme', to: null } });
   });
@@ -174,12 +183,16 @@ describe('setValue — text', () => {
     // Clear on empty — nothing recorded.
     expect(await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx)).toBeNull();
     expect(await customFieldValuesService.setValue(itemId, field.id, '   ', fx.ctx)).toBeNull();
-    expect(await valueRevisions(itemId)).toHaveLength(0);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(0);
 
     // Empty string clears a real value.
     await customFieldValuesService.setValue(itemId, field.id, 'x', fx.ctx);
     expect(await customFieldValuesService.setValue(itemId, field.id, '  ', fx.ctx)).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('rejects over-cap text (422) and a non-string raw value (type mismatch); nothing persists', async () => {
@@ -198,8 +211,12 @@ describe('setValue — text', () => {
     await expect(customFieldValuesService.setValue(itemId, field.id, 42, fx.ctx)).rejects.toThrow(
       CustomFieldValueTypeMismatchError,
     );
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
-    expect(await valueRevisions(itemId)).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(0);
   });
 
   it('accepts text exactly AT the cap', async () => {
@@ -222,13 +239,15 @@ describe('setValue — number', () => {
 
     const fromString = await customFieldValuesService.setValue(itemId, field.id, '1.50', fx.ctx);
     expect(fromString?.number).toBe(1.5);
-    const row = await customFieldValueRepository.findByWorkItemAndField(itemId, field.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+    );
     expect(row!.valueNumber!.equals(new Prisma.Decimal('1.5'))).toBe(true);
 
     const fromNumber = await customFieldValuesService.setValue(itemId, field.id, 3, fx.ctx);
     expect(fromNumber?.number).toBe(3);
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.effort': { from: '1.5', to: '3' } });
   });
@@ -239,7 +258,7 @@ describe('setValue — number', () => {
     const itemId = await makeIssue(fx);
     await customFieldValuesService.setValue(itemId, field.id, '3', fx.ctx);
     await customFieldValuesService.setValue(itemId, field.id, 3.0, fx.ctx);
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 
   it('rejects NaN / ±∞ / non-numeric and exponent strings (422); clear works', async () => {
@@ -260,7 +279,11 @@ describe('setValue — number', () => {
 
     await customFieldValuesService.setValue(itemId, field.id, '-2.25', fx.ctx);
     expect(await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx)).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -277,8 +300,8 @@ describe('setValue — date', () => {
 
     // The rail's full-ISO form lands on the same instant → re-set is a no-op.
     await customFieldValuesService.setValue(itemId, field.id, '2026-07-01T00:00:00.000Z', fx.ctx);
-    expect(await valueRevisions(itemId)).toHaveLength(1);
-    expect((await valueRevisions(itemId))[0]!.diff).toEqual({
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
+    expect((await valueRevisions(itemId, fx.workspaceId))[0]!.diff).toEqual({
       'customFields.golive': { from: null, to: '2026-07-01T00:00:00.000Z' },
     });
   });
@@ -318,7 +341,7 @@ describe('setValue — select', () => {
     expect(dto?.option).toEqual({ id: high.id, label: 'High', archived: false });
 
     await customFieldValuesService.setValue(itemId, field.id, low.id, fx.ctx);
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.severity': { from: 'High', to: 'Low' } });
   });
@@ -356,7 +379,7 @@ describe('setValue — select', () => {
     // Re-setting the same archived option changes nothing — no error, no revision.
     const dto = await customFieldValuesService.setValue(itemId, field.id, opt.id, fx.ctx);
     expect(dto?.option).toEqual({ id: opt.id, label: 'Soon-gone', archived: true });
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 });
 
@@ -373,7 +396,7 @@ describe('setValue — user', () => {
     const dto = await customFieldValuesService.setValue(itemId, field.id, member.id, fx.ctx);
     expect(dto?.user).toEqual({ id: member.id, name: 'Member', image: null });
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs[0]!.diff).toEqual({ 'customFields.stakeholder': { from: null, to: member.id } });
   });
 
@@ -416,7 +439,11 @@ describe('setValue — permission matrix', () => {
         workspaceId: fx.workspaceId,
       }),
     ).rejects.toThrow(ProjectAccessDeniedError);
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('cross-workspace probes 404: a foreign work item, a foreign field, and a same-workspace field of ANOTHER project', async () => {
@@ -546,7 +573,11 @@ describe('lifecycle — field delete destroys values', () => {
     await withWorkspaceContext(fx.ctx, (tx) =>
       customFieldDefinitionRepository.delete(field.id, tx),
     );
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -569,10 +600,14 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs.map((r) => r.diff)).toEqual([
       { 'customFields.golive': { from: '2026-08-15T00:00:00.000Z', to: null } },
       {
@@ -594,13 +629,17 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // Clearing an already-clear field writes nothing — no row, no revision.
     await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
 
     // listByWorkItem returns revisions newest-first → the clear is revs[0].
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.severity': { from: 'High', to: null } });
   });
@@ -620,10 +659,14 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs.map((r) => r.diff)).toEqual([
       { 'customFields.stakeholder': { from: bob.id, to: null } },
       { 'customFields.stakeholder': { from: alice.id, to: bob.id } },

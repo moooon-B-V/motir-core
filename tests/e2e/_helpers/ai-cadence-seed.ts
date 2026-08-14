@@ -50,6 +50,7 @@ import { SPRINT_ASSIGNMENT_DELTA_VERSION, type SprintAssignmentDelta } from '@/l
 import type { SprintPlanReviewDto, SprintPlanReviewItemDto } from '@/lib/dto/aiSprintPlan';
 import type { PlanOriginDto } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 export const CADENCE_SEED_PASSWORD = 'ai-cadence-e2e-pass-7';
 
@@ -221,9 +222,14 @@ export function recordedSprintPacking(seed: AiCadenceSeed): SprintAssignmentDelt
 export async function buildSprintPlanReview(
   projectId: string,
   delta: SprintAssignmentDelta,
+  // Explicit: the read is bound (MOTIR-2843) and this helper is module scope,
+  // so there is no fixture in lexical reach to take the workspace from.
+  workspaceId: string,
 ): Promise<SprintPlanReviewDto> {
   const keys = delta.sprints.flatMap((s) => s.itemKeys);
-  const rows = await workItemRepository.findByIdentifiers(projectId, keys);
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findByIdentifiers(projectId, keys, tx),
+  );
   const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
 
   const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);

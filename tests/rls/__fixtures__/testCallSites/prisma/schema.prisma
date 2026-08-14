@@ -1,0 +1,13 @@
+// Fixture schema for the TEST call-site classifier's negative case (MOTIR-2817).
+// One workspace-scoped model and one that is not, so the gated filter is
+// exercised in both directions rather than assumed.
+
+model Widget {
+  id          String @id
+  workspaceId String
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}

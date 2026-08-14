@@ -199,9 +199,14 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     // four times over.
     expect(acceptanceJob).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
     expect(acceptanceJob).toMatch(/total:\s*\[4\]/);
+    // `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
+    // the stories in review, so an EMPTY lane — and a shard leg that draws zero
+    // specs from a small one — is a legitimate state, not a misconfiguration.
+    // Without the flag Playwright exits non-zero on "no tests found" and every
+    // PR touching this workflow goes red while no story is in flight.
     expect(acceptanceJob).toContain(
       'pnpm test:e2e --config playwright.acceptance.config.ts ' +
-        '--shard=${{ matrix.shard }}/${{ matrix.total }}',
+        '--pass-with-no-tests --shard=${{ matrix.shard }}/${{ matrix.total }}',
     );
   });
 

@@ -139,7 +139,9 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
 describe('boardRepository — reads + workspace gate', () => {
   it('findByProject returns the project board(s) for the right workspace', async () => {
     const fx = await makeBoardTenant('a');
-    const boards = await boardRepository.findByProject(fx.projectId, fx.workspaceId);
+    const boards = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardRepository.findByProject(fx.projectId, fx.workspaceId, tx),
+    );
     expect(boards.map((b) => b.id)).toEqual([fx.boardId]);
     expect(boards[0]?.type).toBe('kanban');
   });
@@ -148,31 +150,49 @@ describe('boardRepository — reads + workspace gate', () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
     // a's project id, b's workspace id → no rows (the explicit gate, not RLS)
-    const boards = await boardRepository.findByProject(a.projectId, b.workspaceId);
+    const boards = await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+      boardRepository.findByProject(a.projectId, b.workspaceId, tx),
+    );
     expect(boards).toEqual([]);
   });
 
   it('findDefaultForProject returns the board, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    const own = await boardRepository.findDefaultForProject(a.projectId, a.workspaceId);
+    const own = await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+      boardRepository.findDefaultForProject(a.projectId, a.workspaceId, tx),
+    );
     expect(own?.id).toBe(a.boardId);
-    const foreign = await boardRepository.findDefaultForProject(a.projectId, b.workspaceId);
+    const foreign = await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+      boardRepository.findDefaultForProject(a.projectId, b.workspaceId, tx),
+    );
     expect(foreign).toBeNull();
   });
 
   it('findById returns the board, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    expect((await boardRepository.findById(a.boardId, a.workspaceId))?.id).toBe(a.boardId);
-    expect(await boardRepository.findById(a.boardId, b.workspaceId)).toBeNull();
+    expect(
+      (
+        await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+          boardRepository.findById(a.boardId, a.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(a.boardId);
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardRepository.findById(a.boardId, b.workspaceId, tx),
+      ),
+    ).toBeNull();
   });
 });
 
 describe('boardColumnRepository — reads, batched read + workspace gate', () => {
   it('findByBoard returns columns in position order', async () => {
     const fx = await makeBoardTenant('a');
-    const cols = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(cols.map((c) => c.id)).toEqual([fx.column1Id, fx.column2Id]);
     expect(cols.map((c) => c.name)).toEqual(['To Do', 'Done']);
   });
@@ -180,51 +200,84 @@ describe('boardColumnRepository — reads, batched read + workspace gate', () =>
   it('findByBoard is workspace-gated — foreign workspaceId returns []', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    expect(await boardColumnRepository.findByBoard(a.boardId, b.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardColumnRepository.findByBoard(a.boardId, b.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 
   it('findByBoards batches across boards and stays workspace-scoped (no N+1, no leak)', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
     // Ask for BOTH boards but under workspace A → only A's columns come back.
-    const cols = await boardColumnRepository.findByBoards([a.boardId, b.boardId], a.workspaceId);
+    const cols = await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+      boardColumnRepository.findByBoards([a.boardId, b.boardId], a.workspaceId, tx),
+    );
     expect(cols.map((c) => c.id).sort()).toEqual([a.column1Id, a.column2Id].sort());
     expect(cols.every((c) => c.boardId === a.boardId)).toBe(true);
   });
 
   it('findByBoards short-circuits on empty input', async () => {
     const a = await makeBoardTenant('a');
-    expect(await boardColumnRepository.findByBoards([], a.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardColumnRepository.findByBoards([], a.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 
   it('findById returns the column, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    expect((await boardColumnRepository.findById(a.column1Id, a.workspaceId))?.id).toBe(
-      a.column1Id,
-    );
-    expect(await boardColumnRepository.findById(a.column1Id, b.workspaceId)).toBeNull();
+    expect(
+      (
+        await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+          boardColumnRepository.findById(a.column1Id, a.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(a.column1Id);
+    // ⚠️ Bound to `a`, READ for `b`: the policy admits a's rows, so a null can
+    // ONLY come from the explicit workspaceId argument — which is the gate this
+    // test asserts. Binding `b` would hide the row twice and prove nothing.
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardColumnRepository.findById(a.column1Id, b.workspaceId, tx),
+      ),
+    ).toBeNull();
   });
 });
 
 describe('boardColumnStatusRepository — mapping reads + workspace gate', () => {
   it('findByBoard returns every column→status edge for the board', async () => {
     const fx = await makeBoardTenant('a');
-    const maps = await boardColumnStatusRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const maps = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(maps.map((m) => m.id).sort()).toEqual([fx.mapping1Id, fx.mapping2Id].sort());
   });
 
   it('findByColumn returns a single column’s mapped status', async () => {
     const fx = await makeBoardTenant('a');
-    const maps = await boardColumnStatusRepository.findByColumn(fx.column1Id, fx.workspaceId);
+    const maps = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByColumn(fx.column1Id, fx.workspaceId, tx),
+    );
     expect(maps.map((m) => m.statusId)).toEqual([fx.status1Id]);
   });
 
   it('mapping reads are workspace-gated', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    expect(await boardColumnStatusRepository.findByBoard(a.boardId, b.workspaceId)).toEqual([]);
-    expect(await boardColumnStatusRepository.findByColumn(a.column1Id, b.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardColumnStatusRepository.findByBoard(a.boardId, b.workspaceId, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(a.workspaceId, (tx) =>
+        boardColumnStatusRepository.findByColumn(a.column1Id, b.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -284,12 +337,20 @@ describe('board writes — required-tx create + delete under a transaction', () 
     });
 
     // Re-read through the repositories to prove the rows committed.
-    expect((await boardRepository.findById(created.boardId, fx.workspaceId))?.id).toBe(
-      created.boardId,
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          boardRepository.findById(created.boardId, fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(created.boardId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(created.boardId, fx.workspaceId, tx),
     );
-    const cols = await boardColumnRepository.findByBoard(created.boardId, fx.workspaceId);
     expect(cols.map((c) => c.id)).toEqual([created.columnId]);
-    const maps = await boardColumnStatusRepository.findByBoard(created.boardId, fx.workspaceId);
+    const maps = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByBoard(created.boardId, fx.workspaceId, tx),
+    );
     expect(maps.map((m) => m.id)).toEqual([created.mappingId]);
   });
 
@@ -299,7 +360,9 @@ describe('board writes — required-tx create + delete under a transaction', () 
       boardColumnStatusRepository.deleteByStatus(fx.boardId, fx.status1Id, tx),
     );
     expect(removed).toBe(1);
-    const remaining = await boardColumnStatusRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const remaining = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(remaining.map((m) => m.id)).toEqual([fx.mapping2Id]);
   });
 
@@ -309,7 +372,9 @@ describe('board writes — required-tx create + delete under a transaction', () 
       boardColumnStatusRepository.deleteByColumn(fx.column1Id, tx),
     );
     expect(removed).toBe(1);
-    const remaining = await boardColumnStatusRepository.findByColumn(fx.column1Id, fx.workspaceId);
+    const remaining = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnStatusRepository.findByColumn(fx.column1Id, fx.workspaceId, tx),
+    );
     expect(remaining).toEqual([]);
   });
 

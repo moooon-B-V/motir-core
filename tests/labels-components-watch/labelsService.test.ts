@@ -23,6 +23,7 @@ import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixt
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // labelsService (Story 5.4 · Subtask 5.4.2) — the folksonomy BUSINESS rules
 // over the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the
@@ -79,14 +80,16 @@ async function buildScenario(): Promise<LabelScenario> {
 }
 
 /** The work item's revisions, oldest-first (repo reach — asserting DB state). */
-async function revisionsOf(workItemId: string): Promise<WorkItemRevision[]> {
-  const rows = await workItemRevisionRepository.listByWorkItem(workItemId);
+async function revisionsOf(workItemId: string, workspaceId: string): Promise<WorkItemRevision[]> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+  );
   return [...rows].reverse();
 }
 
 /** The `{ labels: … }` diffs among the item's revisions, oldest-first. */
-async function labelDiffsOf(workItemId: string): Promise<unknown[]> {
-  const rows = await revisionsOf(workItemId);
+async function labelDiffsOf(workItemId: string, workspaceId: string): Promise<unknown[]> {
+  const rows = await revisionsOf(workItemId, workspaceId);
   return rows
     .map((r) => r.diff as Record<string, unknown>)
     .filter((d) => 'labels' in d)
@@ -111,7 +114,7 @@ describe('labelsService.addLabel — type-to-create find-or-create', () => {
     const labels = await labelsService.addLabel(s.issue.id, 'Perf-Q3', s.memberCtx);
     expect(labels.map((l) => l.name)).toEqual(['Perf-Q3']);
 
-    expect(await labelDiffsOf(s.issue.id)).toEqual([{ added: ['Perf-Q3'] }]);
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([{ added: ['Perf-Q3'] }]);
   });
 
   it("matches case-insensitively across issues — 'PERF-Q3' reuses the 'Perf-Q3' row and returns the original casing", async () => {
@@ -132,7 +135,7 @@ describe('labelsService.addLabel — type-to-create find-or-create', () => {
 
     const labels = await labelsService.addLabel(s.issue.id, 'BACKEND', s.memberCtx);
     expect(labels.map((l) => l.name)).toEqual(['backend']);
-    expect(await labelDiffsOf(s.issue.id)).toHaveLength(1); // only the first add
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toHaveLength(1); // only the first add
   });
 
   it('trims surrounding whitespace before validating', async () => {
@@ -222,7 +225,7 @@ describe('labelsService.removeLabel — delete-on-last-use', () => {
     const labels = await labelsService.removeLabel(s.issue.id, label.id, s.memberCtx);
     expect(labels).toEqual([]);
     expect(await labelRowCount()).toBe(0); // unused labels disappear
-    expect(await labelDiffsOf(s.issue.id)).toEqual([
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
       { added: ['ephemeral'] },
       { removed: ['ephemeral'] },
     ]);
@@ -248,7 +251,7 @@ describe('labelsService.removeLabel — delete-on-last-use', () => {
 
     const labels = await labelsService.removeLabel(s.issue.id, label.id, s.memberCtx);
     expect(labels).toEqual([]);
-    expect(await labelDiffsOf(s.issue.id)).toEqual([]); // nothing changed here
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([]); // nothing changed here
     expect(await labelRowCount()).toBe(1); // the other issue's label untouched
   });
 
@@ -280,7 +283,7 @@ describe('labelsService.setLabels — the bulk replace', () => {
     const labels = await labelsService.setLabels(s.issue.id, ['keep', 'fresh'], s.memberCtx);
     expect(labels.map((l) => l.name)).toEqual(['fresh', 'keep']); // name-ordered
 
-    expect(await labelDiffsOf(s.issue.id)).toEqual([
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
       { added: ['keep', 'drop'] },
       { added: ['fresh'], removed: ['drop'] },
     ]);
@@ -297,7 +300,7 @@ describe('labelsService.setLabels — the bulk replace', () => {
     expect(labels.map((l) => l.name)).toEqual(['Backend']);
 
     await labelsService.setLabels(s.issue.id, ['backend'], s.memberCtx); // same set, other casing
-    expect(await labelDiffsOf(s.issue.id)).toHaveLength(1); // no second revision
+    expect(await labelDiffsOf(s.issue.id, s.fx.workspaceId)).toHaveLength(1); // no second revision
   });
 
   it('clears the set with [] (every label detaches, last-use rows die)', async () => {

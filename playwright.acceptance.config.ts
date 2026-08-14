@@ -40,7 +40,7 @@ import {
 // ── Cloud posture: this lane runs CLOUD-ON ──────────────────────────────────
 //
 // `MOTIR_CLOUD` is set below on BOTH the runner process and the webServer, like
-// playwright.billing.config.ts. This is the file's ONE statement of its
+// playwright.cloud.config.ts. This is the file's ONE statement of its
 // posture; the assignment sites point back here rather than restate it. Two
 // reasons, and the second is why the paragraph is at the TOP of the file:
 //

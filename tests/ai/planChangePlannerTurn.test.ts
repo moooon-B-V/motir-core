@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The PLANNER'S TURN in the plan-change thread (MOTIR-2226) — the consuming half
 // of MOTIR-2222's boundary contract, against a REAL Postgres (the motir-core
@@ -72,12 +73,17 @@ async function submittedThread(ctx: ProjectContext) {
 }
 
 async function threadRows(fx: WorkItemFixture) {
-  const session = await planChangeSessionRepository.findByProjectAndScope(
-    fx.projectId,
-    PROJECT_SCOPE_KEY,
-    fx.workspaceId,
+  const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    planChangeSessionRepository.findByProjectAndScope(
+      fx.projectId,
+      PROJECT_SCOPE_KEY,
+      fx.workspaceId,
+      tx,
+    ),
   );
-  return planChangeTurnRepository.listBySessionId(session!.id, fx.workspaceId);
+  return withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    planChangeTurnRepository.listBySessionId(session!.id, fx.workspaceId, tx),
+  );
 }
 
 let fx: WorkItemFixture;
@@ -167,10 +173,13 @@ describe('recordPlannerTurn — the SAME locked seq allocation', () => {
     const rows = await threadRows(fx);
     expect(rows.map((r) => r.seq)).toEqual([0, 1, 2]);
     expect(rows.map((r) => r.role)).toEqual(['user', 'system', 'assistant']);
-    const session = await planChangeSessionRepository.findByProjectAndScope(
-      fx.projectId,
-      PROJECT_SCOPE_KEY,
-      fx.workspaceId,
+    const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+        tx,
+      ),
     );
     expect(session!.turnCount).toBe(3);
   });

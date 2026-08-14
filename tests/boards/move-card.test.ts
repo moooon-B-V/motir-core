@@ -18,6 +18,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // boardsService.moveCard (Story 3.1 · Subtask 3.1.5). Real Postgres (no mocks),
 // per CLAUDE.md. The project comes from createTestProject (→ createProject,
@@ -186,8 +187,12 @@ async function positionOf(itemId: string): Promise<string> {
   return row.position;
 }
 
-async function revisionCount(itemId: string): Promise<number> {
-  return (await workItemRevisionRepository.listByWorkItem(itemId)).length;
+async function revisionCount(itemId: string, workspaceId: string): Promise<number> {
+  return (
+    await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(itemId, {}, tx),
+    )
+  ).length;
 }
 
 describe('moveCard — cross-column move = workflow transition', () => {
@@ -215,7 +220,7 @@ describe('moveCard — cross-column move = workflow transition', () => {
     const fx = await makeFixture();
     const id = await makeItem(fx);
     const posBefore = await positionOf(id);
-    const revsBefore = await revisionCount(id);
+    const revsBefore = await revisionCount(id, fx.workspaceId);
 
     // todo → done has no seed transition edge → illegal under restricted.
     await expect(
@@ -225,7 +230,7 @@ describe('moveCard — cross-column move = workflow transition', () => {
     // The snapback contract: status, rank, and history are all untouched.
     expect(await statusOf(fx, id)).toBe('todo');
     expect(await positionOf(id)).toBe(posBefore);
-    expect(await revisionCount(id)).toBe(revsBefore);
+    expect(await revisionCount(id, fx.workspaceId)).toBe(revsBefore);
   });
 
   it('a drop onto an unmapped column → UnmappedColumnTargetError', async () => {
@@ -256,7 +261,7 @@ describe('moveCard — cross-column move = workflow transition', () => {
     const id = await makeItem(fx);
     const neighbour = await makeItem(fx, 'Neighbour');
     await workItemsService.updateStatus(id, 'in_progress', fx.ctx); // now in_progress
-    const revsBefore = await revisionCount(id);
+    const revsBefore = await revisionCount(id, fx.workspaceId);
     const posBefore = await positionOf(id);
 
     // Drop AFTER the neighbour so the rank genuinely moves; in_progress is
@@ -270,7 +275,7 @@ describe('moveCard — cross-column move = workflow transition', () => {
 
     expect(result.appliedStatus).toBe('in_progress');
     expect(await statusOf(fx, id)).toBe('in_progress');
-    expect(await revisionCount(id)).toBe(revsBefore); // no new 'updated' revision
+    expect(await revisionCount(id, fx.workspaceId)).toBe(revsBefore); // no new 'updated' revision
     expect(await positionOf(id)).toBe(result.card.position);
     expect(await positionOf(id)).not.toBe(posBefore); // rank recomputed (after neighbour)
     expect((await positionOf(id)) > (await positionOf(neighbour))).toBe(true);
@@ -282,7 +287,7 @@ describe('moveCard — in-column reorder = pure rank change', () => {
     const fx = await makeFixture();
     const a = await makeItem(fx, 'A');
     const b = await makeItem(fx, 'B');
-    const revsBefore = await revisionCount(a);
+    const revsBefore = await revisionCount(a, fx.workspaceId);
 
     // Move A within the To Do column to sit AFTER B (B is the card above the
     // drop slot; nothing below) → A's rank changes, status stays todo.
@@ -295,7 +300,7 @@ describe('moveCard — in-column reorder = pure rank change', () => {
 
     expect(result.appliedStatus).toBe('todo');
     expect(await statusOf(fx, a)).toBe('todo');
-    expect(await revisionCount(a)).toBe(revsBefore); // no status revision
+    expect(await revisionCount(a, fx.workspaceId)).toBe(revsBefore); // no status revision
     expect(await positionOf(a)).toBe(result.card.position);
     expect((await positionOf(a)) > (await positionOf(b))).toBe(true); // sorts after B now
   });

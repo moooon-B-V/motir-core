@@ -6,6 +6,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Expansion nudge (Subtask 7.11.7 / MOTIR-904) — the REAL
 // `workItemRepository.findExpandableStubs` + `workItemsService.computeExpansionNudge`
@@ -77,7 +78,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     const fx = await makeWorkItemFixture();
     const s = await stub(fx, { title: 'Expand me' });
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     expect(stubs(rows)).toEqual([s.identifier]);
     expect(rows[0]).toMatchObject({ title: 'Expand me', kind: 'story' });
@@ -87,7 +90,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     const fx = await makeWorkItemFixture();
     const e = await stub(fx, { kind: 'epic', title: 'Bare epic' });
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     expect(stubs(rows)).toEqual([e.identifier]);
     expect(rows[0]?.kind).toBe('epic');
@@ -103,7 +108,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     // would have failed had the predicate compared the key instead.
     await setStatus(dropped.id, 'cancelled');
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     expect(stubs(rows)).toEqual([open.identifier]);
   });
@@ -113,7 +120,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     const started = await stub(fx, { title: 'Started but unexpanded' });
     await setStatus(started.id, 'in_progress');
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     expect(stubs(rows)).toEqual([started.identifier]);
   });
@@ -127,13 +136,21 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     );
 
     expect(
-      stubs(await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId)),
+      stubs(
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+        ),
+      ),
     ).toEqual([]);
 
     await adminDb.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
 
     expect(
-      stubs(await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId)),
+      stubs(
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+        ),
+      ),
     ).toEqual([parent.identifier]);
   });
 
@@ -147,7 +164,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     const gone = await stub(fx, { title: 'Archived stub' });
     await adminDb.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     expect(rows).toEqual([]);
   });
@@ -161,7 +180,9 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     await stub(fx, { title: 'lowest', priority: 'lowest' });
     const s6 = await stub(fx, { title: 'high', priority: 'high' });
 
-    const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId, tx),
+    );
 
     // Priority first (highest → lowest), key ascending inside a priority bucket
     // (s2 before s4), and the sixth stub — `lowest` — falls off the LIMIT 5.
@@ -180,7 +201,12 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
     const own = await stub(mine, { title: 'Mine' });
     await stub(theirs, { title: 'Theirs' });
 
-    const rows = await workItemRepository.findExpandableStubs(mine.projectId, mine.workspaceId);
+    // Bound to MINE — the workspace the assertion is about. Binding `theirs`
+    // would hide their stub by policy as well as by the explicit argument, and
+    // the gate would stop being tested.
+    const rows = await withWorkspaceServiceContext(mine.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(mine.projectId, mine.workspaceId, tx),
+    );
 
     expect(stubs(rows)).toEqual([own.identifier]);
   });

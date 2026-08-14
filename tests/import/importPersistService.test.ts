@@ -20,6 +20,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures/workItemFixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Engine-level tests for the Story-7.16 PERSIST slice (MOTIR-941): the
 // write-enabled importer engine + the `setImportedStatus` extension. Real
@@ -156,13 +157,19 @@ describe('importPersistService.runImport', () => {
     expect(closed.status).toBe('done');
 
     // The idempotency map has a row per issue.
-    const map1 = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
-    const map2 = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-2');
+    const map1 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
+    const map2 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-2', tx),
+    );
     expect(map1?.workItemId).toBeTruthy();
     expect(map2?.sourceHash).toBeTruthy();
 
     // The Import row carries the final counts + status.
-    const imp = await importRepository.findById(importId);
+    const imp = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importRepository.findById(importId, tx),
+    );
     expect(imp?.status).toBe('succeeded');
     expect(imp?.createdCount).toBe(2);
 
@@ -210,7 +217,9 @@ describe('importPersistService.runImport', () => {
     expect(workItemCount).toBe(2);
 
     // Third run — ACME-1 changed at source → UPDATE the SAME work item, still no dupe.
-    const mapBefore = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
+    const mapBefore = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
     const run3 = summaryOf(
       await drain(
         importPersistService.runImport({
@@ -227,7 +236,9 @@ describe('importPersistService.runImport', () => {
     expect(run3.counts).toMatchObject({ created: 0, updated: 1, skipped: 1 });
     const workItemCount2 = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(workItemCount2).toBe(2);
-    const mapAfter = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
+    const mapAfter = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
+    );
     // Same mapped work item; the edited title is now on it.
     expect(mapAfter?.workItemId).toBe(mapBefore?.workItemId);
     const edited = await adminDb.workItem.findUnique({ where: { id: mapAfter!.workItemId } });
@@ -258,8 +269,12 @@ describe('importPersistService.runImport', () => {
     );
     expect(summaryOf(events).counts).toMatchObject({ created: 2, failed: 0 });
 
-    const parentMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'PARENT');
-    const childMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'CHILD');
+    const parentMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'PARENT', tx),
+    );
+    const childMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'CHILD', tx),
+    );
     const child = await adminDb.workItem.findUnique({ where: { id: childMap!.workItemId } });
     // Restored to subtask AND parented to the story (the deferred-parent path).
     expect(child?.kind).toBe('subtask');
@@ -301,7 +316,9 @@ describe('importPersistService.runImport', () => {
     );
     expect(warned).toBe(true);
     // The child of the (illegal) subtask parent was left unparented (not 500'd).
-    const cMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'C');
+    const cMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'C', tx),
+    );
     const c = await adminDb.workItem.findUnique({ where: { id: cMap!.workItemId } });
     expect(c?.parentId).toBeNull();
   });
@@ -318,7 +335,9 @@ describe('importPersistService.runImport', () => {
     const deps: ImportEngineDeps = {
       lookupExisting: async (p, s, externalId) => {
         if (externalId === 'BAD') throw new Error('lookup blew up');
-        return importedIssueRepository.findBySourceId(p, s, externalId);
+        return withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          importedIssueRepository.findBySourceId(p, s, externalId, tx),
+        );
       },
     };
 

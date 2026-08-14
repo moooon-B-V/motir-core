@@ -5,6 +5,7 @@ import { importedIssueRepository } from '@/lib/repositories/importedIssueReposit
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Repository-layer tests for the Story-7.16 issue-importer persistence leaves
 // (MOTIR-939): importRepository + importedIssueRepository. Real Postgres (no
@@ -78,7 +79,9 @@ describe('importRepository', () => {
     expect(created.failedCount).toBe(0);
     expect(created.source).toBe('github');
 
-    const read = await importRepository.findById(created.id);
+    const read = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importRepository.findById(created.id, tx),
+    );
     expect(read?.id).toBe(created.id);
     expect(read?.mapping).toEqual({ status: { done: 'done' } });
   });
@@ -115,7 +118,9 @@ describe('importRepository', () => {
     // Deleting the user must not destroy the import run — createdBy SET NULL.
     await db.user.delete({ where: { id: fx.ownerId } });
 
-    const read = await importRepository.findById(id);
+    const read = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importRepository.findById(id, tx),
+    );
     expect(read).not.toBeNull();
     expect(read?.createdById).toBeNull();
   });
@@ -148,12 +153,16 @@ describe('importedIssueRepository — the idempotency map', () => {
     );
     expect(mapped.workItemId).toBe(workItemId);
 
-    const found = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-123');
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-123', tx),
+    );
     expect(found?.id).toBe(mapped.id);
     expect(found?.sourceHash).toBe('h1');
 
     // A different external id, same project/source, is a distinct lookup → null.
-    const miss = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-999');
+    const miss = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-999', tx),
+    );
     expect(miss).toBeNull();
   });
 
@@ -320,7 +329,9 @@ describe('importedIssueRepository — the idempotency map', () => {
 
     await db.workItem.delete({ where: { id: workItemId } });
 
-    const found = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-5');
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-5', tx),
+    );
     expect(found).toBeNull();
   });
 
@@ -341,7 +352,9 @@ describe('importedIssueRepository — the idempotency map', () => {
 
     await db.import.delete({ where: { id: importId } });
 
-    const found = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-6');
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-6', tx),
+    );
     expect(found).not.toBeNull();
     expect(found?.importId).toBeNull();
     expect(found?.workItemId).toBe(workItemId);

@@ -24,6 +24,7 @@ import {
 import { truncateAuthTables } from '../../helpers/db';
 import { captureEmailEvents, captureJobEvents } from '../../helpers/jobs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.2 · Subtask 6.2.5 — filter subscriptions. Real Postgres (the one
 // allowed seam is the Inngest client's `send()`, captured for assertion).
@@ -130,7 +131,11 @@ describe('subscribe / unsubscribe / read', () => {
       t.memberCtx,
     );
     expect(rescheduled).toEqual({ schedule: 'weekly', weekday: 3, hour: 17 });
-    expect(await savedFilterSubscriptionRepository.countByFilter(filter.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        savedFilterSubscriptionRepository.countByFilter(filter.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('a non-owner can subscribe to a project-shared filter (the read-layer rule)', async () => {
@@ -236,7 +241,11 @@ describe('dependents + cascade + token unsubscribe', () => {
     expect(deps.subscriptionCount).toBe(2);
 
     await savedFiltersService.delete(t.key, filter.id, t.memberCtx);
-    expect(await savedFilterSubscriptionRepository.countByFilter(filter.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        savedFilterSubscriptionRepository.countByFilter(filter.id, tx),
+      ),
+    ).toBe(0);
   });
 
   it('token unsubscribe deletes the row; an invalid token is rejected', async () => {
@@ -252,7 +261,9 @@ describe('dependents + cascade + token unsubscribe', () => {
       { schedule: 'daily', hour: 9 },
       t.memberCtx,
     );
-    const row = await savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId);
+    const row = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId, tx),
+    );
     expect(row).not.toBeNull();
 
     expect(await savedFilterSubscriptionsService.unsubscribeByToken('garbage')).toEqual({
@@ -261,7 +272,11 @@ describe('dependents + cascade + token unsubscribe', () => {
     expect(
       await savedFilterSubscriptionsService.unsubscribeByToken(signUnsubscribeToken(row!.id)),
     ).toEqual({ status: 'unsubscribed' });
-    expect(await savedFilterSubscriptionRepository.findById(row!.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        savedFilterSubscriptionRepository.findById(row!.id, tx),
+      ),
+    ).toBeNull();
     // Idempotent: re-clicking the (now stale) link still reports success.
     expect(
       await savedFilterSubscriptionsService.unsubscribeByToken(signUnsubscribeToken(row!.id)),
@@ -322,7 +337,9 @@ describe('deliver — resolves AS the subscriber', () => {
     for (let i = 0; i < 3; i += 1) {
       await createTestWorkItem(t.fx, { kind: 'task', title: `Task ${i}` });
     }
-    const row = await savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId);
+    const row = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId, tx),
+    );
     return {
       t,
       filter,
@@ -333,9 +350,8 @@ describe('deliver — resolves AS the subscriber', () => {
           { schedule: 'daily', hour: 9 },
           t.memberCtx,
         );
-        return (await savedFilterSubscriptionRepository.findByFilterAndUser(
-          filter.id,
-          t.memberId,
+        return (await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+          savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId, tx),
         ))!;
       },
       row,
@@ -384,9 +400,8 @@ describe('deliver — resolves AS the subscriber', () => {
       { schedule: 'daily', hour: 9 },
       t.otherCtx,
     );
-    const sub = (await savedFilterSubscriptionRepository.findByFilterAndUser(
-      filter.id,
-      t.otherId,
+    const sub = (await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.otherId, tx),
     ))!;
     await projectMembersService.removeMember({
       key: t.key,
@@ -435,9 +450,8 @@ describe('deliver — resolves AS the subscriber', () => {
       { schedule: 'daily', hour: 9 },
       t.memberCtx,
     );
-    const sub = (await savedFilterSubscriptionRepository.findByFilterAndUser(
-      filter.id,
-      t.memberId,
+    const sub = (await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      savedFilterSubscriptionRepository.findByFilterAndUser(filter.id, t.memberId, tx),
     ))!;
 
     const cap = captureEmailEvents();

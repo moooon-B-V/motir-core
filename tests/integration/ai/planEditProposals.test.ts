@@ -23,6 +23,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { WorkItemFixture } from '../../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // CONTRACT TEST — the plan-EDIT half of the incremental-proposals seam
 // (bug MOTIR-1743). `tests/integration/ai/generationProposals.test.ts` covers
@@ -141,7 +142,9 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       expect(jobId).toBe(c.jobId);
 
       // The Plan the callback will resolve: `generating`, bound by sourceJobId.
-      const opened = await planRepository.findBySourceJobId(jobId, fx.workspaceId);
+      const opened = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planRepository.findBySourceJobId(jobId, fx.workspaceId, tx),
+      );
       expect(opened).not.toBeNull();
       expect(opened!.id).toBe(planId);
       expect(opened!.status).toBe('generating');
@@ -162,7 +165,9 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       expect(body.planned).toBe(false);
 
       // The proposals landed as PlanItems on the opened plan, in append order.
-      const items = await planItemRepository.findByPlan(planId);
+      const items = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planItemRepository.findByPlan(planId, tx),
+      );
       expect(items.map((i) => i.id)).toEqual(body.planItemIds);
       expect(items.every((i) => i.op === 'add' && i.workItemId === null)).toBe(true);
       expect(items.map((i) => (i.proposedFields as { title: string }).title)).toEqual([
@@ -228,8 +233,12 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       proposals: [{ op: 'add', proposedFields: { title: 'From the expand' } }],
     });
 
-    const firstItems = await planItemRepository.findByPlan(first.planId);
-    const secondItems = await planItemRepository.findByPlan(second.planId);
+    const firstItems = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(first.planId, tx),
+    );
+    const secondItems = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(second.planId, tx),
+    );
     expect(firstItems.map((i) => (i.proposedFields as { title: string }).title)).toEqual([
       'From the augment',
     ]);

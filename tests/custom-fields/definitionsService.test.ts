@@ -34,6 +34,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Service-layer tests for customFieldsService — the DEFINITIONS half (Story
 // 5.3 · Subtask 5.3.2): field CRUD (slug key generation + immutability, the
@@ -407,8 +408,16 @@ describe('deleteField', () => {
 
     expect(receipt).toEqual({ id: field.id, key: 'severity', label: 'Severity', valueCount: 1 });
     expect(await customFieldsService.listFields(actorInput(fx))).toEqual([]);
-    expect(await customFieldOptionRepository.listByField(field.id, fx.workspaceId)).toEqual([]);
-    expect(await customFieldValueRepository.listByWorkItem(issue.id, fx.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldOptionRepository.listByField(field.id, fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.listByWorkItem(issue.id, fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -640,11 +649,14 @@ describe('the 5.3.2 repository additions', () => {
     await setTextValue(fx, issue2.id, a.id);
     await setTextValue(fx, issue1.id, b.id);
 
-    expect(await customFieldValueRepository.countGroupedByField([], fx.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.countGroupedByField([], fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
 
-    const counts = await customFieldValueRepository.countGroupedByField(
-      [a.id, b.id],
-      fx.workspaceId,
+    const counts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.countGroupedByField([a.id, b.id], fx.workspaceId, tx),
     );
     expect(new Map(counts.map((c) => [c.fieldId, c.count]))).toEqual(
       new Map([
@@ -659,12 +671,16 @@ describe('the 5.3.2 repository additions', () => {
     await createField(fx, 'Severity', 'select', { options: ['Low', 'High'] });
     await createField(fx, 'Env', 'select', { options: ['Prod'] });
 
-    const options = await customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId);
+    const options = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId, tx),
+    );
     expect(options.map((o) => o.label).sort()).toEqual(['High', 'Low', 'Prod']);
 
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     expect(
-      await customFieldOptionRepository.listByProject(fx.projectId, other.workspaceId),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldOptionRepository.listByProject(fx.projectId, other.workspaceId, tx),
+      ),
     ).toEqual([]);
   });
 });
@@ -763,11 +779,18 @@ describe('the 5.3.6 additions — description edit + per-option usage counts', (
     await setOptionValue(fx, issue1.id, field.id, field.options[0]!.id);
     await setOptionValue(fx, issue2.id, otherField.id, otherField.options[0]!.id);
 
-    expect(await customFieldValueRepository.countGroupedByOption([], fx.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.countGroupedByOption([], fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
 
-    const counts = await customFieldValueRepository.countGroupedByOption(
-      [field.options[0]!.id, field.options[1]!.id, otherField.options[0]!.id],
-      fx.workspaceId,
+    const counts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.countGroupedByOption(
+        [field.options[0]!.id, field.options[1]!.id, otherField.options[0]!.id],
+        fx.workspaceId,
+        tx,
+      ),
     );
     expect(new Map(counts.map((c) => [c.optionId, c.count]))).toEqual(
       new Map([

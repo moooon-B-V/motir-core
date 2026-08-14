@@ -14,7 +14,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, createTestProject } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Auto-relate-on-mention (Story 5.8 · Subtask 5.8.3): saving a work-item text
 // field or comment that REFERENCES another item (`[KEY](motir:<id>)` token or a
@@ -440,7 +440,9 @@ describe('auto-relate concurrency', () => {
     // Either winner is fine — the @@unique serialises the race; neither throws.
     await Promise.all([run(), run()]);
 
-    const forward = await workItemLinkRepository.findByFromItem(source.id, 'relates_to');
+    const forward = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(source.id, 'relates_to', tx),
+    );
     const toTarget = forward.filter((l) => l.toId === target.id);
     expect(toTarget).toHaveLength(1);
     expect(toTarget[0]!.source).toBe('mention');

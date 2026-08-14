@@ -9,6 +9,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Route-level tests for the CONTEXTUAL-PLANNING endpoints (7.12.3 · MOTIR-909) —
 // `POST /api/work-items/[id]/ai/plan` and
@@ -161,7 +162,11 @@ describe('POST /api/work-items/[id]/ai/plan — the happy path', () => {
     // The Plan the job's proposals append into, echoed for the rail's confirm
     // (MOTIR-1745) — bound to THIS job by `sourceJobId`.
     expect(body.planId).toBe(
-      (await planRepository.findBySourceJobId('job-contextual-1', fx.workspaceId))?.id,
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          planRepository.findBySourceJobId('job-contextual-1', fx.workspaceId, tx),
+        )
+      )?.id,
     );
     expect(body.sessionId).toBeTruthy();
     expect(body.session.targetKeys).toEqual([story.identifier]);
@@ -345,7 +350,11 @@ describe('POST /api/work-items/[id]/ai/plan — { resubmit: true }', () => {
     // The retry is its own proposal, so it echoes its OWN plan — confirming the
     // retry must never address the superseded run's (MOTIR-1745).
     expect(body.planId).toBe(
-      (await planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId))?.id,
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId, tx),
+        )
+      )?.id,
     );
     expect(body.session.turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual([
       'Break this up',

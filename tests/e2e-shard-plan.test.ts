@@ -47,7 +47,12 @@ const testIgnorePatterns = (/testIgnore:\s*\[([^\]]*)\]/.exec(PW_CONFIG)?.[1] ??
 /** Every spec file the MAIN Playwright config can run. */
 const runnableSpecs = readdirSync(E2E_DIR)
   .filter((f) => f.endsWith('.spec.ts'))
-  .filter((f) => !(f.startsWith('acceptance') || f === 'billing-cloud.spec.ts'))
+  .filter(
+    (f) =>
+      // The three lanes the main config testIgnore's: the receipt lane, the
+      // cloud-on regression lane (MOTIR-2849) and its original billing member.
+      !(f.startsWith('acceptance') || f.startsWith('cloud-') || f === 'billing-cloud.spec.ts'),
+  )
   .sort();
 
 /** The `e2e:` job body from ci.yml (job ids sit at exactly two spaces). */
@@ -65,7 +70,11 @@ describe('E2E bulk-leg shard plan (MOTIR-2617)', () => {
     // Every assertion below is vacuous if the directory scan or the config parse
     // silently found nothing.
     expect(runnableSpecs.length).toBeGreaterThan(50);
-    expect(testIgnorePatterns).toEqual(['**/billing-cloud.spec.ts', '**/acceptance*.spec.ts']);
+    expect(testIgnorePatterns).toEqual([
+      '**/billing-cloud.spec.ts',
+      '**/cloud-*.spec.ts',
+      '**/acceptance*.spec.ts',
+    ]);
   });
 
   it('has a measured cost for every spec the main config can run', () => {

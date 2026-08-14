@@ -19,6 +19,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Workflow management writes (Story 2.2 · Subtask 2.2.5). Real Postgres. The
 // fixture owner can manage; a member can't. Projects come from createTestProject
@@ -60,7 +61,9 @@ async function makeFixture(): Promise<Fixture> {
 }
 
 async function statusId(fx: Fixture, key: string): Promise<string> {
-  const s = await workflowsRepository.findStatusByKey(fx.projectId, key, fx.workspaceId);
+  const s = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    workflowsRepository.findStatusByKey(fx.projectId, key, fx.workspaceId, tx),
+  );
   if (!s) throw new Error(`seeded status ${key} missing`);
   return s.id;
 }

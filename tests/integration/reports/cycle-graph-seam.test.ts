@@ -8,6 +8,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 8.14 · Subtask 8.14.7 — the cycle-graph INTEGRATION SEAM (real Postgres).
 // The integration-seam rule: read 8.14.3's per-day aggregate (the WRITER,
@@ -107,11 +108,14 @@ describe('cycle-graph seam — repo aggregate read back through the service DTO'
 
     // The WRITER (8.14.3) and the CONSUMER (8.14.4) read the SAME window.
     const window = { start: utcDay(2026, 6, 1), end: utcDay(2026, 6, 12) };
-    const rows = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprint.id,
-      fx.workspaceId,
-      window,
-      false,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprint.id,
+        fx.workspaceId,
+        window,
+        false,
+        tx,
+      ),
     );
     const cycle = await reportsService.getSprintCycleGraph(sprint.id, fx.ctx);
 

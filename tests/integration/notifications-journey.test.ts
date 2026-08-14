@@ -24,6 +24,7 @@ import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '.
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 5.7 (in-app notifications) — the cross-cutting Vitest verification
 // (Subtask 5.7.7). The integration companion to the per-subtask unit suites
@@ -387,7 +388,11 @@ describe('the Notification model cascades + idempotency, observed through the re
   it('deleting the recipient removes their notifications (Cascade)', async () => {
     const j = await makeJourney();
     await seedRow(j, j.bo.id, { dedupeKey: 'r1' });
-    expect(await notificationRepository.countUnreadByRecipient(j.bo.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countUnreadByRecipient(j.bo.id, undefined, tx),
+      ),
+    ).toBe(1);
 
     await adminDb.user.delete({ where: { id: j.bo.id } });
     const notificationCount = await adminDb.notification.count({
@@ -399,7 +404,11 @@ describe('the Notification model cascades + idempotency, observed through the re
   it('deleting the work item removes its notifications (Cascade)', async () => {
     const j = await makeJourney();
     await seedRow(j, j.bo.id, { dedupeKey: 'wi1' });
-    expect(await notificationRepository.countByRecipient(j.bo.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countByRecipient(j.bo.id, undefined, tx),
+      ),
+    ).toBe(1);
 
     await adminDb.workItem.delete({ where: { id: j.issueId } });
     const notificationCount = await adminDb.notification.count({
@@ -439,8 +448,16 @@ describe('the Notification model cascades + idempotency, observed through the re
     await seedRow(j, j.bo.id, { dedupeKey: 'rd', readAt: new Date() });
     // Repository read via the `db` singleton (no `tx`) — the read-path the
     // routes hit and the badge poll uses.
-    expect(await notificationRepository.countUnreadByRecipient(j.bo.id)).toBe(2);
-    expect(await notificationRepository.countByRecipient(j.bo.id)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countUnreadByRecipient(j.bo.id, undefined, tx),
+      ),
+    ).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countByRecipient(j.bo.id, undefined, tx),
+      ),
+    ).toBe(3);
   });
 
   it('the (dedupeKey, recipientUserId) @@unique rejects a duplicate row', async () => {
@@ -486,14 +503,28 @@ describe('the Notification model cascades + idempotency, observed through the re
   it('repository reads via the db singleton: cursor past the end is an empty page; empty createMany is a no-op', async () => {
     const j = await makeJourney();
     await seedRow(j, j.bo.id, { dedupeKey: 'p1' });
-    const [only] = await notificationRepository.listByRecipient(j.bo.id, { category: 'direct' });
+    const [only] = await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+      notificationRepository.listByRecipient(j.bo.id, { category: 'direct' }, tx),
+    );
     expect(only).toBeDefined();
     // Resuming after the last row yields nothing (cursor edge).
-    const past = await notificationRepository.listByRecipient(j.bo.id, { cursor: only!.id });
+    const past = await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+      notificationRepository.listByRecipient(j.bo.id, { cursor: only!.id }, tx),
+    );
     expect(past).toEqual([]);
     // findById via the singleton resolves the row; a missing id is null.
-    expect((await notificationRepository.findById(only!.id))?.id).toBe(only!.id);
-    expect(await notificationRepository.findById('no-such-id')).toBeNull();
+    expect(
+      (
+        await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+          notificationRepository.findById(only!.id, tx),
+        )
+      )?.id,
+    ).toBe(only!.id);
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.findById('no-such-id', tx),
+      ),
+    ).toBeNull();
     // The empty-input guard short-circuits with no DB round-trip.
     const emptyCreate = await adminDb.$transaction((tx) =>
       notificationRepository.createMany([], tx),
@@ -757,14 +788,22 @@ describe('the per-tab unread count is category-scoped (bug 8.8.1)', () => {
     await seedRow(j, j.bo.id, { dedupeKey: 'w1', category: 'watching' });
     await seedRow(j, j.bo.id, { dedupeKey: 'wr', category: 'watching', readAt: new Date() });
 
-    expect(await notificationRepository.countUnreadByRecipient(j.bo.id)).toBe(3); // global
     expect(
-      await notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'direct' }),
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countUnreadByRecipient(j.bo.id, undefined, tx),
+      ),
+    ).toBe(3); // global
+    expect(
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'direct' }, tx),
+      ),
     ).toBe(2);
     // Only the UNREAD watching row counts (the read one is excluded by the
     // partial index), proving the filter composes with `readAt IS NULL`.
     expect(
-      await notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'watching' }),
+      await withWorkspaceServiceContext(j.fx.workspaceId, (tx) =>
+        notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'watching' }, tx),
+      ),
     ).toBe(1);
   });
 });

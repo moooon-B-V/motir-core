@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { backlogService } from '@/lib/services/backlogService';
@@ -176,15 +177,27 @@ describe('backlogService.rankIssue', () => {
   it('moves an issue strictly between two neighbours with a SINGLE-row write', async () => {
     const fx = await makeWorkItemFixture({ name: 'Rank' });
     const [a, b, c] = (await createBacklog(fx, ['A', 'B', 'C'])) as Three; // order A,B,C
-    const aRankBefore = (await workItemRepository.findById(a.id))!.backlogRank;
-    const bRankBefore = (await workItemRepository.findById(b.id))!.backlogRank;
+    const aRankBefore = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(a.id, tx),
+    ))!.backlogRank;
+    const bRankBefore = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(b.id, tx),
+    ))!.backlogRank;
 
     await backlogService.rankIssue(c.id, { beforeId: a.id, afterId: b.id }, fx.ctx);
 
     expect(await backlogIds(fx)).toEqual([a.id, c.id, b.id]); // C now between A and B
     // Only C's rank changed (the fractional-index single-row guarantee).
-    expect((await workItemRepository.findById(a.id))!.backlogRank).toBe(aRankBefore);
-    expect((await workItemRepository.findById(b.id))!.backlogRank).toBe(bRankBefore);
+    expect(
+      (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findById(a.id, tx),
+      ))!.backlogRank,
+    ).toBe(aRankBefore);
+    expect(
+      (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findById(b.id, tx),
+      ))!.backlogRank,
+    ).toBe(bRankBefore);
   });
 
   it('handles the append edge case (only beforeId → after the last)', async () => {
@@ -313,8 +326,12 @@ describe('create-time backlog rank (workItemsService.createWorkItem wiring)', ()
     const fx = await makeWorkItemFixture({ name: 'CreateRank' });
     const [a, b] = (await createBacklog(fx, ['A', 'B'])) as Two;
 
-    const ra = (await workItemRepository.findById(a.id))!.backlogRank;
-    const rb = (await workItemRepository.findById(b.id))!.backlogRank;
+    const ra = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(a.id, tx),
+    ))!.backlogRank;
+    const rb = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(b.id, tx),
+    ))!.backlogRank;
     expect(ra).not.toBeNull();
     expect(rb).not.toBeNull();
     expect(ra! < rb!).toBe(true); // appended in creation order

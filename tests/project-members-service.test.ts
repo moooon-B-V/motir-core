@@ -21,6 +21,7 @@ import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Service-layer tests for projectMembersService (Story 6.4 · Subtask 6.4.4) —
 // the project membership + access management write path. Real Postgres, no DB
@@ -115,7 +116,9 @@ describe('addMember', () => {
     expect(member.role).toBe('viewer');
     expect(member.roleDefinition).toBeNull();
 
-    const persisted = await projectMembershipRepository.findByUserAndProject(alice.id, project.id);
+    const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
+      projectMembershipRepository.findByUserAndProject(alice.id, project.id, tx),
+    );
     expect(persisted?.role).toBe('viewer');
     expect(persisted?.workspaceId).toBe(workspace.id);
   });
@@ -515,7 +518,9 @@ describe('setRole — custom roles', () => {
     expect(back.role).toBe('viewer');
     expect(back.roleDefinition).toBeNull();
     // No membership is ever left pointing at a role it does not hold.
-    const persisted = await projectMembershipRepository.findByUserAndProject(eli.id, project.id);
+    const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
+      projectMembershipRepository.findByUserAndProject(eli.id, project.id, tx),
+    );
     expect(persisted?.roleDefinitionId).toBeNull();
     expect(persisted?.role).toBe('viewer');
   });
@@ -715,7 +720,9 @@ describe('removeMember', () => {
       targetUserId: frank.id,
     });
     expect(removed.userId).toBe(frank.id);
-    const gone = await projectMembershipRepository.findByUserAndProject(frank.id, project.id);
+    const gone = await withWorkspaceServiceContext(workspace.id, (tx) =>
+      projectMembershipRepository.findByUserAndProject(frank.id, project.id, tx),
+    );
     expect(gone).toBeNull();
   });
 

@@ -6,6 +6,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // 6.11.8 — the COMPREHENSIVE read-exclusion guard (per docs/decisions/
 // triage-model.md §2; the load-bearing correctness guarantee of Story 6.11).
@@ -137,24 +138,30 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         name: 'findProjectForest (tree)',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.findProjectForest(fx.projectId, fx.workspaceId)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findProjectForest(fx.projectId, fx.workspaceId, undefined, tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findProjectTreeLevel — roots',
         present: [m.epic, m.normalRoot],
         ids: async () =>
           (
-            await workItemRepository.findProjectTreeLevel(
-              fx.projectId,
-              fx.workspaceId,
-              null,
-              SORT,
-              {
-                take: 100,
-                offset: 0,
-              },
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findProjectTreeLevel(
+                fx.projectId,
+                fx.workspaceId,
+                null,
+                SORT,
+                {
+                  take: 100,
+                  offset: 0,
+                },
+                undefined,
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
@@ -163,41 +170,62 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         present: [m.normalChild],
         ids: async () =>
           (
-            await workItemRepository.findProjectTreeLevel(
-              fx.projectId,
-              fx.workspaceId,
-              m.epic,
-              SORT,
-              { take: 100, offset: 0 },
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findProjectTreeLevel(
+                fx.projectId,
+                fx.workspaceId,
+                m.epic,
+                SORT,
+                { take: 100, offset: 0 },
+                undefined,
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
       {
         name: 'findChildren (epic subtree)',
         present: [m.normalChild],
-        ids: async () => (await workItemRepository.findChildren(m.epic)).map((r) => r.id),
+        ids: async () =>
+          (
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findChildren(m.epic, tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findProjectIssuesFlat (list)',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.findProjectIssuesFlat(fx.projectId, fx.workspaceId, SORT)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findProjectIssuesFlat(
+                fx.projectId,
+                fx.workspaceId,
+                SORT,
+                undefined,
+                undefined,
+                tx,
+              ),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findColumnCards (board column)',
         present: [m.normalChild, m.normalRoot],
         ids: async () =>
           (
-            await workItemRepository.findColumnCards(
-              fx.projectId,
-              fx.workspaceId,
-              [status],
-              'position',
-              {
-                limit: 100,
-              },
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findColumnCards(
+                fx.projectId,
+                fx.workspaceId,
+                [status],
+                'position',
+                {
+                  limit: 100,
+                },
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
@@ -216,9 +244,11 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         name: 'quickSearch (cmd-K / link picker)',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.quickSearch(fx.workspaceId, [fx.projectId], PROBE, 100)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.quickSearch(fx.workspaceId, [fx.projectId], PROBE, 100, [], tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findBacklogPage (backlog)',
@@ -227,7 +257,9 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         present: [m.normalRoot],
         ids: async () =>
           (
-            await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 })
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 }, tx),
+            )
           ).map((r) => r.id),
       },
       {
@@ -235,10 +267,13 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         present: m.normalAll,
         ids: async () =>
           (
-            await workItemRepository.findByProjectAndKinds(
-              fx.projectId,
-              ['epic', 'story', 'task', 'bug'],
-              fx.workspaceId,
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findByProjectAndKinds(
+                fx.projectId,
+                ['epic', 'story', 'task', 'bug'],
+                fx.workspaceId,
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
@@ -246,13 +281,21 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         name: 'findByProject (paged project read)',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.findByProject(fx.projectId, { take: 100 })).map((r) => r.id),
+          (
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findByProject(fx.projectId, { take: 100 }, tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findByProjectFiltered',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.findByProjectFiltered(fx.projectId)).map((r) => r.id),
+          (
+            await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+              workItemRepository.findByProjectFiltered(fx.projectId, undefined, tx),
+            )
+          ).map((r) => r.id),
       },
     ];
 
@@ -273,29 +316,66 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
 
     // countProjectIssues == the flat list size (3 normal, 0 triage).
     const listLen = (
-      await workItemRepository.findProjectIssuesFlat(fx.projectId, fx.workspaceId, SORT)
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.findProjectIssuesFlat(
+          fx.projectId,
+          fx.workspaceId,
+          SORT,
+          undefined,
+          undefined,
+          tx,
+        ),
+      )
     ).length;
-    expect(await workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId)).toBe(listLen);
-    expect(await workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(listLen);
+    expect(
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(3);
 
     // countBacklog == its own page size (both exclude triage identically).
     const backlogLen = (
-      await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 })
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 }, tx),
+      )
     ).length;
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId)).toBe(backlogLen);
+    expect(
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, undefined, undefined, tx),
+      ),
+    ).toBe(backlogLen);
 
     // countProjectTreeLevel == its level page size, at both root and child level.
     const rootLevel = (
-      await workItemRepository.findProjectTreeLevel(fx.projectId, fx.workspaceId, null, SORT, {
-        take: 100,
-        offset: 0,
-      })
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.findProjectTreeLevel(
+          fx.projectId,
+          fx.workspaceId,
+          null,
+          SORT,
+          {
+            take: 100,
+            offset: 0,
+          },
+          undefined,
+          tx,
+        ),
+      )
     ).length;
-    expect(await workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, null)).toBe(
-      rootLevel,
-    );
     expect(
-      await workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, m.epic),
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, null, tx),
+      ),
+    ).toBe(rootLevel);
+    expect(
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, m.epic, tx),
+      ),
     ).toBe(1); // only the normal child under the epic — the triage twin is excluded
   });
 
@@ -304,12 +384,15 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     const { fx, status } = m;
 
     // The card set the lanes partition — already triage-excluded.
-    const cards = await workItemRepository.findColumnCards(
-      fx.projectId,
-      fx.workspaceId,
-      [status],
-      'position',
-      { limit: 100 },
+    const cards = await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+      workItemRepository.findColumnCards(
+        fx.projectId,
+        fx.workspaceId,
+        [status],
+        'position',
+        { limit: 100 },
+        tx,
+      ),
     );
     const cardCount = cards.length;
     expect(cardCount).toBeGreaterThan(0);
@@ -320,16 +403,30 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     // equal the (triage-excluded) card count — never inflated by the triage twin.
     expect(
       sum(
-        await workItemRepository.aggregateBoardLanesByAssignee(fx.projectId, fx.workspaceId, [
-          status,
-        ]),
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.aggregateBoardLanesByAssignee(
+            fx.projectId,
+            fx.workspaceId,
+            [status],
+            undefined,
+            undefined,
+            tx,
+          ),
+        ),
       ),
     ).toBe(cardCount);
     expect(
       sum(
-        await workItemRepository.aggregateBoardLanesByPriority(fx.projectId, fx.workspaceId, [
-          status,
-        ]),
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.aggregateBoardLanesByPriority(
+            fx.projectId,
+            fx.workspaceId,
+            [status],
+            undefined,
+            undefined,
+            tx,
+          ),
+        ),
       ),
     ).toBe(cardCount);
 
@@ -341,10 +438,15 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     // the epic and inflate this count.
     const expectedEpicLane = cards.filter((c) => c.id === m.epic || c.parentId === m.epic).length;
     expect(expectedEpicLane).toBe(2); // the epic card + its one normal child (NOT the triage twin)
-    const epicLanes = await workItemRepository.aggregateBoardLanesByEpic(
-      fx.projectId,
-      fx.workspaceId,
-      [status],
+    const epicLanes = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateBoardLanesByEpic(
+        fx.projectId,
+        fx.workspaceId,
+        [status],
+        undefined,
+        undefined,
+        tx,
+      ),
     );
     const lane = epicLanes.find((r) => r.epicId === m.epic);
     expect(lane?.count).toBe(expectedEpicLane);
@@ -357,10 +459,18 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
 
     // Distribution over kind: the 3 normal items (1 epic + 2 task), never the 2
     // triage twins.
-    const dist = await workItemRepository.aggregateDistribution(fx.projectId, fx.workspaceId, {
-      kind: 'column',
-      column: 'kind',
-    });
+    const dist = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateDistribution(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          kind: 'column',
+          column: 'kind',
+        },
+        undefined,
+        tx,
+      ),
+    );
     expect(sum(dist)).toBe(3);
 
     // Created-by-bucket over a window covering "now": all 5 items were created
@@ -369,11 +479,15 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
       start: new Date(Date.now() - 24 * 60 * 60 * 1000),
       end: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
-    const buckets = await workItemRepository.aggregateCreatedByBucket(
-      fx.projectId,
-      fx.workspaceId,
-      'day',
-      window,
+    const buckets = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateCreatedByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        'day',
+        window,
+        undefined,
+        tx,
+      ),
     );
     expect(sum(buckets)).toBe(3);
   });
@@ -394,7 +508,9 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
   it('the triage-queue read is the SOLE inversion — only triage items, never a normal one', async () => {
     const m = await buildMatrix();
     const queueIds = (
-      await workItemRepository.findTriageQueue(m.fx.projectId, m.fx.workspaceId, { limit: 100 })
+      await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
+        workItemRepository.findTriageQueue(m.fx.projectId, m.fx.workspaceId, { limit: 100 }, tx),
+      )
     ).map((r) => r.id);
 
     expect([...queueIds].sort()).toEqual([...m.triagedAll].sort());

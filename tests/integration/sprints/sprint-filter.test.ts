@@ -3,6 +3,7 @@ import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { backlogService } from '@/lib/services/backlogService';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { FILTER_UNASSIGNED_TOKEN, type FilterAst } from '@/lib/filters/ast';
 import { adminDb } from '../../helpers/adminDb';
@@ -133,13 +134,16 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ast: buildAst('and', [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }]),
     };
 
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50, filter }, tx),
+    );
     // a1 (live bug) + a3 (DONE bug) — the sprint keeps its done issue.
     expect(ids(page)).toEqual([items.a1!.id, items.a3!.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter)).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter, tx),
+      ),
+    ).toBe(2);
   });
 
   it('narrows by the TYPE facet', async () => {
@@ -150,12 +154,15 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ast: buildAst('and', [{ field: 'type', operator: 'is_any_of', value: ['code'] }]),
     };
 
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50, filter }, tx),
+    );
     expect(ids(page)).toEqual([items.a0!.id, items.a3!.id, items.a4!.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter, tx),
+      ),
+    ).toBe(3);
   });
 
   it('narrows by the STATUS facet — and KEEPS a matching done issue (sprint, not backlog)', async () => {
@@ -166,12 +173,15 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ast: buildAst('and', [{ field: 'status', operator: 'is_any_of', value: ['done'] }]),
     };
 
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50, filter }, tx),
+    );
     expect(ids(page)).toEqual([items.a3!.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter, tx),
+      ),
+    ).toBe(1);
   });
 
   it('narrows by the ASSIGNEE facet (assigned and the unassigned token)', async () => {
@@ -187,22 +197,34 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ]),
     };
 
-    const assigned = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter: assignedFilter,
-    });
+    const assigned = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 50, filter: assignedFilter },
+        tx,
+      ),
+    );
     expect(ids(assigned)).toEqual([items.a0!.id, items.a2!.id, items.a4!.id]);
     expect(
-      await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, assignedFilter),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, assignedFilter, tx),
+      ),
     ).toBe(3);
 
-    const unassigned = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter: unassignedFilter,
-    });
+    const unassigned = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 50, filter: unassignedFilter },
+        tx,
+      ),
+    );
     expect(ids(unassigned)).toEqual([items.a1!.id, items.a3!.id]);
     expect(
-      await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, unassignedFilter),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, unassignedFilter, tx),
+      ),
     ).toBe(2);
   });
 
@@ -214,12 +236,15 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ast: buildAst('and', [{ field: 'text', operator: 'contains', value: 'keep' }]),
     };
 
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50, filter }, tx),
+    );
     expect(ids(page)).toEqual([items.a2!.id, items.a3!.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter)).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter, tx),
+      ),
+    ).toBe(2);
   });
 
   it('narrows by an advanced OR AST (beyond a single facet)', async () => {
@@ -234,12 +259,15 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ]),
     };
 
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50, filter }, tx),
+    );
     expect(ids(page)).toEqual([items.a1!.id, items.a2!.id, items.a3!.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, filter, tx),
+      ),
+    ).toBe(3);
   });
 
   it('seek-paginates correctly with a filter applied (page 2 continues the filtered set)', async () => {
@@ -251,25 +279,30 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
       ast: buildAst('and', [{ field: 'type', operator: 'is_any_of', value: ['code'] }]),
     };
 
-    const page1 = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 1,
-      filter,
-    });
+    const page1 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 1, filter }, tx),
+    );
     // take+1 over-fetch → 2 rows, the second signalling a next page.
     expect(ids(page1)).toEqual([items.a0!.id, items.a3!.id]);
 
-    const page2 = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 1,
-      cursor: items.a0!.id,
-      filter,
-    });
+    const page2 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 1, cursor: items.a0!.id, filter },
+        tx,
+      ),
+    );
     expect(ids(page2)).toEqual([items.a3!.id, items.a4!.id]);
 
-    const page3 = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 1,
-      cursor: items.a3!.id,
-      filter,
-    });
+    const page3 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 1, cursor: items.a3!.id, filter },
+        tx,
+      ),
+    );
     // Last filtered row — no over-fetch row, so no next page.
     expect(ids(page3)).toEqual([items.a4!.id]);
   });
@@ -280,22 +313,40 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
     const items = await seedMixed(fx, sprintId);
     const all = [items.a0!.id, items.a1!.id, items.a2!.id, items.a3!.id, items.a4!.id];
 
-    const noArg = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50 });
-    const undefinedFilter = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter: undefined,
-    });
+    const noArg = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50 }, tx),
+    );
+    const undefinedFilter = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 50, filter: undefined },
+        tx,
+      ),
+    );
     // An empty-condition AST also takes the unfiltered path (no SQL change).
-    const emptyAst = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      filter: { ast: buildAst('and', []) },
-    });
+    const emptyAst = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 50, filter: { ast: buildAst('and', []) } },
+        tx,
+      ),
+    );
 
     expect(ids(noArg)).toEqual(all);
     expect(ids(undefinedFilter)).toEqual(all);
     expect(ids(emptyAst)).toEqual(all);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId)).toBe(5);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId, undefined)).toBe(5);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(5);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(5);
   });
 
   it('is workspace-gated under a filter (a cross-workspace read returns [])', async () => {
@@ -306,10 +357,23 @@ describe('sprint filtering — repository (findSprintIssues / countSprintIssues)
     const filter = {
       ast: buildAst('and', [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }]),
     };
+    // ⚠️ Bound to `fx`, READ for `other`. This pairing is deliberate and it is what
+    // keeps the claim alive: the policy admits fx's rows, so the empty result can
+    // ONLY come from the explicit `workspaceId` WHERE clause — which is what this
+    // test is about. Binding to `other` instead would let the POLICY hide the rows
+    // too, and `[]` would stop distinguishing a working gate from a broken one
+    // (the vacuous-pass shape that put five sibling files in
+    // `ADJUDICATED_UNBOUND_FILES`).
     expect(
-      await workItemRepository.findSprintIssues(sprintId, other.workspaceId, { take: 50, filter }),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findSprintIssues(sprintId, other.workspaceId, { take: 50, filter }, tx),
+      ),
     ).toEqual([]);
-    expect(await workItemRepository.countSprintIssues(sprintId, other.workspaceId, filter)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprintId, other.workspaceId, filter, tx),
+      ),
+    ).toBe(0);
   });
 });
 
