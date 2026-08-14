@@ -35,7 +35,7 @@
 // and tells a reviewer nothing about whether the door works, which is what this
 // clip is the receipt for.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { DOC_SURFACES } from '@/lib/apiDocs/surfaces';
 import { DOCS_REDIRECTS } from '../../next.config';

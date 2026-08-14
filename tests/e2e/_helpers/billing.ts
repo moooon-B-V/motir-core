@@ -1,7 +1,7 @@
 // E2E seed + fixture helpers for the billing journeys (Subtask 8.1.10).
 //
 // The billing surfaces are CLOUD-ONLY (MOTIR_CLOUD), so these specs run in the
-// dedicated cloud-on lane (playwright.billing.config.ts). The motir-ai side of
+// dedicated cloud-on lane (playwright.cloud.config.ts). The motir-ai side of
 // billing (AI plan/usage + Stripe sessions) is stood in for by the E2E_TEST_BILLING
 // boundary mock (lib/test-billing-mock.ts); these helpers (1) seed the local org /
 // membership / project + the active-context cookies, and (2) WRITE the per-org

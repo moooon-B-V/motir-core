@@ -1,5 +1,14 @@
 # ADR: Story-acceptance video — entitlement axis, storage/retention, org toggle, CI-upload auth
 
+> **This record governs the PIPELINE that produces a receipt. What happens to a
+> receipt AFTER it is approved — and to the spec that produced it — is
+> `acceptance-receipt-lifecycle.md` (Story MOTIR-2765).** In short: an
+> **approved** receipt is immutable, a republish against one is refused rather
+> than superseding it, and the spec that produced it then leaves the acceptance
+> lane by promotion or retirement. If you are here with a supersede or a
+> retention question, read that record's §2 first — this record's
+> supersede/retention rules hold for a `pending` receipt, not for a signed one.
+
 - **Status:** Accepted (2026-07-05, drafted for Story MOTIR-1627 per the
   decision-subtask ladder). This is the rung-1 policy the rest of MOTIR-1627
   implements — no acceptance-video code ships until these four decisions are

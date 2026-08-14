@@ -38,7 +38,7 @@
 // the assertions above them have already proven the state (see the note on
 // CHAPTER_HOLD_MS in `_helpers/acceptance-video.ts`) — never synchronisation.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page, Request } from '@playwright/test';
 
 import { resetDatabase, db } from './_helpers/db-reset';

@@ -1,5 +1,5 @@
 import { request as apiRequest } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import {
   seedBillingOwner,

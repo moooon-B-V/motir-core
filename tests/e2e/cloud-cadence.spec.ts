@@ -47,7 +47,7 @@
 // is a smaller STORY, never a faster or shorter recording (the watchability
 // amendment in docs/decisions/acceptance-video.md).
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

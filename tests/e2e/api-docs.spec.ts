@@ -36,7 +36,7 @@
 // checks the message, the retry and the still-reachable sibling pages. Recorded
 // here rather than left as a silent omission.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

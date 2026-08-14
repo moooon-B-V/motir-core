@@ -705,6 +705,40 @@ landed" race has no window left to form in.
   the 174 happy-dom files and produced 81 warnings across 15 of them, each fixed
   by awaiting the right signal. It is far cheaper than the class it retires.
 
+### An `acceptance-*.spec.ts` is a RECEIPT, and it has a lifecycle (MOTIR-2765)
+
+**A spec in `tests/e2e/acceptance*.spec.ts` is not a regression test, and the two
+must not be reasoned about the same way.** It exists to record ONE watchable run
+of a story working, which a human then approves. The full rule is
+`docs/decisions/acceptance-receipt-lifecycle.md`; what you need at the keyboard:
+
+- **The spec is a TEST; the video is a TEST EXECUTION.** Their lifetimes are
+  independent. Deleting the spec does not touch the receipt it produced.
+- **Once the story's receipt is `approved` it is FROZEN** — a republish is
+  refused, not superseded — and **the spec must LEAVE the acceptance lane**, by
+  exactly one of two routes: **PROMOTE** it into a lane that runs on every PR
+  (keep every assertion; strip `chapter()` / `beat()` / `acceptanceStory()` and
+  the pacing holds), or **RETIRE** it, naming where the flow stays covered. There
+  is no third route.
+- **⚠️ When an acceptance spec goes red on a PR that did not change its story,
+  do NOT update the assertion to match today.** That is the one reflex this rule
+  exists to stop: it is right for a regression test and backwards for a receipt,
+  because it edits history to agree with the present (motir-core#2051 is the
+  instance — a spec for a story accepted months earlier went red because a later
+  story legitimately moved the sign-in landing). The right move is a disposition.
+- **⚠️ The destination is NOT automatically the main lane.** The acceptance lane's
+  server is CLOUD-ON with the motir-ai, code-health and GitHub-provisioning mocks;
+  `playwright.config.ts`'s is none of those. Promote a gated spec into the main
+  lane and it does not go red — it goes GREEN, because the entitlement path
+  short-circuits off-cloud to the same inert value it returns for an exempt org
+  (the MOTIR-2601 trap). Check `docs/acceptance-lane-triage.md` for the
+  per-spec destination before renaming anything.
+- **Writing a NEW acceptance spec:** declare its story with `acceptanceStory('MOTIR-<n>')`
+  — without it the clip cannot be published to that story at all — and keep it
+  watchable (the ≤ ~60s scope, the chaptering, the pacing). A clip under the 15s
+  floor is reported as _unpublishable_, which is a different verdict from a
+  failure.
+
 ---
 
 ## ⚠️ Page state after a mutation — server refresh vs. client-island refetch

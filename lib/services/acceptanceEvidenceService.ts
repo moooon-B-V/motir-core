@@ -14,6 +14,7 @@ import {
   AcceptanceEvidenceBlobMissingError,
   AcceptanceEvidenceNotAStoryError,
   AcceptanceEvidenceNotFoundError,
+  AcceptanceEvidenceAlreadyApprovedError,
   AcceptanceEvidenceNotInReviewError,
   AcceptanceEvidencePathnameError,
 } from '@/lib/acceptanceEvidence/errors';
@@ -172,6 +173,21 @@ async function persistEvidence(
   ctx: ServiceContext,
 ) {
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    // THE FREEZE GATE (MOTIR-2764). An `approved` receipt is the record of a
+    // human watching THIS recording and signing it — superseding it destroys the
+    // evidence the story was accepted on, and the unlink below hands its bytes to
+    // the orphan-GC. Lock the current row, read its status under the lock (the
+    // lock-before-read-derived-update rule), and refuse before anything is
+    // written. `pending` / `changes_requested` stay freely replaceable: a story
+    // still in review must keep getting the current truth on every run.
+    // Policy: docs/decisions/acceptance-receipt-lifecycle.md §2.
+    const locked = await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(
+      args.story.id,
+      tx,
+    );
+    if (locked?.status === 'approved') {
+      throw new AcceptanceEvidenceAlreadyApprovedError(args.story.identifier);
+    }
     const prior = await acceptanceEvidenceRepository.findCurrentByWorkItem(args.story.id, tx);
     if (prior) {
       await acceptanceEvidenceRepository.markSupersededByWorkItem(args.story.id, tx);
