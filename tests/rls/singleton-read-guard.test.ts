@@ -21,32 +21,40 @@ import { scanSingletonReads } from './singletonReadScan';
 // `DELIBERATELY_UNGUARDED` map — the machine enumerates, a human adjudicates, and
 // an unadjudicated addition is a red build rather than a silent one.
 //
-// ⚠️ WHAT THE ADJUDICATION FOUND (MOTIR-2789), AND WHY THE HEADLINE NUMBER MISLEADS.
-// The 69 unreviewed sites were adjudicated by locating EVERY call site of every read
-// and inspecting its enclosing service method for a context wrapper. The result was
-// not 69 scattered oversights:
+// ⚠️ TWO RATCHETS MEASURED DIFFERENT THINGS, AND CONFLATING THEM WOULD HAVE READ AS
+// REPAIR. This is the one part of MOTIR-2789/2796 worth carrying forward, because the
+// next person to add a ratchet here will face the same choice.
 //
-//   • 55 are `unbound-read-path` — confirmed unbound, therefore confirmed BROKEN under
-//     `motir_app`. `reportsService.ts` and `savedFiltersService.ts` contain ZERO context
-//     wrappers in the entire file; `boardsService.ts` and `workItemsService.ts` have them
-//     only around their WRITE paths. This is the shape of the whole READ surface, which
-//     has never needed a binding because CI and production both run a BYPASSRLS role.
-//   •  3 are `operator-script`, •  3 are `test-only` (vacuous-pass risk),
-//   •  8 remain `unreviewed` — the public-surface reads, below.
+// The adjudication pass located every call site of all 69 unreviewed reads and inspected
+// each enclosing service method for a context wrapper. `UNREVIEWED_CEILING` fell 69 -> 8
+// in that single commit — and the product got no more correct, because what the pass
+// produced was 55 reads now KNOWN to be broken under `motir_app` rather than unknown.
+// `reportsService.ts` and `savedFiltersService.ts` carried ZERO context wrappers in the
+// whole file; `boardsService.ts` and `workItemsService.ts` had them only around WRITE
+// paths. That is the shape of an entire READ surface which had never needed a binding,
+// because CI and production both ran a BYPASSRLS role.
 //
-// So `UNREVIEWED_CEILING` fell 69 → 8 while the product got no more correct. That is
-// why there are now TWO ratchets: `unreviewed` measures whether anyone has LOOKED, and
-// `UNBOUND_READ_PATH_CEILING` measures whether the reads WORK. Quoting the first alone
-// would turn a diagnosis into a false claim of repair. The second falls only when a
-// service actually binds its reads (MOTIR-2796), never by writing a verdict.
+// So a SECOND ratchet was added — `UNBOUND_READ_PATH_CEILING` — precisely so the
+// knowledge number could not be quoted as the correctness number. `unreviewed` measures
+// whether anyone LOOKED, and can be lowered by writing a verdict. The unbound count
+// measured whether the reads WORK, and could only be lowered by a service actually
+// binding them.
 //
-// `public` remains the one verdict that still cannot be earned by reading code: it is the
-// claim that MOTIR-2684's public policy ARM admits the row, and only the public-projects
-// suite passing under the app role can settle it. That suite is at 23 failures (from 33),
-// so a `public` verdict today would be a guess wearing a citation.
+// MOTIR-2796 drove that second count 55 -> 0, so MOTIR-2814 retired it: a ratchet with
+// no members is a number that invites editing, where a set-equality assertion cannot be
+// nudged. The `unbound-read-path` verdict is gone with it. What replaces it is stricter,
+// not weaker — a NEW unbound read of a policy-gated table has no verdict to earn, so the
+// set-equality test below fails until it is bound or explained. Its sibling
+// `tests/rls/call-site-guard.test.ts` holds the other axis (a bindable read whose caller
+// passes nothing) and carries its own two ratchets, both at their floor.
 //
-// Both ratchets may fall, never rise. Rewriting a ceiling upward to make a build pass is
-// the one edit this file exists to prevent.
+// `public` remains the one verdict that cannot be earned by reading code: it is the claim
+// that MOTIR-2684's public policy ARM admits the row, and only the public-projects suite
+// passing under the app role can settle it. The 8 `unreviewed` sites below are all of that
+// kind, and they belong to MOTIR-2789 — NOT to this story.
+//
+// `UNREVIEWED_CEILING` may fall, never rise. Rewriting a ceiling upward to make a build
+// pass is the one edit this file exists to prevent.
 //
 // (It earned its keep before it shipped: the first run of this guard failed on four
 // sites its own author had missed while transcribing the list by hand, and on two
@@ -60,17 +68,6 @@ type Verdict =
   | 'bound'
   /** No tenant exists at read time; there is nothing to bind. */
   | 'pre-auth'
-  /**
-   * CONFIRMED UNBOUND, and confirmed BROKEN under `motir_app` (MOTIR-2789).
-   * The read filters by `workspaceId` in its own WHERE clause — the call site
-   * passes `ctx.workspaceId` — but NOTHING on the path binds the GUC the policy
-   * reads, so under the non-bypass role it returns zero rows and raises nothing.
-   * These are not oversights at the repository: the fix is one layer up, at the
-   * service method that owns the read, and it is the same fix for every site in
-   * a given service. The value names that service, because that is the unit of
-   * work. Tracked by MOTIR-2796.
-   */
-  | 'unbound-read-path'
   /**
    * The only caller is a `scripts/` maintenance tool, which runs on the
    * OPERATOR's connection (the migration/owner role), not the request-path
@@ -155,21 +152,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public_request_vote_public_project_read (20260813210000) · publicProjectAccess.test',
   ],
 
-  // ── unbound-read-path (0) — the class is EMPTY ────────────────────────────
-  // Measured, not guessed: every call site of every read below was located and its
-  // enclosing service method inspected for a context wrapper. NONE has one.
-  // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
-  // the entire file; `boardsService.ts` and `workItemsService.ts` have them only around
-  // their WRITE paths, and these reads sit outside every one.
-  //
-  // So this is not fifty-five separate oversights — it is the shape of the whole
-  // READ surface, which has never needed a binding because CI and production both run
-  // a BYPASSRLS role (MOTIR-2515 is the cutover that ends that). The value names the
-  // owning service because the fix is per-SERVICE, not per-read: open
-  // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
-  // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
-  // and not another sweep card.
-
   // ── unreviewed (8) ────────────────────────────────────────────────────────
   // The public-surface reads, and the ONE category the header's argument still binds:
   // a `public` verdict is the claim that MOTIR-2684's public policy ARM admits the row,
@@ -230,10 +212,10 @@ const UNREVIEWED_CEILING = 8;
 // owning service. The eight that remain are the public-surface reads, which need a green
 // public-projects suite before a `public` verdict is honest rather than assumed.
 //
-// ⚠️ READ THIS BEFORE CELEBRATING THE DROP. 69 -> 8 is a gain in KNOWLEDGE, not in
-// correctness: 55 reads are now known-broken-under-`motir_app` instead of unknown, and
-// `UNBOUND_READ_PATH_CEILING` below is the number that has to fall for the product to
-// actually work. Reporting the unreviewed count alone would misrepresent this commit.
+// ⚠️ READ THIS BEFORE CELEBRATING THE DROP. 69 -> 8 was a gain in KNOWLEDGE, not in
+// correctness — see the two-ratchets note in this file's header, which is the whole
+// reason a second ratchet existed. Reporting the unreviewed count alone would have
+// misrepresented that commit.
 //
 // 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
 // (`organizationRepository.findById` / `findBySlug`,
@@ -242,43 +224,21 @@ const UNREVIEWED_CEILING = 8;
 // that the count of UNJUDGED reads falls, and a read that no longer exists needs no
 // verdict. Lowered in the same commit as the deletion, which is what the guard asks for.
 
-/**
- * The second ratchet, and the one that measures the PRODUCT rather than the review.
- * Every read counted here is confirmed to return zero rows under `motir_app`; the
- * fix is per-service (MOTIR-2796), so this falls in steps of a service's worth.
- *
- * ⚠️ May only ever go DOWN — and unlike the unreviewed ceiling, it cannot be lowered
- * by writing a verdict. It falls only when a service actually binds its reads.
- *
- * 55 -> 52: MOTIR-2805 bound `savedFiltersService` — `listPage`, `countVisible` and
- * `countByFilter`. Lowered BY SUBTRACTION of this card's three, never restated as an
- * absolute: sibling cards edit this same line, and an absolute would discard theirs.
- * 52 -> 44: MOTIR-2800 bound `reportsService` — its eight aggregates, all raw SQL.
- * Same subtraction discipline.
- * 44 -> 39: MOTIR-2804 bound `sprintsService` + `estimationService` — the four
- * `sprint_report_entry` reads and the child rollup.
- * 39 -> 35: MOTIR-2801 bound `boardsService` — the three lane aggregates and the
- * epic-ancestor walk.
- * 35 -> 32: MOTIR-2807 made `workItemRepository.findByIds` bindable and bound its
- * 13 call sites; `sprintRepository.findByIds` and `workItemLinkRepository.
- * findByFromItem` came with it, because two of those call sites read the edge and
- * the batch together and binding one without the other fixes nothing.
- * 32 -> 31: `workItemLinkRepository.findByToItem`, the IN-edge mirror, for the
- * same reason.
- * 31 -> 30: MOTIR-2806 bound `activityService` — `countDisplayableByWorkItem`.
- * Its other named read, `sprintRepository.findByIds`, landed with MOTIR-2807,
- * which needed it for the same feed.
- * 30 -> 21: MOTIR-2802 bound `workItemsService`'s eight link-edge reads. Three
- * more came with them because they share a call site and binding half of a
- * contiguous run fixes nothing — `findBlockerEdgesForItems` (MOTIR-2808 owns its
- * other caller), `customFieldDefinitionRepository.listWithValuesForWorkItem`, and
- * the item-detail fan-out they sit in.
- * 21 -> 14: MOTIR-2803 bound the other half of `workItemsService` — the tree
- * walks, quick search, expandable stubs, the ready-layer descent and
- * `labelRepository.findByIds` — at every caller, including the three in
- * `sprintsService`, `autoPlanCadenceService` and `labelsService`.
- */
-const UNBOUND_READ_PATH_CEILING = 14;
+// ── The retired second ratchet (MOTIR-2814) ─────────────────────────────────
+// `UNBOUND_READ_PATH_CEILING` lived here and measured the reads confirmed BROKEN under
+// `motir_app`. MOTIR-2796 walked it 55 -> 0 across fifteen cards — savedFilters,
+// reports, sprints + estimation, boards, `findByIds` and its 13 call sites, activity,
+// workItems (link edges, then trees/search/decorations), plan validity + staleness, the
+// nine single-read services, migrate-onboarding, and a public SELECT arm for
+// `public_request_vote`. With the class empty the constant is gone: the set-equality test
+// above is the stronger guard, because a new unbound read has no verdict to earn and
+// fails the build outright rather than fitting under a ceiling.
+//
+// ⚠️ The constant sat STALE at 14 for the last four of those cards. Their messages each
+// claimed a step (14 -> 11 -> 3 -> 1 -> 0); the VERDICTS entries were duly removed, but
+// the literal was not edited, and `0 <= 14` passes silently. That is the failure mode a
+// ceiling has and a set-equality assertion does not, and it is a second reason this one
+// is retired rather than pinned at zero.
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {
@@ -302,40 +262,6 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
       stale,
       'VERDICTS names a site the scanner no longer finds. If you bound or deleted ' +
         'the read, delete its entry too — a stale allowlist hides the next one.',
-    ).toEqual([]);
-  });
-
-  it('the confirmed-unbound count only ever falls', () => {
-    const unbound = Object.entries(VERDICTS)
-      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
-      .map(([key]) => key);
-
-    // The ratchet that actually tracks the product working. `unreviewed` falling means
-    // someone LOOKED; this falling means a read that returned zero rows under
-    // `motir_app` now returns its rows. MOTIR-2796 drives it to zero, service by
-    // service — so it should fall in service-sized steps, not one read at a time.
-    expect(
-      unbound.length,
-      `${unbound.length} reads are confirmed unbound under the app role (ceiling ` +
-        `${UNBOUND_READ_PATH_CEILING}). If this ROSE, a new read joined an already-broken ` +
-        'service — bind the service method rather than adding an entry. If it FELL, lower ' +
-        'the ceiling in the same commit.',
-    ).toBeLessThanOrEqual(UNBOUND_READ_PATH_CEILING);
-  });
-
-  it('every unbound-read-path verdict names the service that owns the fix', () => {
-    // The value is the unit of work, not a comment: MOTIR-2796's children are cut by
-    // SERVICE, so a verdict that says `?` or `MOTIR-xxxx` cannot be planned against and
-    // would quietly drop that read from the story.
-    const nameless = Object.entries(VERDICTS)
-      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
-      .filter(([, [, reason]]) => !/Service$|^[a-z]\w*(Service|Auth)$/.test(reason))
-      .map(([key, [, reason]]) => `${key} -> "${reason}"`);
-
-    expect(
-      nameless,
-      'An `unbound-read-path` verdict must name the owning service (e.g. `reportsService`), ' +
-        'because that is the unit MOTIR-2796 plans against.',
     ).toEqual([]);
   });
 

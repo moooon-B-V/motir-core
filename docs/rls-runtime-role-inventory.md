@@ -458,3 +458,77 @@ now five sites: `parallelDb.ts:109` and `:133`, `app-role-harness.test.ts:5,34,8
 The chain then ends at **MOTIR-2515**, the deployed cutover — which is the point at
 which RLS actually starts executing in production. Nothing before it changes what the
 deployed application is subject to.
+
+## CLOSED — the READ surface is bound (MOTIR-2796, 2026-08-13)
+
+The story this inventory's Finding-1/Finding-4 chain was building toward. It bound the read
+surface for `motir_app` and then retired its own scaffolding; what follows is the closing
+measurement, taken on the branch, so the next person can tell what is finished from what is not.
+
+### The two instruments both report the class EMPTY
+
+| scan                                    | measures                                  | before |  after |
+| --------------------------------------- | ----------------------------------------- | -----: | -----: |
+| `tests/rls/singletonReadScan.ts`        | a repository read that CANNOT take a `tx` |     55 |  **0** |
+| `tests/rls/callSiteScan.ts`             | a read that CAN, whose caller passes none |    169 | **15** |
+| ” — bare `db.$transaction` in a service | a transaction binding no GUCs             |     60 | **32** |
+
+**55 reads across 20 services** were bound, one card per service, plus a public SELECT arm for
+`public_request_vote` where there was no workspace to bind. `UNBOUND_READ_PATH_CEILING` and the
+`unbound-read-path` verdict are **retired** (MOTIR-2814): a ratchet with no members is a number
+that invites editing, where the set-equality assertion that replaces it cannot be nudged.
+
+The call-site scan's 15 survivors are all adjudicated non-defects — 9 `public-arm` in
+`publicProjectsService`, 1 in `publicRequestsService` (its opening read is the one that FINDS the
+item's workspace, and `work_item_public_project_read` admits exactly that), and 1 `no-policy`.
+**No site carries an `unbound-call-site` verdict**, and a guard test now fails the build if one
+reappears. The 32 surviving bare transactions enclose no policy-gated statement — user preferences,
+rate-limit counters, CLI device codes, the tenant bootstrap that runs before a workspace exists.
+
+`UNREVIEWED_CEILING` is untouched at **8** — the public-surface reads, which belong to MOTIR-2789
+and need a green public-projects suite before a `public` verdict is honest.
+
+### What `TEST_DB_APP_ROLE=1` reports over the WHOLE suite
+
+`TEST_DB_APP_ROLE=1 pnpm vitest run` — **1 146 failed / 13 390 passed / 1 skipped, 1 019 files.**
+(4 `does not exist` lines are worker-DB contention noise, not results. A run showing hundreds of
+them has been trampled by a concurrent vitest and must be discarded, not read.)
+
+Classified by the FIRST non-`node_modules` frame in each failure's stack:
+
+|                                                                                            | failures | owner                                                     |
+| ------------------------------------------------------------------------------------------ | -------: | --------------------------------------------------------- |
+| only `tests/` frames                                                                       |      814 | MOTIR-2830 + the twenty fixture batches (MOTIR-2735…2754) |
+| `scripts/seedLargeBoard.ts` — a bare `db.$transaction` in a test-seeding script            |       14 | MOTIR-2830                                                |
+| a bare `db.$transaction` **in the test file itself**, around a `workItemRepository.update` |        7 | MOTIR-2830                                                |
+| a mapper reading a row a test-side unbound read never returned                             |        1 | MOTIR-2830                                                |
+
+**Not one of the 1 146 is a production read returning empty.** That is the criterion MOTIR-2789 was
+wrongly given (planning bug MOTIR-2798) and it is satisfied here. What remains is the FIXTURE
+population this document partitioned in the section above, and it is the last thing between here
+and flipping the flag (MOTIR-2734 → MOTIR-2515).
+
+### Two things the story found that its own plan did not name
+
+1. **A second population, invisible to the partitioning scanner.** MOTIR-2796 was cut from
+   `singletonReadScan`, which reads `lib/repositories/` and asks whether a read _can_ bind. The
+   mirror question — whether its caller _does_ — had no card, and its instrument was scheduled
+   LAST, blocked by the thirteen cards it would have classified. Three instances were hit by red
+   suites mid-run before the gap was diagnosed. Carved out as MOTIR-2845/2846 and filed as planning
+   bug MOTIR-2847 (`notes.html` #266).
+2. **The forwarding helper — the same defect one frame up.** A service factors its tenant gate into
+   a local helper taking its own `tx?`, forwards it to a bindable read, and falls through to the
+   singleton when the caller passes none. The inner line looks bound; it is bound only when the
+   caller supplied one. `backlogService.loadItem` alone accounted for **118 `backlogService` frames
+   in `tests/integration/sprints` under the flag (0 after)**, and `componentsService.resolveComponent`,
+   `commentsService.resolveComment`, `plansService.runPersistGate` and
+   `planChangeSessionsService.toDto` were the same shape. The call-site scanner now reaches exactly
+   one frame up to find their callers — and stops reporting once a helper binds its own fallback,
+   because a guard that cannot go green is one people learn to ignore.
+
+### Out of scope, and still open: the WRITE surface
+
+Binding the reads does not bind the writes, and the flag-on suite still shows INSERTs refused by
+policy (`new row violates row-level security policy for table "import"` in `tests/import`, which
+reproduces without any of this story's changes). Those are a separate surface with no card in this
+story; they are visible in the same run and should not be read as read-path residue.
