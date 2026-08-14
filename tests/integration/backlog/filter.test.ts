@@ -7,6 +7,7 @@ import { FilterValidationError } from '@/lib/filters/errors';
 import { FILTER_UNASSIGNED_TOKEN, type FilterAst } from '@/lib/filters/ast';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 8.8.17 — the backlog read accepts the shared FilterAST + quick facets.
 // Real Postgres (no mocks), per CLAUDE.md. These prove the data-path contract:
@@ -108,13 +109,24 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a1!.id, items.a3!.id]);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter)).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter, tx),
+      ),
+    ).toBe(2);
   });
 
   it('narrows by the TYPE facet', async () => {
@@ -124,13 +136,24 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'type', operator: 'is_any_of', value: ['code'] }]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a0!.id, items.a3!.id, items.a4!.id]);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter, tx),
+      ),
+    ).toBe(3);
   });
 
   it('narrows by the STATUS facet', async () => {
@@ -140,13 +163,24 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'status', operator: 'is_any_of', value: ['in_progress'] }]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a3!.id]);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter, tx),
+      ),
+    ).toBe(1);
   });
 
   it('narrows by the ASSIGNEE facet (assigned and the unassigned token)', async () => {
@@ -161,24 +195,42 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ]),
     };
 
-    const assigned = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter: assignedFilter,
-    });
+    const assigned = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter: assignedFilter,
+        },
+        tx,
+      ),
+    );
     expect(ids(assigned)).toEqual([items.a0!.id, items.a2!.id, items.a4!.id]);
     expect(
-      await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], assignedFilter),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], assignedFilter, tx),
+      ),
     ).toBe(3);
 
-    const unassigned = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter: unassignedFilter,
-    });
+    const unassigned = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter: unassignedFilter,
+        },
+        tx,
+      ),
+    );
     expect(ids(unassigned)).toEqual([items.a1!.id, items.a3!.id]);
     expect(
-      await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], unassignedFilter),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], unassignedFilter, tx),
+      ),
     ).toBe(2);
   });
 
@@ -189,13 +241,24 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'text', operator: 'contains', value: 'keep' }]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a2!.id, items.a3!.id]);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter)).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter, tx),
+      ),
+    ).toBe(2);
   });
 
   it('narrows by an advanced OR AST (beyond a single facet)', async () => {
@@ -209,13 +272,24 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a1!.id, items.a2!.id, items.a3!.id]);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter)).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], filter, tx),
+      ),
+    ).toBe(3);
   });
 
   it('still honours the excludeStatusKeys + triagedAt exclusions UNDER a filter', async () => {
@@ -231,14 +305,23 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }]),
     };
 
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: ['done'],
-      filter,
-    });
+    const page = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: ['done'],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page)).toEqual([items.a0!.id]);
     expect(
-      await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, ['done'], filter),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, ['done'], filter, tx),
+      ),
     ).toBe(1);
   });
 
@@ -250,28 +333,49 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
       ast: buildAst('and', [{ field: 'type', operator: 'is_any_of', value: ['code'] }]),
     };
 
-    const page1 = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 1,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page1 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 1,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     // take+1 over-fetch → 2 rows, the second signalling a next page.
     expect(ids(page1)).toEqual([items.a0!.id, items.a3!.id]);
 
-    const page2 = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 1,
-      cursor: items.a0!.id,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page2 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 1,
+          cursor: items.a0!.id,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     expect(ids(page2)).toEqual([items.a3!.id, items.a4!.id]);
 
-    const page3 = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 1,
-      cursor: items.a3!.id,
-      excludeStatusKeys: [],
-      filter,
-    });
+    const page3 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 1,
+          cursor: items.a3!.id,
+          excludeStatusKeys: [],
+          filter,
+        },
+        tx,
+      ),
+    );
     // Last filtered row — no over-fetch row, so no next page.
     expect(ids(page3)).toEqual([items.a4!.id]);
   });
@@ -281,29 +385,56 @@ describe('backlog filtering — repository (findBacklogPage / countBacklog)', ()
     const items = await seedMixed(fx);
     const all = [items.a0!.id, items.a1!.id, items.a2!.id, items.a3!.id, items.a4!.id];
 
-    const noArg = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-    });
-    const undefinedFilter = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter: undefined,
-    });
+    const noArg = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+        },
+        tx,
+      ),
+    );
+    const undefinedFilter = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter: undefined,
+        },
+        tx,
+      ),
+    );
     // An empty-condition AST also takes the unfiltered path (no SQL change).
-    const emptyAst = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 50,
-      excludeStatusKeys: [],
-      filter: { ast: buildAst('and', []) },
-    });
+    const emptyAst = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          take: 50,
+          excludeStatusKeys: [],
+          filter: { ast: buildAst('and', []) },
+        },
+        tx,
+      ),
+    );
 
     expect(ids(noArg)).toEqual(all);
     expect(ids(undefinedFilter)).toEqual(all);
     expect(ids(emptyAst)).toEqual(all);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [])).toBe(5);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], undefined)).toBe(
-      5,
-    );
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], undefined, tx),
+      ),
+    ).toBe(5);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], undefined, tx),
+      ),
+    ).toBe(5);
   });
 });
 

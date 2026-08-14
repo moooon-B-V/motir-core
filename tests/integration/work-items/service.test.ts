@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -402,7 +403,9 @@ describe('archiveWorkItem', () => {
     expect(archived.archivedAt).not.toBeNull();
 
     // The child is untouched: still present, still non-archived.
-    const childRow = await workItemRepository.findById(story.id);
+    const childRow = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(story.id, tx),
+    );
     expect(childRow).not.toBeNull();
     expect(childRow?.archivedAt).toBeNull();
   });
@@ -421,7 +424,9 @@ describe('unarchiveWorkItem', () => {
     expect(restored.archivedAt).toBeNull();
 
     // The persisted row is live again.
-    const row = await workItemRepository.findById(item.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(item.id, tx),
+    );
     expect(row?.archivedAt).toBeNull();
   });
 
@@ -655,8 +660,12 @@ describe('linkWorkItems', () => {
       fx.ctx,
     );
 
-    const forward = await workItemLinkRepository.findById(link.id);
-    const reciprocal = await workItemLinkRepository.findReciprocal(b.id, a.id, 'relates_to');
+    const forward = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findById(link.id, tx),
+    );
+    const reciprocal = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findReciprocal(b.id, a.id, 'relates_to', tx),
+    );
     expect(forward).not.toBeNull();
     expect(reciprocal).not.toBeNull();
     expect(reciprocal?.fromId).toBe(b.id);

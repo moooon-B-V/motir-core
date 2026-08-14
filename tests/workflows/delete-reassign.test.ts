@@ -16,6 +16,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Delete-with-reassign (Story 2.3 · Subtask 2.3.1), real Postgres. Deleting an
 // in-use CUSTOM status migrates every referencing work item (incl. archived) to
@@ -54,7 +55,9 @@ async function makeFixture(email = 'reassign-owner@example.com'): Promise<Fixtur
 }
 
 async function seededStatusId(fx: Fixture, key: string): Promise<string> {
-  const s = await workflowsRepository.findStatusByKey(fx.projectId, key, fx.workspaceId);
+  const s = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+    workflowsRepository.findStatusByKey(fx.projectId, key, fx.workspaceId, tx),
+  );
   if (!s) throw new Error(`seeded status ${key} missing`);
   return s.id;
 }
@@ -118,10 +121,14 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
 
     // Repo read via the no-tx (db singleton) path: nothing references the old
     // key anymore, and all three items now live under the target key.
-    expect(await workItemRepository.findByProjectAndStatusKey(fx.projectId, 'triage')).toHaveLength(
-      0,
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findByProjectAndStatusKey(fx.projectId, 'triage', tx),
+      ),
+    ).toHaveLength(0);
+    const migrated = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectAndStatusKey(fx.projectId, 'todo', tx),
     );
-    const migrated = await workItemRepository.findByProjectAndStatusKey(fx.projectId, 'todo');
     expect(migrated.map((w) => w.id).sort()).toEqual([...ids].sort());
   });
 

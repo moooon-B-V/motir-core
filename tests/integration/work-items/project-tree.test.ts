@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { PrismaClient, Prisma } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { db } from '@/lib/db';
@@ -486,7 +487,9 @@ describe('workItemRepository.findProjectForest — single round-trip + workspace
 
     // Right project, WRONG workspace → the anchor's workspace filter yields nothing,
     // so no row (root or descendant) can leak across the tenant boundary.
-    const rows = await workItemRepository.findProjectForest(fxA.projectId, fxB.workspaceId, {});
+    const rows = await withWorkspaceServiceContext(fxA.workspaceId, (tx) =>
+      workItemRepository.findProjectForest(fxA.projectId, fxB.workspaceId, {}, tx),
+    );
     expect(rows).toEqual([]);
   });
 });

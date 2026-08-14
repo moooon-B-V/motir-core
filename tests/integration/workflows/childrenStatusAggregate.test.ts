@@ -7,6 +7,7 @@ import {
   type WorkItemFixture,
 } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // `workItemRepository.aggregateChildrenStatus` — the data primitive the upward
 // status rollup evaluates its ladder against (Story MOTIR-1615 · Subtask
@@ -59,7 +60,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     const fx = await makeWorkItemFixture();
     const story = await storyIn(fx, 'Lonely');
 
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, 'in_review')).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+      ),
+    ).toEqual({
       total: 0,
       todo: 0,
       inProgress: 0,
@@ -78,7 +83,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     await child(fx, story.id, 'e', 'done');
     await child(fx, story.id, 'f', 'cancelled'); // done category
 
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, 'in_review')).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+      ),
+    ).toEqual({
       total: 6,
       todo: 2,
       inProgress: 1,
@@ -93,7 +102,9 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     await child(fx, story.id, 'a', 'done');
     await child(fx, story.id, 'b', 'cancelled');
 
-    const agg = await workItemRepository.aggregateChildrenStatus(story.id, 'in_review');
+    const agg = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+    );
     expect(agg.total).toBe(2);
     expect(agg.done).toBe(2);
   });
@@ -110,7 +121,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     // Two levels down — must NOT appear in the story's aggregate.
     await child(fx, task.id, 'leaf', 'done');
 
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, 'in_review')).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+      ),
+    ).toEqual({
       total: 1,
       todo: 0,
       inProgress: 1,
@@ -118,7 +133,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       done: 0,
     });
     // …and the task's own aggregate sees exactly that grandchild.
-    expect(await workItemRepository.aggregateChildrenStatus(task.id, 'in_review')).toMatchObject({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(task.id, 'in_review', tx),
+      ),
+    ).toMatchObject({
       total: 1,
       done: 1,
     });
@@ -135,7 +154,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
 
     // An archived child must not hold its parent back from rolling up — so the
     // aggregate reads "one child, done", not "three children, one done".
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, 'in_review')).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+      ),
+    ).toEqual({
       total: 1,
       todo: 0,
       inProgress: 0,
@@ -162,7 +185,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     await child(fx, story.id, 'b', 'in_progress');
 
     // Told that `qa` is this project's review stage, the aggregate splits it out…
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, 'qa')).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, 'qa', tx),
+      ),
+    ).toEqual({
       total: 2,
       todo: 0,
       inProgress: 1,
@@ -171,7 +198,11 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     });
     // …and with NO review status declared, both count as plain in-progress (the
     // degenerate reading: that project simply never reaches the in-review rung).
-    expect(await workItemRepository.aggregateChildrenStatus(story.id, null)).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.aggregateChildrenStatus(story.id, null, tx),
+      ),
+    ).toEqual({
       total: 2,
       todo: 0,
       inProgress: 2,

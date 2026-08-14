@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { backlogService, BACKLOG_PAGE_SIZE } from '@/lib/services/backlogService';
@@ -74,9 +75,13 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
 
     // First activation is fine.
     await activate(first.id);
-    expect((await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId))?.id).toBe(
-      first.id,
-    );
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(first.id);
 
     // Activating the SECOND while the first is active violates the partial
     // unique index (Postgres unique_violation / Prisma P2002).
@@ -142,12 +147,20 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
       ),
     );
 
-    expect((await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId))?.id).toBe(
-      a.id,
-    );
-    expect((await sprintRepository.findActiveByProject(projectB.id, fx.workspaceId))?.id).toBe(
-      b.id,
-    );
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(a.id);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(projectB.id, fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(b.id);
   });
 });
 

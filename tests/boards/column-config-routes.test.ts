@@ -8,6 +8,7 @@ import { boardRepository } from '@/lib/repositories/boardRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Board COLUMN-CONFIG API routes (Story 3.6 · Subtask 3.6.2). Real Postgres; we
 // stub only the two session/context resolvers the test env can't supply via
@@ -81,7 +82,9 @@ async function makeFixture(label: string): Promise<Fixture> {
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
-  const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
+  const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    boardRepository.findDefaultForProject(project.id, workspaceId, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
   const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: project.id } });
   const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));

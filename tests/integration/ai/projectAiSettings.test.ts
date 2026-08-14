@@ -22,6 +22,7 @@ import { createTestUser } from '../../fixtures/userFixtures';
 import { createTestWorkspace } from '../../fixtures/workspaceFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 7.13 · Subtask MOTIR-915 — the `Project` AI-settings columns and the
 // 4-layer path over them (migration → projectRepository → projectAiSettingsService
@@ -89,7 +90,9 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
 
   it('the mapper projects the row (and the repository projection) to the same DTO', async () => {
     const fx = await makeFixture();
-    const projection = await projectRepository.findAiSettings(fx.projectId);
+    const projection = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      projectRepository.findAiSettings(fx.projectId, tx),
+    );
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
 
     expect(projection).not.toBeNull();

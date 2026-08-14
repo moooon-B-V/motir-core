@@ -757,7 +757,11 @@ describe('ciPeriodUsageRepository.sumForOrgPeriod — outside a transaction', ()
     stubGithub();
     await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID);
 
-    expect(await ciPeriodUsageRepository.sumForOrgPeriod(fx.organizationId, JULY_2026)).toEqual({
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        ciPeriodUsageRepository.sumForOrgPeriod(fx.organizationId, JULY_2026, tx),
+      ),
+    ).toEqual({
       organizationId: fx.organizationId,
       periodStart: JULY_2026,
       linearEquivalentMinutes: STARTER_BILLABLE_MINUTES,
@@ -769,7 +773,9 @@ describe('ciPeriodUsageRepository.sumForOrgPeriod — outside a transaction', ()
   it('returns zeros — never null — for an org that has never run CI', async () => {
     const fx = await seedTenant();
     expect(
-      await ciPeriodUsageRepository.sumForOrgPeriod(fx.organizationId, JULY_2026),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        ciPeriodUsageRepository.sumForOrgPeriod(fx.organizationId, JULY_2026, tx),
+      ),
     ).toMatchObject({ linearEquivalentMinutes: 0, billableMinutes: 0, runCount: 0 });
   });
 });

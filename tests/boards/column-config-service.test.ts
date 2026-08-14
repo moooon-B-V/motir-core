@@ -22,6 +22,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // boardsService column-config admin (Story 3.6 · Subtask 3.6.2) — add / rename /
 // reorder / delete a column, map / unmap a status, rename the board. Real
@@ -78,7 +79,9 @@ async function makeFixture(label: string): Promise<Fixture> {
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
-  const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
+  const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    boardRepository.findDefaultForProject(project.id, workspaceId, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
 
   const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: project.id } });
@@ -119,12 +122,16 @@ async function cardInStatus(fx: Fixture, status: string, title: string): Promise
 describe('boardsService.addColumn (Subtask 3.6.2)', () => {
   it('appends a column to the end and persists it', async () => {
     const fx = await makeFixture('add');
-    const before = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const before = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
 
     const dto = await boardsService.addColumn(fx.boardId, { name: 'Triage' }, fx.ownerCtx);
     expect(dto).toMatchObject({ name: 'Triage', wipLimit: null });
 
-    const after = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(after).toHaveLength(before.length + 1);
     // appended last (highest position)
     expect(after[after.length - 1]!.id).toBe(dto.id);
@@ -132,7 +139,9 @@ describe('boardsService.addColumn (Subtask 3.6.2)', () => {
 
   it('inserts at an explicit position when given', async () => {
     const fx = await makeFixture('add-pos');
-    const cols = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     const between = keyBetween(cols[0]!.position, cols[1]!.position);
 
     const dto = await boardsService.addColumn(
@@ -141,7 +150,9 @@ describe('boardsService.addColumn (Subtask 3.6.2)', () => {
       fx.ownerCtx,
     );
 
-    const after = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(after[1]!.id).toBe(dto.id);
   });
 
@@ -157,11 +168,15 @@ describe('boardsService.addColumn (Subtask 3.6.2)', () => {
 
   it('denies a non-owner member (no write)', async () => {
     const fx = await makeFixture('add-member');
-    const before = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const before = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     await expect(
       boardsService.addColumn(fx.boardId, { name: 'Nope' }, fx.memberCtx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const after = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(after).toHaveLength(before.length);
   });
 
@@ -208,14 +223,18 @@ describe('boardsService.renameColumn (Subtask 3.6.2)', () => {
 describe('boardsService.reorderColumn (Subtask 3.6.2)', () => {
   it('moves a column to a new fractional position', async () => {
     const fx = await makeFixture('reorder');
-    const cols = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     const last = cols[cols.length - 1]!;
     // move the last column to sit between the first two.
     const between = keyBetween(cols[0]!.position, cols[1]!.position);
     const dto = await boardsService.reorderColumn(last.id, between, fx.ownerCtx);
     expect(dto.position).toBe(between);
 
-    const after = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(after[1]!.id).toBe(last.id);
   });
 
@@ -263,11 +282,15 @@ describe('boardsService.deleteColumn (Subtask 3.6.2)', () => {
   it('refuses deleting the board’s last column (LastColumnError)', async () => {
     const fx = await makeFixture('del-last');
     // No work items → every column is empty and deletable. Delete down to one.
-    const cols = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const cols = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     for (const col of cols.slice(0, -1)) {
       await boardsService.deleteColumn(col.id, fx.ownerCtx);
     }
-    const remaining = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
+    const remaining = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId, tx),
+    );
     expect(remaining).toHaveLength(1);
     await expect(boardsService.deleteColumn(remaining[0]!.id, fx.ownerCtx)).rejects.toBeInstanceOf(
       LastColumnError,

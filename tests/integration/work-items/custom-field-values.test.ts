@@ -5,6 +5,7 @@ import {
 } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import { customFieldValueRepository } from '@/lib/repositories/customFieldValueRepository';
@@ -131,7 +132,9 @@ describe('setValue — text', () => {
     const dto = await customFieldValuesService.setValue(itemId, field.id, '  Acme Corp  ', fx.ctx);
     expect(dto).toMatchObject({ text: 'Acme Corp', number: null, date: null });
 
-    const row = await customFieldValueRepository.findByWorkItemAndField(itemId, field.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+    );
     expect(row?.valueText).toBe('Acme Corp');
     expect(row?.workspaceId).toBe(fx.workspaceId);
 
@@ -159,7 +162,11 @@ describe('setValue — text', () => {
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     const revs = await valueRevisions(itemId);
     expect(revs).toHaveLength(2);
@@ -179,7 +186,11 @@ describe('setValue — text', () => {
     // Empty string clears a real value.
     await customFieldValuesService.setValue(itemId, field.id, 'x', fx.ctx);
     expect(await customFieldValuesService.setValue(itemId, field.id, '  ', fx.ctx)).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('rejects over-cap text (422) and a non-string raw value (type mismatch); nothing persists', async () => {
@@ -198,7 +209,11 @@ describe('setValue — text', () => {
     await expect(customFieldValuesService.setValue(itemId, field.id, 42, fx.ctx)).rejects.toThrow(
       CustomFieldValueTypeMismatchError,
     );
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
     expect(await valueRevisions(itemId)).toHaveLength(0);
   });
 
@@ -222,7 +237,9 @@ describe('setValue — number', () => {
 
     const fromString = await customFieldValuesService.setValue(itemId, field.id, '1.50', fx.ctx);
     expect(fromString?.number).toBe(1.5);
-    const row = await customFieldValueRepository.findByWorkItemAndField(itemId, field.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+    );
     expect(row!.valueNumber!.equals(new Prisma.Decimal('1.5'))).toBe(true);
 
     const fromNumber = await customFieldValuesService.setValue(itemId, field.id, 3, fx.ctx);
@@ -260,7 +277,11 @@ describe('setValue — number', () => {
 
     await customFieldValuesService.setValue(itemId, field.id, '-2.25', fx.ctx);
     expect(await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx)).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -416,7 +437,11 @@ describe('setValue — permission matrix', () => {
         workspaceId: fx.workspaceId,
       }),
     ).rejects.toThrow(ProjectAccessDeniedError);
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('cross-workspace probes 404: a foreign work item, a foreign field, and a same-workspace field of ANOTHER project', async () => {
@@ -546,7 +571,11 @@ describe('lifecycle — field delete destroys values', () => {
     await withWorkspaceContext(fx.ctx, (tx) =>
       customFieldDefinitionRepository.delete(field.id, tx),
     );
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -569,7 +598,11 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
     const revs = await valueRevisions(itemId);
@@ -594,7 +627,11 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // Clearing an already-clear field writes nothing — no row, no revision.
     await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
@@ -620,7 +657,11 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
 
     const cleared = await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
     expect(cleared).toBeNull();
-    expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
+      ),
+    ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
     const revs = await valueRevisions(itemId);

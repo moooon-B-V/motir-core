@@ -16,6 +16,7 @@ import {
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Triage ACTIONS (Subtask 6.11.5, per docs/decisions/triage-model.md §4/§5):
 // accept / promote (graduate → clear `triagedAt`), decline / mark-duplicate-
@@ -53,14 +54,18 @@ async function read(id: string) {
 }
 
 async function treeIds(fx: WorkItemFixture): Promise<string[]> {
-  return (await workItemRepository.findProjectForest(fx.projectId, fx.workspaceId)).map(
-    (r) => r.id,
-  );
+  return (
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectForest(fx.projectId, fx.workspaceId, undefined, tx),
+    )
+  ).map((r) => r.id);
 }
 
 async function activeQueueIds(fx: WorkItemFixture): Promise<string[]> {
   return (
-    await workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 })
+    await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 }, tx),
+    )
   ).map((r) => r.id);
 }
 
@@ -90,7 +95,9 @@ describe('triageService.acceptTriageItem', () => {
 
     await triageService.acceptTriageItem(item.id, { comment: 'Looks reasonable.' }, fx.ctx);
 
-    const comments = await commentRepository.listThreadsByWorkItem(item.id);
+    const comments = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      commentRepository.listThreadsByWorkItem(item.id, undefined, tx),
+    );
     expect(comments.map((c) => c.bodyMd)).toContain('Looks reasonable.');
   });
 });
@@ -153,7 +160,9 @@ describe('triageService.declineTriageItem', () => {
     expect(row.triagedAt).not.toBeNull(); // marker KEPT — never graduates
     expect(await treeIds(fx)).not.toContain(item.id);
     expect(await activeQueueIds(fx)).not.toContain(item.id); // terminal → out of active queue
-    const comments = await commentRepository.listThreadsByWorkItem(item.id);
+    const comments = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      commentRepository.listThreadsByWorkItem(item.id, undefined, tx),
+    );
     expect(comments.map((c) => c.bodyMd)).toContain('Not a bug.');
   });
 });
@@ -192,10 +201,26 @@ describe('triageService.markDuplicateTriageItem', () => {
     expect(dupRow.triagedAt).not.toBeNull();
 
     // Comments + attachments now hang off the canonical item.
-    expect(await commentRepository.countByWorkItem(canonical.id)).toBe(1);
-    expect(await commentRepository.countByWorkItem(duplicate.id)).toBe(0);
-    expect(await attachmentRepository.countByWorkItem(canonical.id)).toBe(1);
-    expect(await attachmentRepository.countByWorkItem(duplicate.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(canonical.id, tx),
+      ),
+    ).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(duplicate.id, tx),
+      ),
+    ).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(canonical.id, tx),
+      ),
+    ).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(duplicate.id, tx),
+      ),
+    ).toBe(0);
 
     // A `duplicates` link from duplicate → canonical was recorded.
     const links = await workItemLinkRepository.findByFromItem(duplicate.id, 'duplicates');

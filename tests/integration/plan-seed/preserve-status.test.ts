@@ -10,7 +10,7 @@ import {
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 7.8.7 — the seed-loader status-preservation flip. Status authority
 // moved seed → live DB: a seed status is INITIAL-ONLY now, and a reseed
@@ -112,9 +112,27 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
 
     // The two pre-existing items keep their LIVE status (preserved), the new one
     // keeps its seed status.
-    expect((await workItemRepository.findById(new785))?.status).toBe('done');
-    expect((await workItemRepository.findById(new787))?.status).toBe('in_progress');
-    expect((await workItemRepository.findById(newNew))?.status).toBe('todo');
+    expect(
+      (
+        await withWorkspaceServiceContext(reseed.workspaceId, (tx) =>
+          workItemRepository.findById(new785, tx),
+        )
+      )?.status,
+    ).toBe('done');
+    expect(
+      (
+        await withWorkspaceServiceContext(reseed.workspaceId, (tx) =>
+          workItemRepository.findById(new787, tx),
+        )
+      )?.status,
+    ).toBe('in_progress');
+    expect(
+      (
+        await withWorkspaceServiceContext(reseed.workspaceId, (tx) =>
+          workItemRepository.findById(newNew, tx),
+        )
+      )?.status,
+    ).toBe('todo');
     expect(result.preserved).toBe(2);
     expect(result.fellBack).toBe(0);
   });
@@ -130,7 +148,13 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     const result = await applyPreservedStatuses({ snapshot, idMap: new Map([['6.6.6', newId]]) });
 
     // The item keeps its SEED status (not the gone-from-workflow custom one)…
-    expect((await workItemRepository.findById(newId))?.status).toBe('todo');
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(newId, tx),
+        )
+      )?.status,
+    ).toBe('todo');
     // …and the loader is warned.
     expect(result.preserved).toBe(0);
     expect(result.fellBack).toBe(1);
@@ -153,7 +177,13 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
       idMap: new Map([['2.1.1', keptId]]),
     });
 
-    expect((await workItemRepository.findById(keptId))?.status).toBe('done');
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(keptId, tx),
+        )
+      )?.status,
+    ).toBe('done');
     expect(result.preserved).toBe(1);
     expect(result.fellBack).toBe(0);
   });
@@ -173,7 +203,13 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
       idMap: new Map([['7.8.7', reseeded]]),
     });
 
-    expect((await workItemRepository.findById(reseeded))?.status).toBe('in_progress');
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(reseeded, tx),
+        )
+      )?.status,
+    ).toBe('in_progress');
     expect(result.preserved).toBe(1);
     // `id` (the reseed-#1 row) is untouched by this apply — only the idMap row moved.
     expect(id).not.toBe(reseeded);

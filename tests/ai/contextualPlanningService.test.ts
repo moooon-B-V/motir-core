@@ -15,6 +15,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // contextualPlanningService — the motir-core side of CONTEXTUAL PLANNING
 // (7.12.3 · MOTIR-909) against a REAL Postgres. Only the motir-ai BOUNDARY client
@@ -127,10 +128,13 @@ describe('contextualPlanningService.planFromWorkItem', () => {
     // The session the panel resumes on is the one anchored at this item.
     expect(result.session.targetKeys).toEqual([story.identifier]);
 
-    const row = await planChangeSessionRepository.findByProjectAndScope(
-      fx.projectId,
-      story.identifier,
-      fx.workspaceId,
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        story.identifier,
+        fx.workspaceId,
+        tx,
+      ),
     );
     expect(row?.id).toBe(result.sessionId);
     expect(row?.targetKeys).toEqual([story.identifier]);
@@ -192,7 +196,9 @@ describe('contextualPlanningService.planFromWorkItem', () => {
 
     expect(second.sessionId).toBe(first.sessionId);
     // …and the thread ACCUMULATED — that is what makes it a conversation.
-    const turns = await planChangeTurnRepository.listBySessionId(first.sessionId, fx.workspaceId);
+    const turns = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.listBySessionId(first.sessionId, fx.workspaceId, tx),
+    );
     expect(turns.filter((t) => t.role === 'user').map((t) => t.body)).toEqual(['one', 'two']);
     expect(submittedContext(1)['prompt']).toContain('one');
     expect(submittedContext(1)['prompt']).toContain('two');
@@ -373,10 +379,13 @@ describe('getSessionForWorkItem — resuming the item’s thread (MOTIR-910)', (
     expect(result.session).toBeNull();
     // Opening the door is not starting a conversation.
     expect(
-      await planChangeSessionRepository.findByProjectAndScope(
-        fx.projectId,
-        buildScope([story.identifier]).scopeKey,
-        fx.workspaceId,
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findByProjectAndScope(
+          fx.projectId,
+          buildScope([story.identifier]).scopeKey,
+          fx.workspaceId,
+          tx,
+        ),
       ),
     ).toBeNull();
   });

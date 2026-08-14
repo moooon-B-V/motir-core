@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
@@ -355,12 +356,16 @@ describe('workItemLinkRepository.findById + delete', () => {
       createdById: fx.owner.id,
     });
 
-    const found = await workItemLinkRepository.findById(link.id);
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findById(link.id, tx),
+    );
     expect(found?.id).toBe(link.id);
 
     await withWorkspaceContext(fx.ctx, (tx) => workItemLinkRepository.delete(link.id, tx));
 
-    const missing = await workItemLinkRepository.findById(link.id);
+    const missing = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findById(link.id, tx),
+    );
     expect(missing).toBeNull();
   });
 });
@@ -380,11 +385,23 @@ describe('workItemLinkRepository.findAnyBetween — any kind, either direction (
     });
 
     // No tx → exercises the `tx ?? db` fallback. The OR matches a→b…
-    expect(await workItemLinkRepository.findAnyBetween(a.id, b.id)).not.toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findAnyBetween(a.id, b.id, tx),
+      ),
+    ).not.toBeNull();
     // …and the reverse ordering b→a (the "either direction" gate).
-    expect(await workItemLinkRepository.findAnyBetween(b.id, a.id)).not.toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findAnyBetween(b.id, a.id, tx),
+      ),
+    ).not.toBeNull();
     // An unrelated pair is genuinely absent.
-    expect(await workItemLinkRepository.findAnyBetween(a.id, c.id)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findAnyBetween(a.id, c.id, tx),
+      ),
+    ).toBeNull();
   });
 });
 

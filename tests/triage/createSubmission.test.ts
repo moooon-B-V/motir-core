@@ -13,6 +13,7 @@ import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Triage submission intake (Subtask 6.11.4) — the in-app member submit + the
 // SHARED triage-create authority Story 6.12 reuses. Real Postgres (the standing
@@ -60,7 +61,9 @@ describe('triageService.createSubmission — the in-app member intake', () => {
     expect(row.projectId).toBe(fx.projectId);
 
     // Read-exclusion (6.11.3): absent from the tree…
-    const forest = await workItemRepository.findProjectForest(fx.projectId, fx.workspaceId);
+    const forest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectForest(fx.projectId, fx.workspaceId, undefined, tx),
+    );
     expect(forest.map((r) => r.id)).not.toContain(result.id);
 
     // …but present in the triage queue (the ONE inclusion read).

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -71,11 +72,23 @@ describe('setEpicPrivacy — the admin write', () => {
 
     const set = await workItemsService.setEpicPrivacy(epic.id, true, fx.ctx);
     expect(set.publicChildrenHidden).toBe(true);
-    expect((await workItemRepository.findById(epic.id))?.publicChildrenHidden).toBe(true);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(epic.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(true);
 
     const unset = await workItemsService.setEpicPrivacy(epic.id, false, fx.ctx);
     expect(unset.publicChildrenHidden).toBe(false);
-    expect((await workItemRepository.findById(epic.id))?.publicChildrenHidden).toBe(false);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(epic.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(false);
   });
 
   it('a project admin who is NOT a workspace manager can set it', async () => {
@@ -125,7 +138,13 @@ describe('setEpicPrivacy — the admin write', () => {
       workItemsService.setEpicPrivacy(epic.id, true, strangerActor.ctx),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
     // No write leaked through a denied call.
-    expect((await workItemRepository.findById(epic.id))?.publicChildrenHidden).toBe(false);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(epic.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(false);
   });
 
   it('rejects a non-epic target with NotEpicError and leaves the flag untouched', async () => {
@@ -135,7 +154,13 @@ describe('setEpicPrivacy — the admin write', () => {
     await expect(workItemsService.setEpicPrivacy(task.id, true, fx.ctx)).rejects.toBeInstanceOf(
       NotEpicError,
     );
-    expect((await workItemRepository.findById(task.id))?.publicChildrenHidden).toBe(false);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(task.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(false);
   });
 
   it('404s an unknown id and a cross-workspace epic (no existence leak)', async () => {

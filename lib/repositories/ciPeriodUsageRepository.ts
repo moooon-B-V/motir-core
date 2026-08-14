@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type CiPeriodUsage } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 
 // Data access for the per-period CI-consumption ROLLUP (Story MOTIR-1775 ·
 // MOTIR-1896) — the table the allowance sibling (MOTIR-1901) reads to answer
@@ -116,13 +115,20 @@ export const ciPeriodUsageRepository = {
    * run's own timestamp (§4.5), and letting the DB derive it would reintroduce
    * the server-vs-database clock skew that binding a Date avoids.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async sumForOrgPeriod(
     organizationId: string,
     periodStart: Date,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<OrgPeriodConsumption> {
-    const client = tx ?? db;
-    const rows = await client.$queryRaw<
+    const rows = await tx.$queryRaw<
       Array<{
         linearEquivalentMinutes: Prisma.Decimal;
         billableMinutes: bigint | number;

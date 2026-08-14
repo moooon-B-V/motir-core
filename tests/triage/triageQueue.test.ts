@@ -16,6 +16,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Triage schema + read-exclusion invariant + the queue read (Subtask 6.11.3,
 // per docs/decisions/triage-model.md). Real Postgres (the standing rule). The
@@ -97,45 +98,63 @@ describe('triage read-exclusion — a triage item is absent from EVERY normal re
       {
         name: 'findProjectForest (tree)',
         ids: async () =>
-          (await workItemRepository.findProjectForest(fx.projectId, fx.workspaceId)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findProjectForest(fx.projectId, fx.workspaceId, undefined, tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findProjectTreeLevel (lazy tree roots)',
         ids: async () =>
           (
-            await workItemRepository.findProjectTreeLevel(
-              fx.projectId,
-              fx.workspaceId,
-              null,
-              SORT,
-              {
-                take: 100,
-                offset: 0,
-              },
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findProjectTreeLevel(
+                fx.projectId,
+                fx.workspaceId,
+                null,
+                SORT,
+                {
+                  take: 100,
+                  offset: 0,
+                },
+                undefined,
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
       {
         name: 'findProjectIssuesFlat (list)',
         ids: async () =>
-          (await workItemRepository.findProjectIssuesFlat(fx.projectId, fx.workspaceId, SORT)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findProjectIssuesFlat(
+                fx.projectId,
+                fx.workspaceId,
+                SORT,
+                undefined,
+                undefined,
+                tx,
+              ),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findColumnCards (board column)',
         ids: async () =>
           (
-            await workItemRepository.findColumnCards(
-              fx.projectId,
-              fx.workspaceId,
-              [status],
-              'position',
-              {
-                limit: 100,
-              },
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findColumnCards(
+                fx.projectId,
+                fx.workspaceId,
+                [status],
+                'position',
+                {
+                  limit: 100,
+                },
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
@@ -159,17 +178,22 @@ describe('triage read-exclusion — a triage item is absent from EVERY normal re
         name: 'findBacklogPage (backlog)',
         ids: async () =>
           (
-            await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 })
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 100 }, tx),
+            )
           ).map((r) => r.id),
       },
       {
         name: 'findByProjectAndKinds (parent picker)',
         ids: async () =>
           (
-            await workItemRepository.findByProjectAndKinds(
-              fx.projectId,
-              ['task', 'bug', 'story', 'epic'],
-              fx.workspaceId,
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.findByProjectAndKinds(
+                fx.projectId,
+                ['task', 'bug', 'story', 'epic'],
+                fx.workspaceId,
+                tx,
+              ),
             )
           ).map((r) => r.id),
       },
@@ -182,13 +206,28 @@ describe('triage read-exclusion — a triage item is absent from EVERY normal re
     }
 
     // Counts track their list reads.
-    expect(await workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId)).toBe(1);
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, undefined, undefined, tx),
+      ),
+    ).toBe(1);
 
     // The queue read is the ONE inclusion read: triage in, normal out.
-    const queue = await workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, {
-      limit: 100,
-    });
+    const queue = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findTriageQueue(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          limit: 100,
+        },
+        tx,
+      ),
+    );
     expect(queue.map((r) => r.id)).toEqual([triaged.id]);
   });
 
@@ -205,11 +244,15 @@ describe('triage read-exclusion — a triage item is absent from EVERY normal re
         conditions: [{ field: 'kind' as const, operator: 'is_any_of' as const, value: ['bug'] }],
       },
     };
-    const rows = await workItemRepository.findProjectIssuesFlat(
-      fx.projectId,
-      fx.workspaceId,
-      SORT,
-      filter,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesFlat(
+        fx.projectId,
+        fx.workspaceId,
+        SORT,
+        filter,
+        undefined,
+        tx,
+      ),
     );
     const ids = rows.map((r) => r.id);
     expect(ids).toContain(normal.id);
@@ -228,7 +271,9 @@ describe('findTriageQueue — the active inbox read', () => {
     await markTriage(snoozedPast.id, { snoozedUntil: new Date(Date.now() - 60 * 60 * 1000) });
 
     const ids = (
-      await workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 })
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 }, tx),
+      )
     ).map((r) => r.id);
     expect(ids).toContain(active.id);
     expect(ids).toContain(snoozedPast.id);
@@ -242,14 +287,18 @@ describe('findTriageQueue — the active inbox read', () => {
     await markTriage(declined.id, { status: 'cancelled' });
 
     const queueIds = (
-      await workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 })
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findTriageQueue(fx.projectId, fx.workspaceId, { limit: 100 }, tx),
+      )
     ).map((r) => r.id);
     expect(queueIds).not.toContain(declined.id);
 
     // …and still absent from the planned tree (the marker, not the status, gates it).
-    const treeIds = (await workItemRepository.findProjectForest(fx.projectId, fx.workspaceId)).map(
-      (r) => r.id,
-    );
+    const treeIds = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findProjectForest(fx.projectId, fx.workspaceId, undefined, tx),
+      )
+    ).map((r) => r.id);
     expect(treeIds).not.toContain(declined.id);
   });
 

@@ -458,3 +458,60 @@ now five sites: `parallelDb.ts:109` and `:133`, `app-role-harness.test.ts:5,34,8
 The chain then ends at **MOTIR-2515**, the deployed cutover — which is the point at
 which RLS actually starts executing in production. Nothing before it changes what the
 deployed application is subject to.
+
+---
+
+## Closing entry — the TEST call-site class (MOTIR-2797, 2026-08-13)
+
+The twenty batches above migrated **fixtures**: lines matching `db.<model>.<op>(…)`. A third cause of
+the suite being red under `motir_app` survived all of them, because it carries **no `db.` prefix
+anywhere on the line** — a test calling a repository directly:
+
+```ts
+const counts = await workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId);
+```
+
+`countByStatusCategory` is bindable; the test simply passed no `tx`, so the read went to the
+singleton, the policy saw no `app.workspace_id`, and it returned `{ todo: 0, in_progress: 0, done: 0 }`
+while the rows existed. A sweep keyed on the CLIENT's name cannot see a call that reaches the client
+through a named wrapper.
+
+### Final classification — all 1 174 repository call sites under `tests/`
+
+| verdict               |     n | disposition                                                                       |
+| --------------------- | ----: | --------------------------------------------------------------------------------- |
+| `in-scope`            | **0** | **Closed.** Was 458 when measured; the ratchet is now a hard `toEqual([])`.       |
+| `already-bound`       |   721 | Nothing to do. ~250 of these were bound by the twenty fixture batches in passing. |
+| `not-gated`           |   227 | No policy applies; unbound is correct.                                            |
+| `pre-auth`            |    17 | Deliberately actorless (MOTIR-2784's adjudication).                               |
+| `needs-binding-first` |   120 | **MOTIR-2830**, under MOTIR-2796 — no `tx` parameter to pass yet.                 |
+| `adjudicated-unbound` |    89 | Seven files whose CLAIM binding would destroy — below.                            |
+| `unclassifiable`      |     0 | An unknown method fails the build rather than defaulting to in-scope.             |
+
+### The seven adjudicated files, and why each is not work
+
+Binding these does not break a test; it makes one **vacuous**, which is the same failure this story
+existed to remove, arriving from the opposite direction.
+
+| files                                                                                           | adjudicated by  | the claim binding would destroy                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `comments/` `custom-fields/` `labels-components-watch/` `notifications/` `repositories.test.ts` | MOTIR-2751      | Subject is the repository CONTRACT and migration-built CONSTRAINTS with RLS deliberately inert. A cross-workspace read would return `[]` because the _policy_ hid the row, and a constraint test failing with a policy error proves nothing about the constraint.                                  |
+| `integration/sprints/repository.test.ts`                                                        | MOTIR-2739/2747 | Subject is the explicit `workspaceId` WHERE-clause gate. Bound, `[]` stops distinguishing a working gate from a broken one.                                                                                                                                                                        |
+| `mcp/comment-counts.test.ts`                                                                    | MOTIR-2755/2840 | Subject is the QUERY COUNT (the N+1 guard), measured by spying on `db.comment.groupBy`. Binding relocates the query onto the tx client the spy cannot see, so every count reads 0.                                                                                                                 |
+| `project-details-service.test.ts`                                                               | MOTIR-2843      | Its read exercises _"the repo's no-tx read path (the `?? db` branch)"_. Binding deletes the test and its branch coverage. **Follow-up: retire the fallback** — as MOTIR-2755 did for `projectRoleDefinitionRepository` once every caller bound. That is a `lib/` change and belongs to MOTIR-2796. |
+
+### The cross-workspace pattern worth knowing
+
+A gate assertion reads for a FOREIGN workspace and expects `[]`. It is bound to its **OWN** workspace,
+not the one it reads: the policy then admits the caller's rows, so an empty result can only come from
+the explicit `workspaceId` argument — which is what the test asserts. Binding the foreign workspace
+would hide the rows twice. Instances: `sprint-filter`, `issue-detail`, `project-tree`,
+`boards/repositories` (×3).
+
+### What remains before `motir_app` is the default
+
+`TEST_DB_APP_ROLE=1` is **not** green, and no batch of this story could have made it so. The residual
+failures are unbound reads inside `backlogService`, `workItemsService`, `savedFiltersService` and
+their peers — **MOTIR-2796**'s surface. This story's boundary forbade a `lib/` change, so those are
+named per file in each batch's PR body rather than fixed here. The flag retires in **MOTIR-2734**,
+now under MOTIR-2832, once 2796 lands.

@@ -5,6 +5,7 @@ import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // attachmentRepository — the Subtask 5.2.1 link/management leaves, against a
 // REAL Postgres (no-mocks rule). Surfaces under test: the `workItemId` link
@@ -95,17 +96,33 @@ describe('attachmentRepository.listByWorkItem / countByWorkItem', () => {
     const fresh = await makeAttachment(fx, { workItemId: issue.id, createdAt: daysAgo(1) });
     await makeAttachment(fx, { workItemId: other.id }); // foreign issue — never listed
 
-    const page1 = await attachmentRepository.listByWorkItem(issue.id, { take: 2 });
+    const page1 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listByWorkItem(issue.id, { take: 2 }, tx),
+    );
     expect(page1.map((a) => a.id)).toEqual([fresh.id, mid.id]);
 
-    const page2 = await attachmentRepository.listByWorkItem(issue.id, {
-      take: 2,
-      cursor: page1[1]!.id,
-    });
+    const page2 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listByWorkItem(
+        issue.id,
+        {
+          take: 2,
+          cursor: page1[1]!.id,
+        },
+        tx,
+      ),
+    );
     expect(page2.map((a) => a.id)).toEqual([old.id]); // cursor row skipped, no repeat
 
-    expect(await attachmentRepository.countByWorkItem(issue.id)).toBe(3);
-    expect(await attachmentRepository.countByWorkItem(other.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(issue.id, tx),
+      ),
+    ).toBe(3);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(other.id, tx),
+      ),
+    ).toBe(1);
   });
 });
 
@@ -117,18 +134,28 @@ describe('attachmentRepository.findManyByIds', () => {
     const mine = await makeAttachment(fx, { blobPathname: 'attachments/a/mine.png' });
     const theirs = await makeAttachment(foreign, { blobPathname: 'attachments/a/theirs.png' });
 
-    const found = await attachmentRepository.findManyByIds(fx.workspaceId, [
-      mine.id,
-      theirs.id, // foreign workspace — must not resolve
-      'nonexistent000000000000000',
-    ]);
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.findManyByIds(
+        fx.workspaceId,
+        [
+          mine.id,
+          theirs.id, // foreign workspace — must not resolve
+          'nonexistent000000000000000',
+        ],
+        tx,
+      ),
+    );
     expect(found.map((a) => a.id)).toEqual([mine.id]);
   });
 
   it('empty-input guard: [] short-circuits to [] without a query', async () => {
     const fx = await makeWorkItemFixture();
     await makeAttachment(fx);
-    expect(await attachmentRepository.findManyByIds(fx.workspaceId, [])).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.findManyByIds(fx.workspaceId, [], tx),
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -144,7 +171,9 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
     );
     expect(linked).toBe(2);
 
-    const rows = await attachmentRepository.listByWorkItem(issue.id);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listByWorkItem(issue.id, undefined, tx),
+    );
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.source === 'panel')).toBe(true);
 
@@ -156,7 +185,11 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
     const aRow = await adminDb.attachment.findUnique({ where: { id: a.id } });
     expect(aRow!.workItemId).toBeNull();
     expect(aRow!.source).toBe('panel'); // source records how it ENTERED, not link state
-    expect(await attachmentRepository.countByWorkItem(issue.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(issue.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('empty-input guards: [] is a no-op returning 0 for both link and unlink', async () => {
@@ -189,21 +222,33 @@ describe('attachmentRepository.listOrphans', () => {
     await makeAttachment(fx, { createdAt: daysAgo(1) }); // unlinked but INSIDE the window
     await makeAttachment(fx, { workItemId: issue.id, createdAt: daysAgo(30) }); // linked — never swept
 
-    const page1 = await attachmentRepository.listOrphans({ olderThan: daysAgo(7), take: 1 });
+    const page1 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listOrphans({ olderThan: daysAgo(7), take: 1 }, tx),
+    );
     expect(page1.map((a) => a.id)).toEqual([oldest.id]);
 
-    const page2 = await attachmentRepository.listOrphans({
-      olderThan: daysAgo(7),
-      take: 1,
-      cursor: page1[0]!.id,
-    });
+    const page2 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listOrphans(
+        {
+          olderThan: daysAgo(7),
+          take: 1,
+          cursor: page1[0]!.id,
+        },
+        tx,
+      ),
+    );
     expect(page2.map((a) => a.id)).toEqual([older.id]);
 
-    const page3 = await attachmentRepository.listOrphans({
-      olderThan: daysAgo(7),
-      take: 1,
-      cursor: page2[0]!.id,
-    });
+    const page3 = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      attachmentRepository.listOrphans(
+        {
+          olderThan: daysAgo(7),
+          take: 1,
+          cursor: page2[0]!.id,
+        },
+        tx,
+      ),
+    );
     expect(page3).toEqual([]); // bounded walk terminates — nothing beyond the window
   });
 });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -304,11 +305,14 @@ describe('findProjectIssuesKeyset — the repository read', () => {
       await createTestWorkItem(fx, { kind: 'task', title: `T${i}` });
     }
 
-    const rows = await workItemRepository.findProjectIssuesKeyset(
-      fx.projectId,
-      fx.workspaceId,
-      {},
-      { limit: 3 },
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        fx.projectId,
+        fx.workspaceId,
+        {},
+        { limit: 3 },
+        tx,
+      ),
     );
 
     expect(rows).toHaveLength(4); // 3 + the probe row
@@ -324,11 +328,14 @@ describe('findProjectIssuesKeyset — the repository read', () => {
       data: { createdAt: collide },
     });
 
-    const rows = await workItemRepository.findProjectIssuesKeyset(
-      fx.projectId,
-      fx.workspaceId,
-      {},
-      { limit: 10 },
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        fx.projectId,
+        fx.workspaceId,
+        {},
+        { limit: 10 },
+        tx,
+      ),
     );
 
     // Identical timestamps, so `id` decides — and the order is stable.
@@ -336,19 +343,25 @@ describe('findProjectIssuesKeyset — the repository read', () => {
     expect(ids).toEqual([...ids].sort());
 
     // Paging through the collision must still see each row exactly once.
-    const first = await workItemRepository.findProjectIssuesKeyset(
-      fx.projectId,
-      fx.workspaceId,
-      {},
-      { limit: 1 },
+    const first = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        fx.projectId,
+        fx.workspaceId,
+        {},
+        { limit: 1 },
+        tx,
+      ),
     );
     const head = first[0];
     expect(head).toBeDefined();
-    const rest = await workItemRepository.findProjectIssuesKeyset(
-      fx.projectId,
-      fx.workspaceId,
-      {},
-      { limit: 10, after: { createdAt: head!.createdAt, id: head!.id } },
+    const rest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        fx.projectId,
+        fx.workspaceId,
+        {},
+        { limit: 10, after: { createdAt: head!.createdAt, id: head!.id } },
+        tx,
+      ),
     );
     expect(rest.map((r) => r.id)).not.toContain(head!.id);
     expect(rest).toHaveLength(2);

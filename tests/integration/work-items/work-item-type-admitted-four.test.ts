@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { resolve } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { WorkItemType } from '@/generated/prisma/client';
@@ -199,7 +200,9 @@ describe('the admitted four reach every contract that publishes the type set', (
 
       // Read back through the REPOSITORY, so the stored column is what is
       // asserted rather than the value we just handed in.
-      const row = await workItemRepository.findById(created.id);
+      const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findById(created.id, tx),
+      );
       expect(row?.type).toBe(type);
       expect(row?.executor).toBe(ADMITTED_EXECUTORS[type]);
     });

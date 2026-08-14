@@ -2,7 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
@@ -80,14 +80,19 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
 
     // Every service path hands the repository a `tx`; these are the `tx ?? db`
     // arms — the shape any future read-only caller (a route, a report) would use.
-    const byProject = await planChangeSessionRepository.findByProjectAndScope(
-      fx.projectId,
-      PROJECT_SCOPE_KEY,
-      fx.workspaceId,
+    const byProject = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+        tx,
+      ),
     );
     expect(byProject?.id).toBe(opened.id);
 
-    const byId = await planChangeSessionRepository.findById(opened.id, fx.workspaceId);
+    const byId = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findById(opened.id, fx.workspaceId, tx),
+    );
     expect(byId?.projectId).toBe(fx.projectId);
   });
 
@@ -100,16 +105,28 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
     await planChangeSessionsService.appendTurn('a turn', c);
     const other = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
 
-    expect(await planChangeSessionRepository.findById(opened.id, other.workspaceId)).toBeNull();
-    expect(await planChangeTurnRepository.listBySessionId(opened.id, other.workspaceId)).toEqual(
-      [],
-    );
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findById(opened.id, other.workspaceId, tx),
+      ),
+    ).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeTurnRepository.listBySessionId(opened.id, other.workspaceId, tx),
+      ),
+    ).toEqual([]);
     // Same ids, the OWNING scope — proof the nulls above are the scope biting,
     // not a bad id.
-    expect(await planChangeSessionRepository.findById(opened.id, fx.workspaceId)).not.toBeNull();
-    expect(await planChangeTurnRepository.listBySessionId(opened.id, fx.workspaceId)).toHaveLength(
-      1,
-    );
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findById(opened.id, fx.workspaceId, tx),
+      ),
+    ).not.toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeTurnRepository.listBySessionId(opened.id, fx.workspaceId, tx),
+      ),
+    ).toHaveLength(1);
   });
 
   it('reports a MISSING session from the row lock instead of throwing', async () => {
@@ -129,12 +146,17 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
     await planChangeSessionsService.appendTurn('first', c);
     await planChangeSessionsService.appendTurn('second', c);
 
-    const session = (await planChangeSessionRepository.findByProjectAndScope(
-      fx.projectId,
-      PROJECT_SCOPE_KEY,
-      fx.workspaceId,
+    const session = (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+        tx,
+      ),
     ))!;
-    const turns = await planChangeTurnRepository.listBySessionId(session.id, fx.workspaceId);
+    const turns = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeTurnRepository.listBySessionId(session.id, fx.workspaceId, tx),
+    );
     expect(turns.map((t) => t.body)).toEqual(['first', 'second']);
     expect(turns.map((t) => t.seq)).toEqual([0, 1]);
   });

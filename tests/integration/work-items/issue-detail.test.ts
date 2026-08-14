@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -118,14 +119,18 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     );
 
     // Correct workspace → the chain resolves (root→self).
-    const own = await workItemRepository.findAncestors(story.id, fx.ctx.workspaceId);
+    const own = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(story.id, fx.ctx.workspaceId, tx),
+    );
     expect(own.map((a) => a.identifier)).toEqual([epic.identifier]);
 
     // A different workspace's id filters out even the anchor row, so a
     // cross-tenant probe gets an empty chain — no ancestor identifiers/titles
     // leak across workspaces.
     const otherWs = await makeWorkItemFixture();
-    const foreign = await workItemRepository.findAncestors(story.id, otherWs.ctx.workspaceId);
+    const foreign = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(story.id, otherWs.ctx.workspaceId, tx),
+    );
     expect(foreign).toEqual([]);
   });
 

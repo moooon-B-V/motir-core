@@ -13,6 +13,7 @@ import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemDto } from '@/lib/dto/workItems';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Integration tests for the Story-4.3 estimationService (Subtask 4.3.3): the
 // per-issue story-point WRITE, the project estimation-config CRUD, and the
@@ -54,7 +55,9 @@ describe('estimationService.setEstimate', () => {
 
     expect(updated.storyPoints).toBe(5);
     expect(await revisionCount(item.id)).toBe(before + 1);
-    const reread = await workItemRepository.findById(item.id);
+    const reread = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(item.id, tx),
+    );
     expect(reread?.storyPoints?.toString()).toBe('5');
   });
 

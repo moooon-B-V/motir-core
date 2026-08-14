@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -113,13 +114,16 @@ describe('findProjectTreeLevel — sprint scope (top in-sprint roots)', () => {
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    const rows = await workItemRepository.findProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      null,
-      SORT,
-      PAGE,
-      sprintId,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        null,
+        SORT,
+        PAGE,
+        sprintId,
+        tx,
+      ),
     );
     // The roots are a1 (subtask under non-member Story A1) and Story A2 (a member).
     // Epic A, Story A1, Story A3, Epic B are all ABSENT (epics/ancestors not pulled in).
@@ -134,13 +138,16 @@ describe('findProjectTreeLevel — sprint scope (top in-sprint roots)', () => {
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    const rows = await workItemRepository.findProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      t.storyA2.id,
-      SORT,
-      PAGE,
-      sprintId,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        t.storyA2.id,
+        SORT,
+        PAGE,
+        sprintId,
+        tx,
+      ),
     );
     // a3 is backlog but Story A2 is the committed unit, so its full subtree shows.
     expect(rows.map((r) => r.id)).toEqual([t.a3.id]);
@@ -153,13 +160,16 @@ describe('findProjectTreeLevel — sprint scope (top in-sprint roots)', () => {
     // Make a3 (under the member Story A2) a member too — A2 is still the topmost.
     await setSprint(t.a3.id, sprintId);
 
-    const rows = await workItemRepository.findProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      null,
-      SORT,
-      PAGE,
-      sprintId,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        null,
+        SORT,
+        PAGE,
+        sprintId,
+        tx,
+      ),
     );
     // Still { a1, Story A2 } — a3 has a member ancestor (A2), so it is NOT a root.
     expect(rows.map((r) => r.id).sort()).toEqual([t.a1.id, t.storyA2.id].sort());
@@ -170,13 +180,16 @@ describe('findProjectTreeLevel — sprint scope (top in-sprint roots)', () => {
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    const rows = await workItemRepository.findProjectTreeLevel(
-      fx.projectId,
-      fx.workspaceId,
-      null,
-      SORT,
-      PAGE,
-      null,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProjectTreeLevel(
+        fx.projectId,
+        fx.workspaceId,
+        null,
+        SORT,
+        PAGE,
+        null,
+        tx,
+      ),
     );
     expect(rows.map((r) => r.id).sort()).toEqual([t.epicA.id, t.epicB.id].sort());
   });
@@ -190,10 +203,8 @@ describe('countRoadmapProgress — full subtree rollup (unchanged by scope)', ()
 
     // Story A2's subtree is { a3 } (done) → total 1, done 1 — the full subtree, not
     // a sprint-pruned slice.
-    const rows = await workItemRepository.countRoadmapProgress(
-      [t.storyA2.id],
-      ['done'],
-      'cancelled',
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countRoadmapProgress([t.storyA2.id], ['done'], 'cancelled', tx),
     );
     expect(rows).toEqual([{ rootId: t.storyA2.id, total: 1, done: 1, verified: 0 }]);
   });

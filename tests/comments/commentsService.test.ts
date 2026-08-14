@@ -23,6 +23,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Service-layer tests for commentsService (Story 5.1 · Subtask 5.1.2). Real
 // Postgres, no DB mocks (CLAUDE.md); the one external seam stubbed is the
@@ -146,7 +147,9 @@ describe('commentsService.addComment', () => {
     expect(dto.mentionedUserIds).toEqual([]);
     expect(dto.author).toEqual({ id: s.member.id, name: s.member.name, image: null });
 
-    const row = await commentRepository.findById(dto.id);
+    const row = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      commentRepository.findById(dto.id, tx),
+    );
     expect(row?.workspaceId).toBe(s.fx.workspaceId);
     expect(row?.authorId).toBe(s.member.id);
 
@@ -185,7 +188,11 @@ describe('commentsService.addComment', () => {
       commentsService.addComment(s.issue.id, { bodyMd: 'nope' }, s.viewerCtx),
     ).rejects.toBeInstanceOf(CommentForbiddenError);
 
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(0);
     expect(events).toHaveLength(0);
   });
 
@@ -403,7 +410,13 @@ describe('commentsService.editComment', () => {
     await expect(
       commentsService.editComment(created.id, { bodyMd: 'hijack' }, peerCtx),
     ).rejects.toBeInstanceOf(CommentForbiddenError);
-    expect((await commentRepository.findById(created.id))?.bodyMd).toBe('mine');
+    expect(
+      (
+        await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+          commentRepository.findById(created.id, tx),
+        )
+      )?.bodyMd,
+    ).toBe('mine');
   });
 
   it('rejects empty bodies and unknown / cross-workspace comment ids', async () => {
@@ -447,7 +460,11 @@ describe('commentsService.deleteComment', () => {
     // Moderation path: the project admin deletes another author's thread.
     await commentsService.deleteComment(root.id, s.projAdminCtx);
 
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(0);
     expect(await commentMentionRepository.findByCommentIds([root.id])).toEqual([]);
 
     const revisions = await adminDb.workItemRevision.findMany({
@@ -475,7 +492,11 @@ describe('commentsService.deleteComment', () => {
 
     await commentsService.deleteComment(reply.id, s.memberCtx);
 
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(1);
     const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
     });
@@ -498,7 +519,11 @@ describe('commentsService.deleteComment', () => {
     await expect(commentsService.deleteComment('nosuch', s.memberCtx)).rejects.toBeInstanceOf(
       CommentNotFoundError,
     );
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('rejects the read-only viewer even on delete (no comment, no delete — 5.1.7 matrix cell)', async () => {
@@ -509,7 +534,11 @@ describe('commentsService.deleteComment', () => {
     await expect(commentsService.deleteComment(created.id, s.viewerCtx)).rejects.toBeInstanceOf(
       CommentForbiddenError,
     );
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it("lets the WORKSPACE owner hard-delete another author's comment (delete-all — 5.1.7 matrix cell)", async () => {
@@ -519,7 +548,11 @@ describe('commentsService.deleteComment', () => {
 
     await commentsService.deleteComment(created.id, s.ownerCtx);
 
-    expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(0);
     const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
     });
@@ -618,7 +651,9 @@ describe('commentMappers', () => {
     const s = await buildScenario();
     captureCommentEvents();
     const dto = await commentsService.addComment(s.issue.id, { bodyMd: 'x' }, s.memberCtx);
-    const row = await commentRepository.findById(dto.id);
+    const row = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      commentRepository.findById(dto.id, tx),
+    );
 
     expect(() => toCommentDto(row!, new Map(), new Map())).toThrow(/missing from the batched/);
   });

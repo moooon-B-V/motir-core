@@ -17,6 +17,7 @@ import {
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // MOTIR-1451 — the cross-project service principal + service-bearer-only auth
 // the bug-filing route (MOTIR-1450) consumes. Real Postgres (no DB mocks). The
@@ -123,9 +124,8 @@ describe('the system principal satisfies the create gates', () => {
       workspace.id,
     );
     expect(wsMembership).not.toBeNull();
-    const projMembership = await projectMembershipRepository.findByUserAndProject(
-      systemUserId,
-      project.id,
+    const projMembership = await withWorkspaceServiceContext(workspace.id, (tx) =>
+      projectMembershipRepository.findByUserAndProject(systemUserId, project.id, tx),
     );
     expect(projMembership).not.toBeNull();
   });
