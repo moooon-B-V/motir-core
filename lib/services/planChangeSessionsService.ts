@@ -103,7 +103,15 @@ async function toDto(
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<PlanChangeSessionDto> {
-  const turns = await planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, tx);
+  // Bound when the caller holds no transaction (MOTIR-2846). Forwarding a `tx?`
+  // that may be undefined into a bindable read looks bound at this line and is
+  // not: under `motir_app` the turn list came back empty and every conversation
+  // rendered as having no history.
+  const turns = tx
+    ? await planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
+        planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, t),
+      );
   const ids = turns
     .filter((t) => t.role === 'assistant')
     .flatMap((t) => parseWorkItemTokenIds(t.body));

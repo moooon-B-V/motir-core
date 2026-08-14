@@ -248,6 +248,123 @@ function* walk(dir: string): Generator<string> {
 }
 
 /**
+ * FORWARDING HELPERS — the blind spot one frame up (MOTIR-2846, second pass).
+ *
+ * A service factors its tenant gate into a module-local helper that takes its own
+ * `tx?: Prisma.TransactionClient`, hands it to a bindable read, and — when the
+ * caller supplies none — falls through to the `@/lib/db` singleton:
+ *
+ *   async function resolveComponent(id, ctx, tx?: Prisma.TransactionClient) {
+ *     const component = await componentRepository.findById(id, tx);   // <- forwards
+ *     …
+ *   }
+ *
+ * Reading only the direct call sites, that inner line looks BOUND — the `tx` is
+ * right there. It is bound exactly when the caller passed one, and every caller
+ * that did not has the full defect: the read returns nothing and the helper
+ * raises `…NotFoundError` for a row that exists. `backlogService.loadItem`,
+ * `bulkAssignToSprint`'s sprint resolve and `componentsService.resolveComponent`
+ * were all this shape, and between them they accounted for the bulk of the
+ * `TEST_DB_APP_ROLE=1` failures that survived binding every direct site.
+ *
+ * So a helper of this shape is itself treated as a bindable gated read, keyed
+ * `<file>#<name>`, and its own call sites are classified like any other. That
+ * moves the scan up exactly ONE frame — a helper calling a helper is still out of
+ * reach, and the guard's fixture pins that limit rather than leaving it implicit.
+ */
+function forwardingHelpers(root: string, reads: Map<string, BindableRead>): BindableRead[] {
+  const out: BindableRead[] = [];
+
+  for (const scanRoot of SCAN_ROOTS) {
+    const abs = path.join(root, scanRoot);
+    try {
+      statSync(abs);
+    } catch {
+      continue;
+    }
+    for (const full of walk(abs)) {
+      const rel = path.relative(root, full);
+      if (rel.startsWith(REPO_DIR)) continue;
+      const sf = ts.createSourceFile(
+        full,
+        readFileSync(full, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+
+      const consider = (
+        name: string,
+        params: ts.NodeArray<ts.ParameterDeclaration>,
+        body: ts.Node,
+      ): void => {
+        if (!hasOptionalTxParam(params)) return;
+        // A helper that opens a BINDING CONTEXT of its own has handled the
+        // undefined-`tx` case — the shape is `tx ? read(…, tx) : withXContext(…)`
+        // — so it is not a gap and its callers owe nothing. Without this, fixing a
+        // helper would leave its every call site reported forever.
+        let bindsItself = false;
+        const seekBinding = (n: ts.Node): void => {
+          if (
+            !bindsItself &&
+            ts.isCallExpression(n) &&
+            ts.isIdentifier(n.expression) &&
+            BINDING_CONTEXTS.has(n.expression.text)
+          ) {
+            bindsItself = true;
+          }
+          if (!bindsItself) ts.forEachChild(n, seekBinding);
+        };
+        seekBinding(body);
+        if (bindsItself) return;
+
+        // Does it FORWARD that `tx` into a bindable gated read?
+        let forwards = false;
+        const seek = (n: ts.Node): void => {
+          if (
+            !forwards &&
+            ts.isCallExpression(n) &&
+            ts.isPropertyAccessExpression(n.expression) &&
+            ts.isIdentifier(n.expression.expression) &&
+            reads.has(`${n.expression.expression.text}.${n.expression.name.text}`) &&
+            n.arguments.some((a) => ts.isIdentifier(a) && a.text === 'tx')
+          ) {
+            forwards = true;
+          }
+          if (!forwards) ts.forEachChild(n, seek);
+        };
+        seek(body);
+        if (!forwards) return;
+        out.push({ repository: rel, method: name, key: `${rel}.${name}`, models: [], raw: false });
+      };
+
+      const visit = (node: ts.Node): void => {
+        if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+          consider(node.name.text, node.parameters, node.body);
+        } else if (
+          ts.isMethodDeclaration(node) &&
+          node.name &&
+          ts.isIdentifier(node.name) &&
+          node.body
+        ) {
+          consider(node.name.text, node.parameters, node.body);
+        } else if (
+          ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer &&
+          (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) &&
+          node.initializer.body
+        ) {
+          consider(node.name.text, node.initializer.parameters, node.initializer.body);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sf);
+    }
+  }
+  return out;
+}
+
+/**
  * The parameter names of every enclosing binding-context callback, innermost
  * first. Empty when the node sits in no bound transaction.
  *
@@ -313,6 +430,23 @@ function enclosingTxParams(node: ts.Node): string[] {
   return names;
 }
 
+/** Is this call the helper calling ITSELF? Recursion is not a fresh call site. */
+function isDeclarationOf(node: ts.Node, name: string): boolean {
+  for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+    if (ts.isFunctionDeclaration(n) && n.name?.text === name) return true;
+    if (
+      ts.isVariableDeclaration(n) &&
+      ts.isIdentifier(n.name) &&
+      n.name.text === name &&
+      n.initializer &&
+      (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Does this argument list carry something that could BE the transaction?
  *
@@ -350,6 +484,15 @@ function passesTx(args: ts.NodeArray<ts.Expression>, candidates: readonly string
  */
 export function scanCallSites(root = process.cwd()): CallSite[] {
   const reads = new Map(bindableGatedReads(root).map((r) => [r.key, r]));
+  // …plus the module-local helpers that FORWARD a `tx?` into one of those reads,
+  // grouped by the file that declares them: they are called as a bare identifier,
+  // not off an object, so the visitor below matches them separately.
+  const helpersByFile = new Map<string, Set<string>>();
+  for (const h of forwardingHelpers(root, reads)) {
+    const set = helpersByFile.get(h.repository);
+    if (set) set.add(h.method);
+    else helpersByFile.set(h.repository, new Set([h.method]));
+  }
   const out: CallSite[] = [];
 
   for (const scanRoot of SCAN_ROOTS) {
@@ -372,7 +515,34 @@ export function scanCallSites(root = process.cwd()): CallSite[] {
         true,
       );
 
+      const localHelpers = helpersByFile.get(rel) ?? new Set<string>();
+
       const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+          const name = node.expression.text;
+          // A call to one of THIS file's forwarding helpers. Position is decided
+          // exactly as for a repository read: does a bound `tx` reach it?
+          if (localHelpers.has(name) && !isDeclarationOf(node, name)) {
+            const contexts = enclosingContexts(node);
+            const params = [
+              ...contexts.map((c) => c.param).filter((p): p is string => p !== undefined),
+              ...enclosingTxParams(node),
+            ];
+            const innermost = contexts[0];
+            let position: CallSitePosition;
+            if (innermost && !innermost.binding) position = 'in-bare-transaction';
+            else if (passesTx(node.arguments, params)) position = 'receives-tx';
+            else if (contexts.length > 0) position = 'in-context';
+            else position = 'no-context';
+            out.push({
+              file: rel,
+              line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1,
+              read: name,
+              position,
+              key: `${rel}#${name}`,
+            });
+          }
+        }
         if (
           ts.isCallExpression(node) &&
           ts.isPropertyAccessExpression(node.expression) &&

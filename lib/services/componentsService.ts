@@ -137,7 +137,14 @@ async function resolveComponent(
   ctx: { workspaceId: string },
   tx?: Prisma.TransactionClient,
 ): Promise<Component> {
-  const component = await componentRepository.findById(componentId, tx);
+  // Bound when the caller holds no transaction (MOTIR-2846): this is the tenant
+  // GATE, so unbound it raises `ComponentNotFoundError` for a component the user
+  // is looking at.
+  const component = tx
+    ? await componentRepository.findById(componentId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        componentRepository.findById(componentId, t),
+      );
   if (!component || component.workspaceId !== ctx.workspaceId) {
     throw new ComponentNotFoundError(componentId);
   }

@@ -135,7 +135,14 @@ async function resolveComment(
   ctx: ServiceContext,
   tx?: Prisma.TransactionClient,
 ) {
-  const row = await commentRepository.findById(commentId, tx);
+  // Bound when the caller holds no transaction (MOTIR-2846) — the same gate
+  // shape as `componentsService.resolveComponent`, and the same 404-for-a-row-
+  // that-exists when the fallback reaches the singleton.
+  const row = tx
+    ? await commentRepository.findById(commentId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        commentRepository.findById(commentId, t),
+      );
   if (!row || row.workspaceId !== ctx.workspaceId) throw new CommentNotFoundError(commentId);
   return row;
 }

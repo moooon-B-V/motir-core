@@ -285,11 +285,16 @@ async function runPersistGate(
   tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const nodes = items.map(toProposalNode);
-  const rows = await workItemRepository.findByIdsInWorkspace(
-    collectReferencedWorkItemIds(nodes),
-    ctx.workspaceId,
-    tx,
-  );
+  // Bound when the caller holds no transaction (MOTIR-2846) — pass 1 runs before
+  // the approve transaction opens. Unbound, every referenced work item read as
+  // absent and the gate rejected the plan with `PlanRefGraphError` for parents
+  // that exist.
+  const referenced = collectReferencedWorkItemIds(nodes);
+  const rows = tx
+    ? await workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        workItemRepository.findByIdsInWorkspace(referenced, ctx.workspaceId, t),
+      );
   const liveById = new Map<string, LiveWorkItemState>(
     rows.map((r) => [r.id, { id: r.id, kind: r.kind, status: r.status }]),
   );

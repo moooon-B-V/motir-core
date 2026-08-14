@@ -34,7 +34,6 @@
 
 import { Prisma } from '@/generated/prisma/client';
 import type { Import, ImportSource } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -165,7 +164,8 @@ export const importPersistService = {
           counts,
         );
         yield progress;
-        if (++processed % COUNTS_FLUSH_EVERY === 0) await flushCounts(importId, counts);
+        if (++processed % COUNTS_FLUSH_EVERY === 0)
+          await flushCounts(importId, ctx.workspaceId, counts);
       }
       // A connector's own per-issue fetch errors surface as failed issues too.
       for (const e of page.errors) {
@@ -205,7 +205,7 @@ export const importPersistService = {
         : counts.created + counts.updated + counts.skipped > 0
           ? 'partially_failed'
           : 'failed';
-    await db.$transaction((tx) =>
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       importRepository.update(
         importId,
         {
@@ -481,7 +481,7 @@ async function upsertMappingSafely(input: {
   sourceHash: string;
 }): Promise<void> {
   const write = () =>
-    db.$transaction(async (tx) => {
+    withWorkspaceServiceContext(input.workspaceId, async (tx) => {
       await importedIssueRepository.lockBySourceId(
         input.projectId,
         input.source,
@@ -525,8 +525,12 @@ function commentWithAttribution(c: ResolvedComment): string {
 }
 
 /** Flush live counts to the `Import` row (mid-run progress for `GET /:id`). */
-async function flushCounts(importId: string, counts: ImportRunCounts): Promise<void> {
-  await db.$transaction((tx) =>
+async function flushCounts(
+  importId: string,
+  workspaceId: string,
+  counts: ImportRunCounts,
+): Promise<void> {
+  await withWorkspaceServiceContext(workspaceId, (tx) =>
     importRepository.update(
       importId,
       {

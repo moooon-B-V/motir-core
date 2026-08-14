@@ -11,16 +11,40 @@ import { fixtureRepository } from '../repositories/fixtureRepository';
 // fixture free of the real client's model list, which would make it a
 // schema-drift liability for no benefit.
 type Tx = Parameters<typeof fixtureRepository.findWidget>[1];
+// The detector keys on the TYPE NAME carrying `TransactionClient` (the real code
+// writes `Prisma.TransactionClient`), so the fixture has to say it too — the alias
+// exists for that reason and nothing else.
+type TransactionClient = Tx;
 declare const db: { $transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 declare function withWorkspaceServiceContext<T>(
   workspaceId: string,
   fn: (tx: Tx) => Promise<T>,
 ): Promise<T>;
 
+// (I) a MODULE-LOCAL forwarding helper — takes its own `tx?`, hands it to a
+//     bindable read, and falls through to the singleton when the caller passes
+//     none. The helper's own line looks bound; the gap is at its CALL SITES, and
+//     MOTIR-2846's second pass taught the scanner to reach exactly one frame up
+//     to find them. `unboundHelperCaller` below is the finding.
+async function resolveWidget(id: string, tx?: TransactionClient) {
+  return fixtureRepository.findWidget(id, tx);
+}
+
+// (J) the SAME shape, repaired: it binds its own fallback. NOT a finding, and its
+//     callers owe nothing — without this exclusion, fixing a helper would leave
+//     every one of its call sites reported forever.
+async function resolveWidgetBound(id: string, workspaceId: string, tx?: TransactionClient) {
+  return tx
+    ? fixtureRepository.findWidget(id, tx)
+    : withWorkspaceServiceContext(workspaceId, (t) => fixtureRepository.findWidget(id, t));
+}
+
 export const fixtureService = {
   // (A) receives-tx OUTSIDE a context — the caller's own optional `tx`, forwarded.
-  //     NOT a finding here: the gap, if there is one, is one frame up. That
-  //     limitation is deliberate and is pinned by the guard.
+  //     NOT a finding here. The scanner reaches one frame up for a MODULE-LOCAL
+  //     helper (see (I)); an EXPORTED method like this one is called from other
+  //     files, so its gap stays out of reach. That boundary is deliberate and is
+  //     pinned by the guard.
   async forwarded(id: string, tx?: Tx) {
     return fixtureRepository.findWidget(id, tx);
   },
@@ -66,5 +90,15 @@ export const fixtureService = {
   //     because it binds no GUCs and yet looks bound at a glance.
   async bareTransaction(id: string) {
     return db.$transaction(async (tx) => fixtureRepository.findWidget(id, tx));
+  },
+
+  // (I') the finding (I) produces: the helper is called with no transaction.
+  async unboundHelperCaller(id: string) {
+    return resolveWidget(id);
+  },
+
+  // (J') the repaired helper's caller — NOT a finding.
+  async boundHelperCaller(id: string, workspaceId: string) {
+    return resolveWidgetBound(id, workspaceId);
   },
 };

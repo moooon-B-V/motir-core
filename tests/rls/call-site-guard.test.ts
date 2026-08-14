@@ -296,13 +296,30 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
 
     // Pinned INDIVIDUALLY. One `toEqual` over the set would pass for the wrong
     // reason the day the scan returns nothing at all.
-    expect(positions.filter((p) => p === 'receives-tx')).toHaveLength(2);
+    expect(positions.filter((p) => p === 'receives-tx')).toHaveLength(5);
     expect(positions.filter((p) => p === 'in-context')).toHaveLength(1);
     expect(positions.filter((p) => p === 'in-bare-transaction')).toHaveLength(1);
-    expect(positions.filter((p) => p === 'no-context')).toHaveLength(2);
+    expect(positions.filter((p) => p === 'no-context')).toHaveLength(3);
+
+    const reads = [...byPosition.keys()].map((k) => k.split('@')[0]);
+
+    // The FORWARDING-HELPER frame (MOTIR-2846, second pass). A module-local helper
+    // that takes its own `tx?` and hands it to a bindable read is bound only when
+    // its caller supplies one — the helper's own line looks bound either way, which
+    // is why `backlogService.loadItem` and `componentsService.resolveComponent`
+    // survived binding every direct site. The scan reaches ONE frame up to find
+    // those callers.
+    expect(reads, 'a caller of an unrepaired forwarding helper is a finding').toContain(
+      'resolveWidget',
+    );
+    // …and stops reporting the moment the helper binds its own fallback. Without
+    // this, repairing a helper would leave its every call site reported forever —
+    // a guard that cannot go green is a guard people learn to ignore.
+    expect(reads, 'a helper that binds its own fallback is not a gap').not.toContain(
+      'resolveWidgetBound',
+    );
 
     // And the three shapes that must NOT be reported at all:
-    const reads = [...byPosition.keys()].map((k) => k.split('@')[0]);
     expect(reads, 'a read of a non-gated model has no policy to be blind to').not.toContain(
       'fixtureRepository.findGlobalSetting',
     );
