@@ -61,9 +61,19 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * to differ, and re-measure them from the first green run that includes them.
  * `onboarding-migrate.spec.ts` (43.5 s) is by far the heaviest of the twelve and
  * is the one to watch when the bin-packer redistributes.
+ *
+ * ⚠️ `app-role-surfaces.spec.ts` (MOTIR-2816) carries a THIRD provenance and a
+ * cost of ~0 that is honest for THIS lane and misleading anywhere else. Every
+ * test in it calls `test.skip()` unless `E2E_APP_ROLE=1`, and the bulk legs never
+ * set that — so in this lane it loads, skips seven tests and contributes no
+ * execution time. Under its own harness it is a full sign-in-plus-seven-surfaces
+ * pass (measured locally at ~95 s). Re-measure it here only if the flag ever
+ * becomes the lane default; until then a real number would be a lie about what
+ * the bin-packer is scheduling.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
+  'app-role-surfaces.spec.ts': 0,
   'ai-callout-gate.spec.ts': 1.5,
   'ai-plan-generation.spec.ts': 10.0,
   'api-docs.spec.ts': 15.0,

@@ -40,6 +40,30 @@ loadEnv();
 // derived FROM it so the spawned server and the URL Playwright drives can't
 // disagree (a bare E2E_BASE_URL with a stale PORT would otherwise boot the
 // server on one port and drive another).
+// MOTIR-2816 — the `motir_app` E2E harness, the rehearsal for MOTIR-2515.
+//
+// `E2E_APP_ROLE=1` runs the webServer with `DATABASE_URL` rewritten to the
+// NON-BYPASS runtime role, which is the configuration production will be in and
+// the only one no other test in the repo exercises. `TEST_DB_APP_ROLE=1` cannot
+// do this: it swaps the client inside a Vitest process and has no say over a
+// webServer's connection.
+//
+// ⚠️ ONLY THE SERVER MOVES. The Playwright process, its fixtures and every
+// seeding helper keep the OWNER url from `.env` — fixtures create tenants and
+// need privileges the runtime role does not have, so seeding through the app
+// role would fail at setup and prove nothing about the product.
+//
+// The role's throwaway password is provisioned in `globalSetup`; see
+// `tests/e2e/_helpers/appRoleServer.ts` for why it is not a deployed credential.
+const APP_ROLE_SERVER = process.env['E2E_APP_ROLE'] === '1';
+const OWNER_DATABASE_URL = process.env['DATABASE_URL'] ?? '';
+function appRoleDatabaseUrl(raw: string): string {
+  const url = new URL(raw);
+  url.username = process.env['TEST_APP_DB_ROLE'] ?? 'motir_app';
+  url.password = process.env['TEST_APP_DB_PASSWORD'] ?? 'motir_app';
+  return url.toString();
+}
+
 const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(process.env['PORT']);
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
 const PORT = new URL(BASE_URL).port || '3000';
@@ -233,6 +257,10 @@ export default defineConfig({
         // /api/_test 404 gate / 'file' email sink) that the production server
         // would otherwise trip. Only ever set here, never in a real deploy.
         E2E_PROD_HARNESS: '1',
+        // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
+        ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
+          ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }
+          : {}),
         // Give `next build` V8 old-space headroom (it is memory-heavy); harmless
         // for the lightweight `next start` that follows. 6 GB is safely inside
         // the 16 GB `ubuntu-latest` budget shared with Postgres, the Inngest Go

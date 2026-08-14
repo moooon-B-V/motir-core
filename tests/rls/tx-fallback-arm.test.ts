@@ -8,6 +8,14 @@ import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldD
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { sprintRepository } from '@/lib/repositories/sprintRepository';
+import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { codeGraphOffboardingRepository } from '@/lib/repositories/codeGraphOffboardingRepository';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
@@ -375,5 +383,209 @@ describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
       expect(total).toBe(1);
       expect(subs).toBe(1);
     }
+  });
+});
+
+// ── The arms MOTIR-2830 stranded ─────────────────────────────────────────────
+//
+// Binding the TEST call sites removed the last unbound caller from nine more
+// repositories, and CI's merged coverage report caught what a single local run
+// had not: `codeGraphOffboardingRepository` 50%, `planChangeTurnRepository` 50%,
+// `workItemRevisionRepository` 75.6%, and six others under the ≥90% branch floor.
+//
+// The same argument as everything above, one sweep later: the fallback is not
+// dead code, it is what a repository does when nobody bound a transaction, and
+// the answer in that state is the thing this story is about. So it is exercised
+// on purpose rather than deleted or excused.
+
+describe('the fallback arms MOTIR-2830 left without a caller', () => {
+  it('workItemLinkRepository — every edge read, unbound', async () => {
+    const { fx, itemId } = await seedItem('FB1');
+    const other = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Blocker' },
+      fx.ctx,
+    );
+    const link = await workItemsService.linkWorkItems(
+      { fromId: itemId, toId: other.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    expectFallbackAnswer(await workItemLinkRepository.findByFromItem(itemId), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findByToItem(other.id), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findBlockedByEdges([itemId]), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerStates(itemId), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerStatesForItems([itemId]), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerEdgesForItems([itemId]), 1);
+    expectFallbackAnswer(await workItemLinkRepository.findBlockedEdgesForItems([other.id]), 1);
+    expectFallbackAnswer(
+      await workItemLinkRepository.findBlockerSessionBranchesForItems([itemId]),
+      0,
+    );
+
+    const one = await workItemLinkRepository.findById(link.id);
+    if (isAppRoleTestMode()) expect(one).toBeNull();
+    else expect(one?.id).toBe(link.id);
+
+    const between = await workItemLinkRepository.findAnyBetween(itemId, other.id);
+    if (isAppRoleTestMode()) expect(between).toBeNull();
+    else expect(between?.id).toBeTruthy();
+
+    const reciprocal = await workItemLinkRepository.findReciprocal(
+      itemId,
+      other.id,
+      'is_blocked_by',
+    );
+    if (isAppRoleTestMode()) expect(reciprocal).toBeNull();
+    else expect(reciprocal?.id).toBe(link.id);
+  });
+
+  it('sprintRepository — the sprint lookups, unbound', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FB2' });
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Arm' }, fx.ctx);
+
+    expectFallbackAnswer(await sprintRepository.listByProject(fx.projectId, fx.workspaceId), 1);
+    expectFallbackAnswer(await sprintRepository.findByIds([sprint.id], fx.workspaceId), 1);
+    expectFallbackAnswer(
+      await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 10),
+      0,
+    );
+    expectFallbackCount(
+      await sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'planned'),
+      1,
+    );
+    // `maxSequenceForProject` returns 0 for "nothing found", which is also the
+    // unbound answer — so it is asserted only on the OWNER side, where a real
+    // sequence proves the read ran. Under the app role the arm is still executed
+    // (that is what the coverage floor needs) but there is nothing it can claim.
+    const maxSeq = await sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId);
+    if (!isAppRoleTestMode()) expect(maxSeq).toBeGreaterThan(0);
+
+    const byId = await sprintRepository.findById(sprint.id, fx.workspaceId);
+    if (isAppRoleTestMode()) expect(byId).toBeNull();
+    else expect(byId?.id).toBe(sprint.id);
+
+    const active = await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId);
+    expect(active).toBeNull(); // never started — null under BOTH roles
+  });
+
+  it('workItemRevisionRepository — the history and the aggregates, unbound', async () => {
+    const { fx, itemId } = await seedItem('FB3');
+    await workItemsService.updateWorkItem(itemId, { title: 'Renamed' }, fx.ctx);
+    const window = {
+      start: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      end: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    };
+
+    expectFallbackAnswer(await workItemRevisionRepository.listByWorkItem(itemId), 2);
+    // TWO: the `created` revision and the rename. The NUMBER is what separates a
+    // bound read from the unbound zero, so it is asserted rather than rounded to
+    // "some".
+    expectFallbackCount(await workItemRevisionRepository.countDisplayableByWorkItem(itemId, []), 2);
+    expectFallbackAnswer(
+      await workItemRevisionRepository.aggregateNetResolvedByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        'day',
+        window,
+      ),
+      0,
+    );
+    expectFallbackAnswer(
+      await workItemRevisionRepository.aggregateAverageAgeByBucket(fx.projectId, fx.workspaceId, [
+        { key: 'now', end: window.end },
+      ]),
+      0,
+    );
+    expectFallbackAnswer(
+      await workItemRevisionRepository.aggregateResolutionTimeByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        'day',
+        window,
+      ),
+      0,
+    );
+
+    const latest = await workItemRevisionRepository.findLatestIdsByWorkItemIds([itemId]);
+    if (isAppRoleTestMode()) expect(latest.size).toBe(0);
+    else expect(latest.get(itemId)).toBeTruthy();
+
+    const actor = await workItemRevisionRepository.findLatestArchivedActor(itemId);
+    expect(actor).toBeNull(); // never archived — null under BOTH roles
+  });
+
+  it('customFieldOptionRepository — the option lookups, unbound', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FB4' });
+    const field = await adminDb.customFieldDefinition.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'stage',
+        label: 'Stage',
+        fieldType: 'select',
+        position: 'a0',
+      },
+    });
+    const option = await adminDb.customFieldOption.create({
+      data: { fieldId: field.id, label: 'Alpha', position: 'a0' },
+    });
+
+    expectFallbackAnswer(
+      await customFieldOptionRepository.listByField(field.id, fx.workspaceId),
+      1,
+    );
+    expectFallbackAnswer(
+      await customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId),
+      1,
+    );
+    expectFallbackAnswer(
+      await customFieldOptionRepository.findByIds([option.id], fx.projectId, fx.workspaceId),
+      1,
+    );
+    expectFallbackCount(
+      await customFieldOptionRepository.countByField(field.id, fx.workspaceId),
+      1,
+    );
+
+    const byId = await customFieldOptionRepository.findById(option.id, fx.workspaceId);
+    if (isAppRoleTestMode()) expect(byId).toBeNull();
+    else expect(byId?.id).toBe(option.id);
+  });
+
+  it('the plan-change conversation, the offboarding queue and the CI charge', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FB5' });
+    const session = await adminDb.planChangeSession.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, scopeKey: 'project' },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: session.id,
+        seq: 1,
+        role: 'user',
+        body: 'hello',
+      },
+    });
+
+    const found = await planChangeSessionRepository.findByProjectAndScope(
+      fx.projectId,
+      'project',
+      fx.workspaceId,
+    );
+    if (isAppRoleTestMode()) expect(found).toBeNull();
+    else expect(found?.id).toBe(session.id);
+
+    expectFallbackAnswer(
+      await planChangeTurnRepository.listBySessionId(session.id, fx.workspaceId),
+      1,
+    );
+
+    // Two rows whose tables are gated but NOT by `app.workspace_id`: the
+    // offboarding queue is a system-context table and the CI charge is
+    // org-scoped. Unbound, both are still empty — which is the point.
+    expectFallbackAnswer(
+      await codeGraphOffboardingRepository.findByProject(fx.workspaceId, fx.projectId),
+      0,
+    );
   });
 });
