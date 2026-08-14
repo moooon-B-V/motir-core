@@ -614,3 +614,147 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     expect(charge).toBeNull(); // no row for that period, under either role
   });
 });
+
+// ── EVERY `tx ?? db` arm in `workItemRepository`, in one table ────────────────
+//
+// The file has SIXTY-EIGHT of them, and MOTIR-2830 took the last caller off
+// almost all at once by binding the test call sites. Branch coverage fell to
+// 85.3% with barely an uncovered LINE, which is the trap: a two-arm branch whose
+// `tx` side is taken and whose `db` side is not leaves the line fully covered and
+// the branch half-covered, so "Uncovered Line #s" points at nothing useful. Only
+// the percentage moves. Chasing the reported line is the wrong instrument.
+//
+// A TABLE rather than sixty-eight `it`s, and rather than a hand-picked subset
+// that happens to clear the floor: the claim worth making is "every fallback arm
+// in this file has a caller", which a list can state and a sample cannot. A new
+// bindable read added here with no entry does not fail this test — but its arm
+// goes uncovered and the ≥90% floor says so, which is the same signal one step
+// removed.
+//
+// The contract is the file's usual one, applied generically: under the owner the
+// call resolves; under `motir_app` it comes back EMPTY. `isEmptyish` spells out
+// what "empty" means across the four shapes these reads return.
+
+/** `[]`, `0`, `null`, or an empty `Map` — the four ways these reads say nothing. */
+function isEmptyish(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'number') return value === 0;
+  // A Map whose VALUES are all empty counts as empty: several of these reads
+  // pre-seed an entry per requested id so callers can `.get()` without a null
+  // gap (`findAncestorIdsForItems`, `getTerminalStatusKeysByProjects`), so their
+  // unbound answer is a full map of empty arrays, not an empty map.
+  if (value instanceof Map) return [...value.values()].every(isEmptyish);
+  if (typeof value === 'boolean') return value === false;
+  // A record of counts is empty when every count is zero — `countByStatusCategory`
+  // returns `{ todo, in_progress, done }` and its unbound answer is all zeros,
+  // not an absent object. Same idea as the Map case above: the SHAPE is always
+  // there, and the emptiness lives in the values.
+  if (typeof value === 'object') return Object.values(value).every(isEmptyish);
+  return false;
+}
+
+describe('workItemRepository — all 68 fallback arms have a caller', () => {
+  it('every `tx ?? db` read resolves unbound, and answers EMPTY under motir_app', async () => {
+    const { fx, itemId } = await seedItem('FBW');
+    const ws = fx.workspaceId;
+    const pid = fx.projectId;
+    const sort = { column: 'key', direction: 'asc' } as const;
+    const win = {
+      start: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      end: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    };
+    const r = workItemRepository;
+
+    // Every arm, called with the cheapest arguments that reach the query. Ids
+    // that resolve where the answer is interesting; empty arrays where the read
+    // short-circuits anyway (the arm is still entered).
+    const arms: Array<readonly [string, Promise<unknown>]> = [
+      ['findById', r.findById(itemId)],
+      ['findProvenanceBackfillCandidates', r.findProvenanceBackfillCandidates(pid, ws)],
+      ['findByIdentifier', r.findByIdentifier(pid, 'FBW-1')],
+      ['findByIdentifiers', r.findByIdentifiers(pid, ['FBW-1'])],
+      ['findByIds', r.findByIds([itemId])],
+      ['findByIdsInWorkspace', r.findByIdsInWorkspace([itemId], ws)],
+      ['findChildrenCreatedAfter', r.findChildrenCreatedAfter([itemId], ws, win.start)],
+      ['findRoadmapBlockerStubs', r.findRoadmapBlockerStubs([itemId])],
+      ['findBySessionBranch', r.findBySessionBranch('nope', ws)],
+      ['findReadyLayer', r.findReadyLayer(pid, ws, null)],
+      ['findExpandableStubs', r.findExpandableStubs(pid, ws)],
+      ['findTriageQueue', r.findTriageQueue(pid, ws, { limit: 5 })],
+      ['quickSearch', r.quickSearch(ws, [pid], 'sub', 5)],
+      ['findSiblings', r.findSiblings(pid, null)],
+      ['findByProjectFiltered', r.findByProjectFiltered(pid)],
+      ['findByProjectAndKinds', r.findByProjectAndKinds(pid, ['task'], ws)],
+      ['findByProjectKindAndTitle', r.findByProjectKindAndTitle(pid, 'task', 'Subject')],
+      ['findByProject', r.findByProject(pid)],
+      ['findAllByProjectForValidity', r.findAllByProjectForValidity(pid, ws)],
+      ['findPublicHiddenDescendantIds', r.findPublicHiddenDescendantIds(pid, ws)],
+      ['countByProjectAndStatusKey', r.countByProjectAndStatusKey(pid, 'todo')],
+      ['findByProjectAndStatusKey', r.findByProjectAndStatusKey(pid, 'todo')],
+      ['findChildren', r.findChildren(itemId)],
+      ['findSubtree', r.findSubtree(itemId)],
+      ['findBoundedSubtree', r.findBoundedSubtree(itemId, ws, 3)],
+      ['findSubtreeMembersForValidity', r.findSubtreeMembersForValidity(itemId, ws)],
+      ['findDescriptionsByIds', r.findDescriptionsByIds([itemId], ws)],
+      ['countLiveDescendantsByKind', r.countLiveDescendantsByKind(itemId)],
+      ['countRoadmapProgress', r.countRoadmapProgress([itemId], ['done'], 'cancelled')],
+      ['findAncestors', r.findAncestors(itemId, ws)],
+      ['findAncestorIdsForItems', r.findAncestorIdsForItems([itemId], ws)],
+      ['findChildrenForItems', r.findChildrenForItems([itemId], ws)],
+      ['findProjectForest', r.findProjectForest(pid, ws)],
+      [
+        'findProjectIssuesFlat',
+        r.findProjectIssuesFlat(pid, ws, sort, {}, { limit: 5, offset: 0 }),
+      ],
+      ['findProjectIssuesKeyset', r.findProjectIssuesKeyset(pid, ws, {}, { limit: 5 })],
+      ['countProjectIssues', r.countProjectIssues(pid, ws)],
+      ['findArchivedByProject', r.findArchivedByProject(pid, ws, { limit: 5, offset: 0 })],
+      ['countArchivedByProject', r.countArchivedByProject(pid, ws)],
+      ['countByStatusCategory', r.countByStatusCategory(pid, ws)],
+      ['aggregateChildrenStatus', r.aggregateChildrenStatus(itemId, null)],
+      ['countTriageItems', r.countTriageItems(pid, ws)],
+      ['findColumnCards', r.findColumnCards(pid, ws, ['todo'], 'position', { limit: 5 })],
+      ['findProjectTreeLevel', r.findProjectTreeLevel(pid, ws, null, sort, { take: 5, offset: 0 })],
+      ['countProjectTreeLevel', r.countProjectTreeLevel(pid, ws, null)],
+      [
+        'findPublicProjectTreeLevel',
+        r.findPublicProjectTreeLevel(pid, ws, null, { take: 5, offset: 0 }, []),
+      ],
+      ['countPublicProjectTreeLevel', r.countPublicProjectTreeLevel(pid, ws, null, [])],
+      ['aggregateBoardLanesByAssignee', r.aggregateBoardLanesByAssignee(pid, ws, ['todo'])],
+      ['aggregateBoardLanesByPriority', r.aggregateBoardLanesByPriority(pid, ws, ['todo'])],
+      ['aggregateBoardLanesByEpic', r.aggregateBoardLanesByEpic(pid, ws, ['todo'])],
+      [
+        'matchesAutomationCondition',
+        r.matchesAutomationCondition(itemId, {
+          combinator: 'and',
+          conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
+        }),
+      ],
+      ['aggregateCreatedByBucket', r.aggregateCreatedByBucket(pid, ws, 'day', win)],
+      [
+        'aggregateDistribution',
+        r.aggregateDistribution(pid, ws, { kind: 'column', column: 'kind' }),
+      ],
+      ['aggregateWorkloadByAssignee', r.aggregateWorkloadByAssignee(pid, ws)],
+      ['findEpicAncestors', r.findEpicAncestors([itemId], ws)],
+      ['findBacklogRankByIds', r.findBacklogRankByIds([itemId], ws)],
+      ['findBoundaryBacklogRank', r.findBoundaryBacklogRank(pid, ws, null, 'max')],
+    ];
+
+    const answers = await Promise.all(arms.map(([, p]) => p));
+    for (const [i, [name]] of arms.entries()) {
+      if (isAppRoleTestMode()) {
+        expect(isEmptyish(answers[i]), `${name} must answer EMPTY unbound under motir_app`).toBe(
+          true,
+        );
+      }
+    }
+    // A floor on the OWNER side, so the table cannot pass by every call throwing
+    // its way to an empty answer: some of these must genuinely return rows.
+    if (!isAppRoleTestMode()) {
+      expect(answers.filter((a) => !isEmptyish(a)).length).toBeGreaterThan(5);
+    }
+  });
+});
