@@ -24,6 +24,25 @@ import { truncateAuthTables } from '../helpers/db';
 // viewer's `voted` flag. Columns are cursor-paginated `(voteCount DESC, recency
 // DESC, id ASC)`.
 
+/**
+ * A fixture whose project is actually `public` — which is the precondition
+ * EVERY read in this file is about. The roadmap reads are the PUBLIC surface,
+ * and under the non-bypass runtime role `work_item_public_project_read` admits
+ * a row only when its project is public; a fixture left at the default access
+ * level therefore proves nothing the reads claim (MOTIR-2857). The write goes
+ * through `adminDb` — the owner client — because making a project public is
+ * SETUP here, not the behaviour under test (see `tests/helpers/adminDb.ts`).
+ * Mirrors `makePublicProjectFixture` in `publicSubmit.test.ts`.
+ */
+async function makePublicProjectFixture(): Promise<WorkItemFixture> {
+  const fx = await makeWorkItemFixture();
+  await adminDb.project.update({
+    where: { id: fx.projectId },
+    data: { accessLevel: 'public' },
+  });
+  return fx;
+}
+
 let userCounter = 0;
 async function makeUser(name: string) {
   userCounter += 1;
@@ -75,7 +94,7 @@ afterAll(async () => {
 
 describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
   it('returns active in-triage public requests, highest-demand first, with the viewer vote flag', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const submitter = await makeUser('Submitter');
     const viewer = await makeUser('Viewer');
     const otherVoter = await makeUser('Other');
@@ -100,7 +119,7 @@ describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
   });
 
   it('excludes non-triage, archived, un-attributed, declined (done) and snoozed requests', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const submitter = await makeUser('Submitter');
 
     // The one item that SHOULD show.
@@ -142,7 +161,7 @@ describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
   });
 
   it('pages after a cursor (seek-after, no overlap)', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const submitter = await makeUser('Submitter');
     for (const title of ['req a', 'req b', 'req c']) {
       const wi = await createTestWorkItem(fx, { kind: 'task', title });
@@ -176,7 +195,7 @@ describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
 
 describe('workItemRepository.countPublicRoadmapSubmitted (6.12.7)', () => {
   it('counts only active, attributed, in-triage requests', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const submitter = await makeUser('Submitter');
 
     for (const title of ['r1', 'r2']) {
@@ -196,7 +215,7 @@ describe('workItemRepository.countPublicRoadmapSubmitted (6.12.7)', () => {
   });
 
   it('returns 0 for a project with no submissions', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const count = await workItemRepository.countPublicRoadmapSubmitted(
       fx.projectId,
       fx.workspaceId,
@@ -217,7 +236,7 @@ describe('workItemRepository.findPublicRoadmapByStatus (6.12.7)', () => {
   }
 
   it('returns graduated items in the given status keys, demand-first, with the vote flag', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const viewer = await makeUser('Viewer');
     const { planned } = await seedPromoted(fx);
 
@@ -238,7 +257,7 @@ describe('workItemRepository.findPublicRoadmapByStatus (6.12.7)', () => {
   });
 
   it('excludes archived and triage items even when their status is in the set', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     const submitter = await makeUser('Submitter');
 
     const live = await createTestWorkItem(fx, { kind: 'task', title: 'live done' });
@@ -264,7 +283,7 @@ describe('workItemRepository.findPublicRoadmapByStatus (6.12.7)', () => {
   });
 
   it('short-circuits to [] for an empty status-key set (a bucket mapping no live status)', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     await seedPromoted(fx);
     const rows = await workItemRepository.findPublicRoadmapByStatus(
       fx.projectId,
@@ -279,7 +298,7 @@ describe('workItemRepository.findPublicRoadmapByStatus (6.12.7)', () => {
   });
 
   it('pages after a cursor on the monotonic key (seek-after, no overlap)', async () => {
-    const fx = await makeWorkItemFixture();
+    const fx = await makePublicProjectFixture();
     for (const title of ['d1', 'd2', 'd3']) {
       const wi = await createTestWorkItem(fx, { kind: 'task', title });
       await setStatus(wi.id, 'done');

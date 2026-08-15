@@ -11,6 +11,7 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import { makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -24,17 +25,18 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await db.projectTagAssignment.deleteMany();
-  await db.projectTag.deleteMany();
+  await adminDb.projectTagAssignment.deleteMany();
+  await adminDb.projectTag.deleteMany();
 });
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Make a project `public` so the facet read counts it. */
 async function makePublic(projectId: string): Promise<void> {
-  await db.project.update({ where: { id: projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: projectId }, data: { accessLevel: 'public' } });
 }
 
 describe('projectTagsService.setProjectTags — per-project tagging', () => {
@@ -211,7 +213,7 @@ describe('projectTagsService.listCategories — the public tag facet', () => {
     await projectTagsService.setProjectTags(a.projectIdentifier, ['design'], a.ctx);
     expect((await projectTagsService.listCategories()).map((c) => c.slug)).toEqual(['design']);
 
-    await db.project.update({ where: { id: a.projectId }, data: { accessLevel: 'open' } });
+    await adminDb.project.update({ where: { id: a.projectId }, data: { accessLevel: 'open' } });
     expect(await projectTagsService.listCategories()).toEqual([]);
   });
 });

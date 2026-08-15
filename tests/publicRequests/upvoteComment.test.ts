@@ -9,6 +9,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { EmptyCommentBodyError } from '@/lib/comments/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Public-request UPVOTE + COMMENT (Story 6.12 · Subtask 6.12.6) — the two
@@ -32,12 +33,12 @@ async function makeUser(name: string) {
  *  voters/commenters below are fresh cross-org accounts (no membership). */
 async function publicRequestFixture(): Promise<{ fx: WorkItemFixture; requestId: string }> {
   const fx = await makeWorkItemFixture();
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: 'Dark mode please' },
     fx.ctx,
   );
-  await db.workItem.update({ where: { id: item.id }, data: { triagedAt: new Date() } });
+  await adminDb.workItem.update({ where: { id: item.id }, data: { triagedAt: new Date() } });
   return { fx, requestId: item.id };
 }
 
@@ -47,6 +48,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('publicRequestsService.toggleUpvote (6.12.6)', () => {
@@ -71,7 +73,7 @@ describe('publicRequestsService.toggleUpvote (6.12.6)', () => {
     expect(second.voteCount).toBe(2);
 
     // The unique (workItemId, userId) holds — exactly two rows, one per account.
-    const rows = await db.publicRequestVote.count({ where: { workItemId: requestId } });
+    const rows = await adminDb.publicRequestVote.count({ where: { workItemId: requestId } });
     expect(rows).toBe(2);
   });
 
@@ -107,7 +109,7 @@ describe('publicRequestsService.addComment (6.12.6)', () => {
     expect(dto.author.id).toBe(commenter.id);
     expect(dto.bodyMd).toBe('Would love this too!');
 
-    const row = await db.comment.findUnique({ where: { id: dto.id } });
+    const row = await adminDb.comment.findUnique({ where: { id: dto.id } });
     expect(row?.isPublic).toBe(true);
   });
 
@@ -115,7 +117,7 @@ describe('publicRequestsService.addComment (6.12.6)', () => {
     const { fx, requestId } = await publicRequestFixture();
     // The owner (a member) comments through the INTERNAL path (5.1.2).
     const internal = await commentsService.addComment(requestId, { bodyMd: 'triage note' }, fx.ctx);
-    const row = await db.comment.findUnique({ where: { id: internal.id } });
+    const row = await adminDb.comment.findUnique({ where: { id: internal.id } });
     expect(row?.isPublic).toBe(false);
   });
 
@@ -141,7 +143,7 @@ describe('publicRequestsService.addComment (6.12.6)', () => {
 describe('triage queue — vote count is the leading sort key (6.12.6)', () => {
   it('an upvoted request floats above newer-but-unvoted ones; voteCount rides the DTO; a zero-vote queue stays newest-first', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
 
     // Three triage requests, oldest → newest by triagedAt.
     const mk = async (title: string, triagedAt: Date) => {
@@ -149,7 +151,7 @@ describe('triage queue — vote count is the leading sort key (6.12.6)', () => {
         { projectId: fx.projectId, kind: 'task', title },
         fx.ctx,
       );
-      await db.workItem.update({ where: { id: it.id }, data: { triagedAt } });
+      await adminDb.workItem.update({ where: { id: it.id }, data: { triagedAt } });
       return it.id;
     };
     const a = await mk('oldest', new Date('2026-06-10T00:00:00.000Z'));

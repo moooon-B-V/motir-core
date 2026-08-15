@@ -8,6 +8,7 @@ import { decodeDirectoryCursor, encodeDirectoryCursor } from '@/lib/projectSquar
 import { InvalidProjectSquareCursorError } from '@/lib/projectSquare/errors';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectDirectoryCursor } from '@/lib/repositories/projectRepository';
 
@@ -23,11 +24,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Make `fx`'s project `public` (optionally authoring a public overview). */
 async function makePublic(projectId: string, overviewMd: string | null = null): Promise<void> {
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: projectId },
     data: { accessLevel: 'public', publicOverviewMd: overviewMd },
   });
@@ -38,7 +40,7 @@ async function addUpvotes(fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, c
   const request = await createTestWorkItem(fx, { kind: 'task', title: 'a public request' });
   for (let i = 0; i < count; i++) {
     const voter = await createTestUser();
-    await db.publicRequestVote.create({ data: { workItemId: request.id, userId: voter.id } });
+    await adminDb.publicRequestVote.create({ data: { workItemId: request.id, userId: voter.id } });
   }
 }
 
@@ -56,7 +58,7 @@ describe('projectSquareService.listDirectory — the public directory', () => {
     await makePublic(bPublic.projectId, 'The B project README.');
     // A `limited` project in org B — also non-public, also excluded.
     const bLimited = await makeWorkItemFixture({ name: 'Org B two', identifier: 'BLM' });
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: bLimited.projectId },
       data: { accessLevel: 'limited' },
     });
@@ -188,8 +190,8 @@ describe('projectRepository.listPublicDirectoryRanked — keyset determinism (re
       ids.push(fx.projectId);
     }
     const tied = new Date('2026-01-01T00:00:00.000Z');
-    await db.project.update({ where: { id: ids[0]! }, data: { createdAt: tied } });
-    await db.project.update({ where: { id: ids[1]! }, data: { createdAt: tied } });
+    await adminDb.project.update({ where: { id: ids[0]! }, data: { createdAt: tied } });
+    await adminDb.project.update({ where: { id: ids[1]! }, data: { createdAt: tied } });
 
     const seen = new Set<string>();
     let cursor: { ts: Date; id: string } | undefined;
