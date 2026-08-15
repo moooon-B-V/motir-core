@@ -4,6 +4,7 @@ import { projectSquareService } from '@/lib/services/projectSquareService';
 import { GET as exploreRoute } from '@/app/api/public/explore/route';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectSquareCardDto } from '@/lib/dto/projectSquare';
 
@@ -29,12 +30,13 @@ import type { ProjectSquareCardDto } from '@/lib/dto/projectSquare';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await db.projectTagAssignment.deleteMany();
-  await db.projectTag.deleteMany();
+  await adminDb.projectTagAssignment.deleteMany();
+  await adminDb.projectTag.deleteMany();
 });
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type WorkItemFx = Awaited<ReturnType<typeof makeWorkItemFixture>>;
@@ -44,7 +46,7 @@ async function makePublic(
   projectId: string,
   pins: { madePublicAt?: Date | null; createdAt?: Date } = {},
 ): Promise<void> {
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: projectId },
     data: {
       accessLevel: 'public',
@@ -67,7 +69,7 @@ async function makeProject(opts: {
   overview?: string;
 }): Promise<WorkItemFx> {
   const fx = await makeWorkItemFixture({ identifier: opts.identifier });
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: fx.projectId },
     data: {
       name: opts.name,
@@ -83,7 +85,7 @@ async function addVotesAt(fx: WorkItemFx, count: number, at: Date): Promise<void
   const request = await createTestWorkItem(fx, { kind: 'task', title: 'a public request' });
   for (let i = 0; i < count; i++) {
     const voter = await createTestUser();
-    await db.publicRequestVote.create({
+    await adminDb.publicRequestVote.create({
       data: { workItemId: request.id, userId: voter.id, createdAt: at },
     });
   }
@@ -91,8 +93,12 @@ async function addVotesAt(fx: WorkItemFx, count: number, at: Date): Promise<void
 
 /** Assign a curated tag (by slug) to a project, materializing the shared tag row. */
 async function tagProject(projectId: string, slug: string, label: string): Promise<void> {
-  const tag = await db.projectTag.upsert({ where: { slug }, create: { slug, label }, update: {} });
-  await db.projectTagAssignment.create({ data: { projectId, tagId: tag.id } });
+  const tag = await adminDb.projectTag.upsert({
+    where: { slug },
+    create: { slug, label },
+    update: {},
+  });
+  await adminDb.projectTagAssignment.create({ data: { projectId, tagId: tag.id } });
 }
 
 const NOW = Date.now();
