@@ -600,3 +600,87 @@ Binding the reads does not bind the writes, and the flag-on suite still shows IN
 policy (`new row violates row-level security policy for table "import"` in `tests/import`, which
 reproduces without any of this story's changes). Those are a separate surface with no card in this
 story; they are visible in the same run and should not be read as read-path residue.
+
+---
+
+## CLOSED — both ratchets are at their floor (MOTIR-2833, 2026-08-15)
+
+The last entry this document owes. `tests/rls/singleton-read-guard.test.ts` carried two ratchets;
+this is where both finish, and the two closed for **different reasons**, which is the distinction
+the whole two-ratchet apparatus existed to preserve.
+
+| ratchet                     | measures                                 | peak | final | closed by                          |
+| --------------------------- | ---------------------------------------- | ---: | ----: | ---------------------------------- |
+| `UNBOUND_READ_PATH_CEILING` | reads confirmed BROKEN under `motir_app` |   55 | **0** | MOTIR-2796 — RETIRED by MOTIR-2814 |
+| `UNREVIEWED_CEILING`        | reads nobody had LOOKED at               |   73 | **0** | MOTIR-2833                         |
+
+`'unreviewed'` is also gone from the `Verdict` union, so the state cannot be re-entered without an
+explicit type change — the count and the type now say the same thing, which is the property a bare
+ceiling could not give (it sat stale at 14 through four cards that each thought they had lowered it).
+
+### The last eight, and the prediction that was wrong about half of them
+
+The eight were all public-surface reads, and the closing card's own plan predicted all eight would
+return `public`, on this reasoning: _"only `project` and `work_item` carry public arms … the reads
+below all target `project` or `work_item`, which is why they are plausibly `public` rather than
+plausibly broken."_
+
+**Four of them were broken, by the very fact that sentence quotes.** They TARGET `project` /
+`work_item` and they JOIN a third table that had no arm:
+
+| read                                             | unarmed table it joined      |
+| ------------------------------------------------ | ---------------------------- |
+| `workItemRepository#findPublicRoadmapSubmitted`  | `workflow_status`            |
+| `workItemRepository#countPublicRoadmapSubmitted` | `workflow_status`            |
+| `workItemRepository#findPublicRequestMatches`    | `workflow_status`            |
+| `projectRepository#listPublicDirectoryRanked`    | `workspace` → `organization` |
+
+Under RLS an unadmitted join returns **zero rows and raises nothing**, so each of these was a live
+production defect — latent only because production still runs a `BYPASSRLS` role, and due to arrive
+all at once at MOTIR-2515's cutover, on the roadmap, the duplicate-detection pre-check and the whole
+project square. `publicProjectsService` and `projectSquareService` bind no context anywhere, so the
+request path IS the context-less connection the tests reproduce.
+
+**A read is admitted only if EVERY table it touches is admitted.** A policy-arm inventory describes
+the FROM clause, not the query. Recorded as `notes.html` #269, planning bug MOTIR-2858.
+
+The control that makes this a measurement rather than a story: `findPublicRoadmapByStatus` joins only
+armed tables and PASSED under `motir_app` in the same run in which its three neighbours failed.
+
+### What each card contributed
+
+- **MOTIR-2856** — the three missing arms (`workflow_status_public_project_read`,
+  `workspace_public_project_read`, `organization_public_project_read`), each gated on an unbound
+  `app.workspace_id` so a tenant read pays nothing (all three subplans report `never executed` on the
+  bound path). Its measurement also found that a correlated `EXISTS` beats an uncorrelated hashed
+  `IN` by ~8× under the project square's `LIMIT` — `hashed SubPlan` is not a win to chase.
+- **MOTIR-2857** — the two test defects that had hidden the class. `tests/projectSquare` wrote its
+  fixtures through the app-role client (so `makePublic` silently failed), and
+  `publicProjects/publicRoadmap.test.ts` never marked its project `public` at all. Both suites were
+  green for months while asserting a public-visibility guarantee against a private project.
+- **MOTIR-2833** — the eight verdicts, each naming its policy arm AND the run that settles it; the
+  ceiling to 0; `'unreviewed'` out of the union; and one missing test: `projectRepository#listPublic`
+  (the sitemap read) had **no test anywhere**, so no run could be cited for it. It is now covered in
+  `publicProjects/publicAccessAndProjection.test.ts`, and mutation-checked — dropping
+  `project_public_read` turns it red.
+
+### The evidence, as run
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/publicProjects
+  Test Files  11 passed (11)        Tests  87 passed (87)
+
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/projectSquare
+  Test Files   6 passed (6)         Tests  76 passed (76)
+
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/rls/singleton-read-guard.test.ts
+  Test Files   1 passed (1)         Tests   5 passed (5)
+```
+
+### What this does NOT close
+
+The read surface is finished; the suite is not. The WRITE surface flagged in the section above
+remains open (INSERTs refused by policy in `tests/import`, reproducible without any of these
+changes), and the whole-suite figure is MOTIR-2862's to re-measure once the TRUNCATE mask is lifted.
+**This entry closes the two ratchets in `singleton-read-guard.test.ts` — not the flag.** Flipping it
+is MOTIR-2734, and cutting the deployment over is MOTIR-2515.
