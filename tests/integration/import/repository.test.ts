@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { importedIssueRepository } from '@/lib/repositories/importedIssueRepository';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -20,7 +21,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 async function truncateAll(): Promise<void> {
   // imported_issue / import FK work_item + workspace (CASCADE), so the work_item
   // + workspace truncates carry them; mirror the sprints/work-item repo tests.
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 

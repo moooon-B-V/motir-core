@@ -15,6 +15,7 @@ import type {
   SourceIssue,
   SourceIssuePage,
 } from '@/lib/import/connectors/types';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestUser } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -47,7 +48,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 async function truncateAll(): Promise<void> {
   // work_item CASCADE carries away import / imported_issue rows.
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 

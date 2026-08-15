@@ -97,12 +97,12 @@ async function injectNoise(
 
 /** Pin a comment's createdAt (test-only determinism — never racing now()). */
 async function setCommentTime(id: string, at: Date): Promise<void> {
-  await db.$executeRaw`UPDATE "comment" SET "created_at" = ${at} WHERE "id" = ${id}`;
+  await adminDb.$executeRaw`UPDATE "comment" SET "created_at" = ${at} WHERE "id" = ${id}`;
 }
 
 /** Pin a revision's changedAt. */
 async function setRevisionTime(id: string, at: Date): Promise<void> {
-  await db.$executeRaw`UPDATE "work_item_revision" SET "changedAt" = ${at} WHERE "id" = ${id}`;
+  await adminDb.$executeRaw`UPDATE "work_item_revision" SET "changedAt" = ${at} WHERE "id" = ${id}`;
 }
 
 /** All revision ids of an issue, oldest first (raw read — test reach). */

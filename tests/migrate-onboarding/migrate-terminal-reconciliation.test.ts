@@ -3,6 +3,7 @@ import type { MigrateOnboardingStep } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // THE MIGRATE-ONBOARDING TERMINAL RECONCILIATION (MOTIR-2092) — against a REAL
@@ -89,7 +90,7 @@ async function readRun(id: string) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
 });

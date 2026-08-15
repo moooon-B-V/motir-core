@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -85,7 +86,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
   sessionRef.current = null;

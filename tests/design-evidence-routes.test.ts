@@ -4,6 +4,7 @@ import type { TokenScope } from '@/lib/mcp/scopes';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // POST /api/work-items/[id]/design-evidence{,/upload-token} (Story MOTIR-2664 ·
@@ -93,7 +94,7 @@ function seed(
 beforeEach(async () => {
   store.clear();
   oidc.current = null;
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "design_asset", "design_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();

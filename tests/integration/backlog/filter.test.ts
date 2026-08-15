@@ -5,6 +5,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { backlogService } from '@/lib/services/backlogService';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { FILTER_UNASSIGNED_TOKEN, type FilterAst } from '@/lib/filters/ast';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -18,7 +19,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // the route maps to 422). An unfiltered call is byte-identical to today.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
