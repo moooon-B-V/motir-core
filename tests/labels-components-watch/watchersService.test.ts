@@ -16,6 +16,7 @@ import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixt
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // watchersService (Story 5.4 · Subtask 5.4.4) — the watch BUSINESS rules over
 // the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the verified
@@ -125,14 +126,22 @@ describe('self watch / unwatch (view access is the only gate)', () => {
 
   it('writes NO revision rows from any watch path (watching is not a field change)', async () => {
     const s = await buildScenario();
-    const before = (await workItemRevisionRepository.listByWorkItem(s.issue.id)).length;
+    const before = (
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(s.issue.id, {}, tx),
+      )
+    ).length;
 
     await watchersService.watch(s.issue.id, s.memberCtx);
     await watchersService.addWatcher(s.issue.id, s.viewerId, s.fx.ctx);
     await watchersService.removeWatcher(s.issue.id, s.viewerId, s.fx.ctx);
     await watchersService.unwatch(s.issue.id, s.memberCtx);
 
-    const after = (await workItemRevisionRepository.listByWorkItem(s.issue.id)).length;
+    const after = (
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(s.issue.id, {}, tx),
+      )
+    ).length;
     expect(after).toBe(before);
   });
 
@@ -214,7 +223,11 @@ describe('manage others — the "Manage watchers" tier', () => {
     await expect(watchersService.addWatcher(s.issue.id, lateJoiner.id, s.fx.ctx)).rejects.toThrow(
       WatcherTargetCannotViewError,
     );
-    expect(await watcherRepository.existsFor(s.issue.id, lateJoiner.id)).toBe(false);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        watcherRepository.existsFor(s.issue.id, lateJoiner.id, tx),
+      ),
+    ).toBe(false);
   });
 
   it('rejects a non-workspace-member (and a nonexistent user) target the same way', async () => {
@@ -320,19 +333,35 @@ describe('auto-watch hooks (the verified create-or-comment rule, constant-on)', 
       { projectId: fx.projectId, kind: 'task', title: 'Born watched' },
       fx.ctx,
     );
-    expect(await watcherRepository.existsFor(dto.id, fx.ownerId)).toBe(true);
-    expect(await watcherRepository.countByWorkItem(dto.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        watcherRepository.existsFor(dto.id, fx.ownerId, tx),
+      ),
+    ).toBe(true);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        watcherRepository.countByWorkItem(dto.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('commenting auto-watches the commenter, idempotently across comments', async () => {
     const s = await buildScenario();
 
     await commentsService.addComment(s.issue.id, { bodyMd: 'First!' }, s.memberCtx);
-    expect(await watcherRepository.existsFor(s.issue.id, s.memberId)).toBe(true);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        watcherRepository.existsFor(s.issue.id, s.memberId, tx),
+      ),
+    ).toBe(true);
 
     // A second comment by the same author absorbs into the existing row.
     await commentsService.addComment(s.issue.id, { bodyMd: 'Again.' }, s.memberCtx);
-    expect(await watcherRepository.countByWorkItem(s.issue.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        watcherRepository.countByWorkItem(s.issue.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('a rolled-back create leaves no watcher row (the hook rides the owning tx)', async () => {

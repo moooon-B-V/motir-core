@@ -81,7 +81,9 @@ describe('createWorkItem — revision', () => {
       fx.ctx,
     );
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs).toHaveLength(1);
     const rev = revs[0]!;
     expect(rev.changeKind).toBe('created');
@@ -107,7 +109,9 @@ describe('createWorkItem — revision', () => {
   it('maps a revision row to its DTO (ISO changedAt, narrowed changeKind)', async () => {
     const fx = await makeFixture();
     const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
-    const [rev] = await workItemRevisionRepository.listByWorkItem(created.id);
+    const [rev] = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     const dto = toWorkItemRevisionDto(rev!);
     expect(dto.changeKind).toBe('created');
     expect(dto.workItemId).toBe(created.id);
@@ -127,7 +131,9 @@ describe('updateWorkItem — revision', () => {
     );
     await workItemsService.updateWorkItem(created.id, { title: 'new' }, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     // created + updated
     expect(revs.map((r) => r.changeKind)).toEqual(['updated', 'created']);
     const updatedRev = revs[0]!;
@@ -154,7 +160,9 @@ describe('updateWorkItem — revision', () => {
       fx.ctx,
     );
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs.map((r) => r.changeKind)).toEqual(['updated', 'created']);
     const diff = diffOf(revs[0]!);
     expect(diff.title).toEqual({ from: 'old', to: 'new' });
@@ -166,7 +174,9 @@ describe('updateWorkItem — revision', () => {
     const fx = await makeFixture();
     const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
     await workItemsService.updateWorkItem(created.id, {}, fx.ctx);
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs).toHaveLength(1); // only the 'created' one
     expect(revs[0]!.changeKind).toBe('created');
   });
@@ -178,7 +188,9 @@ describe('updateWorkItem — revision', () => {
       fx.ctx,
     );
     await workItemsService.updateWorkItem(created.id, { title: 'same' }, fx.ctx);
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs).toHaveLength(1);
     expect(revs[0]!.changeKind).toBe('created');
   });
@@ -192,7 +204,9 @@ describe('updateWorkItem — revision', () => {
     // Patch ONLY explanationMd; the state machine flips source to user_edited.
     await workItemsService.updateWorkItem(created.id, { explanationMd: 'human text' }, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     const diff = diffOf(revs[0]!);
     expect(diff.explanationMd).toEqual({ from: 'draft text', to: 'human text' });
     expect(diff.explanationSource).toEqual({ from: 'ai_draft', to: 'user_edited' });
@@ -207,7 +221,9 @@ describe('archiveWorkItem — revision', () => {
     const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
     const archived = await workItemsService.archiveWorkItem(created.id, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     const rev = revs[0]!;
     expect(rev.changeKind).toBe('archived');
     const diff = diffOf(rev);
@@ -221,7 +237,9 @@ describe('archiveWorkItem — revision', () => {
     const archived = await workItemsService.archiveWorkItem(created.id, fx.ctx);
     const restored = await workItemsService.unarchiveWorkItem(created.id, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     const rev = revs[0]!; // newest first
     expect(rev.changeKind).toBe('unarchived');
     const diff = diffOf(rev);
@@ -238,7 +256,9 @@ describe('findLatestArchivedActor', () => {
     const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
     await workItemsService.archiveWorkItem(created.id, fx.ctx);
 
-    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    const actor = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestArchivedActor(created.id, tx),
+    );
     expect(actor?.id).toBe(fx.ctx.userId);
     // The display name + avatar ride the same read (joined from `user`).
     expect(actor).toHaveProperty('name');
@@ -254,12 +274,16 @@ describe('findLatestArchivedActor', () => {
     await workItemsService.unarchiveWorkItem(created.id, fx.ctx);
     await workItemsService.archiveWorkItem(created.id, fx.ctx);
 
-    const archivedRevs = (await workItemRevisionRepository.listByWorkItem(created.id)).filter(
-      (r) => r.changeKind === 'archived',
-    );
+    const archivedRevs = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+      )
+    ).filter((r) => r.changeKind === 'archived');
     expect(archivedRevs).toHaveLength(2);
 
-    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    const actor = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestArchivedActor(created.id, tx),
+    );
     expect(actor?.id).toBe(fx.ctx.userId);
   });
 
@@ -267,7 +291,9 @@ describe('findLatestArchivedActor', () => {
     const fx = await makeFixture();
     const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
     // A live item: only a "created" revision, no "archived" one.
-    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    const actor = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestArchivedActor(created.id, tx),
+    );
     expect(actor).toBeNull();
   });
 });
@@ -285,12 +311,16 @@ describe('linkWorkItems / unlinkWorkItems — revisions', () => {
       fx.ctx,
     );
 
-    const aRevs = await workItemRevisionRepository.listByWorkItem(a.id);
+    const aRevs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(a.id, {}, tx),
+    );
     expect(aRevs.map((r) => r.changeKind)).toEqual(['updated', 'created']);
     expect(diffOf(aRevs[0]!).links).toEqual({ added: [{ toId: b.id, kind: 'is_blocked_by' }] });
 
     // The TO item only has its own 'created' revision — no link revision.
-    const bRevs = await workItemRevisionRepository.listByWorkItem(b.id);
+    const bRevs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(b.id, {}, tx),
+    );
     expect(bRevs.map((r) => r.changeKind)).toEqual(['created']);
   });
 
@@ -301,12 +331,16 @@ describe('linkWorkItems / unlinkWorkItems — revisions', () => {
 
     await workItemsService.linkWorkItems({ fromId: a.id, toId: b.id, kind: 'relates_to' }, fx.ctx);
 
-    const aRevs = await workItemRevisionRepository.listByWorkItem(a.id);
+    const aRevs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(a.id, {}, tx),
+    );
     // Only ONE 'updated' revision despite the reciprocal B→A row being written.
     expect(aRevs.filter((r) => r.changeKind === 'updated')).toHaveLength(1);
     expect(diffOf(aRevs[0]!).links).toEqual({ added: [{ toId: b.id, kind: 'relates_to' }] });
     // B gets none from this action.
-    const bRevs = await workItemRevisionRepository.listByWorkItem(b.id);
+    const bRevs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(b.id, {}, tx),
+    );
     expect(bRevs.map((r) => r.changeKind)).toEqual(['created']);
   });
 
@@ -321,7 +355,9 @@ describe('linkWorkItems / unlinkWorkItems — revisions', () => {
 
     await workItemsService.unlinkWorkItems(link.id, fx.ctx);
 
-    const aRevs = await workItemRevisionRepository.listByWorkItem(a.id);
+    const aRevs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(a.id, {}, tx),
+    );
     // created + linked + unlinked
     expect(aRevs.map((r) => r.changeKind)).toEqual(['updated', 'updated', 'created']);
     expect(diffOf(aRevs[0]!).links).toEqual({ removed: [{ toId: b.id, kind: 'is_blocked_by' }] });
@@ -418,7 +454,9 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     );
     expect(row?.title).toBe('Before');
     // Only the original 'created' revision survives — no 'updated' orphan.
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs.map((r) => r.changeKind)).toEqual(['created']);
 
     spy.mockRestore();
@@ -434,7 +472,9 @@ describe('listByWorkItem — ordering', () => {
     await workItemsService.updateWorkItem(created.id, { title: 'v2' }, fx.ctx);
     await workItemsService.archiveWorkItem(created.id, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(revs.map((r) => r.changeKind)).toEqual(['archived', 'updated', 'created']);
     // changedAt is non-increasing down the list.
     for (let i = 1; i < revs.length; i += 1) {
@@ -469,17 +509,27 @@ describe('listByWorkItem — ordering', () => {
       data: { changedAt: new Date(base + 2000) },
     });
 
-    const all = await workItemRevisionRepository.listByWorkItem(created.id);
+    const all = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, {}, tx),
+    );
     expect(all.map((r) => r.changeKind)).toEqual(['archived', 'updated', 'created']);
 
     // Page after the newest ('archived') revision → the next two, in order.
-    const afterFirst = await workItemRevisionRepository.listByWorkItem(created.id, {
-      cursor: all[0]!.id,
-    });
+    const afterFirst = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(
+        created.id,
+        {
+          cursor: all[0]!.id,
+        },
+        tx,
+      ),
+    );
     expect(afterFirst.map((r) => r.changeKind)).toEqual(['updated', 'created']);
 
     // Cap the page size.
-    const firstOnly = await workItemRevisionRepository.listByWorkItem(created.id, { take: 1 });
+    const firstOnly = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(created.id, { take: 1 }, tx),
+    );
     expect(firstOnly.map((r) => r.changeKind)).toEqual(['archived']);
   });
 });
@@ -536,8 +586,12 @@ async function makeRevisionTenants(): Promise<RevisionTenants> {
     createInput(fxB, { title: 'B-item' }),
     fxB.ctx,
   );
-  const [revA] = await workItemRevisionRepository.listByWorkItem(itemA.id);
-  const [revB] = await workItemRevisionRepository.listByWorkItem(itemB.id);
+  const [revA] = await withWorkspaceServiceContext(fxA.workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(itemA.id, {}, tx),
+  );
+  const [revB] = await withWorkspaceServiceContext(fxB.workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(itemB.id, {}, tx),
+  );
   return {
     userAId: fxA.ownerId,
     workspaceW1Id: fxA.workspaceId,
@@ -599,7 +653,9 @@ describe('work_item_revision RLS — write isolation (WITH CHECK)', () => {
 
     // Sanity (superuser): nothing landed against W2's item beyond its own
     // 'created' revision.
-    const w2revs = await workItemRevisionRepository.listByWorkItem(fx.itemW2Id);
+    const w2revs = await withWorkspaceServiceContext(fx.workspaceW2Id, (tx) =>
+      workItemRevisionRepository.listByWorkItem(fx.itemW2Id, {}, tx),
+    );
     expect(w2revs.map((r) => r.changeKind)).toEqual(['created']);
   });
 });

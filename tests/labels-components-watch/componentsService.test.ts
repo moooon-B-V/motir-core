@@ -114,8 +114,10 @@ async function ownerCreate(
 }
 
 /** The `{ components: … }` diffs among the item's revisions, oldest-first. */
-async function componentDiffsOf(workItemId: string): Promise<unknown[]> {
-  const rows = await workItemRevisionRepository.listByWorkItem(workItemId);
+async function componentDiffsOf(workItemId: string, workspaceId: string): Promise<unknown[]> {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+  );
   return [...rows]
     .reverse()
     .map((r) => r.diff as Record<string, unknown>)
@@ -269,7 +271,7 @@ describe('componentsService — per-issue assignment', () => {
     // A no-change set writes nothing.
     await componentsService.setComponents(s.issue.id, [api.id], s.memberCtx);
 
-    expect(await componentDiffsOf(s.issue.id)).toEqual([
+    expect(await componentDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
       { added: ['API', 'Web'] },
       { removed: ['Web'] },
     ]);
@@ -289,7 +291,10 @@ describe('componentsService — per-issue assignment', () => {
     const removedAgain = await componentsService.removeComponent(s.issue.id, api.id, s.memberCtx);
     expect(removedAgain).toEqual([]); // no-op
 
-    expect(await componentDiffsOf(s.issue.id)).toEqual([{ added: ['API'] }, { removed: ['API'] }]);
+    expect(await componentDiffsOf(s.issue.id, s.fx.workspaceId)).toEqual([
+      { added: ['API'] },
+      { removed: ['API'] },
+    ]);
   });
 
   it("rejects another project's component (422) and an unknown id (404)", async () => {

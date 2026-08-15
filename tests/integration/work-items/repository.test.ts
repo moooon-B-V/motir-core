@@ -270,7 +270,11 @@ describe('workItemRepository.findByIds', () => {
     const c = await createWorkItem(fx, { kind: 'task', title: 'C', parentId: b.id });
 
     // Empty input short-circuits without issuing a query.
-    expect(await workItemRepository.findByIds([])).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findByIds([], tx),
+      ),
+    ).toEqual([]);
 
     // A single IN(...) round-trip resolves every requested id; the method
     // makes no ordering promise, so we compare as sets.
@@ -286,7 +290,9 @@ describe('workItemRepository.findByIds', () => {
       // Call through the repository (which uses the `db` singleton); the
       // logged client is used only to prove the single-query shape via an
       // identical query on the same data.
-      rows = await workItemRepository.findByIds([c.id, a.id, b.id]);
+      rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findByIds([c.id, a.id, b.id], tx),
+      );
       const loggedRows = await (loggedDb as unknown as typeof db).workItem.findMany({
         where: { id: { in: [c.id, a.id, b.id] } },
       });

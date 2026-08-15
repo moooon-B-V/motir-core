@@ -1,5 +1,6 @@
 import type { FullConfig } from '@playwright/test';
 import { assertHarnessReady } from './_helpers/readiness';
+import { ensureAppRoleCanLogIn, isAppRoleE2E } from './_helpers/appRoleServer';
 
 /**
  * Playwright globalSetup (MOTIR-1565) — the E2E harness readiness gate.
@@ -24,6 +25,22 @@ import { assertHarnessReady } from './_helpers/readiness';
  * CI runner that needs a longer cold-start budget.
  */
 export default async function globalSetup(config: FullConfig): Promise<void> {
+  // MOTIR-2816 — give `motir_app` a login before the webServer tries to use it.
+  //
+  // ⚠️ Ordering looks wrong and is not: Playwright starts the webServers BEFORE
+  // globalSetup, so this cannot run first. It does not need to. `next build`
+  // occupies the first minutes of that command and the server does not open a
+  // pool until it serves a request, which cannot happen before the readiness
+  // gate below — which runs after this. If that ever changes, the symptom is a
+  // clear auth error from the server, not a silent wrong-role run, because
+  // `assertServerIsAppRole` refuses to let the spec proceed.
+  if (isAppRoleE2E()) {
+    const ownerUrl = process.env['DATABASE_URL'];
+    if (!ownerUrl) throw new Error('[e2e-app-role] E2E_APP_ROLE=1 needs DATABASE_URL (the owner).');
+    await ensureAppRoleCanLogIn(ownerUrl);
+    console.warn('[e2e-app-role] provisioned the non-bypass role — the webServer runs as it.');
+  }
+
   const baseUrl =
     config.projects[0]?.use?.baseURL ??
     process.env['E2E_BASE_URL'] ??

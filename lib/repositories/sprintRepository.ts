@@ -43,9 +43,14 @@ export const sprintRepository = {
    * result — the caller renders its deleted-referent fallback. Empty `ids`
    * short-circuits to `[]` (no query). Read-only path → `db` singleton.
    */
-  async findByIds(ids: string[], workspaceId: string): Promise<Sprint[]> {
+  async findByIds(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Sprint[]> {
     if (ids.length === 0) return [];
-    return db.sprint.findMany({ where: { id: { in: ids }, workspaceId } });
+    const client = tx ?? db;
+    return client.sprint.findMany({ where: { id: { in: ids }, workspaceId } });
   },
 
   /**

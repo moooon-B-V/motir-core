@@ -1,4 +1,5 @@
 import { workItemsService } from '@/lib/services/workItemsService';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { commentsService } from '@/lib/services/commentsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -56,8 +57,11 @@ export const aiBoundaryService = {
     }
     // ONE batched latest-revision lookup for the whole read (MOTIR-1531) — the
     // `baseRevision` anchor each row carries; never a per-row (N+1) fetch.
-    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
-      items.map((i) => i.id),
+    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds(
+        items.map((i) => i.id),
+        tx,
+      ),
     );
     return {
       project: { projectId, projectKey: project.identifier },
@@ -147,8 +151,11 @@ export const aiBoundaryService = {
       ctx,
       depth,
     );
-    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
-      nodes.map((n) => n.id),
+    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds(
+        nodes.map((n) => n.id),
+        tx,
+      ),
     );
     return {
       project: { projectId, projectKey: project.identifier },
@@ -173,8 +180,11 @@ export const aiBoundaryService = {
     const closure = await workItemsService.getBlockingClosure(root.id, ctx, opts);
     const idToKey = new Map<string, string>([[root.id, root.identifier]]);
     for (const n of closure.nodes) idToKey.set(n.id, n.identifier);
-    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
-      closure.nodes.map((n) => n.id),
+    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds(
+        closure.nodes.map((n) => n.id),
+        tx,
+      ),
     );
     return {
       root: root.identifier,
@@ -230,8 +240,11 @@ export const aiBoundaryService = {
     const nextCursor =
       !overshot && result.page < totalPages ? encodeSearchCursor({ page: result.page + 1 }) : null;
 
-    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
-      items.map((i) => i.id),
+    const revisionByItemId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds(
+        items.map((i) => i.id),
+        tx,
+      ),
     );
     return {
       items: toSearchResultRows(items, revisionByItemId),

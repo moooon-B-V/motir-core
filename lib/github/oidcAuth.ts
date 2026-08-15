@@ -1,6 +1,8 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Keyless BYOK publish auth (MOTIR-1650, per the acceptance-video ADR §4
 // amendment). A repo connected via the MOTIR-810 GitHub App can publish its
@@ -94,7 +96,14 @@ export async function authenticateGithubOidc(req: Request): Promise<OidcAuthResu
   // The verified `repository` claim determines the tenant → resolve it GLOBALLY
   // (the caller has no workspace yet). Reject unconnected OR ambiguous — never
   // silently pick a workspace when a coordinate resolves to more than one.
-  const matches = await githubRepoRepository.findConnectedByName(owner, name);
+  // ⚠️ AN AUTH PATH, and deliberately CROSS-WORKSPACE: the verified `repository`
+  // claim is what determines the tenant, so there is no workspace to bind yet.
+  // `github_repo_workspace_or_system` has a system arm for exactly this, so the
+  // resolve binds `app.system_admin` rather than a workspace. Unbound it matched
+  // NOTHING and every OIDC exchange was refused as `repo_not_connected`.
+  const matches = await withSystemContext((tx) =>
+    githubRepoRepository.findConnectedByName(owner, name, tx),
+  );
   const [match, ...rest] = matches;
   if (!match || rest.length > 0) {
     return { ok: false, status: 403, reason: 'repo_not_connected' };
@@ -110,9 +119,14 @@ export async function authenticateGithubOidc(req: Request): Promise<OidcAuthResu
   const workspaceId = match.workspaceId;
 
   // Actor = the workspace owner (the ADR §4 keyless-actor decision): OIDC has no
-  // user, but `Attachment.uploaderUserId` is required. A `db` read, no context
-  // (mirrors the 6.12 public-submit owner-as-reporter seam).
-  const ownerMembership = await workspaceMembershipRepository.findOwnerByWorkspace(workspaceId);
+  // user, but `Attachment.uploaderUserId` is required. Bound to the workspace
+  // (MOTIR-2846) — `workspace_membership` is policy-gated, so unbound this read
+  // returns nothing and every OIDC upload is refused `workspace_owner_missing`.
+  // Userless by construction (there is no actor yet — this read IS how one is
+  // chosen), so the service context, not the user one.
+  const ownerMembership = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx),
+  );
   if (!ownerMembership) {
     return { ok: false, status: 403, reason: 'workspace_owner_missing' };
   }

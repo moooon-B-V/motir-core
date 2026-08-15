@@ -21,32 +21,40 @@ import { scanSingletonReads } from './singletonReadScan';
 // `DELIBERATELY_UNGUARDED` map — the machine enumerates, a human adjudicates, and
 // an unadjudicated addition is a red build rather than a silent one.
 //
-// ⚠️ WHAT THE ADJUDICATION FOUND (MOTIR-2789), AND WHY THE HEADLINE NUMBER MISLEADS.
-// The 69 unreviewed sites were adjudicated by locating EVERY call site of every read
-// and inspecting its enclosing service method for a context wrapper. The result was
-// not 69 scattered oversights:
+// ⚠️ TWO RATCHETS MEASURED DIFFERENT THINGS, AND CONFLATING THEM WOULD HAVE READ AS
+// REPAIR. This is the one part of MOTIR-2789/2796 worth carrying forward, because the
+// next person to add a ratchet here will face the same choice.
 //
-//   • 55 are `unbound-read-path` — confirmed unbound, therefore confirmed BROKEN under
-//     `motir_app`. `reportsService.ts` and `savedFiltersService.ts` contain ZERO context
-//     wrappers in the entire file; `boardsService.ts` and `workItemsService.ts` have them
-//     only around their WRITE paths. This is the shape of the whole READ surface, which
-//     has never needed a binding because CI and production both run a BYPASSRLS role.
-//   •  3 are `operator-script`, •  3 are `test-only` (vacuous-pass risk),
-//   •  8 remain `unreviewed` — the public-surface reads, below.
+// The adjudication pass located every call site of all 69 unreviewed reads and inspected
+// each enclosing service method for a context wrapper. `UNREVIEWED_CEILING` fell 69 -> 8
+// in that single commit — and the product got no more correct, because what the pass
+// produced was 55 reads now KNOWN to be broken under `motir_app` rather than unknown.
+// `reportsService.ts` and `savedFiltersService.ts` carried ZERO context wrappers in the
+// whole file; `boardsService.ts` and `workItemsService.ts` had them only around WRITE
+// paths. That is the shape of an entire READ surface which had never needed a binding,
+// because CI and production both ran a BYPASSRLS role.
 //
-// So `UNREVIEWED_CEILING` fell 69 → 8 while the product got no more correct. That is
-// why there are now TWO ratchets: `unreviewed` measures whether anyone has LOOKED, and
-// `UNBOUND_READ_PATH_CEILING` measures whether the reads WORK. Quoting the first alone
-// would turn a diagnosis into a false claim of repair. The second falls only when a
-// service actually binds its reads (MOTIR-2796), never by writing a verdict.
+// So a SECOND ratchet was added — `UNBOUND_READ_PATH_CEILING` — precisely so the
+// knowledge number could not be quoted as the correctness number. `unreviewed` measures
+// whether anyone LOOKED, and can be lowered by writing a verdict. The unbound count
+// measured whether the reads WORK, and could only be lowered by a service actually
+// binding them.
 //
-// `public` remains the one verdict that still cannot be earned by reading code: it is the
-// claim that MOTIR-2684's public policy ARM admits the row, and only the public-projects
-// suite passing under the app role can settle it. That suite is at 23 failures (from 33),
-// so a `public` verdict today would be a guess wearing a citation.
+// MOTIR-2796 drove that second count 55 -> 0, so MOTIR-2814 retired it: a ratchet with
+// no members is a number that invites editing, where a set-equality assertion cannot be
+// nudged. The `unbound-read-path` verdict is gone with it. What replaces it is stricter,
+// not weaker — a NEW unbound read of a policy-gated table has no verdict to earn, so the
+// set-equality test below fails until it is bound or explained. Its sibling
+// `tests/rls/call-site-guard.test.ts` holds the other axis (a bindable read whose caller
+// passes nothing) and carries its own two ratchets, both at their floor.
 //
-// Both ratchets may fall, never rise. Rewriting a ceiling upward to make a build pass is
-// the one edit this file exists to prevent.
+// `public` remains the one verdict that cannot be earned by reading code: it is the claim
+// that MOTIR-2684's public policy ARM admits the row, and only the public-projects suite
+// passing under the app role can settle it. The 8 `unreviewed` sites below are all of that
+// kind, and they belong to MOTIR-2789 — NOT to this story.
+//
+// `UNREVIEWED_CEILING` may fall, never rise. Rewriting a ceiling upward to make a build
+// pass is the one edit this file exists to prevent.
 //
 // (It earned its keep before it shipped: the first run of this guard failed on four
 // sites its own author had missed while transcribing the list by hand, and on two
@@ -61,17 +69,6 @@ type Verdict =
   /** No tenant exists at read time; there is nothing to bind. */
   | 'pre-auth'
   /**
-   * CONFIRMED UNBOUND, and confirmed BROKEN under `motir_app` (MOTIR-2789).
-   * The read filters by `workspaceId` in its own WHERE clause — the call site
-   * passes `ctx.workspaceId` — but NOTHING on the path binds the GUC the policy
-   * reads, so under the non-bypass role it returns zero rows and raises nothing.
-   * These are not oversights at the repository: the fix is one layer up, at the
-   * service method that owns the read, and it is the same fix for every site in
-   * a given service. The value names that service, because that is the unit of
-   * work. Tracked by MOTIR-2796.
-   */
-  | 'unbound-read-path'
-  /**
    * The only caller is a `scripts/` maintenance tool, which runs on the
    * OPERATOR's connection (the migration/owner role), not the request-path
    * `motir_app` role. Nothing to bind and nothing to fix — but see the note on
@@ -85,6 +82,15 @@ type Verdict =
    * `adminDb` — the MOTIR-2775 disposition.
    */
   | 'test-only'
+  /**
+   * The read runs UNBOUND on purpose, and a PUBLIC POLICY ARM admits its rows.
+   *
+   * ⚠️ THE ONE VERDICT THAT CANNOT BE EARNED BY READING CODE — this file's header
+   * says so, and it was true until MOTIR-2811. It is the claim that a specific
+   * policy admits the row with NO GUC bound, so it needs the policy to exist and
+   * a test to have watched it work. Both halves are named in the reason.
+   */
+  | 'public'
   /** Enumerated, not yet adjudicated. Only ever to be REMOVED from this file. */
   | 'unreviewed';
 
@@ -98,149 +104,52 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'rateLimitCounterRepository.ts#countAllUnsafe': ['pre-auth', 'no tenant exists at write time'],
   'rateLimitCounterRepository.ts#findCountUnsafe': ['pre-auth', 'no tenant exists at write time'],
 
-  // ── operator-script (3) ───────────────────────────────────────────────────
-  // `scripts/stampOnboardingRan.ts` is the sole caller of all three. It resolves a
-  // workspace by SLUG and a project by KEY across workspaces (it refuses an ambiguous
-  // match rather than guessing), so there is no single tenant to bind — the read is
-  // cross-tenant BY DESIGN, which is exactly why it belongs to an operator and not to
-  // a request path.
+  // ── operator-script (2) ───────────────────────────────────────────────────
+  // `scripts/stampOnboardingRan.ts` is the sole caller of both. It searches for a
+  // project key ACROSS workspaces — that is the point, since it refuses an
+  // ambiguous match rather than guessing — so there is no single tenant to bind
+  // and no policy arm for a cross-tenant search (nor should there be).
   //
-  // ⚠️ The script's own header claims its write "passes under the non-bypass
-  // `motir_app` role in production" — true of the WRITE, which `withWorkspaceContext`
-  // binds, but NOT of these three resolves above it. Run that script on a `motir_app`
-  // connection and `findBySlug` returns null, so it reports `workspace_not_found` for a
-  // workspace that exists and stamps nothing. The verdict here is therefore conditional
-  // on the operator posture, and MOTIR-2796 carries making that explicit at the seam
-  // (`workspace_visible_bootstrap`, the `app.bootstrap_slug` arm, admits exactly a
-  // one-slug read and is the sanctioned mechanism if it ever needs to run as the app).
-  'projectRepository.ts#findAllByIdentifier': ['operator-script', 'stampOnboardingRan'],
-  'projectRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
-  'workspaceRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
-
-  // ── test-only (3) ─────────────────────────────────────────────────────────
-  // Zero production callers; only tests keep them alive. `findReadyCandidates` was
-  // REPLACED by `findReadyLayer` (see its own docstring, and the note at
-  // workItemRepository.ts:1083 — "the read that replaces the whole-table
-  // findReadyCandidates scan"), so two suites are pinning the behaviour of a read the
-  // product no longer performs. `findByUserAndWorkspace` has seven test consumers and a
-  // test that documents it "reads through the `db`" — the same shape MOTIR-2775 retired
-  // rather than adjudicated. Under the app role each returns zero rows, so a test using
-  // one as an existence check passes VACUOUSLY, which is the worst of the failure modes
-  // here: it does not go red, it goes quietly meaningless. MOTIR-2796 retires them.
-  'projectRepository.ts#listPublicDirectory': ['test-only', 'projectSquareDirectory.test'],
-  'workItemRepository.ts#findReadyCandidates': ['test-only', 'superseded by findReadyLayer'],
-  'workspaceMembershipRepository.ts#findByUserAndWorkspace': [
-    'test-only',
-    '7 suites, MOTIR-2775 shape',
+  // ⚠️ THE VERDICT IS NO LONGER CONDITIONAL. It used to carry a caveat: the
+  // script's header claimed non-bypass safety it did not have, so under
+  // `motir_app` these returned nothing and it reported the project missing.
+  // MOTIR-2813 closed that two ways — the header now scopes its claim to the
+  // WRITE, and `assertOperatorConnection()` reads `pg_roles.rolbypassrls` and
+  // refuses LOUDLY rather than answering wrongly. `workspaceRepository.findBySlug`
+  // left this list entirely: the `--workspace` arm binds `app.bootstrap_slug`
+  // (`withBootstrapSlugContext`) and now works under EITHER role.
+  'projectRepository.ts#findAllByIdentifier': [
+    'operator-script',
+    'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
+  ],
+  'projectRepository.ts#findBySlug': [
+    'operator-script',
+    'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
   ],
 
-  // ── unbound-read-path (55) ────────────────────────────────────────────────
-  // Measured, not guessed: every call site of every read below was located and its
-  // enclosing service method inspected for a context wrapper. NONE has one.
-  // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
-  // the entire file; `boardsService.ts` and `workItemsService.ts` have them only around
-  // their WRITE paths, and these reads sit outside every one.
+  // ── test-only (0) — RETIRED, not adjudicated ──────────────────────────────
+  // MOTIR-2812 DELETED all three: `workItemRepository.findReadyCandidates`,
+  // `workspaceMembershipRepository.findByUserAndWorkspace` and
+  // `projectRepository.listPublicDirectory`. Each had zero production callers
+  // across `app`, `lib`, `scripts` AND `packages`, and each was a live
+  // vacuous-pass risk — under `motir_app` they returned nothing, so a test using
+  // one as an EXISTENCE check did not go red, it went quietly meaningless.
   //
-  // So this is not fifty-five separate oversights — it is the shape of the whole
-  // READ surface, which has never needed a binding because CI and production both run
-  // a BYPASSRLS role (MOTIR-2515 is the cutover that ends that). The value names the
-  // owning service because the fix is per-SERVICE, not per-read: open
-  // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
-  // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
-  // and not another sweep card.
-  'componentRepository.ts#listByProject': ['unbound-read-path', 'componentsService'],
-  'customFieldDefinitionRepository.ts#listWithValuesForWorkItem': [
-    'unbound-read-path',
-    'workItemsService',
-  ],
-  'dashboardRepository.ts#listVisible': ['unbound-read-path', 'dashboardsService'],
-  'deviceCodeRepository.ts#findByUserCodeForRead': ['unbound-read-path', 'cliDeviceService'],
-  'githubRepoRepository.ts#findConnectedByName': ['unbound-read-path', 'oidcAuth'],
-  'importRepository.ts#findCompletedForProject': ['unbound-read-path', 'migrateOnboardingService'],
-  'labelRepository.ts#findByIds': ['unbound-read-path', 'workItemsService'],
-  'labelRepository.ts#searchByPrefix': ['unbound-read-path', 'labelsService'],
-  'organizationRepository.ts#findCapContext': ['unbound-read-path', 'entitlementsService'],
-  'planRepository.ts#findBySourceJobId': ['unbound-read-path', 'migrateOnboardingService'],
+  // Deleting a site is a legitimate way to leave this list (the MOTIR-2775
+  // precedent). No entry replaces them: a read that no longer exists needs no
+  // verdict, and `tests/permissions/membershipGateRouting.test.ts` is now a
+  // TOMBSTONE that fails the build if the sharpest of the three comes back.
+
+  // ── public (1) ────────────────────────────────────────────────────────────
+  // The project square's demand counts, read by an anonymous visitor across many
+  // projects in many workspaces. There is no workspace to bind — inventing one
+  // would presume the answer the page computes — so MOTIR-2811 gave the table a
+  // public SELECT arm instead of a `tx`. The FIRST verdict of this kind: the
+  // header's "a `public` verdict today would be a guess wearing a citation" held
+  // until the arm and its tests existed together.
   'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
-    'unbound-read-path',
-    'projectSquareService',
-  ],
-  'savedFilterRepository.ts#countVisible': ['unbound-read-path', 'savedFiltersService'],
-  'savedFilterRepository.ts#listPage': ['unbound-read-path', 'savedFiltersService'],
-  'savedFilterSubscriptionRepository.ts#countByFilter': [
-    'unbound-read-path',
-    'savedFiltersService',
-  ],
-  'sprintReportEntryRepository.ts#countAddedAfterStart': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#countByCompletion': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#findByCompletion': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#sumPointsByCompletion': [
-    'unbound-read-path',
-    'estimationService',
-  ],
-  'sprintRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
-  'workItemLinkRepository.ts#findBlockedByEdges': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockerEdgesForItems': [
-    'unbound-read-path',
-    'planValidityService',
-  ],
-  'workItemLinkRepository.ts#findBlockerSessionBranchesForItems': [
-    'unbound-read-path',
-    'workItemsService',
-  ],
-  'workItemLinkRepository.ts#findBlockerStates': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockerStatesForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findByFromItem': ['unbound-read-path', 'dispatchPromptService'],
-  'workItemLinkRepository.ts#findByToItem': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#aggregateBoardLanesByAssignee': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateBoardLanesByEpic': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateBoardLanesByPriority': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateCreatedByBucket': ['unbound-read-path', 'reportsService'],
-  'workItemRepository.ts#aggregateDistribution': ['unbound-read-path', 'reportsService'],
-  'workItemRepository.ts#aggregateWorkloadByAssignee': ['unbound-read-path', 'reportsService'],
-  'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
-  'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
-  'workItemRepository.ts#findChildrenForItems': ['unbound-read-path', 'sprintsService'],
-  'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findEpicAncestors': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findReadyLayer': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findRoadmapBlockerStubs': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findSubtreeMembersForValidity': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#matchesAutomationCondition': [
-    'unbound-read-path',
-    'automationEngineService',
-  ],
-  'workItemRepository.ts#quickSearch': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#sumStartedForSprint': ['unbound-read-path', 'reportsService'],
-  'workItemRevisionRepository.ts#aggregateAverageAgeByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateNetResolvedByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateResolutionTimeByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateSprintCycleByDay': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#countDisplayableByWorkItem': [
-    'unbound-read-path',
-    'activityService',
-  ],
-  'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': [
-    'unbound-read-path',
-    'aiBoundaryService',
+    'public',
+    'public_request_vote_public_project_read (20260813210000) · publicProjectAccess.test',
   ],
 
   // ── unreviewed (8) ────────────────────────────────────────────────────────
@@ -303,10 +212,10 @@ const UNREVIEWED_CEILING = 8;
 // owning service. The eight that remain are the public-surface reads, which need a green
 // public-projects suite before a `public` verdict is honest rather than assumed.
 //
-// ⚠️ READ THIS BEFORE CELEBRATING THE DROP. 69 -> 8 is a gain in KNOWLEDGE, not in
-// correctness: 55 reads are now known-broken-under-`motir_app` instead of unknown, and
-// `UNBOUND_READ_PATH_CEILING` below is the number that has to fall for the product to
-// actually work. Reporting the unreviewed count alone would misrepresent this commit.
+// ⚠️ READ THIS BEFORE CELEBRATING THE DROP. 69 -> 8 was a gain in KNOWLEDGE, not in
+// correctness — see the two-ratchets note in this file's header, which is the whole
+// reason a second ratchet existed. Reporting the unreviewed count alone would have
+// misrepresented that commit.
 //
 // 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
 // (`organizationRepository.findById` / `findBySlug`,
@@ -315,15 +224,21 @@ const UNREVIEWED_CEILING = 8;
 // that the count of UNJUDGED reads falls, and a read that no longer exists needs no
 // verdict. Lowered in the same commit as the deletion, which is what the guard asks for.
 
-/**
- * The second ratchet, and the one that measures the PRODUCT rather than the review.
- * Every read counted here is confirmed to return zero rows under `motir_app`; the
- * fix is per-service (MOTIR-2796), so this falls in steps of a service's worth.
- *
- * ⚠️ May only ever go DOWN — and unlike the unreviewed ceiling, it cannot be lowered
- * by writing a verdict. It falls only when a service actually binds its reads.
- */
-const UNBOUND_READ_PATH_CEILING = 55;
+// ── The retired second ratchet (MOTIR-2814) ─────────────────────────────────
+// `UNBOUND_READ_PATH_CEILING` lived here and measured the reads confirmed BROKEN under
+// `motir_app`. MOTIR-2796 walked it 55 -> 0 across fifteen cards — savedFilters,
+// reports, sprints + estimation, boards, `findByIds` and its 13 call sites, activity,
+// workItems (link edges, then trees/search/decorations), plan validity + staleness, the
+// nine single-read services, migrate-onboarding, and a public SELECT arm for
+// `public_request_vote`. With the class empty the constant is gone: the set-equality test
+// above is the stronger guard, because a new unbound read has no verdict to earn and
+// fails the build outright rather than fitting under a ceiling.
+//
+// ⚠️ The constant sat STALE at 14 for the last four of those cards. Their messages each
+// claimed a step (14 -> 11 -> 3 -> 1 -> 0); the VERDICTS entries were duly removed, but
+// the literal was not edited, and `0 <= 14` passes silently. That is the failure mode a
+// ceiling has and a set-equality assertion does not, and it is a second reason this one
+// is retired rather than pinned at zero.
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {
@@ -347,40 +262,6 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
       stale,
       'VERDICTS names a site the scanner no longer finds. If you bound or deleted ' +
         'the read, delete its entry too — a stale allowlist hides the next one.',
-    ).toEqual([]);
-  });
-
-  it('the confirmed-unbound count only ever falls', () => {
-    const unbound = Object.entries(VERDICTS)
-      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
-      .map(([key]) => key);
-
-    // The ratchet that actually tracks the product working. `unreviewed` falling means
-    // someone LOOKED; this falling means a read that returned zero rows under
-    // `motir_app` now returns its rows. MOTIR-2796 drives it to zero, service by
-    // service — so it should fall in service-sized steps, not one read at a time.
-    expect(
-      unbound.length,
-      `${unbound.length} reads are confirmed unbound under the app role (ceiling ` +
-        `${UNBOUND_READ_PATH_CEILING}). If this ROSE, a new read joined an already-broken ` +
-        'service — bind the service method rather than adding an entry. If it FELL, lower ' +
-        'the ceiling in the same commit.',
-    ).toBeLessThanOrEqual(UNBOUND_READ_PATH_CEILING);
-  });
-
-  it('every unbound-read-path verdict names the service that owns the fix', () => {
-    // The value is the unit of work, not a comment: MOTIR-2796's children are cut by
-    // SERVICE, so a verdict that says `?` or `MOTIR-xxxx` cannot be planned against and
-    // would quietly drop that read from the story.
-    const nameless = Object.entries(VERDICTS)
-      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
-      .filter(([, [, reason]]) => !/Service$|^[a-z]\w*(Service|Auth)$/.test(reason))
-      .map(([key, [, reason]]) => `${key} -> "${reason}"`);
-
-    expect(
-      nameless,
-      'An `unbound-read-path` verdict must name the owning service (e.g. `reportsService`), ' +
-        'because that is the unit MOTIR-2796 plans against.',
     ).toEqual([]);
   });
 
@@ -431,8 +312,18 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     // A guard whose scanner silently returns nothing passes forever. Pin that it
     // resolves the schema, walks the repositories, and finds a known site.
     const scanned = scanSingletonReads();
-    expect(scanned.length).toBeGreaterThan(50);
-    expect(scanned.map((r) => r.key)).toContain('workItemRepository.ts#quickSearch');
+    // A floor, not a target: it exists so a scanner that silently returns nothing
+    // fails instead of passing forever. It moves DOWN as reads become bindable —
+    // 51 before MOTIR-2807, 19 after MOTIR-2809 — so it is kept comfortably below
+    // the live count rather than pinned to it, and lowered when a card takes the
+    // population past it.
+    expect(scanned.length).toBeGreaterThan(10);
+    // A KNOWN site, chosen because it SURVIVES this story by design:
+    // `rateLimitCounterRepository.countAllUnsafe` carries the `pre-auth` verdict
+    // (no tenant exists at read time), so nothing will bind it away. Two earlier
+    // canaries — `quickSearch`, then `matchesAutomationCondition` — were each
+    // bound by the very next card, which is the wrong property for a canary.
+    expect(scanned.map((r) => r.key)).toContain('rateLimitCounterRepository.ts#countAllUnsafe');
     // And that the `tx ?? db` fallback is genuinely excluded — `findStatuses` uses it,
     // so if this ever appears the scanner has stopped distinguishing bindable reads
     // from unbound ones and every verdict above is meaningless.

@@ -8,6 +8,7 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Mention → email fan-out (Story 5.1 · Subtask 5.1.6). The business logic
 // behind the mentionNotify job (lib/jobs/definitions/mentionNotify.ts): given
@@ -91,7 +92,10 @@ export const mentionNotificationsService = {
     let bodyMd: string | null;
     let sourceId: string;
     if (input.source.kind === 'comment') {
-      const comment = await commentRepository.findById(input.source.commentId);
+      const { commentId } = input.source;
+      const comment = await withWorkspaceServiceContext(item.workspaceId, (tx) =>
+        commentRepository.findById(commentId, tx),
+      );
       if (!comment || comment.workItemId !== item.id) return { notifiedUserIds: [] };
       bodyMd = comment.bodyMd;
       sourceId = comment.id;

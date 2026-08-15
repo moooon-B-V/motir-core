@@ -173,7 +173,9 @@ describe('commentsService.addComment', () => {
     const dto = await commentsService.addComment(s.issue.id, { bodyMd: body }, s.memberCtx);
 
     expect(dto.mentionedUserIds).toEqual([s.mentionee.id, s.fx.ownerId]);
-    const rows = await commentMentionRepository.findByCommentIds([dto.id]);
+    const rows = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      commentMentionRepository.findByCommentIds([dto.id], tx),
+    );
     expect(rows.map((r) => r.mentionedUserId).sort()).toEqual(
       [s.mentionee.id, s.fx.ownerId].sort(),
     );
@@ -347,7 +349,9 @@ describe('commentsService.editComment', () => {
     );
 
     expect(edited.mentionedUserIds).toEqual([s.fx.ownerId]);
-    const rows = await commentMentionRepository.findByCommentIds([created.id]);
+    const rows = await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+      commentMentionRepository.findByCommentIds([created.id], tx),
+    );
     expect(rows.map((r) => r.mentionedUserId)).toEqual([s.fx.ownerId]);
     expect(events).toHaveLength(2);
     expect(events[1]?.mentionedUserIds).toEqual([s.fx.ownerId]);
@@ -465,7 +469,11 @@ describe('commentsService.deleteComment', () => {
         commentRepository.countByWorkItem(s.issue.id, tx),
       ),
     ).toBe(0);
-    expect(await commentMentionRepository.findByCommentIds([root.id])).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(s.fx.workspaceId, (tx) =>
+        commentMentionRepository.findByCommentIds([root.id], tx),
+      ),
+    ).toEqual([]);
 
     const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },

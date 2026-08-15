@@ -1,4 +1,5 @@
 import 'server-only';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
@@ -161,7 +162,9 @@ export const aiBugTelemetryService = {
 
     // Outgoing links → implicated subtasks (or siblings). Read the raw edges;
     // resolve each target through the same browse-gated read.
-    const links = await workItemLinkRepository.findByFromItem(bug.id);
+    const links = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(bug.id, undefined, tx),
+    );
     for (const link of links) {
       if (seen.has(link.toId)) continue;
       seen.add(link.toId);

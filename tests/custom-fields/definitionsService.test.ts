@@ -408,7 +408,11 @@ describe('deleteField', () => {
 
     expect(receipt).toEqual({ id: field.id, key: 'severity', label: 'Severity', valueCount: 1 });
     expect(await customFieldsService.listFields(actorInput(fx))).toEqual([]);
-    expect(await customFieldOptionRepository.listByField(field.id, fx.workspaceId)).toEqual([]);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldOptionRepository.listByField(field.id, fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
     expect(
       await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         customFieldValueRepository.listByWorkItem(issue.id, fx.workspaceId, tx),
@@ -667,12 +671,16 @@ describe('the 5.3.2 repository additions', () => {
     await createField(fx, 'Severity', 'select', { options: ['Low', 'High'] });
     await createField(fx, 'Env', 'select', { options: ['Prod'] });
 
-    const options = await customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId);
+    const options = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId, tx),
+    );
     expect(options.map((o) => o.label).sort()).toEqual(['High', 'Low', 'Prod']);
 
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     expect(
-      await customFieldOptionRepository.listByProject(fx.projectId, other.workspaceId),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        customFieldOptionRepository.listByProject(fx.projectId, other.workspaceId, tx),
+      ),
     ).toEqual([]);
   });
 });

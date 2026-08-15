@@ -4,7 +4,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import {
@@ -119,10 +118,9 @@ describe('authenticateServiceRequest', () => {
 describe('the system principal satisfies the create gates', () => {
   it('is a workspace member (so assertReporterMember passes) AND a project member', async () => {
     const { workspace, project, systemUserId } = await makeMetaTenant();
-    const wsMembership = await workspaceMembershipRepository.findByUserAndWorkspace(
-      systemUserId,
-      workspace.id,
-    );
+    const wsMembership = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: systemUserId, workspaceId: workspace.id } },
+    });
     expect(wsMembership).not.toBeNull();
     const projMembership = await withWorkspaceServiceContext(workspace.id, (tx) =>
       projectMembershipRepository.findByUserAndProject(systemUserId, project.id, tx),

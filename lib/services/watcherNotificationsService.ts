@@ -124,7 +124,9 @@ export const watcherNotificationsService = {
     if (input.kind === 'comment') {
       // The comment must still exist (5.1's delete is a HARD delete — mailing
       // an excerpt of a deleted comment would resurrect removed content).
-      const comment = await commentRepository.findById(input.commentId);
+      const comment = await withWorkspaceServiceContext(item.workspaceId, (tx) =>
+        commentRepository.findById(input.commentId, tx),
+      );
       if (!comment || comment.workItemId !== item.id) return { notifiedUserIds: [] };
       excerpt = mentionExcerpt(comment.bodyMd);
     } else {

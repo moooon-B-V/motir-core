@@ -125,9 +125,11 @@ export const customFieldOptionRepository = {
     ids: string[],
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldOption[]> {
     if (ids.length === 0) return [];
-    return db.customFieldOption.findMany({
+    const client = tx ?? db;
+    return client.customFieldOption.findMany({
       where: { id: { in: ids }, field: { projectId, workspaceId } },
     });
   },

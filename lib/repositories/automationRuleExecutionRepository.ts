@@ -82,8 +82,10 @@ export const automationRuleExecutionRepository = {
   async listByRule(
     ruleId: string,
     opts: { skip: number; take: number },
+    tx?: Prisma.TransactionClient,
   ): Promise<AutomationRuleExecutionWithItem[]> {
-    return db.automationRuleExecution.findMany({
+    const client = tx ?? db;
+    return client.automationRuleExecution.findMany({
       where: { ruleId },
       orderBy: { createdAt: 'desc' },
       skip: opts.skip,
@@ -94,8 +96,9 @@ export const automationRuleExecutionRepository = {
 
   /** Total execution rows for a rule — the audit-log pager's `total`. Read-only
    * (uses the `db` singleton). */
-  async countByRule(ruleId: string): Promise<number> {
-    return db.automationRuleExecution.count({ where: { ruleId } });
+  async countByRule(ruleId: string, tx?: Prisma.TransactionClient): Promise<number> {
+    const client = tx ?? db;
+    return client.automationRuleExecution.count({ where: { ruleId } });
   },
 
   /** The latest execution per rule across a set of rule ids — the list's

@@ -59,6 +59,8 @@ import { commentsService } from '@/lib/services/commentsService';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
 
@@ -84,6 +86,7 @@ async function scanDisplayable(
   workItemId: string,
   cursor: string | undefined,
   order: 'asc' | 'desc',
+  tx?: Prisma.TransactionClient,
 ): Promise<ScanResult> {
   const rows: WorkItemRevision[] = [];
   let scanned = 0;
@@ -92,11 +95,11 @@ async function scanDisplayable(
   let moreMayRemain = true;
 
   while (moreMayRemain && rows.length < ACTIVITY_PAGE_SIZE && scanned < MAX_SCANNED_ROWS) {
-    const batch = await workItemRevisionRepository.listByWorkItem(workItemId, {
-      take: SCAN_BATCH_SIZE,
-      cursor: batchCursor,
-      order,
-    });
+    const batch = await workItemRevisionRepository.listByWorkItem(
+      workItemId,
+      { take: SCAN_BATCH_SIZE, cursor: batchCursor, order },
+      tx,
+    );
     if (batch.length === 0) {
       moreMayRemain = false;
       break;
@@ -144,16 +147,27 @@ async function buildResolvers(
     collectDiffRefs(row.changeKind, row.diff, refs);
   }
 
-  const [users, statuses, sprints, issues] = await Promise.all([
-    refs.users.size > 0 ? userRepository.findByIds([...refs.users]) : ([] as User[]),
-    refs.statuses.size > 0
-      ? workflowsRepository.findStatuses(item.projectId, ctx.workspaceId)
-      : ([] as WorkflowStatus[]),
-    refs.sprints.size > 0
-      ? sprintRepository.findByIds([...refs.sprints], ctx.workspaceId)
-      : ([] as Sprint[]),
-    refs.issues.size > 0 ? workItemRepository.findByIds([...refs.issues]) : ([] as WorkItem[]),
-  ]);
+  // The three tenant reads share ONE bound transaction; `user` carries no policy
+  // (checked against `pg_policies`), so it stays on the singleton.
+  const users =
+    refs.users.size > 0 ? await userRepository.findByIds([...refs.users]) : ([] as User[]);
+  const { statuses, sprints, issues } = await withWorkspaceServiceContext(
+    ctx.workspaceId,
+    async (tx) => ({
+      statuses:
+        refs.statuses.size > 0
+          ? await workflowsRepository.findStatuses(item.projectId, ctx.workspaceId, tx)
+          : ([] as WorkflowStatus[]),
+      sprints:
+        refs.sprints.size > 0
+          ? await sprintRepository.findByIds([...refs.sprints], ctx.workspaceId, tx)
+          : ([] as Sprint[]),
+      issues:
+        refs.issues.size > 0
+          ? await workItemRepository.findByIds([...refs.issues], tx)
+          : ([] as WorkItem[]),
+    }),
+  );
 
   const userById = new Map(users.map((u) => [u.id, u]));
   const statusByKey = new Map(statuses.map((s) => [s.key, s]));
@@ -269,10 +283,17 @@ export const activityService = {
     // project comes from the ITEM, never from the actor's active project.
     await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
 
-    const [totalCount, scan] = await Promise.all([
-      workItemRevisionRepository.countDisplayableByWorkItem(workItemId, [...SUPPRESSED_DIFF_KEYS]),
-      scanDisplayable(workItemId, options.cursor, order),
-    ]);
+    // The count and the page it heads share ONE bound transaction: unbound the
+    // count read 0, so the "show more" affordance vanished from an item with a
+    // long history — a missing door rather than a visible error.
+    const { totalCount, scan } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      totalCount: await workItemRevisionRepository.countDisplayableByWorkItem(
+        workItemId,
+        [...SUPPRESSED_DIFF_KEYS],
+        tx,
+      ),
+      scan: await scanDisplayable(workItemId, options.cursor, order, tx),
+    }));
 
     const resolvers = await buildResolvers(scan.rows, item, ctx);
     return {
@@ -318,11 +339,25 @@ export const activityService = {
     // total. listComments re-checks the gate it owns (capability-aware) —
     // an acceptable double-read; its threads arrive mapped to the native
     // 5.1 DTO, which is exactly what an All comment entry is.
-    const [commentsPage, scan, totalChanges] = await Promise.all([
-      commentsService.listComments(workItemId, { cursor: cursor.c ?? undefined, order }, ctx),
-      scanDisplayable(workItemId, cursor.h ?? undefined, order),
-      workItemRevisionRepository.countDisplayableByWorkItem(workItemId, [...SUPPRESSED_DIFF_KEYS]),
-    ]);
+    // `listComments` is a SERVICE call and opens its own context (the
+    // call-into-another-service clause in the transaction-shape ADR); this
+    // method's own two reads share one.
+    const commentsPage = await commentsService.listComments(
+      workItemId,
+      { cursor: cursor.c ?? undefined, order },
+      ctx,
+    );
+    const { scan, totalChanges } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        scan: await scanDisplayable(workItemId, cursor.h ?? undefined, order, tx),
+        totalChanges: await workItemRevisionRepository.countDisplayableByWorkItem(
+          workItemId,
+          [...SUPPRESSED_DIFF_KEYS],
+          tx,
+        ),
+      }),
+    );
 
     const resolvers = await buildResolvers(scan.rows, item, ctx);
     const history = scan.rows.map((row) => toActivityEntryDto(row, resolvers));

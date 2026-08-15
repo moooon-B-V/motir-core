@@ -1,6 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -250,9 +250,11 @@ export const automationEngineService = {
     const projectId = input.projectId ?? (await this.resolveProjectId(input));
     if (!projectId) return summary;
 
-    const rules = await automationRuleRepository.listEnabledByProjectAndTrigger(
-      projectId,
-      input.trigger,
+    // Bound (MOTIR-2815): `automation_rule` is policy-gated, so unbound this
+    // returned NO rules and every automation silently declined to fire — a
+    // no-op that reads exactly like "no rule matched".
+    const rules = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      automationRuleRepository.listEnabledByProjectAndTrigger(projectId, input.trigger, tx),
     );
     const matching = rules.filter((rule) => triggerMatches(rule, input));
     summary.matched = matching.length;
@@ -309,9 +311,11 @@ export const automationEngineService = {
   ): Promise<'success' | 'failure' | 'no_actions' | 'deduped'> {
     // (4) Idempotency — already ran this rule for this event? Skip before
     // re-executing any action (a replay must not re-apply side effects).
-    const already = await automationRuleExecutionRepository.existsByRuleAndEvent(
-      rule.id,
-      input.eventId,
+    // Bound (MOTIR-2815): `automation_rule_execution` is policy-gated. Unbound,
+    // the idempotency probe found NO prior run, so a replayed event re-applied
+    // every action — the one direction this guard exists to prevent.
+    const already = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      automationRuleExecutionRepository.existsByRuleAndEvent(rule.id, input.eventId, tx),
     );
     if (already) return 'deduped';
 
@@ -366,7 +370,12 @@ export const automationEngineService = {
     if (!decoded.ok) return false;
     const ast: FilterAst = decoded.ast;
     const referents = await loadFilterReferents(rule.projectId, rule.workspaceId, ast);
-    return workItemRepository.matchesAutomationCondition(input.workItemId, ast, referents);
+    // ⚠️ A GATE, not a list. Unbound this matched NOTHING, so the rule never
+    // fired and no surface reported that it hadn't — an automation that silently
+    // stops working looks identical to one nobody triggered.
+    return withWorkspaceServiceContext(rule.workspaceId, (tx) =>
+      workItemRepository.matchesAutomationCondition(input.workItemId, ast, referents, tx),
+    );
   },
 
   /** Write a `no_actions` audit row (condition gated). The failure counter is

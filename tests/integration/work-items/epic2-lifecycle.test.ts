@@ -15,6 +15,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 2.6.3 — the SINGLE cross-story Epic-2 lifecycle scenario.
 //
@@ -203,7 +204,13 @@ describe('Epic-2 lifecycle — multi-hop status walk under the restricted defaul
     );
     expect((await workItemsService.getWorkItem(t.task.id, fx.ctx)).status).toBe('todo');
     // No status revision was written for the rejected jump.
-    expect(statusWalk(await workItemRevisionRepository.listByWorkItem(t.task.id))).toEqual([]);
+    expect(
+      statusWalk(
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+        ),
+      ),
+    ).toEqual([]);
 
     // The legal multi-hop walk: forward → block/unblock detour → forward → reopen.
     const walk: Array<[string, string]> = [
@@ -222,13 +229,19 @@ describe('Epic-2 lifecycle — multi-hop status walk under the restricted defaul
     expect(ended.status).toBe('in_progress');
 
     // Each hop wrote exactly one 'updated' status revision, in walk order.
-    const revs = await workItemRevisionRepository.listByWorkItem(t.task.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+    );
     expect(statusWalk(revs)).toEqual(walk.map(([from, to]) => ({ from, to })));
     // A no-op self-transition writes nothing extra.
     await workItemsService.updateStatus(t.task.id, 'in_progress', fx.ctx);
-    expect(statusWalk(await workItemRevisionRepository.listByWorkItem(t.task.id))).toHaveLength(
-      walk.length,
-    );
+    expect(
+      statusWalk(
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+        ),
+      ),
+    ).toHaveLength(walk.length);
   });
 });
 

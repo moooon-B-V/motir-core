@@ -10,6 +10,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.3 · Subtask 6.3.2 — reportsService.getCreatedVsResolved. Real
 // Postgres, the burndown-test conventions: the resolved series is
@@ -252,11 +253,15 @@ describe('getCreatedVsResolved — bounded shape + caps', () => {
 
     const window = reportWindow(new Date(), 14);
     const started = Date.now();
-    const rows = await workItemRevisionRepository.aggregateNetResolvedByBucket(
-      fx.projectId,
-      fx.workspaceId,
-      'day',
-      window,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateNetResolvedByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        'day',
+        window,
+        undefined,
+        tx,
+      ),
     );
     const elapsed = Date.now() - started;
     // GROUPed server-side: a row per event day (≤ 10), never per revision.

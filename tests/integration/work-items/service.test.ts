@@ -645,9 +645,17 @@ describe('linkWorkItems', () => {
     expect(link.fromId).toBe(a.id);
     expect(link.toId).toBe(b.id);
 
-    expect(await workItemLinkRepository.findByFromItem(a.id)).toHaveLength(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(a.id, undefined, tx),
+      ),
+    ).toHaveLength(1);
     // No reciprocal is_blocked_by row out of B.
-    expect(await workItemLinkRepository.findByFromItem(b.id)).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(b.id, undefined, tx),
+      ),
+    ).toHaveLength(0);
   });
 
   it('relates_to writes BOTH rows in one transaction', async () => {
@@ -682,8 +690,12 @@ describe('linkWorkItems', () => {
     // Now A→B's primary already exists → DuplicateLinkError on the PRIMARY
     // (the reciprocal-swallow path is exercised by the test below via a
     // legacy half-pair). Here we assert the steady state has exactly two rows.
-    const fromB = await workItemLinkRepository.findByFromItem(b.id, 'relates_to');
-    const fromA = await workItemLinkRepository.findByFromItem(a.id, 'relates_to');
+    const fromB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(b.id, 'relates_to', tx),
+    );
+    const fromA = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(a.id, 'relates_to', tx),
+    );
     expect(fromB).toHaveLength(1);
     expect(fromA).toHaveLength(1);
   });
@@ -715,8 +727,16 @@ describe('linkWorkItems', () => {
     );
     expect(link.fromId).toBe(a.id);
     // The pre-existing mirror is untouched (no duplicate, no error).
-    expect(await workItemLinkRepository.findByFromItem(b.id, 'relates_to')).toHaveLength(1);
-    expect(await workItemLinkRepository.findByFromItem(a.id, 'relates_to')).toHaveLength(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(b.id, 'relates_to', tx),
+      ),
+    ).toHaveLength(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(a.id, 'relates_to', tx),
+      ),
+    ).toHaveLength(1);
   });
 
   it('rejects a cycle-closing is_blocked_by link with WorkItemLinkCycleError', async () => {
@@ -746,8 +766,16 @@ describe('unlinkWorkItems', () => {
     );
     await workItemsService.unlinkWorkItems(link.id, fx.ctx);
 
-    expect(await workItemLinkRepository.findByFromItem(a.id, 'relates_to')).toHaveLength(0);
-    expect(await workItemLinkRepository.findByFromItem(b.id, 'relates_to')).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(a.id, 'relates_to', tx),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(b.id, 'relates_to', tx),
+      ),
+    ).toHaveLength(0);
   });
 });
 

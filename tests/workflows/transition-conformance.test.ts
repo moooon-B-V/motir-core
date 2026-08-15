@@ -12,6 +12,7 @@ import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWo
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Graph-COMPLETE conformance guard over the default workflow (Subtask 2.6.2),
 // consolidating what `transition-validation.test.ts` only SAMPLES. Everything
@@ -102,7 +103,11 @@ function setStatus(itemId: string, status: string): Promise<unknown> {
   return adminDb.workItem.update({ where: { id: itemId }, data: { status } });
 }
 async function revisionCount(itemId: string): Promise<number> {
-  return (await workItemRevisionRepository.listByWorkItem(itemId)).length;
+  return (
+    await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(itemId, {}, tx),
+    )
+  ).length;
 }
 
 describe('default workflow — graph shape is locked (literal pin, constant-derived guard)', () => {
@@ -180,7 +185,9 @@ describe('restricted mode — every default edge is accepted (the full 22-edge s
       const updated = await workItemsService.updateStatus(restrictedItemId, to, ctx);
       expect(updated.status).toBe(to);
 
-      const revs = await workItemRevisionRepository.listByWorkItem(restrictedItemId);
+      const revs = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(restrictedItemId, {}, tx),
+      );
       expect(revs.length).toBe(before + 1);
       expect(revs[0]!.changeKind).toBe('updated');
       expect((revs[0]!.diff as Record<string, unknown>).status).toEqual({ from, to });

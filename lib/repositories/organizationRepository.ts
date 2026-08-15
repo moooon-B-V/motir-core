@@ -106,8 +106,9 @@ export const organizationRepository = {
    * standalone read BEFORE the blob round-trip — no create transaction to thread.
    * Missing/hidden org → the safe default (bounded `free` tier, caps apply).
    */
-  async findCapContext(id: string): Promise<OrgCapContext> {
-    const org = await db.organization.findUnique({
+  async findCapContext(id: string, tx?: Prisma.TransactionClient): Promise<OrgCapContext> {
+    const client = tx ?? db;
+    const org = await client.organization.findUnique({
       where: { id },
       select: { isMeta: true, scaledTrackerSubscription: true, aiIncludedSeat: true },
     });

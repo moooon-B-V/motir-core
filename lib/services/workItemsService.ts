@@ -4,7 +4,6 @@ import {
   type WorkItemKind,
   type WorkItemPriority,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import {
   astHasEpic5Conditions,
   collectFilterReferentIds,
@@ -49,7 +48,11 @@ import {
   QUICK_SEARCH_MIN_QUERY_LENGTH,
 } from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import {
@@ -469,14 +472,25 @@ export async function loadFilterReferents(
 ): Promise<ProjectFilterReferents | undefined> {
   if (!astHasEpic5Conditions(ast)) return undefined;
   const ids = collectFilterReferentIds(ast);
-  const [definitions, options, labels, components] = await Promise.all([
-    ids.customFieldIds.length > 0
-      ? customFieldDefinitionRepository.listByProject(projectId, workspaceId)
-      : [],
-    customFieldOptionRepository.findByIds(ids.customFieldValueIds, projectId, workspaceId),
-    labelRepository.findByIds(ids.labelIds, projectId),
-    componentRepository.findByIds(ids.componentIds),
-  ]);
+  // Four reads of four policy-gated tables, resolved together to decorate ONE
+  // filter — so they share one bound transaction rather than four.
+  const { definitions, options, labels, components } = await withWorkspaceServiceContext(
+    workspaceId,
+    async (tx) => ({
+      definitions:
+        ids.customFieldIds.length > 0
+          ? await customFieldDefinitionRepository.listByProject(projectId, workspaceId, tx)
+          : [],
+      options: await customFieldOptionRepository.findByIds(
+        ids.customFieldValueIds,
+        projectId,
+        workspaceId,
+        tx,
+      ),
+      labels: await labelRepository.findByIds(ids.labelIds, projectId, tx),
+      components: await componentRepository.findByIds(ids.componentIds, tx),
+    }),
+  );
 
   const customFields = new Map<string, ProjectFilterCustomField>();
   for (const def of definitions) {
@@ -723,7 +737,9 @@ export const workItemsService = {
     // sprint → 422. Checked before the key-allocation transaction so a denied
     // create never burns a work-item key.
     if (input.sprintId != null) {
-      const sprint = await sprintRepository.findById(input.sprintId, workspaceId);
+      const sprint = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        sprintRepository.findById(input.sprintId as string, workspaceId, tx),
+      );
       if (!sprint) throw new SprintNotFoundError(input.sprintId);
       if (sprint.projectId !== input.projectId) {
         throw new CrossProjectSprintAssignmentError('new', input.sprintId);
@@ -738,7 +754,9 @@ export const workItemsService = {
     // join rows are written inside it.
     const componentIds = [...new Set(input.componentIds ?? [])];
     if (componentIds.length > 0) {
-      const components = await componentRepository.findByIds(componentIds);
+      const components = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        componentRepository.findByIds(componentIds, tx),
+      );
       const componentsById = new Map(components.map((c) => [c.id, c]));
       for (const id of componentIds) {
         const component = componentsById.get(id);
@@ -1620,7 +1638,11 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction((tx) =>
+    // MOTIR-2846: `withWorkspaceContext`, not a bare `db.$transaction`. A bare
+    // one binds no GUCs, so every gate read inside `applyStatusTransition` —
+    // the item, its project, the workflow — comes back empty under `motir_app`
+    // and the transition 404s an item that is on the screen.
+    const { dto, transition } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
     );
     // Post-commit, never inside the tx — a rollback must not have notified
@@ -1665,7 +1687,7 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const { dto } = await db.$transaction((tx) =>
+    const { dto } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
     );
     return dto;
@@ -1688,7 +1710,7 @@ export const workItemsService = {
     ciState: 'passing' | 'failing' | null,
     ctx: ServiceContext,
   ): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(workItemId, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) {
         throw new WorkItemNotFoundError(workItemId);
@@ -1962,9 +1984,8 @@ export const workItemsService = {
       [...terminalKeys].filter((key) => key !== CANCELLED_STATUS_KEY),
     );
 
-    const rows = await workItemRepository.findProvenanceBackfillCandidates(
-      projectId,
-      project.workspaceId,
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProvenanceBackfillCandidates(projectId, project.workspaceId, tx),
     );
 
     const report: ProvenanceBackfillReport = {
@@ -2091,7 +2112,7 @@ export const workItemsService = {
     implementation: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
     const item = await workItemsService.getWorkItem(workItemId, ctx);
-    const row = await db.$transaction(async (tx) => {
+    const row = await withWorkspaceContext(ctx, async (tx) => {
       await projectAccessService.assertCanEdit(item.projectId, ctx, tx);
       return workItemsService.recordImplementationProvenance(
         workItemId,
@@ -2108,7 +2129,7 @@ export const workItemsService = {
     ctx: ServiceContext,
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction(async (tx) => {
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const res = await workItemsService.applyStatusTransition(
         workItemId,
         IN_REVIEW_STATUS_KEY,
@@ -2166,10 +2187,12 @@ export const workItemsService = {
     ctx: ServiceContext,
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<CompleteSessionResultDto> {
-    const items = await workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId);
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId, tx),
+    );
     if (items.length === 0) return { sessionBranch, results: [] };
 
-    const { results, transitions } = await db.$transaction(async (tx) => {
+    const { results, transitions } = await withWorkspaceContext(ctx, async (tx) => {
       const results: CompleteSessionItemResultDto[] = [];
       const transitions: Array<{
         id: string;
@@ -2424,7 +2447,15 @@ export const workItemsService = {
     await projectAccessService.assertPermission(root.projectId, ctx, 'work_item:delete');
 
     // One recursive-CTE round-trip: root + every descendant, each with its kind.
-    const subtree = await workItemRepository.findSubtree(id);
+    // Both CTE reads share ONE bound transaction (MOTIR-2846) — they are this
+    // method's own contiguous read run, and unbound they return zero rows and
+    // the preview reports an empty subtree for an item that has children.
+    const [subtree, liveCounts] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findSubtree(id, tx),
+        workItemRepository.countLiveDescendantsByKind(id, tx),
+      ]),
+    );
     const byKind: Partial<Record<WorkItemKindDto, number>> = {};
     for (const row of subtree) {
       if (row.id === id) continue; // the breakdown counts DESCENDANTS only
@@ -2438,7 +2469,7 @@ export const workItemsService = {
     // full breakdown but not here.
     const liveByKind: Partial<Record<WorkItemKindDto, number>> = {};
     let liveDescendantCount = 0;
-    for (const { kind, count } of await workItemRepository.countLiveDescendantsByKind(id)) {
+    for (const { kind, count } of liveCounts) {
       liveByKind[kind as WorkItemKindDto] = count;
       liveDescendantCount += count;
     }
@@ -2538,11 +2569,17 @@ export const workItemsService = {
     ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const rows = await workItemRepository.findByProjectFiltered(projectId, {
-      ...(filter.kind ? { kind: filter.kind } : {}),
-      ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
-    });
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(
+        projectId,
+        {
+          ...(filter.kind ? { kind: filter.kind } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
+        },
+        tx,
+      ),
+    );
     return rows.map(toWorkItemSummaryDto);
   },
 
@@ -2551,8 +2588,10 @@ export const workItemsService = {
    * mapped to subtree-row DTOs with depth metadata. Read-only; `ctx` reserved
    * for 1.4.5 RLS.
    */
-  async getWorkItemSubtree(rootId: string, _ctx: ServiceContext): Promise<WorkItemSubtreeDto[]> {
-    const rows = await workItemRepository.findSubtree(rootId);
+  async getWorkItemSubtree(rootId: string, ctx: ServiceContext): Promise<WorkItemSubtreeDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findSubtree(rootId, tx),
+    );
     return rows.map(toWorkItemSubtreeDto);
   },
 
@@ -2576,10 +2615,8 @@ export const workItemsService = {
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     const effectiveDepth = clampBound(depth, 0, MAX_SUBTREE_DEPTH, DEFAULT_SUBTREE_DEPTH);
-    const rows = await workItemRepository.findBoundedSubtree(
-      rootId,
-      row.workspaceId,
-      effectiveDepth,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findBoundedSubtree(rootId, row.workspaceId, effectiveDepth, tx),
     );
     return { nodes: rows.map(toWorkItemSubtreeDto), depth: effectiveDepth };
   },
@@ -2617,10 +2654,8 @@ export const workItemsService = {
       ? await loadFilterReferents(projectId, project.workspaceId, filter.ast)
       : undefined;
     const repoFilter = buildRepoFilter(filter, referents);
-    const rows = await workItemRepository.findProjectForest(
-      projectId,
-      project.workspaceId,
-      repoFilter,
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectForest(projectId, project.workspaceId, repoFilter, tx),
     );
 
     return assembleProjectForest(rows, repoFilterIsActive(repoFilter));
@@ -2675,9 +2710,8 @@ export const workItemsService = {
     // the shipped read.
     let sprintId: string | null = null;
     if (opts.scope === 'sprint') {
-      const activeSprint = await sprintRepository.findActiveByProject(
-        projectId,
-        project.workspaceId,
+      const activeSprint = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        sprintRepository.findActiveByProject(projectId, project.workspaceId, tx),
       );
       if (!activeSprint) {
         return { nodes: [], edges: [], offLevelBlockers: [] };
@@ -2686,16 +2720,19 @@ export const workItemsService = {
     }
 
     const [rows, statuses] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(
-        projectId,
-        project.workspaceId,
-        parentId,
-        DEFAULT_SORT,
-        {
-          take: TREE_LEVEL_MAX_TAKE,
-          offset: 0,
-        },
-        sprintId,
+      withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workItemRepository.findProjectTreeLevel(
+          projectId,
+          project.workspaceId,
+          parentId,
+          DEFAULT_SORT,
+          {
+            take: TREE_LEVEL_MAX_TAKE,
+            offset: 0,
+          },
+          sprintId,
+          tx,
+        ),
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
@@ -2722,10 +2759,13 @@ export const workItemsService = {
     // that whole subtree (MOTIR-1381, revised) — sprint scope only re-roots the top
     // level, it does not prune progress.
     const containerIds = rows.filter((r) => r.hasChildren).map((r) => r.id);
-    const progressRows = await workItemRepository.countRoadmapProgress(
-      containerIds,
-      [...doneKeys],
-      ROADMAP_CANCELLED_KEY,
+    const progressRows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countRoadmapProgress(
+        containerIds,
+        [...doneKeys],
+        ROADMAP_CANCELLED_KEY,
+        tx,
+      ),
     );
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total, verified: p.verified }]),
@@ -2767,7 +2807,12 @@ export const workItemsService = {
 
     // The `is_blocked_by` edges FROM this level's items (the canvas draws the
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
-    const edges = await workItemLinkRepository.findBlockedByEdges(rows.map((r) => r.id));
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges(
+        rows.map((r) => r.id),
+        tx,
+      ),
+    );
 
     // A blocker NOT on this level needs a NAMING stub so the canvas can anchor the
     // signal to a chip (MOTIR-1331). The stub carries `isDone` + `inActiveSprint`
@@ -2778,7 +2823,9 @@ export const workItemsService = {
     const offLevelIds = [
       ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
     ];
-    const offLevelStubs = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
+    );
     const offLevelBlockers = offLevelStubs.map((s) => ({
       id: s.id,
       identifier: s.identifier,
@@ -2828,21 +2875,22 @@ export const workItemsService = {
     // Count the filtered set first so an out-of-range ?page CLAMPS to the last
     // page (the 2.5.10 edge spec) instead of fetching an empty offset window.
     // The count is the pager's denominator and tracks the active filter.
-    const total = await workItemRepository.countProjectIssues(
-      projectId,
-      project.workspaceId,
-      repoFilter,
+    const total = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter, tx),
     );
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const rows = await workItemRepository.findProjectIssuesFlat(
-      projectId,
-      project.workspaceId,
-      params.sort,
-      repoFilter,
-      { limit: pageSize, offset },
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesFlat(
+        projectId,
+        project.workspaceId,
+        params.sort,
+        repoFilter,
+        { limit: pageSize, offset },
+        tx,
+      ),
     );
 
     return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
@@ -2888,11 +2936,14 @@ export const workItemsService = {
     const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
 
     const limit = clampV1PageLimit(params.limit);
-    const rows = await workItemRepository.findProjectIssuesKeyset(
-      projectId,
-      project.workspaceId,
-      repoFilter,
-      { ...(params.after ? { after: params.after } : {}), limit },
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        projectId,
+        project.workspaceId,
+        repoFilter,
+        { ...(params.after ? { after: params.after } : {}), limit },
+        tx,
+      ),
     );
 
     // The repository fetched `limit + 1` — the extra row IS the "more remains"
@@ -2941,7 +2992,9 @@ export const workItemsService = {
       : undefined;
     const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
 
-    return workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter);
+    return withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter, tx),
+    );
   },
 
   /**
@@ -2971,15 +3024,21 @@ export const workItemsService = {
     await projectAccessService.assertCanBrowse(projectId, ctx);
 
     const pageSize = clampIssuePageSize(params.pageSize);
-    const total = await workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+    const total = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countArchivedByProject(projectId, project.workspaceId, tx),
+    );
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const rows = await workItemRepository.findArchivedByProject(projectId, project.workspaceId, {
-      limit: pageSize,
-      offset,
-    });
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findArchivedByProject(
+        projectId,
+        project.workspaceId,
+        { limit: pageSize, offset },
+        tx,
+      ),
+    );
     return { items: rows.map(toArchivedWorkItemDto), total, page, pageSize };
   },
 
@@ -2998,7 +3057,9 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    return workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+    return withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countArchivedByProject(projectId, project.workspaceId, tx),
+    );
   },
 
   /**
@@ -3022,13 +3083,20 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const { take, offset } = clampTreePage(params);
-    const [rows, total] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(projectId, project.workspaceId, null, params.sort, {
-        take,
-        offset,
-      }),
-      workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null),
-    ]);
+    const [rows, total] = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findProjectTreeLevel(
+          projectId,
+          project.workspaceId,
+          null,
+          params.sort,
+          { take, offset },
+          null,
+          tx,
+        ),
+        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, tx),
+      ]),
+    );
     return buildTreeLevel(rows, take, total);
   },
 
@@ -3049,16 +3117,25 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(parent.projectId, ctx);
     const { take, offset } = clampTreePage(params);
-    const [rows, total] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(
-        parent.projectId,
-        parent.workspaceId,
-        parentId,
-        params.sort,
-        { take, offset },
-      ),
-      workItemRepository.countProjectTreeLevel(parent.projectId, parent.workspaceId, parentId),
-    ]);
+    const [rows, total] = await withWorkspaceServiceContext(parent.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findProjectTreeLevel(
+          parent.projectId,
+          parent.workspaceId,
+          parentId,
+          params.sort,
+          { take, offset },
+          null,
+          tx,
+        ),
+        workItemRepository.countProjectTreeLevel(
+          parent.projectId,
+          parent.workspaceId,
+          parentId,
+          tx,
+        ),
+      ]),
+    );
     return buildTreeLevel(rows, take, total);
   },
 
@@ -3219,22 +3296,37 @@ export const workItemsService = {
   /**
    * The blockers of `workItemId`: the items it `is_blocked_by`. One link-table
    * query yields the toIds, one findByIds resolves them all (N+0 — no N+1).
-   * Sorted by key for a stable order. Read-only; `ctx` reserved for 1.4.5 RLS.
+   * Sorted by key for a stable order. Read-only; `ctx` binds the read (MOTIR-2807).
    */
-  async getBlockers(workItemId: string, _ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
-    const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by');
-    const rows = await workItemRepository.findByIds(links.map((l) => l.toId));
+  async getBlockers(workItemId: string, ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
+    // The edge read and the batch it resolves are ONE contiguous run of this
+    // method's own reads, so they share one transaction. Binding only the batch
+    // would fix nothing: the edge read returns [] first and the item reports no
+    // blockers — which does not render as "unknown", it renders as READY.
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by', tx);
+      return workItemRepository.findByIds(
+        links.map((l) => l.toId),
+        tx,
+      );
+    });
     return rows.sort(byKeyAsc).map(toWorkItemSummaryDto);
   },
 
   /**
    * The items `workItemId` is blocking: those that are `is_blocked_by` it. One
    * reverse link-table query (the @@index([toId, kind]) lookup) yields the
-   * fromIds, one findByIds resolves them. Read-only; `ctx` reserved for 1.4.5.
+   * fromIds, one findByIds resolves them. Read-only; `ctx` binds the read (MOTIR-2807).
    */
-  async getBlocking(workItemId: string, _ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
-    const links = await workItemLinkRepository.findByToItem(workItemId, 'is_blocked_by');
-    const rows = await workItemRepository.findByIds(links.map((l) => l.fromId));
+  async getBlocking(workItemId: string, ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
+    // Same contiguous run as `getBlockers`, mirrored onto the IN edges.
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const links = await workItemLinkRepository.findByToItem(workItemId, 'is_blocked_by', tx);
+      return workItemRepository.findByIds(
+        links.map((l) => l.fromId),
+        tx,
+      );
+    });
     return rows.sort(byKeyAsc).map(toWorkItemSummaryDto);
   },
 
@@ -3284,7 +3376,9 @@ export const workItemsService = {
     let depth = 0;
 
     while (frontier.length > 0 && depth < maxDepth) {
-      const edgeRows = await workItemLinkRepository.findBlockerEdgesForItems(frontier);
+      const edgeRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemLinkRepository.findBlockerEdgesForItems(frontier, undefined, tx),
+      );
       const next: string[] = [];
       for (const e of edgeRows) {
         if (e.blockerProjectId !== root.projectId) continue; // out-of-project → out of scope
@@ -3305,7 +3399,9 @@ export const workItemsService = {
     // Stopped at the depth cap with a non-empty frontier → more levels remain.
     if (frontier.length > 0) truncated = true;
 
-    const rows = await workItemRepository.findByIds([...closureIds]);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIds([...closureIds], tx),
+    );
     return { nodes: rows.sort(byKeyAsc).map(toWorkItemSummaryDto), edges, truncated };
   },
 
@@ -3360,7 +3456,13 @@ export const workItemsService = {
     // detail. (`openBlockerIds` stays the node's OWN blockers — the relationships
     // banner highlights those; the cascade cause is surfaced separately as
     // `blockedByAncestorId`, the nearest own-blocked ancestor. Card 7.0.13's "may".)
-    const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
+    // THE assertion this whole story turns on: an empty edge set does not render
+    // as "unknown", it renders as NOT BLOCKED — so unbound, every blocked item
+    // reported itself READY and `claim_next_ready` would hand out work whose
+    // prerequisites are unbuilt.
+    const blockers = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerStates(workItemId, tx),
+    );
     let ownReady = true;
     let openBlockerIds = new Set<string>();
     let inheritedSessionBranch: string | null = null;
@@ -3381,9 +3483,8 @@ export const workItemsService = {
     // Cascade (Subtask 7.0.13): also gate on the ANCESTOR chain — ready only when
     // every ancestor is ready too. Checked even when the node has no own blocker,
     // because an unready ancestor still holds it out of the ready set.
-    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
-      [workItemId],
-      ctx.workspaceId,
+    const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestorIdsForItems([workItemId], ctx.workspaceId, tx),
     );
     const ancestors = ancestorsByItem.get(workItemId) ?? [];
     let ancestorsReady = true;
@@ -3427,9 +3528,8 @@ export const workItemsService = {
     // ancestor unready) holds the whole subtree out of the ready set — the
     // mirror of 7.0.10 (a parent-with-children is excluded; its children wait
     // until it is ready).
-    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
-      itemIds,
-      ctx.workspaceId,
+    const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestorIdsForItems(itemIds, ctx.workspaceId, tx),
     );
     const union = new Set<string>(itemIds);
     for (const chain of ancestorsByItem.values()) for (const a of chain) union.add(a);
@@ -3505,10 +3605,12 @@ export const workItemsService = {
   async resolveIdentifiersToIds(
     projectId: string,
     identifiers: string[],
-    _ctx: ServiceContext,
+    ctx: ServiceContext,
   ): Promise<string[]> {
     if (identifiers.length === 0) return [];
-    const rows = await workItemRepository.findByIdentifiers(projectId, identifiers);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifiers(projectId, identifiers, tx),
+    );
     const idByIdentifier = new Map(rows.map((row) => [row.identifier, row.id]));
     return identifiers.map((identifier) => {
       const id = idByIdentifier.get(identifier);
@@ -3522,7 +3624,9 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
@@ -3547,10 +3651,14 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<WorkItemLineageDto> {
-    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
-    const ancestorRows = await workItemRepository.findAncestors(row.id, ctx.workspaceId);
+    const ancestorRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(row.id, ctx.workspaceId, tx),
+    );
     return { item: toWorkItemDto(row), ancestors: ancestorRows.map(toWorkItemSummaryDto) };
   },
 
@@ -3569,7 +3677,9 @@ export const workItemsService = {
     title: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto | null> {
-    const row = await workItemRepository.findByProjectKindAndTitle(projectId, kind, title);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectKindAndTitle(projectId, kind, title, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) return null;
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
@@ -3634,12 +3744,18 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<IssueDetailDto> {
-    const item = await workItemRepository.findByIdentifier(projectId, identifier);
+    const item = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(identifier);
     }
     await projectAccessService.assertCanBrowse(item.projectId, ctx);
 
+    // The detail fan-out is ONE contiguous run of this method's own reads, so it
+    // opens ONE bound transaction (docs/decisions/bound-read-transaction-shape.md).
+    // `workflowsService.getWorkflow` is a SERVICE call and stays outside it.
+    const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
     const [
       ancestorRows,
       childRows,
@@ -3648,69 +3764,80 @@ export const workItemsService = {
       relatesLinks,
       duplicatesLinks,
       clonesLinks,
-      workflow,
       labelRows,
       componentRows,
       customFieldRows,
       watcherCount,
       viewerIsWatching,
-    ] = await Promise.all([
+    ] = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => [
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
-      workItemRepository.findAncestors(item.id, ctx.workspaceId),
-      workItemRepository.findChildren(item.id),
-      workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
-      workItemLinkRepository.findByToItem(item.id, 'is_blocked_by'),
-      workItemLinkRepository.findByFromItem(item.id, 'relates_to'),
-      workItemLinkRepository.findByFromItem(item.id, 'duplicates'),
-      workItemLinkRepository.findByFromItem(item.id, 'clones'),
-      workflowsService.getWorkflow(projectId, ctx.workspaceId),
+      await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
+      await workItemRepository.findChildren(item.id, tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
+      await workItemLinkRepository.findByToItem(item.id, 'is_blocked_by', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'relates_to', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'duplicates', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'clones', tx),
       // The issue's labels (5.4.2) — one bounded query riding the same
       // fan-out (no extra round-trip; capped per-issue by labelsService).
-      labelRepository.listByWorkItem(item.id),
+      await labelRepository.listByWorkItem(item.id, tx),
       // The issue's components (5.4.3) — the same bounded-slot shape as
       // labels: one query riding the fan-out, name-ordered, bounded by the
       // admin-curated taxonomy.
-      componentRepository.listByWorkItem(item.id),
+      await componentRepository.listByWorkItem(item.id, tx),
       // The project's custom-field definitions + THIS issue's values (5.3.3)
       // — ONE bounded query (≤50 defs by the project cap, ≤1 value row per
       // def by the pair unique), options + value relations resolved in the
       // same operation. No N+1, no second round-trip.
-      customFieldDefinitionRepository.listWithValuesForWorkItem(
+      await customFieldDefinitionRepository.listWithValuesForWorkItem(
         item.projectId,
         ctx.workspaceId,
         item.id,
+        tx,
       ),
       // The header eye-count + the caller's own watch state (5.4.4) — two
       // point reads riding the same fan-out, so the watch control renders
       // from the detail read with no extra round-trip.
-      watcherRepository.countByWorkItem(item.id),
-      watcherRepository.existsFor(item.id, ctx.userId),
+      await watcherRepository.countByWorkItem(item.id, tx),
+      await watcherRepository.existsFor(item.id, ctx.userId, tx),
     ]);
 
-    const [
-      blockerRows,
-      blockingRows,
-      relatesRows,
-      duplicatesRows,
-      clonesRows,
-      readiness,
-      archivedActor,
-    ] = await Promise.all([
-      workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
-      workItemRepository.findByIds(relatesLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(duplicatesLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(clonesLinks.map((l) => l.toId)),
-      this.getReadiness(item.id, ctx),
-      // Who archived it (2.9.6) — ONLY for an archived item; an active item
-      // skips the read entirely (no extra round-trip on the common path). The
-      // banner names the actor from this; the timestamp rides `item.archivedAt`.
-      item.archivedAt
-        ? workItemRevisionRepository.findLatestArchivedActor(item.id)
-        : Promise.resolve(null),
-    ]);
+    // The five relationship batches are THIS method's own reads and share ONE
+    // bound transaction (the 5-wide fan-out MOTIR-2799 measured); `getReadiness`
+    // is a service call and opens its own, per the call-into-another-service
+    // clause in the transaction-shape ADR.
+    const { blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, archivedActor } =
+      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+        blockerRows: await workItemRepository.findByIds(
+          blockedByLinks.map((l) => l.toId),
+          tx,
+        ),
+        blockingRows: await workItemRepository.findByIds(
+          blocksLinks.map((l) => l.fromId),
+          tx,
+        ),
+        relatesRows: await workItemRepository.findByIds(
+          relatesLinks.map((l) => l.toId),
+          tx,
+        ),
+        duplicatesRows: await workItemRepository.findByIds(
+          duplicatesLinks.map((l) => l.toId),
+          tx,
+        ),
+        clonesRows: await workItemRepository.findByIds(
+          clonesLinks.map((l) => l.toId),
+          tx,
+        ),
+        // Who archived it (2.9.6) — ONLY for an archived item; an active item
+        // skips the read entirely (no extra round-trip on the common path). The
+        // banner names the actor from this; the timestamp rides `item.archivedAt`.
+        archivedActor: item.archivedAt
+          ? await workItemRevisionRepository.findLatestArchivedActor(item.id, tx)
+          : null,
+      }));
+    const readiness = await this.getReadiness(item.id, ctx);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
     const blockedBy = toRelationshipLinks(blockedByLinks, blockerRows, 'toId');
@@ -3790,8 +3917,12 @@ export const workItemsService = {
     const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
-      sprintRepository.listByProject(projectId, ctx.workspaceId),
-      componentRepository.listByProject(projectId),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.listByProject(projectId, ctx.workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        componentRepository.listByProject(projectId, tx),
+      ),
       // MOTIR-2593 — the estimation config the composed `EstimateBadge` needs.
       // One primary-key project read, in the same round trip; without it the
       // badge falls back to a read-only default and is silently inert on every
@@ -3811,7 +3942,9 @@ export const workItemsService = {
     // lookup for an epic or a backlog item.
     let sprintName: string | null = null;
     if (detail.item.sprintId && detail.item.kind !== 'epic') {
-      const sprint = await sprintRepository.findById(detail.item.sprintId, ctx.workspaceId);
+      const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.findById(detail.item.sprintId as string, ctx.workspaceId, tx),
+      );
       sprintName = sprint?.name ?? null;
     }
     // Work-item references (5.8.6) — `motir:` tokens in the description (live
@@ -3832,7 +3965,7 @@ export const workItemsService = {
     // The Development section's linked PRs (MOTIR-1579). Tenancy rides the
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
-    const pullRequests = await this.listLinkedPullRequests(detail.item.id);
+    const pullRequests = await this.listLinkedPullRequests(detail.item.id, ctx);
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -3860,9 +3993,19 @@ export const workItemsService = {
    * AND the detail page. Takes the item's INTERNAL id; callers pass an id an
    * access-gated read (getIssueDetail / getQuickView) already resolved — this
    * method adds no tenancy gate of its own.
+   *
+   * `ctx` is for the BINDING, not for a gate (MOTIR-2815): `github_pull_request`
+   * is policy-gated, so the read needs the workspace GUC or it returns no PRs
+   * for an item that has them. The parameter is required rather than optional
+   * precisely so the next caller cannot forget it.
    */
-  async listLinkedPullRequests(workItemId: string): Promise<LinkedPullRequestDto[]> {
-    const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId);
+  async listLinkedPullRequests(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<LinkedPullRequestDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
+    );
     return rows.map(toLinkedPullRequestDto);
   },
 
@@ -3884,7 +4027,9 @@ export const workItemsService = {
     workspaceId: string,
   ): Promise<WorkItemSummaryDto[]> {
     const kinds = allowedParentKinds(childType);
-    const rows = await workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId);
+    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId, tx),
+    );
     return rows.map(toWorkItemSummaryDto);
   },
 
@@ -3898,7 +4043,13 @@ export const workItemsService = {
   async listRevisions(workItemId: string, ctx: ServiceContext): Promise<WorkItemRevisionDto[]> {
     const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
-    const revisions = await workItemRevisionRepository.listByWorkItem(workItemId);
+    // Bound (MOTIR-2815). `work_item_revision` carries an RLS policy but no
+    // `workspaceId` COLUMN (it is gated through its work item), so it sat
+    // outside both scanners' scope until they learned to read the policies —
+    // and unbound, an item's entire history came back empty.
+    const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+    );
     return revisions.map(toWorkItemRevisionDto);
   },
 
@@ -3919,11 +4070,13 @@ export const workItemsService = {
     const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const take = clampBound(options.take, 1, HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE);
-    const window = await workItemRevisionRepository.listByWorkItem(workItemId, {
-      take: take + 1,
-      cursor: options.cursor,
-      order: 'desc',
-    });
+    const window = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(
+        workItemId,
+        { take: take + 1, cursor: options.cursor, order: 'desc' },
+        tx,
+      ),
+    );
     const page = window.slice(0, take);
     const nextCursor = window.length > take ? (page[page.length - 1]?.id ?? null) : null;
     return { revisions: page.map(toWorkItemRevisionDto), nextCursor };
@@ -3936,7 +4089,9 @@ export const workItemsService = {
    * guard before unlinkWorkItems — a member of W1 can't delete a link in W2.
    */
   async getLink(linkId: string, ctx: ServiceContext): Promise<WorkItemLinkDto> {
-    const link = await workItemLinkRepository.findById(linkId);
+    const link = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findById(linkId, tx),
+    );
     if (!link || link.workspaceId !== ctx.workspaceId) throw new WorkItemLinkNotFoundError(linkId);
     return toWorkItemLinkDto(link);
   },
@@ -3985,13 +4140,18 @@ export const workItemsService = {
 
     const linkedIds =
       relationship === 'blocks'
-        ? (await workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by')).map(
-            (l) => l.fromId,
-          )
+        ? (
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by', tx),
+            )
+          ).map((l) => l.fromId)
         : (
-            await workItemLinkRepository.findByFromItem(
-              currentItemId,
-              relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              workItemLinkRepository.findByFromItem(
+                currentItemId,
+                relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
+                tx,
+              ),
             )
           ).map((l) => l.toId);
 
@@ -4026,15 +4186,20 @@ export const workItemsService = {
     );
     // The Story 6.4 gate, batched (one workspace-role + one membership query —
     // no N+1), so the search only ever spans projects the actor may browse.
-    const projects = await projectRepository.findByWorkspace(ctx.workspaceId);
+    const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findByWorkspace(ctx.workspaceId, tx),
+    );
     const browsable = await projectAccessService.filterBrowsable(projects, ctx);
     if (browsable.length === 0) return [];
-    const rows = await workItemRepository.quickSearch(
-      ctx.workspaceId,
-      browsable.map((p) => p.id),
-      trimmed,
-      limit,
-      opts.excludeIds ?? [],
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.quickSearch(
+        ctx.workspaceId,
+        browsable.map((p) => p.id),
+        trimmed,
+        limit,
+        opts.excludeIds ?? [],
+        tx,
+      ),
     );
     return rows.map(toWorkItemSummaryDto);
   },
@@ -4142,9 +4307,8 @@ export const workItemsService = {
     for (const id of itemIds) byItem[id] = null;
     if (itemIds.length === 0) return byItem;
 
-    const rows = await workItemLinkRepository.findBlockerSessionBranchesForItems(
-      itemIds,
-      ctx.workspaceId,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerSessionBranchesForItems(itemIds, ctx.workspaceId, tx),
     );
     const branches = new Map<string, Set<string>>();
     for (const row of rows) {
@@ -4189,10 +4353,21 @@ export const workItemsService = {
     for (const id of itemIds) edges[id] = { blockedBy: [], blocks: [] };
     if (itemIds.length === 0) return edges;
 
-    const [blockerRows, blockedRows] = await Promise.all([
-      workItemLinkRepository.findBlockerEdgesForItems(itemIds, ctx.workspaceId),
-      workItemLinkRepository.findBlockedEdgesForItems(itemIds, ctx.workspaceId),
-    ]);
+    const { blockerRows, blockedRows } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        blockerRows: await workItemLinkRepository.findBlockerEdgesForItems(
+          itemIds,
+          ctx.workspaceId,
+          tx,
+        ),
+        blockedRows: await workItemLinkRepository.findBlockedEdgesForItems(
+          itemIds,
+          ctx.workspaceId,
+          tx,
+        ),
+      }),
+    );
 
     for (const row of blockerRows) {
       edges[row.fromId]?.blockedBy.push({
@@ -4291,7 +4466,7 @@ export const workItemsService = {
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
 
-    const claimed = await db.$transaction(async (tx) => {
+    const claimed = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.claimNextReadyCandidate(orderedIds, tx);
       if (!locked) return null;
       // `in_progress` is the dispatch state (lib/workflows/defaultWorkflow.ts);
@@ -4368,7 +4543,9 @@ export const workItemsService = {
     const { count } = await this.countReady(projectId, {}, ctx);
     if (count >= EXPANSION_NUDGE_THRESHOLD) return null;
 
-    const stubs = await workItemRepository.findExpandableStubs(projectId, ctx.workspaceId);
+    const stubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(projectId, ctx.workspaceId, tx),
+    );
     if (stubs.length === 0) return null;
 
     const nominated = stubs[0]!;
@@ -4409,7 +4586,7 @@ export const workItemsService = {
     publicChildrenHidden: boolean,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       // Lock + re-read under the lock (mirrors updateWorkItem): two concurrent
       // toggles serialize on the FOR UPDATE lock, and the explicit workspace
       // check is the finding-#26 tenant gate (a cross-workspace item is an
@@ -4508,7 +4685,9 @@ async function collectReadyLeaves(
   facets: { kinds?: WorkItemKind[]; assigneeId?: string | null; priority?: WorkItemPriority[] },
 ): Promise<ReadyLayerRow[]> {
   const leaves: ReadyLayerRow[] = [];
-  let frontier = await workItemRepository.findReadyLayer(projectId, workspaceId, null);
+  let frontier = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findReadyLayer(projectId, workspaceId, null, tx),
+  );
   for (let depth = 0; depth < READY_MAX_TREE_DEPTH && frontier.length > 0; depth++) {
     const ownReady = await computeOwnBlockerReadiness(
       frontier.map((r) => r.id),
@@ -4522,7 +4701,9 @@ async function collectReadyLeaves(
       else if (row.statusCategory === 'todo') leaves.push(row); // ready, childless, to-start
     }
     frontier = descend.length
-      ? await workItemRepository.findReadyLayer(projectId, workspaceId, descend)
+      ? await withWorkspaceServiceContext(workspaceId, (tx) =>
+          workItemRepository.findReadyLayer(projectId, workspaceId, descend, tx),
+        )
       : [];
   }
   let out = leaves;
@@ -4612,8 +4793,14 @@ async function buildReadyDispatchDto(
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
   const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
-    row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
-    workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
+    row.parentId
+      ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workItemRepository.findById(row.parentId as string, tx),
+        )
+      : Promise.resolve(null),
+    withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by', tx),
+    ),
     workItemsService.getReadiness(row.id, ctx),
     // WHICH repo to run this in, resolved against the item's PROJECT repo set —
     // else, for a project with no set, the workspace's connected repos (Story
@@ -4622,7 +4809,14 @@ async function buildReadyDispatchDto(
     // needed for the ONE item being dispatched (never for the list read).
     resolveItemDispatchRepo(row.targetRepo, row.projectId, ctx),
   ]);
-  const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
+  const blockerRows = (
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIds(
+        blockerLinks.map((l) => l.toId),
+        tx,
+      ),
+    )
+  )
     .slice()
     .sort(byKeyAsc);
 
@@ -4730,7 +4924,11 @@ async function computeOwnBlockerReadiness(
 ): Promise<Map<string, boolean>> {
   const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
   if (itemIds.length === 0) return ready;
-  const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
+  // The batched form of the readiness read — same consequence, one query for a
+  // whole list, so unbound an ENTIRE backlog reports itself ready.
+  const blockers = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerStatesForItems(itemIds, tx),
+  );
   if (blockers.length === 0) return ready;
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
     blockers.map((b) => b.projectId),
@@ -4773,7 +4971,9 @@ async function computeWorkItemValidity(
   condition: ValidityCondition,
 ): Promise<WorkItemValidityDto> {
   // The containing set S: the root + every non-archived descendant.
-  const members = await workItemRepository.findSubtreeMembersForValidity(root.id, ctx.workspaceId);
+  const members = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findSubtreeMembersForValidity(root.id, ctx.workspaceId, tx),
+  );
   const memberIds = new Set(members.map((m) => m.id));
   const membersById = new Map(members.map((m) => [m.id, m]));
 
@@ -4788,7 +4988,13 @@ async function computeWorkItemValidity(
     return { key: root.identifier, valid: true, blockers: [], advisories: [] };
   }
 
-  const edges = await workItemLinkRepository.findBlockerEdgesForItems(notDone.map((m) => m.id));
+  const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems(
+      notDone.map((m) => m.id),
+      undefined,
+      tx,
+    ),
+  );
   // Per-project terminal sets — a block can be cross-project, so each blocker's
   // done-ness is judged against its OWN project (finding #21).
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
@@ -4847,7 +5053,9 @@ async function computeSubtreeProseAdvisories(
   // The root's OWN ancestors (above the subtree) — a member naming the epic its
   // story hangs under is naming an ancestor too, and the subtree walk alone
   // cannot see those.
-  const aboveRoot = await workItemRepository.findAncestors(root.id, ctx.workspaceId);
+  const aboveRoot = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAncestors(root.id, ctx.workspaceId, tx),
+  );
   const rootAncestorIds = aboveRoot.map((a) => a.id);
 
   const blockedByMember = new Map<string, Set<string>>();
@@ -4859,9 +5067,12 @@ async function computeSubtreeProseAdvisories(
 
   const bodies = new Map(
     (
-      await workItemRepository.findDescriptionsByIds(
-        notDone.map((m) => m.id),
-        ctx.workspaceId,
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(
+          notDone.map((m) => m.id),
+          ctx.workspaceId,
+          tx,
+        ),
       )
     ).map((r) => [r.id, r]),
   );

@@ -20,15 +20,6 @@ export type MembershipWithUser = WorkspaceMembership & {
 // WorkspaceMembership, not Workspace.
 
 export const workspaceMembershipRepository = {
-  async findByUserAndWorkspace(
-    userId: string,
-    workspaceId: string,
-  ): Promise<WorkspaceMembership | null> {
-    return db.workspaceMembership.findUnique({
-      where: { userId_workspaceId: { userId, workspaceId } },
-    });
-  },
-
   /**
    * Same lookup as findByUserAndWorkspace, but inside the caller's
    * transaction so the membership_visible RLS policy (which keys off the

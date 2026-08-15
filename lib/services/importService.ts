@@ -43,6 +43,7 @@ import {
 } from '@/lib/import/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 export interface CreateImportInput {
   projectId: string;
@@ -227,7 +228,9 @@ export const importService = {
 
   /** Load an import in the acting workspace or throw a 404. */
   async requireImport(importId: string, ctx: ServiceContext) {
-    const row = await importRepository.findById(importId);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      importRepository.findById(importId, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new ImportNotFoundError(importId);
     return row;
   },

@@ -1,13 +1,19 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
-import { componentRepository } from '@/lib/repositories/componentRepository';
+import {
+  componentRepository,
+  type ComponentWithCount,
+} from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+  type WorkspaceContext,
+} from '@/lib/workspaces/context';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
@@ -131,7 +137,14 @@ async function resolveComponent(
   ctx: { workspaceId: string },
   tx?: Prisma.TransactionClient,
 ): Promise<Component> {
-  const component = await componentRepository.findById(componentId, tx);
+  // Bound when the caller holds no transaction (MOTIR-2846): this is the tenant
+  // GATE, so unbound it raises `ComponentNotFoundError` for a component the user
+  // is looking at.
+  const component = tx
+    ? await componentRepository.findById(componentId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        componentRepository.findById(componentId, t),
+      );
   if (!component || component.workspaceId !== ctx.workspaceId) {
     throw new ComponentNotFoundError(componentId);
   }
@@ -255,7 +268,9 @@ export const componentsService = {
       }
       throw err;
     }
-    const rows = await componentRepository.listByProject(project.id);
+    const rows: ComponentWithCount[] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      componentRepository.listByProject(project.id, tx),
+    );
     const assigneeIds = [...new Set(rows.flatMap((r) => r.defaultAssigneeId ?? []))];
     const users = assigneeIds.length > 0 ? await userRepository.findByIds(assigneeIds) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));
@@ -420,7 +435,7 @@ export const componentsService = {
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
     const ids = [...new Set(componentIds)];
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await resolveEditableWorkItem(workItemId, ctx, tx);
       const byId = await resolveSameProjectComponents(ids, item, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
@@ -464,7 +479,7 @@ export const componentsService = {
     componentId: string,
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await resolveEditableWorkItem(workItemId, ctx, tx);
       const byId = await resolveSameProjectComponents([componentId], item, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
@@ -488,7 +503,7 @@ export const componentsService = {
     componentId: string,
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await resolveEditableWorkItem(workItemId, ctx, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
       const target = current.find((c) => c.id === componentId);

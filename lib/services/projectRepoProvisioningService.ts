@@ -1,5 +1,5 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -278,9 +278,11 @@ async function establishRow(
     // purpose (the shipped `findConnectedByName` semantics): the question "who
     // already holds this coordinate?" cannot be asked from inside one tenant.
     if (provisioned.adopted) {
-      const existing = await githubRepoRepository.findConnectedByName(
-        provisioned.owner,
-        provisioned.name,
+      // CROSS-WORKSPACE by design — the question is "who already holds this
+      // coordinate?", which cannot be asked from inside one tenant. Same system
+      // binding as `oidcAuth`'s resolve, and for the same reason.
+      const existing = await withSystemContext((tx) =>
+        githubRepoRepository.findConnectedByName(provisioned.owner, provisioned.name, tx),
       );
       const foreign = existing.find((repo) => repo.workspaceId !== ctx.workspaceId);
       if (foreign) return failRow(row, new RepoNameTakenOnHostError(row.name), ctx);

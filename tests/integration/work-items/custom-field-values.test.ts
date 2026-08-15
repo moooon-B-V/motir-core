@@ -116,8 +116,10 @@ async function makeIssue(fx: WorkItemFixture): Promise<string> {
 }
 
 /** The revisions AFTER the 'created' one — i.e. the value-set entries. */
-async function valueRevisions(workItemId: string) {
-  const rows = await workItemRevisionRepository.listByWorkItem(workItemId);
+async function valueRevisions(workItemId: string, workspaceId: string) {
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+  );
   return rows.filter((r) => r.changeKind === 'updated');
 }
 
@@ -138,7 +140,7 @@ describe('setValue — text', () => {
     expect(row?.valueText).toBe('Acme Corp');
     expect(row?.workspaceId).toBe(fx.workspaceId);
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(1);
     expect(revs[0]!.diff).toEqual({ 'customFields.customer': { from: null, to: 'Acme Corp' } });
     expect(revs[0]!.changedById).toBe(fx.ctx.userId);
@@ -151,7 +153,7 @@ describe('setValue — text', () => {
     await customFieldValuesService.setValue(itemId, field.id, 'same', fx.ctx);
     const dto = await customFieldValuesService.setValue(itemId, field.id, 'same', fx.ctx);
     expect(dto?.text).toBe('same');
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 
   it('clears via null — the row is DELETED (no tombstone) and the diff records to: null', async () => {
@@ -168,7 +170,7 @@ describe('setValue — text', () => {
       ),
     ).toBeNull();
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.customer': { from: 'Acme', to: null } });
   });
@@ -181,7 +183,7 @@ describe('setValue — text', () => {
     // Clear on empty — nothing recorded.
     expect(await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx)).toBeNull();
     expect(await customFieldValuesService.setValue(itemId, field.id, '   ', fx.ctx)).toBeNull();
-    expect(await valueRevisions(itemId)).toHaveLength(0);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(0);
 
     // Empty string clears a real value.
     await customFieldValuesService.setValue(itemId, field.id, 'x', fx.ctx);
@@ -214,7 +216,7 @@ describe('setValue — text', () => {
         customFieldValueRepository.findByWorkItemAndField(itemId, field.id, tx),
       ),
     ).toBeNull();
-    expect(await valueRevisions(itemId)).toHaveLength(0);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(0);
   });
 
   it('accepts text exactly AT the cap', async () => {
@@ -245,7 +247,7 @@ describe('setValue — number', () => {
     const fromNumber = await customFieldValuesService.setValue(itemId, field.id, 3, fx.ctx);
     expect(fromNumber?.number).toBe(3);
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.effort': { from: '1.5', to: '3' } });
   });
@@ -256,7 +258,7 @@ describe('setValue — number', () => {
     const itemId = await makeIssue(fx);
     await customFieldValuesService.setValue(itemId, field.id, '3', fx.ctx);
     await customFieldValuesService.setValue(itemId, field.id, 3.0, fx.ctx);
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 
   it('rejects NaN / ±∞ / non-numeric and exponent strings (422); clear works', async () => {
@@ -298,8 +300,8 @@ describe('setValue — date', () => {
 
     // The rail's full-ISO form lands on the same instant → re-set is a no-op.
     await customFieldValuesService.setValue(itemId, field.id, '2026-07-01T00:00:00.000Z', fx.ctx);
-    expect(await valueRevisions(itemId)).toHaveLength(1);
-    expect((await valueRevisions(itemId))[0]!.diff).toEqual({
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
+    expect((await valueRevisions(itemId, fx.workspaceId))[0]!.diff).toEqual({
       'customFields.golive': { from: null, to: '2026-07-01T00:00:00.000Z' },
     });
   });
@@ -339,7 +341,7 @@ describe('setValue — select', () => {
     expect(dto?.option).toEqual({ id: high.id, label: 'High', archived: false });
 
     await customFieldValuesService.setValue(itemId, field.id, low.id, fx.ctx);
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.severity': { from: 'High', to: 'Low' } });
   });
@@ -377,7 +379,7 @@ describe('setValue — select', () => {
     // Re-setting the same archived option changes nothing — no error, no revision.
     const dto = await customFieldValuesService.setValue(itemId, field.id, opt.id, fx.ctx);
     expect(dto?.option).toEqual({ id: opt.id, label: 'Soon-gone', archived: true });
-    expect(await valueRevisions(itemId)).toHaveLength(1);
+    expect(await valueRevisions(itemId, fx.workspaceId)).toHaveLength(1);
   });
 });
 
@@ -394,7 +396,7 @@ describe('setValue — user', () => {
     const dto = await customFieldValuesService.setValue(itemId, field.id, member.id, fx.ctx);
     expect(dto?.user).toEqual({ id: member.id, name: 'Member', image: null });
 
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs[0]!.diff).toEqual({ 'customFields.stakeholder': { from: null, to: member.id } });
   });
 
@@ -605,7 +607,7 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
     ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs.map((r) => r.diff)).toEqual([
       { 'customFields.golive': { from: '2026-08-15T00:00:00.000Z', to: null } },
       {
@@ -637,7 +639,7 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
     await customFieldValuesService.setValue(itemId, field.id, null, fx.ctx);
 
     // listByWorkItem returns revisions newest-first → the clear is revs[0].
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs).toHaveLength(2);
     expect(revs[0]!.diff).toEqual({ 'customFields.severity': { from: 'High', to: null } });
   });
@@ -664,7 +666,7 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
     ).toBeNull();
 
     // listByWorkItem returns revisions newest-first.
-    const revs = await valueRevisions(itemId);
+    const revs = await valueRevisions(itemId, fx.workspaceId);
     expect(revs.map((r) => r.diff)).toEqual([
       { 'customFields.stakeholder': { from: bob.id, to: null } },
       { 'customFields.stakeholder': { from: alice.id, to: bob.id } },

@@ -233,20 +233,22 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         name: 'findReadyCandidates (ready set)',
         // Ready = leaf items (the epic has a child, so it is not a leaf).
         present: [m.normalRoot, m.normalChild],
+        // MOTIR-2812: `findReadyCandidates` was RETIRED — `findReadyLayer` replaced
+        // it, and the product's ready set is `workItemsService.listReady`. Probing the
+        // service is also the stronger check: it is the surface a triaged item would
+        // actually leak into.
         ids: async () =>
-          (
-            await workItemRepository.findReadyCandidates(fx.projectId, fx.workspaceId, {
-              limit: 100,
-            })
-          ).map((r) => r.id),
+          (await workItemsService.listReady(fx.projectId, {}, fx.ctx)).items.map((r) => r.id),
       },
       {
         name: 'quickSearch (cmd-K / link picker)',
         present: m.normalAll,
         ids: async () =>
-          (await workItemRepository.quickSearch(fx.workspaceId, [fx.projectId], PROBE, 100)).map(
-            (r) => r.id,
-          ),
+          (
+            await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+              workItemRepository.quickSearch(fx.workspaceId, [fx.projectId], PROBE, 100, [], tx),
+            )
+          ).map((r) => r.id),
       },
       {
         name: 'findBacklogPage (backlog)',
@@ -401,16 +403,30 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     // equal the (triage-excluded) card count — never inflated by the triage twin.
     expect(
       sum(
-        await workItemRepository.aggregateBoardLanesByAssignee(fx.projectId, fx.workspaceId, [
-          status,
-        ]),
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.aggregateBoardLanesByAssignee(
+            fx.projectId,
+            fx.workspaceId,
+            [status],
+            undefined,
+            undefined,
+            tx,
+          ),
+        ),
       ),
     ).toBe(cardCount);
     expect(
       sum(
-        await workItemRepository.aggregateBoardLanesByPriority(fx.projectId, fx.workspaceId, [
-          status,
-        ]),
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.aggregateBoardLanesByPriority(
+            fx.projectId,
+            fx.workspaceId,
+            [status],
+            undefined,
+            undefined,
+            tx,
+          ),
+        ),
       ),
     ).toBe(cardCount);
 
@@ -422,10 +438,15 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     // the epic and inflate this count.
     const expectedEpicLane = cards.filter((c) => c.id === m.epic || c.parentId === m.epic).length;
     expect(expectedEpicLane).toBe(2); // the epic card + its one normal child (NOT the triage twin)
-    const epicLanes = await workItemRepository.aggregateBoardLanesByEpic(
-      fx.projectId,
-      fx.workspaceId,
-      [status],
+    const epicLanes = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateBoardLanesByEpic(
+        fx.projectId,
+        fx.workspaceId,
+        [status],
+        undefined,
+        undefined,
+        tx,
+      ),
     );
     const lane = epicLanes.find((r) => r.epicId === m.epic);
     expect(lane?.count).toBe(expectedEpicLane);
@@ -438,10 +459,18 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
 
     // Distribution over kind: the 3 normal items (1 epic + 2 task), never the 2
     // triage twins.
-    const dist = await workItemRepository.aggregateDistribution(fx.projectId, fx.workspaceId, {
-      kind: 'column',
-      column: 'kind',
-    });
+    const dist = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateDistribution(
+        fx.projectId,
+        fx.workspaceId,
+        {
+          kind: 'column',
+          column: 'kind',
+        },
+        undefined,
+        tx,
+      ),
+    );
     expect(sum(dist)).toBe(3);
 
     // Created-by-bucket over a window covering "now": all 5 items were created
@@ -450,11 +479,15 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
       start: new Date(Date.now() - 24 * 60 * 60 * 1000),
       end: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
-    const buckets = await workItemRepository.aggregateCreatedByBucket(
-      fx.projectId,
-      fx.workspaceId,
-      'day',
-      window,
+    const buckets = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateCreatedByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        'day',
+        window,
+        undefined,
+        tx,
+      ),
     );
     expect(sum(buckets)).toBe(3);
   });

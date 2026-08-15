@@ -706,10 +706,15 @@ describe('the sweep-facing surface', () => {
       coreProjectIds: ['p1'],
       reason: 'project_archived',
     });
-    // The `tx ?? db` arm — a read-only caller outside a transaction. (Under the
-    // dev/CI BYPASSRLS role this reaches the row; in production this repository's
-    // callers are all inside `withSystemContext`, which is what the policy admits.)
-    const rows = await codeGraphOffboardingRepository.findByProject('ws1', 'p1');
+    // Bound the way PRODUCTION binds it (MOTIR-2830). This used to read through
+    // the `tx ?? db` arm and the comment justified it as "a read-only caller
+    // outside a transaction" — but every real caller of this repository is inside
+    // `withSystemContext`, which is what the policy admits, so the unbound read
+    // was testing a path the product does not take. The fallback arm itself is
+    // covered deliberately in `tests/rls/tx-fallback-arm.test.ts`.
+    const rows = await withSystemContext((tx) =>
+      codeGraphOffboardingRepository.findByProject('ws1', 'p1', tx),
+    );
     expect(rows).toHaveLength(1);
   });
 

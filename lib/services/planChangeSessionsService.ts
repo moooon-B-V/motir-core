@@ -7,7 +7,7 @@ import {
 
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -103,7 +103,15 @@ async function toDto(
   pctx: ProjectContext,
   tx?: Prisma.TransactionClient,
 ): Promise<PlanChangeSessionDto> {
-  const turns = await planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, tx);
+  // Bound when the caller holds no transaction (MOTIR-2846). Forwarding a `tx?`
+  // that may be undefined into a bindable read looks bound at this line and is
+  // not: under `motir_app` the turn list came back empty and every conversation
+  // rendered as having no history.
+  const turns = tx
+    ? await planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, (t) =>
+        planChangeTurnRepository.listBySessionId(row.id, pctx.workspaceId, t),
+      );
   const ids = turns
     .filter((t) => t.role === 'assistant')
     .flatMap((t) => parseWorkItemTokenIds(t.body));
@@ -146,10 +154,13 @@ async function requireSession(
 ): Promise<PlanChangeSession> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
   await assertCanPlan(pctx.projectId, ctx);
-  const session = await planChangeSessionRepository.findByProjectAndScope(
-    pctx.projectId,
-    scopeKey,
-    pctx.workspaceId,
+  const session = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+    planChangeSessionRepository.findByProjectAndScope(
+      pctx.projectId,
+      scopeKey,
+      pctx.workspaceId,
+      tx,
+    ),
   );
   if (!session) throw new PlanChangeSessionNotFoundError(pctx.projectId);
   return session;
@@ -251,10 +262,13 @@ export const planChangeSessionsService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await assertCanPlan(pctx.projectId, ctx);
 
-    const existing = await planChangeSessionRepository.findByProjectAndScope(
-      pctx.projectId,
-      scope.scopeKey,
-      pctx.workspaceId,
+    const existing = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        pctx.projectId,
+        scope.scopeKey,
+        pctx.workspaceId,
+        tx,
+      ),
     );
     if (existing) return toDto(existing, pctx);
 
@@ -278,10 +292,13 @@ export const planChangeSessionsService = {
       // A concurrent opener won the unique-index race. "Open the conversation" is
       // idempotent, so the right answer is the winner's thread — not an error.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        const winner = await planChangeSessionRepository.findByProjectAndScope(
-          pctx.projectId,
-          scope.scopeKey,
-          pctx.workspaceId,
+        const winner = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+          planChangeSessionRepository.findByProjectAndScope(
+            pctx.projectId,
+            scope.scopeKey,
+            pctx.workspaceId,
+            tx,
+          ),
         );
         if (winner) return toDto(winner, pctx);
       }
@@ -306,10 +323,13 @@ export const planChangeSessionsService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
 
-    const existing = await planChangeSessionRepository.findByProjectAndScope(
-      pctx.projectId,
-      scope.scopeKey,
-      pctx.workspaceId,
+    const existing = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        pctx.projectId,
+        scope.scopeKey,
+        pctx.workspaceId,
+        tx,
+      ),
     );
     return existing ? toDto(existing, pctx) : null;
   },
@@ -455,7 +475,9 @@ export const planChangeSessionsService = {
     scopeKey: string = PROJECT_SCOPE_KEY,
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, scopeKey);
-    const turns = await planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId);
+    const turns = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeTurnRepository.listBySessionId(session.id, pctx.workspaceId, tx),
+    );
     const intent = buildAccumulatedIntent(turns);
     if (!intent) throw new EmptyPlanChangeIntentError(session.id);
 

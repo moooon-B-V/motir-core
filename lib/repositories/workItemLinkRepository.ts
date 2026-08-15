@@ -52,8 +52,13 @@ export const workItemLinkRepository = {
    * this issue" endpoint feeds from a from + to merge). With a `kind`
    * filter, narrows to the indexed `(fromId, kind)` lookup.
    */
-  async findByFromItem(fromId: string, kind?: WorkItemLinkKind): Promise<WorkItemLink[]> {
-    return db.workItemLink.findMany({
+  async findByFromItem(
+    fromId: string,
+    kind?: WorkItemLinkKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    const client = tx ?? db;
+    return client.workItemLink.findMany({
       where: { fromId, ...(kind ? { kind } : {}) },
     });
   },
@@ -63,8 +68,13 @@ export const workItemLinkRepository = {
    * mirror of findByFromItem; for `is_blocked_by` this is the "what does
    * this item block?" reverse lookup the ready-set engine needs.
    */
-  async findByToItem(toId: string, kind?: WorkItemLinkKind): Promise<WorkItemLink[]> {
-    return db.workItemLink.findMany({
+  async findByToItem(
+    toId: string,
+    kind?: WorkItemLinkKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    const client = tx ?? db;
+    return client.workItemLink.findMany({
       where: { toId, ...(kind ? { kind } : {}) },
     });
   },
@@ -162,10 +172,11 @@ export const workItemLinkRepository = {
    */
   async findBlockerStates(
     workItemId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{ id: string; status: string; projectId: string; sessionBranch: string | null }>
   > {
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: { fromId: workItemId, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         toItem: { select: { id: true, status: true, projectId: true, sessionBranch: true } },
@@ -196,11 +207,12 @@ export const workItemLinkRepository = {
    */
   async findBlockerStatesForItems(
     fromIds: string[],
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{ fromId: string; status: string; projectId: string; sessionBranch: string | null }>
   > {
     if (fromIds.length === 0) return [];
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: { fromId: { in: fromIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         fromId: true,
@@ -225,9 +237,10 @@ export const workItemLinkRepository = {
    */
   async findBlockedByEdges(
     itemIds: string[],
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ blockedId: string; blockerId: string }>> {
     if (itemIds.length === 0) return [];
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: { fromId: { in: itemIds }, kind: 'is_blocked_by' },
       select: { fromId: true, toId: true },
     });
@@ -267,6 +280,7 @@ export const workItemLinkRepository = {
   async findBlockerEdgesForItems(
     fromIds: string[],
     workspaceId?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       fromId: string;
@@ -279,7 +293,7 @@ export const workItemLinkRepository = {
     }>
   > {
     if (fromIds.length === 0) return [];
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: {
         fromId: { in: fromIds },
         kind: 'is_blocked_by',
@@ -343,9 +357,10 @@ export const workItemLinkRepository = {
   async findBlockerSessionBranchesForItems(
     fromIds: string[],
     workspaceId?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ fromId: string; sessionBranch: string }>> {
     if (fromIds.length === 0) return [];
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: {
         fromId: { in: fromIds },
         kind: 'is_blocked_by',
@@ -382,6 +397,7 @@ export const workItemLinkRepository = {
   async findBlockedEdgesForItems(
     toIds: string[],
     workspaceId?: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       toId: string;
@@ -394,7 +410,7 @@ export const workItemLinkRepository = {
     }>
   > {
     if (toIds.length === 0) return [];
-    const rows = await db.workItemLink.findMany({
+    const rows = await (tx ?? db).workItemLink.findMany({
       where: {
         toId: { in: toIds },
         kind: 'is_blocked_by',

@@ -128,8 +128,16 @@ describe('deleteWorkItem — subtree cascade', () => {
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
     // No orphaned links survive on the outside endpoint; the endpoint itself lives.
-    expect(await workItemLinkRepository.findByFromItem(outside.id)).toHaveLength(0);
-    expect(await workItemLinkRepository.findByToItem(outside.id)).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByFromItem(outside.id, undefined, tx),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findByToItem(outside.id, undefined, tx),
+      ),
+    ).toHaveLength(0);
     expect(await exists(outside.id, fx.workspaceId)).toBe(true);
   });
 });
@@ -148,7 +156,9 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
-    const revs = await workItemRevisionRepository.listByWorkItem(epic.id);
+    const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(epic.id, {}, tx),
+    );
     const del = revs.find((r) => r.changeKind === 'deleted');
     expect(del).toBeDefined();
     expect(del!.changedById).toBe(fx.ownerId);
@@ -168,9 +178,11 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(sub1.id, fx.ctx);
 
-    const del = (await workItemRevisionRepository.listByWorkItem(story.id)).find(
-      (r) => r.changeKind === 'deleted',
-    );
+    const del = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(story.id, {}, tx),
+      )
+    ).find((r) => r.changeKind === 'deleted');
     expect(del).toBeDefined();
     const from = (del!.diff as { deleted: { from: string } }).deleted.from;
     expect(from).toContain(sub1.identifier);
@@ -189,9 +201,11 @@ describe('deleteWorkItem — audit', () => {
 
     await workItemsService.deleteWorkItem(story.id, fx.ctx);
 
-    const del = (await workItemRevisionRepository.listByWorkItem(epic.id)).find(
-      (r) => r.changeKind === 'deleted',
-    );
+    const del = (
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRevisionRepository.listByWorkItem(epic.id, {}, tx),
+      )
+    ).find((r) => r.changeKind === 'deleted');
     const from = (del!.diff as { deleted: { from: string } }).deleted.from;
     expect(from).toContain('+1 descendant');
     expect(from).not.toContain('descendants');

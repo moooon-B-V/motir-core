@@ -37,9 +37,11 @@ export const dashboardRepository = {
     workspaceId: string,
     actorUserId: string,
     take: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<DashboardWithFacts[]> {
     if (!workspaceId || !actorUserId) return [];
-    return db.dashboard.findMany({
+    const client = tx ?? db;
+    return client.dashboard.findMany({
       where: { workspaceId, OR: [{ access: 'workspace' }, { ownerId: actorUserId }] },
       include: factsInclude,
       orderBy: [{ name: 'asc' }, { id: 'asc' }],

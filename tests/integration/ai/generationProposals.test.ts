@@ -507,7 +507,9 @@ describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolatio
     expect(b2.planId).toBe(planB);
     expect(b2.planned).toBe(true);
     expect(b2.planItemIds).toHaveLength(FRONTIER.length);
-    const resolvedB = await planRepository.findBySourceJobId(job2, fx.ctx.workspaceId);
+    const resolvedB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(job2, fx.ctx.workspaceId, tx),
+    );
     expect(resolvedB!.id).toBe(planB);
     expect(resolvedB!.id).not.toBe(planA);
 

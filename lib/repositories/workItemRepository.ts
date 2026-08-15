@@ -21,7 +21,6 @@ import {
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
-import { READY_KIND_RANK, type ReadyCursor } from '@/lib/workItems/readyFilter';
 import {
   DepthLimitExceededError,
   IllegalParentTypeError,
@@ -755,9 +754,10 @@ export const workItemRepository = {
    * Read-only path → `db` singleton. Empty input short-circuits to `[]` so
    * we never issue a degenerate `IN ()`.
    */
-  async findByIds(ids: string[]): Promise<WorkItem[]> {
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
-    return db.workItem.findMany({ where: { id: { in: ids } } });
+    const client = tx ?? db;
+    return client.workItem.findMany({ where: { id: { in: ids } } });
   },
 
   /**
@@ -877,9 +877,11 @@ export const workItemRepository = {
     parentIds: string[],
     workspaceId: string,
     after: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (parentIds.length === 0) return [];
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: {
         parentId: { in: parentIds },
         workspaceId,
@@ -897,7 +899,10 @@ export const workItemRepository = {
    * `identifier` + `title` + the title of the container it lives in (its parent
    * story/epic). ONE query with the parent relation; empty input → `[]`.
    */
-  async findRoadmapBlockerStubs(ids: string[]): Promise<
+  async findRoadmapBlockerStubs(
+    ids: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<
     Array<{
       id: string;
       identifier: string;
@@ -908,7 +913,8 @@ export const workItemRepository = {
     }>
   > {
     if (ids.length === 0) return [];
-    const rows = await db.workItem.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItem.findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
@@ -937,138 +943,16 @@ export const workItemRepository = {
    * its per-item result list are deterministic. Rides the
    * `work_item_sessionBranch` index. Read-only path → `db` singleton.
    */
-  async findBySessionBranch(sessionBranch: string, workspaceId: string): Promise<WorkItem[]> {
-    return db.workItem.findMany({
+  async findBySessionBranch(
+    sessionBranch: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { sessionBranch, workspaceId },
       orderBy: { key: 'asc' },
     });
-  },
-
-  /**
-   * The CANDIDATE ready set of a project (Subtask 7.0.2): non-archived work
-   * items whose OWN status is in the `todo` category (not-yet-started —
-   * `workflow_status.category = 'todo'`; a "ready" item is one to START, so
-   * `in_progress` and `done` are both excluded),
-   * narrowed by the optional kind / assignee / priority facets and the cursor
-   * seek-after, sorted `(type ASC, priority DESC, key ASC)` and capped at `limit`. ONE
-   * `$queryRaw` returning the full `work_item` row (`w.*`) PLUS the joined status
-   * `category` + assignee name/email/avatar — so the service feeds the 7.0.3
-   * mapper (`WorkItem` + resolved context) without any extra read (no N+1).
-   *
-   * Readiness (the per-blocker terminal check) is NOT applied here — it's a
-   * per-blocker-project property the service composes via `getReadinessForItems`
-   * over this candidate set (finding #21). So this returns CANDIDATES; the
-   * service filters to ready ones, which may shorten a page.
-   *
-   * **Sort + cursor (Subtask 7.0.12, reversing 7.0.11's precedence).**
-   * `(type ASC, priority DESC, key ASC)`: **type is primary** via a CASE rank
-   * built from `READY_KIND_RANK` (`subtask` first … `epic` last — the leaf-most
-   * dispatchable unit before a container); **priority breaks the type tie** —
-   * the `priority` enum sorts by its declaration order (`lowest < … < highest`)
-   * so `DESC` puts `highest` first within a type bucket; `key ASC` breaks the
-   * final tie (stable, monotonic, reseed-safe). The cursor is the (kind,
-   * priority, key) of the previous page's last candidate; the 3-tuple seek-after
-   * predicate (`kindRank > ckr OR (kindRank = ckr AND priority < cp) OR
-   * (kindRank = ckr AND priority = cp AND key > ck)`) resumes strictly after it.
-   * `priority` is cast text→enum so the bound param compares against the column;
-   * the same `READY_KIND_RANK`-derived CASE feeds the ORDER BY and the seek-after
-   * so they can never disagree.
-   *
-   * **Todo-only via INNER JOIN.** The `JOIN workflow_status` (not LEFT) plus
-   * `ws.category = 'todo'` is the not-yet-started filter AND the category source
-   * in one move: a ready item is one to START, so `in_progress` and `done` are
-   * both excluded, and an item whose `status` references no live workflow row
-   * can't be ready either, so dropping it is correct. Explicit `projectId` +
-   * `workspaceId` gate (finding #26 — RLS is inert under the dev/CI superuser).
-   * Read-only path → `db` singleton.
-   *
-   * **Leaf-only — a container is not dispatchable (Subtask 7.0.10).** A work item
-   * that has been broken down into children is a planning CONTAINER, not a unit
-   * of work: you dispatch its children, never the container itself. So any item
-   * with ≥1 live (non-archived) child is excluded via
-   * `NOT EXISTS (… c."parentId" = w."id" …)`. This is the GENERAL reading of the
-   * reported bug (not epic/story-only): the ready set is the dispatchable LEAVES
-   * of the execution tree — the AI-native intent (decision-ladder rung 1; the
-   * deeper kind-parent matrix that lets a task/bug parent children is finding #41,
-   * so a childed task/bug is a container too). A `subtask` (the matrix's only leaf)
-   * can never have children, so it is unaffected. Archived children don't count
-   * (they're soft-deleted, mirroring the `w."archivedAt" IS NULL` row filter), so
-   * a parent whose children were all archived becomes dispatchable again. Kept
-   * inside the single query (no N+1) → `listReady` / `getNextReady` / `countReady`
-   * all agree automatically.
-   */
-  async findReadyCandidates(
-    projectId: string,
-    workspaceId: string,
-    filter: {
-      kinds?: WorkItemKind[];
-      assigneeId?: string | null;
-      priority?: WorkItemPriority[];
-      cursor?: ReadyCursor;
-      limit: number;
-    },
-  ): Promise<ReadyCandidateRow[]> {
-    // The issue-type rank used by both the ORDER BY tiebreaker and the cursor
-    // seek-after below. Built from READY_KIND_RANK (the single source of the
-    // dispatch order, `subtask` first … `epic` last) so the two never drift.
-    const kindRankSql = Prisma.sql`CASE w."kind"::text ${Prisma.join(
-      Object.entries(READY_KIND_RANK).map(([k, rank]) => Prisma.sql`WHEN ${k} THEN ${rank}`),
-      ' ',
-    )} ELSE ${Object.keys(READY_KIND_RANK).length} END`;
-
-    const preds: Prisma.Sql[] = [];
-    if (filter.kinds && filter.kinds.length > 0) {
-      const kinds = filter.kinds.map((k) => k as string);
-      preds.push(Prisma.sql`w."kind"::text = ANY(${kinds})`);
-    }
-    if (filter.priority && filter.priority.length > 0) {
-      const prios = filter.priority.map((p) => p as string);
-      preds.push(Prisma.sql`w."priority"::text = ANY(${prios})`);
-    }
-    if (filter.assigneeId === null) {
-      preds.push(Prisma.sql`w."assigneeId" IS NULL`);
-    } else if (filter.assigneeId !== undefined) {
-      preds.push(Prisma.sql`w."assigneeId" = ${filter.assigneeId}`);
-    }
-    if (filter.cursor) {
-      const cp = filter.cursor.priority;
-      const ckr = READY_KIND_RANK[filter.cursor.kind];
-      const ck = filter.cursor.key;
-      // Seek-after under `(kindRank ASC, priority DESC, key ASC)`: strictly
-      // after the previous page's last candidate.
-      preds.push(
-        Prisma.sql`(
-          ${kindRankSql} > ${ckr}
-          OR (${kindRankSql} = ${ckr} AND w."priority" < ${cp}::"work_item_priority")
-          OR (${kindRankSql} = ${ckr} AND w."priority" = ${cp}::"work_item_priority" AND w."key" > ${ck})
-        )`,
-      );
-    }
-    const where = preds.length ? Prisma.join(preds, ' AND ') : Prisma.sql`TRUE`;
-
-    return db.$queryRaw<ReadyCandidateRow[]>`
-      SELECT w.*,
-             ws."category"::text AS "statusCategory",
-             au."name"           AS "assigneeName",
-             au."email"          AS "assigneeEmail",
-             au."image"          AS "assigneeImage"
-        FROM "work_item" w
-        JOIN "workflow_status" ws
-              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
-        LEFT JOIN "user" au ON au."id" = w."assigneeId"
-        WHERE w."projectId" = ${projectId}
-          AND w."workspaceId" = ${workspaceId}
-          AND w."archivedAt" IS NULL
-          AND ${notInTriageSql('w')}
-          AND ws."category" = 'todo'
-          AND NOT EXISTS (
-            SELECT 1 FROM "work_item" c
-             WHERE c."parentId" = w."id"
-               AND c."archivedAt" IS NULL
-          )
-          AND (${where})
-        ORDER BY ${kindRankSql} ASC, w."priority" DESC, w."key" ASC
-        LIMIT ${filter.limit}`;
   },
 
   /**
@@ -1093,13 +977,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     parentIds: string[] | null,
+    tx?: Prisma.TransactionClient,
   ): Promise<ReadyLayerRow[]> {
     if (parentIds !== null && parentIds.length === 0) return [];
     const parentPred =
       parentIds === null
         ? Prisma.sql`w."parentId" IS NULL`
         : Prisma.sql`w."parentId" = ANY(${parentIds})`;
-    return db.$queryRaw<ReadyLayerRow[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<ReadyLayerRow[]>`
       SELECT w.*,
              ws."category"::text AS "statusCategory",
              au."name"           AS "assigneeName",
@@ -1143,8 +1029,10 @@ export const workItemRepository = {
   async findExpandableStubs(
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ identifier: string; title: string; kind: string; priority: string }>> {
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ identifier: string; title: string; kind: string; priority: string }>
     >`
       SELECT w."identifier", w."title", w."kind"::text AS "kind", w."priority"::text AS "priority"
@@ -1452,6 +1340,7 @@ export const workItemRepository = {
     query: string,
     limit: number,
     excludeIds: string[] = [],
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (projectIds.length === 0) return [];
     const exact = query.toLowerCase();
@@ -1476,7 +1365,8 @@ export const workItemRepository = {
     const excludeSql = excludeIds.length
       ? Prisma.sql`AND w."id" <> ALL(${excludeIds})`
       : Prisma.empty;
-    return db.$queryRaw<WorkItem[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<WorkItem[]>`
       SELECT w.*
         FROM "work_item" w
         WHERE w."workspaceId" = ${workspaceId}
@@ -1693,6 +1583,7 @@ export const workItemRepository = {
   async findAllByProjectForValidity(
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       id: string;
@@ -1703,7 +1594,8 @@ export const workItemRepository = {
       projectId: string;
     }>
   > {
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { projectId, workspaceId, archivedAt: null, triagedAt: null },
       select: {
         id: true,
@@ -1889,8 +1781,10 @@ export const workItemRepository = {
     rootId: string,
     workspaceId: string,
     maxDepth: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItemSubtreeRow[]> {
-    return db.$queryRaw<WorkItemSubtreeRow[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
                w."title", w."status", w."position", 1 AS depth
@@ -1943,8 +1837,10 @@ export const workItemRepository = {
   async findSubtreeMembersForValidity(
     rootId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; identifier: string; status: string; parentId: string | null }>> {
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ id: string; identifier: string; status: string; parentId: string | null }>
     >`
       WITH RECURSIVE subtree AS (
@@ -1978,6 +1874,7 @@ export const workItemRepository = {
   async findDescriptionsByIds(
     ids: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       id: string;
@@ -1991,7 +1888,8 @@ export const workItemRepository = {
     // `type` / `executor` ride along for the prose advisory's ORDERING exemption
     // (MOTIR-2175), and `targetRepo` for the REPO-STRADDLE check's pin side
     // (MOTIR-2177) — the same rows, a few columns wider, rather than more reads.
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
       select: { id: true, descriptionMd: true, type: true, executor: true, targetRepo: true },
     });
@@ -2137,10 +2035,12 @@ export const workItemRepository = {
   async findAncestorIdsForItems(
     itemIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Map<string, string[]>> {
     const byItem = new Map<string, string[]>(itemIds.map((id) => [id, []]));
     if (itemIds.length === 0) return byItem;
-    const rows = await db.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
       WITH RECURSIVE chain AS (
         SELECT w."id" AS "seedId", w."parentId" AS "ancestorId"
           FROM "work_item" w
@@ -2180,6 +2080,7 @@ export const workItemRepository = {
   async findChildrenForItems(
     parentIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       parentId: string;
@@ -2191,7 +2092,8 @@ export const workItemRepository = {
     }>
   > {
     if (parentIds.length === 0) return [];
-    const rows = await db.workItem.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItem.findMany({
       where: {
         parentId: { in: parentIds },
         workspaceId,
@@ -3094,6 +2996,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ assigneeId: string | null; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Raw GROUP BY (not the Prisma builder) so the optional 6.15.2 FilterAST —
@@ -3102,7 +3005,8 @@ export const workItemRepository = {
     // No filter → the fragment is `TRUE`, so the counts are byte-for-byte the
     // 3.3.4 aggregate. Read-exclusion (6.11.3): a triage item never counts.
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
       SELECT w."assigneeId" AS "assigneeId", COUNT(*)::int AS "count"
         FROM "work_item" w
         WHERE w."projectId" = ${projectId}
@@ -3126,6 +3030,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ priority: WorkItemPriority; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Raw GROUP BY so the optional 6.15.2 FilterAST AND-s in (see
@@ -3133,7 +3038,8 @@ export const workItemRepository = {
     // string value (= the WorkItemPriority union members), so the shape matches
     // the prior `groupBy` result. No filter → `TRUE` (byte-for-byte 3.3.4).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
       SELECT w."priority"::text AS "priority", COUNT(*)::int AS "count"
         FROM "work_item" w
         WHERE w."projectId" = ${projectId}
@@ -3164,6 +3070,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ epicId: string; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Sprint scope (Story 4.5.2): only the anchor (the board CARDS) is sprint-
@@ -3173,7 +3080,8 @@ export const workItemRepository = {
     // is structural) — so the epic lanes/counts track the FILTERED board. No
     // filter → `TRUE` (byte-for-byte the 3.3.4 epic aggregate).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ epicId: string; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ epicId: string; count: number }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
           FROM "work_item" w
@@ -3210,9 +3118,11 @@ export const workItemRepository = {
     workItemId: string,
     ast: FilterAst,
     referents?: ProjectFilterReferents,
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const astSql = compileFilterConditionsSql(ast, referents);
-    const rows = await db.$queryRaw<Array<{ ok: number }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ ok: number }>>`
       SELECT 1 AS ok FROM "work_item" w
       WHERE w."id" = ${workItemId} AND (${astSql})
       LIMIT 1`;
@@ -3238,11 +3148,13 @@ export const workItemRepository = {
     period: 'day' | 'week' | 'month',
     window: { start: Date; end: Date },
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ bucket: string; count: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<Array<{ bucket: string; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ bucket: string; count: number }>>`
       SELECT
         to_char(date_trunc(${period}, w."createdAt"), 'YYYY-MM-DD') AS "bucket",
         COUNT(*)::int AS "count"
@@ -3284,12 +3196,14 @@ export const workItemRepository = {
     workspaceId: string,
     groupBy: DistributionGroupBy,
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string | null; label: string | null; count: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
     const { idExpr, labelExpr, joinSql } = distributionGroupBySql(groupBy);
-    return db.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
       SELECT ${idExpr} AS "id", ${labelExpr} AS "label", COUNT(*)::int AS "count"
       FROM "work_item" w
       ${joinSql}
@@ -3321,13 +3235,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
   > {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
     >`
       SELECT
@@ -3361,9 +3277,11 @@ export const workItemRepository = {
   async findEpicAncestors(
     itemIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ cardId: string; epicId: string }>> {
     if (itemIds.length === 0) return [];
-    return db.$queryRaw<Array<{ cardId: string; epicId: string }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ cardId: string; epicId: string }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
           FROM "work_item" w
@@ -3568,6 +3486,7 @@ export const workItemRepository = {
     sprintId: string,
     workspaceId: string,
     statistic: EstimationStatistic,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const startedFilter = Prisma.sql` FILTER (WHERE ws."category" IS NOT NULL AND ws."category" <> 'todo')`;
     const expr =
@@ -3576,7 +3495,8 @@ export const workItemRepository = {
         : statistic === 'story_points'
           ? Prisma.sql`COALESCE(SUM(w."storyPoints")${startedFilter}, 0)`
           : Prisma.sql`COALESCE(SUM(w."estimateMinutes")${startedFilter}, 0)`;
-    const rows = await db.$queryRaw<Array<{ started: number }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ started: number }>>`
       SELECT ${expr}::float8 AS "started"
         FROM "work_item" w
         LEFT JOIN "workflow_status" ws
@@ -4482,7 +4402,24 @@ function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): P
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} - (${value as number})::int AND ${column}::date <= ${UTC_TODAY_SQL}`;
     case 'in_next_days':
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} AND ${column}::date <= ${UTC_TODAY_SQL} + (${value as number})::int`;
-    /* istanbul ignore next -- defensive: validateFilterAst rejects text ops on non-text fields before this switch */
+    // A text operator on a NON-text field. GENUINELY unreachable, and I first
+    // concluded otherwise (MOTIR-2815): a repository is normally a leaf that
+    // trusts its caller, so this looked testable from the repository's own
+    // surface. It is not. Every path into this switch goes through
+    // `compileFilterConditionsSql` -> `resolveFilterAst` ->
+    // `validateResolvedCondition`, which throws `UnknownFilterOperatorError`
+    // (`lib/filters/registry.ts`) for exactly this shape BEFORE the compiler runs.
+    //
+    // ⚠️ THE TEST THAT "COVERED" IT WAS PASSING ON THE VALIDATOR'S THROW — same
+    // error class, different layer — which CI's coverage report caught and a
+    // green assertion did not. So: a directive, not a test.
+    //
+    // ⚠️ ONE LINE on purpose. `next N` counts from the DIRECTIVE'S OWN line, so a
+    // multi-line comment makes the range swallow its own text and cover nothing
+    // (measured — it cost a 33-minute run). And it is spelled for V8, not
+    // istanbul: the provider is `v8`, so the `istanbul ignore` this replaced never
+    // applied and the branch was counted uncovered all along.
+    /* v8 ignore next 3 */
     case 'contains':
     case 'not_contains':
       throw new UnknownFilterOperatorError(field, operator);
@@ -4840,6 +4777,7 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
     // alias `w` — callers on the fixed-projection forest alias `f` must strip
     // it and compose the fragment over a joined `w` instead (findProjectForest
     // does); reaching here with alias `f` is a programming error, not input.
+    /* v8 ignore next 3 -- defensive: see above; no caller can reach it with `f`. */
     if (alias !== 'w') {
       throw new Error('RepoIssueFilter.ast requires the full work_item alias (w)');
     }

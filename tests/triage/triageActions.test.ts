@@ -223,7 +223,9 @@ describe('triageService.markDuplicateTriageItem', () => {
     ).toBe(0);
 
     // A `duplicates` link from duplicate → canonical was recorded.
-    const links = await workItemLinkRepository.findByFromItem(duplicate.id, 'duplicates');
+    const links = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(duplicate.id, 'duplicates', tx),
+    );
     expect(links.map((l) => l.toId)).toContain(canonical.id);
   });
 

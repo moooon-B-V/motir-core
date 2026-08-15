@@ -142,7 +142,9 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       expect(jobId).toBe(c.jobId);
 
       // The Plan the callback will resolve: `generating`, bound by sourceJobId.
-      const opened = await planRepository.findBySourceJobId(jobId, fx.workspaceId);
+      const opened = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planRepository.findBySourceJobId(jobId, fx.workspaceId, tx),
+      );
       expect(opened).not.toBeNull();
       expect(opened!.id).toBe(planId);
       expect(opened!.status).toBe('generating');

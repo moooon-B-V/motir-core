@@ -131,7 +131,11 @@ describe('subscribe / unsubscribe / read', () => {
       t.memberCtx,
     );
     expect(rescheduled).toEqual({ schedule: 'weekly', weekday: 3, hour: 17 });
-    expect(await savedFilterSubscriptionRepository.countByFilter(filter.id)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        savedFilterSubscriptionRepository.countByFilter(filter.id, tx),
+      ),
+    ).toBe(1);
   });
 
   it('a non-owner can subscribe to a project-shared filter (the read-layer rule)', async () => {
@@ -237,7 +241,11 @@ describe('dependents + cascade + token unsubscribe', () => {
     expect(deps.subscriptionCount).toBe(2);
 
     await savedFiltersService.delete(t.key, filter.id, t.memberCtx);
-    expect(await savedFilterSubscriptionRepository.countByFilter(filter.id)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        savedFilterSubscriptionRepository.countByFilter(filter.id, tx),
+      ),
+    ).toBe(0);
   });
 
   it('token unsubscribe deletes the row; an invalid token is rejected', async () => {

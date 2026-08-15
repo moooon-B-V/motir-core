@@ -13,6 +13,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Read-side tests for the automation audit log (Story 6.6 · Subtask 6.6.6):
 // `automationRulesService.listExecutions` (the per-rule paged history) +
@@ -325,9 +326,15 @@ describe('automationRuleExecutionRepository — direct', () => {
     const item = await createTestWorkItem(fx, { kind: 'bug', title: 'Joined' });
     await seedExecution(ruleId, { status: 'success', workItemId: item.id });
 
-    const rows = await automationRuleExecutionRepository.listByRule(ruleId, { skip: 0, take: 10 });
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      automationRuleExecutionRepository.listByRule(ruleId, { skip: 0, take: 10 }, tx),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.workItem).toEqual({ identifier: item.identifier, title: 'Joined' });
-    expect(await automationRuleExecutionRepository.countByRule(ruleId)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        automationRuleExecutionRepository.countByRule(ruleId, tx),
+      ),
+    ).toBe(1);
   });
 });

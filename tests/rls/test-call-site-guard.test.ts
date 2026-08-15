@@ -99,13 +99,24 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  * suite less safe than it found it — the risk it covers is the inverse one, a
  * future tidy-up "fixing" a line that was never broken.
  *
- * ⚠️ It may only ever go UP or stay. It is NOT the count of out-of-scope sites
- * (244) — 95 of those legitimately pass a `tx` already, because a write method
- * requires one whether or not its model is gated. The verdict alone cannot catch
- * this: a `not-gated` call handed a `tx` is still `not-gated`, which is why the
- * scanner records `bound` separately from the verdict.
+ * ⚠️ It may only ever go UP or stay — EXCEPT when the set itself shrinks for a
+ * reason that is not "somebody bound one", which is the third cause the original
+ * wording did not anticipate.
+ *
+ * 149 -> 73 (MOTIR-2815/2830): `policyGatedModels` used to decide "is this table
+ * under RLS?" from a `workspaceId` FIELD on the Prisma model, and 18 of the 69
+ * RLS-protected tables carry no such column — they are gated through a join. It
+ * now reads the POLICIES out of the migrations, so 76 sites that were classified
+ * `not-gated` are `in-scope` instead: their tables were gated all along and the
+ * detector could not see it. NOT ONE of those lines was edited to make the number
+ * move; they were re-adjudicated, and then bound as part of the same card.
+ *
+ * It is NOT the count of out-of-scope sites (79) — 6 of those legitimately pass a
+ * `tx` already, because a write method requires one whether or not its model is
+ * gated. The verdict alone cannot catch that: a `not-gated` call handed a `tx` is
+ * still `not-gated`, which is why the scanner records `bound` separately.
  */
-const UNTOUCHED_OUT_OF_SCOPE_FLOOR = 149;
+const UNTOUCHED_OUT_OF_SCOPE_FLOOR = 73;
 
 const outOfScope = (s: TestCallSite): boolean =>
   s.verdict === 'not-gated' || s.verdict === 'pre-auth';
@@ -285,6 +296,7 @@ describe('the ratchets over the real test suite', () => {
       'tests/mcp/comment-counts.test.ts',
       'tests/notifications/repositories.test.ts',
       'tests/project-details-service.test.ts',
+      'tests/rls/tx-fallback-arm.test.ts',
     ]);
     for (const [file, reason] of Object.entries(ADJUDICATED_UNBOUND_FILES)) {
       expect(existsSync(path.join(process.cwd(), file)), `${file} does not exist`).toBe(true);

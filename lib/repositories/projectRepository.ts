@@ -302,65 +302,6 @@ export const projectRepository = {
   },
 
   /**
-   * The PROJECT SQUARE directory read (Story 6.13 · Subtask 6.13.2) — a page of
-   * `public`, non-archived projects across ALL workspaces/orgs, ordered by a
-   * DETERMINISTIC total order (`createdAt` desc, then `id` desc as the stable
-   * tiebreak) and CURSOR-paginated via a keyset (finding #57 — a system-level
-   * list could be thousands, so NEVER load-all / never OFFSET-the-world). This
-   * is the second deliberately cross-org project read (alongside `listPublic`,
-   * the sitemap): a public project is discoverable cross-org, so NO workspace
-   * filter is applied. The `accessLevel = 'public'` predicate lives HERE, in
-   * the single repository read, so no non-public project can leak through any
-   * caller. Read-only path → `db` singleton + the app-layer public filter (the
-   * RLS-secondary posture the other anonymous public reads use; finding #26).
-   *
-   * The keyset cursor encodes the previous page's last `(createdAt, id)`; the
-   * predicate `createdAt < c.createdAt OR (createdAt = c.createdAt AND id < c.id)`
-   * walks strictly past it, so paging skips/duplicates no row even when several
-   * projects share a `createdAt`. Selects ONLY the card-projection columns + the
-   * org join (no internal field). 6.13.4 swaps in the trending/popular/recent
-   * sort keys over this same cursored shape.
-   */
-  async listPublicDirectory(options: {
-    take: number;
-    cursor?: ProjectDirectoryCursor;
-  }): Promise<ProjectDirectoryRow[]> {
-    const { take, cursor } = options;
-    const rows = await db.project.findMany({
-      where: {
-        accessLevel: 'public',
-        archivedAt: null,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { lt: cursor.createdAt } },
-                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take,
-      select: {
-        id: true,
-        identifier: true,
-        name: true,
-        publicOverviewMd: true,
-        createdAt: true,
-        workspace: { select: { organization: { select: { name: true, slug: true } } } },
-      },
-    });
-    return rows.map((r) => ({
-      id: r.id,
-      identifier: r.identifier,
-      name: r.name,
-      publicOverviewMd: r.publicOverviewMd,
-      createdAt: r.createdAt,
-      org: { name: r.workspace.organization.name, slug: r.workspace.organization.slug },
-    }));
-  },
-
-  /**
    * A RANKED page of the PROJECT SQUARE (Story 6.13 · Subtask 6.13.4) — the same
    * cross-org `public`, non-archived projects {@link listPublicDirectory}
    * returns, but ordered by one of the three demand ranks instead of creation

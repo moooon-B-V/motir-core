@@ -11,6 +11,7 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // ⚠️ There is NO approve here, by design (MOTIR-1747). A plan edit's proposals
 // land in the run's `Plan` (`addProposals` → `markPlanned`), and the ONE path
@@ -297,7 +298,9 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
+    const wi = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(ctx.projectId, itemKey, tx),
+    );
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
     }
@@ -313,7 +316,9 @@ export const aiPlanEditsService = {
 
   async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
+    const wi = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(ctx.projectId, itemKey, tx),
+    );
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
     }

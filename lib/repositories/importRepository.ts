@@ -40,8 +40,13 @@ export const importRepository = {
   /** Find the most recent SUCCEEDED or PARTIALLY_FAILED import RUN for a
    *  project (the import step's completion exit check). Returns null when no
    *  import has completed for this project yet. */
-  async findCompletedForProject(projectId: string, workspaceId: string): Promise<Import | null> {
-    return db.import.findFirst({
+  async findCompletedForProject(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Import | null> {
+    const client = tx ?? db;
+    return client.import.findFirst({
       where: {
         projectId,
         workspaceId,

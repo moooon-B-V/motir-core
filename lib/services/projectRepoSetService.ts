@@ -6,7 +6,7 @@ import {
 } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRepoCollaboratorRepository';
@@ -227,7 +227,9 @@ async function inLockedRow<T>(
   ctx: ServiceContext,
   fn: (row: ProjectRepoWithRealized, tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  const existing = await projectRepoRepository.findById(rowId, ctx.workspaceId);
+  const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    projectRepoRepository.findById(rowId, ctx.workspaceId, tx),
+  );
   if (!existing) throw new ProjectRepoNotFoundError(rowId);
   await projectAccessService.assertPermission(existing.projectId, ctx, 'repository:manage');
   return withWorkspaceContext(
@@ -517,7 +519,9 @@ export const projectRepoSetService = {
    * already-gone row is a no-op, not a 404, so a double-submit is harmless.
    */
   async removeRow(rowId: string, ctx: ServiceContext): Promise<void> {
-    const existing = await projectRepoRepository.findById(rowId, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepoRepository.findById(rowId, ctx.workspaceId, tx),
+    );
     if (!existing) return;
     await projectAccessService.assertCanEdit(existing.projectId, ctx);
     await withWorkspaceContext(

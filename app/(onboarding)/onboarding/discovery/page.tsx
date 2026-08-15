@@ -8,6 +8,7 @@ import { migrateOnboardingService } from '@/lib/services/migrateOnboardingServic
 import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The authed discovery onboarding route (Subtask 7.3.5 / MOTIR-833) — where the
 // public front door (7.3.14) lands the visitor after auth (`ONBOARDING_ENTRY_PATH
@@ -61,7 +62,9 @@ export default async function OnboardingPage() {
   // project with a tree. The run is read only when the gate would otherwise
   // fire, so the empty-project path keeps its single query.
   if (!ctx.project.onboardingRanAt) {
-    const itemCount = await workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId);
+    const itemCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId, undefined, tx),
+    );
     const run =
       itemCount > 0
         ? await migrateOnboardingService.getForProject(ctx.projectId, {

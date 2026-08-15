@@ -19,6 +19,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // AI SPRINT PLANNING (Story 7.13 · Subtask 7.13.5 · MOTIR-918) — the motir-core
 // half of the `plan_sprint` seam: SUBMIT the packing job, STREAM its progress,
@@ -226,10 +227,14 @@ export const aiSprintPlanningService = {
     // `idToKey` IS the in-packing set: an edge whose endpoint is missing from it
     // points outside the packing (or at another project), and is dropped — the
     // packing cannot order what it does not contain.
-    const rows = await workItemRepository.findByIdentifiers(ctx.projectId, keys);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifiers(ctx.projectId, keys, tx),
+    );
     const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
 
-    const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges([...idToKey.keys()], tx),
+    );
     const blockersByKey = new Map<string, string[]>();
     for (const edge of edges) {
       const blockedKey = idToKey.get(edge.blockedId);
@@ -413,7 +418,9 @@ export const aiSprintPlanningService = {
     const keys = delta.sprints.flatMap((s) => s.itemKeys);
     if (keys.length === 0) return new Map();
 
-    const rows = await workItemRepository.findByIdentifiers(ctx.projectId, keys);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifiers(ctx.projectId, keys, tx),
+    );
     const byKey = new Map(rows.map((r) => [r.identifier, r]));
 
     const missing = keys.filter((k) => !byKey.has(k));
@@ -447,7 +454,9 @@ export const aiSprintPlanningService = {
       for (const key of sprint.itemKeys) position.set(key, next++);
     }
     const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
-    const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges([...idToKey.keys()], tx),
+    );
     for (const edge of edges) {
       const blockedKey = idToKey.get(edge.blockedId);
       const blockerKey = idToKey.get(edge.blockerId);

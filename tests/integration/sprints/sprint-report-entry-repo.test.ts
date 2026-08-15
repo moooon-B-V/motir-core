@@ -8,6 +8,7 @@ import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntr
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Direct repository coverage for the frozen sprint-report snapshot
 // (bug-sprint-report-incomplete-list-zero-after-carry-over). Real Postgres (no
@@ -47,10 +48,13 @@ describe('workItemRevisionRepository.findItemIdsAddedToSprintAfter (no tx)', () 
       select: { startDate: true },
     });
     // Called WITHOUT a tx → the `db` singleton read path.
-    const ids = await workItemRevisionRepository.findItemIdsAddedToSprintAfter(
-      sprint.id,
-      fx.ctx.workspaceId,
-      row.startDate!,
+    const ids = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findItemIdsAddedToSprintAfter(
+        sprint.id,
+        fx.ctx.workspaceId,
+        row.startDate!,
+        tx,
+      ),
     );
     expect(ids).toEqual([after]);
     expect(ids).not.toContain(before);
@@ -63,17 +67,38 @@ describe('sprintReportEntryRepository read edges (empty snapshot)', () => {
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
 
     const ws = fx.ctx.workspaceId;
-    expect(await sprintReportEntryRepository.countByCompletion(sprint.id, ws, true)).toBe(0);
-    expect(await sprintReportEntryRepository.countByCompletion(sprint.id, ws, false)).toBe(0);
-    expect(await sprintReportEntryRepository.countAddedAfterStart(sprint.id, ws)).toBe(0);
     expect(
-      await sprintReportEntryRepository.findByCompletion(sprint.id, ws, {
-        completed: false,
-        take: 50,
-      }),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintReportEntryRepository.countByCompletion(sprint.id, ws, true, tx),
+      ),
+    ).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintReportEntryRepository.countByCompletion(sprint.id, ws, false, tx),
+      ),
+    ).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintReportEntryRepository.countAddedAfterStart(sprint.id, ws, tx),
+      ),
+    ).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintReportEntryRepository.findByCompletion(
+          sprint.id,
+          ws,
+          {
+            completed: false,
+            take: 50,
+          },
+          tx,
+        ),
+      ),
     ).toEqual([]);
     expect(
-      await sprintReportEntryRepository.sumPointsByCompletion(sprint.id, ws, 'story_points'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintReportEntryRepository.sumPointsByCompletion(sprint.id, ws, 'story_points', tx),
+      ),
     ).toEqual({ completed: 0, notCompleted: 0 });
   });
 });

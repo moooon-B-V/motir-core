@@ -1,4 +1,5 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -128,7 +129,9 @@ export const aiGenerationService = {
     ctx: ServiceContext,
     opts: { final?: boolean; productName?: string | null } = {},
   ): Promise<{ planId: string; planItemIds: string[]; planned: boolean }> {
-    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new NoPlanForJobError(jobId);
 
     let createdIds: string[] = [];
@@ -168,7 +171,9 @@ export const aiGenerationService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<{ planId: string; item: PlanItemDto }> {
-    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new NoPlanForJobError(jobId);
     const result = await plansService.deepenProposal(plan.id, planItemId, input, ctx);
     // `deepenProposal` throws `PlanItemNotFoundError` if the item isn't in the

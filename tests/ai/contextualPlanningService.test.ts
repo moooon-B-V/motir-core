@@ -557,7 +557,9 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
     );
 
     expect(result.planId).toBeTruthy();
-    const plan = await planRepository.findBySourceJobId(result.jobId, fx.workspaceId);
+    const plan = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(result.jobId, fx.workspaceId, tx),
+    );
     // The id is the one bound to THIS job — not merely some plan that exists.
     expect(plan?.id).toBe(result.planId);
     expect(plan?.status).toBe('generating');
@@ -585,9 +587,13 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
     const planCount2 = await adminDb.plan.count({ where: { projectId: fx.projectId } });
     expect(planCount2).toBe(2);
     expect(again.planId).not.toBe(undefined);
-    expect((await planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId))?.id).toBe(
-      again.planId,
-    );
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(again.planId);
   });
 
   it('a RESUMED thread whose proposal is still undecided reports that plan', async () => {

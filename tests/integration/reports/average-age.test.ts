@@ -10,6 +10,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 const HIGH_AST: FilterAst = {
   combinator: 'and',
@@ -177,10 +178,14 @@ describe('getAverageAge — the point-in-time matrix', () => {
 
   it('the repo aggregate short-circuits on an empty bucket list (the guard)', async () => {
     const fx = await makeWorkItemFixture();
-    const rows = await workItemRevisionRepository.aggregateAverageAgeByBucket(
-      fx.projectId,
-      fx.workspaceId,
-      [],
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateAverageAgeByBucket(
+        fx.projectId,
+        fx.workspaceId,
+        [],
+        undefined,
+        tx,
+      ),
     );
     expect(rows).toEqual([]);
   });

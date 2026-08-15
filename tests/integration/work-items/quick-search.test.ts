@@ -16,7 +16,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, nextTestPosition } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 6.9.1 — the reusable server-side issue quick-search read.
 //
@@ -319,8 +319,15 @@ describe('workItemsService.quickSearch — permission scope (Story 6.4)', () => 
 });
 
 describe('workItemRepository.quickSearch — direct', () => {
+  // Both cases assert a SHORT-CIRCUIT — the repository returning [] without a
+  // query — so the tenant is incidental. They are still bound (MOTIR-2830): an
+  // unbound read returns [] too, which would make either of them pass for the
+  // wrong reason. A real workspace, so [] can only come from the guard.
   it('short-circuits to [] when the browsable project set is empty', async () => {
-    const rows = await workItemRepository.quickSearch('any-workspace', [], 'anything', 20);
+    const fx = await makeWorkItemFixture({ identifier: 'QSA' });
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.quickSearch(fx.workspaceId, [], 'anything', 20, [], tx),
+    );
     expect(rows).toEqual([]);
   });
 
@@ -328,11 +335,9 @@ describe('workItemRepository.quickSearch — direct', () => {
     // The service guards this, but the repo must stay safe if called directly:
     // a whitespace-only query yields zero tokens → the title arm is FALSE and
     // the (space-prefixed) identifier arm matches nothing.
-    const rows = await workItemRepository.quickSearch(
-      'any-workspace',
-      ['bogus-project'],
-      '   ',
-      20,
+    const fx = await makeWorkItemFixture({ identifier: 'QSB' });
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.quickSearch(fx.workspaceId, [fx.projectId], '   ', 20, [], tx),
     );
     expect(rows).toEqual([]);
   });

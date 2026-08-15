@@ -8,6 +8,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { LinkedPullRequestDto, PullRequestLinkCandidateDto } from '@/lib/dto/github';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) — the
 // MANUAL override of the MOTIR-892 auto-resolver. Two operations back the
@@ -57,10 +58,8 @@ export const githubPullRequestService = {
     if (connected.length === 0) throw new GithubNotConnectedError();
 
     if (query.trim().length < QUICK_SEARCH_MIN_QUERY_LENGTH) return [];
-    const rows = await githubPullRequestRepository.searchCandidates(
-      ctx.workspaceId,
-      query,
-      PR_CANDIDATE_LIMIT,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.searchCandidates(ctx.workspaceId, query, PR_CANDIDATE_LIMIT, tx),
     );
     return rows
       .filter((row) => row.workItemId !== currentItemId)

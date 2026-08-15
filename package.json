@@ -22,6 +22,7 @@
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",
     "db:seed:reporting": "tsx --tsconfig tsconfig.node.json scripts/seed-reporting.ts",
+    "bench:bound-read-shape": "tsx --tsconfig tsconfig.node.json scripts/bench/boundReadTransactionShape.ts",
     "db:backfill:boards": "tsx --tsconfig tsconfig.node.json scripts/backfill-default-boards.ts",
     "db:backfill:provenance": "tsx --tsconfig tsconfig.node.json scripts/backfill-work-item-provenance.ts",
     "db:backfill:code-graph-index": "tsx --tsconfig tsconfig.node.json scripts/backfill-code-graph-index.ts",

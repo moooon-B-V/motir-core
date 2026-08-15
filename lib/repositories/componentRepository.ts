@@ -60,8 +60,12 @@ export const componentRepository = {
    * user-generated), so no pagination by design — the recorded finding-#57
    * call in the story description. Read-only path → `db` singleton.
    */
-  async listByProject(projectId: string): Promise<ComponentWithCount[]> {
-    return db.component.findMany({
+  async listByProject(
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ComponentWithCount[]> {
+    const client = tx ?? db;
+    return client.component.findMany({
       where: { projectId },
       include: { _count: { select: { workItems: true } } },
       orderBy: { nameLower: 'asc' },

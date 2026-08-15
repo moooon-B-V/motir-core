@@ -28,6 +28,7 @@ import type {
 } from '@/lib/dto/acceptanceEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /**
  * The status a story must sit in to be approved (MOTIR-1625) — the canonical
@@ -124,7 +125,12 @@ async function resolveStory(workItemId: string, ctx: ServiceContext): Promise<Wo
 async function resolveCostContext(
   workspaceId: string,
 ): Promise<{ organizationId: string | null; perFileLimit: number }> {
-  const organizationId = (await workspaceRepository.findById(workspaceId))?.organizationId ?? null;
+  const organizationId =
+    (
+      await withWorkspaceServiceContext(workspaceId, (tx) =>
+        workspaceRepository.findById(workspaceId, tx),
+      )
+    )?.organizationId ?? null;
   const perFileLimit = organizationId
     ? await entitlementsService.resolvePerFileLimitBytes(organizationId)
     : MAX_UPLOAD_BYTES;

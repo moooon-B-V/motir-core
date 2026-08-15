@@ -19,6 +19,7 @@ import type {
   PlanReviewDto,
   PlanReviewItemDto,
 } from '@/lib/dto/planReview';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The plan-detail READ assembly (Story 7.21 · Subtask 7.4.5 / MOTIR-847). A pure
 // READ orchestrator: it composes the substrate's own reads — `getPlan`
@@ -116,7 +117,9 @@ export const planReviewService = {
     const targetIds = Array.from(
       new Set(plan.items.filter((i) => i.op !== 'add' && i.workItemId).map((i) => i.workItemId!)),
     );
-    const targets = await workItemRepository.findByIdsInWorkspace(targetIds, ctx.workspaceId);
+    const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(targetIds, ctx.workspaceId, tx),
+    );
     const targetById = new Map(targets.map((t) => [t.id, t]));
 
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));

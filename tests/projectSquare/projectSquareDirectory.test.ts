@@ -171,7 +171,13 @@ describe('projectSquareService.listDirectory — cursor pagination boundary', ()
   });
 });
 
-describe('projectRepository.listPublicDirectory — keyset determinism', () => {
+describe('projectRepository.listPublicDirectoryRanked — keyset determinism (recent)', () => {
+  // MOTIR-2812: this suite used to probe `listPublicDirectory`, which
+  // `listPublicDirectoryRanked` SUPERSEDED and which the product no longer calls.
+  // Ported rather than deleted, because the TIED-`createdAt` branch it exercises
+  // is the one case `projectSquareRanking.test.ts`'s ranked keyset test does not
+  // cover — that one ties on SCORE. The `recent` rank keys on `createdAt`, so the
+  // same tiebreak is reachable through the live read.
   it('keyset-walks every public project once, even on tied createdAt timestamps', async () => {
     // Five public projects; force two to share an identical createdAt so the
     // `id` tiebreak branch of the keyset is exercised.
@@ -186,14 +192,18 @@ describe('projectRepository.listPublicDirectory — keyset determinism', () => {
     await db.project.update({ where: { id: ids[1]! }, data: { createdAt: tied } });
 
     const seen = new Set<string>();
-    let cursor: ProjectDirectoryCursor | undefined;
+    let cursor: { ts: Date; id: string } | undefined;
     for (;;) {
-      const rows = await projectRepository.listPublicDirectory({ take: 1, cursor });
+      const rows = await projectRepository.listPublicDirectoryRanked({
+        rank: 'recent',
+        take: 1,
+        cursor,
+      });
       if (rows.length === 0) break;
       const row = rows[0]!;
       expect(seen.has(row.id)).toBe(false);
       seen.add(row.id);
-      cursor = { createdAt: row.createdAt, id: row.id };
+      cursor = { ts: row.sortTs!, id: row.id };
       if (seen.size > 5) break; // guard
     }
     expect(seen.size).toBe(5);

@@ -48,9 +48,11 @@ export const workItemRevisionRepository = {
   async listByWorkItem(
     workItemId: string,
     options: { take?: number; cursor?: string; order?: 'asc' | 'desc' } = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItemRevision[]> {
     const { take = 50, cursor, order = 'desc' } = options;
-    return db.workItemRevision.findMany({
+    const client = tx ?? db;
+    return client.workItemRevision.findMany({
       where: { workItemId },
       // `id` is a required secondary sort: `changedAt` alone is not a total
       // order — two revisions written in the same millisecond tie, and an
@@ -77,9 +79,13 @@ export const workItemRevisionRepository = {
    * targets. A work item with no revisions simply has no entry in the map.
    * Read-only path → `db` singleton; empty input short-circuits to an empty map.
    */
-  async findLatestIdsByWorkItemIds(workItemIds: string[]): Promise<Map<string, string>> {
+  async findLatestIdsByWorkItemIds(
+    workItemIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
     if (workItemIds.length === 0) return new Map();
-    const rows = await db.$queryRaw<Array<{ workItemId: string; id: string }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ workItemId: string; id: string }>>`
       SELECT DISTINCT ON ("workItemId") "workItemId", "id"
       FROM "work_item_revision"
       WHERE "workItemId" IN (${Prisma.join(workItemIds)})
@@ -103,8 +109,10 @@ export const workItemRevisionRepository = {
    */
   async findLatestArchivedActor(
     workItemId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; name: string | null; image: string | null } | null> {
-    const revision = await db.workItemRevision.findFirst({
+    const client = tx ?? db;
+    const revision = await client.workItemRevision.findFirst({
       where: { workItemId, changeKind: 'archived' },
       orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
       select: { changedBy: { select: { id: true, name: true, image: true } } },
@@ -124,8 +132,13 @@ export const workItemRevisionRepository = {
    * `jsonb_typeof` guards the (never-written, but JSON-typed) non-object diff.
    * Read-only path → `db` singleton.
    */
-  async countDisplayableByWorkItem(workItemId: string, suppressedKeys: string[]): Promise<number> {
-    const rows = await db.$queryRaw<Array<{ count: bigint }>>`
+  async countDisplayableByWorkItem(
+    workItemId: string,
+    suppressedKeys: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count
       FROM "work_item_revision" r
       WHERE r."workItemId" = ${workItemId}
@@ -161,8 +174,10 @@ export const workItemRevisionRepository = {
     sprintId: string,
     workspaceId: string,
     after: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const rows = await db.workItemRevision.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItemRevision.findMany({
       where: {
         changeKind: 'updated',
         changedAt: { gt: after },
@@ -253,6 +268,7 @@ export const workItemRevisionRepository = {
     workspaceId: string,
     window: { start: Date; end: Date },
     useCount: boolean,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{ day: string; scopeDelta: number; completedDelta: number; startedDelta: number }>
   > {
@@ -280,7 +296,8 @@ export const workItemRevisionRepository = {
       ? Prisma.sql`0`
       : Prisma.sql`(COALESCE((r."diff" -> 'storyPoints' ->> 'to')::numeric, 0) - COALESCE((r."diff" -> 'storyPoints' ->> 'from')::numeric, 0))`;
 
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ day: string; scopeDelta: number; completedDelta: number; startedDelta: number }>
     >`
       SELECT
@@ -361,11 +378,13 @@ export const workItemRevisionRepository = {
     period: 'day' | 'week' | 'month',
     window: { start: Date; end: Date },
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ bucket: string; resolved: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<Array<{ bucket: string; resolved: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ bucket: string; resolved: number }>>`
       SELECT
         to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
         COALESCE(SUM(
@@ -420,11 +439,13 @@ export const workItemRevisionRepository = {
     period: 'day' | 'week' | 'month',
     window: { start: Date; end: Date },
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ bucket: string; avgDays: number; resolvedCount: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<Array<{ bucket: string; avgDays: number; resolvedCount: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ bucket: string; avgDays: number; resolvedCount: number }>>`
       SELECT
         to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
         AVG(EXTRACT(EPOCH FROM (r."changedAt" - w."createdAt")) / 86400.0)::float8 AS "avgDays",
@@ -475,6 +496,7 @@ export const workItemRevisionRepository = {
     workspaceId: string,
     buckets: Array<{ key: string; end: Date }>,
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ bucket: string; avgDays: number; openCount: number }>> {
     if (buckets.length === 0) return [];
     const astSql = filter?.ast
@@ -482,7 +504,8 @@ export const workItemRevisionRepository = {
       : Prisma.sql`TRUE`;
     const keys = buckets.map((b) => b.key);
     const ends = buckets.map((b) => b.end);
-    return db.$queryRaw<Array<{ bucket: string; avgDays: number; openCount: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ bucket: string; avgDays: number; openCount: number }>>`
       WITH be AS (
         SELECT * FROM unnest(${keys}::text[], ${ends}::timestamptz[]) AS t("key", "periodEnd")
       ),

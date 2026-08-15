@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import {
   AlreadyOrgMemberError,
   LastOrgOwnerError,
@@ -130,7 +129,9 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
     expect(access).toBeNull(); // denied → the route raises 404-not-403
 
     // The workspace membership row is still present (org-remove does not delete it).
-    const wsm = await workspaceMembershipRepository.findByUserAndWorkspace(stale.id, workspace.id);
+    const wsm = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: stale.id, workspaceId: workspace.id } },
+    });
     expect(wsm).not.toBeNull();
   });
 
@@ -204,10 +205,9 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
     });
 
     // No workspace membership anywhere.
-    const wsm = await workspaceMembershipRepository.findByUserAndWorkspace(
-      orgOnly.id,
-      workspace.id,
-    );
+    const wsm = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: orgOnly.id, workspaceId: workspace.id } },
+    });
     expect(wsm).toBeNull();
     // ...and they can't reach the workspace (org member without a workspace membership).
     const access = await organizationsService.resolveWorkspaceAccess(orgOnly.id, workspace.id);
@@ -398,7 +398,9 @@ describe('provisioning + the user-orgs surface', () => {
       organizationMembershipRepository.findByOrgAndUserInTx(orgId, user.id, tx),
     );
     expect(orgm!.role).toBe('owner');
-    const wsm = await workspaceMembershipRepository.findByUserAndWorkspace(user.id, workspace.id);
+    const wsm = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
+    });
     expect(wsm!.role).toBe('owner');
   });
 

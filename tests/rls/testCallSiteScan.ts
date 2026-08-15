@@ -113,6 +113,17 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   'tests/project-details-service.test.ts':
     "MOTIR-2843/2796: the test's subject IS the `?? db` branch; binding deletes it. Retire the fallback instead.",
 
+  // ── MOTIR-2815: the file whose SUBJECT is the unbound arm itself ──────────
+  // Every read here is deliberately unbound and asserted PER ROLE — rows under
+  // the BYPASSRLS owner, EMPTY under `motir_app`. Binding them does not improve
+  // the file, it deletes it, and with it the `tx ?? db` branch coverage that
+  // eight repositories need to clear the ≥90% floor once their production
+  // callers all thread a `tx` (MOTIR-2815 measured exactly that drop). This is
+  // the same argument as `project-details-service.test.ts` below, generalised to
+  // one file that owns the whole class.
+  'tests/rls/tx-fallback-arm.test.ts':
+    'MOTIR-2815: the subject IS the `tx ?? db` arm; every read is unbound on purpose and asserted per role.',
+
   // ── MOTIR-2755 / MOTIR-2840: the batched-read QUERY COUNT ─────────────────
   // A different incompatibility from the others. This file's subject is how MANY
   // queries a batched read issues (the N+1 guard), measured by spying on

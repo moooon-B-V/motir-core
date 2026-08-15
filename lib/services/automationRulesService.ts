@@ -33,6 +33,7 @@ import type {
   AutomationRuleLastRunDto,
   AutomationRuleSummaryDto,
 } from '@/lib/dto/automationRules';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // automationRulesService (Story 6.6 · Subtask 6.6.1) — persistence +
 // permissions for the rule model. Owns validation (the TOTAL trigger/action
@@ -239,13 +240,19 @@ export const automationRulesService = {
 
     // The audit reads are read-only (the `db` singleton path) — they run after
     // the admin gate + the rule-belongs-to-project assertion above.
-    const [rows, total] = await Promise.all([
-      automationRuleExecutionRepository.listByRule(ruleId, {
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      automationRuleExecutionRepository.countByRule(ruleId),
-    ]);
+    // Bound (MOTIR-2815). `automation_rule_execution` is policy-gated, so the
+    // audit page and its denominator BOTH came back empty under `motir_app` —
+    // a rule that had run many times rendered as never having run.
+    const [rows, total] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        automationRuleExecutionRepository.listByRule(
+          ruleId,
+          { skip: (page - 1) * pageSize, take: pageSize },
+          tx,
+        ),
+        automationRuleExecutionRepository.countByRule(ruleId, tx),
+      ]),
+    );
 
     return {
       executions: rows.map(toAutomationExecutionDto),

@@ -7,6 +7,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 7.1.6 — the ai→core READ-back surface against a REAL Postgres. Proves
 // the skeleton read projects the token's project (parentKey resolved) and the
@@ -76,7 +77,9 @@ describe('aiBoundaryService.readPlanTree', () => {
     // The row's `id` is the real cuid (not the key), and its `revision` equals the
     // item's latest `work_item_revision.id` — the `created` revision at this point.
     expect(storyRowBefore.id).toBe(story.id);
-    const latestBefore = await workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id]);
+    const latestBefore = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id], tx),
+    );
     expect(storyRowBefore.revision).toBe(latestBefore.get(story.id));
     expect(storyRowBefore.revision).not.toBeNull();
 
@@ -86,7 +89,9 @@ describe('aiBoundaryService.readPlanTree', () => {
 
     const after = await aiBoundaryService.readPlanTree(fx.projectId, fx.ctx);
     const storyRowAfter = after.items.find((i) => i.key === story.identifier)!;
-    const latestAfter = await workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id]);
+    const latestAfter = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id], tx),
+    );
 
     expect(storyRowAfter.id).toBe(story.id);
     expect(storyRowAfter.revision).toBe(latestAfter.get(story.id));

@@ -7,6 +7,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 8.14 · Subtask 8.14.3 — workItemRevisionRepository.aggregateSprintCycleByDay.
 // Real Postgres (no mocks). Drives the per-day scope / completed / started deltas
@@ -98,11 +99,14 @@ describe('aggregateSprintCycleByDay', () => {
       sprintId: { from: null, to: sprint.id }, // done item joins → scope +5 (NO done-gate)
     });
 
-    const rows = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprint.id,
-      fx.workspaceId,
-      WINDOW,
-      false,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprint.id,
+        fx.workspaceId,
+        WINDOW,
+        false,
+        tx,
+      ),
     );
     const at = byDay(rows);
 
@@ -133,11 +137,14 @@ describe('aggregateSprintCycleByDay', () => {
       sprintId: { from: null, to: sprint.id },
     });
 
-    const rows = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprint.id,
-      fx.workspaceId,
-      WINDOW,
-      true, // count mode
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprint.id,
+        fx.workspaceId,
+        WINDOW,
+        true, // count mode
+        tx,
+      ),
     );
     const at = byDay(rows);
     expect(at('2026-06-03').scopeDelta).toBe(0); // re-estimate doesn't change the issue count
@@ -155,11 +162,14 @@ describe('aggregateSprintCycleByDay', () => {
     await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 4), {
       status: { from: 'in_progress', to: 'todo' }, // back to todo → −3 started
     });
-    const rows = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprint.id,
-      fx.workspaceId,
-      WINDOW,
-      false,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprint.id,
+        fx.workspaceId,
+        WINDOW,
+        false,
+        tx,
+      ),
     );
     const at = byDay(rows);
     expect(at('2026-06-02').startedDelta).toBe(3);
@@ -175,11 +185,14 @@ describe('aggregateSprintCycleByDay', () => {
     await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 2), {
       status: { from: 'todo', to: 'done' },
     });
-    const rows = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprint.id,
-      other.workspaceId, // wrong tenant
-      WINDOW,
-      false,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprint.id,
+        other.workspaceId, // wrong tenant
+        WINDOW,
+        false,
+        tx,
+      ),
     );
     expect(rows).toHaveLength(0);
   });
@@ -208,15 +221,21 @@ describe('workItemRepository.sumStartedForSprint', () => {
 
     // story_points: A + B (non-todo) = 13; C (todo) excluded.
     expect(
-      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points', tx),
+      ),
     ).toBe(13);
     // issue_count: 2 started items.
     expect(
-      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'issue_count'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'issue_count', tx),
+      ),
     ).toBe(2);
     // time_estimate: A + B minutes = 130 (the third statistic branch).
     expect(
-      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'time_estimate'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'time_estimate', tx),
+      ),
     ).toBe(130);
   });
 
@@ -230,11 +249,15 @@ describe('workItemRepository.sumStartedForSprint', () => {
       data: { sprintId: sprint.id, status: 'todo', storyPoints: 5 },
     });
     expect(
-      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points', tx),
+      ),
     ).toBe(0);
     // wrong tenant sees nothing.
     expect(
-      await workItemRepository.sumStartedForSprint(sprint.id, other.workspaceId, 'story_points'),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprint.id, other.workspaceId, 'story_points', tx),
+      ),
     ).toBe(0);
   });
 });

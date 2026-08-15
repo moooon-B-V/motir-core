@@ -303,10 +303,14 @@ describe('workItemLinkRepository.findByFromItem / findByToItem', () => {
       createdById: fx.owner.id,
     });
 
-    const all = await workItemLinkRepository.findByFromItem(a.id);
+    const all = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(a.id, undefined, tx),
+    );
     expect(all.map((l) => l.kind).sort()).toEqual(['is_blocked_by', 'relates_to']);
 
-    const blockers = await workItemLinkRepository.findByFromItem(a.id, 'is_blocked_by');
+    const blockers = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(a.id, 'is_blocked_by', tx),
+    );
     expect(blockers).toHaveLength(1);
     expect(blockers[0]!.toId).toBe(b.id);
   });
@@ -333,10 +337,14 @@ describe('workItemLinkRepository.findByFromItem / findByToItem', () => {
       createdById: fx.owner.id,
     });
 
-    const all = await workItemLinkRepository.findByToItem(c.id);
+    const all = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByToItem(c.id, undefined, tx),
+    );
     expect(all.map((l) => l.kind).sort()).toEqual(['duplicates', 'is_blocked_by']);
 
-    const dups = await workItemLinkRepository.findByToItem(c.id, 'duplicates');
+    const dups = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemLinkRepository.findByToItem(c.id, 'duplicates', tx),
+    );
     expect(dups).toHaveLength(1);
     expect(dups[0]!.fromId).toBe(b.id);
   });

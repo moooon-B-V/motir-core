@@ -9,6 +9,7 @@ import type { PlanItemStalenessDto } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Integration tests for Subtask 7.21.3 / MOTIR-1340 — `planStalenessService`,
 // plan staleness detection (Story 7.21). Real Postgres (no mocks), per CLAUDE.md.
@@ -48,8 +49,10 @@ async function seed(
 
 /** The target's CURRENT latest revision id — the optimistic-concurrency anchor
  *  a producer would store as a modify/remove proposal's `baseRevision`. */
-async function latestRev(workItemId: string): Promise<string> {
-  const map = await workItemRevisionRepository.findLatestIdsByWorkItemIds([workItemId]);
+async function latestRev(workItemId: string, workspaceId: string): Promise<string> {
+  const map = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRevisionRepository.findLatestIdsByWorkItemIds([workItemId], tx),
+  );
   const rev = map.get(workItemId);
   if (!rev) throw new Error(`no revision for ${workItemId}`);
   return rev;
@@ -133,7 +136,7 @@ describe('planStalenessService — per-reason detection', () => {
   it('base_revision_drift (edited): a modify target changed since the proposal baseRevision', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seed(fx, 'Original title');
-    const baseRevision = await latestRev(targetId);
+    const baseRevision = await latestRev(targetId, fx.workspaceId);
     const { planId, items } = await plannedPlan(fx, [
       { op: 'modify', workItemId: targetId, patch: { title: 'Proposed title' }, baseRevision },
     ]);
@@ -150,7 +153,7 @@ describe('planStalenessService — per-reason detection', () => {
   it('base_revision_drift (archived): a remove target archived after planning counts as removed', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seed(fx, 'To be removed');
-    const baseRevision = await latestRev(targetId);
+    const baseRevision = await latestRev(targetId, fx.workspaceId);
     const { planId, items } = await plannedPlan(fx, [
       { op: 'remove', workItemId: targetId, baseRevision },
     ]);
@@ -201,7 +204,7 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     const parentId = await seed(fx, 'Parent', 'story');
     const blockerId = await seed(fx, 'Blocker');
     const targetId = await seed(fx, 'Target');
-    const baseRevision = await latestRev(targetId);
+    const baseRevision = await latestRev(targetId, fx.workspaceId);
 
     const { planId, items } = await plannedPlan(fx, [
       {
@@ -223,7 +226,7 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
   it('is a PURE read — computing staleness writes nothing and never decides the plan', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seed(fx, 'Edited');
-    const baseRevision = await latestRev(targetId);
+    const baseRevision = await latestRev(targetId, fx.workspaceId);
     const { planId } = await plannedPlan(fx, [
       { op: 'modify', workItemId: targetId, patch: { title: 'X' }, baseRevision },
     ]);
