@@ -4,6 +4,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { historicalPullRequestBackfillService } from '@/lib/services/historicalPullRequestBackfillService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The historical-PR mirror backfill against real Postgres (MOTIR-1965) — the
@@ -31,7 +32,7 @@ const REPO_PROVIDER_ID = '9001';
 let fetchMock: ReturnType<typeof vi.fn>;
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "github_pull_request", "github_repo", "github_installation", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();

@@ -9,6 +9,7 @@ import {
 import { jobFunctions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -84,7 +85,7 @@ async function readRun(id: string) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
 });

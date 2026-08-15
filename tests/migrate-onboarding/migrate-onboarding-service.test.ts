@@ -10,6 +10,7 @@ import {
   MigrateOnboardingStepError,
 } from '@/lib/migrateOnboarding/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -142,8 +143,8 @@ async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved'
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
-  await db.$executeRawUnsafe('TRUNCATE TABLE "import" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "import" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
   mocks.submitJob.mockClear();

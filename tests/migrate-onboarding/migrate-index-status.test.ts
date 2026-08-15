@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { MigrateOnboardingNotFoundError } from '@/lib/migrateOnboarding/errors';
 import { randomToken } from '../helpers/random';
@@ -111,7 +112,7 @@ async function seedRunningIndexJob(fx: WorkItemFixture) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
 });
