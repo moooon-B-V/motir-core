@@ -3,6 +3,8 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { publicProjectsService } from '@/lib/services/publicProjectsService';
+import { projectSquareService } from '@/lib/services/projectSquareService';
 import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
@@ -49,7 +51,9 @@ interface Tenant {
   workspaceId: string;
   organizationId: string;
   projectId: string;
+  projectIdentifier: string;
   workItemId: string;
+  workflowStatusId: string;
 }
 
 /** The public project's tenant. */
@@ -236,6 +240,266 @@ describe('the vote arm (MOTIR-2811)', () => {
   });
 });
 
+describe('the JOINED-table arms (MOTIR-2856)', () => {
+  // The second hop. `project`, `work_item` and `public_request_vote` were each
+  // armed after someone traced a broken surface back to the row it names —
+  // nobody traced the tables those reads JOIN. `workflow_status` (the roadmap's
+  // `category <> 'done'` filter, in three reads) and `workspace` → `organization`
+  // (the project square's org-name join) had no public arm at all, so four reads
+  // returned zero rows unbound and RAISED NOTHING.
+  //
+  // Each table gets the same four-way pin: admitted unbound for a public
+  // project, refused unbound for a non-public one, refused on the SAME row once
+  // its project stops being public, and unchanged for a bound tenant session.
+  // The write verbs are pinned per table below, because `FOR SELECT` is the
+  // whole claim.
+
+  describe('workflow_status', () => {
+    it('ADMITS a public project’s statuses with no workspace bound', async () => {
+      const rows = await asAppRole({}, (tx) => selectWorkflowStatuses(tx, host.projectId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it('admits NOTHING ELSE unbound — a non-public project’s statuses stay invisible', async () => {
+      const rows = await asAppRole({}, (tx) => selectWorkflowStatuses(tx, neighbour.projectId));
+      expect(rows).toHaveLength(0);
+
+      // And on the SAME row, so `accessLevel` is the only variable.
+      for (const level of ['open', 'limited', 'private'] as const) {
+        await adminDb.project.update({
+          where: { id: host.projectId },
+          data: { accessLevel: level },
+        });
+        const hidden = await asAppRole({}, (tx) => selectWorkflowStatuses(tx, host.projectId));
+        expect(hidden, `accessLevel=${level} must hide its statuses unbound`).toHaveLength(0);
+      }
+    });
+
+    it('leaves a WORKSPACE-BOUND read exactly as it was', async () => {
+      // The arm is gated on there being NO bound workspace, so a tenant session
+      // keeps precisely the set `workflow_status_active_workspace` gave it: its
+      // own statuses, and none of a foreign workspace's — public or not.
+      const own = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
+        selectWorkflowStatuses(tx, host.projectId),
+      );
+      expect(own).toHaveLength(1);
+      const foreign = await asAppRole({ workspaceId: neighbour.workspaceId }, (tx) =>
+        selectWorkflowStatuses(tx, host.projectId),
+      );
+      expect(foreign, 'a bound session does not gain the public arm').toHaveLength(0);
+    });
+
+    it('does NOT let an unbound reader UPDATE or DELETE a status it can now read', async () => {
+      // A workflow status is project CONFIGURATION, so a widened write verb here
+      // would let an anonymous visitor edit a team's board. `FOR SELECT` is what
+      // prevents it: the FOR-ALL policy's USING still matches zero rows unbound,
+      // and zero-rows-affected is not an error — so this asserts on the ROW.
+      await asAppRole(
+        {},
+        (tx) =>
+          tx.$executeRaw`UPDATE "workflow_status" SET "label" = 'Hijacked' WHERE "id" = ${host.workflowStatusId}`,
+      );
+      await asAppRole(
+        {},
+        (tx) => tx.$executeRaw`DELETE FROM "workflow_status" WHERE "id" = ${host.workflowStatusId}`,
+      );
+      const survivor = await adminDb.workflowStatus.findUnique({
+        where: { id: host.workflowStatusId },
+      });
+      expect(survivor?.label).toBe('To Do');
+    });
+
+    it('leaves WITH CHECK untouched — a status cannot be moved into a foreign workspace', async () => {
+      await expect(
+        asAppRole(
+          { workspaceId: host.workspaceId },
+          (tx) =>
+            tx.$executeRaw`
+            UPDATE "workflow_status" SET "workspace_id" = ${neighbour.workspaceId}
+             WHERE "id" = ${host.workflowStatusId}
+          `,
+        ),
+      ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+    });
+  });
+
+  describe('workspace', () => {
+    // A pure HOP in the square's join — not one of its columns reaches the DTO —
+    // but an invisible row kills the join just as thoroughly as a missing one.
+    // Note the predicate points the OTHER WAY from work_item's: `workspace` sits
+    // ABOVE `project`, so the arm asks "does this workspace HAVE a public
+    // project", which any one of its projects can satisfy.
+
+    it('ADMITS a public project’s workspace with no workspace bound', async () => {
+      const rows = await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it('admits NOTHING ELSE unbound — a workspace with no public project stays invisible', async () => {
+      const rows = await asAppRole({}, (tx) => selectWorkspace(tx, neighbour.workspaceId));
+      expect(rows).toHaveLength(0);
+
+      for (const level of ['open', 'limited', 'private'] as const) {
+        await adminDb.project.update({
+          where: { id: host.projectId },
+          data: { accessLevel: level },
+        });
+        const hidden = await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId));
+        expect(hidden, `accessLevel=${level} must hide the workspace unbound`).toHaveLength(0);
+      }
+    });
+
+    it('admits the workspace as soon as ANY of its projects is public', async () => {
+      // The semi-join direction, stated as a behaviour rather than as SQL: the
+      // host's own project goes private, a SECOND project in the same workspace
+      // is public, and the workspace stays visible on the strength of that one.
+      await adminDb.project.update({
+        where: { id: host.projectId },
+        data: { accessLevel: 'private' },
+      });
+      expect(await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId))).toHaveLength(0);
+
+      await adminDb.project.create({
+        data: {
+          workspaceId: host.workspaceId,
+          name: 'Second',
+          slug: 'host-second',
+          identifier: 'HOST2',
+          accessLevel: 'public',
+        },
+      });
+      expect(await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId))).toHaveLength(1);
+    });
+
+    it('leaves a WORKSPACE-BOUND read exactly as it was', async () => {
+      const foreign = await asAppRole({ workspaceId: neighbour.workspaceId }, (tx) =>
+        selectWorkspace(tx, host.workspaceId),
+      );
+      expect(foreign, 'a bound session does not gain the public arm').toHaveLength(0);
+    });
+
+    it('does NOT let an unbound reader UPDATE or DELETE the workspace it can now read', async () => {
+      await asAppRole(
+        {},
+        (tx) =>
+          tx.$executeRaw`UPDATE "workspace" SET "name" = 'Hijacked' WHERE "id" = ${host.workspaceId}`,
+      );
+      await asAppRole(
+        {},
+        (tx) => tx.$executeRaw`DELETE FROM "workspace" WHERE "id" = ${host.workspaceId}`,
+      );
+      const survivor = await adminDb.workspace.findUnique({ where: { id: host.workspaceId } });
+      expect(survivor?.name).toBe('Workspace host');
+    });
+  });
+
+  describe('organization', () => {
+    // The only one of the three whose columns a reader actually SEES — `o.name`
+    // and `o.slug` sit on every square card. Publicness is inherited twice, so
+    // the arm's EXISTS walks organization → workspace → project, resolving its
+    // middle hop through the workspace arm directly above.
+
+    it('ADMITS a public project’s organization with no workspace bound', async () => {
+      const rows = await asAppRole({}, (tx) => selectOrganization(tx, host.organizationId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it('admits NOTHING ELSE unbound — an org with no public project stays invisible', async () => {
+      const rows = await asAppRole({}, (tx) => selectOrganization(tx, neighbour.organizationId));
+      expect(rows).toHaveLength(0);
+
+      for (const level of ['open', 'limited', 'private'] as const) {
+        await adminDb.project.update({
+          where: { id: host.projectId },
+          data: { accessLevel: level },
+        });
+        const hidden = await asAppRole({}, (tx) => selectOrganization(tx, host.organizationId));
+        expect(hidden, `accessLevel=${level} must hide the org unbound`).toHaveLength(0);
+      }
+    });
+
+    it('leaves a WORKSPACE-BOUND read exactly as it was', async () => {
+      // Gated on `app.workspace_id`, NOT on `app.organization_id` — the question
+      // is "is this the context-less public connection", and the workspace GUC is
+      // the one every bound path sets. So an ordinary workspace-bound request,
+      // which binds no org id, must NOT pick up a foreign org through this arm.
+      const foreign = await asAppRole({ workspaceId: neighbour.workspaceId }, (tx) =>
+        selectOrganization(tx, host.organizationId),
+      );
+      expect(foreign, 'a workspace-bound session does not gain the public arm').toHaveLength(0);
+    });
+
+    it('does NOT let an unbound reader UPDATE or DELETE the org it can now read', async () => {
+      // The org row carries billing state (`scaledTrackerSubscription`,
+      // `aiIncludedSeat`, `isMeta`), so a widened write verb here would be a
+      // billing-TAMPERING surface, not merely a leak.
+      await asAppRole(
+        {},
+        (tx) =>
+          tx.$executeRaw`UPDATE "organization" SET "aiIncludedSeat" = true WHERE "id" = ${host.organizationId}`,
+      );
+      await asAppRole(
+        {},
+        (tx) => tx.$executeRaw`DELETE FROM "organization" WHERE "id" = ${host.organizationId}`,
+      );
+      const survivor = await adminDb.organization.findUnique({
+        where: { id: host.organizationId },
+      });
+      expect(survivor?.aiIncludedSeat).toBe(false);
+    });
+  });
+});
+
+describe('the four reads the join arms unblock (MOTIR-2856)', () => {
+  // The admit assertions at the tier that was actually broken. A policy test
+  // proves the ROW is visible; these prove the QUERY returns it — which is the
+  // thing a customer sees, and the thing that was silently returning nothing.
+
+  it('the roadmap’s Submitted column and its header count come back non-empty', async () => {
+    // `findPublicRoadmapSubmitted` + `countPublicRoadmapSubmitted` both JOIN
+    // `workflow_status`. `getRoadmap` also reads it directly via
+    // `workflowsService.listStatusesByProject`, so this exercises three of the
+    // four blocked reads at once. A triage item is `triagedAt` + `submittedBy`.
+    await adminDb.workItem.update({
+      where: { id: host.workItemId },
+      data: { triagedAt: new Date(), submittedByUserId: outsiderId, status: 'todo' },
+    });
+
+    const roadmap = await publicProjectsService.getRoadmap(host.projectIdentifier, null);
+    const submitted = roadmap.columns.find((c) => c.key === 'submitted');
+    expect(submitted?.cards.map((c) => c.id)).toEqual([host.workItemId]);
+    expect(submitted?.totalCount).toBe(1);
+  });
+
+  it('the duplicate pre-check finds a match', async () => {
+    // `findPublicRequestMatches`, the fourth `workflow_status` joiner. Returning
+    // nothing here does not look like a failure — it looks like "no duplicates",
+    // so the user files the dupe the check exists to prevent.
+    await adminDb.workItem.update({
+      where: { id: host.workItemId },
+      data: { title: 'Dark mode please', status: 'todo' },
+    });
+
+    const matches = await publicProjectsService.findDuplicateRequests(
+      host.projectId,
+      outsiderId,
+      'dark mode',
+    );
+    expect(matches.candidates.map((c) => c.id)).toEqual([host.workItemId]);
+  });
+
+  it('the project square lists the public project WITH its org name', async () => {
+    // `listPublicDirectoryRanked` — the `workspace` → `organization` join. The
+    // org name is the assertion that matters: an armed `workspace` with an
+    // unarmed `organization` would drop the card just as completely, so a test
+    // that only counted cards could pass with one arm missing.
+    const page = await projectSquareService.listDirectory({ rank: 'recent' });
+    const card = page.items.find((i) => i.identifier === host.projectIdentifier);
+    expect(card?.org.name).toBe('Org host');
+    expect(page.items.map((i) => i.identifier)).not.toContain(neighbour.projectIdentifier);
+  });
+});
+
 describe('the service path — resolvePublicInputs', () => {
   it('RESOLVES a public project for an ANONYMOUS actor', async () => {
     const caps = await projectAccessService.getPublicCapabilities(host.projectId, null);
@@ -385,6 +649,19 @@ function selectVotes(tx: Prisma.TransactionClient, workItemId: string) {
     SELECT "id" FROM "public_request_vote" WHERE "work_item_id" = ${workItemId}`;
 }
 
+function selectWorkflowStatuses(tx: Prisma.TransactionClient, projectId: string) {
+  return tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "workflow_status" WHERE "project_id" = ${projectId}`;
+}
+
+function selectWorkspace(tx: Prisma.TransactionClient, id: string) {
+  return tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "workspace" WHERE "id" = ${id}`;
+}
+
+function selectOrganization(tx: Prisma.TransactionClient, id: string) {
+  return tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "organization" WHERE "id" = ${id}`;
+}
+
 /** One upvote on a tenant's seeded request, cast by the outsider account. */
 async function seedVote(tenant: Tenant): Promise<void> {
   await adminDb.publicRequestVote.create({
@@ -435,11 +712,28 @@ async function seedTenant(
       backlogRank: 'a0',
     },
   });
+  // The project's workflow (MOTIR-2856). Every roadmap read JOINs
+  // `workflow_status` for its `category <> 'done'` predicate, so a tenant with
+  // no status row cannot exercise the arm this file now pins — the join would
+  // return nothing for a reason that has nothing to do with the policies.
+  const workflowStatus = await adminDb.workflowStatus.create({
+    data: {
+      workspaceId: workspace.id,
+      projectId: project.id,
+      key: 'todo',
+      label: 'To Do',
+      category: 'todo',
+      position: 'a0',
+      isInitial: true,
+    },
+  });
   return {
     ownerId: owner.id,
     workspaceId: workspace.id,
     organizationId: organization.id,
     projectId: project.id,
+    projectIdentifier: identifier,
     workItemId: workItem.id,
+    workflowStatusId: workflowStatus.id,
   };
 }
