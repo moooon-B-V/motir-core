@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
-import { isAppRoleTestMode } from './helpers/parallelDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Creating a TENANT under the non-bypass role (MOTIR-2512).
@@ -51,7 +50,7 @@ async function seedWorkspace(slug: string): Promise<string> {
   return workspace.id;
 }
 
-describe.runIf(isAppRoleTestMode())('creating a tenant as the non-bypass role', () => {
+describe('creating a tenant as the non-bypass role', () => {
   it('creates a workspace end-to-end through the service', async () => {
     const user = await adminDb.user.create({
       data: { email: 'root-create@example.com', name: 'Root Create' },

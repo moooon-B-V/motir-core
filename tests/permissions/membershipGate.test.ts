@@ -13,7 +13,6 @@ import { readMembership, readOwnMembership } from '@/lib/workspaces/membershipGa
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { isAppRoleTestMode } from '../helpers/parallelDb';
 import { captureEmailEvents } from '../helpers/jobs';
 
 // The twelve membership gates, proved ADMITTING (MOTIR-2527).
@@ -23,7 +22,7 @@ import { captureEmailEvents } from '../helpers/jobs';
 // per-transaction GUCs — so under the non-bypass `motir_app` role
 // `membership_visible_active_or_own` compared both of its arms against NULL, the row
 // was invisible, and the lookup returned `null`. Every gate reports that as NOT a
-// member. Measured: 1048 failures under `TEST_DB_APP_ROLE=1`, all of them this
+// member. Measured: 1048 failures under the app role, all of them this
 // (`docs/rls-runtime-role-inventory.md`, Finding 1).
 //
 // ⚠️ THE ADMIT ASSERTIONS ARE THE POINT, AND THEY ARE THE ONES THAT USED TO FAIL.
@@ -35,9 +34,8 @@ import { captureEmailEvents } from '../helpers/jobs';
 // it seeds two tenants, which is precisely what the policies forbid, and the services
 // write through `@/lib/db`, the connection under test (`tests/helpers/adminDb.ts`).
 //
-// These run in BOTH modes on purpose. Under `TEST_DB_APP_ROLE=1` they are the proof;
-// with the flag unset (what CI runs today) they are the regression guard that keeps
-// the gates behaving while MOTIR-2528 migrates the fixtures.
+// Since MOTIR-2734 there is one mode: `@/lib/db` is always the non-bypass role, so
+// these are always the proof rather than sometimes the regression guard.
 
 interface Tenant {
   ownerId: string;
@@ -72,10 +70,10 @@ describe('the harness is actually exercising the role it claims', () => {
     const [who] = await db.$queryRawUnsafe<{ current_user: string; active: boolean }[]>(
       `SELECT current_user, row_security_active('public.workspace_membership') AS active`,
     );
-    // Not an assertion about WHICH mode — both are legitimate — but a pinned
-    // statement of the two possibilities, so `row_security_active` can never be
-    // false under the flag while the file below reports success.
-    expect(who?.active).toBe(isAppRoleTestMode());
+    // There is only one mode now (MOTIR-2734), so this is a flat assertion:
+    // `row_security_active` can never be false while the file below reports
+    // success — a BYPASSRLS connection would pass every case here vacuously.
+    expect(who?.active).toBe(true);
   });
 });
 
