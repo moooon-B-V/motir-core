@@ -600,3 +600,34 @@ Binding the reads does not bind the writes, and the flag-on suite still shows IN
 policy (`new row violates row-level security policy for table "import"` in `tests/import`, which
 reproduces without any of this story's changes). Those are a separate surface with no card in this
 story; they are visible in the same run and should not be read as read-path residue.
+
+## `public_request_vote`'s THIRD arm — the member read (MOTIR-2864, 2026-08-15)
+
+The entry above records that MOTIR-2796 shipped "a public SELECT arm for `public_request_vote`
+where there was no workspace to bind." That arm was correct and it was not sufficient, and the gap
+is worth stating precisely because the shape recurs: **arming a table for the reader you are
+currently looking at can leave the table armed for NOBODY ELSE.**
+
+MOTIR-2811's arm is gated on `coalesce(current_setting('app.workspace_id', true), '') = ''` — it
+fires only on the genuinely context-less connection. So after it the table admitted the vote's
+OWNER, the system flag, and an anonymous reader. A workspace MEMBER matched none of the three:
+`withWorkspaceServiceContext` binds `app.workspace_id` and not `app.user_id`, and the member
+reading the queue is not the voter anyway. `workItemRepository.findTriageQueue` aggregates this
+table inside exactly that transaction, so the triage inbox's `voteCount` came back **0 for every
+request** — no error, no warning, just the 6.12.6 sort key quietly ceasing to exist.
+
+`public_request_vote_active_workspace_read` (`20260815234500`) closes it: a `FOR SELECT` correlated
+`EXISTS` resolving the vote's tenant through `work_item."workspaceId"`, the `work_item_label` /
+`watcher` member shape, narrowed to reads so the owner arm keeps owning every write.
+
+**Two notes for whoever audits the next table.**
+
+- **Neither scanner could have found this.** `singletonReadScan` and `callSiteScan` ask whether a
+  read is BOUND; this read was bound, correctly, from the start. The missing half was the POLICY,
+  and a bound read against a table with no matching arm returns rows rather than an error — the
+  vacuous-pass class MOTIR-2829 names, one layer down. A `COUNT` that reads 0 is the worst instance
+  of it, because 0 is a legitimate answer.
+- **The trigger was a FIXTURE repair, not an audit.** MOTIR-2857 moved this suite's setup writes to
+  `adminDb`; before that the file died in setup and the assertion was never reached. Expect more of
+  this class to surface as the remaining fixture batches land — a suite that dies early is a suite
+  whose later assertions have never run.

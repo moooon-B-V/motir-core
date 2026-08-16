@@ -5,7 +5,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { triageService } from '@/lib/services/triageService';
 import { usersService } from '@/lib/services/usersService';
 import { publicRequestsService } from '@/lib/services/publicRequestsService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { EmptyCommentBodyError } from '@/lib/comments/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -40,6 +40,49 @@ async function publicRequestFixture(): Promise<{ fx: WorkItemFixture; requestId:
   );
   await adminDb.workItem.update({ where: { id: item.id }, data: { triagedAt: new Date() } });
   return { fx, requestId: item.id };
+}
+
+/**
+ * Assert a call is refused with the NO-EXISTENCE-LEAK 404 — the property these
+ * tests were written to protect, stated as the property rather than as one of
+ * the two classes that carry it.
+ *
+ * ⚠️ MOTIR-2864 decided this deliberately; it is an amendment on the record, not
+ * a relaxed assertion. On a NON-public project the service used to reach its
+ * project lookup and throw `ProjectNotFoundError`. Under `motir_app` it no longer
+ * does: `resolvePublicRequest`'s opening `workItemRepository.findById` is an
+ * UNBOUND read, `work_item_public_project_read` admits only a PUBLIC project's
+ * items unbound, so the row is declined first and the service throws
+ * `PublicRequestNotFoundError` instead. Which class arrives therefore depends on
+ * the connection's role, and after MOTIR-2734 only the app-role answer will exist.
+ *
+ * Both are the same OBSERVABLE outcome, and not by coincidence: the two shipped
+ * routes map them with one branch —
+ * `if (err instanceof PublicRequestNotFoundError || err instanceof ProjectNotFoundError)`
+ * → 404 (`app/api/public-requests/[id]/upvote/route.ts:38`,
+ * `…/comments/route.ts:64`) — while `ProjectAccessDeniedError` is the 403 that
+ * would CONFIRM the project exists. So the union below is the route's own
+ * contract, and asserting it plus the absence of the 403 is a stronger statement
+ * of "no existence leak" than naming either class was.
+ *
+ * The alternative was to reorder the service to keep the class stable. It was
+ * rejected: the id is all the route has, so nothing but a broader read can name
+ * the project before the work item resolves — and re-opening a cross-tenant read
+ * to improve an error class trades a real property for a cosmetic one.
+ */
+async function expectPublicRequest404(call: Promise<unknown>): Promise<void> {
+  const err = await call.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(err, 'expected the call to be refused').not.toBeNull();
+  expect(err, 'a 403 here would confirm the project exists').not.toBeInstanceOf(
+    ProjectAccessDeniedError,
+  );
+  expect(
+    err instanceof PublicRequestNotFoundError || err instanceof ProjectNotFoundError,
+    `expected a 404-mapped error, got ${(err as Error)?.name}`,
+  ).toBe(true);
 }
 
 beforeEach(async () => {
@@ -85,10 +128,11 @@ describe('publicRequestsService.toggleUpvote (6.12.6)', () => {
       fx.ctx,
     );
     const outsider = await makeUser('Outsider');
-    await expect(
+    await expectPublicRequest404(
       publicRequestsService.toggleUpvote(item.id, { userId: outsider.id }),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    );
 
+    // A genuinely missing id is unambiguous in either mode — nothing to resolve.
     await expect(
       publicRequestsService.toggleUpvote('wi_does_not_exist', { userId: outsider.id }),
     ).rejects.toBeInstanceOf(PublicRequestNotFoundError);
@@ -128,9 +172,9 @@ describe('publicRequestsService.addComment (6.12.6)', () => {
       fx.ctx,
     );
     const outsider = await makeUser('Outsider');
-    await expect(
+    await expectPublicRequest404(
       publicRequestsService.addComment(item.id, { bodyMd: 'hi' }, { userId: outsider.id }),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    );
 
     const { requestId } = await publicRequestFixture();
     const commenter = await makeUser('Blank');

@@ -1132,11 +1132,18 @@ export const workItemRepository = {
     // item with no votes counts as 0 (the common case) and a zero-vote queue
     // keeps its newest-first order. The `vt` aggregate is GROUPed once and
     // LEFT-JOINed, so it stays O(votes) — never a correlated per-row count.
-    // (`public_request_vote` is FORCE-RLS keyed on `app.user_id`/`app.system_admin`;
-    // like the work_item read this query already relies on, the vote tally here
-    // rides the app-layer `projectId`/`workspaceId` gate + the app connection's
-    // RLS-secondary posture — finding #26. When that table's RLS is enforced for
-    // this read, the whole triage read moves to a system/workspace context.)
+    // (MOTIR-2864: that move has HAPPENED, and this is the read it happened for.
+    // `public_request_vote` is FORCE-RLS, and under `motir_app` neither the
+    // `app.user_id`/`app.system_admin` owner arm nor MOTIR-2811's
+    // workspace-must-be-UNSET public arm admitted a single row here — so the
+    // aggregate returned nothing and every `COALESCE(vt."votes", 0)` was 0, which
+    // reads from the outside exactly like "nobody has voted yet". The service
+    // already ran this inside `withWorkspaceServiceContext`; what was missing was
+    // the matching policy, `public_request_vote_active_workspace_read`
+    // (`prisma/migrations/20260815234500_public_request_vote_member_read`). The
+    // tally is now RLS-scoped to the bound workspace rather than riding the
+    // app-layer `projectId`/`workspaceId` gate alone — finding #26 stays the
+    // secondary defence, not the only one.)
     const voteCountSql = Prisma.sql`COALESCE(vt."votes", 0)`;
     // Seek-after under `(voteCount DESC, triagedAt DESC, id ASC)`: strictly after
     // the previous page's last item. Bound params, never interpolated.

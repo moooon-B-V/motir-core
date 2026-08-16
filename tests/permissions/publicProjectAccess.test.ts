@@ -206,23 +206,34 @@ describe('the vote arm (MOTIR-2811)', () => {
     }
   });
 
-  it('leaves a WORKSPACE-BOUND read exactly as it was', async () => {
-    // The arm is gated on there being NO bound workspace, so a tenant session
-    // keeps precisely the visible set it had: its own votes are governed by the
-    // owner-or-system policy, which the outsider's vote does not satisfy, and a
-    // neighbour's votes stay invisible either way.
+  it('does not fire for a WORKSPACE-BOUND reader — the arm stays anonymous-only', async () => {
+    // ⚠️ AMENDED BY MOTIR-2864, and the amendment is the point. This test used to
+    // read "leaves a WORKSPACE-BOUND read exactly as it was" and assert 0 rows for
+    // a member on their OWN tenant's votes — asserting, correctly, that this arm
+    // is gated on there being no bound workspace, and (incorrectly) that the
+    // visible set a member had was the right one. It was not: the member-facing
+    // triage inbox aggregates this table under a bound workspace and got 0 for
+    // everyone. The gate below is still exactly as MOTIR-2811 wrote it; what
+    // changed is that a SECOND policy now admits the member, so the own-tenant
+    // case moved to `the vote MEMBER arm` below. This test keeps the half that is
+    // still this arm's: a bound reader does not reach a FOREIGN tenant's votes
+    // through it, public project or not.
     await seedVote(host);
     await seedVote(neighbour);
 
-    const own = await asAppRole({ workspaceId: host.workspaceId, userId: host.ownerId }, (tx) =>
-      selectVotes(tx, host.workItemId),
-    );
-    expect(own, 'a bound session does not gain the public arm').toHaveLength(0);
-
-    const foreign = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
+    const foreignPrivate = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
       selectVotes(tx, neighbour.workItemId),
     );
-    expect(foreign).toHaveLength(0);
+    expect(foreignPrivate).toHaveLength(0);
+
+    // The sharper direction: `host` IS public, so an anonymous reader sees its
+    // votes — but a reader bound to the NEIGHBOUR workspace must not, because the
+    // public arm is closed by the bound workspace and the member arm requires the
+    // tenant to match. A bound session never gains the anonymous reader's view.
+    const foreignPublic = await asAppRole({ workspaceId: neighbour.workspaceId }, (tx) =>
+      selectVotes(tx, host.workItemId),
+    );
+    expect(foreignPublic, 'a bound session does not gain the public arm').toHaveLength(0);
   });
 
   it('leaves the WRITE path untouched — an unbound INSERT is still refused', async () => {
@@ -237,6 +248,93 @@ describe('the vote arm (MOTIR-2811)', () => {
         `,
       ),
     ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+  });
+});
+
+describe('the vote MEMBER arm (MOTIR-2864)', () => {
+  // The mirror of the arm above. MOTIR-2811 armed the ANONYMOUS square reader and
+  // gated it on there being no bound workspace; that left the member-facing
+  // triage inbox — which reads this table inside `withWorkspaceServiceContext` —
+  // matching no policy at all. The owner arm keys on `app.user_id`, which that
+  // helper does not bind, and the member reading the queue is not the voter
+  // anyway; the public arm is closed by the very workspace binding that makes the
+  // read a tenant read. So `findTriageQueue`'s vote aggregate returned nothing and
+  // every request's tally COALESCEd to 0 — silently, which is why it took a
+  // fixture repair (MOTIR-2857) to surface it as an assertion rather than a crash.
+
+  it('ADMITS a workspace-bound reader its OWN tenant’s votes', async () => {
+    // The admit assertion, first — a policy set that refuses everyone passes every
+    // denial test in this file (the header's standing warning).
+    await seedVote(host);
+    const rows = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
+      selectVotes(tx, host.workItemId),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it('admits them WITHOUT `app.user_id` — the reader is not the voter', async () => {
+    // The precise shape of the defect. `withWorkspaceServiceContext` binds only
+    // `app.workspace_id`; the vote belongs to a cross-org outsider who is not a
+    // member of this workspace at all. Binding the member's own id must not be
+    // required, and must not narrow the set to their own votes either.
+    await seedVote(host);
+    const withActor = await asAppRole(
+      { workspaceId: host.workspaceId, userId: host.ownerId },
+      (tx) => selectVotes(tx, host.workItemId),
+    );
+    expect(withActor).toHaveLength(1);
+  });
+
+  it('does NOT widen the UNBOUND read — a non-public project’s votes stay invisible', async () => {
+    // The arm keys on the tenant, so it must not leak onto the anonymous path:
+    // with no workspace bound, `wi."workspaceId" = NULL` is NULL and the row is
+    // refused. `neighbour` is `limited`, so the public arm does not admit it
+    // either — an unbound reader still sees nothing.
+    await seedVote(neighbour);
+    const rows = await asAppRole({}, (tx) => selectVotes(tx, neighbour.workItemId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('is SELECT-ONLY — a bound member cannot cast, retract or re-attribute a vote', async () => {
+    // The narrowing this arm makes deliberately, against the `work_item_label` /
+    // `watcher` FOR-ALL shape it is otherwise modelled on. A vote is a row about a
+    // PERSON's interest; the owner arm's `user_id = app.user_id` still owns every
+    // write, and a workspace member is not the voter.
+    await seedVote(host);
+    const bound = { workspaceId: host.workspaceId, userId: host.ownerId };
+
+    await expect(
+      asAppRole(
+        bound,
+        (tx) =>
+          tx.$executeRaw`
+          INSERT INTO "public_request_vote" ("id", "work_item_id", "user_id", "created_at")
+          VALUES (${'vote-by-member'}, ${host.workItemId}, ${outsiderId}, now())
+        `,
+      ),
+      'a member must not cast a vote as somebody else',
+    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+
+    // DELETE and UPDATE are governed by the same FOR-ALL policy's USING, which the
+    // member does not satisfy — so they match no row rather than raising. Either
+    // way the outsider's vote must survive, read back as the owner.
+    await asAppRole(
+      bound,
+      (tx) => tx.$executeRaw`
+        DELETE FROM "public_request_vote" WHERE "work_item_id" = ${host.workItemId}`,
+    );
+    await asAppRole(
+      bound,
+      (tx) => tx.$executeRaw`
+        UPDATE "public_request_vote" SET "user_id" = ${host.ownerId}
+         WHERE "work_item_id" = ${host.workItemId}`,
+    );
+
+    const surviving = await adminDb.publicRequestVote.findMany({
+      where: { workItemId: host.workItemId },
+    });
+    expect(surviving).toHaveLength(1);
+    expect(surviving[0]!.userId, 'the vote must still belong to its caster').toBe(outsiderId);
   });
 });
 
