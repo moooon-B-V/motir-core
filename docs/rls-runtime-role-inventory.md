@@ -702,6 +702,7 @@ request** — no error, no warning, just the 6.12.6 sort key quietly ceasing to 
   binds no GUC (theirs) and a GUC with no arm that reads it (this one). Neither is a call-site
   property, so no call-site scanner can see either. What would cover both is an assertion per
   (table, context) pair against `pg_policies` — nothing today makes that claim.
+
 - **The trigger was a FIXTURE repair, not an audit.** MOTIR-2857 moved this suite's setup writes to
   `adminDb`; before that the file died in setup and the assertion was never reached. Expect more of
   this class to surface as the remaining fixture batches land — a suite that dies early is a suite
