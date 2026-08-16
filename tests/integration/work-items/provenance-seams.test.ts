@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { WorkItemImplementationSource, WorkItemPlanningSource } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';
 import enMessages from '@/messages/en.json';
@@ -172,7 +173,13 @@ describe('provenance write → read-DTO seams (all sources through the detail re
       { projectId: fx.projectId, kind: 'task', title: 'partial' },
       fx.ctx,
     );
-    await db.$transaction(async (tx) => {
+    // ⚠️ NOT `adminDb` and NOT a bare `db.$transaction` (MOTIR-2871).
+    // `recordImplementationProvenance` is the PATH UNDER TEST, so it stays on
+    // the singleton — but it takes the caller's `tx`, and a bare one binds no
+    // GUCs, so under TEST_DB_APP_ROLE=1 its own UPDATE cannot see the row it
+    // just created. A real caller is inside a bound transaction; this supplies
+    // the same thing.
+    await withWorkspaceContext(fx.ctx, async (tx) => {
       await workItemsService.recordImplementationProvenance(
         created.id,
         { source: 'byok', harness: 'codex', model: 'gpt-5-codex' },
@@ -186,7 +193,7 @@ describe('provenance write → read-DTO seams (all sources through the detail re
     expect(dto.implementationModel).toBe('gpt-5-codex');
 
     // An explicit null is a REPORT — "there is none" — and does clear it.
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(fx.ctx, async (tx) => {
       await workItemsService.recordImplementationProvenance(
         created.id,
         { source: 'byok', harness: null, model: null },

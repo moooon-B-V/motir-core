@@ -603,11 +603,80 @@ story; they are visible in the same run and should not be read as read-path resi
 
 ---
 
-## CLOSED — both ratchets are at their floor (MOTIR-2833, 2026-08-15)
+## CLOSED — the WRITE surface is bound (MOTIR-2865, 2026-08-16)
 
-The last entry this document owes. `tests/rls/singleton-read-guard.test.ts` carried two ratchets;
-this is where both finish, and the two closed for **different reasons**, which is the distinction
-the whole two-ratchet apparatus existed to preserve.
+The section directly above — _"Out of scope, and still open: the WRITE surface"_ — was accurate,
+prominent and terminal: it named a whole class and filed no card for it, in this story or any
+other (`notes.html` #271, planning bug MOTIR-2863). MOTIR-2862's re-measurement carved it into
+MOTIR-2865 and five children; this is their closing entry.
+
+### The named class, before and after
+
+Measured under `TEST_DB_APP_ROLE=1` over the union of the five children's own suites — 445 files,
+`does not exist` count **0** (a clean run, not a trampled one):
+
+| writer                        | denials before | after |
+| ----------------------------- | -------------- | ----- |
+| **application + script code** | **115**        | **0** |
+| test fixtures (MOTIR-2871's)  | 59             | 59    |
+
+**The suite total does not fall by 115, and that is the expected shape** (`notes.html` #249): what
+sat behind a refused INSERT is the next layer, not nothing. Failing tests over the same union are
+**111**, and the residue is the assertion class MOTIR-2872 re-measures after this lands. A reader
+who expects the total to move by the class size will read a correct fix as a failed one.
+
+### What was actually unbound, by site
+
+| site                                                                                                                        | verdict                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `automationEngineService.writeExecution` (`:483`)                                                                           | bound on `rule.workspaceId`; takes the RULE, not a rule id, so the pair cannot be mismatched (49)                    |
+| `notificationFanInService` (`:403`)                                                                                         | bound on `event.workspaceId`, the same tenant its reads at `:181`/`:224` already bound (17)                          |
+| `organizationsService.createOrganization` (`:222`)                                                                          | BOOTSTRAP-bound inline (`app.bootstrap_slug` + `app.user_id`), the org-tier twin of `insertWorkspaceWithOwner` (3)   |
+| `importService.createDraft` (`:95`) and `preview` (`:190`)                                                                  | bound on `ctx.workspaceId`, as `:231` already was (8)                                                                |
+| `scripts/plan-seed/systemPrincipal.ts`, `testProject.ts`, `seed.ts` (×2), `seedReportingFixture.ts`, `seedCollabFixture.ts` | bound on the workspace (or, for `seed.ts:282`, on the ORG) — every one writes into a tenant that already exists (38) |
+
+### Three things the five cards found that the partition did not predict
+
+1. **59 of the 174 denials are FIXTURES, not application code.** The classifier that cut the
+   partition reads an error message; it cannot see whether the statement came from `lib/` or from a
+   test's own `db.$transaction`. `watcher` (10) and `work_item_embedding` (10) were assigned to the
+   write surface and have **no unbound application writer at all** — every site is a fixture, and
+   MOTIR-2870's four services were already bound before its card was written. They are handed to
+   MOTIR-2871 by file and line. (`notes.html` #257, one instance further on.)
+2. **`withSystemContext` is not an escape hatch for the tenant-root tables.** Neither
+   `membership_insert_active_or_bootstrap` nor `org_membership_insert_active_or_bootstrap` has a
+   `system_admin` arm, so a caller reaching for it is refused rather than over-permitted.
+   `tests/github/githubWebhookService.test.ts` had done exactly that and was red for it.
+3. **A denial was masking a SILENT gate failure.** `entitlementsService.assertCanCreateOrganization`
+   counts the actor's existing org memberships inside `createOrganization`'s transaction, and
+   `org_membership_visible_active_or_own` shows them only to `app.user_id`. Unbound, the §4.5
+   org-creation gate read ZERO orgs for every actor and allowed every 2nd+ org it exists to refuse.
+   The refused INSERT is the loud half of that transaction; this was the quiet half.
+
+### Out of scope, and CARDED: three unbound tenant READS the read surface missed
+
+Found by sweeping every remaining bare `db.$transaction` in `lib/` rather than only the ones a
+failing test pointed at. All three READ `workspace_membership` with no GUC bound, so under
+`motir_app` they return empty and **raise nothing** — invisible to this story's instrument, which
+keys on a refusal:
+
+- `workspacesService.getActiveWorkspace` (`:349`) — `GET /api/workspaces/current` resolves to null.
+- `workspacesService.ensureDefaultWorkspace` (`:309`) — the membership count that makes it idempotent
+  reads 0, so it mints a duplicate default workspace.
+- `importEngineService.defaultLoadMembers` (`:39`) — the import's assignee resolution maps nobody.
+
+Filed as a bug rather than absorbed (`notes.html` #27). They belong to the READ surface MOTIR-2796
+closed and are a counter-example to its instruments: both scanners ask whether a repository read
+_takes_ a `tx`, and these three pass one — from a transaction that binds nothing.
+
+---
+
+## CLOSED — both ratchets are at their floor (MOTIR-2833, 2026-08-16)
+
+`tests/rls/singleton-read-guard.test.ts` carried two ratchets; this is where both finish, and they
+closed for **different reasons**, which is the distinction the whole two-ratchet apparatus existed to
+preserve. (Written while the WRITE surface above was still open, and landed after it closed — the
+two are independent axes, which is why the order of the last two sections does not matter.)
 
 | ratchet                     | measures                                 | peak | final | closed by                          |
 | --------------------------- | ---------------------------------------- | ---: | ----: | ---------------------------------- |
@@ -679,8 +748,11 @@ TEST_DB_APP_ROLE=1 pnpm vitest run tests/rls/singleton-read-guard.test.ts
 
 ### What this does NOT close
 
-The read surface is finished; the suite is not. The WRITE surface flagged in the section above
-remains open (INSERTs refused by policy in `tests/import`, reproducible without any of these
-changes), and the whole-suite figure is MOTIR-2862's to re-measure once the TRUNCATE mask is lifted.
-**This entry closes the two ratchets in `singleton-read-guard.test.ts` — not the flag.** Flipping it
-is MOTIR-2734, and cutting the deployment over is MOTIR-2515.
+**This entry closes the two ratchets in `singleton-read-guard.test.ts` — not the flag.** Flipping
+`TEST_DB_APP_ROLE` is MOTIR-2734, and cutting the deployment over is MOTIR-2515.
+
+The WRITE surface this section originally listed as still-open closed one day later, in the section
+directly above (MOTIR-2865) — including `importService.createDraft`/`preview`, which were the
+`tests/import` denials cited here while this card was in review. What remains between here and the
+flag is the assertion residue MOTIR-2872 re-measures and the fixture population MOTIR-2871 owns;
+neither is a read returning empty.

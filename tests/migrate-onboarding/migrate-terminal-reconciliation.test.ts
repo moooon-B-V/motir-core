@@ -66,7 +66,7 @@ async function seedRun(
     codeGraphReady?: boolean;
   },
 ) {
-  return db.migrateOnboarding.create({
+  return adminDb.migrateOnboarding.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -82,11 +82,11 @@ async function seedRun(
 /** Stamp the durable "this project is established" marker — what
  *  `approvePlan` / the dogfood seed / the MOTIR-1799 operator stamp all write. */
 async function establishProject(fx: WorkItemFixture, at = new Date()) {
-  await db.project.update({ where: { id: fx.projectId }, data: { onboardingRanAt: at } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { onboardingRanAt: at } });
 }
 
 async function readRun(id: string) {
-  return db.migrateOnboarding.findUniqueOrThrow({ where: { id } });
+  return adminDb.migrateOnboarding.findUniqueOrThrow({ where: { id } });
 }
 
 beforeEach(async () => {
@@ -97,6 +97,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the reconciliation completes an orphaned run — both producers', () => {
@@ -278,7 +279,7 @@ describe('the lane runs the reconciliation BEFORE the index repair', () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
     await establishProject(fx);
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId: fx.workspaceId,
         functionId: 'system.code-graph-index',
@@ -312,7 +313,7 @@ describe('the reconciliation is concurrency-safe', () => {
    */
   async function waitForBlockedLock(): Promise<void> {
     for (let attempt = 0; attempt < 400; attempt += 1) {
-      const rows = await db.$queryRaw<Array<{ n: bigint }>>`
+      const rows = await adminDb.$queryRaw<Array<{ n: bigint }>>`
         SELECT count(*)::bigint AS n FROM pg_locks WHERE NOT granted
       `;
       if (Number(rows[0]!.n) > 0) return;
@@ -335,7 +336,7 @@ describe('the reconciliation is concurrency-safe', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const wizard = db.$transaction(
+    const wizard = adminDb.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "migrate_onboarding" WHERE "id" = ${run.id} FOR UPDATE`;
         await tx.migrateOnboarding.update({

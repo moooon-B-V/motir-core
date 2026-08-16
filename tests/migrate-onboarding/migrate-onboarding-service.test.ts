@@ -81,7 +81,7 @@ async function patchRun(
  *  resolves it — the connect-step exit signal. Returns its `owner/name` ref. */
 async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'widgets') {
   const rand = randomToken(6);
-  const inst = await db.githubInstallation.create({
+  const inst = await adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
@@ -89,7 +89,7 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
       accountType: 'Organization',
     },
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -105,7 +105,7 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
 
 /** Seed a SUCCEEDED code-graph-index job_run for a repo — the index-step exit. */
 async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -126,7 +126,7 @@ async function seedPlan(
   sourceJobId: string,
   status: 'generating' | 'planned' | 'approved' = 'generating',
 ) {
-  await db.plan.create({
+  await adminDb.plan.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -139,7 +139,10 @@ async function seedPlan(
 
 /** Move the generation Plan bound to `sourceJobId` to a terminal review status. */
 async function setPlanStatus(sourceJobId: string, status: 'planned' | 'approved') {
-  await db.plan.updateMany({ where: { sourceJobId }, data: { status, plannedAt: new Date() } });
+  await adminDb.plan.updateMany({
+    where: { sourceJobId },
+    data: { status, plannedAt: new Date() },
+  });
 }
 
 beforeEach(async () => {
@@ -155,6 +158,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('migrateOnboardingService.startMigration', () => {
@@ -168,7 +172,7 @@ describe('migrateOnboardingService.startMigration', () => {
     expect(dto.status).toBe('active');
     expect(dto.connectedRepoRef).toBeNull();
     expect(dto.codeGraphReady).toBe(false);
-    expect(await db.migrateOnboarding.count({ where: { projectId: fx.projectId } })).toBe(1);
+    expect(await adminDb.migrateOnboarding.count({ where: { projectId: fx.projectId } })).toBe(1);
   });
 
   it('accepts a connectedRepoRef at start', async () => {
@@ -186,7 +190,7 @@ describe('migrateOnboardingService.startMigration', () => {
     await expect(
       migrateOnboardingService.startMigration(fx.projectId, fx.ctx),
     ).rejects.toBeInstanceOf(MigrateOnboardingExistsError);
-    expect(await db.migrateOnboarding.count({ where: { projectId: fx.projectId } })).toBe(1);
+    expect(await adminDb.migrateOnboarding.count({ where: { projectId: fx.projectId } })).toBe(1);
   });
 });
 
@@ -280,7 +284,7 @@ describe('migrateOnboardingService — import step (optional; MOTIR-1643)', () =
   /** Seed a COMPLETED import run on the fixture's project so the import step's
    *  exit check resolves via polling. */
   async function seedCompletedImport(fx: WorkItemFixture, source = 'jira') {
-    return db.import.create({
+    return adminDb.import.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -517,7 +521,7 @@ describe('migrateOnboardingService — generate step (code-aware precondition ·
     const fx = await makeWorkItemFixture();
     await seedConnectedRepo(fx);
     // Seed a completed import so the reconcile prompt is injected.
-    await db.import.create({
+    await adminDb.import.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

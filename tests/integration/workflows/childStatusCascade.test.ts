@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -40,14 +41,15 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function statusOf(id: string): Promise<string> {
-  return (await db.workItem.findUniqueOrThrow({ where: { id } })).status;
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
 /** A done story over children in the given statuses. */
@@ -79,9 +81,9 @@ describe('the cascade — a done parent completes its children', () => {
 
     // …and the ordinary user path still refuses that same move, so the cascade
     // did NOT buy its power by adding a user-draggable edge.
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
-    const userEdge = await db.workflowTransition.findFirst({
+    const userEdge = await adminDb.workflowTransition.findFirst({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('todo'),
@@ -109,19 +111,19 @@ describe('the cascade — a done parent completes its children', () => {
   it('keeps the done invariants: a revision per child, and sessionBranch cleared', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['in_review']);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: children[0]!.id },
       data: { sessionBranch: 'motir/auto-1' },
     });
 
     await childStatusCascadeService.cascadeToChildren(story.id);
 
-    const child = await db.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
+    const child = await adminDb.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
     expect(child.status).toBe('done');
     // The system set skips ONLY the legality check — every other invariant holds.
     expect(child.sessionBranch).toBeNull();
 
-    const revs = await db.workItemRevision.findMany({
+    const revs = await adminDb.workItemRevision.findMany({
       where: { workItemId: children[0]!.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -221,7 +223,7 @@ describe('forward-only, gates, and no-ops', () => {
   it('the toggle OFF suppresses the cascade entirely', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoCompleteChildrenOnParentDone: false },
     });
@@ -236,7 +238,7 @@ describe('forward-only, gates, and no-ops', () => {
   it('the UPWARD toggle does not suppress the downward cascade', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoRollupParentStatus: false },
     });
@@ -250,7 +252,7 @@ describe('forward-only, gates, and no-ops', () => {
   it('archived and triage children are left out of the cascade', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo', 'todo']);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: children[1]!.id },
       data: { archivedAt: new Date() },
     });

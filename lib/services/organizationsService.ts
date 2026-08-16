@@ -220,6 +220,37 @@ export const organizationsService = {
       lastAttempt = slug;
       try {
         const org = await db.$transaction(async (tx) => {
+          // Bind the TENANT-BOOTSTRAP context (MOTIR-2512 / MOTIR-2868), exactly
+          // as `workspacesService.insertWorkspaceWithOwner` does — this is the
+          // org-tier half of the same problem: the write ESTABLISHES a tenant
+          // rather than acting inside one, so there is no `app.organization_id`
+          // to bind (the id does not exist until the INSERT runs) and
+          // `withOrgContext` cannot be used. The bootstrap policies key on the
+          // SLUG, which the caller chooses and is globally unique:
+          //   * `organization_insert_bootstrap` — `slug = app.bootstrap_slug`
+          //   * `org_membership_insert_active_or_bootstrap` — the second arm,
+          //     `organizationId IN (SELECT id FROM organization WHERE slug =
+          //     app.bootstrap_slug)`
+          // and the RETURNING each `create` performs re-reads the row through
+          // `organization_visible_bootstrap` (slug) and
+          // `org_membership_visible_active_or_own` (`userId = app.user_id`),
+          // which is why BOTH GUCs are bound and not just the slug.
+          //
+          // ⚠️ `app.user_id` is also what makes the entitlement gate below
+          // MEAN anything. `assertCanCreateOrganization` counts the actor's
+          // existing org memberships, and `org_membership_visible_active_or_own`
+          // shows them only to `app.user_id` — so unbound the gate read ZERO
+          // orgs for everyone and silently allowed every 2nd+ org it exists to
+          // refuse. The denial this card was filed for is the loud half; this is
+          // the quiet one.
+          //
+          // Bound INSIDE the retry loop's transaction on purpose: each attempt
+          // opens a fresh tx (a P2002 poisons the current one) and must rebind to
+          // the slug it is actually attempting. Set per-transaction, so it dies
+          // with the tx and cannot leak into the connection's next use.
+          await tx.$executeRaw`SELECT set_config('app.user_id', ${input.actorUserId}, true)`;
+          await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${slug}, true)`;
+
           // §4.5 org-creation gate (8.1.11): the first org is always free; a
           // 2nd+ requires the actor to own/admin a paid (active scaled-tracker)
           // org. Inert off-cloud. Throws EntitlementExceededError otherwise.

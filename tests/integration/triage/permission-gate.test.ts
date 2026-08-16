@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { triageService } from '@/lib/services/triageService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
@@ -56,7 +57,9 @@ async function makeFixture(label: string): Promise<Fixture> {
       password: PASSWORD,
       name: role,
     });
-    await db.workspaceMembership.create({ data: { userId: u.id, workspaceId, role: 'member' } });
+    await adminDb.workspaceMembership.create({
+      data: { userId: u.id, workspaceId, role: 'member' },
+    });
     await projectMembersService.addMember({
       key: project.identifier,
       actorUserId: owner.id,
@@ -90,6 +93,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('work_item:delete — a member keeps every edit and loses the cascade', () => {
@@ -112,7 +116,7 @@ describe('work_item:delete — a member keeps every edit and loses the cascade',
       PermissionDeniedError,
     );
     // nothing was destroyed
-    expect(await db.workItem.findUnique({ where: { id } })).not.toBeNull();
+    expect(await adminDb.workItem.findUnique({ where: { id } })).not.toBeNull();
   });
 
   it('refuses a VIEWER the same three, and admits the ADMIN', async () => {

@@ -1,5 +1,4 @@
 import { Prisma, type WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
@@ -390,6 +389,18 @@ export const notificationFanInService = {
       // One row per recipient for THIS page, in one transaction. `createMany`'s
       // skipDuplicates + the `(dedupeKey, recipientUserId)` unique make a replay
       // / retry idempotent.
+      //
+      // ⚠️ BOUND (MOTIR-2866/2867), on the SAME workspace the reads above bind.
+      // `notification`'s policy is `workspace_id = current_setting('app.workspace_id',
+      // true)` in `USING` **and** `WITH CHECK`, so a bare `db.$transaction` here
+      // could not satisfy it: every row this loop builds was refused, and because
+      // the fan-in is a background job nothing surfaced it — the mutation that
+      // triggered it succeeded and the recipient simply never heard. MOTIR-2796
+      // bound the roster READ (":181") and the comment read (":224") and left this
+      // write on the singleton, which is the shape of the whole write surface.
+      // `event.workspaceId` is the trusted value the source event carries, and
+      // ":324" has already asserted `item.workspaceId === event.workspaceId`, so
+      // the bind and the rows' own `workspaceId` column cannot disagree.
       const rows: Prisma.NotificationCreateManyInput[] = recipientIds.map((recipientUserId) => ({
         workspaceId: event.workspaceId,
         recipientUserId,
@@ -400,7 +411,9 @@ export const notificationFanInService = {
         data: plan.data as unknown as Prisma.InputJsonValue,
         dedupeKey,
       }));
-      await db.$transaction((tx) => notificationRepository.createMany(rows, tx));
+      await withWorkspaceServiceContext(event.workspaceId, (tx) =>
+        notificationRepository.createMany(rows, tx),
+      );
       writtenUserIds.push(...recipientIds);
     }
 

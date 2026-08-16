@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { projectStatusAutomationService } from '@/lib/services/projectStatusAutomationService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectsService } from '@/lib/services/projectsService';
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The settings fixture: an owner (project admin) + a project. */
@@ -73,7 +75,7 @@ describe('Project status-automation columns — defaults (MOTIR-1618)', () => {
     // Read the raw row: proves the DEFAULTs live in the migration, so a project
     // created by any path (seed, import, raw insert) backfills the same way —
     // which is what the ADR's "existing projects backfill to ON" rollout rests on.
-    const row = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(row.autoRollupParentStatus).toBe(true);
     expect(row.autoCompleteChildrenOnParentDone).toBe(true);
   });
@@ -205,7 +207,7 @@ describe('Project status-automation — the update path (MOTIR-1618)', () => {
     });
     // And the edited one really changed (so the assertion above isn't vacuous).
     expect(
-      (await db.project.findUniqueOrThrow({ where: { id: a.id } })).autoRollupParentStatus,
+      (await adminDb.project.findUniqueOrThrow({ where: { id: a.id } })).autoRollupParentStatus,
     ).toBe(false);
   });
 });
@@ -271,7 +273,7 @@ describe('Project status-automation — validation + gates (MOTIR-1618)', () => 
   it('a plain workspace member can READ the switches but cannot CHANGE them', async () => {
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'member@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
 

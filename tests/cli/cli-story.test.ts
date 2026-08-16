@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -83,6 +84,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.close();
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 beforeEach(async () => {
@@ -131,7 +133,7 @@ async function linkedProject(): Promise<LinkedProject> {
 /** Connect a repo to the workspace — the single registry a `targetRepo` pin
  *  validates against (the 7.10.3 installation mirror). */
 async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${fx.workspaceId}` },
     create: {
       installationId: `inst-${fx.workspaceId}`,
@@ -142,7 +144,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
     },
     update: {},
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -1129,7 +1131,7 @@ describe('motir show — build-order waves over a real Postgres DAG', () => {
     // `cycleMembers` unit cases, which can hand it the impossible input.)
     await expect(block(fx, first.id, second.id)).rejects.toThrow();
     await expect(
-      db.workItemLink.create({
+      adminDb.workItemLink.create({
         data: {
           workspaceId: fx.workspaceId,
           fromId: first.id,
@@ -1616,7 +1618,7 @@ describe('attribution — every write lands as the PAT owner', () => {
     await ws.run(['run', item.identifier, '--print']);
     await ws.run(['done', item.identifier, '--via', 'in_review']);
 
-    const revisions = await db.workItemRevision.findMany({
+    const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: item.id },
       orderBy: { changedAt: 'asc' },
     });
