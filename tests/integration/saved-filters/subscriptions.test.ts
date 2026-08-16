@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
@@ -99,6 +100,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('subscribe / unsubscribe / read', () => {
@@ -410,7 +412,10 @@ describe('deliver — resolves AS the subscriber', () => {
       targetUserId: t.otherId,
     });
     // Make the project private so a non-member truly can't browse.
-    await db.project.update({ where: { id: t.fx.projectId }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({
+      where: { id: t.fx.projectId },
+      data: { accessLevel: 'private' },
+    });
 
     const cap = captureEmailEvents();
     const outcome = await savedFilterSubscriptionsService.deliver({

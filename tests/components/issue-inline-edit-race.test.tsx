@@ -61,6 +61,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -85,7 +86,7 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -104,6 +105,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Shape a real WorkItemDto into the row payload the list cells render. */

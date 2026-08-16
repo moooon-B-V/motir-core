@@ -109,6 +109,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /design-evidence/upload-token', () => {
@@ -312,7 +313,7 @@ describe('POST /design-evidence — auth', () => {
 
     expect(res.status).toBe(404);
     // …and the other tenant's item is untouched.
-    expect(await db.designEvidence.count({ where: { workItemId: otherCard.id } })).toBe(0);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: otherCard.id } })).toBe(0);
   });
 });
 
@@ -327,7 +328,7 @@ describe('POST /design-evidence — keyless GitHub OIDC (the PRIMARY auth path)'
     );
 
     expect(res.status).toBe(201);
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
   });
 
   it('401s an OIDC token that does not verify', async () => {
@@ -405,14 +406,14 @@ describe('POST /design-evidence — register', () => {
     );
 
     // On the subtask...
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
     // ...and NOT on its parent story, which is where acceptance evidence would go.
-    expect(await db.designEvidence.count({ where: { workItemId: card.parentId! } })).toBe(0);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: card.parentId! } })).toBe(0);
   });
 
   it('422s a CONTAINER target — a story has many designs, one per design subtask', async () => {
     const token = await integrationToken(fx);
-    const story = await db.workItem.findUniqueOrThrow({ where: { id: card.parentId! } });
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.parentId! } });
     const pathname = `${designPrefix(fx.ctx.workspaceId, story.id)}s.mock.html`;
     store.set(pathname, { contentType: 'text/html', size: 10 });
 
@@ -476,7 +477,7 @@ describe('POST /design-evidence — register', () => {
     );
 
     expect(res.status).toBe(403);
-    expect(await db.designEvidence.count()).toBe(0);
+    expect(await adminDb.designEvidence.count()).toBe(0);
     spy.mockRestore();
   });
 
@@ -556,14 +557,14 @@ describe('POST /design-evidence — register', () => {
 
   it('does not change the item’s status — publishing is evidence, not a transition', async () => {
     const token = await integrationToken(fx);
-    const before = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
 
     await REGISTER(
       req('', token, { assets: [seed('mock', 'z.mock.html', 'text/html')] }, card.identifier),
       params(card.identifier),
     );
 
-    const after = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(after.status).toBe(before.status);
   });
 });

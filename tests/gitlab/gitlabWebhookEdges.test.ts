@@ -7,7 +7,6 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { gitlabWebhookService } from '@/lib/services/gitlabWebhookService';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -45,7 +44,7 @@ async function makeScenario(email: string) {
   );
   await workItemsService.updateStatus(item.id, 'in_progress', ctx);
 
-  await withSystemContext(async (tx) => {
+  await adminDb.$transaction(async (tx) => {
     const connection = await githubInstallationRepository.upsertGitlabConnection(
       {
         installationId: `gitlab-ws-${workspace.id}`,
@@ -138,6 +137,13 @@ async function openMr(identifier: string, iid = 7): Promise<number> {
   return iid;
 }
 
+// ⚠️ Every FIXTURE / teardown / direct-DB-assertion transaction below runs on
+// `adminDb` — the OWNER (MOTIR-2871). They used to open `withSystemContext`,
+// which binds `app.system_admin`, and that arm exists on some policies and not
+// others: under TEST_DB_APP_ROLE=1 a `work_item` delete found nothing and a
+// `workspace_membership` INSERT was refused by WITH CHECK, while the same
+// block's other statements went through. A fixture needs privileges no runtime
+// context grants, so it belongs on the second client, not on a wider GUC.
 beforeEach(async () => {
   await truncateAuthTables();
 });
@@ -260,7 +266,7 @@ describe('gitlabWebhookService — unresolvable deliveries against a real connec
   it('a pipeline on an MR whose linked work item was HARD-DELETED is no_work_item', async () => {
     const { item } = await makeScenario('edge-x@example.com');
     await openMr('ACME-1');
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workItemRevision.deleteMany({ where: { workItemId: item.id } });
       await tx.workItem.delete({ where: { id: item.id } });
     });
@@ -347,7 +353,7 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
     // Degenerate: remove the owner's membership — no principal can author the
     // transition. GitLab always uses owner (no bound identity), so this is the
     // only degenerate-author arm.
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workspaceMembership.deleteMany({
         where: { workspaceId: workspace.id, userId: user.id },
       });

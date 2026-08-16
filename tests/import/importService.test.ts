@@ -1,6 +1,8 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { importService } from '@/lib/services/importService';
+import { importRepository } from '@/lib/repositories/importRepository';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { encryptToken } from '@/lib/github/tokenCrypto';
@@ -45,6 +47,28 @@ const CSV_MAPPING: ImportMapping = {
   statusToKey: { open: 'todo', done: 'done' },
 };
 
+/**
+ * Bind `app.workspace_id` and DROP to the non-bypass `motir_app` role for the
+ * transaction, so `import_active_workspace` actually bites (MOTIR-2869). The
+ * role switch is what makes this assertion mode-INDEPENDENT: with
+ * `TEST_DB_APP_ROLE` unset the singleton is the owner, which bypasses RLS even
+ * under FORCE, and a denial assertion written against it would pass in one mode
+ * and fail in the other. Reverts at transaction end.
+ *
+ * A local copy, per the pattern the RLS suites already follow
+ * (`tests/project-rls.test.ts`, `tests/organization-rls.test.ts`).
+ */
+async function asAppRole<T>(
+  workspaceId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
+    return fn(tx);
+  });
+}
+
 describe('importService', () => {
   it('createDraft creates a draft import and getImport reads it back (status + zero counts)', async () => {
     const fx = await makeWorkItemFixture();
@@ -71,6 +95,34 @@ describe('importService', () => {
     await expect(importService.getImport(draft.id, other.ctx)).rejects.toBeInstanceOf(
       ImportNotFoundError,
     );
+  });
+
+  // MOTIR-2869. The 404 above is enforced by `requireImport`'s own
+  // `workspaceId` comparison in APPLICATION code, so it passes whether or not
+  // `import_active_workspace` exists — a vacuous pass with respect to the thing
+  // this card is about. This asserts the DATABASE half: the row is invisible to
+  // a transaction bound to another tenant, one layer below the service gate.
+  //
+  // It also pins the write down. `createDraft` used a bare `db.$transaction`, so
+  // under `motir_app` the row was refused outright (the 8 failures in this file);
+  // if that were ever "fixed" by widening the policy or by reaching for a
+  // tenant-blind context, this read would start returning the row and go red —
+  // which a green create alone would not catch.
+  it('a draft is invisible to another workspace at the DATABASE layer, not just the service gate', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ identifier: 'OTHER', name: 'Other' });
+    const draft = await importService.createDraft(
+      { projectId: fx.projectId, source: 'csv' },
+      fx.ctx,
+    );
+
+    const own = await asAppRole(fx.workspaceId, (tx) => importRepository.findById(draft.id, tx));
+    expect(own?.id).toBe(draft.id);
+
+    const foreign = await asAppRole(other.workspaceId, (tx) =>
+      importRepository.findById(draft.id, tx),
+    );
+    expect(foreign).toBeNull();
   });
 
   it('preview classifies with no writes, then stores the mapping + a previewed status', async () => {

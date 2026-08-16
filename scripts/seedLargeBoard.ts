@@ -58,6 +58,21 @@ const PRIORITIES: WorkItemPriority[] = ['lowest', 'low', 'medium', 'high', 'high
 export const SEED_LARGE_OWNER_EMAIL = 'seed-large@motir.dev';
 export const SEED_LARGE_OWNER_PASSWORD = 'hunter2hunter2'; // satisfies the credential-strength rule
 
+/**
+ * The Prisma client this seed writes through (MOTIR-2871).
+ *
+ * A seed is a FIXTURE, not application code: it populates a tenant it is TOLD
+ * about rather than one it resolved from a session, so it needs the connection
+ * the workspace RLS policies do not narrow. `db` — the default — is exactly
+ * that for `scripts/seed-large.ts` and every dev / CI invocation, where
+ * `DATABASE_URL` carries the owner. Under `TEST_DB_APP_ROLE=1` the singleton is
+ * the NON-BYPASS runtime role and its writes are refused, so a vitest caller
+ * passes the owner client (`tests/helpers/adminDb`) instead. Injecting it keeps
+ * the standalone script byte-identical rather than making `scripts/` import a
+ * test helper.
+ */
+export type SeedBoardClient = typeof db;
+
 export interface SeedLargeBoardParams {
   workspaceId: string;
   projectId: string;
@@ -125,6 +140,7 @@ export interface SeedLargeBoardManifest {
 export async function seedLargeBoard(
   params: SeedLargeBoardParams,
   options: Partial<SeedLargeBoardOptions> = {},
+  client: SeedBoardClient = db,
 ): Promise<SeedLargeBoardManifest> {
   const opts: SeedLargeBoardOptions = { ...SEED_LARGE_BOARD_DEFAULTS, ...options };
   const { workspaceId, projectId, projectIdentifier, ownerId, memberIds } = params;
@@ -174,7 +190,7 @@ export async function seedLargeBoard(
     priority: WorkItemPriority;
     assigneeId: string | null;
   }): Promise<string> {
-    const id = await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const id = await client.$transaction(async (tx: Prisma.TransactionClient) => {
       const key = await projectRepository.allocateWorkItemNumber(projectId, tx);
       const row = await workItemRepository.create(
         {
@@ -286,7 +302,7 @@ export async function seedLargeBoard(
     (_, i) => opts.doneAgedOutEvery > 0 && i % opts.doneAgedOutEvery === 0,
   );
   if (agedOutIds.length > 0) {
-    await db.$executeRaw`
+    await client.$executeRaw`
       UPDATE "work_item"
          SET "updatedAt" = now() - interval '400 days'
        WHERE id IN (${Prisma.join(agedOutIds)})`;
@@ -379,12 +395,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Chunk `ids` and raw-UPDATE each chunk to keep the `IN (...)` parameter list
  *  well under Postgres' bind limit even at full seed size. */
-async function rawUpdateIn(ids: string[], assign: Prisma.Sql): Promise<void> {
+async function rawUpdateIn(
+  ids: string[],
+  assign: Prisma.Sql,
+  client: SeedBoardClient,
+): Promise<void> {
   const CHUNK = 1000;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
     if (slice.length === 0) continue;
-    await db.$executeRaw`UPDATE "work_item" SET ${assign} WHERE id IN (${Prisma.join(slice)})`;
+    await client.$executeRaw`UPDATE "work_item" SET ${assign} WHERE id IN (${Prisma.join(slice)})`;
   }
 }
 
@@ -417,6 +437,7 @@ export function coprimeStride(stride: number, statusCount: number): number {
 export async function seedLargeScrumSprint(
   params: SeedLargeScrumSprintParams,
   options: SeedLargeScrumSprintOptions = {},
+  client: SeedBoardClient = db,
 ): Promise<SeedLargeScrumSprintManifest> {
   const requestedBacklogEvery = Math.max(2, options.backlogSliceEvery ?? 7);
   const unestimatedEvery = Math.max(2, options.unestimatedEvery ?? 4);
@@ -432,7 +453,7 @@ export async function seedLargeScrumSprint(
   //    props seedLargeBoard ignores. (Do NOT re-pick the board keys explicitly —
   //    that would pass `doneAgedOutEvery: undefined`, which spreads OVER and
   //    clobbers the default, silently dropping the Done-age spread.)
-  const boardManifest = await seedLargeBoard(params, options);
+  const boardManifest = await seedLargeBoard(params, options, client);
 
   // The stride is chosen AFTER the board is seeded, because it depends on how
   // many statuses this project's workflow actually has — see `coprimeStride`.
@@ -441,7 +462,7 @@ export async function seedLargeScrumSprint(
   // 2. Flip the project's seeded default board (kanban, 3.1.2) to scrum so
   //    `getBoard` takes the 4.5.2 sprint-scoped path. The columns + mappings are
   //    untouched (only the kind changes), exactly as the projection tests do.
-  await db.board.updateMany({ where: { projectId }, data: { type: BoardType.scrum } });
+  await client.board.updateMany({ where: { projectId }, data: { type: BoardType.scrum } });
 
   // 3. The active sprint + the planned carry-over target. State + window set
   //    directly (the 4.4 lifecycle UI is not depended on by 4.7.1) — the same
@@ -452,7 +473,7 @@ export async function seedLargeScrumSprint(
     return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   })();
   const activeSprintName = 'At-scale sprint';
-  const active = await db.sprint.create({
+  const active = await client.sprint.create({
     data: {
       workspaceId,
       projectId,
@@ -465,7 +486,7 @@ export async function seedLargeScrumSprint(
     },
   });
   const targetSprintName = 'Carry-over target';
-  const target = await db.sprint.create({
+  const target = await client.sprint.create({
     data: {
       workspaceId,
       projectId,
@@ -481,7 +502,7 @@ export async function seedLargeScrumSprint(
   //    stays in the backlog; the rest join the sprint — so the sprint inherits
   //    the full column / lane / priority / Done-age spread, while a representative
   //    slice is provably out of scope.
-  const rows = await db.workItem.findMany({
+  const rows = await client.workItem.findMany({
     where: { projectId, workspaceId },
     select: { id: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -491,7 +512,7 @@ export async function seedLargeScrumSprint(
   rows.forEach((r, i) => (i % backlogSliceEvery === 0 ? backlogIds : sprintIds).push(r.id));
 
   // Associate the in-sprint set (raw UPDATE — preserves the Done-age backdating).
-  await rawUpdateIn(sprintIds, Prisma.sql`"sprintId" = ${active.id}`);
+  await rawUpdateIn(sprintIds, Prisma.sql`"sprintId" = ${active.id}`, client);
 
   // 5. Story-point spread over the in-sprint issues: every `unestimatedEvery`-th
   //    is left NULL (the contributes-0 path); the rest cycle the deck. Bucket by
@@ -509,7 +530,7 @@ export async function seedLargeScrumSprint(
     committedPoints += value;
   });
   for (const [value, ids] of buckets) {
-    await rawUpdateIn(ids, Prisma.sql`"storyPoints" = ${value}::numeric`);
+    await rawUpdateIn(ids, Prisma.sql`"storyPoints" = ${value}::numeric`, client);
   }
 
   return {

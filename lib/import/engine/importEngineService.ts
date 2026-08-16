@@ -11,7 +11,6 @@
 // while wiring the real repositories by default.
 
 import type { ImportedIssue, ImportSource } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -33,10 +32,20 @@ export interface ImportEngineDeps {
   loadMembers?: (workspaceId: string) => Promise<Array<{ userId: string; email: string | null }>>;
 }
 
+// ⚠️ `withWorkspaceServiceContext`, NOT a bare `db.$transaction` (MOTIR-2874).
+// `workspace_membership`'s SELECT policy `membership_visible_active_or_own`
+// admits a row on `"workspaceId" = app.workspace_id` OR `"userId" =
+// app.user_id`. An import run is a TRUSTED path scoped to ONE workspace and has
+// no acting user to bind at this seam (the importing user is threaded into
+// `buildResolveContext` separately, and is not necessarily a member whose own
+// row would answer the question) — so the workspace arm is the one to fire, and
+// `withWorkspaceServiceContext` is the tier that binds it. Unbound, this
+// returned `[]` under `motir_app`, `buildResolveContext`'s email→user map came
+// back empty, and every imported issue silently resolved to NO assignee.
 async function defaultLoadMembers(
   workspaceId: string,
 ): Promise<Array<{ userId: string; email: string | null }>> {
-  const members = await db.$transaction((tx) =>
+  const members = await withWorkspaceServiceContext(workspaceId, (tx) =>
     workspaceMembershipRepository.findMembersByWorkspace(workspaceId, tx),
   );
   return members.map((m) => ({ userId: m.user.id, email: m.user.email }));

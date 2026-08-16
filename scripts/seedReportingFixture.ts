@@ -60,6 +60,7 @@
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -358,7 +359,12 @@ export async function seedReportingFixture(): Promise<ReportingSeedManifest> {
 
   // Enroll the pool in the project (open access) — the plan-seed 6.4.7 pattern;
   // the owner is the project admin (saved-filter share + automation-admin gates).
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  // Bound (MOTIR-2868) on the workspace being enrolled into: `project_membership`
+  // gates every verb on `workspace_id = current_setting('app.workspace_id', true)`,
+  // and `projectRepository.setAccessLevel` below writes `project`, which is
+  // workspace-gated too. The workspace already exists here, so this is an
+  // ordinary tenant write, not a bootstrap.
+  await withWorkspaceServiceContext(workspace.id, async (tx: Prisma.TransactionClient) => {
     for (const userId of memberIds) {
       await projectMembershipRepository.create(
         {

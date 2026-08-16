@@ -15,6 +15,7 @@ import {
 } from '@/lib/services/notificationFanInService';
 import type { NotificationData } from '@/lib/dto/notifications';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
+import { notificationsService } from '@/lib/services/notificationsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { commentsService } from '@/lib/services/commentsService';
@@ -58,6 +59,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
   await adminDb.$disconnect();
 });
 
@@ -213,6 +215,67 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
     expect(await notificationsFor(s.member.id)).toHaveLength(1);
   });
 
+  // MOTIR-2867. The fan-in's WRITE was a bare `db.$transaction`, so under
+  // `motir_app` every row it built was refused by `notification`'s
+  // `workspace_id = current_setting('app.workspace_id', true)` WITH CHECK — 17
+  // of them across this file and the journey suite. The failure is invisible
+  // from outside: the mutation that fired the event succeeds, the recipient
+  // simply never hears.
+  //
+  // The read-back deliberately goes through `notificationsService.listNotifications`
+  // AS THE RECIPIENT, not through `adminDb` (which every other test here uses,
+  // legitimately, to assert row shape). An owner-client read proves the row
+  // exists; only a bound read as the recipient proves the application could
+  // write it AND see it. Red on `origin/main` under `TEST_DB_APP_ROLE=1`.
+  it('writes rows the RECIPIENT can then read back through the app (bound both ways)', async () => {
+    const s = await buildScenario();
+    const comment = await addMentioningComment(s, s.member);
+
+    const result = await notificationFanInService.fanIn('work-item/comment.created', {
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      commentId: comment.id,
+      authorId: s.fx.ownerId,
+      mentionedUserIds: [s.member.id],
+    } satisfies WorkItemCommentCreatedData);
+    expect(result.writtenUserIds).toEqual([s.member.id]);
+
+    const page = await notificationsService.listNotifications(
+      {},
+      { userId: s.member.id, workspaceId: s.fx.workspaceId },
+    );
+    expect(page.totalCount).toBe(1);
+    expect(page.unreadCount).toBe(1);
+    expect(page.notifications[0]!.type).toBe('mentioned');
+    expect(page.notifications[0]!.workItemId).toBe(s.issueId);
+  });
+
+  // The mirror of the read-back above: binding the write to the event's
+  // workspace must not become a way to write a row FOR someone outside it. A
+  // user who is not in this workspace at all is filtered by the capability gate
+  // before the write ever forms, and this asserts that end to end rather than
+  // trusting the gate — a change that drops it is red here.
+  it('never writes a row for a recipient outside the event workspace', async () => {
+    const s = await buildScenario();
+    const outsider = await usersService.createUser({
+      email: 'outsider@example.com',
+      password: 'hunter2hunter2',
+      name: 'Outsider',
+    });
+    const comment = await addMentioningComment(s, s.member);
+
+    const result = await notificationFanInService.fanIn('work-item/comment.created', {
+      workspaceId: s.fx.workspaceId,
+      workItemId: s.issueId,
+      commentId: comment.id,
+      authorId: s.fx.ownerId,
+      mentionedUserIds: [outsider.id, s.member.id],
+    } satisfies WorkItemCommentCreatedData);
+
+    expect(result.writtenUserIds).toEqual([s.member.id]);
+    expect(await notificationsFor(outsider.id)).toHaveLength(0);
+  });
+
   it('no-ops on a mention-free comment event (every comment fires the event)', async () => {
     const s = await buildScenario();
     const comment = await commentsService.addComment(s.issueId, { bodyMd: 'No tags.' }, s.fx.ctx);
@@ -311,7 +374,7 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
 describe('notificationFanInService.fanIn — description mentions', () => {
   it('writes a description-sourced row scoped to the revision id', async () => {
     const s = await buildScenario();
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(
         s.issueId,
         { descriptionMd: `Owned by ${mentionToken(s.member)}.` },
@@ -463,7 +526,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
 
   it('drives the description-mentioned event end-to-end', async () => {
     const s = await buildScenario();
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(s.issueId, { descriptionMd: `cc ${mentionToken(s.member)}` }, tx),
     );
 

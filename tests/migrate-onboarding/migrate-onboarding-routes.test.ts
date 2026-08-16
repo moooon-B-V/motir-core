@@ -64,7 +64,7 @@ function useProject(fx: WorkItemFixture) {
 
 async function seedConnectedRepo(fx: WorkItemFixture) {
   const rand = randomToken(6);
-  const inst = await db.githubInstallation.create({
+  const inst = await adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
@@ -72,7 +72,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
       accountType: 'Organization',
     },
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -96,6 +96,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/onboarding/migrate — start', () => {

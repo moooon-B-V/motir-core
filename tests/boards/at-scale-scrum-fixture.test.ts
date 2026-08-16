@@ -107,6 +107,7 @@ async function seed(fx: Fixture) {
       memberIds: fx.memberIds,
     },
     SMALL_OPTS,
+    adminDb,
   );
 }
 

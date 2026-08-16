@@ -49,7 +49,7 @@ async function seedRun(
     codeGraphReady?: boolean;
   },
 ) {
-  return db.migrateOnboarding.create({
+  return adminDb.migrateOnboarding.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -65,7 +65,7 @@ async function seedRun(
 /** Seed a SUCCEEDED `system.code-graph-index` ledger row for a repo — the exit
  *  signal the sweep reads. Mirrors what the real index job writes on success. */
 async function seedSucceededIndexJob(workspaceId: string, repoRef: string) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId,
       functionId: 'system.code-graph-index',
@@ -80,7 +80,7 @@ async function seedSucceededIndexJob(workspaceId: string, repoRef: string) {
 }
 
 async function readRun(id: string) {
-  const row = await db.migrateOnboarding.findUniqueOrThrow({ where: { id } });
+  const row = await adminDb.migrateOnboarding.findUniqueOrThrow({ where: { id } });
   return row;
 }
 
@@ -92,6 +92,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the index sweep repairs a wedged run', () => {
@@ -148,7 +149,7 @@ describe('the index sweep leaves everything else alone', () => {
     const fx = await makeWorkItemFixture();
     const run = await seedRun(fx, { step: 'index', connectedRepoRef: 'acme/widgets' });
     // A RUNNING index is not a succeeded one.
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId: fx.workspaceId,
         functionId: 'system.code-graph-index',
@@ -255,7 +256,7 @@ describe('the index sweep is concurrency-safe', () => {
    */
   async function waitForBlockedLock(): Promise<void> {
     for (let attempt = 0; attempt < 400; attempt += 1) {
-      const rows = await db.$queryRaw<Array<{ n: bigint }>>`
+      const rows = await adminDb.$queryRaw<Array<{ n: bigint }>>`
         SELECT count(*)::bigint AS n FROM pg_locks WHERE NOT granted
       `;
       if (Number(rows[0]!.n) > 0) return;
@@ -278,7 +279,7 @@ describe('the index sweep is concurrency-safe', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const wizard = db.$transaction(
+    const wizard = adminDb.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "migrate_onboarding" WHERE "id" = ${run.id} FOR UPDATE`;
         await tx.migrateOnboarding.update({
