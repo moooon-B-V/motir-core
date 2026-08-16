@@ -74,7 +74,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
       workItemRepository.update(hand.id, { status: 'todo' }, tx),
     );
 
-    const snapshot = await snapshotLiveStatuses([fx.workspaceId]);
+    const snapshot = await snapshotLiveStatuses([fx.workspaceId], adminDb);
 
     expect(snapshot.get('7.8.5')).toBe('done');
     expect(snapshot.get('7.8.7')).toBe('in_progress');
@@ -83,9 +83,9 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
   });
 
   it('returns an empty snapshot (nothing preserved) for a first-ever seed', async () => {
-    const snapshot = await snapshotLiveStatuses([]);
+    const snapshot = await snapshotLiveStatuses([], adminDb);
     expect(snapshot.size).toBe(0);
-    const result = await applyPreservedStatuses({ snapshot, idMap: new Map() });
+    const result = await applyPreservedStatuses({ snapshot, idMap: new Map(), client: adminDb });
     expect(result).toEqual({ preserved: 0, fellBack: 0, warnings: [] });
   });
 
@@ -94,7 +94,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     const live = await makeWorkItemFixture({ name: 'Live' });
     await seedItem(live, '7.8.5', 'done');
     await seedItem(live, '7.8.7', 'in_progress');
-    const snapshot = await snapshotLiveStatuses([live.workspaceId]);
+    const snapshot = await snapshotLiveStatuses([live.workspaceId], adminDb);
 
     // ── Phase 2: the RESEED. The tree is recreated with SEED statuses; a brand
     // new item (7.8.99) appears. idMap is the loader's planId → new work_item id.
@@ -108,7 +108,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
       ['7.8.99', newNew],
     ]);
 
-    const result = await applyPreservedStatuses({ snapshot, idMap });
+    const result = await applyPreservedStatuses({ snapshot, idMap, client: adminDb });
 
     // The two pre-existing items keep their LIVE status (preserved), the new one
     // keeps its seed status.
@@ -145,7 +145,11 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     expect(DEFAULT_STATUS_KEYS.has(customStatus)).toBe(false);
     const snapshot = new Map([['6.6.6', customStatus]]);
 
-    const result = await applyPreservedStatuses({ snapshot, idMap: new Map([['6.6.6', newId]]) });
+    const result = await applyPreservedStatuses({
+      snapshot,
+      idMap: new Map([['6.6.6', newId]]),
+      client: adminDb,
+    });
 
     // The item keeps its SEED status (not the gone-from-workflow custom one)…
     expect(
@@ -175,6 +179,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     const result = await applyPreservedStatuses({
       snapshot,
       idMap: new Map([['2.1.1', keptId]]),
+      client: adminDb,
     });
 
     expect(
@@ -193,7 +198,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     // that preserved value and re-applies it — same result, no drift.
     const fx = await makeWorkItemFixture();
     const id = await seedItem(fx, '7.8.7', 'in_progress'); // state after reseed #1
-    const snapshot = await snapshotLiveStatuses([fx.workspaceId]);
+    const snapshot = await snapshotLiveStatuses([fx.workspaceId], adminDb);
     expect(snapshot.get('7.8.7')).toBe('in_progress');
 
     // Reseed #2: recreate with the seed status, then preserve.
@@ -201,6 +206,7 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     const result = await applyPreservedStatuses({
       snapshot,
       idMap: new Map([['7.8.7', reseeded]]),
+      client: adminDb,
     });
 
     expect(

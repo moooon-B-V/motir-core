@@ -1,5 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { MOTIR_SYSTEM_USER_EMAIL, MOTIR_SYSTEM_USER_NAME } from '@/lib/ai/systemPrincipal';
@@ -45,7 +46,22 @@ export async function seedSystemPrincipal(
     create: { email: MOTIR_SYSTEM_USER_EMAIL, name: MOTIR_SYSTEM_USER_NAME, emailVerified: true },
   });
 
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  // Bound (MOTIR-2868) on the workspace the principal is being enrolled INTO.
+  // This is a seed helper, but it is not a bootstrap: the meta workspace and
+  // project already exist and their ids are the function's own inputs, so the
+  // tenant is known and the narrow context is available. Both writes are gated
+  // on it — `membership_insert_active_or_bootstrap`'s first arm (`"workspaceId"
+  // = app.workspace_id`) and `project_membership_active_workspace` — and the
+  // RETURNING each `create` performs re-reads through the matching SELECT arm.
+  //
+  // ⚠️ NOT `withSystemContext`. Neither tenant-root membership policy has a
+  // `system_admin` arm at all, so it would not even work here (see
+  // `tests/github/githubWebhookService.test.ts`, which tried exactly that and
+  // was refused); and where it does work it hands a seed script a tenant-blind
+  // connection, which is the exemption this whole effort is closing. A seed
+  // script that runs BEFORE any tenant exists is the legitimate system-context
+  // case; this one runs after.
+  await withWorkspaceServiceContext(input.workspaceId, async (tx: Prisma.TransactionClient) => {
     await workspaceMembershipRepository.create(
       { userId: user.id, workspaceId: input.workspaceId, role: 'member' },
       tx,

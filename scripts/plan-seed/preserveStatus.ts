@@ -50,6 +50,19 @@ import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
  * titled `7 …` don't collide on the leading integer. Returns null for a title
  * that carries no dotted-id prefix (a hand-created tenant item, not a plan row).
  */
+/**
+ * The Prisma client the preserve pass reads and writes through (MOTIR-2871).
+ *
+ * The plan-seed loader is a FIXTURE for a tenant it is being handed, not a
+ * request path that resolved one, so it needs the connection the workspace RLS
+ * policies do not narrow. `db` — the default — is that for `pnpm db:seed` and
+ * every dev / CI invocation. Under `TEST_DB_APP_ROLE=1` the singleton is the
+ * NON-BYPASS runtime role: the snapshot read returns nothing and the re-apply
+ * write is refused, so a vitest caller passes the owner client
+ * (`tests/helpers/adminDb`) instead.
+ */
+export type PreserveStatusClient = typeof db;
+
 export function planIdFromTitle(title: string): string | null {
   const epic = title.match(/^Epic (\d+(?:\.\d+)*): /);
   if (epic) return epic[1]!;
@@ -69,11 +82,12 @@ export function planIdFromTitle(title: string): string | null {
  */
 export async function snapshotLiveStatuses(
   workspaceIds: Iterable<string>,
+  client: PreserveStatusClient = db,
 ): Promise<Map<string, string>> {
   const ids = [...workspaceIds];
   const snapshot = new Map<string, string>();
   if (ids.length === 0) return snapshot;
-  const rows = await db.workItem.findMany({
+  const rows = await client.workItem.findMany({
     where: { workspaceId: { in: ids } },
     select: { title: true, status: true },
   });
@@ -112,7 +126,10 @@ export async function applyPreservedStatuses(args: {
   snapshot: Map<string, string>;
   /** plan id → freshly-created work_item id (the loader's `idMap`). */
   idMap: Map<string, string>;
+  /** See {@link PreserveStatusClient}; defaults to the `@/lib/db` singleton. */
+  client?: PreserveStatusClient;
 }): Promise<PreserveResult> {
+  const client = args.client ?? db;
   let preserved = 0;
   let fellBack = 0;
   const warnings: string[] = [];
@@ -126,7 +143,7 @@ export async function applyPreservedStatuses(args: {
       );
       continue;
     }
-    await db.$transaction((tx: Prisma.TransactionClient) =>
+    await client.$transaction((tx: Prisma.TransactionClient) =>
       workItemRepository.update(workItemId, { status: liveStatus }, tx),
     );
     preserved++;

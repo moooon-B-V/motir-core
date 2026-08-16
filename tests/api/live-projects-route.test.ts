@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { LIVE_PROJECTS_MAX_PAIRS } from '@/lib/codeGraph/liveProjects';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectsService } from '@/lib/services/projectsService';
@@ -32,6 +33,7 @@ afterAll(async () => {
   if (previousToken === undefined) delete process.env['MOTIR_AI_TO_CORE_SERVICE_TOKEN'];
   else process.env['MOTIR_AI_TO_CORE_SERVICE_TOKEN'] = previousToken;
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 beforeEach(async () => {
@@ -103,7 +105,7 @@ describe('the per-pair verdict', () => {
       actorUserId: owner.id,
       name: 'Legacy',
     });
-    await db.project.delete({ where: { id: gone.id } });
+    await adminDb.project.delete({ where: { id: gone.id } });
 
     const res = await POST(
       request({

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -35,14 +36,15 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function statusOf(id: string): Promise<string> {
-  return (await db.workItem.findUniqueOrThrow({ where: { id } })).status;
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
 /** A story with N subtasks, every status pinned explicitly (the fixture writes
@@ -194,7 +196,7 @@ describe('gates and no-ops', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'in_progress');
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoRollupParentStatus: false },
     });
@@ -208,7 +210,7 @@ describe('gates and no-ops', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'in_progress');
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoCompleteChildrenOnParentDone: false },
     });
@@ -224,9 +226,9 @@ describe('gates and no-ops', () => {
     await setStatus(story.id, 'in_progress');
     // Remove the very edge MOTIR-1625 added, leaving the done rung unreachable
     // from in_progress — the shape a team with a custom graph can produce.
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
-    await db.workflowTransition.deleteMany({
+    await adminDb.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('in_progress'),
@@ -259,7 +261,7 @@ describe('gates and no-ops', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['done']);
     // A custom status with no outgoing edges — every rung is unreachable.
-    const frozen = await db.workflowStatus.create({
+    const frozen = await adminDb.workflowStatus.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -315,7 +317,7 @@ describe('the emitted event — what carries derivation to the next level', () =
 
     await parentStatusRollupService.rollUpForChild(children[0]!.id);
 
-    const revs = await db.workItemRevision.findMany({
+    const revs = await adminDb.workItemRevision.findMany({
       where: { workItemId: story.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -334,7 +336,7 @@ describe('a RENAMED workflow still derives', () => {
     const fx = await makeWorkItemFixture();
     // Rename `in_progress` → `doing`: the canonical key no longer exists, so the
     // resolver must fall back to the first status of the in_progress category.
-    await db.workflowStatus.updateMany({
+    await adminDb.workflowStatus.updateMany({
       where: { projectId: fx.projectId, key: 'in_progress' },
       data: { key: 'doing' },
     });

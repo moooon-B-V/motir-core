@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createTestUser } from '../fixtures/userFixtures';
 
@@ -50,7 +51,7 @@ const { workspacesService } = await import('@/lib/services/workspacesService');
 async function orgWithOwner(name = 'Acme') {
   const owner = await createTestUser();
   const { workspace } = await workspacesService.createWorkspace({ name, ownerUserId: owner.id });
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
   return { owner, organizationId: ws.organizationId };
 }
 
@@ -71,12 +72,13 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the meta organization, end to end from the database row', () => {
   it('is ENTITLED — the real service reads isMeta and the predicate says yes', async () => {
     const { owner, organizationId } = await orgWithOwner('moooon');
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     const access = await billingService.getAiAccess({
       actorUserId: owner.id,
@@ -94,7 +96,7 @@ describe('the meta organization, end to end from the database row', () => {
 
   it('the settings page derivation hands the card hasPlan: TRUE for a meta org', async () => {
     const { owner, organizationId } = await orgWithOwner('moooon');
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     // Exactly the expression `app/(authed)/settings/organization/page.tsx`
     // evaluates. If someone re-introduces the direct `hasPaidAiPlan` read, this
@@ -124,7 +126,7 @@ describe('the meta organization, end to end from the database row', () => {
       hasAiEntitlement(await billingService.getAiAccess({ actorUserId: owner.id, organizationId })),
     ).toBe(false);
 
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     expect(
       hasAiEntitlement(await billingService.getAiAccess({ actorUserId: owner.id, organizationId })),
@@ -133,7 +135,7 @@ describe('the meta organization, end to end from the database row', () => {
 
   it('documents the boundary crossing a meta org does not need (see the logged bug)', async () => {
     const { owner, organizationId } = await orgWithOwner('moooon');
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     await billingService.getAiAccess({ actorUserId: owner.id, organizationId });
 
@@ -148,7 +150,7 @@ describe('the meta organization, end to end from the database row', () => {
 
   it('survives a motir-ai OUTAGE — the exempt sentinel is returned, not a thrown error', async () => {
     const { owner, organizationId } = await orgWithOwner('moooon');
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
     // Every motir-ai read now REJECTS. This is the availability half of the bug:
     // before the fix, `getAiAccess` awaited both reads inside a `Promise.all`
     // before looking at `isMeta`, so this case threw and `/settings/organization`

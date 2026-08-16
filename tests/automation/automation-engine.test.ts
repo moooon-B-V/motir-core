@@ -498,14 +498,15 @@ describe('internal guards', () => {
     const fx = await makeWorkItemFixture();
     const rule = await makeRule(fx, {});
     const item = await newItem(fx);
-    const first = await automationEngineService.writeExecution(rule.id, {
+    const ref = { id: rule.id, workspaceId: fx.workspaceId };
+    const first = await automationEngineService.writeExecution(ref, {
       status: 'no_actions',
       workItemId: item.id,
       eventId: 'claim-dup',
       durationMs: 1,
     });
     expect(first).not.toBeNull();
-    const second = await automationEngineService.writeExecution(rule.id, {
+    const second = await automationEngineService.writeExecution(ref, {
       status: 'no_actions',
       workItemId: item.id,
       eventId: 'claim-dup',
@@ -513,6 +514,34 @@ describe('internal guards', () => {
     });
     expect(second).toBeNull(); // the partial unique index makes the claim atomic
     expect(await executions(rule.id)).toHaveLength(1);
+  });
+
+  // MOTIR-2866. The audit WRITE is policy-gated: `automation_rule_execution`'s
+  // `WITH CHECK` resolves through a join to `automation_rule`, so an unbound
+  // transaction cannot satisfy it and the INSERT is REFUSED — 49 tests across
+  // five suites, all `new row violates row-level security policy`.
+  //
+  // The read-back deliberately goes through `automationRulesService.listExecutions`
+  // — the audit-log UI's own path — and NOT through `adminDb`. An assertion made
+  // as the owner proves the row exists; it does not prove the application could
+  // write it or see it, which is the whole claim. Red on `origin/main` under
+  // `TEST_DB_APP_ROLE=1` (the run throws out of `recordSuccess`); green after.
+  it('a run WRITES its audit row under the rule tenant, and the app can read it back', async () => {
+    const fx = await makeWorkItemFixture();
+    const rule = await makeRule(fx, {});
+    const item = await newItem(fx);
+
+    const summary = await created(fx, item.id);
+    expect(summary.succeeded).toBe(1);
+
+    const page = await automationRulesService.listExecutions(
+      fx.projectIdentifier,
+      rule.id,
+      { page: 1 },
+      fx.ctx,
+    );
+    expect(page.total).toBe(1);
+    expect(page.executions[0]!.status).toBe('success');
   });
 
   it('the failure email is a silent no-op when the owner no longer exists', async () => {

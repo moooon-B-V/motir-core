@@ -601,12 +601,80 @@ policy (`new row violates row-level security policy for table "import"` in `test
 reproduces without any of this story's changes). Those are a separate surface with no card in this
 story; they are visible in the same run and should not be read as read-path residue.
 
-## `public_request_vote`'s THIRD arm — the member read (MOTIR-2864, 2026-08-15)
+---
 
-The entry above records that MOTIR-2796 shipped "a public SELECT arm for `public_request_vote`
-where there was no workspace to bind." That arm was correct and it was not sufficient, and the gap
-is worth stating precisely because the shape recurs: **arming a table for the reader you are
-currently looking at can leave the table armed for NOBODY ELSE.**
+## CLOSED — the WRITE surface is bound (MOTIR-2865, 2026-08-16)
+
+The section directly above — _"Out of scope, and still open: the WRITE surface"_ — was accurate,
+prominent and terminal: it named a whole class and filed no card for it, in this story or any
+other (`notes.html` #271, planning bug MOTIR-2863). MOTIR-2862's re-measurement carved it into
+MOTIR-2865 and five children; this is their closing entry.
+
+### The named class, before and after
+
+Measured under `TEST_DB_APP_ROLE=1` over the union of the five children's own suites — 445 files,
+`does not exist` count **0** (a clean run, not a trampled one):
+
+| writer                        | denials before | after |
+| ----------------------------- | -------------- | ----- |
+| **application + script code** | **115**        | **0** |
+| test fixtures (MOTIR-2871's)  | 59             | 59    |
+
+**The suite total does not fall by 115, and that is the expected shape** (`notes.html` #249): what
+sat behind a refused INSERT is the next layer, not nothing. Failing tests over the same union are
+**111**, and the residue is the assertion class MOTIR-2872 re-measures after this lands. A reader
+who expects the total to move by the class size will read a correct fix as a failed one.
+
+### What was actually unbound, by site
+
+| site                                                                                                                        | verdict                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `automationEngineService.writeExecution` (`:483`)                                                                           | bound on `rule.workspaceId`; takes the RULE, not a rule id, so the pair cannot be mismatched (49)                    |
+| `notificationFanInService` (`:403`)                                                                                         | bound on `event.workspaceId`, the same tenant its reads at `:181`/`:224` already bound (17)                          |
+| `organizationsService.createOrganization` (`:222`)                                                                          | BOOTSTRAP-bound inline (`app.bootstrap_slug` + `app.user_id`), the org-tier twin of `insertWorkspaceWithOwner` (3)   |
+| `importService.createDraft` (`:95`) and `preview` (`:190`)                                                                  | bound on `ctx.workspaceId`, as `:231` already was (8)                                                                |
+| `scripts/plan-seed/systemPrincipal.ts`, `testProject.ts`, `seed.ts` (×2), `seedReportingFixture.ts`, `seedCollabFixture.ts` | bound on the workspace (or, for `seed.ts:282`, on the ORG) — every one writes into a tenant that already exists (38) |
+
+### Three things the five cards found that the partition did not predict
+
+1. **59 of the 174 denials are FIXTURES, not application code.** The classifier that cut the
+   partition reads an error message; it cannot see whether the statement came from `lib/` or from a
+   test's own `db.$transaction`. `watcher` (10) and `work_item_embedding` (10) were assigned to the
+   write surface and have **no unbound application writer at all** — every site is a fixture, and
+   MOTIR-2870's four services were already bound before its card was written. They are handed to
+   MOTIR-2871 by file and line. (`notes.html` #257, one instance further on.)
+2. **`withSystemContext` is not an escape hatch for the tenant-root tables.** Neither
+   `membership_insert_active_or_bootstrap` nor `org_membership_insert_active_or_bootstrap` has a
+   `system_admin` arm, so a caller reaching for it is refused rather than over-permitted.
+   `tests/github/githubWebhookService.test.ts` had done exactly that and was red for it.
+3. **A denial was masking a SILENT gate failure.** `entitlementsService.assertCanCreateOrganization`
+   counts the actor's existing org memberships inside `createOrganization`'s transaction, and
+   `org_membership_visible_active_or_own` shows them only to `app.user_id`. Unbound, the §4.5
+   org-creation gate read ZERO orgs for every actor and allowed every 2nd+ org it exists to refuse.
+   The refused INSERT is the loud half of that transaction; this was the quiet half.
+
+### Out of scope, and CARDED: three unbound tenant READS the read surface missed
+
+Found by sweeping every remaining bare `db.$transaction` in `lib/` rather than only the ones a
+failing test pointed at. All three READ `workspace_membership` with no GUC bound, so under
+`motir_app` they return empty and **raise nothing** — invisible to this story's instrument, which
+keys on a refusal:
+
+- `workspacesService.getActiveWorkspace` (`:349`) — `GET /api/workspaces/current` resolves to null.
+- `workspacesService.ensureDefaultWorkspace` (`:309`) — the membership count that makes it idempotent
+  reads 0, so it mints a duplicate default workspace.
+- `importEngineService.defaultLoadMembers` (`:39`) — the import's assignee resolution maps nobody.
+
+Filed as a bug rather than absorbed (`notes.html` #27). They belong to the READ surface MOTIR-2796
+closed and are a counter-example to its instruments: both scanners ask whether a repository read
+_takes_ a `tx`, and these three pass one — from a transaction that binds nothing.
+
+## `public_request_vote`'s THIRD arm — the member read (MOTIR-2864, 2026-08-16)
+
+The **READ**-surface entry above (MOTIR-2796) records that it shipped "a public SELECT arm for
+`public_request_vote` where there was no workspace to bind." That arm was correct and it was not
+sufficient, and the gap is worth stating precisely because the shape recurs: **arming a table for
+the reader you are currently looking at can leave the table armed for NOBODY ELSE.**
 
 MOTIR-2811's arm is gated on `coalesce(current_setting('app.workspace_id', true), '') = ''` — it
 fires only on the genuinely context-less connection. So after it the table admitted the vote's
@@ -622,11 +690,18 @@ request** — no error, no warning, just the 6.12.6 sort key quietly ceasing to 
 
 **Two notes for whoever audits the next table.**
 
-- **Neither scanner could have found this.** `singletonReadScan` and `callSiteScan` ask whether a
-  read is BOUND; this read was bound, correctly, from the start. The missing half was the POLICY,
-  and a bound read against a table with no matching arm returns rows rather than an error — the
-  vacuous-pass class MOTIR-2829 names, one layer down. A `COUNT` that reads 0 is the worst instance
-  of it, because 0 is a legitimate answer.
+- **Neither scanner could have found this — and that is now the SECOND independent instance.** Both
+  ask whether a repository read is BOUND; this read was bound, correctly, from the start. The
+  missing half was the POLICY, and a bound read against a table with no matching arm returns rows
+  rather than an error — the vacuous-pass class MOTIR-2829 names, one layer down. A `COUNT` that
+  reads 0 is the worst instance of it, because 0 is a legitimate answer.
+
+  MOTIR-2865's closing section directly above reaches the same verdict from the opposite direction:
+  its three unbound tenant READS "pass one — from a transaction that binds nothing." Put together
+  the instruments have **two** blind spots on the same axis, and they are complementary: a `tx` that
+  binds no GUC (theirs) and a GUC with no arm that reads it (this one). Neither is a call-site
+  property, so no call-site scanner can see either. What would cover both is an assertion per
+  (table, context) pair against `pg_policies` — nothing today makes that claim.
 - **The trigger was a FIXTURE repair, not an audit.** MOTIR-2857 moved this suite's setup writes to
   `adminDb`; before that the file died in setup and the assertion was never reached. Expect more of
   this class to surface as the remaining fixture batches land — a suite that dies early is a suite

@@ -134,7 +134,7 @@ describe('workItemRepository.update — cycle trigger', () => {
     // Move A (root) under C (its grandchild) → cycle. The cycle trigger fires
     // before kind, so we get ParentCycleError (not "epic can't have a parent").
     await expect(
-      db.$transaction((tx) => workItemRepository.update(a.id, { parentId: c.id }, tx)),
+      adminDb.$transaction((tx) => workItemRepository.update(a.id, { parentId: c.id }, tx)),
     ).rejects.toBeInstanceOf(ParentCycleError);
   });
 
@@ -159,7 +159,7 @@ describe('workItemRepository.update — cycle trigger', () => {
     // Move A (root) under D (its great-grandchild). The CTE recurses
     // D → C → B → A and finds the cycle on the deepest hop.
     await expect(
-      db.$transaction((tx) => workItemRepository.update(a.id, { parentId: d.id }, tx)),
+      adminDb.$transaction((tx) => workItemRepository.update(a.id, { parentId: d.id }, tx)),
     ).rejects.toBeInstanceOf(ParentCycleError);
   });
 });
@@ -207,7 +207,7 @@ describe('workItemRepository.lockById', () => {
     const fx = await makeFixture();
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Lockable' });
 
-    const [found, missing] = await db.$transaction(async (tx) => [
+    const [found, missing] = await adminDb.$transaction(async (tx) => [
       await workItemRepository.lockById(epic.id, tx),
       await workItemRepository.lockById('does-not-exist', tx),
     ]);
@@ -228,7 +228,7 @@ describe('workItemRepository.lockById', () => {
     // assertion is order-independent — either ordering yields 'baseXX'.
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const bump = (hold: number) =>
-      db.$transaction(async (tx) => {
+      adminDb.$transaction(async (tx) => {
         await workItemRepository.lockById(item.id, tx);
         const current = await workItemRepository.findById(item.id, tx);
         await sleep(hold);
@@ -317,10 +317,10 @@ describe('workItemRepository.findByProjectFiltered — filters', () => {
     const open = await createWorkItem(fx, { kind: 'task', title: 'open' });
     const done = await createWorkItem(fx, { kind: 'task', title: 'done' });
     const gone = await createWorkItem(fx, { kind: 'task', title: 'archived' });
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(done.id, { status: 'done', assigneeId: fx.owner.id }, tx),
     );
-    await db.$transaction((tx) => workItemRepository.archive(gone.id, tx));
+    await adminDb.$transaction((tx) => workItemRepository.archive(gone.id, tx));
 
     const all = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       workItemRepository.findByProjectFiltered(fx.project.id, undefined, tx),
@@ -412,7 +412,7 @@ describe('workItemRepository.create / update — Prisma error translation', () =
     const fx = await makeFixture();
     // Insert key=1 directly, then attempt a second row with the SAME key in the
     // same project (bypassing the allocator) → unique violation → typed error.
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.create(
         {
           workspaceId: fx.workspace.id,
@@ -428,7 +428,7 @@ describe('workItemRepository.create / update — Prisma error translation', () =
       ),
     );
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         workItemRepository.create(
           {
             workspaceId: fx.workspace.id,
@@ -448,7 +448,7 @@ describe('workItemRepository.create / update — Prisma error translation', () =
 
   it('translates an update of a missing row to WorkItemNotFoundError (P2025)', async () => {
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         workItemRepository.update('00000000-0000-0000-0000-000000000000', { title: 'x' }, tx),
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
@@ -456,7 +456,7 @@ describe('workItemRepository.create / update — Prisma error translation', () =
 
   it('translates an archive of a missing row to WorkItemNotFoundError (P2025)', async () => {
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         workItemRepository.archive('00000000-0000-0000-0000-000000000000', tx),
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
@@ -465,14 +465,14 @@ describe('workItemRepository.create / update — Prisma error translation', () =
   it('unarchive clears archivedAt (the inverse of archive)', async () => {
     const fx = await makeFixture();
     const item = await createWorkItem(fx, { kind: 'task', title: 'restore me' });
-    await db.$transaction((tx) => workItemRepository.archive(item.id, tx));
-    const restored = await db.$transaction((tx) => workItemRepository.unarchive(item.id, tx));
+    await adminDb.$transaction((tx) => workItemRepository.archive(item.id, tx));
+    const restored = await adminDb.$transaction((tx) => workItemRepository.unarchive(item.id, tx));
     expect(restored.archivedAt).toBeNull();
   });
 
   it('translates an unarchive of a missing row to WorkItemNotFoundError (P2025)', async () => {
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         workItemRepository.unarchive('00000000-0000-0000-0000-000000000000', tx),
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);

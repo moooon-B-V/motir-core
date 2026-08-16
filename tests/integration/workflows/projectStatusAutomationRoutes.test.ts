@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture, userId = fx.ownerId) {
@@ -135,7 +137,7 @@ describe('PATCH /api/projects/[key]/status-automation', () => {
     });
     expect(res.status).toBe(200);
 
-    const row = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(row.autoRollupParentStatus).toBe(false);
     expect(row.autoCompleteChildrenOnParentDone).toBe(false);
   });
@@ -155,7 +157,7 @@ describe('PATCH /api/projects/[key]/status-automation', () => {
   it('403 for a plain workspace member', async () => {
     const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const member = await createTestUser({ email: 'member@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     signInAs(fx, member.id);

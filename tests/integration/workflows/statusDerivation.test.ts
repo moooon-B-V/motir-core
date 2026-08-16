@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
@@ -77,14 +78,15 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function statusOf(id: string): Promise<string> {
-  return (await db.workItem.findUniqueOrThrow({ where: { id } })).status;
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
 /** A story with N subtasks, statuses pinned explicitly (the fixture writes
@@ -166,7 +168,7 @@ describe('the upward ladder, end to end through the real transition path', () =>
 
   it('the rollup toggle OFF suppresses it; ON it fires', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoRollupParentStatus: false },
     });
@@ -175,7 +177,7 @@ describe('the upward ladder, end to end through the real transition path', () =>
     await transitionAndDrain(fx, children[0]!.id, 'in_progress');
     expect(await statusOf(story.id)).toBe('todo');
 
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoRollupParentStatus: true },
     });
@@ -204,9 +206,9 @@ describe('the downward cascade, end to end through the real transition path', ()
     expect(await statusOf(child.id)).toBe('done');
     // The system bypass did NOT come from a new user-draggable edge — asserted
     // on the graph itself, so a future "fix" that adds one fails here.
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((st) => st.key === k)!.id;
-    const userEdge = await db.workflowTransition.findFirst({
+    const userEdge = await adminDb.workflowTransition.findFirst({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('todo'),
@@ -229,7 +231,7 @@ describe('the downward cascade, end to end through the real transition path', ()
 
     await transitionAndDrain(fx, story.id, 'done');
 
-    const revs = await db.workItemRevision.findMany({
+    const revs = await adminDb.workItemRevision.findMany({
       where: { workItemId: blocked.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -269,7 +271,7 @@ describe('the downward cascade, end to end through the real transition path', ()
 
   it('the cascade toggle OFF suppresses it; ON it fires', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoCompleteChildrenOnParentDone: false },
     });
@@ -285,7 +287,7 @@ describe('the downward cascade, end to end through the real transition path', ()
     await transitionAndDrain(fx, story.id, 'done');
     expect(await statusOf(child.id)).toBe('todo');
 
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoCompleteChildrenOnParentDone: true },
     });
@@ -393,7 +395,7 @@ describe('recursion, termination, and up↔down non-interference', () => {
     await transitionAndDrain(fx, children[1]!.id, 'done');
     expect(await statusOf(story.id)).toBe('done');
 
-    const revsBefore = await db.workItemRevision.count({ where: { workItemId: story.id } });
+    const revsBefore = await adminDb.workItemRevision.count({ where: { workItemId: story.id } });
 
     // Redeliver the last event: same dispatch, same item, already-settled tree.
     await parentStatusRollupService.rollUpForChild(children[1]!.id);
@@ -402,7 +404,9 @@ describe('recursion, termination, and up↔down non-interference', () => {
 
     expect(extra).toBe(0); // nothing moved ⇒ nothing emitted
     expect(await statusOf(story.id)).toBe('done');
-    expect(await db.workItemRevision.count({ where: { workItemId: story.id } })).toBe(revsBefore);
+    expect(await adminDb.workItemRevision.count({ where: { workItemId: story.id } })).toBe(
+      revsBefore,
+    );
   });
 
   it('an ILLEGAL upward move is a logged no-op, not a thrown job', async () => {
@@ -413,7 +417,7 @@ describe('recursion, termination, and up↔down non-interference', () => {
     // create. Park the PARENT there (the children keep their normal path, so the
     // transitions driving this test stay legal). With every child done, the DONE
     // rung is the only match, and it is unreachable from here.
-    const frozen = await db.workflowStatus.create({
+    const frozen = await adminDb.workflowStatus.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
