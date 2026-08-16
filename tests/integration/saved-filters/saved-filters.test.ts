@@ -11,6 +11,7 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 });
 
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -133,6 +134,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('create — visibility gates + validation + uniqueness', () => {
@@ -698,7 +700,7 @@ describe('durability — stale referents degrade, corrupt envelopes recover type
   });
 
   async function corruptEnvelope(filterId: string, envelope: unknown): Promise<void> {
-    await db.savedFilter.update({
+    await adminDb.savedFilter.update({
       where: { id: filterId },
       data: { astEnvelope: envelope as never },
     });
@@ -944,7 +946,7 @@ describe('dependents + delete — the warning seam and the cascade', () => {
     await expect(savedFiltersService.resolve(t.key, doomed.id, t.memberCtx)).rejects.toThrow(
       SavedFilterNotFoundError,
     );
-    expect(await db.savedFilterStar.count({ where: { savedFilterId: doomed.id } })).toBe(0);
+    expect(await adminDb.savedFilterStar.count({ where: { savedFilterId: doomed.id } })).toBe(0);
   });
 });
 

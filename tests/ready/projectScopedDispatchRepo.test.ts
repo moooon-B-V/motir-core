@@ -62,6 +62,7 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
@@ -258,7 +259,7 @@ describe("authoring a pin validates against THIS project's set", () => {
       /This project's repositories: moooon\/acme-web/,
     );
     // …and the rejected create left no row behind.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
   });
 
   it('ACCEPTS a pin naming a row that is still PROPOSED — the plan pins before it creates', async () => {
@@ -279,7 +280,9 @@ describe("authoring a pin validates against THIS project's set", () => {
     await expect(
       workItemsService.updateWorkItem(item.id, { targetRepo: 'acme-wbe' }, fx.ctx),
     ).rejects.toBeInstanceOf(UnknownTargetRepoError);
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: item.id } })).targetRepo).toBeNull();
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).targetRepo,
+    ).toBeNull();
 
     const pinned = await workItemsService.updateWorkItem(
       item.id,

@@ -51,6 +51,7 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Sign the test in as a given actor scoped to a workspace. */
@@ -84,7 +85,7 @@ async function seedItem(args: {
   title: string;
   kind?: WorkItemKind;
 }): Promise<WorkItem> {
-  return db.$transaction(async (tx) => {
+  return adminDb.$transaction(async (tx) => {
     const key = await projectRepository.allocateWorkItemNumber(args.projectId, tx);
     return workItemRepository.create(
       {

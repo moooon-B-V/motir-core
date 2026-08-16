@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   createTestWorkItem,
@@ -29,12 +30,13 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Move a work item straight to a status, bypassing the workflow — these tests
  *  exercise the AGGREGATE, not the transition graph. */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 /** A child in an explicit status. The status is ALWAYS set, never left to the
@@ -149,8 +151,8 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
     await child(fx, story.id, 'live', 'done');
     const archived = await child(fx, story.id, 'archived', 'todo');
     const triaged = await child(fx, story.id, 'triaged', 'todo');
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
-    await db.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
 
     // An archived child must not hold its parent back from rolling up — so the
     // aggregate reads "one child, done", not "three children, one done".
@@ -170,7 +172,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
   it('follows a RENAMED workflow: the category join and the supplied review key both adapt', async () => {
     const fx = await makeWorkItemFixture();
     // A team that added its own review-ish status in the in_progress category.
-    await db.workflowStatus.create({
+    await adminDb.workflowStatus.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -48,6 +49,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture, userId = fx.ownerId) {
@@ -325,7 +327,7 @@ describe('POST …/[rowId]/state — the three moves the step offers', () => {
       { role: 'api', name: 'a' },
       fx.ctx,
     );
-    const inst = await db.githubInstallation.create({
+    const inst = await adminDb.githubInstallation.create({
       data: {
         installationId: `inst-${fx.workspaceId}`,
         workspaceId: fx.workspaceId,
@@ -334,7 +336,7 @@ describe('POST …/[rowId]/state — the three moves the step offers', () => {
         provider: 'github',
       },
     });
-    const repo = await db.githubRepo.create({
+    const repo = await adminDb.githubRepo.create({
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,

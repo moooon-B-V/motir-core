@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
@@ -41,6 +42,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function mcpClientFor(token: string) {
@@ -109,7 +111,7 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       fixedGrant: ['project:browse'],
     });
     // Written the OLD way — the only way to produce a row `create` no longer can.
-    await db.apiToken.update({
+    await adminDb.apiToken.update({
       where: { id: dto.id },
       data: { scopes: [...LEGACY_TOKEN_SCOPES] },
     });
@@ -133,7 +135,7 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       label: 'malformed',
       fixedGrant: ['project:browse'],
     });
-    await db.apiToken.update({
+    await adminDb.apiToken.update({
       where: { id: dto.id },
       data: { scopes: ['read', 'utter-nonsense'] },
     });

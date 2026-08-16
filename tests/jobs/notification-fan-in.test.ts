@@ -60,6 +60,7 @@ afterEach(() => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -373,7 +374,7 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
 describe('notificationFanInService.fanIn — description mentions', () => {
   it('writes a description-sourced row scoped to the revision id', async () => {
     const s = await buildScenario();
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(
         s.issueId,
         { descriptionMd: `Owned by ${mentionToken(s.member)}.` },
@@ -525,7 +526,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
 
   it('drives the description-mentioned event end-to-end', async () => {
     const s = await buildScenario();
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(s.issueId, { descriptionMd: `cc ${mentionToken(s.member)}` }, tx),
     );
 

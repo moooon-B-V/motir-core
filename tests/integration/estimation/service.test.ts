@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { estimationService } from '@/lib/services/estimationService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -24,13 +25,13 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // finding-#21 done-category predicate + the statistic switch.
 
 async function revisionCount(workItemId: string): Promise<number> {
-  return db.workItemRevision.count({ where: { workItemId } });
+  return adminDb.workItemRevision.count({ where: { workItemId } });
 }
 
 /** Stamp a `done`-category status on an issue (the test-direct status set the
  *  work-item suites use), so the sprint `completed` predicate counts it. */
 async function markDone(id: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status: 'done' } });
+  await adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 }
 
 async function createTask(fx: WorkItemFixture, title: string): Promise<WorkItemDto> {
@@ -43,6 +44,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('estimationService.setEstimate', () => {
@@ -67,7 +69,7 @@ describe('estimationService.setEstimate', () => {
     await estimationService.setEstimate(item.id, 5, fx.ctx);
     await estimationService.setEstimate(item.id, 8, fx.ctx);
 
-    const revs = await db.workItemRevision.findMany({ where: { workItemId: item.id } });
+    const revs = await adminDb.workItemRevision.findMany({ where: { workItemId: item.id } });
     const diffs = revs.map((r) => r.diff);
     expect(diffs).toContainEqual(expect.objectContaining({ storyPoints: { from: 5, to: 8 } }));
   });
@@ -193,10 +195,10 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
       label: string,
       roles: { workspaceRole?: 'admin' | 'member'; projectRole?: 'admin' | 'member' | 'viewer' },
     ) {
-      const user = await db.user.create({
+      const user = await adminDb.user.create({
         data: { email: `est-${label}@example.com`, name: label, emailVerified: true },
       });
-      await db.workspaceMembership.create({
+      await adminDb.workspaceMembership.create({
         data: {
           userId: user.id,
           workspaceId: fx.workspaceId,
@@ -204,7 +206,7 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
         },
       });
       if (roles.projectRole) {
-        await db.projectMembership.create({
+        await adminDb.projectMembership.create({
           data: {
             userId: user.id,
             projectId: fx.projectId,
@@ -315,8 +317,8 @@ describe('estimationService.rollupForSprint (bounded — finding #57)', () => {
     const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.ctx);
     const a = await createTask(fx, 'A');
     const b = await createTask(fx, 'B');
-    await db.workItem.update({ where: { id: a.id }, data: { estimateMinutes: 60 } });
-    await db.workItem.update({ where: { id: b.id }, data: { estimateMinutes: 30 } });
+    await adminDb.workItem.update({ where: { id: a.id }, data: { estimateMinutes: 60 } });
+    await adminDb.workItem.update({ where: { id: b.id }, data: { estimateMinutes: 30 } });
     await estimationService.setEstimate(a.id, 99, fx.ctx); // story points ignored under time stat
     for (const i of [a, b]) await backlogService.assignToSprint(i.id, sprint.id, undefined, fx.ctx);
     await markDone(b.id);

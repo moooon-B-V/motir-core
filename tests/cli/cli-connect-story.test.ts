@@ -17,6 +17,7 @@ vi.hoisted(() => {
 });
 
 const { db } = await import('@/lib/db');
+const { adminDb } = await import('../helpers/adminDb');
 const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
@@ -101,6 +102,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.close();
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 beforeEach(async () => {
@@ -229,7 +231,7 @@ describe('the grant → mint → bearer seam, read back through the CONSUMER', (
         },
       });
       const identifier = structured(created)['identifier'] as string;
-      const row = await db.workItem.findFirstOrThrow({ where: { identifier } });
+      const row = await adminDb.workItem.findFirstOrThrow({ where: { identifier } });
       expect(row.title).toBe('Created over CLI PAT');
       // Written AS the approver, into the workspace the approval bound — not the
       // owner's default workspace.
@@ -298,7 +300,7 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
       expect(isScopeDenied(sprint), 'create_sprint must be scope-denied').toBe(true);
 
       // Denied means denied — nothing was archived on the way out.
-      const item = await db.workItem.findFirstOrThrow({ where: { identifier: key } });
+      const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
       expect(item.archivedAt).toBeNull();
     } finally {
       await client.close();
@@ -308,7 +310,9 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
 
 describe('architecture guards — asserted against the migrated database, not the prose', () => {
   it('device_code is IDENTITY-scoped: no RLS, no policy, and a nullable workspace binding', async () => {
-    const [table] = await db.$queryRaw<{ relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
+    const [table] = await adminDb.$queryRaw<
+      { relrowsecurity: boolean; relforcerowsecurity: boolean }[]
+    >`
       SELECT c.relrowsecurity, c.relforcerowsecurity
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public' AND c.relname = 'device_code'`;
@@ -319,19 +323,19 @@ describe('architecture guards — asserted against the migrated database, not th
     expect(table!.relrowsecurity).toBe(false);
     expect(table!.relforcerowsecurity).toBe(false);
 
-    const policies = await db.$queryRaw<{ policyname: string }[]>`
+    const policies = await adminDb.$queryRaw<{ policyname: string }[]>`
       SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'device_code'`;
     expect(policies).toEqual([]);
 
     // Not a vacuous query: a workspace-scoped table in the SAME database DOES
     // carry forced RLS, so the assertions above are discriminating.
-    const [sprint] = await db.$queryRaw<{ relforcerowsecurity: boolean }[]>`
+    const [sprint] = await adminDb.$queryRaw<{ relforcerowsecurity: boolean }[]>`
       SELECT c.relforcerowsecurity
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE n.nspname = 'public' AND c.relname = 'sprint'`;
     expect(sprint!.relforcerowsecurity).toBe(true);
 
-    const columns = await db.$queryRaw<{ column_name: string; is_nullable: string }[]>`
+    const columns = await adminDb.$queryRaw<{ column_name: string; is_nullable: string }[]>`
       SELECT column_name, is_nullable
         FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'device_code'
@@ -346,7 +350,7 @@ describe('architecture guards — asserted against the migrated database, not th
     expect(nullable['device_code']).toBe('NO');
     expect(nullable['user_code']).toBe('NO');
 
-    const uniques = await db.$queryRaw<{ indexdef: string }[]>`
+    const uniques = await adminDb.$queryRaw<{ indexdef: string }[]>`
       SELECT indexdef FROM pg_indexes
        WHERE schemaname = 'public' AND tablename = 'device_code' AND indexdef LIKE '%UNIQUE%'`;
     const defs = uniques.map((u) => u.indexdef).join('\n');
@@ -355,7 +359,7 @@ describe('architecture guards — asserted against the migrated database, not th
 
     // Both FKs CASCADE: deleting a user or a workspace drops grants that would
     // mint into them (short-lived auth substrate, not audit).
-    const fks = await db.$queryRaw<{ conname: string; confdeltype: string }[]>`
+    const fks = await adminDb.$queryRaw<{ conname: string; confdeltype: string }[]>`
       SELECT conname, confdeltype::text AS confdeltype FROM pg_constraint
        WHERE conrelid = 'public.device_code'::regclass AND contype = 'f'`;
     expect(fks).toHaveLength(2);
@@ -376,7 +380,7 @@ describe('architecture guards — asserted against the migrated database, not th
 
     // The grant itself left nothing behind — the single-use row is gone, so the
     // token row is the ONLY artifact of the login.
-    expect(await db.deviceCode.count()).toBe(0);
+    expect(await adminDb.deviceCode.count()).toBe(0);
 
     const working = await connectMcp(token);
     expect(
@@ -410,7 +414,7 @@ describe('architecture guards — asserted against the migrated database, not th
         arguments: { projectKey: b.projectIdentifier, kind: 'task', title: 'cross-tenant' },
       });
       expect((denied as { isError?: boolean }).isError).toBe(true);
-      expect(await db.workItem.count({ where: { workspaceId: b.workspaceId } })).toBe(0);
+      expect(await adminDb.workItem.count({ where: { workspaceId: b.workspaceId } })).toBe(0);
     } finally {
       await client.close();
     }
@@ -425,7 +429,7 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     await expect
       .poll(
         async () => {
-          const row = await db.deviceCode.findFirst({ where: { status: 'pending' } });
+          const row = await adminDb.deviceCode.findFirst({ where: { status: 'pending' } });
           userCode = row?.userCode;
           return userCode ?? null;
         },
@@ -468,7 +472,7 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     expect(verified.user.id).toBe(fx.ownerId);
     expect(verified.workspaceId).toBe(fx.workspaceId);
     expect([...verified.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
-    const tokens = await db.apiToken.findMany();
+    const tokens = await adminDb.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label.startsWith('CLI · ')).toBe(true);
 
@@ -503,7 +507,7 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     // client-side budget.
     const login = ws.run(['login', '--no-browser', '--server', server.url]);
     const userCode = await pendingUserCode();
-    await db.deviceCode.update({
+    await adminDb.deviceCode.update({
       where: { userCode },
       data: { expiresAt: new Date(Date.now() - 1_000) },
     });
@@ -513,7 +517,7 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     expect(result.stderr).toContain('expired');
     // Nothing minted, nothing stored — the invariant that makes an abandoned or
     // phished login leave no credential behind.
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
     expect(existsSync(join(ws.configHome, 'motir', 'config.json'))).toBe(false);
   });
 });

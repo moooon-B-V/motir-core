@@ -9,7 +9,6 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -151,6 +150,13 @@ async function statusOf(workItemId: string): Promise<string> {
   return row!.status;
 }
 
+// ⚠️ Every FIXTURE / teardown / direct-DB-assertion transaction below runs on
+// `adminDb` — the OWNER (MOTIR-2871). They used to open `withSystemContext`,
+// which binds `app.system_admin`, and that arm exists on some policies and not
+// others: under TEST_DB_APP_ROLE=1 a `work_item` delete found nothing and a
+// `workspace_membership` INSERT was refused by WITH CHECK, while the same
+// block's other statements went through. A fixture needs privileges no runtime
+// context grants, so it belongs on the second client, not on a wider GUC.
 beforeEach(async () => {
   await truncateAuthTables();
   _resetInstallationTokenCache();
@@ -339,7 +345,7 @@ describe('githubWebhookService — unresolvable deliveries against a real instal
     await githubWebhookService.handleEvent('pull_request', prPayload({ action: 'opened' }));
     // Deleting the item SetNulls the PR's link (the schema's onDelete), so the
     // check resolves a stored PR with no work item — the clean no-op.
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workItemRevision.deleteMany({ where: { workItemId: item.id } });
       await tx.workItem.delete({ where: { id: item.id } });
     });
@@ -384,7 +390,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       password: PASSWORD,
       name: 'Dev',
     });
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workspaceMembership.create({
         data: { userId: dev.id, workspaceId: workspace.id, role: 'member' },
       });
@@ -422,7 +428,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
   it('a check on a linked PR with NO owner membership is a clean no-op', async () => {
     const { user, workspace, item } = await makeScenario('edge-w@example.com');
     await githubWebhookService.handleEvent('pull_request', prPayload({ action: 'opened' }));
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workspaceMembership.deleteMany({
         where: { workspaceId: workspace.id, userId: user.id },
       });
@@ -481,7 +487,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       password: PASSWORD,
       name: 'Outsider',
     });
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await githubIdentityRepository.upsertForUser(
         {
           userId: outsider.id,
@@ -511,7 +517,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     const { user, workspace, item } = await makeScenario('edge-i@example.com');
     // Degenerate state: the workspace owner's membership is gone (system-level
     // removal) and the PR author is unbound — no principal can author the move.
-    await withSystemContext(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.workspaceMembership.deleteMany({
         where: { workspaceId: workspace.id, userId: user.id },
       });
@@ -575,7 +581,7 @@ describe('githubWebhookService — installation reconcile account fallbacks (MOT
     });
 
     expect(result).toEqual({ event: 'installation', outcome: 'synced' });
-    const row = await withSystemContext((tx) =>
+    const row = await adminDb.$transaction((tx) =>
       tx.githubInstallation.findUnique({ where: { installationId: INSTALLATION_ID } }),
     );
     // The stored account survives the account-less delivery (the ?? fallback).
