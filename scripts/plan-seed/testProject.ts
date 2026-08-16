@@ -1,5 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 
@@ -64,8 +64,11 @@ export async function seedGenerationTestProject(
   // NOT create a ProjectMembership, so a plain create per user is correct and —
   // because the clear pass deletes the workspace (cascading its projects +
   // memberships) — idempotent across reseeds. Owner → `admin`, the rest → `member`.
+  // Bound (MOTIR-2868) on the workspace being enrolled into — `project_membership`
+  // is gated `workspace_id = current_setting('app.workspace_id', true)` for ALL
+  // verbs, so the bare transaction this replaced had every INSERT refused.
   const memberIds = Array.from(new Set([input.ownerUserId, ...input.memberUserIds]));
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  await withWorkspaceServiceContext(input.workspaceId, async (tx: Prisma.TransactionClient) => {
     for (const userId of memberIds) {
       await projectMembershipRepository.create(
         {

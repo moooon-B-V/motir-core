@@ -8,7 +8,6 @@
 // The persist/classify engines own their own transactions; this service owns the
 // `Import`-row transactions.
 
-import { db } from '@/lib/db';
 import type { ImportSource } from '@/generated/prisma/client';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -92,7 +91,16 @@ export const importService = {
     }
     await assertCanRunImports(input.projectId, ctx);
 
-    const row = await db.$transaction((tx) =>
+    // BOUND (MOTIR-2869). `import_active_workspace` gates every verb on
+    // `workspace_id = current_setting('app.workspace_id', true)`, so the bare
+    // transaction this replaced had the very FIRST row of the import flow
+    // refused — migration did not degrade under `motir_app`, it was impossible,
+    // and it failed with a database error rather than anything a user could act
+    // on. This is the failure `docs/rls-runtime-role-inventory.md` has quoted by
+    // its error text in "Out of scope, and still open: the WRITE surface" since
+    // MOTIR-2796 closed. `ctx.workspaceId` is the same value the row carries in
+    // its own column, and `:231` already proves it is in scope here.
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       importRepository.create(
         {
           workspaceId: ctx.workspaceId,
@@ -187,7 +195,11 @@ export const importService = {
     // Resolve the human-facing source ref OUTSIDE the transaction (it may hit the
     // source / re-parse a file — never inside a tx).
     const sourceRef = imp.sourceRef ?? (await connectorSourceRef(connector));
-    await db.$transaction((tx) =>
+    // BOUND (MOTIR-2869) — same policy, same reason as `createDraft`. An UPDATE
+    // is checked against `USING` *and* `WITH CHECK`, so unbound it could neither
+    // find the row nor write it: the confirmed mapping and the `previewed` status
+    // were silently lost between the preview and the run.
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       importRepository.update(
         importId,
         { mapping: args.mapping as object, sourceRef, status: 'previewed' },
