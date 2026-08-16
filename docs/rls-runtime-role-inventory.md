@@ -603,6 +603,259 @@ story; they are visible in the same run and should not be read as read-path resi
 
 ---
 
+## THE RESIDUAL, PARTITIONED (MOTIR-2862, 2026-08-15)
+
+The measurement the section above deferred. MOTIR-2861 removed the last `beforeEach` mask — ten files
+that died before a single assertion ran — so a partition taken now is a partition of what is broken
+rather than of what fails first. **This section fixes nothing**; its output is a count, a three-class
+partition in which every failure is attributed to exactly one class, and the eight cards that follow
+from it.
+
+### How it was measured
+
+`TEST_DB_APP_ROLE=1 pnpm vitest run` on `origin/main` at **`6d1a385f`** (MOTIR-2857 merged, #2062),
+against a Postgres cluster and base database created for this run alone (`prodect_b2862`, so the worker
+DBs are `prodect_b2862_test_wN` and no concurrent session's teardown can drop them).
+
+|                      |         |
+| -------------------- | ------: |
+| test files           |   1 018 |
+| red files            |     108 |
+| tests                |  14 356 |
+| **failed**           | **652** |
+| passed               |  13 703 |
+| skipped              |       1 |
+| **`does not exist`** |   **0** |
+
+**The `does not exist` count is 0 — a clean run.** A run showing hundreds of those has been trampled by
+a concurrent vitest and must be discarded, not read.
+
+Two corrections to the raw output, both stated so the numbers reconcile:
+
+- `tests/permissions/membershipGate.test.ts` produced **zero** test results, failing at import with
+  `EPERM … zod/v3/helpers/typeAliases.js` — an unreadable file in the pnpm store, not a test failure.
+  Re-run on its own it is **30 passed / 0 failed**, and those 30 are included above. The raw run
+  reported 14 326 tests and 109 red files.
+- The run emitted six `Worker exited unexpectedly` errors under memory pressure. Exactly one file lost
+  its results (the one above); the other 1 017 are complete.
+
+**⚠️ The flag, and why this is not literally the command MOTIR-2862 was written with.** That card says
+_"re-run with no environment variable — i.e. with `@/lib/db` connected as the non-bypass role"_. Those
+two clauses are equivalent only on MOTIR-2734's branch, where `isAppRoleTestMode()` is deleted. On
+`origin/main` `parallelDb.ts:133` still branches, so **unset means the bypass OWNER role** and the
+measurement the card asks for is `TEST_DB_APP_ROLE=1`. The card also requires `main` with MOTIR-2861
+merged, which is where this was run. The nine `isAppRoleTestMode()` readers therefore execute their
+app-role arms here — the same arms MOTIR-2734 will make unconditional — so this reading is the one
+that generalises. (MOTIR-2860, which that card's criteria name, was **archived as a duplicate** on
+2026-08-15; MOTIR-2734's own amendment already owns the defect it described.)
+
+### The partition — three classes, no residual bucket
+
+Classified on **two axes kept separate** (`notes.html` #257): the error's own class, and the first
+non-`node_modules` frame. The axes disagree, which is the point of keeping both.
+
+| class                                       | failures | files | what it is                                                                                                       |
+| ------------------------------------------- | -------: | ----: | ---------------------------------------------------------------------------------------------------------------- |
+| **1 — the WRITE surface, application side** |  **166** |    25 | a policy's `WITH CHECK` refuses a write issued by `lib/` or `scripts/` code on a connection binding no workspace |
+| **2 — the test-side residue**               |  **240** |    41 | a test or seed script issues the statement through `@/lib/db` where it needs the owner client                    |
+| **3 — downstream assertion failures**       |  **246** |    65 | a read came back empty; the cause is NOT separable from the assertion text                                       |
+|                                             |  **652** |   108 |                                                                                                                  |
+
+**There is no "other" bucket.** Every one of the 652 lands in exactly one class.
+
+#### What the frame axis cannot see, and why the error axis alone would also mislead
+
+- **All 267 RLS write denials carry NO repo frame at all.** Prisma 7 raises them as a bare
+  `DriverAdapterError` from `PgTransaction.performIO`, whose stack is entirely inside
+  `node_modules/@prisma/*`. A frame histogram is blind to the single largest cause in this run.
+- **The absence of a caller frame does NOT imply the caller was application code.**
+  `migrate-terminal-reconciliation.test.ts:69` is a plain fixture `db.migrateOnboarding.create` and
+  still produces a bare adapter error. Class 1 and class 2 were separated by **reading the source of
+  each failing (table, file) pair**, not by the stack.
+- **The 29 `ProjectNotFoundError` / `WorkItemNotFoundError` / `TypeError` failures all book a
+  `lib/repositories/*` frame and are all test-side** — called from `scripts/seedLargeBoard.ts` (10),
+  eleven test files, and `scripts/plan-seed/preserveStatus.ts` (1). This is `notes.html` #257 verbatim:
+  _a fixture that reaches into a repository books a `lib/` frame and reads as an application defect._
+- **Conversely, the error axis alone splits ONE cause across four buckets.** Class 2's four error
+  shapes — INSERT refused, row invisible to `USING`, repository reach, raw `TRUNCATE` — are the same
+  defect. Sorting by message would have produced four cards fixing one thing in four places.
+
+### Class 1 — the WRITE surface, application side (166 failures, 25 files) → **MOTIR-2865**
+
+Refused by a policy's `WITH CHECK` where the writer is `lib/` or `scripts/` code. **These are production
+defects**: they fail for exactly the reason they will fail once MOTIR-2515 points production's
+`DATABASE_URL` at `motir_app`.
+
+Two facts establish that no denial here is a _missing_ policy: all **69** RLS tables carry an
+INSERT/UPDATE/DELETE/SELECT-capable policy, and **every `FOR ALL` policy carries a `WITH CHECK`** (65
+`FOR ALL` + 15 SELECT + 4 each INSERT/UPDATE/DELETE = 92 policies). The writes are refused because the
+session bound no workspace, not because nothing admits them.
+
+A one-off scan of `lib/` for a bare `db.$transaction(…)` enclosing a repository write found **22 sites
+across 14 service files**, and it corroborates the four largest groups by name:
+
+| site                                                | table                       |   failures |
+| --------------------------------------------------- | --------------------------- | ---------: |
+| `automationEngineService.ts:483` (`writeExecution`) | `automation_rule_execution` |         49 |
+| `notificationFanInService.ts:403`                   | `notification`              |         29 |
+| `importService.ts:95`, `:190`                       | `import`                    |         18 |
+| `organizationsService.ts:222`                       | `organization`              |          3 |
+| `workspaceInvitesService.ts:331`                    | `workspace_membership`      | part of 37 |
+
+**The scan does NOT reach every denial** — `watcher`, `work_item_embedding` and `custom_field_value` are
+refused with no bare-transaction site to point at, which is why MOTIR-2870 is sized to find the route
+rather than to apply a known fix.
+
+| table                       | failures |     | table                     | failures |
+| --------------------------- | -------: | --- | ------------------------- | -------: |
+| `automation_rule_execution` |       49 |     | `custom_field_value`      |        6 |
+| `workspace_membership`      |       37 |     | `organization`            |        3 |
+| `notification`              |       29 |     | `project_membership`      |        2 |
+| `import`                    |       18 |     | `custom_field_definition` |        1 |
+| `work_item_embedding`       |       10 |     | `work_item`               |        1 |
+| `watcher`                   |       10 |     |                           |          |
+
+Files, by failure count: `automation-engine` 21 · `ai/work-items-route` 19 · `automation-story` 15 ·
+`integration/notifications-journey` 12 · `notifications/notificationsService` 12 ·
+`embeddings/workItemEmbeddingRls` 10 · `integration/import/importSeam` 10 · `ai/serviceAuth` 9 ·
+`automation-epic5` 9 · `import/importService` 8 · `custom-fields/definitionsService` 7 ·
+`integration/home/personal-reads` 6 · `jobs/notification-fan-in` 5 ·
+`integration/migrations/ensure-planner-bug-home` 4 · `integration/plan-seed/system-principal` 4 ·
+`integration/epic6-journey` 3 · `integration/home/story-seams` 3 · `organizations-service` 2 ·
+and seven files at 1 (`billing-seat-sync`, `github/githubWebhookService`, `jobs/watcher-notify`,
+`integration/epic6-at-scale`, `integration/plan-seed/onboarding-marker`,
+`integration/plan-seed/test-project`, `integration/work-items/repository`).
+
+Carved as **MOTIR-2865** (story) with five children: **MOTIR-2866** automation audit (49) ·
+**MOTIR-2867** notification + watcher (39) · **MOTIR-2868** tenant-root + membership (42) ·
+**MOTIR-2869** import (18) · **MOTIR-2870** the four surfaces the scan cannot see (18). 21 points.
+
+### Class 2 — the test-side residue (240 failures, 41 files) → **MOTIR-2871**
+
+The statement is issued by the test or a seed script through `@/lib/db` and needs `adminDb`. Four error
+shapes, one cause:
+
+| shape                                            | failures | files |
+| ------------------------------------------------ | -------: | ----: |
+| INSERT refused by `WITH CHECK`                   |      101 |    15 |
+| row invisible to `USING` on UPDATE / `…OrThrow`  |      106 |    19 |
+| a test or seed script reaching into a repository |       29 |    11 |
+| raw `TRUNCATE` on the singleton                  |        4 |     1 |
+
+**The middle shape is mechanically proven test-side.** Prisma prints ``Invalid `db.<model>.<op>()`
+invocation in <file>`` for a `PrismaClientKnownRequestError`, and **all 106 name a file under `tests/`** —
+`db.workItem.update` in a helper (`parentStatusRollup.test.ts:41`) being the dominant form.
+
+**The raw-`TRUNCATE` shape is a twelfth instance of MOTIR-2861's own class**:
+`tests/components/issue-inline-edit-race.test.tsx:88` runs
+`db.$executeRawUnsafe('TRUNCATE TABLE "work_item_link", "work_item" …')` on the singleton. `motir_app`
+holds SELECT/INSERT/UPDATE/DELETE on that table but not ownership, so it is refused `42501`.
+(`tests/helpers/db.ts` is already correct — it imports `adminDb as db`.)
+
+**⚠️ The twenty batches' path partition has holes, and that is the finding worth carrying.**
+`tests/integration/workflows/parentStatusRollup.test.ts` contains **zero** `adminDb` references and nine
+`db.` sites, and was last touched **2026-08-04** — before the batches ran. `tests/billing/meta-org-entitlement-seam.test.ts`
+is the same shape. `tests/integration/workflows`, `tests/integration/backlog`, `tests/billing`,
+`tests/migrate-onboarding` and `tests/embeddings` appear in no batch card's path list. A partition drawn
+by directory goes stale the moment a directory is added.
+
+Files, by failure count: `integration/workflows/parentStatusRollup` 25 ·
+`migrate-onboarding/migrate-terminal-reconciliation` 25 · `migrate-onboarding/migrate-onboarding-service` 19 ·
+`integration/workflows/childStatusCascade` 18 · `integration/workflows/statusDerivation` 16 ·
+`migrate-onboarding/migrate-index-sweep` 15 · `integration/backlog/filter` 12 ·
+`integration/github/historical-pr-backfill` 11 · `integration/import/repository` 10 ·
+`billing/meta-org-entitlement-seam` 7 · `boards/at-scale-scrum-fixture` 6 ·
+`integration/workflows/childrenStatusAggregate` 5 · `integration/triage/permission-gate` 5 ·
+`billing-seat-sync` 5 · `boards/at-scale-fixture` 4 · `cli/cli-story` 4 ·
+`integration/estimation/service` 4 · `integration/saved-filters/saved-filters` 4 ·
+`integration/work-items/mention-search-route` 4 ·
+`components/issue-inline-edit-race` 4 · `issues/createIssueAction` 3 ·
+`integration/work-items/repository` 3 · `migrate-onboarding/migrate-index-status` 3 ·
+`scripts`-driven and 1–2-failure files: `design-evidence-routes`, `cli/cli-connect-story`,
+`tokens/story-gate`, `integration/workflows/projectStatusAutomation`, `jobs/code-graph-index`,
+`jobs/notification-fan-in`, `integration/projectRepos/repositorySetStoryGate`,
+`integration/plan-seed/preserve-status`, `integration/work-items/provenance-seams`,
+`jobs/mention-notify`, `api/live-projects-route`, `github/githubWebhookEdges`,
+`gitlab/gitlabWebhookEdges`, `ready/projectScopedDispatchRepo`,
+`integration/saved-filters/subscriptions`, `integration/workflows/projectStatusAutomationRoutes`,
+`migrate-onboarding/migrate-onboarding-routes`, `integration/projectRepos/repositorySetRoutes`.
+
+Carved as **MOTIR-2871**, 8 points.
+
+### Class 3 — downstream assertion failures (246 failures, 65 files) → **MOTIR-2872**
+
+`expected [] to have a length of 1` · `expected undefined to be '<id>'` ·
+`expected { indexed: false } to deeply equal { indexed: true }` ·
+`expected "pollIndexContainer" to be called 4 times, but got 0`.
+
+Every one is a read that came back empty. **Whether the cause is an unbound read, a fixture whose INSERT
+was refused, or a genuine product defect cannot be told apart from the assertion text.**
+
+Concentrations, offered as a starting point and not a conclusion: `jobs/code-graph-index*` 41 across
+three files · `github/*` 43 · `gitlab/*` 14 · `integration/work-items` 16 · `projectRepos` 15 ·
+`integration/sprints/repository` 11 · `custom-fields/repositories` 10 ·
+`labels-components-watch/repositories` 10 · `comments/repositories` 9 · `notifications/repositories` 7 ·
+`cli` 9 · `mcp` 7 · `boards` 5. **MOTIR-2864 already owns** `public_request_vote`'s missing
+workspace-member read arm, where `publicRequests/upvoteComment` (3) sits.
+
+Carved as **MOTIR-2872**, 3 points, `blocked_by` MOTIR-2865 and MOTIR-2871 — it re-measures on `main`
+after both have MERGED, and files a card per surviving class.
+
+### ⚠️ What this partition does NOT claim — `notes.html` #249
+
+> _"An error census over short-circuiting paths measures ORDER, not extent. … The prediction to refuse
+> is the one about the RESIDUE."_
+
+**This partition is still a census of what fails FIRST.** It is a better one than the section above it —
+the `beforeEach` mask is gone, and the two-axis method separates causes that a frame histogram fuses —
+but it cannot see past a statement that never ran. So:
+
+- **No claim is made about what class 3 becomes** once classes 1 and 2 clear. It may be most of the 246;
+  it may be almost none. That is MOTIR-2872's measurement to take, on a run where the top causes are
+  already suppressed, and it is why that card exists at all rather than being folded into this one.
+- **The completion signal for each card is ITS NAMED CLASS reaching zero, never the suite total.** When
+  MOTIR-2865 and MOTIR-2871 land, the total will **not** fall by 406. A layered defect gives back its
+  layers one at a time, and a total that does not move is the expected shape of a real fix — the exact
+  reading error that cost this document a re-measurement at MOTIR-2527.
+
+### Cards filed from this partition
+
+| card           | class                                          | kind    | points |
+| -------------- | ---------------------------------------------- | ------- | -----: |
+| **MOTIR-2865** | 1 — the write surface (166)                    | story   |      — |
+| MOTIR-2866     | automation audit write (49)                    | subtask |      3 |
+| MOTIR-2867     | notification + watcher writes (39)             | subtask |      5 |
+| MOTIR-2868     | tenant-root + membership writes (42)           | subtask |      5 |
+| MOTIR-2869     | import write path (18)                         | subtask |      3 |
+| MOTIR-2870     | the four surfaces the scan cannot see (18)     | subtask |      5 |
+| **MOTIR-2871** | 2 — the test-side residue (240)                | task    |      8 |
+| **MOTIR-2872** | 3 — re-measure the downstream population (246) | task    |      3 |
+
+**MOTIR-2734** (retire `TEST_DB_APP_ROLE`) is now `blocked_by` MOTIR-2865, MOTIR-2871 and MOTIR-2872,
+and its edge to MOTIR-2862 is dropped.
+
+> **⚠️ CORRECTED THE NEXT DAY — read the closing entry below before using class 1's split.** This
+> section assigns **166** denials to application/script code and **101** to fixtures, split by reading
+> the source of each failing (table, file) pair. MOTIR-2865's five children found that split wrong at
+> its tail: **`watcher` (10) and `work_item_embedding` (10) have no unbound application writer at
+> all** — every site is a fixture, and they belong to MOTIR-2871 — and **all four services MOTIR-2870
+> was cut to bind turned out to be bound already**, which also covers `custom_field_value` (6),
+> `custom_field_definition` (1) and `work_item` (1). Class 1 is therefore ~28 denials smaller than
+> stated here, and class 2 correspondingly larger.
+>
+> The cause is the one this section already names one paragraph up and did not apply far enough: the
+> classifier reads an **error message**, and an RLS `WITH CHECK` refusal is byte-identical whether the
+> statement came from `lib/` or from a test's own `db.$transaction`. Source inspection of the failing
+> test file narrows that but does not settle it — a file can hold both. `notes.html` #257, one instance
+> further on.
+>
+> **The numbers below are left as measured rather than back-edited**, which is this document's
+> convention (see _"First, the correction — 94 of those frames are not what this document said they
+> were"_ above): a dated entry records what was seen on its date, and the correction goes in the entry
+> that found it.
+
+---
+
 ## CLOSED — the WRITE surface is bound (MOTIR-2865, 2026-08-16)
 
 The section directly above — _"Out of scope, and still open: the WRITE surface"_ — was accurate,
