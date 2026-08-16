@@ -71,6 +71,8 @@ import type {
   WorkItemPriority,
 } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -279,7 +281,15 @@ async function main() {
   // `member` role addMember already gave them. Idempotent across reseeds — the
   // clear pass deletes the org first, cascading its memberships.
   const organizationId = workspace.organizationId;
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  // Bound (MOTIR-2868) on the ORG, not the workspace: both statements below are
+  // org-tier — `organization_mutate_active` (UPDATE) and
+  // `org_membership_mutate_active` gate on `app.organization_id`, which
+  // `withWorkspaceServiceContext` does not bind. The org already exists (it was
+  // minted by `createWorkspace` above), so this is a write INSIDE a known tenant
+  // and `withOrgServiceWriteContext` — the userless, single-org context — is the
+  // right one; `withSystemContext` would widen the reach to every org for no
+  // reason.
+  await withOrgServiceWriteContext(organizationId, async (tx: Prisma.TransactionClient) => {
     // The seed `moooon` org IS moooon B.V. — the META org: exempt from the §4
     // entitlement caps + the AI paywall. The prod row is flipped by the
     // add_organization_is_meta migration (WHERE slug = 'moooon'); that one-time
@@ -326,7 +336,9 @@ async function main() {
   // demo workspace-member gating instead. The clear pass above deletes the
   // project (cascading its memberships), so a plain create is idempotent across
   // reseeds.
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  // Bound (MOTIR-2868) on the workspace: `project_membership` gates every verb on
+  // `workspace_id = current_setting('app.workspace_id', true)`.
+  await withWorkspaceServiceContext(workspace.id, async (tx: Prisma.TransactionClient) => {
     for (const u of SEED_USERS) {
       await projectMembershipRepository.create(
         {

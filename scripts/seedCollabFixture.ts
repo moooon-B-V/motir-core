@@ -54,6 +54,7 @@
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -328,7 +329,10 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
 
   // Enroll the pool in the project (open access) — the plan-seed 6.4.7
   // pattern, so members can comment / be mentioned / watch.
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  // Bound (MOTIR-2868) — same shape as seedReportingFixture: `project_membership`
+  // and the `project` access-level write below are both workspace-gated, and the
+  // workspace already exists.
+  await withWorkspaceServiceContext(workspace.id, async (tx: Prisma.TransactionClient) => {
     for (const userId of memberIds) {
       await projectMembershipRepository.create(
         {
