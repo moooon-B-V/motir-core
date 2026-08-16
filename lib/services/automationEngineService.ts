@@ -1,5 +1,4 @@
 import { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
@@ -55,13 +54,22 @@ import type { AutomationTriggerType } from '@/generated/prisma/client';
 //      success (the verified dedupe), via the 1.6 email pipeline.
 //
 // CONTEXT / RLS: the engine runs OUTSIDE any HTTP request (a background job),
-// on the app's BYPASSRLS connection — so, like savedFilterSubscriptionsService'
-// s delivery path, it gates reads by explicit `workspaceId`/`projectId` (the
-// application-layer tenant boundary) rather than threading withWorkspaceContext
-// through every action service (which manages its own transactions). The ONLY
-// cross-workspace path — the retention sweep — runs under withSystemContext
-// (the system-admin RLS branch the 6.6.2 migration adds), the attachment-GC
-// precedent.
+// so there is no session and every gated statement binds the WORKSPACE tier —
+// `withWorkspaceServiceContext(rule.workspaceId | input.workspaceId, …)`. The
+// workspace id rides the automation event envelope (a trusted resolution, never
+// wire input) or comes off the rule row itself. The ONLY cross-workspace path —
+// the retention sweep — runs under withSystemContext (the system-admin RLS
+// branch the 6.6.2 migration adds), the attachment-GC precedent.
+//
+// ⚠️ The app is NOT on a BYPASSRLS connection any more (MOTIR-2515 points the
+// deployed runtime at `motir_app`), so an unbound statement here is not merely
+// unscoped — it is REFUSED. `automation_rule_execution`'s policy gates through a
+// join, `EXISTS (SELECT 1 FROM automation_rule ar WHERE ar.id = rule_id AND
+// ar.workspace_id = current_setting('app.workspace_id', true))`, in both `USING`
+// and `WITH CHECK`. Unbound, the probe read finds nothing (a replay re-applies
+// every action) and the audit INSERT raises `new row violates row-level security
+// policy` (MOTIR-2866: 49 refused INSERTs across five suites). The read half was
+// bound by MOTIR-2815; this file's WRITE half is bound here.
 
 /** The normalized event the engine acts on — one per consumed `work-item/*`
  * event, assembled by the job handler from the typed payload. */
@@ -386,7 +394,7 @@ export const automationEngineService = {
     input: AutomationEngineEventInput,
     durationMs: number,
   ): Promise<void> {
-    await this.writeExecution(rule.id, {
+    await this.writeExecution(rule, {
       status: 'no_actions',
       workItemId: input.workItemId,
       eventId: input.eventId,
@@ -402,7 +410,7 @@ export const automationEngineService = {
     durationMs: number,
   ): Promise<void> {
     await this.writeExecution(
-      rule.id,
+      rule,
       { status: 'success', workItemId: input.workItemId, eventId: input.eventId, durationMs },
       async (tx) => {
         const state = await automationRuleRepository.lockFailureState(rule.id, tx);
@@ -428,7 +436,7 @@ export const automationEngineService = {
     let firstFailureAfterSuccess = false;
     let autoDisabled = false;
     const written = await this.writeExecution(
-      rule.id,
+      rule,
       {
         status: 'failure',
         workItemId: input.workItemId,
@@ -467,9 +475,22 @@ export const automationEngineService = {
    * unique-violation means a concurrent run already claimed this (rule, event)
    * — treated as a benign dedupe (returns null), never a thrown run. Returns
    * the written row, or null when deduped.
+   *
+   * ⚠️ BOUND (MOTIR-2866), and it takes the RULE rather than a rule id for that
+   * reason. Both statements inside are policy-gated —
+   * `automation_rule_execution`'s `WITH CHECK` resolves through a join to
+   * `automation_rule`, and `mutate`'s failure-counter lock + update hit
+   * `automation_rule` itself (`workspace_id = current_setting('app.workspace_id')`).
+   * A bare `db.$transaction` binds nothing, so the INSERT was refused outright
+   * and `lockFailureState` returned no row — which the caller reads as "rule
+   * deleted mid-run" and skips, so the auto-disable counter silently stopped
+   * counting. Passing `{ id, workspaceId }` instead of two loose strings makes a
+   * mismatched pair unrepresentable: the tenant is the rule's, always.
+   * `withSystemContext` is NOT the alternative here — it would grant the audit
+   * write a tenant-blind context, which is the exemption this effort closes.
    */
   async writeExecution(
-    ruleId: string,
+    rule: { id: string; workspaceId: string },
     data: {
       status: 'success' | 'failure' | 'no_actions';
       workItemId: string;
@@ -480,11 +501,11 @@ export const automationEngineService = {
     mutate?: (tx: Prisma.TransactionClient) => Promise<void>,
   ): Promise<{ id: string } | null> {
     try {
-      return await db.$transaction(async (tx) => {
+      return await withWorkspaceServiceContext(rule.workspaceId, async (tx) => {
         if (mutate) await mutate(tx);
         const row = await automationRuleExecutionRepository.create(
           {
-            ruleId,
+            ruleId: rule.id,
             status: data.status,
             workItemId: data.workItemId,
             eventId: data.eventId,
