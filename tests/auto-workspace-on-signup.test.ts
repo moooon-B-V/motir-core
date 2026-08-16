@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { withUserContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -204,6 +206,51 @@ describe('workspacesService.ensureDefaultWorkspace (lazy self-heal)', () => {
     expect(ensured.workspace.id).toBe(created.workspace.id);
     const workspaceCount = await adminDb.workspace.count();
     expect(workspaceCount).toBe(1);
+  });
+
+  // MOTIR-2874 — the idempotency guard is a READ, and it was reading through a
+  // bare `db.$transaction`. Under `motir_app`, `membership_visible_active_or_own`
+  // admits a row on `"workspaceId" = app.workspace_id` OR `"userId" =
+  // app.user_id`; this path is resolving the workspace, so only the `_or_own`
+  // arm can fire and nothing was binding `app.user_id`. `countByUser` therefore
+  // read 0 for a user who already had memberships and the guard failed OPEN.
+  //
+  // The cases above assert the OUTCOME (one workspace). This one asserts the
+  // INPUT the guard actually acts on — a NON-EMPTY count under the restricted
+  // role — because the outcome is reachable for the wrong reason and the count
+  // is not: a `0` from an unbound read is indistinguishable from a `0` that is
+  // the truth, which is exactly why nothing caught this.
+  it('sees its own membership count under the restricted role, so a second call mints nothing (MOTIR-2874)', async () => {
+    const user = await usersService.createUser({
+      email: 'bound-count@example.com',
+      password: 'hunter2hunter2',
+      name: 'Bound',
+    });
+    const created = await workspacesService.createWorkspace({
+      name: 'Already Here',
+      ownerUserId: user.id,
+    });
+
+    // The guard's own read, on the guard's own context tier. Non-empty is the
+    // assertion; a denial test here would pass against a policy set that
+    // refuses everyone.
+    const boundCount = await withUserContext(user.id, (tx) =>
+      workspaceMembershipRepository.countByUser(user.id, tx),
+    );
+    expect(boundCount).toBe(1);
+
+    const ensured = await workspacesService.ensureDefaultWorkspace({
+      userId: user.id,
+      userName: user.name,
+    });
+
+    // Same workspace back — and, decisively, no "{name}'s Workspace" alongside
+    // it. That second row is what an unbound count produces, and it is a
+    // duplicate DEFAULT workspace, not a harmless extra.
+    expect(ensured.workspace.id).toBe(created.workspace.id);
+    expect(ensured.workspace.name).toBe('Already Here');
+    const all = await adminDb.workspace.findMany({ select: { name: true } });
+    expect(all.map((w) => w.name)).toEqual(['Already Here']);
   });
 
   it('survives concurrent first-calls without creating duplicate workspaces', async () => {

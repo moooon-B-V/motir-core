@@ -296,6 +296,24 @@ export const workspacesService = {
    * Each slug-collision retry opens a fresh transaction because a P2002
    * poisons the current one. The lock is re-acquired on every attempt; the
    * count re-check inside the lock keeps it idempotent across retries too.
+   *
+   * ⚠️ The transaction is `withUserContext`, NOT a bare `db.$transaction`
+   * (MOTIR-2874). The idempotency check reads `workspace_membership`, whose
+   * SELECT policy `membership_visible_active_or_own` admits a row only when
+   * `"workspaceId" = app.workspace_id` OR `"userId" = app.user_id`. This path
+   * is RESOLVING the workspace, so there is no workspace id to bind — the
+   * `_or_own` arm is the one that must fire, and it needs `app.user_id`. Under
+   * a bare transaction `countByUser` read 0 for a user who already had
+   * memberships (RLS removes rows, it does not raise), the guard failed OPEN,
+   * and the self-heal minted a DUPLICATE default workspace. The `FOR UPDATE`
+   * lock on the user row serialises the race but cannot see what RLS hid.
+   *
+   * `insertWorkspaceWithOwner` re-binds `app.user_id` to the same value inside
+   * this transaction (it also needs `app.bootstrap_slug`, which it owns because
+   * each retry attempts a different slug) — a same-value rebind, so the two
+   * bindings compose rather than conflict. Ordering alone would NOT have been
+   * enough: that binding happens on the CREATE path, after the count that
+   * needed it has already run.
    */
   async ensureDefaultWorkspace(input: EnsureDefaultWorkspaceInput): Promise<CreateWorkspaceResult> {
     const name = `${input.userName}'s Workspace`;
@@ -306,7 +324,7 @@ export const workspacesService = {
       const slug = attempt === 0 ? base : `${base}-${randomSuffix()}`;
       lastAttempt = slug;
       try {
-        const result = await db.$transaction(async (tx) => {
+        const result = await withUserContext(input.userId, async (tx) => {
           await userRepository.lockById(input.userId, tx);
 
           const existingCount = await workspaceMembershipRepository.countByUser(input.userId, tx);
@@ -339,14 +357,26 @@ export const workspacesService = {
    * it, else their first membership) and return it as the
    * GET /api/workspaces/current DTO. Returns null when the user has no
    * memberships — the route turns that into a 404. Read-only, so the reads
-   * run in one $transaction purely for snapshot consistency between the
+   * run in one transaction purely for snapshot consistency between the
    * membership lookup and its workspace.
+   *
+   * ⚠️ That transaction is `withUserContext`, NOT a bare `db.$transaction`
+   * (MOTIR-2874). It mirrors `resolveActiveWorkspace` below, and for the same
+   * reason: both reads are membership RESOLUTION, so no `app.workspace_id`
+   * exists yet and the `_or_own` arm of `membership_visible_active_or_own` is
+   * what has to admit the row — plus `workspace_membership_visible` on
+   * `workspace`, which is also keyed on `app.user_id` and is what makes the
+   * `include: { workspace: true }` come back non-null. Unbound, both reads
+   * returned nothing under `motir_app` and this method resolved to `null` for
+   * every signed-in user, which the route turns into a 404 — the shell asks
+   * `GET /api/workspaces/current` before it can render anything, so that is not
+   * a degraded feature but a product that does not open.
    */
   async getActiveWorkspace(
     userId: string,
     preferredWorkspaceId: string | null,
   ): Promise<CurrentWorkspaceDTO | null> {
-    return db.$transaction(async (tx) => {
+    return withUserContext(userId, async (tx) => {
       if (preferredWorkspaceId) {
         const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
           userId,
