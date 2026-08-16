@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -81,7 +83,7 @@ describe('createIssueAction', () => {
     if (!result.ok) throw new Error('expected ok');
     expect(result.identifier).toBe('WFD-1');
 
-    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row).not.toBeNull();
     expect(row!.title).toBe('First issue');
     expect(row!.kind).toBe('task');
@@ -108,7 +110,7 @@ describe('createIssueAction', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected ok');
-    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row!.reporterId).toBe(fx.userId);
     expect(row!.reporterId).not.toBe(intruder.id);
   });
@@ -118,7 +120,7 @@ describe('createIssueAction', () => {
     const result = await createIssueAction({ kind: 'task', title: 'Human-made' });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected ok');
-    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row!.planningSource).toBe('manual');
     expect(row!.planningHarness).toBeNull();
     expect(row!.planningModel).toBeNull();
@@ -138,7 +140,7 @@ describe('createIssueAction', () => {
     } as never);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected ok');
-    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row!.planningSource).toBe('manual');
   });
 
@@ -146,7 +148,7 @@ describe('createIssueAction', () => {
     await makeFixture();
     const empty = await createIssueAction({ kind: 'task', title: '   ' });
     expect(empty).toEqual({ ok: false, error: 'Give the work item a title.' });
-    const count = await db.workItem.count();
+    const count = await adminDb.workItem.count();
     expect(count).toBe(0);
   });
 
@@ -154,7 +156,7 @@ describe('createIssueAction', () => {
     await makeFixture();
     const result = await createIssueAction({ kind: 'task', title: 'x'.repeat(201) });
     expect(result.ok).toBe(false);
-    expect(await db.workItem.count()).toBe(0);
+    expect(await adminDb.workItem.count()).toBe(0);
   });
 
   it('returns an error (no throw) when there is no active project', async () => {
@@ -172,6 +174,6 @@ describe('createIssueAction', () => {
     const result = await createIssueAction({ kind: 'task', title: 'Ghost' });
     expect(result).toEqual({ ok: false, error: 'That project no longer exists.' });
     // Nothing persisted under the real project either.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
   });
 });

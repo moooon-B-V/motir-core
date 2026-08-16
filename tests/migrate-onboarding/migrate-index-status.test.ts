@@ -44,7 +44,7 @@ const { migrateOnboardingService } = await import('@/lib/services/migrateOnboard
  *  {@link seedRepo} for each repo under it. */
 async function seedInstallation(fx: WorkItemFixture, account = 'acme') {
   const rand = randomToken(6);
-  return db.githubInstallation.create({
+  return adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
@@ -64,7 +64,7 @@ async function seedRepo(
 ) {
   const rand = randomToken(6);
   if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: inst.workspaceId,
@@ -80,7 +80,7 @@ async function seedRepo(
 
 /** Seed a SUCCEEDED `system.code-graph-index` job_run for a repo. */
 async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -98,7 +98,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
  *  row — the index job writes `output` only on success; this is the aggregate
  *  hasRunning signal). */
 async function seedRunningIndexJob(fx: WorkItemFixture) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -119,6 +119,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('migrateOnboardingService.getIndexStatus', () => {

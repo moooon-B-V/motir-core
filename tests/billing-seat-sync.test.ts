@@ -11,6 +11,7 @@ vi.mock('@/lib/billing/seatSync', () => ({
 }));
 
 const { db } = await import('@/lib/db');
+const { adminDb } = await import('./helpers/adminDb');
 const { enqueueScaledTrackerSeatSync } = await import('@/lib/billing/seatSync');
 const { organizationsService } = await import('@/lib/services/organizationsService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -31,8 +32,9 @@ async function makeOrg(): Promise<{
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  const organizationId = (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
-    .organizationId;
+  const organizationId = (
+    await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } })
+  ).organizationId;
   return { organizationId, ownerId: owner.id, workspaceId: workspace.id };
 }
 
@@ -43,6 +45,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('seat-sync is enqueued on every org-membership COUNT change', () => {
@@ -98,7 +101,7 @@ describe('seat-sync is enqueued on every org-membership COUNT change', () => {
       workspaceId,
       targetEmail: invitee.email,
     });
-    const row = await db.verification.findFirstOrThrow({
+    const row = await adminDb.verification.findFirstOrThrow({
       where: {
         identifier: { startsWith: INVITE_IDENTIFIER_PREFIX },
         value: { contains: invitee.email },

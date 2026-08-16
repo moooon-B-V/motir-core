@@ -46,6 +46,7 @@ afterEach(() => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -217,7 +218,7 @@ describe('mentionNotificationsService.fanOut — description mentions', () => {
   it('excerpts the current description and scopes idempotency to the revision', async () => {
     const s = await buildScenario();
     const capture = captureEmailEvents();
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemRepository.update(
         s.issueId,
         { descriptionMd: `Owned by ${mentionToken(s.member)}.` },

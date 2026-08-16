@@ -146,6 +146,7 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
         memberIds: fx.memberIds,
       },
       SMALL_OPTS,
+      adminDb,
     );
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
@@ -173,6 +174,7 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
         memberIds: fx.memberIds,
       },
       SMALL_OPTS,
+      adminDb,
     );
     expect(manifest.assigneeCount).toBe(fx.memberIds.length); // every member used
     expect(manifest.unassignedCount).toBeGreaterThan(0);
@@ -195,6 +197,7 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
         memberIds: fx.memberIds,
       },
       SMALL_OPTS,
+      adminDb,
     );
 
     await setGroupBy(fx.projectId, BoardSwimlaneGroupBy.epic);
@@ -219,6 +222,7 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
         memberIds: fx.memberIds,
       },
       SMALL_OPTS,
+      adminDb,
     );
     expect(manifest.terminalAgedOut).toBeGreaterThan(0);
     expect(manifest.terminalInWindow).toBeGreaterThan(0);
