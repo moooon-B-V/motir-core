@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { getBoard, columnByStatus } from './_helpers/board';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
@@ -137,7 +137,10 @@ async function settleCreates(n: number): Promise<void> {
   await expect
     .poll(
       async () =>
-        db.jobRun.count({
+        // `adminDb`, not `db` — the ledger read is HARNESS bookkeeping, not the
+        // code under test, and a policy-gated read through the runtime role would
+        // answer `0` without raising (MOTIR-2939 / the `tests/e2e/**` ceiling).
+        adminDb.jobRun.count({
           where: { functionId: 'status-derivation/created', status: 'succeeded' },
         }),
       { timeout: 20_000, message: `awaiting ${n} create-derivation run(s) to settle` },
