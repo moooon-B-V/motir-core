@@ -149,8 +149,11 @@ describe('bare `db.$transaction`s enclosing policy-gated statements are all acco
       'A bare `db.$transaction` encloses a statement against a policy-gated table. It ' +
         'binds NO GUC, so the policy compares against NULL: a SELECT returns FEWER ROWS ' +
         'AND RAISES NOTHING, and a write matches nothing and raises nothing. Use ' +
-        'withWorkspaceContext / withWorkspaceServiceContext / withUserContext — or add an ' +
-        'entry here saying, with a measurement, why the table is not actually gated.',
+        'withWorkspaceContext / withWorkspaceServiceContext / withUserContext — or, when the ' +
+        'workspace is not known until partway through the transaction, bindWorkspaceContext / ' +
+        'bindOrganizationContext at the point it becomes known, BEFORE the first tenant ' +
+        'statement — or add an entry here saying, with a measurement, why the table is not ' +
+        'actually gated.',
     ).toEqual([]);
     expect(
       stale,
@@ -291,6 +294,35 @@ describe('bare `db.$transaction`s enclosing policy-gated statements are all acco
       verdictOf('bareTwoHops'),
       'two hops is out of reach by design — if this changed, the scan was widened',
     ).toBe('no-gated-statement');
+
+    // (K)–(N) — THE IMPORTED BINDER (MOTIR-2945). `bindWorkspaceContext` is the
+    // answer `lib/workspaces/context.ts` documents for a workspace known only
+    // partway through a transaction, and it is always reached across a module
+    // boundary — so a scan that followed same-file helpers alone called the one
+    // correctly-bound shape a finding, and the guard's own message then offered
+    // the reader nothing to record but a false verdict.
+    expect(
+      verdictOf('bareBindingViaImportedBinder'),
+      'the blessed mid-block binder, imported — a bound transaction is not a finding',
+    ).toBe('binds-inline');
+
+    // The positional half, one module over: (D) for the import path. If this ever
+    // reads `binds-inline`, following the import became a whole-site boolean.
+    expect(
+      verdictOf('bareImportedBinderAfterRead'),
+      'an imported binder called AFTER the read binds nothing retroactively',
+    ).toBe('gated-statement');
+
+    // The two controls that keep "resolved" from decaying into "named".
+    expect(
+      verdictOf('bareWithImportedNonBinder'),
+      'handing a `tx` across a module boundary is not a binding — the callee must bind',
+    ).toBe('gated-statement');
+    expect(
+      verdictOf('bareWithLocalNamesakeBinder'),
+      'a LOCAL function named `bindWorkspaceContext` that binds nothing must not clear the ' +
+        'site — the callee is resolved to a declaration, never matched by name',
+    ).toBe('gated-statement');
   });
 
   it('the scanner actually finds the sites it is pointed at (a live negative)', () => {
