@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { bareTransactionSites, scanCallSites, unboundCallSites } from './callSiteScan';
+import { remeasureFirst } from './remeasureFirst';
 
 // The CALL-SITE guard (MOTIR-2845) — the second axis of the singleton-read
 // guard, and the half `tests/rls/singleton-read-guard.test.ts` is structurally
@@ -276,7 +277,8 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     const sites = unboundCallSites();
     expect(
       sites.length,
-      `${sites.length} call sites invoke a bindable gated read with no bound transaction ` +
+      remeasureFirst('UNBOUND_CALL_SITE_CEILING') +
+        `${sites.length} call sites invoke a bindable gated read with no bound transaction ` +
         `(ceiling ${UNBOUND_CALL_SITE_CEILING}). If this ROSE, a new caller joined the ` +
         'class — pass the `tx` rather than adding an entry. If it FELL, lower the ceiling ' +
         'in the same commit.',
@@ -287,7 +289,8 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     const bare = bareTransactionSites();
     expect(
       bare.length,
-      `${bare.length} service functions open a bare \`db.$transaction\` (ceiling ` +
+      remeasureFirst('BARE_TRANSACTION_CEILING') +
+        `${bare.length} service functions open a bare \`db.$transaction\` (ceiling ` +
         `${BARE_TRANSACTION_CEILING}). It binds no GUCs, so every gated read inside one ` +
         'is dark while LOOKING bound. Use withWorkspaceContext / ' +
         'withWorkspaceServiceContext instead.',
