@@ -57,10 +57,13 @@ async function makeUser(email = 'member@example.com') {
   return usersService.createUser({ email, password: PASSWORD, name: 'Member' });
 }
 
-/** Count identity rows bypassing RLS (system context) — the raw `db` singleton
- *  binds no GUC, so RLS would hide every row. */
+/** Count identity rows as the OWNER (MOTIR-2887). The comment this replaces said
+ *  a system context "bypasses RLS"; it does not — it binds `app.system_admin`, and
+ *  whether that is seen at all depends on the table having an arm that reads it.
+ *  `github_identity` does (`github_identity_owner_or_system`), so this count was
+ *  correct; a count that must see EVERY row should not rest on that. */
 function countIdentities(): Promise<number> {
-  return withSystemContext((tx) => tx.githubIdentity.count());
+  return adminDb.githubIdentity.count();
 }
 
 /**

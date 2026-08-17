@@ -58,7 +58,16 @@ import { policyGatedModels } from './singletonReadScan';
 // one entry per site, with the reason in the value, the division of labour
 // MOTIR-2784 established.
 
-const SCAN_ROOTS = ['lib', 'app'] as const;
+// ⚠️ `tests` JOINED THE ROOTS IN MOTIR-2887, and the reason is that the class this
+// module finds has a TEST-SIDE twin that is strictly worse. A `withSystemContext`
+// block in `lib/` that reads an unarmed table makes the PRODUCT visibly wrong; the
+// same block in a FIXTURE makes the TEST quietly wrong IN THE DIRECTION OF
+// PASSING — `dropStatusCategory` in `githubWebhookCustomWorkflow.test.ts` deleted
+// nothing, so the test measured the DEFAULT workflow while claiming to measure a
+// custom one. MOTIR-2880 scoped the scan to `lib/` + `app/` to stay off the test
+// tree while MOTIR-2881 / MOTIR-2882 were rewriting it; both have merged, and that
+// reason has expired.
+const SCAN_ROOTS = ['lib', 'app', 'tests'] as const;
 const REPO_DIR = 'lib/repositories';
 const SCHEMA = 'prisma/schema.prisma';
 const HELPER = 'withSystemContext';
@@ -500,6 +509,22 @@ function enclosingName(node: ts.Node): string {
     ) {
       return n.name.text;
     }
+    // A TEST callback (MOTIR-2887). In `lib/` every site sits in a named function
+    // or a named const, so the four cases above are total; in `tests/` the
+    // commonest enclosing scope by far is an ANONYMOUS arrow handed to `it(…)` /
+    // `beforeEach(…)`, which none of them names — every such site would key as
+    // `<module>` and collapse onto one another. The test's own TITLE is the
+    // line-independent name the sibling guards' keys are built for.
+    if (
+      (ts.isArrowFunction(n) || ts.isFunctionExpression(n)) &&
+      n.parent &&
+      ts.isCallExpression(n.parent) &&
+      ts.isIdentifier(n.parent.expression)
+    ) {
+      const fn = n.parent.expression.text;
+      const [first] = n.parent.arguments;
+      return first && ts.isStringLiteralLike(first) ? `${fn}:${first.text}` : fn;
+    }
   }
   return '<module>';
 }
@@ -509,6 +534,10 @@ function* walk(dir: string): Generator<string> {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (entry === 'node_modules' || entry === '.next') continue;
+      // The scanner's OWN negative fixture is a separate root with its own cache
+      // key (see `scanSystemContexts`), so walking it from the repo root would
+      // report its deliberately-broken sites as real findings.
+      if (entry === '__fixtures__') continue;
       yield* walk(full);
     } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
       yield full;
@@ -524,7 +553,7 @@ function* walk(dir: string): Generator<string> {
  */
 const cache = new Map<string, SystemContextSite[]>();
 
-/** Every `withSystemContext` block in `lib/` + `app/`, classified by what it reaches. */
+/** Every `withSystemContext` block in `lib/` + `app/` + `tests/`, classified by what it reaches. */
 export function scanSystemContexts(root = process.cwd()): SystemContextSite[] {
   const cached = cache.get(root);
   if (cached) return cached;

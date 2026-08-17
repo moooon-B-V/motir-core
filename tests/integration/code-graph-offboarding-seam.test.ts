@@ -9,7 +9,6 @@ import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService'
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
 
@@ -69,10 +68,13 @@ async function makeWorkspace(email = 'owner@example.com', name = 'Acme') {
   return { owner, workspace };
 }
 
+/** Every queue row — a direct-DB ASSERTION, so it runs as the OWNER
+ *  (MOTIR-2887). `code_graph_offboarding` is armed, so this read was correct
+ *  before the move; the owner is where an assertion belongs regardless. */
 async function queueRows() {
-  return withSystemContext((tx) =>
-    tx.codeGraphOffboarding.findMany({ orderBy: [{ coreProjectId: 'asc' }, { repoRef: 'asc' }] }),
-  );
+  return adminDb.codeGraphOffboarding.findMany({
+    orderBy: [{ coreProjectId: 'asc' }, { repoRef: 'asc' }],
+  });
 }
 
 /** Drive the sweep through its REAL job handler — never the service or repository. */
@@ -84,12 +86,14 @@ async function runSweepJob() {
 
 /** Move a row's `dueAt` into the past — the seam a test can reach, per the story's recipe step 4. */
 async function makeDue(id: string) {
-  await withSystemContext((tx) =>
-    tx.codeGraphOffboarding.update({
-      where: { id },
-      data: { dueAt: new Date(Date.now() - 60_000) },
-    }),
-  );
+  // A FIXTURE write runs as the OWNER (MOTIR-2887). This one is the shape that
+  // fails SILENTLY when an arm is missing: an `update` whose `where` matches
+  // nothing raises P2025, but a `updateMany`/`deleteMany` in the same position
+  // reports 0 and the row just stays not-due.
+  await adminDb.codeGraphOffboarding.update({
+    where: { id },
+    data: { dueAt: new Date(Date.now() - 60_000) },
+  });
 }
 
 const githubInstallation = {
@@ -107,34 +111,31 @@ const ghRepo = (name: string, id: string) => ({
 
 /** A GitLab connection with two connected projects, written directly (the OAuth exchange is not under test). */
 async function seedGitlab(workspaceId: string) {
-  const conn = await withSystemContext((tx) =>
-    tx.githubInstallation.create({
-      data: {
-        installationId: `gitlab-ws-${workspaceId}`,
-        workspaceId,
-        accountLogin: 'acme',
-        accountType: 'User',
-        provider: 'gitlab',
-      },
-    }),
-  );
+  // FIXTURE writes run as the OWNER (MOTIR-2887).
+  const conn = await adminDb.githubInstallation.create({
+    data: {
+      installationId: `gitlab-ws-${workspaceId}`,
+      workspaceId,
+      accountLogin: 'acme',
+      accountType: 'User',
+      provider: 'gitlab',
+    },
+  });
   for (const [repoId, name] of [
     ['g1', 'api'],
     ['g2', 'web'],
   ] as const) {
-    await withSystemContext((tx) =>
-      tx.githubRepo.create({
-        data: {
-          installationId: conn.id,
-          workspaceId,
-          repoId,
-          owner: 'acme',
-          name,
-          defaultBranch: 'main',
-          provider: 'gitlab',
-        },
-      }),
-    );
+    await adminDb.githubRepo.create({
+      data: {
+        installationId: conn.id,
+        workspaceId,
+        repoId,
+        owner: 'acme',
+        name,
+        defaultBranch: 'main',
+        provider: 'gitlab',
+      },
+    });
   }
   return conn;
 }

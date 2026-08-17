@@ -7,7 +7,6 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -69,14 +68,20 @@ async function makeScenario(email: string) {
  *  transitions touching them, FK-first) — the degenerate custom workflow the
  *  admin surface forbids but the webhook must survive. */
 async function dropStatusCategory(projectId: string, category: StatusCategory): Promise<void> {
-  await withSystemContext(async (tx) => {
-    const doomed = await tx.workflowStatus.findMany({ where: { projectId, category } });
-    const ids = doomed.map((s) => s.id);
-    await tx.workflowTransition.deleteMany({
-      where: { OR: [{ fromStatusId: { in: ids } }, { toStatusId: { in: ids } }] },
-    });
-    await tx.workflowStatus.deleteMany({ where: { id: { in: ids } } });
+  // ⚠️ THE OWNER, not a system context (MOTIR-2887). `workflow_status` carries ONE
+  // policy, `workflow_status_active_workspace`, keyed purely on `app.workspace_id`
+  // — no `system_admin` arm. Under `motir_app` the `findMany` returned `[]`, the
+  // deletes matched nothing, and the degenerate custom workflow this fixture
+  // exists to create was never created; the test then measured the DEFAULT
+  // workflow while claiming to measure a custom one, and read `transitioned`
+  // where it expected `no_matching_status`. The fixture did not fail — it
+  // silently did nothing, which is the whole shape this card is named for.
+  const doomed = await adminDb.workflowStatus.findMany({ where: { projectId, category } });
+  const ids = doomed.map((s) => s.id);
+  await adminDb.workflowTransition.deleteMany({
+    where: { OR: [{ fromStatusId: { in: ids } }, { toStatusId: { in: ids } }] },
   });
+  await adminDb.workflowStatus.deleteMany({ where: { id: { in: ids } } });
 }
 
 function prPayload(opts: {
@@ -161,9 +166,9 @@ describe('githubWebhookService — custom workflow with NO matching status (MOTI
       prPayload({ action: 'opened', identifier: 'ACME-1' }),
     );
 
-    const pr = await withSystemContext((tx) =>
-      tx.githubPullRequest.findFirst({ where: { number: 7 } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). `github_pull_request`
+    // is armed, so this one worked before the move.
+    const pr = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
     expect(pr).not.toBeNull();
     expect(pr!.workItemId).toBe(item.id);
   });

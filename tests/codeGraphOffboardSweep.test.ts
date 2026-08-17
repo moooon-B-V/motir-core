@@ -58,10 +58,15 @@ async function enqueueDueAt(
   );
 }
 
+/** Every queue row, unscoped — a direct-DB ASSERTION, so it runs as the OWNER
+ *  (MOTIR-2887). `code_graph_offboarding` DOES carry a `system_admin` arm
+ *  (`code_graph_offboarding_system_only`, ALL, measured against `pg_policies`),
+ *  so this read was not coming back empty; the move is rule-conformance, not a
+ *  bug fix. It is still the right client — the arm is a property of the DEPLOYED
+ *  policy set, and `workflow_status` in this same sweep is the proof a table can
+ *  simply not have one. */
 async function allRows() {
-  return withSystemContext((tx) =>
-    tx.codeGraphOffboarding.findMany({ orderBy: { coreProjectId: 'asc' } }),
-  );
+  return adminDb.codeGraphOffboarding.findMany({ orderBy: { coreProjectId: 'asc' } });
 }
 
 beforeEach(async () => {

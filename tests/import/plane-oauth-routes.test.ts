@@ -325,7 +325,11 @@ describe('GET /api/import/plane/oauth/callback', () => {
     );
     expect(res.headers.get('location')).toContain('import=plane_error');
 
-    const count = await withSystemContext((tx) => tx.importSourceIdentity.count());
+    // Asserted as the OWNER (MOTIR-2887) — the twin of the `linear` case. The
+    // table is armed, so the assertion held; a `toBe(0)` read through a
+    // policy-filtered client is nonetheless the shape that goes silently vacuous
+    // the moment the arm is not there.
+    const count = await adminDb.importSourceIdentity.count();
     expect(count).toBe(0);
   });
 });

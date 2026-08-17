@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { NextRequest, type NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -127,9 +126,10 @@ describe('GET /api/github/oauth/callback', () => {
     expect(REDIRECT_STATUSES).toContain(res.status);
     expect(res.headers.get('location')).toContain('github=connected');
 
-    const row = await withSystemContext((tx) =>
-      tx.githubIdentity.findUnique({ where: { userId: user.id } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). `github_identity` is
+    // armed (`github_identity_owner_or_system`), so this read worked either way —
+    // the move is rule-conformance, not a fix.
+    const row = await adminDb.githubIdentity.findUnique({ where: { userId: user.id } });
     expect(row).not.toBeNull();
     expect(row!.githubUserId).toBe('555');
     expect(row!.githubLogin).toBe('gh-router');

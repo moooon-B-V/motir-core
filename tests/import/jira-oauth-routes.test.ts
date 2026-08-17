@@ -5,7 +5,6 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { jiraOAuthService, jiraApiBaseUrl } from '@/lib/services/jiraOAuthService';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -265,9 +264,10 @@ describe('GET /api/import/jira/oauth/callback', () => {
 
     // Stored at rest: the raw column is the versioned ciphertext, NOT plaintext,
     // and the metadata carries the accessible-resource the token maps to.
-    const row = await withSystemContext((tx) =>
-      tx.importSourceIdentity.findFirst({ where: { userId, source: 'jira' } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887).
+    const row = await adminDb.importSourceIdentity.findFirst({
+      where: { userId, source: 'jira' },
+    });
     expect(row).not.toBeNull();
     expect(row!.accessTokenEncrypted).toMatch(/^v1\./);
     expect(row!.accessTokenEncrypted).not.toContain('jira_access_1');
