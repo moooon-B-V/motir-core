@@ -41,22 +41,13 @@ const MEMBERS: WorkspaceMemberDTO[] = [
   { userId: 'u2', name: 'Mei Lin', email: 'mei@example.com', role: 'member' },
 ];
 
-/** Two projects that spell the SAME status key differently — the case a shared
- *  workflow would render wrong, and silently. */
-const WORKFLOWS = new Map<string, WorkflowDto>([
-  [
-    'p1',
-    {
-      statuses: [{ key: 'in_progress', label: 'In Progress', category: 'in_progress' }],
-    } as unknown as WorkflowDto,
-  ],
-  [
-    'p2',
-    {
-      statuses: [{ key: 'in_progress', label: 'Doing', category: 'in_progress' }],
-    } as unknown as WorkflowDto,
-  ],
-]);
+/** The ACTIVE project's workflow — one, since MOTIR-2761 narrowed Home to it.
+ *  The per-project MAP this used to be existed because Home spanned projects
+ *  that can spell the same status key differently; the rows now share a project,
+ *  so they share its workflow the way the `/items` rows do. */
+const WORKFLOW = {
+  statuses: [{ key: 'in_progress', label: 'In Progress', category: 'in_progress' }],
+} as unknown as WorkflowDto;
 
 function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWorkItemRowDto {
   return {
@@ -81,17 +72,24 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
 }
 
 const renderRows = (rows: HomeWorkItemRowDto[], tab: 'work' | 'watching' = 'work') =>
-  render(<HomeList rows={toHomeRowViews(rows, WORKFLOWS, MEMBERS, tab)} label="My work" />);
+  render(<HomeList rows={toHomeRowViews(rows, WORKFLOW, MEMBERS, tab)} label="My work" />);
 
 describe('the Home row — the cells the design added', () => {
-  it('identifies the owning project on every row', () => {
-    renderRows([
-      dto({ identifier: 'MOTIR-1' }),
-      dto({ identifier: 'ATLAS-1', project: { id: 'p2', identifier: 'ATLAS', name: 'Atlas' } }),
-    ]);
+  it('carries NO project cell or column — the page is one project (MOTIR-2761)', () => {
+    renderRows([dto({ identifier: 'MOTIR-1' })]);
 
-    expect(within(screen.getByTestId('home-row-MOTIR-1')).getByText('Motir')).toBeTruthy();
-    expect(within(screen.getByTestId('home-row-ATLAS-1')).getByText('Atlas')).toBeTruthy();
+    // The chip is gone from the row AND its header from the strip. A column
+    // whose every row repeats the project switcher two rows above it is not
+    // information — and while it was here it was the visible half of a surface
+    // reading across a boundary it should not have crossed.
+    expect(within(screen.getByTestId('home-row-MOTIR-1')).queryByText('Motir')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Project' })).toBeNull();
+    expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual([
+      'Title',
+      'Your role',
+      'Assignee',
+      'Status',
+    ]);
   });
 
   it('names the reader s relation, and marks BOTH as the one worth spotting', () => {
@@ -127,19 +125,16 @@ describe('the Home row — the cells the design added', () => {
     expect(within(screen.getByTestId('home-row-W-1')).getByText('Watching')).toBeTruthy();
   });
 
-  it('resolves each row s status against ITS OWN project s workflow', () => {
-    renderRows([
-      dto({ identifier: 'MOTIR-1' }),
-      dto({ identifier: 'ATLAS-1', project: { id: 'p2', identifier: 'ATLAS', name: 'Atlas' } }),
-    ]);
+  it('resolves every row s status against the ACTIVE project s workflow', () => {
+    renderRows([dto({ identifier: 'MOTIR-1' }), dto({ identifier: 'MOTIR-2' })]);
 
-    // Same status KEY, two projects, two labels. A single shared workflow would
-    // render one of these wrong and would never say so.
+    // One project, one workflow, one label — the shape `/items` has always had.
+    // The per-project map this replaced was rent Home paid on spanning projects.
     expect(within(screen.getByTestId('home-row-MOTIR-1')).getByText('In Progress')).toBeTruthy();
-    expect(within(screen.getByTestId('home-row-ATLAS-1')).getByText('Doing')).toBeTruthy();
+    expect(within(screen.getByTestId('home-row-MOTIR-2')).getByText('In Progress')).toBeTruthy();
   });
 
-  it('falls back to the raw status key when a project s workflow cannot classify it', () => {
+  it('falls back to the raw status key when the workflow cannot classify it', () => {
     renderRows([dto({ identifier: 'X-1', status: 'some_custom_state' })]);
     expect(within(screen.getByTestId('home-row-X-1')).getByText('some_custom_state')).toBeTruthy();
   });
@@ -227,7 +222,7 @@ describe('toHomeRowViews — the role fallback', () => {
     // data rather than in the read.
     const [row] = toHomeRowViews(
       [dto({ identifier: 'Z-1', viewerIsAssignee: false, viewerIsReporter: false })],
-      WORKFLOWS,
+      WORKFLOW,
       MEMBERS,
       'work',
     );

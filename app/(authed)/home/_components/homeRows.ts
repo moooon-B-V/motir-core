@@ -4,22 +4,21 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 
 // Pure view-shaping for `/home` (Story MOTIR-2649 · Subtask MOTIR-2653) — the
-// same job `app/(authed)/items/_components/issueRows.ts` does for `/items`, one
-// scope wider.
+// same job `app/(authed)/items/_components/issueRows.ts` does for `/items`, over
+// the same scope: one project, the active one.
 //
 // Resolving the STATUS (key → label + category, which decides the Pill's tone)
 // and the ASSIGNEE (id → display name) happens HERE, on the server, so the
 // client list receives plain data rather than the whole workflow and member
 // tables. Kept Prisma-free and React-free so it unit-tests in isolation.
 //
-// ⚠️ ONE WORKFLOW PER PROJECT, and that is the only real difference from the
-// `/items` version. `/items` shapes rows against a single project's workflow
-// because it IS a single project; Home spans every project the reader can
-// browse, and two projects can spell the same lifecycle differently — one's
-// `in_progress` may be labelled "In Progress" and another's "Doing". So the
-// caller hands in a workflow PER PROJECT and each row resolves against its own.
-// Falling back to a shared workflow would render the wrong label the moment a
-// second project customises one, and would do it silently.
+// ⚠️ ONE WORKFLOW, and it used to be a MAP keyed by project id (MOTIR-2761).
+// While Home spanned every browsable project, two projects could spell the same
+// status key differently — one's `in_progress` labelled "In Progress" and
+// another's "Doing" — so each row had to resolve against its own project's
+// workflow. Home now reads one project, so the rows share its workflow the way
+// `/items` rows share theirs, and the PROJECT cell went with the map: a column
+// whose every row reads the same value is not information.
 
 /** The row payload the client list renders. Fully serializable. */
 export interface HomeRowView {
@@ -27,8 +26,6 @@ export interface HomeRowView {
   identifier: string;
   title: string;
   kind: WorkItemKindDto;
-  /** The owning project's display name — the Project cell. */
-  projectName: string;
   /** The reader's relation to the item — the "Your role" cell. */
   role: HomeRole;
   /** Resolved assignee display name, or null when unassigned. */
@@ -66,21 +63,18 @@ function resolveRole(row: HomeWorkItemRowDto, tab: 'work' | 'watching'): HomeRol
 
 export function toHomeRowViews(
   rows: HomeWorkItemRowDto[],
-  workflowsByProjectId: ReadonlyMap<string, WorkflowDto>,
+  workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
   tab: 'work' | 'watching',
 ): HomeRowView[] {
   const nameByUserId = new Map(members.map((m) => [m.userId, m.name]));
   return rows.map((row) => {
-    const status = workflowsByProjectId
-      .get(row.project.id)
-      ?.statuses.find((s) => s.key === row.status);
+    const status = workflow.statuses.find((s) => s.key === row.status);
     return {
       id: row.id,
       identifier: row.identifier,
       title: row.title,
       kind: row.kind,
-      projectName: row.project.name,
       role: resolveRole(row, tab),
       assigneeName: row.assigneeId ? (nameByUserId.get(row.assigneeId) ?? null) : null,
       agent: row.executor === 'coding_agent',
