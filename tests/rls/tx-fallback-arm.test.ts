@@ -741,13 +741,12 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
     });
     await adminDb.workItemLabel.create({ data: { workItemId: itemId, labelId: label.id } });
 
-    expectFallbackAnswer(await labelRepository.searchByPrefix(fx.projectId, 'perf'), 1);
-    expectFallbackAnswer(await labelRepository.listByWorkItem(itemId), 1);
-    expectFallbackAnswer(await workItemLabelRepository.listByWorkItem(itemId), 1);
+    expectFallbackAnswer(await labelRepository.searchByPrefix(fx.projectId, 'perf'));
+    expectFallbackAnswer(await labelRepository.listByWorkItem(itemId));
+    expectFallbackAnswer(await workItemLabelRepository.listByWorkItem(itemId));
 
     const byName = await labelRepository.findByNameLower(fx.projectId, 'perf-q3');
-    if (isAppRoleTestMode()) expect(byName).toBeNull();
-    else expect(byName?.id).toBe(label.id);
+    expect(byName).toBeNull();
   });
 
   it('componentRepository + workItemComponentRepository — the list, the join, the default assignee', async () => {
@@ -765,22 +764,19 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       data: { workItemId: itemId, componentId: component.id },
     });
 
-    expectFallbackAnswer(await componentRepository.listByProject(fx.projectId), 1);
-    expectFallbackAnswer(await componentRepository.listByWorkItem(itemId), 1);
-    expectFallbackAnswer(await workItemComponentRepository.listByWorkItem(itemId), 1);
-    expectFallbackCount(await workItemComponentRepository.countByComponent(component.id), 1);
+    expectFallbackAnswer(await componentRepository.listByProject(fx.projectId));
+    expectFallbackAnswer(await componentRepository.listByWorkItem(itemId));
+    expectFallbackAnswer(await workItemComponentRepository.listByWorkItem(itemId));
+    expectFallbackCount(await workItemComponentRepository.countByComponent(component.id));
 
     const byId = await componentRepository.findById(component.id);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(component.id);
+    expect(byId).toBeNull();
 
     const byName = await componentRepository.findByNameLower(fx.projectId, 'api');
-    if (isAppRoleTestMode()) expect(byName).toBeNull();
-    else expect(byName?.id).toBe(component.id);
+    expect(byName).toBeNull();
 
     const defaulted = await componentRepository.findFirstDefaultAssignee([component.id]);
-    if (isAppRoleTestMode()) expect(defaulted).toBeNull();
-    else expect(defaulted?.defaultAssigneeId).toBe(fx.ownerId);
+    expect(defaulted).toBeNull();
   });
 
   it('watcherRepository — the popover page, the count, and the membership probe', async () => {
@@ -788,13 +784,13 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
     // creating a second one trips the (work_item_id, user_id) unique.
     const { fx, itemId } = await seedItem('FC3');
 
-    expectFallbackAnswer(await watcherRepository.listByWorkItem(itemId, { take: 5 }), 1);
-    expectFallbackCount(await watcherRepository.countByWorkItem(itemId), 1);
+    expectFallbackAnswer(await watcherRepository.listByWorkItem(itemId, { take: 5 }));
+    expectFallbackCount(await watcherRepository.countByWorkItem(itemId));
 
     // `existsFor` is the boolean form of the same arm: FALSE unbound under the role
     // is the "no rows admitted" answer, not "this person is not watching".
     const watching = await watcherRepository.existsFor(itemId, fx.ownerId);
-    expect(watching).toBe(!isAppRoleTestMode());
+    expect(watching).toBe(false);
   });
 
   it('commentRepository + commentMentionRepository — the thread, its counts, the mentions', async () => {
@@ -820,15 +816,14 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       data: { commentId: root.id, mentionedUserId: fx.ownerId },
     });
 
-    expectFallbackAnswer(await commentRepository.listThreadsByWorkItem(itemId), 1);
-    expectFallbackAnswer(await commentMentionRepository.findByCommentIds([root.id]), 1);
-    expectFallbackCount(await commentRepository.countByWorkItem(itemId), 2);
-    expectFallbackCount(await commentRepository.countRootsByWorkItem(itemId), 1);
-    expectFallbackCount(await commentRepository.countByParent(root.id), 1);
+    expectFallbackAnswer(await commentRepository.listThreadsByWorkItem(itemId));
+    expectFallbackAnswer(await commentMentionRepository.findByCommentIds([root.id]));
+    expectFallbackCount(await commentRepository.countByWorkItem(itemId));
+    expectFallbackCount(await commentRepository.countRootsByWorkItem(itemId));
+    expectFallbackCount(await commentRepository.countByParent(root.id));
 
     const one = await commentRepository.findById(root.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(root.id);
+    expect(one).toBeNull();
   });
 
   it('notificationRepository — the drawer page, the badge count, the id lookup', async () => {
@@ -846,12 +841,11 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       },
     });
 
-    expectFallbackAnswer(await notificationRepository.listByRecipient(fx.ownerId, { take: 5 }), 1);
-    expectFallbackCount(await notificationRepository.countUnreadByRecipient(fx.ownerId), 1);
+    expectFallbackAnswer(await notificationRepository.listByRecipient(fx.ownerId, { take: 5 }));
+    expectFallbackCount(await notificationRepository.countUnreadByRecipient(fx.ownerId));
 
     const one = await notificationRepository.findById(row.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(row.id);
+    expect(one).toBeNull();
   });
 
   it('customFieldValueRepository — the issue’s values and the two guard counts', async () => {
@@ -878,14 +872,8 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       },
     });
 
-    expectFallbackAnswer(
-      await customFieldValueRepository.listByWorkItem(itemId, fx.workspaceId),
-      1,
-    );
-    expectFallbackCount(await customFieldValueRepository.countByField(field.id, fx.workspaceId), 1);
-    expectFallbackCount(
-      await customFieldValueRepository.countByOption(option.id, fx.workspaceId),
-      1,
-    );
+    expectFallbackAnswer(await customFieldValueRepository.listByWorkItem(itemId, fx.workspaceId));
+    expectFallbackCount(await customFieldValueRepository.countByField(field.id, fx.workspaceId));
+    expectFallbackCount(await customFieldValueRepository.countByOption(option.id, fx.workspaceId));
   });
 });

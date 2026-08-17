@@ -12,7 +12,6 @@ import {
   type WorkItemFixture,
 } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // `childStatusCascadeService.cascadeToChildren` — the DOWNWARD half of
 // bidirectional status derivation (Story MOTIR-1615 · Subtask MOTIR-1647). Real
@@ -366,9 +365,9 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
   // `{ outcome: 'unresolvable' }` — silently, because an RLS-denied SELECT returns
   // fewer rows rather than raising.
   //
-  // Unconditional for the reason `tests/app-role-bound-context-reads.test.ts`
-  // gives (CI does not set the flag): trivially green under the bypass role, red
-  // on `main` and green here under `TEST_DB_APP_ROLE=1`.
+  // Since MOTIR-2734 retired `TEST_DB_APP_ROLE`, `@/lib/db` is always `motir_app`,
+  // so these cases bite on every run. They were red on `main` before MOTIR-2880
+  // and trivially green under the old bypass-role default.
 
   it('completes the children under the non-bypass role — the read is workspace-bound', async () => {
     const fx = await makeWorkItemFixture();
@@ -376,7 +375,7 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
 
     const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
-    // On `main` under TEST_DB_APP_ROLE=1 this is `{ outcome: 'unresolvable' }`.
+    // On `main` before MOTIR-2880 this was `{ outcome: 'unresolvable' }`.
     expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
     expect(await statusOf(children[0]!.id)).toBe('done');
   });
@@ -388,9 +387,7 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
 
     const res = await childStatusCascadeService.cascadeToChildren(story.id, other.workspaceId);
 
-    if (isAppRoleTestMode()) {
-      expect(res).toEqual({ outcome: 'unresolvable' });
-      expect(await statusOf(children[0]!.id)).toBe('todo');
-    }
+    expect(res).toEqual({ outcome: 'unresolvable' });
+    expect(await statusOf(children[0]!.id)).toBe('todo');
   });
 });
