@@ -320,9 +320,18 @@ export const workflowsService = {
     // vocabulary: unbound it returned no statuses, so nothing counted as done and
     // a blocker that HAD landed still read as open. The mirror of the unbound
     // edge read, and just as silent.
-    const statuses = await withWorkspaceServiceContext(workspaceId, (t) =>
-      workflowsRepository.findStatusesByProjects(unique, workspaceId, tx ?? t),
-    );
+    //
+    // ⚠️ A supplied `tx` is used INSTEAD OF opening a context, not inside one
+    // (MOTIR-2758, this method's first `tx`-passing caller). The GUC is already
+    // bound on that transaction, so the wrapper adds nothing but a SECOND pooled
+    // connection held while the caller's is open — and `homeService` calls this
+    // on every `/home` render, which is the load shape where nesting an
+    // interactive transaction inside another exhausts the pool.
+    const statuses = tx
+      ? await workflowsRepository.findStatusesByProjects(unique, workspaceId, tx)
+      : await withWorkspaceServiceContext(workspaceId, (t) =>
+          workflowsRepository.findStatusesByProjects(unique, workspaceId, t),
+        );
     for (const s of statuses) {
       if (s.category === 'done') map.get(s.projectId)?.add(s.key);
     }
