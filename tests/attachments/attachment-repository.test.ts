@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Attachment, Prisma } from '@/generated/prisma/client';
+import type { Attachment, Prisma, Workspace } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { adminDb } from '../helpers/adminDb';
@@ -259,12 +259,18 @@ describe('attachmentRepository.listOrphans', () => {
 // runs under `SET LOCAL ROLE motir_app` (NOSUPERUSER NOBYPASSRLS), the
 // asAppRole idiom from tests/workspace-rls.test.ts.
 async function asAppRole<T>(
-  guc: { workspaceId?: string; systemAdmin?: boolean },
+  guc: { workspaceId?: string; organizationId?: string; userId?: string; systemAdmin?: boolean },
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
   return adminDb.$transaction(async (tx) => {
+    if (guc.userId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${guc.userId}, true)`;
+    }
     if (guc.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${guc.workspaceId}, true)`;
+    }
+    if (guc.organizationId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.organization_id', ${guc.organizationId}, true)`;
     }
     if (guc.systemAdmin) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
@@ -309,6 +315,107 @@ describe('attachment RLS — the 5.2.1 policy swap', () => {
     await asAppRole({ systemAdmin: true }, (tx) => attachmentRepository.delete(orphanA.id, tx));
     const attachmentRow = await adminDb.attachment.findUnique({ where: { id: orphanA.id } });
     expect(attachmentRow).toBeNull();
+  });
+});
+
+// ── The ORG-SERVICE read arms (MOTIR-2956) ─────────────────────────────────
+//
+// `entitlementsService.assertWithinStorageCap` sums an ORG's attachments under
+// `withOrgServiceWriteContext`, which binds `app.organization_id` and nothing
+// else. Neither arm of the policy proved above reads that GUC, so under the
+// non-bypass role the sum answered 0 for every org and the §4.3b storage cap
+// never fired — while the call site's comment asserted the opposite.
+//
+// The two cases that matter are below, and NEITHER is expressible through the
+// existing describe: the sum spans an org's WORKSPACES (which is why binding a
+// workspace could not have answered it), and it must NOT widen when an acting
+// user is present (`withOrgContext`'s member-scoped reach is a documented
+// posture of `summarizeOrgFootprint` / `listMembers`).
+//
+// ⚠️ These run under `SET LOCAL ROLE motir_app` rather than relying on the
+// suite's default connection, deliberately: until MOTIR-2734 flips the default,
+// the same assertions made through `@/lib/db` would pass on the bypass role
+// while proving nothing at all about the arms.
+
+/** A SECOND workspace inside an EXISTING org — the shape a per-workspace binding cannot answer. */
+async function makeSiblingWorkspace(organizationId: string, slug: string): Promise<Workspace> {
+  return adminDb.workspace.create({
+    data: { organizationId, name: `Sibling ${slug}`, slug: `sibling-${slug}` },
+  });
+}
+
+describe('attachment + workspace ORG-SERVICE read arms (MOTIR-2956)', () => {
+  it('the org GUC alone sums an org’s attachments ACROSS its workspaces, and excludes another org’s', async () => {
+    const fx = await makeWorkItemFixture();
+    const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RVL' });
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    const sibling = await makeSiblingWorkspace(orgId, 'a');
+
+    await makeAttachment(fx); // 4 bytes, workspace 1
+    await adminDb.attachment.create({
+      data: {
+        workspaceId: sibling.id, // 40 bytes, workspace 2 — SAME org
+        uploaderUserId: fx.ownerId,
+        blobPathname: 'https://blob.example/a/sibling.png',
+        mimeType: 'image/png',
+        sizeBytes: 40,
+        originalFilename: 'sibling.png',
+      },
+    });
+    await makeAttachment(rival, { blobPathname: 'https://blob.example/a/theirs.png' }); // other org
+
+    // Exactly what `withOrgServiceWriteContext` binds: the org GUC, no user.
+    const total = await asAppRole({ organizationId: orgId }, (tx) =>
+      attachmentRepository.sumSizeByOrganization(orgId, tx),
+    );
+    expect(total).toBe(44); // 0 before the arms landed — the cap's whole input
+  });
+
+  it('fails CLOSED with no org bound — an unbound caller still sums nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    await makeAttachment(fx);
+
+    expect(await asAppRole({}, (tx) => attachmentRepository.sumSizeByOrganization(orgId, tx))).toBe(
+      0,
+    );
+  });
+
+  it('an ACTING USER withdraws the arm — `withOrgContext`’s member-scoped reach is unchanged', async () => {
+    // The narrowing, pinned. Both arms require `app.user_id` to be EMPTY, so a
+    // user-bearing org context (organizationsService's surfaces) sees exactly
+    // what it saw before: its member workspaces, and no attachments at all.
+    const fx = await makeWorkItemFixture();
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    const sibling = await makeSiblingWorkspace(orgId, 'b');
+    await makeAttachment(fx);
+
+    const bound = { organizationId: orgId, userId: fx.ownerId };
+    expect(
+      await asAppRole(bound, (tx) => attachmentRepository.sumSizeByOrganization(orgId, tx)),
+    ).toBe(0);
+    // …and the workspace list stays membership-scoped: the owner's own workspace
+    // only, never the sibling they were never added to.
+    const visible = await asAppRole(bound, (tx) => tx.workspace.findMany({ select: { id: true } }));
+    expect(visible.map((w) => w.id)).toEqual([fx.workspaceId]);
+    expect(visible.map((w) => w.id)).not.toContain(sibling.id);
+  });
+
+  it('the workspace arm is org-scoped, not global — the userless context sees its org’s workspaces only', async () => {
+    const fx = await makeWorkItemFixture();
+    const rival = await makeWorkItemFixture({ name: 'Rival', identifier: 'RVL' });
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } }))
+      .organizationId;
+    const sibling = await makeSiblingWorkspace(orgId, 'c');
+
+    const visible = await asAppRole({ organizationId: orgId }, (tx) =>
+      tx.workspace.findMany({ select: { id: true } }),
+    );
+    expect(visible.map((w) => w.id).sort()).toEqual([fx.workspaceId, sibling.id].sort());
+    expect(visible.map((w) => w.id)).not.toContain(rival.workspaceId);
   });
 });
 
