@@ -16,6 +16,49 @@ predate the three-file convention and are indexed below rather than rewritten.
 
 ---
 
+## The content column reserves the floating orb's footprint (MOTIR-2763)
+
+**The shell's content column pays the clearance for every piece of floating furniture the shell
+mounts. A bottom-anchored control on any page must NOT reserve space for the orb itself.**
+
+`PlanWithAIFab` — the "M" AI callout orb — is `fixed right-5 bottom-5 z-40 h-14 w-14`, so it owns the
+viewport rect `y ∈ [bottom−76, bottom−20]` on every authed screen where `showPlanWithAi` holds. Being
+`position: fixed` it participates in **no page's flow**: it takes viewport space from every page while
+appearing in none of their layouts. Nothing catches that — no page imports the orb, so no type, no
+grep and no component test connects the two, and a happy-dom test has no layout engine to see it with.
+
+So the reservation is made **once, at the mount that creates the obstruction** — the content wrapper in
+`app/(authed)/layout.tsx`, conditional on the same `showPlanWithAi` that decides whether the orb ships
+at all. It is carried by a single custom property:
+
+|                            |                                                                                                                                                                                                                                                                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--shell-bottom-clearance` | `6rem` when the orb mounts, `1.5rem` when it does not. Set on the content wrapper; the wrapper's own `pb-` reads it.                                                                                                                                                        |
+| consumers                  | Anything sizing itself against the fold subtracts `var(--shell-bottom-clearance, 1.5rem)` instead of hard-coding the wrapper's bottom padding — `BoardColumn`, `plans/[id]`, `RoadmapView`, and the `3d-immersive` board-column rule in `packages/design-system/theme.css`. |
+
+**Two rules follow, and they are the reason this is written down.**
+
+1. **A new bottom-anchored control adds nothing.** Put the pager, the footer row or the action bar
+   last and right-aligned exactly as the design asks; the column already holds the space open. A
+   control that reserves its own clearance double-pays it, and creates a rule every future author has
+   to remember — there were already five such controls when this was found, and the sixth author would
+   not have known.
+2. **A surface that hard-codes a viewport-relative height MUST spend the variable, not a constant.**
+   `h-[calc(100dvh - <chrome above> - var(--shell-bottom-clearance, 1.5rem))]` — never a single baked
+   number that silently encodes today's padding. Four surfaces did bake it in, and all four would have
+   been pushed past the fold by the clearance had they not been converted with it.
+
+**And the check is a HIT TEST, not a look.** An overlapped control is still perfectly `toBeVisible()`
+— visibility is a property of the element and clickability is a property of the stack above it. The
+guard is `tests/e2e/cloud-orb-clearance.spec.ts`, which rides the **cloud** lane because that is the
+only lane whose webServer sets `MOTIR_AI_URL`; in the main lane the orb does not mount, so the same
+assertion would pass on broken code forever.
+
+**Adding floating furniture to the shell is not additive** — it is a claim on viewport space that every
+page in the app now pays. Reserving the space is part of shipping the element, in the same commit.
+
+---
+
 ## The top bar's control budget (MOTIR-2374)
 
 The code change is **MOTIR-2373**. This asset decides what it builds.

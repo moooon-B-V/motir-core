@@ -166,7 +166,10 @@ export function RoadmapView({
         </div>
       </header>
 
-      <div className="h-[calc(100dvh-13rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
+      {/* 11.5rem of chrome above, then the shell's own bottom reservation —
+          see the same split in BoardColumn / plans/[id] (MOTIR-2763). The flat
+          13rem this replaces encoded the shell's old 1.5rem bottom padding. */}
+      <div className="h-[calc(100dvh_-_11.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
         {noActiveSprint ? (
           <div className="flex h-full items-center justify-center p-6">
             <EmptyState
