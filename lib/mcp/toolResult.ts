@@ -59,6 +59,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanTargetLockedError,
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
@@ -331,7 +332,12 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof EmptyPlanChangeIntentError ||
     err instanceof EmptyPlanChangeTurnError ||
     err instanceof TooManyPlanChangeTargetsError ||
-    err instanceof PlanChangeTurnConflictError
+    err instanceof PlanChangeTurnConflictError ||
+    // MOTIR-2787 — another session holds one of the scope's targets. The message
+    // names the item, the holder and the lease expiry, which is what lets an
+    // agent decide between waiting and planning something else instead of
+    // retrying the same refused call.
+    err instanceof PlanTargetLockedError
   ) {
     return toolError(err.code, err.message);
   }

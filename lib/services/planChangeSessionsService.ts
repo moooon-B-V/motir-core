@@ -10,6 +10,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
@@ -254,6 +255,20 @@ export const planChangeSessionsService = {
    * `scope` is derived from an ALREADY-RESOLVED anchor set (`buildScope`), never
    * from raw client input: the caller has resolved and permission-checked every
    * anchor, so an item the actor cannot browse can never become part of a key.
+   *
+   * ⚠️ OPENING TAKES THE TARGET LOCK (Story MOTIR-2786 · MOTIR-2787). Every
+   * anchor in the scope moves to `planning` and is held EXCLUSIVELY by this
+   * thread; a second session whose scope overlaps a held item is refused with
+   * `PlanTargetLockedError` naming the item and the holder. The scope key cannot
+   * do this job — `[MOTIR-9]` and `[MOTIR-9, MOTIR-4]` are two different threads
+   * addressing one common item — so the exclusion lives on the ITEM.
+   *
+   * It runs AFTER the session row exists, because the lease points at the session
+   * that holds it. It is idempotent for the holder (a re-open refreshes the lease
+   * rather than failing), which is what keeps this safe as a mount read. And it
+   * is deliberately NOT in {@link findForScope}: looking at the door is not
+   * starting a conversation, and must not take a lock any more than it writes a
+   * row.
    */
   async getOrCreateForScope(
     pctx: ProjectContext,
@@ -270,13 +285,16 @@ export const planChangeSessionsService = {
         tx,
       ),
     );
-    if (existing) return toDto(existing, pctx);
+    if (existing) {
+      await planTargetLockService.acquireForScope(existing.id, scope.targetKeys, pctx);
+      return toDto(existing, pctx);
+    }
 
     try {
       const row = await withWorkspaceContext(
         { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
-        (tx) =>
-          planChangeSessionRepository.create(
+        async (tx) => {
+          const created = await planChangeSessionRepository.create(
             {
               workspaceId: pctx.workspaceId,
               projectId: pctx.projectId,
@@ -285,12 +303,28 @@ export const planChangeSessionsService = {
               targetKeys: scope.targetKeys,
             },
             tx,
-          ),
+          );
+          // ONE transaction with the session write. A thread row that commits
+          // while its leases do not would exist, be resumable, and hold nothing —
+          // so a refusal rolls the open back entirely: the conversation was never
+          // started, because its targets were already taken.
+          await planTargetLockService.acquireForScopeWithin(
+            created.id,
+            scope.targetKeys,
+            pctx,
+            new Date(),
+            tx,
+          );
+          return created;
+        },
       );
       return toDto(row, pctx);
     } catch (err) {
       // A concurrent opener won the unique-index race. "Open the conversation" is
       // idempotent, so the right answer is the winner's thread — not an error.
+      // The LOCK is not idempotent that way, though: the winner's thread is a
+      // DIFFERENT session, so the loser acquires against it and is told who holds
+      // the targets, which is the correct answer to "can I plan this?".
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         const winner = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
           planChangeSessionRepository.findByProjectAndScope(
@@ -300,7 +334,10 @@ export const planChangeSessionsService = {
             tx,
           ),
         );
-        if (winner) return toDto(winner, pctx);
+        if (winner) {
+          await planTargetLockService.acquireForScope(winner.id, scope.targetKeys, pctx);
+          return toDto(winner, pctx);
+        }
       }
       throw err;
     }
@@ -499,6 +536,13 @@ export const planChangeSessionsService = {
       { role: 'system', body: intent, jobId },
       { lastJobId: jobId, lastSubmittedAt: new Date() },
     );
+    // HEARTBEAT (MOTIR-2787). Submitting is the thread proving it is alive, so it
+    // pushes the target lease out by a fresh window. Without this a conversation
+    // longer than one lease would have its own targets swept out from under it;
+    // with it, the window only starts running down once the session goes quiet —
+    // which is exactly the condition the sweep exists to detect. A thread holding
+    // nothing refreshes nothing.
+    await planTargetLockService.refreshForSession(session.id, pctx);
     // `planId` is PASSED THROUGH, never re-derived: the submit above already
     // opened exactly one `generating` Plan bound to `jobId` (MOTIR-1743), so
     // this seam opens none of its own (MOTIR-1745).

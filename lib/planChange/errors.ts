@@ -60,6 +60,33 @@ export class TooManyPlanChangeTargetsError extends Error {
   }
 }
 
+/**
+ * Another planning session already holds one of this scope's targets (Story
+ * MOTIR-2786 · MOTIR-2787). → 409: a state conflict, and a retryable one — the
+ * body was fine, the item is simply taken.
+ *
+ * It NAMES the item and the holder, deliberately. "Planning is locked" with no
+ * subject is an error a user cannot act on: with a scope of up to
+ * `MAX_SCOPE_TARGETS` anchors they do not know WHICH of their targets is taken,
+ * and with no holder they do not know whom to ask or whether to wait. The holder
+ * name is nullable because the holding user may since have been deleted, and a
+ * lease outliving its owner is exactly the case the expiry sweep exists for.
+ */
+export class PlanTargetLockedError extends Error {
+  readonly code = 'PLAN_TARGET_LOCKED' as const;
+  constructor(
+    readonly targetIdentifier: string,
+    readonly holderName: string | null,
+    readonly expiresAt: Date,
+  ) {
+    super(
+      `${targetIdentifier} is being planned by ${holderName ?? 'another session'} right now. ` +
+        `The hold releases when that session finishes, or by ${expiresAt.toISOString()} at the latest.`,
+    );
+    this.name = 'PlanTargetLockedError';
+  }
+}
+
 /** The turn body was empty / blank. → 400 */
 export class EmptyPlanChangeTurnError extends Error {
   readonly code = 'PLAN_CHANGE_EMPTY_TURN' as const;
