@@ -462,19 +462,42 @@ describe('workItemRepository.findProjectForest — single round-trip + workspace
 
     let rows;
     try {
-      rows = await workItemRepository.findProjectForest(
-        fx.projectId,
-        fx.workspaceId,
-        {},
-        loggedDb as unknown as Prisma.TransactionClient,
-      );
+      // BOUND, and deliberately NOT moved to `adminDb` (MOTIR-2952): the SUBJECT
+      // of this case is `findProjectForest` itself — MOTIR-2881's class 2 read
+      // whose subject IS the repository method — so it keeps the code-under-
+      // test's connection and gets a workspace binding, exactly as its real
+      // caller (`workItemsService.getProjectTree`) supplies one. `loggedDb`
+      // carries `DATABASE_URL`, which is `motir_app` in a Vitest worker, and an
+      // unbound `work_item` read there answers `[]`; running the query as the
+      // OWNER instead would make this pass by taking the code under test off the
+      // restricted role, which is the one way this work fails silently.
+      // `withWorkspaceContext` cannot serve here (it binds on the `@/lib/db`
+      // singleton, and the query LOG is the point of this client), so the GUCs
+      // are set inline on `loggedDb`'s own transaction — the same three
+      // `set_config` calls that helper makes.
+      rows = await loggedDb.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${fx.ownerId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${fx.workspaceId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.project_id', ${''}, true)`;
+        queries.length = 0; // the binding is setup, not the read under measurement
+        return workItemRepository.findProjectForest(
+          fx.projectId,
+          fx.workspaceId,
+          {},
+          tx as unknown as Prisma.TransactionClient,
+        );
+      });
     } finally {
       await loggedDb.$disconnect();
     }
 
     expect(rows).toHaveLength(7);
-    expect(queries).toHaveLength(1);
-    expect(queries[0]!.toLowerCase()).toContain('recursive');
+    // Still exactly ONE statement for the whole forest (the no-N+1 claim). The
+    // transaction's own BEGIN / COMMIT are Prisma-emitted control statements, not
+    // reads of the forest, so they are excluded rather than counted.
+    const forestQueries = queries.filter((q) => !/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(q));
+    expect(forestQueries).toHaveLength(1);
+    expect(forestQueries[0]!.toLowerCase()).toContain('recursive');
     // Every row matched (no filter) and depth is populated.
     expect(rows.every((r) => r.matched)).toBe(true);
     expect(rows.find((r) => r.identifier === 'PROD-4')!.depth).toBe(4);

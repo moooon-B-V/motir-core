@@ -348,7 +348,15 @@ describe('moveCard — not-found + tenant scoping', () => {
     });
     const w2 = await workspacesService.createWorkspace({ name: 'Move W2', ownerUserId: userB.id });
     const ctxB: ServiceContext = { userId: userB.id, workspaceId: w2.workspace.id };
-    // The board is in W1; W2's ctx must not see it.
+    // The board is in W1; W2's ctx must not see it. `BoardNotFoundError` is the
+    // DECIDED answer, not the one that happened to fall out (MOTIR-2952): the
+    // service used to lock the card before resolving the board, so this case
+    // answered `BoardNotFoundError` as the BYPASSRLS owner and
+    // `WorkItemNotFoundError` as `motir_app` — one boundary, two errors, chosen
+    // by the connection. `moveCard` now resolves the board first, which is the
+    // only workspace-filtered gate of the two, so the answer is the same in
+    // every mode. Verdict + rejected alternative:
+    // docs/decisions/public-api-conventions.md §4.
     await expect(
       boardsService.moveCard(fx.boardId, id, { toColumnId: fx.columns['in_progress']! }, ctxB),
     ).rejects.toBeInstanceOf(BoardNotFoundError);

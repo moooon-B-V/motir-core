@@ -232,10 +232,22 @@ describe('workItemRepository.findSubtree', () => {
 
     let rows;
     try {
-      rows = await workItemRepository.findSubtree(
-        epic.id,
-        loggedDb as unknown as Prisma.TransactionClient,
-      );
+      // BOUND, and deliberately NOT moved to `adminDb` (MOTIR-2952): the SUBJECT
+      // here is `findSubtree` itself, so it keeps the code-under-test's
+      // connection and gets a workspace binding, exactly as its real caller
+      // supplies one. `loggedDb` carries `DATABASE_URL`, which is `motir_app` in
+      // a Vitest worker, and an unbound `work_item` read there answers `[]`;
+      // running it as the OWNER instead would make this pass by taking the code
+      // under test off the restricted role. `withWorkspaceContext` cannot serve
+      // (it binds on the `@/lib/db` singleton, and the query LOG is the point of
+      // this client), so the same three `set_config` calls are made inline.
+      rows = await loggedDb.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${fx.ownerId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${fx.workspaceId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.project_id', ${''}, true)`;
+        queries.length = 0; // the binding is setup, not the read under measurement
+        return workItemRepository.findSubtree(epic.id, tx as unknown as Prisma.TransactionClient);
+      });
     } finally {
       await loggedDb.$disconnect();
     }
@@ -245,9 +257,12 @@ describe('workItemRepository.findSubtree', () => {
     expect(rows.map((r) => r.kind)).toEqual(['epic', 'story', 'task', 'subtask']);
     expect(rows[0]!.identifier).toBe('PROD-1');
 
-    // Exactly one round-trip, and it is the recursive CTE.
-    expect(queries).toHaveLength(1);
-    expect(queries[0]!.toLowerCase()).toContain('recursive');
+    // Exactly one round-trip, and it is the recursive CTE. The transaction's own
+    // BEGIN / COMMIT are Prisma-emitted control statements, not reads of the
+    // subtree, so they are excluded rather than counted.
+    const subtreeQueries = queries.filter((q) => !/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(q));
+    expect(subtreeQueries).toHaveLength(1);
+    expect(subtreeQueries[0]!.toLowerCase()).toContain('recursive');
   });
 });
 
@@ -342,8 +357,17 @@ describe('workItemRepository.findByIds', () => {
       rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemRepository.findByIds([c.id, a.id, b.id], tx),
       );
-      const loggedRows = await (loggedDb as unknown as typeof db).workItem.findMany({
-        where: { id: { in: [c.id, a.id, b.id] } },
+      // The MIRROR query is instrumentation, not the subject — but it is still a
+      // `work_item` read on `motir_app`, so it needs the same binding or it
+      // answers `[]` and the round-trip claim is measured over nothing
+      // (MOTIR-2952). Bound rather than moved to `adminDb`, so the statement
+      // whose shape is being counted is the one production would issue.
+      const loggedRows = await loggedDb.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${fx.ownerId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${fx.workspaceId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.project_id', ${''}, true)`;
+        queries.length = 0; // the binding is setup, not the read under measurement
+        return tx.workItem.findMany({ where: { id: { in: [c.id, a.id, b.id] } } });
       });
       expect(loggedRows).toHaveLength(3);
     } finally {
@@ -351,8 +375,9 @@ describe('workItemRepository.findByIds', () => {
     }
 
     expect(rows.map((r) => r.id).sort()).toEqual([a.id, b.id, c.id].sort());
-    // The mirror query on the logging client was exactly one round-trip.
-    expect(queries).toHaveLength(1);
+    // The mirror query on the logging client was exactly one round-trip (the
+    // transaction's own BEGIN / COMMIT are control statements, not reads).
+    expect(queries.filter((q) => !/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(q))).toHaveLength(1);
   });
 });
 

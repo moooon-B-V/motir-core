@@ -2014,3 +2014,110 @@ rest).
 **The deployed cutover is MOTIR-2515 and is NOT done.** Production still connects as the owner; this
 card changes the test suite only. Until 2515 lands, the policies are exercised on every run and enforced
 nowhere that a customer can see.
+
+## ⚠️ THE FOURTH SHORT ENUMERATION — why no fifth list is worth writing (MOTIR-2952, 2026-08-17)
+
+MOTIR-2734's own PR CI (motir-core#2098) — the **first** run of the full suite with `motir_app` as the
+default connection — reported **14 failures across 14 793 passing tests** over the three Vitest shards
+(7 / 3 / 4, in 11 red files of 1031). Twelve were the same two dispositions this document has been
+applying since MOTIR-2881; one was a boundary defect (below); one was a production defect filed apart
+as **MOTIR-2956**, and a thirteenth turned out to be a second production defect on inspection and was
+filed as **MOTIR-2960**. The number is small, and the fact that it is non-zero is the finding.
+
+**It is the fourth time in four days, and MOTIR-2911's acceptance criteria predicted it in advance:**
+_"A third recurrence of 'the list was short' is the finding, not the twelve fixes."_
+
+| card       | claimed                | what came after                          |
+| ---------- | ---------------------- | ---------------------------------------- |
+| MOTIR-2871 | 41 files, 240 failures | MOTIR-2882 — 7 files its scope never saw |
+| MOTIR-2881 | 12 files, 67 failures  | MOTIR-2911 — 3 more                      |
+| MOTIR-2911 | 3 files, 13 failures   | **this card — 10 more files**            |
+
+### The reason is measured, not theorised: the scanners cannot see this class by construction
+
+Every one was invisible to `tests/rls/testCallSiteScan.ts` and `tests/rls/singletonReadScan.ts` **for a
+stated reason, and the reason is the same one each time — there is nothing at the CALL SITE to match
+on**:
+
+| site                                    | how it reached the wrong connection                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------- |
+| `project-details-service.test.ts:462`   | a repository method whose `tx` is OPTIONAL, called without one                  |
+| `mcp/comment-counts.test.ts:124 / :144` | the same, on a call a spy REQUIRES to stay unbound                              |
+| `epic6-at-scale.test.ts:129 / :155`     | a HELPER (`expectedCreatedVsResolved`) holding the client one level down        |
+| `work-items/delete.test.ts:260`         | a local `exists()` helper, bound — to the WRONG workspace                       |
+| `work-items/project-tree.test.ts:475`   | a hand-built `PrismaClient` off `DATABASE_URL`, passed in AS the `tx`           |
+| `work-items/repository.test.ts:243/348` | the same hand-built client, twice more                                          |
+| `plans/approvePersistGate.test.ts:394`  | a raw `UPDATE` in a bare `db.$transaction` — a WRITE that matched zero rows     |
+| `cli/cli-device-routes.test.ts:253`     | `db.apiToken.count()` inside a route test, reading like ordinary assertion code |
+
+The scanners find sites by SYNTACTIC SIGNATURE. A call that names the shared client is findable; a
+call that passes no argument, that hands the client to a function defined elsewhere, or that
+CONSTRUCTS its own `PrismaClient` from `DATABASE_URL`, has no signature at all. MOTIR-2918's own
+closing section already says this in the form of a limitation — _"it does not follow a client passed
+into a helper as a parameter"_ — and the honest reading of four short lists is that the limitation is
+the dominant term, not a footnote. **No fifth enumeration will be complete, and running the scanner
+more carefully cannot make it so.**
+
+### What replaces them
+
+**Running the whole suite as `motir_app` — which is exactly what MOTIR-2734 makes unconditional.** It
+is not a better scanner; it is a different instrument, and it is exhaustive by construction: a site
+that reads nothing is a red assertion, wherever the client came from and however many helpers deep it
+sits. That is how all fourteen were found — not by a sweep, but by the first CI run of the flipped
+suite.
+
+So the sequencing to hold onto: **the enumeration problem is solved by the card that was blocked on
+the enumeration.** The scanners keep their job — they are RATCHETS, and their ceilings may only ever
+fall — but the ENUMERATOR is CI, from MOTIR-2734's merge onward. A future short list is no longer
+evidence that the class is nearly closed; the suite's own green is.
+
+### ⚠️ An ADJUDICATION is not an ASSERTION fix — the sub-finding, and the full re-read
+
+`tests/project-details-service.test.ts` and `tests/mcp/comment-counts.test.ts` were **already in
+`ADJUDICATED_UNBOUND_FILES`**, and both entries were correct: each file's subject genuinely IS the
+unbound arm (the `?? db` branch; a query COUNT a bound read would move off the spied client). The
+ruling tells the SCANNER to stop flagging the call. It says nothing about the ASSERTION, which went on
+expecting rows the unbound read can no longer return — so a file can be correctly adjudicated and
+still red, and in the guard's output the two are indistinguishable.
+
+**All nine entries were re-read. The result, per entry:**
+
+| entry                                          | verdict                                                                                                                           |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `comments/repositories.test.ts`                | clean — the file has **no `db.` at all**; every read is `adminDb`                                                                 |
+| `custom-fields/repositories.test.ts`           | clean, same (29 `adminDb` sites, 0 `db.`)                                                                                         |
+| `labels-components-watch/repositories.test.ts` | clean, same                                                                                                                       |
+| `notifications/repositories.test.ts`           | clean, same                                                                                                                       |
+| `integration/sprints/repository.test.ts`       | clean, same                                                                                                                       |
+| `rls/tx-fallback-arm.test.ts`                  | correct BY CONSTRUCTION — the empty answer is its subject, seeded through `adminDb` so emptiness is evidence                      |
+| `app-role-bound-context-reads.test.ts`         | correct — asserts the `tx ?? db` PAIR side by side, rows bound and `[]` unbound                                                   |
+| **`project-details-service.test.ts`**          | **RED — fixed here**: the read stays unbound, the expectation becomes `[]`                                                        |
+| **`mcp/comment-counts.test.ts`**               | **RED — fixed here**: the spied call keeps its unbound arm and asserts `[]`; each answer-shaped claim moved to its own BOUND read |
+
+Two of nine, and the five `adminDb`-only files are clean for a structural reason rather than a lucky
+one. **The residue this re-read cannot reach is the MIRROR shape** — an assertion expecting `[]` or
+`0` that an unbound read satisfies for the wrong reason. Running the suite cannot surface those (they
+are green), and three were found by hand in `cli/cli-device-routes.test.ts`: `toBe(0)` counts on
+`api_token`, passing whether or not the route minted a credential. They moved to `adminDb` with the
+one that was actually red.
+
+### Two of the fourteen were not a fixture class at all, and they went opposite ways
+
+Both arrived looking identical — a test asserting something the app did not do — and only reading the
+`lib/` path told them apart. That reading is the step, not an optional flourish:
+
+- **`boardsService.moveCard`** answered `BoardNotFoundError` as the owner and `WorkItemNotFoundError`
+  as `motir_app`, because it locked the card before it resolved the board. A **mode-split in the shape
+  MOTIR-2919 outlawed hours earlier** — _"the connection mode must never change which error a boundary
+  owes"_ — so it was decided rather than matched. Verdict, rejected alternative and the generalisation
+  are recorded beside 2919's own in `docs/decisions/public-api-conventions.md` §4.
+- **`planChangeSessionsService.recordPlannerTurn`** calls `normalizeBodyRefs` with **no `tx`** — the
+  only one of its five call sites that does not — so under `motir_app` the work-item keys in a planner
+  turn resolve to nothing and stay plain text, silently. That is application code, not a test to
+  convert, and it is filed as **MOTIR-2960**. Its test file is the one member of this card's ten left
+  red on purpose.
+- And the near-miss in the other direction: `plans/approvePersistGate.test.ts:394` read exactly like a
+  gate failing to block, and was a TEST-side unbound WRITE — the concurrent transition it stages ran a
+  raw `UPDATE` in a bare `db.$transaction`, matched zero rows, raised nothing, and left the approve
+  with no race to lose. The gate was fine. **A test that fails because its own precondition silently
+  did not happen is indistinguishable, from the assertion alone, from the code being broken.**
