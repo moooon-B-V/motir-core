@@ -256,6 +256,128 @@ async function asAppRole<T>(
   });
 }
 
+/**
+ * A LEGAL epic → story → task → subtask chain (the deepest the depth limit
+ * allows) inside `projectId`, built as the owner. `firstKey` is the first of the
+ * four per-project keys it consumes.
+ *
+ * Used by the MOTIR-2895 cases that need a full-depth ancestor chain sitting in a
+ * project OTHER than the one the writer has bound.
+ */
+async function makeLegalChainIn(
+  fx: WorkItemTenantFixture,
+  projectId: string,
+  firstKey: number,
+): Promise<{ epicId: string; storyId: string; taskId: string; subtaskId: string }> {
+  const base = {
+    workspaceId: fx.workspaceW1Id,
+    projectId,
+    reporterId: fx.userAId,
+  };
+  const epicId = await makeWorkItem({ ...base, kind: 'epic', key: firstKey });
+  const storyId = await makeWorkItem({
+    ...base,
+    kind: 'story',
+    key: firstKey + 1,
+    parentId: epicId,
+  });
+  const taskId = await makeWorkItem({
+    ...base,
+    kind: 'task',
+    key: firstKey + 2,
+    parentId: storyId,
+  });
+  const subtaskId = await makeWorkItem({
+    ...base,
+    kind: 'subtask',
+    key: firstKey + 3,
+    parentId: taskId,
+  });
+  return { epicId, storyId, taskId, subtaskId };
+}
+
+/**
+ * INSERT a work_item as RAW SQL — no `RETURNING`, and therefore no read of the
+ * inserted row.
+ *
+ * Two reasons the MOTIR-2895 cases need this rather than `tx.workItem.create`:
+ *
+ *   1. **Prisma's create always emits `RETURNING`**, and the RESTRICTIVE
+ *      `work_item_project_narrow` policy is applied to the returned row — so a
+ *      writer bound to project P inserting into project Q fails with *"new row
+ *      violates row-level security policy \"work_item_project_narrow\""*
+ *      (measured) regardless of what the triggers decide. That RLS error MASKS
+ *      the trigger's verdict, which is the thing under test.
+ *   2. A **direct SQL write** is the first scenario the trigger file's own header
+ *      names as why these triggers exist at all. Proving them against the ORM
+ *      only would leave that scenario unmeasured — the same gap, one layer up,
+ *      that let MOTIR-2884 sit for a year behind owner-role tests.
+ */
+async function insertRawWorkItem(
+  tx: Prisma.TransactionClient,
+  row: {
+    id: string;
+    workspaceId: string;
+    projectId: string;
+    reporterId: string;
+    kind: WorkItemKind;
+    key: number;
+    parentId: string;
+  },
+): Promise<void> {
+  await tx.$executeRawUnsafe(
+    `INSERT INTO public."work_item"
+       ("id","workspaceId","projectId","reporterId","kind","key","identifier","title","position","parentId","updatedAt")
+     VALUES ($1, $2, $3, $4, $5::public.work_item_kind, $6, $7, $8, $9, $10, now())`,
+    row.id,
+    row.workspaceId,
+    row.projectId,
+    row.reporterId,
+    row.kind,
+    row.key,
+    `WI-RAW-${row.key}`,
+    `Raw ${row.kind} ${row.key}`,
+    `a${row.key}`,
+    row.parentId,
+  );
+}
+
+/**
+ * The Postgres error behind a rejected write, from EITHER client shape.
+ *
+ * A rejected `tx.workItem.create` surfaces the pg error as `err.cause`; a
+ * rejected `$executeRawUnsafe` wraps it as a Prisma `P2010` whose
+ * `meta.driverAdapterError.cause` carries the SQLSTATE and message. That is a
+ * driver detail, not a behavioural difference, so it is unwrapped in one place
+ * rather than asserted around at each call site.
+ */
+function pgErrorOf(err: unknown): { code?: string; message?: string } | null {
+  if (!err || typeof err !== 'object') return null;
+  const direct = (err as { cause?: unknown }).cause;
+  if (direct && typeof direct === 'object' && 'code' in direct) {
+    return direct as { code?: string; message?: string };
+  }
+  const adapterCause = (
+    err as { meta?: { driverAdapterError?: { cause?: { code?: string; message?: string } } } }
+  ).meta?.driverAdapterError?.cause;
+  return adapterCause ?? null;
+}
+
+/** Assert a write was REFUSED by a trigger: SQLSTATE 23514 + the WI_* marker. */
+async function expectTriggerRefusal(promise: Promise<unknown>, marker: string): Promise<void> {
+  const err = await promise.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  expect(
+    err,
+    `expected the write to be REFUSED with ${marker}, but it was ACCEPTED`,
+  ).not.toBeNull();
+  const pg = pgErrorOf(err);
+  expect(pg?.code).toBe('23514');
+  expect(pg?.message).toContain(marker);
+}
+
 describe('work_item RLS — read isolation', () => {
   it('with NO GUC set, the motir_app role sees zero work_item rows', async () => {
     await makeWorkItemTenants();
@@ -706,6 +828,311 @@ describe('MOTIR-2884 — link workspace trigger refuses a cross-tenant write as 
         }),
     );
     expect(created.id).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MOTIR-2895 — the database checks parent TENANCY, and the parent-chain walks
+// are complete because of it
+// ---------------------------------------------------------------------------
+// The block above fixed the ONE trigger whose subject is a row in another
+// tenant. Writing its per-function verdict surfaced the other half: the three
+// work_item parent-chain functions each RESOLVE the parent and each DEFER when
+// that lookup reads NULL, and their "the parent is always in-context" premise
+// held only because `workItemsService` refuses a cross-project parent
+// (`CrossProjectParentError`). NOTHING in the database compared
+// parent."workspaceId" / parent."projectId" with the child's — so the DB
+// backstop's completeness rested on the application check it exists to backstop.
+//
+// `enforce_work_item_parent_tenancy()` (20260817160000) closes that, and these
+// cases are its proof under the ROLE — the lesson of 2884 being that a trigger
+// exercised only as the owner is a trigger whose RLS behaviour is unmeasured.
+// The last three cases are the evidence for the amended SECURITY DEFINER verdict
+// on kind / depth / cycle; each is ACCEPTED (silently, with the row landing)
+// against those functions as SECURITY INVOKER.
+describe('MOTIR-2895 — parent tenancy is refused for a bound motir_app writer', () => {
+  it('REFUSES an INSERT whose parentId lives in another WORKSPACE (WI_PARENT_CROSS_WORKSPACE)', async () => {
+    const fx = await makeWorkItemTenants();
+    // Bound to W1, writing a W1/P1 row whose parent is W2's epic — a parent that
+    // is invisible to this writer, which is precisely the case the check is FOR.
+    // A story under an epic is kind-LEGAL, so nothing but the tenancy check can
+    // reject this.
+    await expect(
+      asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: '' }, (tx) =>
+        tx.workItem.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1Id,
+            reporterId: fx.userAId,
+            kind: 'story',
+            key: 600,
+            identifier: 'WI-XWS',
+            title: 'Story under another tenant’s epic',
+            position: 'a600',
+            parentId: fx.itemP2aId,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_WORKSPACE') },
+    });
+
+    // The assertion above would also pass if the insert failed for an unrelated
+    // reason, so read the table back as the owner.
+    const rows = await adminDb.workItem.findMany({ where: { parentId: fx.itemP2aId } });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('REFUSES an INSERT whose parentId lives in another PROJECT of the same workspace (WI_PARENT_CROSS_PROJECT)', async () => {
+    const fx = await makeWorkItemTenants();
+    // Same workspace, so RLS's own WITH CHECK is satisfied and the workspace arm
+    // of the new check passes — the project arm is the only thing left. Bound to
+    // the CHILD's project, which is the shape a project-scoped writer has.
+    await expect(
+      asAppRole(
+        { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+        (tx) =>
+          tx.workItem.create({
+            data: {
+              workspaceId: fx.workspaceW1Id,
+              projectId: fx.projectP1Id,
+              reporterId: fx.userAId,
+              kind: 'story',
+              key: 601,
+              identifier: 'WI-XPROJ',
+              title: 'Story under a sibling project’s epic',
+              position: 'a601',
+              parentId: fx.itemP1b_otherProjectId,
+            },
+          }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
+    });
+
+    const rows = await adminDb.workItem.findMany({
+      where: { parentId: fx.itemP1b_otherProjectId },
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('REFUSES the cross-project parent with app.project_id UNBOUND too (the refusal does not depend on which GUCs are set)', async () => {
+    const fx = await makeWorkItemTenants();
+    // With app.project_id = '' the parent is perfectly VISIBLE to the writer, so
+    // this case would pass even under SECURITY INVOKER — it is here because a
+    // tenancy check whose answer moves with the caller's narrowing is not a
+    // check. Same violation, opposite GUC, same marker.
+    await expect(
+      asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: '' }, (tx) =>
+        tx.workItem.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1Id,
+            reporterId: fx.userAId,
+            kind: 'story',
+            key: 602,
+            identifier: 'WI-XPROJ-UNBOUND',
+            title: 'Story under a sibling project’s epic, unnarrowed',
+            position: 'a602',
+            parentId: fx.itemP1b_otherProjectId,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
+    });
+  });
+
+  it('REFUSES a cross-project RE-PARENT (UPDATE), not only an INSERT', async () => {
+    const fx = await makeWorkItemTenants();
+    const story = await makeWorkItem({
+      workspaceId: fx.workspaceW1Id,
+      projectId: fx.projectP1Id,
+      reporterId: fx.userAId,
+      kind: 'story',
+      key: 603,
+      parentId: fx.itemP1aId,
+    });
+
+    await expect(
+      asAppRole(
+        { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+        (tx) =>
+          tx.workItem.update({
+            where: { id: story },
+            data: { parentId: fx.itemP1b_otherProjectId },
+          }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CROSS_PROJECT') },
+    });
+
+    const after = await adminDb.workItem.findUnique({ where: { id: story } });
+    expect(after?.parentId).toBe(fx.itemP1aId);
+  });
+
+  it('still ACCEPTS a legal same-project parent with app.project_id bound (the check does not over-reject)', async () => {
+    const fx = await makeWorkItemTenants();
+    // The guard on the fix itself: the ordinary write every user makes, with the
+    // narrowing that would hide a foreign parent, must still go through.
+    const created = await asAppRole(
+      { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+      (tx) =>
+        tx.workItem.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1Id,
+            reporterId: fx.userAId,
+            kind: 'story',
+            key: 604,
+            identifier: 'WI-SAME-PROJ',
+            title: 'Story under its own project’s epic',
+            position: 'a604',
+            parentId: fx.itemP1aId,
+          },
+        }),
+    );
+    expect(created.parentId).toBe(fx.itemP1aId);
+  });
+
+  it('the DEPTH and CYCLE walks are complete for a LEGAL chain under the role', async () => {
+    const fx = await makeWorkItemTenants();
+    // epic → story → task, all in W1/P1, built as the owner.
+    const story = await makeWorkItem({
+      workspaceId: fx.workspaceW1Id,
+      projectId: fx.projectP1Id,
+      reporterId: fx.userAId,
+      kind: 'story',
+      key: 610,
+      parentId: fx.itemP1aId,
+    });
+    const task = await makeWorkItem({
+      workspaceId: fx.workspaceW1Id,
+      projectId: fx.projectP1Id,
+      reporterId: fx.userAId,
+      kind: 'task',
+      key: 611,
+      parentId: story,
+    });
+    const bound = {
+      userId: fx.userAId,
+      workspaceId: fx.workspaceW1Id,
+      projectId: fx.projectP1Id,
+    };
+
+    // The 4th level is legal — the walk must count 3 ancestors, not fewer.
+    const subtask = await asAppRole(bound, (tx) =>
+      tx.workItem.create({
+        data: {
+          workspaceId: fx.workspaceW1Id,
+          projectId: fx.projectP1Id,
+          reporterId: fx.userAId,
+          kind: 'subtask',
+          key: 612,
+          identifier: 'WI-L4',
+          title: 'L4 subtask',
+          position: 'a612',
+          parentId: task,
+        },
+      }),
+    );
+    expect(subtask.parentId).toBe(task);
+
+    // The 5th is not. A truncated walk would UNDER-count and admit it.
+    await expect(
+      asAppRole(bound, (tx) =>
+        tx.workItem.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1Id,
+            reporterId: fx.userAId,
+            kind: 'subtask',
+            key: 613,
+            identifier: 'WI-L5',
+            title: 'L5 too deep',
+            position: 'a613',
+            parentId: subtask.id,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_DEPTH_LIMIT_EXCEEDED') },
+    });
+
+    // And the cycle walk: moving the story under its own grandchild. cycle sorts
+    // before kind, so the cycle error is the one that surfaces (this re-parent is
+    // also kind-illegal).
+    await expect(
+      asAppRole(bound, (tx) =>
+        tx.workItem.update({ where: { id: story }, data: { parentId: subtask.id } }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_PARENT_CYCLE') },
+    });
+  });
+
+  it('the DEPTH walk is complete even when app.project_id names a DIFFERENT project than the row (the SECURITY DEFINER case)', async () => {
+    const fx = await makeWorkItemTenants();
+    // A legal 4-deep chain in P1b, and a writer bound to P1. RLS permits the
+    // write: `work_item_project_narrow` is FOR SELECT only, so nothing pins the
+    // written row's project to the bound one — only its WORKSPACE is pinned. So
+    // the row lands in P1b while every ancestor of it is hidden from an INVOKER
+    // lookup, and the depth walk returns a SMALLER max(lvl): it passes by
+    // under-counting, with no error to notice.
+    //
+    // Raw SQL, deliberately: the ORM's create emits RETURNING, and the same
+    // restrictive policy rejects the RETURNED row ("new row violates row-level
+    // security policy \"work_item_project_narrow\"" — measured), which MASKS the
+    // trigger's verdict behind an RLS error. A direct SQL write is also the exact
+    // scenario the file header names as this trigger's reason to exist.
+    const chain = await makeLegalChainIn(fx, fx.projectP1bId, 700);
+
+    await expectTriggerRefusal(
+      asAppRole(
+        { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+        (tx) =>
+          insertRawWorkItem(tx, {
+            id: 'wi-2895-depth',
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1bId,
+            reporterId: fx.userAId,
+            kind: 'subtask',
+            key: 704,
+            parentId: chain.subtaskId,
+          }),
+      ),
+      'WI_DEPTH_LIMIT_EXCEEDED',
+    );
+
+    expect(await adminDb.workItem.count({ where: { id: 'wi-2895-depth' } })).toBe(0);
+  });
+
+  it('the KIND matrix applies in that same shape (the other SECURITY DEFINER case)', async () => {
+    const fx = await makeWorkItemTenants();
+    // Same shape, the kind axis: a `story` parented to a STORY is illegal (story
+    // ∈ {epic}), and shallow enough that depth does not trip first. Under
+    // SECURITY INVOKER the parent read NULL, the function deferred to the FK, the
+    // FK was satisfied because the row exists, and the illegal row landed.
+    const chain = await makeLegalChainIn(fx, fx.projectP1bId, 710);
+
+    await expectTriggerRefusal(
+      asAppRole(
+        { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+        (tx) =>
+          insertRawWorkItem(tx, {
+            id: 'wi-2895-kind',
+            workspaceId: fx.workspaceW1Id,
+            projectId: fx.projectP1bId,
+            reporterId: fx.userAId,
+            kind: 'story',
+            key: 714,
+            parentId: chain.storyId,
+          }),
+      ),
+      'WI_ILLEGAL_PARENT_TYPE',
+    );
+
+    expect(await adminDb.workItem.count({ where: { id: 'wi-2895-kind' } })).toBe(0);
   });
 });
 

@@ -715,9 +715,13 @@ export const workItemsService = {
       await assertAssigneeMember(input.assigneeId, workspaceId);
     }
 
-    // Parent pre-flight: same project + kind-legal parent (the DB trigger
-    // backstops kind/depth/cycle; cross-project parenting has no trigger, so
-    // this assertion is the primary guard for it).
+    // Parent pre-flight: same project + kind-legal parent. Every rule here is
+    // ALSO backstopped in the database — kind/depth/cycle since 1.4.2, and
+    // cross-project / cross-workspace parenting since MOTIR-2895
+    // (`enforce_work_item_parent_tenancy`, which the repository translates back
+    // to this same `CrossProjectParentError`). This check stays because it is the
+    // friendlier error and it runs before a key is burned, not because it is the
+    // only thing standing behind the rule.
     if (input.parentId != null) {
       const parent = await readWorkItem(input.parentId, ctx);
       if (!parent) throw new WorkItemNotFoundError(input.parentId);

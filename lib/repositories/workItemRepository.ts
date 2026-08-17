@@ -22,6 +22,7 @@ import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import {
+  CrossProjectParentError,
   DepthLimitExceededError,
   IllegalParentTypeError,
   ParentCycleError,
@@ -35,9 +36,10 @@ import {
 // that run inside a transaction). No business logic, no transactions, no DTO
 // mapping here — those belong in workItemsService (Subtask 1.4.4).
 //
-// The DB-layer triggers (prisma/sql/work_item_triggers.sql) enforce the
-// kind-parent matrix, the depth limit, and cycle prevention. On INSERT /
-// UPDATE they reject with SQLSTATE 23514 + a message marker; create/update
+// The DB-layer triggers (prisma/sql/work_item_triggers.sql) enforce parent
+// TENANCY (MOTIR-2895), the kind-parent matrix, the depth limit, and cycle
+// prevention. On INSERT / UPDATE they reject with SQLSTATE 23514 + a message
+// marker; create/update
 // translate those markers into the typed errors from lib/workItems/errors.ts
 // at this edge, so the service layer never inspects Prisma/Postgres error
 // codes (the 4-layer rule). P2002 (unique key/identifier) and P2025 (record
@@ -4800,6 +4802,18 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
   const sqlState = extractSqlState(err);
 
   if (sqlState === '23514' || isTriggerMarker(message)) {
+    // Both tenancy markers (MOTIR-2895) land on the SAME typed error the service
+    // layer already throws for this rule on all three of its paths — the DB check
+    // backstops `workItemsService`'s `CrossProjectParentError`, it does not
+    // introduce a second vocabulary for the same mistake. The marker itself
+    // distinguishes the workspace case from the project case, and it rides along
+    // in the message.
+    if (
+      message.includes('WI_PARENT_CROSS_WORKSPACE') ||
+      message.includes('WI_PARENT_CROSS_PROJECT')
+    ) {
+      throw new CrossProjectParentError(message);
+    }
     if (message.includes('WI_ILLEGAL_PARENT_TYPE') || message.includes('WI_SUBTASK_NEEDS_PARENT')) {
       throw new IllegalParentTypeError(message);
     }
@@ -4823,6 +4837,8 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
 
 function isTriggerMarker(message: string): boolean {
   return (
+    message.includes('WI_PARENT_CROSS_WORKSPACE') ||
+    message.includes('WI_PARENT_CROSS_PROJECT') ||
     message.includes('WI_ILLEGAL_PARENT_TYPE') ||
     message.includes('WI_SUBTASK_NEEDS_PARENT') ||
     message.includes('WI_DEPTH_LIMIT_EXCEEDED') ||
