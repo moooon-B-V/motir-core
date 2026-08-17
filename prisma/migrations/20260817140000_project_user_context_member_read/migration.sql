@@ -1,0 +1,145 @@
+-- ===========================================================================
+-- RLS: give `project` a USER-CONTEXT member read arm (MOTIR-2886).
+--
+-- The same shape as `20260815234500` (public_request_vote's third arm) and the
+-- same lesson: arming a table for the readers you are currently looking at can
+-- leave it armed for NOBODY in the one context that has no tenant yet.
+--
+-- Before this migration `project` carried exactly two policies:
+--
+--     project_workspace_or_system_read   "workspaceId" = app.workspace_id
+--                                        OR app.system_admin = 'true'
+--     project_public_read                "accessLevel" = 'public'
+--
+-- so it admitted a tenant-bound request, the jobs/operator runtime, and an
+-- anonymous reader of a public project — and nobody else.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT BROKE
+-- ---------------------------------------------------------------------------
+-- `workspacesService.resolveLastActiveContext` (Subtask 8.8.27) is a RESOLUTION
+-- read: it computes WHICH workspace the request acts within, so by construction
+-- no `app.workspace_id` exists yet. It runs inside `withUserContext`, which binds
+-- only `app.user_id` (lib/workspaces/context.ts) — neither GUC in the arm above —
+-- and the project it resolves is a private tenant project, so the public arm does
+-- not fire either.
+--
+--     const user    = await userRepository.findById(userId, tx);          -- admitted
+--     const project = await projectRepository.findById(
+--                       user.lastActiveProjectId, tx);                    -- DEAD
+--     if (!project) return null;                                          -- always taken
+--
+-- No arm admits it, so the read returns NULL and raises nothing. The resolver
+-- returns null, and `resolveActiveWorkspace` falls through to its
+-- first-by-createdAt default. "Land on the project you last worked in"
+-- (Subtasks 8.8.27 / 8.8.28 / 8.8.29) stops working ENTIRELY the day MOTIR-2515
+-- points production at `motir_app`: every cold landing goes to the user's OLDEST
+-- workspace instead, cross-device, for every user, silently. The feature works
+-- perfectly and returns the wrong answer — the vacuous-pass class MOTIR-2829
+-- names, on a hot path with a plausible-looking fallback in front of it.
+--
+-- ---------------------------------------------------------------------------
+-- THE ARM, AND WHY IT IS GATED ON THE UNBOUND WORKSPACE
+-- ---------------------------------------------------------------------------
+-- The arm is modelled on `workspace_membership_visible` (20260527134009) one
+-- level down the tree. That policy's own header states this exact purpose —
+-- "any workspace the user is a member of is visible (so the switcher can list
+-- them all and THE BOOTSTRAP PATH CAN RESOLVE THE ACTIVE WORKSPACE FROM
+-- MEMBERSHIP)". `project` is the tier below `workspace` and the resolver reaches
+-- one tier further down than the bootstrap arm was written for; that is the whole
+-- gap.
+--
+-- Two deliberate narrowings, both load-bearing:
+--
+--   * FOR SELECT, NOT FOR ALL. `project_workspace_or_system_read` keeps owning
+--     every write and every `WITH CHECK` unchanged: no path can INSERT or UPDATE
+--     a project into a workspace that is not the active one, and an unbound
+--     DELETE still matches zero rows. Postgres combines policies as
+--     `(permissive_1 OR permissive_2 OR …) AND (restrictive …)` PER COMMAND, so a
+--     SELECT-only policy widens reads and only reads. (The precedent is
+--     `project_public_read` on this same table, 20260811230000, which argues the
+--     point at length.)
+--
+--   * GATED ON `coalesce(current_setting('app.workspace_id', true), '') = ''` —
+--     the arm fires ONLY when no tenant is bound. This is the difference between
+--     this policy and the naive membership arm, and it is the difference between
+--     a resolution affordance and a cross-tenant hole. `withWorkspaceContext`
+--     binds `app.user_id` AND `app.workspace_id`, so an UNGATED membership arm
+--     would let every ordinary tenant request see the projects of every OTHER
+--     workspace the acting user happens to belong to — collapsing the tenant
+--     boundary this table's first policy exists to draw, and exactly the casual
+--     reach MOTIR-2865 argued against. With the gate, a bound request
+--     short-circuits on a row-INDEPENDENT test: measured on MOTIR-2856 (PG 15,
+--     2 000 tenants), a gate of this shape reports the correlated subplan as
+--     `never executed`, so the tenant path pays nothing.
+--
+-- CORRELATED `EXISTS`, not an uncorrelated `"workspaceId" IN (SELECT …)`. The
+-- guarded read is `projectRepository.findById` — a primary-key probe for ONE row
+-- — so the correlated form runs one indexed membership lookup and stops, while
+-- the hashed form must materialise the user's whole membership set first.
+-- Measured ~8x on MOTIR-2856; `workspace_membership_visible` above predates that
+-- measurement and keeps its `IN` form, which is why this arm does not copy it
+-- verbatim. `workspace_membership_userId_workspaceId_key` serves the probe.
+--
+-- The `EXISTS` runs under the querying role, so it resolves through
+-- `workspace_membership`'s own policies and bottoms out in
+-- `"userId" = current_setting('app.user_id', true)` — a bare column test in
+-- `membership_visible_active_or_own`, no subquery, so Postgres never sees
+-- recursion.
+--
+-- ---------------------------------------------------------------------------
+-- WHO GAINS SIGHT, ENUMERATED PER CONTEXT — NOT PER TABLE
+-- ---------------------------------------------------------------------------
+--   * `withUserContext` (user, no workspace) — GAINS the projects of workspaces
+--     the user is a member of. The defect, fixed. This is the only context the
+--     arm was written for.
+--   * `withOrgContext` (user + organization, no workspace) — also reaches it, and
+--     deliberately so: it admits strictly LESS than the org the context already
+--     binds, since a member workspace of the user is by construction inside an org
+--     the user belongs to. There is no shipped org-tier project read that depends
+--     on being denied here.
+--   * `withWorkspaceContext` / `withWorkspaceServiceContext` (workspace bound) —
+--     GAIN NOTHING. The gate is false before the membership term is evaluated.
+--   * `withSystemContext`, the anonymous connection, `withBootstrapSlugContext` —
+--     GAIN NOTHING: no `app.user_id`, so the membership term compares against
+--     NULL and admits no row. The public-project square keeps running entirely
+--     through `project_public_read`.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT IT DOES **NOT** DO: MAKE THE ACCESS GATE VACUOUS
+-- ---------------------------------------------------------------------------
+-- `resolveLastActiveContext` calls `organizationsService.resolveWorkspaceAccess`
+-- immediately after this read, and that gate is ORG-keyed: org membership gates
+-- workspace access, so a stale workspace membership whose ORG membership was
+-- revoked must still be denied (Story 6.10.4). This arm keys on WORKSPACE
+-- membership only, so the two conditions stay independent and the gate keeps
+-- doing real work — a user whose org membership was revoked now RESOLVES the
+-- project and is then DENIED by the gate, where before the read died one line
+-- earlier and the gate was never reached at all. That is the whole point of not
+-- encoding the gate in SQL: the authorization decision stays in the service where
+-- it is testable, and the policy grants only the sight the decision needs.
+-- `tests/last-active-project.test.ts` asserts that ordering explicitly.
+--
+-- The one behaviour that changes shape rather than merely working: an ORG ADMIN
+-- who is NOT a member of the workspace passes the gate but is not admitted by
+-- this arm, so a stale pointer into such a workspace degrades to
+-- first-by-createdAt instead of landing. That state is not reachable by writing —
+-- the pointer is only ever set through `setActiveProject` /
+-- `recordLastActiveProjectForWorkspace`, both of which go through the user's own
+-- membership row — and the degradation is the resolver's documented behaviour for
+-- a since-revoked membership. Widening the arm to chase it would mean joining
+-- `organization_membership` and duplicating the gate in SQL; the landing
+-- preference is not worth that reach.
+-- ===========================================================================
+
+CREATE POLICY "project_user_membership_read" ON "project"
+  FOR SELECT
+  USING (
+    coalesce(current_setting('app.workspace_id', true), '') = ''
+    AND EXISTS (
+      SELECT 1
+      FROM "workspace_membership" m
+      WHERE m."workspaceId" = "project"."workspaceId"
+        AND m."userId" = current_setting('app.user_id', true)
+    )
+  );

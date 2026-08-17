@@ -1371,6 +1371,58 @@ empty read is the next layer, not nothing. And the two scanners still cannot see
 verdict about BINDING and says nothing about the client the read runs on. The instrument that would have
 caught it is the one MOTIR-2864's entry already asked for: an assertion per (table, context) pair.
 
+---
+
+## `project`'s THIRD arm — the `withUserContext` member read (MOTIR-2886, 2026-08-17)
+
+The carve MOTIR-2881's entry directly above hands off — seven failures across its two
+`last-active-project` files, and not a test defect — resolved here. **It is also the first entry in
+this document whose dead read is under `withUserContext` rather than a `workspace_id`-shaped
+context**: every arm above is keyed on a bound workspace, a bound org, or the system flag, and that is
+exactly why this one survived all of them.
+
+`workspacesService.resolveLastActiveContext` (Subtask 8.8.27) is a RESOLUTION read: it computes WHICH
+workspace the request acts within, so by construction no `app.workspace_id` exists yet. It runs inside
+`withUserContext`, which binds only `app.user_id`. `project`'s two policies key on
+`app.workspace_id` / `app.system_admin` (`project_workspace_or_system_read`) and on
+`"accessLevel" = 'public'` (`project_public_read`). A private tenant project read from a user-only
+context matches neither, so `projectRepository.findById` returned **null and raised nothing**, and
+`resolveLastActiveContext` returned null one line before its access gate.
+
+**The production effect is a wrong answer, not an error.** `resolveActiveWorkspace` falls through to
+first-by-createdAt, so once MOTIR-2515 points the deployed runtime at `motir_app`, "land on the project
+you last worked in" stops working for every user, on every cold landing, cross-device — and the
+fallback it degrades to is a perfectly plausible workspace, so nothing looks broken and nothing logs.
+
+`project_user_membership_read` (`20260817140000`) closes it: a `FOR SELECT` correlated `EXISTS` over
+`workspace_membership`, **gated on `coalesce(current_setting('app.workspace_id', true), '') = ''`**.
+The gate is the difference between a resolution affordance and a cross-tenant hole —
+`withWorkspaceContext` binds `app.user_id` AND `app.workspace_id`, so an ungated membership arm would
+have let every ordinary tenant request see the projects of every other workspace its acting user
+belongs to. Both directions are asserted in `tests/last-active-project.test.ts`.
+
+**Three notes for whoever audits the next context.**
+
+- **This is the third independent instance of "bound, and admitted by nobody"**, after
+  `public_request_vote` (MOTIR-2864) and MOTIR-2865's three unbound tenant reads. Neither scanner can
+  see it — the read was bound, correctly, from the day it was written. What is new here is the axis:
+  the two earlier instances were missing arms on a table for a WORKSPACE-tier reader; this is a missing
+  arm for a whole CONTEXT. The per-`(table, context)` assertion against `pg_policies` that this
+  document has now wished for twice would have caught all three, and `withUserContext`'s docstring now
+  carries a table-by-table sufficiency list as the manual stand-in.
+- **The vacuous passes outnumbered the failures, and were the more dangerous half.** Seven assertions
+  across the two files went red; **three others kept passing while checking nothing**, because a
+  function that returns `null` for the right reason and one that returns `null` two lines too early are
+  indistinguishable from outside. Dropping the arm against the fixed tree now fails **12** of 29, not
+  7 — the gap is the measure of how much of this defect a green-chasing fix would have left behind. The
+  rule that closes it: **assert the intermediate** (the resolved project, the gate's own verdict, the
+  pointer) — never only the terminal `null`.
+- **A policy must not absorb the gate it stands in front of.** The arm keys on WORKSPACE membership;
+  `organizationsService.resolveWorkspaceAccess` keys on ORG membership. Keeping them independent is
+  what makes the revoked-org-membership case testable at all: the project now resolves and the GATE
+  says no, where before the read died first and the gate never executed. Encoding the whole gate in SQL
+  would have made every one of its tests vacuous in the other direction.
+
 ## CLOSED — the seven fixture files outside MOTIR-2871's scope (MOTIR-2882, 2026-08-17)
 
 Class 3 of MOTIR-2872's 2026-08-16 re-measurement: **49 refused writes across 7 test files**, every

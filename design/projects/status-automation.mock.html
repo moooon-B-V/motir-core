@@ -3,12 +3,44 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · Status automation (Story MOTIR-1615 · MOTIR-1617)</title>
+    <title>Design mock · Status automation (Story MOTIR-2888 · MOTIR-2890)</title>
     <!--
       DESIGN ASSET (HTML mockup) — the STATUS AUTOMATION section of the project
-      WORKFLOW settings page. Story MOTIR-1615 (bidirectional status derivation) ·
-      subtask MOTIR-1617. Layout source of truth for MOTIR-1622, which implements
-      it verbatim.
+      WORKFLOW settings page. Originally Story MOTIR-1615 (bidirectional status
+      derivation) · subtask MOTIR-1617; layout source of truth for MOTIR-1622,
+      which implemented it verbatim.
+
+      ── RE-DRAWN 2026-08-17 · Story MOTIR-2888 · subtask MOTIR-2890 ──
+      The behaviour this surface describes CHANGED, so the surface changed with
+      it. Status derivation became a RECOMPUTE (ADR
+      docs/decisions/status-derivation.md as amended by MOTIR-2889, settling
+      MOTIR-2885): a parent's status is a function of its children's CURRENT
+      statuses, applied BOTH ways — it advances as they progress and it comes
+      back when one reopens or when a new unstarted child is added.
+
+      Two things on this asset were therefore false and are now replaced, not
+      softened:
+        · the rollup hint promised, in THREE separate panels, that the rollup
+          advances a parent and never brings one back. Every one of those
+          sentences now carries the both-ways promise instead. (The retired
+          wording is quoted in full on MOTIR-2890 and in design-notes.md; it is
+          deliberately NOT repeated here, so a grep for it over design/ stays
+          empty and cannot resurface as a copy source.)
+        · the .ladder read-out had THREE rows. It has FOUR: the new To Do rung
+          is what lets the read-out say "there is open, unstarted work down
+          here" at all, which is exactly the state a finished parent enters when
+          a child is added to it.
+      The cascade switch, its copy and its "includes children nobody has started
+      yet" warning are UNCHANGED — that direction did not move.
+
+      Layout source of truth for MOTIR-2893, which rewrites the shipped
+      `settings.statusAutomation.rollup.*` catalog keys (en + zh) to match.
+
+      PNG export: Playwright chromium, full page, light theme,
+      deviceScaleFactor 2, viewport width 1200 — the repo convention
+      (motir-core CLAUDE.md § design assets). The exact script is reproduced
+      inline in design-notes.md rather than committed, so nothing here names a
+      file that will not exist on main.
 
       ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
       Every surface below was read from origin/main (HEAD 3d7a9831) before it was
@@ -39,8 +71,10 @@
           token value in the <style> block below is COPIED from the current
           Tier-0 + Tier-3 blocks, not invented.
         · docs/decisions/status-derivation.md — the behaviour the copy describes
-          (the three-rung ladder, the cascade, both default ON, forward-only,
-          the workspace-owner attribution).
+          (the FOUR-rung ladder, the cascade, both default ON, the RECOMPUTE in
+          both directions, the workspace-owner attribution). Re-read after the
+          MOTIR-2889 amendment — the earlier draft of this line said
+          "three-rung … forward-only", which the amendment reversed.
 
       ── PLACEMENT (and why it is NOT a new settings page) ──
       A new registry entry was considered and REJECTED. These two switches
@@ -617,9 +651,9 @@
                     <span class="switch-label">Roll up parent status from children</span>
                     <p class="switch-hint">
                       A parent follows its children's progress: In Progress once work starts on any
-                      child, In Review once the last open child reaches review, and Done once every
-                      child is finished. It only ever moves a parent forward, along moves your
-                      workflow already allows.
+                      child, In Review once every unfinished child is in review, and Done once every
+                      child is finished. It follows them BOTH ways — a parent comes back when a
+                      child reopens, or when a new unstarted child is added to it.
                     </p>
                   </span>
                 </div>
@@ -663,7 +697,11 @@
           What every project starts at, and what existing projects backfill to. The ladder read-out
           under the first switch is a plain definition list, not a new component — it exists because
           "rolls up" alone does not tell an admin WHEN each rung fires, and that is the one thing
-          they need to predict the behaviour.
+          they need to predict the behaviour. It carries FOUR rows since MOTIR-2890: the To Do rung
+          is the one that says <em>there is open, unstarted work down here</em>, and it is the only
+          row that can fire on a parent the admin already considers finished — so leaving it out
+          would hide precisely the move they will be surprised by. It stays last, after Done,
+          because it reads as the return trip rather than a second ordering of the same ladder.
         </p>
         <section class="card" style="max-width: 48rem">
           <div class="card-head">
@@ -685,17 +723,19 @@
               <span>
                 <span class="switch-label">Roll up parent status from children</span>
                 <p class="switch-hint">
-                  A parent follows its children's progress. It only ever moves a parent forward,
-                  along moves your workflow already allows — reopening a child never moves a parent
-                  back.
+                  A parent follows its children's progress, both ways — it moves forward as they
+                  progress, and comes back when one reopens or when a new unstarted child is added
+                  to it.
                 </p>
                 <dl class="ladder">
                   <dt>In Progress</dt>
                   <dd>as soon as any child starts</dd>
                   <dt>In Review</dt>
-                  <dd>when the last open child reaches review</dd>
+                  <dd>when every unfinished child is in review</dd>
                   <dt>Done</dt>
                   <dd>when every child is finished or cancelled</dd>
+                  <dt>To Do</dt>
+                  <dd>when a child is added or reopened and none has started</dd>
                 </dl>
               </span>
             </div>
@@ -748,8 +788,8 @@
               <span>
                 <span class="switch-label">Roll up parent status from children</span>
                 <p class="switch-hint">
-                  A parent follows its children's progress. It only ever moves a parent forward,
-                  along moves your workflow already allows.
+                  A parent follows its children's progress, both ways — forward as they progress,
+                  and back when one reopens or a new unstarted child is added.
                 </p>
               </span>
             </div>
@@ -800,8 +840,8 @@
               <span>
                 <span class="switch-label">Roll up parent status from children</span>
                 <p class="switch-hint">
-                  A parent follows its children's progress. It only ever moves a parent forward,
-                  along moves your workflow already allows.
+                  A parent follows its children's progress, both ways — forward as they progress,
+                  and back when one reopens or a new unstarted child is added.
                 </p>
               </span>
             </div>
