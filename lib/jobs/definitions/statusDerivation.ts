@@ -1,5 +1,9 @@
 import { defineJob } from '../defineJob';
-import type { WorkItemTransitionedData } from '../types';
+import type {
+  WorkItemChildSetChangedData,
+  WorkItemCreatedData,
+  WorkItemTransitionedData,
+} from '../types';
 
 // Bidirectional status derivation — the trigger seam (Story MOTIR-1615 · Subtask
 // MOTIR-1621; `docs/decisions/status-derivation.md`). ONE consumer of the shared
@@ -56,5 +60,75 @@ export const statusDerivationOnTransitioned = defineJob(
     // Returned for the run log — which direction acted, and on what. Both
     // outcomes are always present, and most transitions produce two no-ops.
     return { rollup, cascade };
+  },
+);
+
+// ── The CHILD-SET triggers (Story MOTIR-2888 · Subtask MOTIR-2892, ADR §3a) ──
+//
+// Derivation used to ride `work-item/transitioned` alone, which was sufficient
+// for a ladder CLIMB — a climb is caused by a child moving along the ladder. It
+// is not sufficient for a RECOMPUTE, which is a function of the child SET: every
+// edit to that set has to run it. The case the whole story exists for — a `todo`
+// child added to a `done` parent — fired nothing whatsoever.
+//
+// The two consumers below close that surface. Neither runs the DOWNWARD cascade:
+// it fires only on an item ENTERING a done-category status, and none of these
+// edits transitions anything. Keeping it out is load-bearing rather than tidy —
+// a parent that has just come BACK to `todo` must not turn round and force-close
+// the child that brought it there.
+//
+// `retryPolicy: 'idempotent'` for the same reason the transition consumer has
+// it: a recompute converges on re-run, so a transient DB blip is worth the full
+// retry budget.
+
+export const statusDerivationOnCreated = defineJob(
+  {
+    // Distinct from `automation-engine/created` and `outward-bug-telemetry/created`,
+    // the other two consumers of this event — the shipped single-event /
+    // many-consumers fan-in.
+    id: 'status-derivation/created',
+    trigger: 'work-item/created',
+    retryPolicy: 'idempotent',
+  },
+  async (ctx, services) => {
+    const payload = ctx.event.data as WorkItemCreatedData;
+    // No payload change was needed: `rollUpForChild` re-reads the item and finds
+    // its parent itself. A root item returns `no_parent` after one indexed read,
+    // which is the cheap no-op this event needs — it fires on EVERY item
+    // creation in the workspace.
+    return ctx.step.run('recompute-parent', () =>
+      services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
+    );
+  },
+);
+
+export const statusDerivationOnChildSetChanged = defineJob(
+  {
+    id: 'status-derivation/child-set-changed',
+    trigger: 'work-item/child-set.changed',
+    retryPolicy: 'idempotent',
+  },
+  async (ctx, services) => {
+    const payload = ctx.event.data as WorkItemChildSetChangedData;
+
+    // A re-parent carries TWO parents and both are recomputed; an archive /
+    // unarchive / delete carries one. Each gets its OWN durable `step.run` — the
+    // same reason the transition consumer splits its two directions: a retry
+    // after the first parent succeeded must not redo it, and the two parents are
+    // independent recomputes that must not share a failure.
+    //
+    // ORDER IS NOT SIGNIFICANT and must not be relied on. Each parent's target
+    // is a pure function of its OWN children, so the pair commutes — which is
+    // exactly what lets a move's two ends be two steps instead of one
+    // transaction spanning both.
+    const outcomes = [];
+    for (const [i, parentId] of payload.parentIds.entries()) {
+      outcomes.push(
+        await ctx.step.run(`recompute-parent-${i}`, () =>
+          services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId),
+        ),
+      );
+    }
+    return { reason: payload.reason, outcomes };
   },
 );

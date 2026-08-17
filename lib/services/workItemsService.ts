@@ -2335,7 +2335,7 @@ export const workItemsService = {
    * explicit action — never a side effect of archive.
    */
   async archiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
       // Resolve + tenant-gate first so the access gate (6.4.3) has the item's
       // project, and a cross-workspace id is a 404 (no existence leak) before
       // the archive write.
@@ -2353,8 +2353,23 @@ export const workItemsService = {
         },
         tx,
       );
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), parentId: current.parentId };
     });
+
+    // Status derivation, child-set trigger (Story MOTIR-2888 · MOTIR-2892, ADR
+    // §3a). An archived child LEAVES its parent's aggregate — every child read
+    // excludes `archivedAt IS NOT NULL` — so archiving the last open child of a
+    // parent completes it. Post-commit, and only when there is a parent to
+    // recompute.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'archived',
+      });
+    }
+    return dto;
   },
 
   /**
@@ -2367,7 +2382,7 @@ export const workItemsService = {
    * carried before the restore (null if it was already live — a no-op restore).
    */
   async unarchiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
@@ -2383,8 +2398,21 @@ export const workItemsService = {
         },
         tx,
       );
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), parentId: current.parentId };
     });
+
+    // The mirror of archive's trigger (MOTIR-2892, ADR §3a): a restored child
+    // RE-ENTERS its parent's aggregate, so unarchiving an open child brings a
+    // completed parent back.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'unarchived',
+      });
+    }
+    return dto;
   },
 
   /**
@@ -2417,7 +2445,7 @@ export const workItemsService = {
    * raw Prisma error. Returns nothing — the rows are gone, there is no DTO to map.
    */
   async deleteWorkItem(id: string, ctx: ServiceContext): Promise<void> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const parentId = await withWorkspaceContext(ctx, async (tx) => {
       // 1. Lock the root + tenant-gate (404 on cross-workspace / already-deleted).
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
@@ -2456,7 +2484,21 @@ export const workItemsService = {
 
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
+      return root.parentId;
     });
+
+    // Status derivation, child-set trigger (MOTIR-2892, ADR §3a). The deleted
+    // root's own parent SURVIVES and has one fewer child — deleting the last
+    // open child of a parent completes it. Only the root's parent needs it:
+    // every other parent in the subtree went with the subtree.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'deleted',
+      });
+    }
   },
 
   /**
@@ -2537,7 +2579,7 @@ export const workItemsService = {
     input: MoveWorkItemInput,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, movedBetween } = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -2578,7 +2620,7 @@ export const workItemsService = {
       }
 
       if (!parentChanged && newPosition === current.position) {
-        return toWorkItemDto(current); // true no-op
+        return { dto: toWorkItemDto(current), movedBetween: null }; // true no-op
       }
 
       const update: Prisma.WorkItemUncheckedUpdateInput = {
@@ -2596,8 +2638,38 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
         tx,
       );
-      return toWorkItemDto(row);
+      return {
+        dto: toWorkItemDto(row),
+        // A pure REORDER changes no parent's child SET, so it derives nothing.
+        movedBetween: parentChanged
+          ? { previousParentId: current.parentId, newParentId: targetParentId }
+          : null,
+      };
     });
+
+    // Status derivation, child-set trigger (Story MOTIR-2888 · MOTIR-2892, ADR
+    // §3a) — and, until now, this function emitted NOTHING AT ALL, so a
+    // `move_to_parent` was invisible to every job in the system.
+    //
+    // BOTH parents are recomputed, because one move changes two child sets in
+    // opposite directions: the previous parent may now be finished (its last
+    // open child left) and the new one may need to come back (it just gained
+    // one). Either end may be null — an item moved to or from the top level —
+    // and a move with no parent on either side emits nothing.
+    if (movedBetween) {
+      // At least one end is non-null by construction: `parentChanged` means the
+      // two differ, so they cannot both be null.
+      const parentIds = [movedBetween.previousParentId, movedBetween.newParentId].filter(
+        (p): p is string => p !== null,
+      );
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds,
+        workItemId: id,
+        reason: 'reparented',
+      });
+    }
+    return dto;
   },
 
   /**

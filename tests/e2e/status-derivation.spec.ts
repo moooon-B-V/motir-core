@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { getBoard, columnByStatus } from './_helpers/board';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -10,9 +11,12 @@ import { projectsService } from '@/lib/services/projectsService';
 // Postgres + the Inngest dev server that runs the derivation job).
 //
 //   1. the SETTINGS surface — both switches ship ON, each turns off
-//      independently, and the change persists across a reload;
-//   2. UPWARD — a child's transition rolls its parent up all three rungs, and
+//      independently, the change persists across a reload, and the read-out
+//      states the FOUR rungs and the both-ways promise (MOTIR-2893);
+//   2. UPWARD — a child's transition rolls its parent up all four rungs, and
 //      transitively to the grandparent;
+//   2b. the parent COMES BACK — a story sitting Done on the board is given a
+//      fresh subtask FROM THE UI and returns to To Do (Story MOTIR-2888);
 //   3. DOWNWARD — a parent set Done completes its children, including one nobody
 //      started, and transitively to a grandchild;
 //   4. the OFF states — each direction is suppressed by its own switch, with the
@@ -188,6 +192,22 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     // The consequence sentence the design makes load-bearing.
     await expect(page.getByText('This includes children nobody has started yet.')).toBeVisible();
 
+    // The rollup half now promises BOTH directions, over FOUR rungs
+    // (MOTIR-2893, drawn by MOTIR-2890). Asserted HERE, on the real rendered
+    // page, because this is the surface a user reads before predicting what
+    // their board will do — and until MOTIR-2891 it promised the opposite.
+    await expect(page.getByText(/both ways/i)).toBeVisible();
+    await expect(
+      page.getByText('when a child is added or reopened and none has started'),
+    ).toBeVisible();
+    const rungs = await page.getByTestId('status-automation').locator('dl dt').allTextContents();
+    expect(rungs, 'the ladder read-out, row-for-row against the design asset').toEqual([
+      'In Progress',
+      'In Review',
+      'Done',
+      'To Do',
+    ]);
+
     // The upward-only preference the two-switch model exists to express.
     await setSwitches(page, { cascade: false });
 
@@ -236,6 +256,76 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     // guessed key ordinal.
     await page.goto(`/items/${story.identifier}`);
     await expect(statusCard(page)).toContainText('Done');
+  });
+
+  test('the parent COMES BACK — a Done story given a fresh subtask FROM THE UI returns to To Do', async ({
+    page,
+  }) => {
+    // Story MOTIR-2888's own case, end to end. Before the recompute this fired
+    // NOTHING: `work-item/created` had no derivation consumer, so the board sat
+    // there showing a finished story with untouched work inside it.
+    const tenant = await seedTenant('deriv-comes-back@example.com');
+    await signIn(page, tenant.ownerEmail, PWD);
+
+    const story = await createItem(page, tenant.projectId, 'story', 'Finished Story');
+    const child = await createItem(page, tenant.projectId, 'subtask', 'The only child', story.id);
+
+    // ⚠️ Await the DERIVED status between transitions, exactly as the UPWARD
+    // test above does. This is not politeness: firing the three back-to-back
+    // STRANDS the story at To Do, because every job then reads the same final
+    // `{ done }` aggregate, wants the `done` rung, and `todo → done` is not an
+    // edge in the default workflow — with no lower rung to fall back to. That is
+    // MOTIR-2901, a PRE-EXISTING defect verified on `origin/main` @ 0297a33a and
+    // filed rather than absorbed here; this test is about the recompute coming
+    // BACK, and must not fail for an unrelated reason on the way in.
+    await transition(page, child.id, 'in_progress');
+    await expectDerivedStatus(story.id, 'in_progress', 'the story (rung 1)');
+    await transition(page, child.id, 'in_review');
+    await expectDerivedStatus(story.id, 'in_review', 'the story (rung 2)');
+    await transition(page, child.id, 'done');
+    await expectDerivedStatus(story.id, 'done', 'the story (derived Done)');
+
+    // It really reads Done ON THE BOARD before anything is added — the premise,
+    // asserted rather than assumed.
+    await page.goto('/boards');
+    const before = await getBoard(page.request);
+    const doneColumn = columnByStatus(before, 'done');
+    await expect(page.getByTestId(`board-column-${doneColumn.id}`)).toContainText('Finished Story');
+
+    // Add an unstarted subtask under it THROUGH THE UI — the create modal and
+    // its Server Action, not the `_test` transport, so the user's own path is
+    // what emits `work-item/created`.
+    await page.goto('/items');
+    await page.getByRole('button', { name: 'Create work item' }).click();
+    await page.getByRole('combobox', { name: 'Type', exact: true }).click();
+    await page.getByRole('option', { name: 'Sub-task' }).click();
+    await page.getByRole('combobox', { name: 'Parent' }).click();
+    await page.getByRole('option', { name: /Finished Story/ }).click();
+    await page.getByLabel('Title').fill('Newly discovered work');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
+
+    // The authoritative signal: the derived row, polled — derivation is async
+    // and there is no response to await for an item the user did not touch.
+    await expectDerivedStatus(story.id, 'todo', 'the story (back to To Do)');
+
+    // And the new child was NOT force-closed on the way. The cascade fires only
+    // on ENTRY into a done-category status, which is exactly what stops a parent
+    // that has just come back from completing the child that brought it there.
+    const created = await db.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'Newly discovered work' },
+    });
+    expect(created.status).toBe('todo');
+    // The child that was already finished keeps its own status too.
+    await expectStatusUnchanged(child.id, 'done', 'the finished sibling');
+
+    // Visible where the user reads it: the board moved the story out of Done.
+    await page.goto('/boards');
+    const after = await getBoard(page.request);
+    expect(columnByStatus(after, 'done').cards.map((c) => c.id)).not.toContain(story.id);
+    await expect(
+      page.getByTestId(`board-column-${columnByStatus(after, 'todo').id}`),
+    ).toContainText('Finished Story');
   });
 
   test('DOWNWARD — a parent set Done completes its children, including one nobody started', async ({

@@ -169,6 +169,36 @@ export interface WorkItemCreatedData {
 }
 
 /**
+ * The `work-item/child-set.changed` event payload (Story MOTIR-2888 · Subtask
+ * MOTIR-2892; `docs/decisions/status-derivation.md` §3a) — emitted AFTER an edit
+ * that adds a row to, or removes one from, some parent's DIRECT child set
+ * WITHOUT transitioning anything: a re-parent, an archive, an unarchive, a
+ * delete. Post-commit like its `work-item/*` siblings.
+ *
+ * It exists because status derivation became a RECOMPUTE over the child SET, and
+ * the only event it rode (`work-item/transitioned`) fires on none of these. The
+ * one that mattered most was invisible twice over: `moveWorkItem` emitted NOTHING
+ * AT ALL before this, so a `move_to_parent` reached no job in the system.
+ *
+ * CREATE is deliberately NOT in here — `work-item/created` (6.6.2) already
+ * carries it, and adding a second event for the same edit would double-fire the
+ * recompute.
+ */
+export interface WorkItemChildSetChangedData {
+  workspaceId: string;
+  /** The PARENT ids whose direct child set changed — ONE for an archive /
+   *  unarchive / delete, TWO for a re-parent (the previous parent, which may
+   *  now be finished, and the new one, which may need to come back). Never
+   *  empty: an edit that touches no parent emits nothing at all. */
+  parentIds: string[];
+  /** The child that entered or left the set. Carried for the run log and for
+   *  triage — the recompute reads the PARENTS, so this is not an input. */
+  workItemId: string;
+  /** Which edit produced it, so a run log can tell an archive from a move. */
+  reason: 'reparented' | 'archived' | 'unarchived' | 'deleted';
+}
+
+/**
  * The `work-item/field.changed` event payload (Story 6.6 · Subtask 6.6.2) —
  * emitted AFTER a free-form work-item UPDATE commits, carrying the built-in
  * field ids that actually changed (computed from the 1.4.6 revision diff). The
@@ -382,6 +412,7 @@ export interface JobEventDataMap {
   'work-item/transitioned': WorkItemTransitionedData;
   'work-item/created': WorkItemCreatedData;
   'work-item/field.changed': WorkItemFieldChangedData;
+  'work-item/child-set.changed': WorkItemChildSetChangedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
 }
 
