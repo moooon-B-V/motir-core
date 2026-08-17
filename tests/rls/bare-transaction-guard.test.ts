@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { gatedBareTransactions, scanBareTransactions } from './bareTransactionScan';
 import { bareTransactionSites } from './callSiteScan';
+import { remeasureFirst } from './remeasureFirst';
 
 // The BARE-TRANSACTION guard (MOTIR-2876) — the THIRD axis, and the one the
 // other two guards are structurally blind to.
@@ -163,7 +164,8 @@ describe('bare `db.$transaction`s enclosing policy-gated statements are all acco
     const sites = gatedBareTransactions();
     expect(
       sites.length,
-      `${sites.length} bare transactions enclose a policy-gated statement (ceiling ` +
+      remeasureFirst('GATED_BARE_TRANSACTION_CEILING') +
+        `${sites.length} bare transactions enclose a policy-gated statement (ceiling ` +
         `${GATED_BARE_TRANSACTION_CEILING}). If this ROSE, a new one was written — bind it ` +
         'rather than adding an entry.',
     ).toBeLessThanOrEqual(GATED_BARE_TRANSACTION_CEILING);
