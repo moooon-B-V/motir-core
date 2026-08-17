@@ -35,6 +35,22 @@
   activity feed. **NO `workflow_transition` row was added** — in particular not
   `todo → done`; the board's draggable edges are unchanged.
 
+- **Amended:** 2026-08-17 (MOTIR-2957) — **§4's trigger is read off the TRANSITION, never
+  off the row.** The clause itself is unchanged (_"an item **transitions into** a
+  done-category status"_), and always described the MOVE; the implementation tested it by
+  re-reading the item and asking whether it _was_ done at job time, which is a different
+  predicate. The two agree except when a concurrent derivation has moved the item in
+  between — the case the amendment above made common, because a `work-item/created`
+  recompute for a child created moments BEFORE the parent was set Done pulls the parent
+  back to rung 4 and the row read then **cancelled the very cascade that would have
+  completed that child**. Neither direction acted, the child set never changed again, and
+  the tree settled at `todo` with the user's Done discarded: **7 of 20** parents,
+  measured on `origin/main` @ `a09c21ee`. §5's concurrency bullet gains the **parent-side**
+  half it was missing (it reasoned only about a stale CHILD read), and part 2 of the
+  termination argument is now sound rather than nearly so — it always assumed the cascade
+  an entry schedules actually runs. **No semantic change and no new toggle**; the
+  `work-item/transitioned` payload already carried `fromStatusKey` / `toStatusKey`.
+
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
 > authoritative source (the convention `work-item-type-taxonomy.md` set).
@@ -322,7 +338,10 @@ Three constraints that are decisions, not detail:
 ### 4. The DOWNWARD cascade (parent → children)
 
 **Trigger:** an item transitions **into a `done`-category status** — by a user, by the
-upward rollup, or by the change-request webhook when its PR merges. **Effect:** every
+upward rollup, or by the change-request webhook when its PR merges. **Read off the
+TRANSITION** (`toStatusKey` in a done category, `fromStatusKey` not), never off the item's
+current status — see the 2026-08-17 / MOTIR-2957 amendment above for the failure the row
+read produced once rung 4 could move that row underneath it. **Effect:** every
 **not-done DIRECT child** (non-archived, non-triaged) is set to the project's `done`
 status. Grandchildren are reached by re-emission, never by a subtree walk.
 
@@ -441,6 +460,16 @@ asymmetries on two axes.)_
   a stale "this child is not done" read is benign, because the action is an
   unconditional force-to-done that `applyStatusTransition` no-ops if the child got there
   first.
+
+  **The cascade's stale read that is NOT benign is of the PARENT** _(added 2026-08-17,
+  MOTIR-2957)_. The sentence above reasons about the CHILD aggregate and is right about
+  it; what it does not cover is the cascade's own **trigger** condition. Deciding "did this
+  item enter done?" by re-reading the item makes the cascade cancellable by any concurrent
+  derivation that moved it since — and rung 4 introduced one that does so routinely, for a
+  child created just before the parent was set Done. So the trigger is taken from the
+  transition the event carries (§4), which no later write can rewrite, and the cascade
+  needs no lock: the entry it acts on is a historical fact, not a current reading.
+
 - **Derived transitions are REAL transitions.** They fire the automation engine and the
   watcher/bell notifications exactly like a board move, because that is what they are —
   a status genuinely changed and watchers asked to be told. Accepted consequence: a
