@@ -6,6 +6,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
 import { runMoveToParent } from '@/lib/mcp/tools/moveToParent';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import {
   createTestWorkItem,
@@ -668,5 +669,202 @@ describe('the child-set triggers, end to end through their real ingress', () => 
     );
     await drain();
     expect(await statusOf(story.id)).toBe('done');
+  });
+});
+
+// ── The RECOMPUTE, assembled (Story MOTIR-2888 · Subtask MOTIR-2894) ─────────
+//
+// The blocks above prove each trigger fires. These prove the STORY: a parent
+// that comes back, through the whole tree, with the termination argument that no
+// longer leans on forward-only.
+
+describe('the recompute, assembled — a parent that comes back', () => {
+  it('the story CASE: a done story + a fresh todo child ⇒ the story AND its epic come back', async () => {
+    // Case 1. The epic half is the one a single-level test cannot see, and it is
+    // the whole point of "no ancestor walk": the story's own backward move
+    // re-emits, and the ordinary transition consumer carries it up.
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'S', parentId: epic.id });
+    const settled = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'settled',
+      parentId: story.id,
+    });
+    await setStatus(settled.id, 'done');
+    await setStatus(story.id, 'done');
+    await setStatus(epic.id, 'done');
+
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'Fresh work',
+      },
+      fx.ctx,
+    );
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('todo');
+    expect(await statusOf(epic.id)).toBe('todo');
+    // The cascade did NOT fire on the way back — neither on the new child nor on
+    // the one that was already finished.
+    const fresh = await adminDb.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'Fresh work' },
+    });
+    expect(fresh.status).toBe('todo');
+    expect(await statusOf(settled.id)).toBe('done');
+  });
+
+  it('REOPEN, and back again: the parent follows its child in both directions', async () => {
+    // Case 2. The round trip matters more than either leg: a recompute that only
+    // came back would be a ratchet pointed the other way.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['done', 'done']);
+    await setStatus(story.id, 'done');
+
+    await transitionAndDrain(fx, children[0]!.id, 'in_progress');
+    expect(await statusOf(story.id)).toBe('in_progress');
+
+    await transitionAndDrain(fx, children[0]!.id, 'in_review');
+    expect(await statusOf(story.id)).toBe('in_review');
+
+    await transitionAndDrain(fx, children[0]!.id, 'done');
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('the IN-REVIEW rung comes DOWN to in_progress when work is found during review', async () => {
+    // Case 3, corrected against the rung table (ADR §3, and the story's own copy
+    // of it). MOTIR-2894 predicted `todo` here; the rule gives `in_progress`,
+    // and the rule is right: `in_review` sits in the IN_PROGRESS category, so a
+    // sibling in review means work HAS started and rung 3 matches before rung 4
+    // is ever reached. Rung 4's condition is "≥ 1 child in a todo-category
+    // status AND NONE STARTED" — the next test is the case that satisfies it.
+    // The card was amended on the record rather than the assertion bent to it.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['done', 'in_progress']);
+    await setStatus(story.id, 'in_progress');
+
+    // A REAL move, not a re-set of the status the child already holds — a no-op
+    // transition emits nothing, so nothing would derive.
+    await transitionAndDrain(fx, children[1]!.id, 'in_review');
+    expect(await statusOf(story.id)).toBe('in_review');
+
+    // Work discovered during review: the parent comes BACK one rung, because it
+    // is no longer true that every unfinished child is in review.
+    const late = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'found in review',
+      parentId: story.id,
+    });
+    // `createTestWorkItem` writes through the REPOSITORY, so the column default
+    // (`open`) stands — and `open` is not a key in this project's workflow, so
+    // the aggregate's JOIN drops the row entirely. Pin the status, as every
+    // other test in this file does.
+    await setStatus(late.id, 'todo');
+    await parentStatusRollupService.rollUpForChild(late.id);
+    await drain();
+    expect(await statusOf(story.id)).toBe('in_progress');
+
+    // And back up: the new child reaches review too, so every unfinished child
+    // is in review again.
+    await transitionAndDrain(fx, late.id, 'in_progress');
+    expect(await statusOf(story.id)).toBe('in_progress');
+    await transitionAndDrain(fx, late.id, 'in_review');
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+
+  it('rung 4 needs NOTHING started — the review sibling is what kept it off', async () => {
+    // The contrast that makes the rung boundary legible. Same shape as the test
+    // above, with the in-review sibling FINISHED instead: now nothing is started
+    // and the parent goes all the way back to To Do.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['done', 'in_progress']);
+    await setStatus(story.id, 'in_progress');
+
+    await transitionAndDrain(fx, children[1]!.id, 'in_review');
+    await transitionAndDrain(fx, children[1]!.id, 'done');
+    expect(await statusOf(story.id)).toBe('done');
+
+    const late = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'found after the fact',
+      parentId: story.id,
+    });
+    // `createTestWorkItem` writes through the REPOSITORY, so the column default
+    // (`open`) stands — and `open` is not a key in this project's workflow, so
+    // the aggregate's JOIN drops the row entirely. Pin the status, as every
+    // other test in this file does.
+    await setStatus(late.id, 'todo');
+    await parentStatusRollupService.rollUpForChild(late.id);
+    await drain();
+    expect(await statusOf(story.id)).toBe('todo');
+
+    await transitionAndDrain(fx, late.id, 'in_progress');
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('BACKWARD through an unhelpful workflow — no edge, and the grandparent still follows', async () => {
+    // Case 4. `done → todo` is not a row in the default workflow (restricted
+    // mode), and must not be added — those rows are user-draggable board edges.
+    // So this lands only through the privileged system set, and it must still
+    // write a revision and EMIT, or the epic never hears about it.
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'S', parentId: epic.id });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'child',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'todo');
+    await setStatus(story.id, 'done');
+    await setStatus(epic.id, 'done');
+
+    expect(await workflowsService.canTransition(fx.projectId, 'done', 'todo', fx.workspaceId)).toBe(
+      false,
+    );
+
+    await parentStatusRollupService.rollUpForChild(child.id);
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('todo');
+    expect(await statusOf(epic.id)).toBe('todo');
+    const revs = await adminDb.workItemRevision.findMany({
+      where: { workItemId: story.id },
+      orderBy: { changedAt: 'desc' },
+    });
+    expect((revs[0]!.diff as Record<string, unknown>)['status']).toEqual({
+      from: 'done',
+      to: 'todo',
+    });
+  });
+
+  it('NO LOOP: a USER setting a parent done cascades, recomputes to done, and stops', async () => {
+    // Case 8. The termination argument's cross-direction half, driven from the
+    // direction that actually engages both: the parent ENTERS done, so the
+    // cascade fires; each completed child re-emits; each re-emission recomputes
+    // the parent, whose children are now all done — rung 1 returns `done`, the
+    // parent is already there, and that no-op emits nothing. A bounded step
+    // count is the assertion, not just the final state: a converging loop and a
+    // runaway one reach the same statuses.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo', 'todo', 'in_progress']);
+    await setStatus(story.id, 'in_progress');
+
+    const steps = await transitionAndDrain(fx, story.id, 'done');
+
+    expect(await statusOf(story.id)).toBe('done');
+    for (const c of children) expect(await statusOf(c.id)).toBe('done');
+    expect(steps).toBeLessThan(MAX_STEPS);
+    expect(queue).toHaveLength(0);
+    // And the parent moved exactly ONCE — the recompute that ran after each
+    // child's re-emission found it already `done` and emitted nothing.
+    const storyStatusRevs = (
+      await adminDb.workItemRevision.findMany({ where: { workItemId: story.id } })
+    ).filter((r) => (r.diff as Record<string, unknown>)['status']);
+    expect(storyStatusRevs).toHaveLength(1);
   });
 });
