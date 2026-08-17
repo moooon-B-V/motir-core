@@ -924,6 +924,47 @@ _takes_ a `tx`, and these three pass one — from a transaction that binds nothi
 
 ---
 
+## `public_request_vote`'s THIRD arm — the member read (MOTIR-2864, 2026-08-16)
+
+The **READ**-surface entry above (MOTIR-2796) records that it shipped "a public SELECT arm for
+`public_request_vote` where there was no workspace to bind." That arm was correct and it was not
+sufficient, and the gap is worth stating precisely because the shape recurs: **arming a table for
+the reader you are currently looking at can leave the table armed for NOBODY ELSE.**
+
+MOTIR-2811's arm is gated on `coalesce(current_setting('app.workspace_id', true), '') = ''` — it
+fires only on the genuinely context-less connection. So after it the table admitted the vote's
+OWNER, the system flag, and an anonymous reader. A workspace MEMBER matched none of the three:
+`withWorkspaceServiceContext` binds `app.workspace_id` and not `app.user_id`, and the member
+reading the queue is not the voter anyway. `workItemRepository.findTriageQueue` aggregates this
+table inside exactly that transaction, so the triage inbox's `voteCount` came back **0 for every
+request** — no error, no warning, just the 6.12.6 sort key quietly ceasing to exist.
+
+`public_request_vote_active_workspace_read` (`20260815234500`) closes it: a `FOR SELECT` correlated
+`EXISTS` resolving the vote's tenant through `work_item."workspaceId"`, the `work_item_label` /
+`watcher` member shape, narrowed to reads so the owner arm keeps owning every write.
+
+**Two notes for whoever audits the next table.**
+
+- **Neither scanner could have found this — and that is now the SECOND independent instance.** Both
+  ask whether a repository read is BOUND; this read was bound, correctly, from the start. The
+  missing half was the POLICY, and a bound read against a table with no matching arm returns rows
+  rather than an error — the vacuous-pass class MOTIR-2829 names, one layer down. A `COUNT` that
+  reads 0 is the worst instance of it, because 0 is a legitimate answer.
+
+  MOTIR-2865's closing section directly above reaches the same verdict from the opposite direction:
+  its three unbound tenant READS "pass one — from a transaction that binds nothing." Put together
+  the instruments have **two** blind spots on the same axis, and they are complementary: a `tx` that
+  binds no GUC (theirs) and a GUC with no arm that reads it (this one). Neither is a call-site
+  property, so no call-site scanner can see either. What would cover both is an assertion per
+  (table, context) pair against `pg_policies` — nothing today makes that claim.
+
+- **The trigger was a FIXTURE repair, not an audit.** MOTIR-2857 moved this suite's setup writes to
+  `adminDb`; before that the file died in setup and the assertion was never reached. Expect more of
+  this class to surface as the remaining fixture batches land — a suite that dies early is a suite
+  whose later assertions have never run.
+
+---
+
 ## THE DOWNSTREAM POPULATION, RE-MEASURED (MOTIR-2872, 2026-08-16)
 
 The measurement MOTIR-2862 deferred. Its class 3 was 246 failures whose error was an assertion rather
@@ -1024,6 +1065,16 @@ Two proven instances, both read at their failing line:
 
 This generalises MOTIR-2865's finding 2 (_"`withSystemContext` is not an escape hatch for the
 tenant-root tables"_) from the WRITE side to the READ side, and from two membership tables to 45.
+
+> **This is the measurement the section directly above asks for.** MOTIR-2864's entry closes on the
+> observation that the two scanners have complementary blind spots — _"a `tx` that binds no GUC
+> (theirs) and a GUC with no arm that reads it (this one). Neither is a call-site property, so no
+> call-site scanner can see either. What would cover both is an assertion per (table, context) pair
+> against `pg_policies` — **nothing today makes that claim**."_ The 24-vs-45 split above IS that claim,
+> made for the `system_admin` context: it is a property of the POLICY set, read from `pg_policies`, and
+> no call site was consulted to produce it. The two entries were written the same day from opposite
+> ends and meet here. Making the equivalent claim for the OTHER contexts (`app.workspace_id`,
+> `app.user_id`) is not done, and is the natural next instrument.
 
 > **⚠️ Attribution confidence, stated rather than implied.** The mechanism is **proven** for the
 > services named above. The per-file counts below are assigned by **association** — the test exercises a
