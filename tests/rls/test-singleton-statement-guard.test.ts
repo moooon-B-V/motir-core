@@ -283,6 +283,10 @@ describe('the ratchets over the real test suite', () => {
     // another, or into no work at all.
     expect(Object.keys(DISPOSITIONED_FILES).sort()).toEqual([
       'tests/cli/cli-device-routes.test.ts',
+      // MOTIR-2896 — `platform_audit_log`'s unbound read, added on purpose:
+      // the assertion is the DIFFERENCE between the owner client seeing the row
+      // and the app client seeing none, so neither client can be swapped out.
+      'tests/platform/platformAuditLog.test.ts',
       'tests/tenant-root-creation-rls.test.ts',
     ]);
     for (const [file, [, reason]] of Object.entries(DISPOSITIONED_FILES)) {

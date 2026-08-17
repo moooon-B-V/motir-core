@@ -75,6 +75,16 @@ model User {
   /// resolution degrades to the first-by-createdAt fallback rather than
   /// dangling at a dead project.
   lastActiveProjectId String?
+  /// Platform-staff standing — moooon B.V. operators ONLY (MOTIR-2896, the ADR
+  /// `docs/decisions/platform-staff-auth.md`). NULL means "not platform staff",
+  /// which is every customer account and the default for every row.
+  /// Deliberately SEPARATE from `MemberRole` (Story 6.4, workspace/project) and
+  /// `OrganizationRole` (Story 6.10, org): those describe a user's standing
+  /// INSIDE one tenant, this one describes standing OUTSIDE all of them, and no
+  /// value of either can produce a value of this. Written only by `db:seed`
+  /// (dev) and the production operator script (MOTIR-2932) until Story 10.3
+  /// ships a grant surface — nothing in the product writes it.
+  platformRole        PlatformRole? @map("platform_role")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -240,9 +250,93 @@ model User {
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   createdPlanChangeSessions   PlanChangeSession[]       @relation("PlanChangeSessionCreatedBy")
   authoredPlanChangeTurns     PlanChangeTurn[]          @relation("PlanChangeTurnAuthor")
+  // Platform-staff actions this user performed against the estate (MOTIR-2896).
+  // Restrict on the FK: a user with audit rows on record cannot be hard-deleted
+  // (the `WorkItem.reporter` precedent) — the evidence of what an operator did
+  // must outlive their account. Modelled on both sides per the FK-`@relation`
+  // rule so `migrate dev` reports no drift.
+  platformAuditEntries        PlatformAuditLog[]        @relation("PlatformAuditLogActor")
 
   @@index([lastActiveProjectId])
   @@map("user")
+}
+
+/// Degrees of platform-staff access (ADR: `docs/decisions/platform-staff-auth.md`,
+/// MOTIR-729). A LADDER — each value contains the one before it. Values are
+/// deliberately disjoint from `MemberRole` / `OrganizationRole`'s (`owner` /
+/// `admin` / `member` / `viewer`) so that a log line, a test fixture or a code
+/// review can never confuse a tenant role with a platform one.
+///
+/// An enum rather than a boolean because the three degrees are not merely
+/// foreseen, they are already specified by the merged `design/platform-admin/`
+/// asset: `support` reads the estate (Panels 2–6, 8), `operator` adds the two
+/// day-1 support writes (Panel 9 — MOTIR-1167), `superadmin` adds Story 10.3's
+/// governance and is the only role that may grant or revoke `platformRole`.
+enum PlatformRole {
+  /// Read the estate: the console, the audited drill-down, the health glance.
+  support
+  /// `support` + the day-1 support WRITES (password reset, account suspend).
+  operator
+  /// `operator` + Story 10.3 governance, and the only role that may grant or
+  /// revoke `platformRole` itself.
+  superadmin
+
+  @@map("platform_role")
+}
+
+/// What a `PlatformAuditLog` row is ABOUT. `platform` covers an action with no
+/// single tenant subject (an estate-wide rollup read, a console sign-in).
+enum PlatformAuditTargetKind {
+  organization
+  workspace
+  project
+  user
+  platform
+
+  @@map("platform_audit_target_kind")
+}
+
+/// Every platform-staff action against the estate: the cross-tenant READS the
+/// console performs (MOTIR-730), the day-1 support WRITES (MOTIR-1167), and
+/// Story 10.3's governance actions (MOTIR-747/748/749/750). One shape, because
+/// "who touched this tenant, and when?" cannot be answered by three tables.
+/// APPEND-ONLY: `platformAuditLogRepository` exposes create + reads and nothing
+/// else. Tamper-EVIDENCE (the hash chain) is MOTIR-751's, not this model's.
+model PlatformAuditLog {
+  id             String                  @id @default(cuid())
+  /// The operator. Restrict on the FK (see `User.platformAuditEntries`).
+  actorUserId    String                  @map("actor_user_id")
+  /// The operator's role AT THE TIME. Snapshotted, not joined — a later grant
+  /// or revoke must not rewrite what the record says happened.
+  actorRole      PlatformRole            @map("actor_role")
+  /// `<domain>.<verb>`, from the code-owned `PLATFORM_AUDIT_ACTIONS` union in
+  /// `lib/platform/auditActions.ts`. A `String` in the database because an
+  /// audit vocabulary is open-ended and a Postgres enum would need an
+  /// `ALTER TYPE` per action four stories add across two epics; the closedness
+  /// that matters — catching a typo at the call site — is bought in code,
+  /// exactly as `lib/permissions/catalog.ts` owns the permission keys.
+  action         String
+  targetKind     PlatformAuditTargetKind @map("target_kind")
+  /// Bare ids and a label, with NO @relation and NO FK — deliberately. The
+  /// record must outlive the org, workspace, project or user it describes; a
+  /// Cascade would delete exactly the evidence of what happened to a tenant
+  /// that was then deleted, and a Restrict would make the audit log block
+  /// account deletion. (CLAUDE.md's FK rule holds: no SQL FK, so no @relation.)
+  targetId       String?                 @map("target_id")
+  targetLabel    String?                 @map("target_label")
+  organizationId String?                 @map("organization_id")
+  /// REQUIRED for every write action, NULL for a read. Enforced in
+  /// `platformAuditService`, not by the column, because reads legitimately
+  /// have none.
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  actor User @relation("PlatformAuditLogActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("platform_audit_log")
 }
 
 /// Both credential (email/password) AND OAuth provider linkages live here.
