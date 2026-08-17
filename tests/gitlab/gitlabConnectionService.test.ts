@@ -139,9 +139,11 @@ describe('gitlabConnectionService.completeOAuthCallback', () => {
       userId: user.id,
     });
 
-    const count = await withSystemContext((tx) =>
-      tx.githubInstallation.count({ where: { workspaceId: workspace.id, provider: 'gitlab' } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887): a count that must see
+    // every matching row should not be taken through a policy-filtered client.
+    const count = await adminDb.githubInstallation.count({
+      where: { workspaceId: workspace.id, provider: 'gitlab' },
+    });
     expect(count).toBe(1);
   });
 });

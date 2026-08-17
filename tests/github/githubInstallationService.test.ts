@@ -234,10 +234,13 @@ describe('githubInstallationService.mintAccessTokenForWorkspace', () => {
     // The schema carries no token column (the appAuth cache is in-memory only);
     // this negative read pins that — a future column/write that persists the
     // minted token long-lived would surface it in a raw row dump and fail here.
-    const rows = await withSystemContext(async (tx) => ({
-      installations: await tx.githubInstallation.findMany(),
-      repos: await tx.githubRepo.findMany(),
-    }));
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887) — and NEGATIVE ("no
+    // row contains the token"), so it must be taken by the client that sees
+    // everything, not one a policy can narrow.
+    const rows = {
+      installations: await adminDb.githubInstallation.findMany(),
+      repos: await adminDb.githubRepo.findMany(),
+    };
     expect(rows.installations.length).toBeGreaterThan(0);
     expect(JSON.stringify(rows)).not.toContain('ghs_never_persist_me');
   });
@@ -473,8 +476,9 @@ describe('github_installation RLS', () => {
 describe('a mirror row records whether its repository is ARCHIVED', () => {
   const ARCHIVED_REPO: NormalizedRepo = { ...REPO_A, archived: true };
 
+  /** A direct-DB ASSERTION, so it runs as the OWNER (MOTIR-2887). */
   async function mirrorOf(repoId: string) {
-    return withSystemContext((tx) => tx.githubRepo.findFirst({ where: { repoId } }));
+    return adminDb.githubRepo.findFirst({ where: { repoId } });
   }
 
   it('stamps the host value on the reconcile write — live and archived alike', async () => {

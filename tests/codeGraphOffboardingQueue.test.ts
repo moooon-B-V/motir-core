@@ -59,11 +59,14 @@ async function makeProject(workspaceId: string, actorUserId: string, name: strin
   return projectsService.createProject({ workspaceId, actorUserId, name });
 }
 
-/** Every queue row, unscoped — read under system context, which is the only reach the policy admits. */
+/** Every queue row, unscoped — a direct-DB ASSERTION, so it runs as the OWNER
+ *  (MOTIR-2887). The comment this replaces called a system context "the only
+ *  reach the policy admits", which was never the reason: the owner reaches it
+ *  too, and reaches it without depending on an arm staying in place. */
 async function allRows() {
-  return withSystemContext((tx) =>
-    tx.codeGraphOffboarding.findMany({ orderBy: [{ coreProjectId: 'asc' }, { repoRef: 'asc' }] }),
-  );
+  return adminDb.codeGraphOffboarding.findMany({
+    orderBy: [{ coreProjectId: 'asc' }, { repoRef: 'asc' }],
+  });
 }
 
 // ── 1. the window and the sentinel ───────────────────────────────────────────
@@ -458,35 +461,33 @@ describe('the four lifecycle triggers (§14.3)', () => {
     const project = await makeProject(workspace.id, owner.id, 'Core');
 
     // The GitLab connection + two connected projects, written directly — the
-    // OAuth exchange is not what this case is about.
-    const conn = await withSystemContext((tx) =>
-      tx.githubInstallation.create({
-        data: {
-          installationId: `gitlab-ws-${workspace.id}`,
-          workspaceId: workspace.id,
-          accountLogin: 'acme',
-          accountType: 'User',
-          provider: 'gitlab',
-        },
-      }),
-    );
+    // OAuth exchange is not what this case is about. A FIXTURE, so it runs as the
+    // OWNER (MOTIR-2887): a system context binds no workspace, and these are
+    // tenant-scoped INSERTs.
+    const conn = await adminDb.githubInstallation.create({
+      data: {
+        installationId: `gitlab-ws-${workspace.id}`,
+        workspaceId: workspace.id,
+        accountLogin: 'acme',
+        accountType: 'User',
+        provider: 'gitlab',
+      },
+    });
     for (const [repoId, name] of [
       ['g1', 'api'],
       ['g2', 'web'],
     ]) {
-      await withSystemContext((tx) =>
-        tx.githubRepo.create({
-          data: {
-            installationId: conn.id,
-            workspaceId: workspace.id,
-            repoId: repoId!,
-            owner: 'acme',
-            name: name!,
-            defaultBranch: 'main',
-            provider: 'gitlab',
-          },
-        }),
-      );
+      await adminDb.githubRepo.create({
+        data: {
+          installationId: conn.id,
+          workspaceId: workspace.id,
+          repoId: repoId!,
+          owner: 'acme',
+          name: name!,
+          defaultBranch: 'main',
+          provider: 'gitlab',
+        },
+      });
     }
 
     await gitlabConnectionService.disconnectProject(
