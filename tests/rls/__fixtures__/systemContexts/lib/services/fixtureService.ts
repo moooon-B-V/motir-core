@@ -126,6 +126,26 @@ export const fixtureService = {
   async systemMutualRecursion(id: string) {
     return withSystemContext((tx) => ping(id, tx));
   },
+
+  // (O) ⚠️ THE WALL (MOTIR-2910) — the transaction is handed to a callee the
+  //     walk cannot resolve BY NAME, because it is a function-typed PARAMETER
+  //     whose value is supplied by the caller. Everything that callee reads is
+  //     unread, so a verdict computed here describes only part of the block.
+  //
+  //     This is the shape that produced a real false GREEN:
+  //     `changeRequestStatusSync#syncChangeRequestStatus` reports `binds-tenant`
+  //     off the statements after its bind, while the provider resolver it invokes
+  //     through exactly this indirection ran an UNBOUND `workspace_membership`
+  //     read before it. The site must therefore report the unresolved call — and
+  //     note it still reports `binds-tenant`, because naming the wall is what
+  //     this fixture pins, not a changed verdict.
+  async systemUnresolvedCallback(id: string, resolveContext: (tx: Tx) => Promise<unknown>) {
+    return withSystemContext(async (tx) => {
+      await resolveContext(tx);
+      await bindWorkspaceContext(tx, id);
+      return loadWidget(id, tx);
+    });
+  },
 };
 
 async function outer(id: string, tx: Tx) {

@@ -107,6 +107,32 @@ export interface SystemContextSite {
   raw: boolean;
   /** How each model was reached — `repo.method`, `helper:name`, `tx.model`. */
   via: string[];
+  /**
+   * Calls that were HANDED THE TRANSACTION and whose body this scan could not
+   * read (MOTIR-2910) — sorted, `helper-trail -> name` where the wall sits below
+   * a helper hop.
+   *
+   * ⚠️ THIS IS THE FIELD THAT KEEPS A VERDICT HONEST, and it exists because the
+   * absence of it produced a silent false GREEN. `changeRequestStatusSync#
+   * syncChangeRequestStatus` calls `resolveContext(tx)` — a FUNCTION-TYPED
+   * PARAMETER, supplied by whichever provider is driving the delivery — and the
+   * walk resolves callees by NAME through `reachableHelpers`, which knows local
+   * declarations and imports and cannot know a parameter's runtime value. So the
+   * call was dropped, and the site was classified `binds-tenant` off the
+   * statements the walk COULD see (all of which do sit after the bind) while
+   * `resolveGithubChangeRequestContext` — which runs BEFORE it and read
+   * `workspace_membership` unbound — was invisible.
+   *
+   * A verdict computed over a walk that hit a wall is a verdict about part of
+   * the block. Recording the wall is what lets the guard REFUSE to read such a
+   * verdict as clearance (`notes.html` #268 — a partition inherits every
+   * distinction its instrument cannot draw, so the instrument must state what it
+   * cannot see). Resolving the callee properly would mean inverting the call
+   * graph to find what every caller passes for that parameter; that is a real
+   * feature and this is deliberately not it. Naming the blind spot is cheap,
+   * total, and cannot itself be wrong.
+   */
+  unresolvedCalls: string[];
 }
 
 // ─── prisma schema: model ⇄ table, and each model's relation fields ─────────
@@ -565,6 +591,7 @@ function classify(
   const models = new Set<string>();
   const systemOnly = new Set<string>();
   const via = new Set<string>();
+  const unresolved = new Set<string>();
   let raw = false;
 
   const [arg] = node.arguments;
@@ -710,6 +737,18 @@ function classify(
           if (ts.isIdentifier(n.expression) && depth < MAX_HELPER_HOPS) {
             const name = n.expression.text;
             const helper = scope.get(name);
+            // The wall (MOTIR-2910). The transaction was handed to a callee this
+            // scan cannot resolve by name — a function-typed PARAMETER, or any
+            // other value-level indirection. Everything below it is unread, so
+            // record it instead of stepping over it silently.
+            //
+            // A BIND_CALLS member is never a wall: the scan models it explicitly
+            // (that is what moves `bindPos`), so an unresolved DECLARATION for it
+            // costs nothing. Reporting it would be noise that trains a reader to
+            // skim the one list that must stay worth reading.
+            if (!helper && !BIND_CALLS.has(name)) {
+              unresolved.add(trail ? `${trail} -> ${name}` : name);
+            }
             const mark = `${helper?.sf.fileName ?? file.fileName}#${name}`;
             if (helper && !seen.has(mark)) {
               seen.add(mark);
@@ -756,6 +795,7 @@ function classify(
     models: [...models].sort(),
     raw,
     via: [...via].sort(),
+    unresolvedCalls: [...unresolved].sort(),
   };
 }
 
