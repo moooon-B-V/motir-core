@@ -10,7 +10,11 @@ import { jobServices } from '@/lib/jobs/services';
 import { RETRY_POLICIES } from '@/lib/jobs/retries';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
-import { statusDerivationOnTransitioned } from '@/lib/jobs/definitions/statusDerivation';
+import {
+  statusDerivationOnChildSetChanged,
+  statusDerivationOnCreated,
+  statusDerivationOnTransitioned,
+} from '@/lib/jobs/definitions/statusDerivation';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -225,5 +229,107 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     expect(runs[0]!.status).toBe('succeeded');
     expect(runs[0]!.workspaceId).toBe(fx.workspaceId);
     expect(runs[0]!.failure).toBeNull();
+  });
+});
+
+// ── The CHILD-SET consumers (Story MOTIR-2888 · Subtask MOTIR-2892) ──
+//
+// Same reason this file exists at all: an unregistered consumer fires silently
+// never. These two are the whole of the recompute's new trigger surface, and
+// their failure mode is exactly the one MOTIR-2888 was filed about — a child set
+// changes, nothing runs, and the board quietly lies.
+
+describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
+  it('both are REGISTERED', () => {
+    expect(jobFunctions).toContain(statusDerivationOnCreated);
+    expect(jobFunctions).toContain(statusDerivationOnChildSetChanged);
+  });
+
+  it('each triggers on its own event, under an id distinct from the other consumers', () => {
+    const byId = new Map(
+      jobFunctions.map((f) => [
+        (f as { id: () => string }).id(),
+        (f as { opts?: { triggers?: Array<{ event?: string }> } }).opts,
+      ]),
+    );
+    // `id()` prefixes the app id, so match on the suffix the definition declares.
+    const find = (suffix: string) => [...byId.entries()].find(([id]) => id.endsWith(suffix))?.[1];
+
+    expect(find('status-derivation/created')?.triggers).toEqual([{ event: 'work-item/created' }]);
+    expect(find('status-derivation/child-set-changed')?.triggers).toEqual([
+      { event: 'work-item/child-set.changed' },
+    ]);
+    // `work-item/created` already has two consumers (the automation engine and
+    // the outward bug telemetry); this is the additional-consumer form.
+    const createdConsumers = jobFunctions.filter((f) =>
+      ((f as { opts?: { triggers?: Array<{ event?: string }> } }).opts?.triggers ?? []).some(
+        (t) => t.event === 'work-item/created',
+      ),
+    );
+    expect(createdConsumers.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
+  it('created: recomputes the created item’s PARENT, and runs no cascade', async () => {
+    const { rollUp, cascade } = stubBothDirections();
+
+    const engine = new InngestTestEngine({
+      function: statusDerivationOnCreated,
+      events: [
+        {
+          name: 'work-item/created' as const,
+          data: {
+            workspaceId: 'ws-1',
+            projectId: 'p-1',
+            workItemId: 'child-1',
+            actorId: 'user-1',
+          },
+        },
+      ],
+    });
+    await engine.execute();
+
+    expect(rollUp).toHaveBeenCalledWith('child-1');
+    // A create transitions nothing, so nothing ENTERED a done-category status.
+    // Running the cascade here is what would let a parent that just came back
+    // force-close the child that brought it there.
+    expect(cascade).not.toHaveBeenCalled();
+  });
+
+  it('child-set changed: recomputes EVERY parent named, each in its own step', async () => {
+    const recompute = vi
+      .spyOn(parentStatusRollupService, 'recomputeParent')
+      .mockResolvedValue({ outcome: 'no_rung', parentId: 'p' });
+    const cascade = vi
+      .spyOn(childStatusCascadeService, 'cascadeToChildren')
+      .mockResolvedValue({ outcome: 'not_done' });
+
+    const engine = new InngestTestEngine({
+      function: statusDerivationOnChildSetChanged,
+      events: [
+        {
+          name: 'work-item/child-set.changed' as const,
+          data: {
+            workspaceId: 'ws-1',
+            parentIds: ['old-parent', 'new-parent'],
+            workItemId: 'mover-1',
+            reason: 'reparented' as const,
+          },
+        },
+      ],
+    });
+    await engine.execute();
+
+    // A re-parent changes TWO child sets in opposite directions — recomputing
+    // only one of them is the defect this asserts against.
+    expect(recompute).toHaveBeenCalledTimes(2);
+    expect(recompute).toHaveBeenCalledWith('old-parent');
+    expect(recompute).toHaveBeenCalledWith('new-parent');
+    expect(cascade).not.toHaveBeenCalled();
+  });
+
+  it('child-set changed: reaches the service through the INJECTED bag', () => {
+    expect(jobServices.parentStatusRollup).toBe(parentStatusRollupService);
   });
 });

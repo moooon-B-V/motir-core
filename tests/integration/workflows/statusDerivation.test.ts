@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardsService } from '@/lib/services/boardsService';
+import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
+import { runMoveToParent } from '@/lib/mcp/tools/moveToParent';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import {
@@ -31,10 +33,15 @@ import { truncateAuthTables } from '../../helpers/db';
 
 interface Emitted {
   name: string;
-  data: { workItemId: string; toStatusKey: string };
+  data: { workItemId: string; toStatusKey?: string; parentIds?: string[] };
 }
 
 const queue: Emitted[] = [];
+
+/** Every event name `drain()` has played this test, in order — so a test can
+ *  assert that a trigger produced NO derived transition, which an empty queue at
+ *  the end cannot distinguish from one that produced several. */
+const processed: string[] = [];
 
 vi.mock('@/lib/jobs/sendEvent', () => ({
   sendEvent: async (name: string, data: Record<string, unknown>) => {
@@ -62,11 +69,27 @@ async function drain(): Promise<number> {
       );
     }
     const event = queue.shift()!;
-    expect(event.name).toBe('work-item/transitioned');
-    // The job's order, deliberately: rollup first — it is the direction that can
-    // CREATE work for the other.
-    await parentStatusRollupService.rollUpForChild(event.data.workItemId);
-    await childStatusCascadeService.cascadeToChildren(event.data.workItemId);
+    processed.push(event.name);
+    // Route by event NAME, exactly as `lib/jobs/registry.ts` does — derivation
+    // has three consumers since MOTIR-2892, because a recompute is a function of
+    // the child SET and `work-item/transitioned` fires on none of the edits that
+    // change that set.
+    if (event.name === 'work-item/transitioned') {
+      // The job's order, deliberately: rollup first — it is the direction that
+      // can CREATE work for the other.
+      await parentStatusRollupService.rollUpForChild(event.data.workItemId);
+      await childStatusCascadeService.cascadeToChildren(event.data.workItemId);
+    } else if (event.name === 'work-item/created') {
+      // No cascade: a create transitions nothing, so nothing ENTERED a
+      // done-category status.
+      await parentStatusRollupService.rollUpForChild(event.data.workItemId);
+    } else if (event.name === 'work-item/child-set.changed') {
+      for (const parentId of event.data.parentIds ?? []) {
+        await parentStatusRollupService.recomputeParent(parentId);
+      }
+    }
+    // Every other `work-item/*` event (embeddings, mentions) has no derivation
+    // consumer and is simply drained.
   }
   return steps;
 }
@@ -74,6 +97,7 @@ async function drain(): Promise<number> {
 beforeEach(async () => {
   await truncateAuthTables();
   queue.length = 0;
+  processed.length = 0;
 });
 
 afterAll(async () => {
@@ -466,5 +490,183 @@ describe('ingress coverage — derivation rides the event, not one entry point',
 
     expect(await statusOf(children[0]!.id)).toBe('in_progress');
     expect(await statusOf(story.id)).toBe('in_progress');
+  });
+});
+
+// ── The CHILD-SET triggers (Story MOTIR-2888 · Subtask MOTIR-2892, ADR §3a) ──
+//
+// Everything above rides `work-item/transitioned`. These drive the four edits
+// that change a parent's child set WITHOUT transitioning anything, through their
+// REAL ingress — the MCP `create_work_item` / `move_to_parent` tools and the
+// archive / unarchive / delete service paths — never by calling a job handler.
+// The pump routes each emitted event exactly as the registry does.
+
+describe('the child-set triggers, end to end through their real ingress', () => {
+  it('MCP create_work_item: a todo child under a DONE story brings the story back', async () => {
+    // The story's own case (MOTIR-2888). Before this trigger existed, creating a
+    // child emitted `work-item/created` and no derivation consumer read it, so
+    // the board showed a finished story with untouched work inside it.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['done']);
+    await setStatus(story.id, 'done');
+
+    const res = await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'New unstarted work',
+      },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('todo');
+    // And the cascade did NOT fire on the way: the child that brought the parent
+    // back must not be force-closed by it.
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'New unstarted work' },
+    });
+    expect(created.status).toBe('todo');
+    expect(await statusOf(children[0]!.id)).toBe('done');
+  });
+
+  it('MCP create_work_item: a ROOT item with no parent derives nothing', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const res = await runCreateWorkItem(
+      { projectKey: fx.projectIdentifier, kind: 'story', title: 'Top level' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+
+    // The event fires on every creation in the workspace; with no parent the
+    // consumer is a one-read no-op, so draining produces no derived transition
+    // at all. (The queue also holds the unrelated embedding event every create
+    // emits — the assertion is about what derivation DID, not the queue length.)
+    await drain();
+    expect(processed).toContain('work-item/created');
+    expect(processed).not.toContain('work-item/transitioned');
+  });
+
+  it('a child created under a TODO parent changes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story } = await tree(fx, ['todo']);
+
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'Another',
+      },
+      fx.ctx,
+    );
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
+  it('MCP move_to_parent: ONE move completes the old parent and reopens the new one', async () => {
+    const fx = await makeWorkItemFixture();
+    // A: one done child + the open one that is about to leave ⇒ A completes.
+    const a = await createTestWorkItem(fx, { kind: 'story', title: 'A' });
+    await setStatus(a.id, 'in_progress');
+    const settled = await createTestWorkItem(fx, { kind: 'subtask', title: 'a1', parentId: a.id });
+    await setStatus(settled.id, 'done');
+    const mover = await createTestWorkItem(fx, { kind: 'subtask', title: 'a2', parentId: a.id });
+    await setStatus(mover.id, 'todo');
+    // B: finished ⇒ gaining an unstarted child brings it back.
+    const b = await createTestWorkItem(fx, { kind: 'story', title: 'B' });
+    await setStatus(b.id, 'done');
+    const bChild = await createTestWorkItem(fx, { kind: 'subtask', title: 'b1', parentId: b.id });
+    await setStatus(bChild.id, 'done');
+
+    const rows = await adminDb.workItem.findMany({ where: { id: { in: [mover.id, b.id] } } });
+    const identOf = (id: string) => rows.find((r) => r.id === id)!.identifier;
+    const res = await runMoveToParent({ key: identOf(mover.id), parentKey: identOf(b.id) }, fx.ctx);
+    expect(res.isError).toBeFalsy();
+    await drain();
+
+    expect(await statusOf(a.id)).toBe('done');
+    expect(await statusOf(b.id)).toBe('todo');
+    // The moved child itself is untouched by either recompute.
+    expect(await statusOf(mover.id)).toBe('todo');
+  });
+
+  it('a pure REORDER emits nothing — no parent changed', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo', 'todo']);
+
+    await workItemsService.moveWorkItem(children[1]!.id, { afterId: children[0]!.id }, fx.ctx);
+
+    expect(queue).toHaveLength(0);
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
+  it('archiving the only open child completes the parent; unarchiving brings it back', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['done', 'todo']);
+    await setStatus(story.id, 'in_progress');
+
+    await workItemsService.archiveWorkItem(children[1]!.id, fx.ctx);
+    await drain();
+    expect(await statusOf(story.id)).toBe('done');
+
+    await workItemsService.unarchiveWorkItem(children[1]!.id, fx.ctx);
+    await drain();
+    expect(await statusOf(story.id)).toBe('todo');
+    // The restored child keeps its own status — it was never transitioned.
+    expect(await statusOf(children[1]!.id)).toBe('todo');
+  });
+
+  it('deleting the only open child completes the parent, and the GRANDPARENT follows', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    await setStatus(epic.id, 'in_progress');
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'S', parentId: epic.id });
+    await setStatus(story.id, 'in_progress');
+    const done = await createTestWorkItem(fx, { kind: 'subtask', title: 's1', parentId: story.id });
+    await setStatus(done.id, 'done');
+    const open = await createTestWorkItem(fx, { kind: 'subtask', title: 's2', parentId: story.id });
+    await setStatus(open.id, 'todo');
+
+    await workItemsService.deleteWorkItem(open.id, fx.ctx);
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('done');
+    // No ancestor walk was added: the story's own transition re-emitted, and the
+    // existing `work-item/transitioned` consumer carried it one level up.
+    expect(await statusOf(epic.id)).toBe('done');
+  });
+
+  it('the rollup toggle OFF suppresses every child-set trigger too', async () => {
+    const fx = await makeWorkItemFixture();
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { autoRollupParentStatus: false },
+    });
+    const { story, children } = await tree(fx, ['done', 'todo']);
+    await setStatus(story.id, 'done');
+
+    await workItemsService.archiveWorkItem(children[1]!.id, fx.ctx);
+    await drain();
+    expect(await statusOf(story.id)).toBe('done');
+
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'Suppressed',
+      },
+      fx.ctx,
+    );
+    await drain();
+    expect(await statusOf(story.id)).toBe('done');
   });
 });

@@ -135,12 +135,36 @@ export const parentStatusRollupService = {
    * Never throws for a business reason; returns a typed outcome instead.
    */
   async rollUpForChild(childId: string): Promise<RollupOutcome> {
-    // Phase 1 — resolve the neighbourhood. No acting user yet, so a system
-    // context (the change-request-sync precedent).
-    const resolved = await withSystemContext(async (tx) => {
+    // Resolve the child's parent, then hand off. The child is only ever an
+    // ADDRESS for its parent — every rung reads the parent's whole child set —
+    // so the two entry points share one implementation (MOTIR-2892: the
+    // child-set triggers know a PARENT, not a child, and must not fork the
+    // ladder). No acting user yet, so a system context (the change-request-sync
+    // precedent).
+    const parentId = await withSystemContext(async (tx) => {
       const child = await workItemRepository.findById(childId, tx);
-      if (!child?.parentId) return null;
-      const parent = await workItemRepository.findById(child.parentId, tx);
+      return child?.parentId ?? null;
+    });
+    if (!parentId) return { outcome: 'no_parent' };
+    return parentStatusRollupService.recomputeParent(parentId);
+  },
+
+  /**
+   * RECOMPUTE one parent from its current child set — the PARENT-keyed entry
+   * point (Story MOTIR-2888 · Subtask MOTIR-2892).
+   *
+   * Identical in every respect to {@link rollUpForChild}, which is a thin
+   * resolver in front of it; see that method's doc comment for the rungs and the
+   * three properties. It exists because the child-set triggers — a re-parent's
+   * PREVIOUS parent, a delete whose child row no longer exists — have a parent id
+   * and no child to address it through, and handing them "any surviving child"
+   * would be a lie in exactly the cases that matter (the last child left).
+   *
+   * `no_parent` is not reachable from here: the caller already has the parent.
+   */
+  async recomputeParent(parentIdIn: string): Promise<RollupOutcome> {
+    const resolved = await withSystemContext(async (tx) => {
+      const parent = await workItemRepository.findById(parentIdIn, tx);
       if (!parent) return null;
       const settings = await projectRepository.findStatusAutomation(parent.projectId, tx);
       const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
@@ -156,7 +180,9 @@ export const parentStatusRollupService = {
       };
     });
 
-    if (!resolved) return { outcome: 'no_parent' };
+    // The parent row is gone (deleted in the window between the emit and this
+    // run). Nothing to recompute, and not an error.
+    if (!resolved) return { outcome: 'unresolvable' };
     if (!resolved.enabled) return { outcome: 'toggle_off', parentId: resolved.parentId };
     // No workspace owner ⇒ nobody can author the move. Not an error: a workspace
     // in that state has bigger problems than a missing rollup.

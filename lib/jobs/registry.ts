@@ -33,7 +33,11 @@ import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
-import { statusDerivationOnTransitioned } from './definitions/statusDerivation';
+import {
+  statusDerivationOnChildSetChanged,
+  statusDerivationOnCreated,
+  statusDerivationOnTransitioned,
+} from './definitions/statusDerivation';
 import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
 import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 
@@ -72,6 +76,8 @@ export const jobFunctions = [
   ciRunnerBoot,
   ciRunnerReap,
   statusDerivationOnTransitioned,
+  statusDerivationOnCreated,
+  statusDerivationOnChildSetChanged,
   migrateOnboardingSweep,
   workItemEmbeddingRequested,
 ];
