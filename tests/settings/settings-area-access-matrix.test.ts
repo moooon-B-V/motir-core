@@ -13,6 +13,7 @@ import {
 } from '@/lib/settings/projectSettingsNav';
 import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.5 · Subtask 6.5.4 — the settings-area role-gating matrix proven over
@@ -48,6 +49,7 @@ afterAll(async () => {
   // Release the worktree-side pool so it doesn't keep the runner alive past the
   // last test (mirrors project-access-service / project-isolation).
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -89,7 +91,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   // toggle is Subtask 6.12.8; `asAccessLevel` still rejects it), so seed it
   // directly at the data layer; the 3 settable levels go through the real setter.
   if (level === 'public') {
-    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,

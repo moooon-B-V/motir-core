@@ -313,6 +313,75 @@ describe('findUserWorkspaces', () => {
   });
 });
 
+// MOTIR-2874 — `getActiveWorkspace` had NO test at all, which is how it shipped
+// on a bare `db.$transaction` that binds no GUCs. Under `motir_app` that made
+// `membership_visible_active_or_own` (`"workspaceId" = app.workspace_id` OR
+// `"userId" = app.user_id`) match nothing, so both membership reads came back
+// empty, the method resolved to `null`, and `GET /api/workspaces/current`
+// returned a 404 for every signed-in user.
+//
+// Every assertion below is an ADMIT assertion — a NON-EMPTY result under the
+// restricted role. A denial test would pass just as happily against a policy set
+// that refuses everyone, which is the failure mode this class hides behind: RLS
+// removes rows from a SELECT, it does not raise, so "nothing came back" and
+// "nothing exists" are indistinguishable to the caller.
+describe('getActiveWorkspace (bound read — MOTIR-2874)', () => {
+  it('resolves the first membership, workspace row included, with no workspace pinned', async () => {
+    const user = await makeUser('active-first@example.com', 'Active');
+    const { workspace } = await createWorkspace({ name: 'Only', ownerUserId: user.id });
+
+    const dto = await workspacesService.getActiveWorkspace(user.id, null);
+
+    // Non-empty: the membership read was admitted by the `_or_own` arm...
+    expect(dto).not.toBeNull();
+    expect(dto!.membership.userId).toBe(user.id);
+    expect(dto!.membership.workspaceId).toBe(workspace.id);
+    expect(dto!.membership.role).toBe('owner');
+    // ...and so was the `include: { workspace: true }` join, which
+    // `workspace_membership_visible` gates on the same `app.user_id`. A DTO
+    // whose workspace half came back empty is the other half of this bug.
+    expect(dto!.workspace.id).toBe(workspace.id);
+    expect(dto!.workspace.name).toBe('Only');
+    expect(dto!.workspace.slug).toBe(workspace.slug);
+  });
+
+  it('resolves the COOKIE-PINNED workspace when the user is a member of it', async () => {
+    const user = await makeUser('active-pinned@example.com', 'Pinned');
+    await createWorkspace({ name: 'First', ownerUserId: user.id });
+    const { workspace: second } = await createWorkspace({ name: 'Second', ownerUserId: user.id });
+
+    const dto = await workspacesService.getActiveWorkspace(user.id, second.id);
+
+    expect(dto).not.toBeNull();
+    expect(dto!.workspace.id).toBe(second.id);
+    expect(dto!.workspace.name).toBe('Second');
+  });
+
+  it('falls back to the first membership when the pin names a workspace the user is NOT in', async () => {
+    const user = await makeUser('active-stale-pin@example.com', 'Stale');
+    const stranger = await makeUser('active-stranger@example.com', 'Stranger');
+    const { workspace: mine } = await createWorkspace({ name: 'Mine', ownerUserId: user.id });
+    const { workspace: theirs } = await createWorkspace({
+      name: 'Theirs',
+      ownerUserId: stranger.id,
+    });
+
+    const dto = await workspacesService.getActiveWorkspace(user.id, theirs.id);
+
+    // The fallback is the point: a stale pin must not strand the user at null,
+    // and it must not leak the workspace they have no membership in.
+    expect(dto).not.toBeNull();
+    expect(dto!.workspace.id).toBe(mine.id);
+  });
+
+  it('returns null for a user with genuinely zero memberships', async () => {
+    // The one legitimate null. Kept last so the three admits above are what
+    // carries the file — this case passes whether or not anything is bound.
+    const loner = await makeUser('active-loner@example.com', 'Loner');
+    expect(await workspacesService.getActiveWorkspace(loner.id, null)).toBeNull();
+  });
+});
+
 describe('cascade behavior', () => {
   it('removes membership rows when the parent Workspace is deleted', async () => {
     const owner = await makeUser('owner@example.com');

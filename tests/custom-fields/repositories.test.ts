@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { CustomFieldDefinition, WorkItem } from '@/generated/prisma/client';
+import type { CustomFieldDefinition, Prisma, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
@@ -33,6 +33,15 @@ import { truncateAuthTables } from '../helpers/db';
 // the constraint. So the admin client is what PRESERVES these claims rather than
 // weakening them. The policies' own behaviour is proved separately, under the role,
 // in the *-rls suites this header already points at.
+//
+// ⚠️ AND SO DO THIS FILE'S READS (MOTIR-2881). MOTIR-2751 migrated the WRITES and
+// left the assertion-side READS on the `@/lib/db` singleton — which under the role
+// is `motir_app`, binds no workspace GUC, and returns NOTHING. A refused write says
+// so (`42501`); a refused read just returns `null` / `[]` / `0`, so ten assertions
+// here went red while the `finding #26` gate probes — which EXPECT emptiness — passed
+// for the wrong reason. `readAsOwner` routes them through the SAME owner client the
+// writes use: that is what keeps an explicit-`workspaceId` gate assertion meaningful,
+// since a bound read returns [] whether the WHERE clause gated it or the policy did.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -57,6 +66,16 @@ async function makeFieldFixture(): Promise<FieldFixture> {
   const fx = await makeWorkItemFixture();
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Field-bearing task' });
   return { fx, issue };
+}
+
+/**
+ * Run a repository READ through the OWNER client, exactly as this file's writes run.
+ * The repository method under test is still what is exercised — only the connection
+ * changes, so RLS stays inert (see the header) and a `null` / `[]` is the repository's
+ * own `workspaceId` gate rather than a policy.
+ */
+function readAsOwner<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return adminDb.$transaction(fn);
 }
 
 /** Insert one definition through the repository's required-`tx` write path. */
@@ -142,13 +161,25 @@ describe('customFieldDefinitionRepository', () => {
   it('findById returns the row only under its own workspace (finding #26)', async () => {
     const f = await makeFieldFixture();
     const row = await addField(f);
-    expect((await customFieldDefinitionRepository.findById(row.id, f.fx.workspaceId))?.id).toBe(
-      row.id,
-    );
+    expect(
+      (
+        await readAsOwner((tx) =>
+          customFieldDefinitionRepository.findById(row.id, f.fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(row.id);
     // Cross-workspace probe → null (the service maps it to 404), unknown → null.
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await customFieldDefinitionRepository.findById(row.id, other.workspaceId)).toBeNull();
-    expect(await customFieldDefinitionRepository.findById('nope', f.fx.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.findById(row.id, other.workspaceId, tx),
+      ),
+    ).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.findById('nope', f.fx.workspaceId, tx),
+      ),
+    ).toBeNull();
   });
 
   it('update patches label/position; the key column stays untouched', async () => {
@@ -166,15 +197,16 @@ describe('customFieldDefinitionRepository', () => {
     const f = await makeFieldFixture();
     await addField(f, { key: 'b-field', label: 'B', position: 'a1' });
     await addField(f, { key: 'a-field', label: 'A', position: 'a0' });
-    const listed = await customFieldDefinitionRepository.listByProject(
-      f.fx.projectId,
-      f.fx.workspaceId,
+    const listed = await readAsOwner((tx) =>
+      customFieldDefinitionRepository.listByProject(f.fx.projectId, f.fx.workspaceId, tx),
     );
     expect(listed.map((d) => d.key)).toEqual(['a-field', 'b-field']);
     // Right projectId + wrong workspaceId → [] (not another tenant's rows).
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     expect(
-      await customFieldDefinitionRepository.listByProject(f.fx.projectId, other.workspaceId),
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.listByProject(f.fx.projectId, other.workspaceId, tx),
+      ),
     ).toEqual([]);
   });
 
@@ -183,7 +215,9 @@ describe('customFieldDefinitionRepository', () => {
     await addField(f, { key: 'one', position: 'a0' });
     await addField(f, { key: 'two', position: 'a1' });
     expect(
-      await customFieldDefinitionRepository.countByProject(f.fx.projectId, f.fx.workspaceId),
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.countByProject(f.fx.projectId, f.fx.workspaceId, tx),
+      ),
     ).toBe(2);
     // The tx branch — the 5.3.2 cap check runs inside the create transaction.
     const inTx = await adminDb.$transaction(async (tx) =>
@@ -192,7 +226,9 @@ describe('customFieldDefinitionRepository', () => {
     expect(inTx).toBe(2);
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     expect(
-      await customFieldDefinitionRepository.countByProject(f.fx.projectId, other.workspaceId),
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.countByProject(f.fx.projectId, other.workspaceId, tx),
+      ),
     ).toBe(0);
   });
 
@@ -204,7 +240,11 @@ describe('customFieldDefinitionRepository', () => {
 
     await adminDb.$transaction(async (tx) => customFieldDefinitionRepository.delete(field.id, tx));
 
-    expect(await customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId, tx),
+      ),
+    ).toBeNull();
     const customFieldOptionCount = await adminDb.customFieldOption.count({
       where: { fieldId: field.id },
     });
@@ -227,7 +267,9 @@ describe('customFieldOptionRepository', () => {
     await addOption(field.id, 'High', 'a0');
     await addOption(field.id, 'Retired', 'a2', true);
 
-    const listed = await customFieldOptionRepository.listByField(field.id, f.fx.workspaceId);
+    const listed = await readAsOwner((tx) =>
+      customFieldOptionRepository.listByField(field.id, f.fx.workspaceId, tx),
+    );
     // Archived options STAY in the read — existing values referencing them
     // must keep rendering; excluding them from new selection is a UI concern.
     expect(listed.map((o) => o.label)).toEqual(['High', 'Low', 'Retired']);
@@ -240,10 +282,28 @@ describe('customFieldOptionRepository', () => {
     const opt = await addOption(field.id, 'High', 'a0');
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
 
-    expect((await customFieldOptionRepository.findById(opt.id, f.fx.workspaceId))?.id).toBe(opt.id);
-    expect(await customFieldOptionRepository.findById(opt.id, other.workspaceId)).toBeNull();
-    expect(await customFieldOptionRepository.listByField(field.id, other.workspaceId)).toEqual([]);
-    expect(await customFieldOptionRepository.countByField(field.id, other.workspaceId)).toBe(0);
+    expect(
+      (
+        await readAsOwner((tx) =>
+          customFieldOptionRepository.findById(opt.id, f.fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(opt.id);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldOptionRepository.findById(opt.id, other.workspaceId, tx),
+      ),
+    ).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        customFieldOptionRepository.listByField(field.id, other.workspaceId, tx),
+      ),
+    ).toEqual([]);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldOptionRepository.countByField(field.id, other.workspaceId, tx),
+      ),
+    ).toBe(0);
   });
 
   it('update renames, reorders, and flips the archived bit', async () => {
@@ -272,7 +332,11 @@ describe('customFieldOptionRepository', () => {
     const field = await addField(f);
     await addOption(field.id, 'A', 'a0');
     await addOption(field.id, 'B', 'a1');
-    expect(await customFieldOptionRepository.countByField(field.id, f.fx.workspaceId)).toBe(2);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldOptionRepository.countByField(field.id, f.fx.workspaceId, tx),
+      ),
+    ).toBe(2);
     const inTx = await adminDb.$transaction(async (tx) =>
       customFieldOptionRepository.countByField(field.id, f.fx.workspaceId, tx),
     );
@@ -287,7 +351,11 @@ describe('customFieldOptionRepository', () => {
     await setValue(f, field.id, { valueOptionId: inUse.id });
 
     await adminDb.$transaction(async (tx) => customFieldOptionRepository.delete(unused.id, tx));
-    expect(await customFieldOptionRepository.findById(unused.id, f.fx.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        customFieldOptionRepository.findById(unused.id, f.fx.workspaceId, tx),
+      ),
+    ).toBeNull();
 
     // The only-when-unused rule's DB backstop: the value FK's ON DELETE
     // RESTRICT rejects the hard delete while a value row holds the option.
@@ -295,10 +363,18 @@ describe('customFieldOptionRepository', () => {
       adminDb.$transaction(async (tx) => customFieldOptionRepository.delete(inUse.id, tx)),
     ).rejects.toMatchObject({ code: 'P2003' });
     // The value row (and the option) survive the rejected delete.
-    expect((await customFieldOptionRepository.findById(inUse.id, f.fx.workspaceId))?.id).toBe(
-      inUse.id,
-    );
-    expect(await customFieldValueRepository.countByOption(inUse.id, f.fx.workspaceId)).toBe(1);
+    expect(
+      (
+        await readAsOwner((tx) =>
+          customFieldOptionRepository.findById(inUse.id, f.fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(inUse.id);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.countByOption(inUse.id, f.fx.workspaceId, tx),
+      ),
+    ).toBe(1);
   });
 });
 
@@ -404,13 +480,17 @@ describe('customFieldValueRepository', () => {
     await setValue(f, fieldB.id, { valueText: 'also on issue' });
     await setValue(f, fieldA.id, { valueText: 'on sibling' }, sibling.id);
 
-    const listed = await customFieldValueRepository.listByWorkItem(f.issue.id, f.fx.workspaceId);
+    const listed = await readAsOwner((tx) =>
+      customFieldValueRepository.listByWorkItem(f.issue.id, f.fx.workspaceId, tx),
+    );
     expect(listed).toHaveLength(2);
     expect(listed.every((v) => v.workItemId === f.issue.id)).toBe(true);
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await customFieldValueRepository.listByWorkItem(f.issue.id, other.workspaceId)).toEqual(
-      [],
-    );
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.listByWorkItem(f.issue.id, other.workspaceId, tx),
+      ),
+    ).toEqual([]);
     // The tx branch — 5.3.3 may read inside its set transaction.
     const inTx = await adminDb.$transaction(async (tx) =>
       customFieldValueRepository.listByWorkItem(f.issue.id, f.fx.workspaceId, tx),
@@ -426,11 +506,27 @@ describe('customFieldValueRepository', () => {
     await setValue(f, field.id, { valueOptionId: opt.id });
     await setValue(f, field.id, { valueOptionId: opt.id }, sibling.id);
 
-    expect(await customFieldValueRepository.countByField(field.id, f.fx.workspaceId)).toBe(2);
-    expect(await customFieldValueRepository.countByOption(opt.id, f.fx.workspaceId)).toBe(2);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.countByField(field.id, f.fx.workspaceId, tx),
+      ),
+    ).toBe(2);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.countByOption(opt.id, f.fx.workspaceId, tx),
+      ),
+    ).toBe(2);
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await customFieldValueRepository.countByField(field.id, other.workspaceId)).toBe(0);
-    expect(await customFieldValueRepository.countByOption(opt.id, other.workspaceId)).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.countByField(field.id, other.workspaceId, tx),
+      ),
+    ).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        customFieldValueRepository.countByOption(opt.id, other.workspaceId, tx),
+      ),
+    ).toBe(0);
     // The tx branches — both counts run inside their write transactions.
     const [fieldCount, optionCount] = await adminDb.$transaction(async (tx) => [
       await customFieldValueRepository.countByField(field.id, f.fx.workspaceId, tx),
@@ -452,8 +548,12 @@ describe('customFieldValueRepository', () => {
     });
     expect(customFieldValueCount).toBe(0);
     // The definition survives — only the issue's values die.
-    expect((await customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId))?.id).toBe(
-      field.id,
-    );
+    expect(
+      (
+        await readAsOwner((tx) =>
+          customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(field.id);
   });
 });

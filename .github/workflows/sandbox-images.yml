@@ -297,7 +297,10 @@ jobs:
           done
           {
             echo
-            echo "Paste the table above into \`packages/cli/sandbox/README.md\` → **Published images**."
+            echo "This table is a CONVENIENCE, not a handoff: \`release-sandbox.yml\`'s"
+            echo "\`readme\` job writes \`packages/cli/sandbox/README.md\` → **Published images**"
+            echo "itself, reading each digest back from the registry ANONYMOUSLY rather than"
+            echo "from this page (MOTIR-2699 / MOTIR-2220). Nothing here needs retyping."
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ── The consumer's question: can a STRANGER pull this? (MOTIR-2010) ────────

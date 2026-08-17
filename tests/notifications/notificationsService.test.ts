@@ -75,7 +75,7 @@ async function seed(
     createdAt?: Date;
   }>,
 ): Promise<number> {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     notificationRepository.createMany(
       rows.map((r, i) => ({
         workspaceId: s.fx.workspaceId,

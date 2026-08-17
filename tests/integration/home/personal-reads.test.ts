@@ -4,6 +4,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { homeService } from '@/lib/services/homeService';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { decodeHomeCursor, encodeHomeCursor } from '@/lib/home/cursor';
 import { truncateAuthTables } from '../../helpers/db';
 import {
@@ -323,7 +324,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const ownedOnly = await createWorkItem(fx, { kind: 'task', title: 'Mine, not watched' });
     await own(watchedOnly.id, { assignee: other.id, reporter: other.id });
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(watchedOnly.id, fx.ownerId, tx);
       await watcherRepository.add(ownedAndWatched.id, fx.ownerId, tx);
     });
@@ -345,7 +346,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const other = await enrolMember(fx, 'wrel');
     const item = await createWorkItem(fx, { kind: 'task', title: 'Watched only' });
     await own(item.id, { assignee: other.id, reporter: other.id });
-    await db.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
 
     const page = await homeService.listWatching(fx.ctx);
 
@@ -367,7 +368,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     );
 
     const member = await enrolMember(fx, 'watcher');
-    await db.$transaction((tx) => watcherRepository.add(hidden.id, member.id, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(hidden.id, member.id, tx));
 
     const page = await homeService.listWatching({ userId: member.id, workspaceId: fx.workspaceId });
 
@@ -378,7 +379,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const fx = await makeFixture({ identifier: 'WSTR' });
     const item = await createWorkItem(fx, { kind: 'task', title: 'Watched by a stranger' });
     const stranger = await createTestUser({ email: `wstr-${Date.now()}@example.com` });
-    await db.$transaction((tx) => watcherRepository.add(item.id, stranger.id, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(item.id, stranger.id, tx));
 
     // The watch row EXISTS — only the empty browsable set keeps it out, and the
     // read short-circuits before issuing a degenerate `IN ()` rather than
@@ -396,7 +397,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
       const item = await createWorkItem(fx, { kind: 'task', title: `W${i}` });
       made.push(item.identifier);
       await touch(item.id, `2026-08-1${i}T00:00:00.000Z`);
-      await db.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
+      await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
     }
 
     const first = await homeService.listWatching(fx.ctx, { limit: 2 });
@@ -458,7 +459,7 @@ describe('homeService.tabCounts — the tab badges', () => {
       { kind: 'task', title: 'Hidden' },
     );
     const watched = await createWorkItem(fx, { kind: 'task', title: 'Watched' });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(watched.id, fx.ownerId, tx);
       await watcherRepository.add(hidden.id, fx.ownerId, tx);
     });
@@ -496,5 +497,149 @@ describe('homeService.tabCounts — the tab badges', () => {
     expect(
       await homeService.tabCounts({ userId: stranger.id, workspaceId: fx.workspaceId }),
     ).toEqual({ myWork: 0, watching: 0 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The lifecycle axis (MOTIR-2758). Home's two reads carried a PERSON predicate
+// and a PROJECT predicate and no third one, so the surface whose own subtitle
+// says "waiting on you" listed finished work — 87% of it for the reader who uses
+// the product most, and the newest rows by construction, since the last thing to
+// touch an item is usually its merge.
+//
+// Every case below carries a POSITIVE CONTROL — an open row that must still
+// appear — so none of these assertions can pass by the fixture being empty.
+
+/** Put a row in a status directly; the reads under test don't care how it got there. */
+async function setStatus(id: string, status: string): Promise<void> {
+  await adminDb.workItem.update({ where: { id }, data: { status } });
+}
+
+describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
+  it('drops an item the reader both assigned and reported once it is done — list AND badge', async () => {
+    const fx = await makeFixture({ identifier: 'DON' });
+    const open = await createWorkItem(fx, { kind: 'task', title: 'Still waiting on me' });
+    const finished = await createWorkItem(fx, { kind: 'task', title: 'Shipped last week' });
+    await own(open.id, { assignee: fx.ownerId, reporter: fx.ownerId });
+    await own(finished.id, { assignee: fx.ownerId, reporter: fx.ownerId });
+    await setStatus(finished.id, 'done');
+
+    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['DON-1']);
+    // The badge moves with the list, in the same commit — a count that disagrees
+    // with its tab is the shape this card was filed about.
+    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(1);
+  });
+
+  it('excludes by CATEGORY, not by the literal key `done` — a cancelled item is out too', async () => {
+    const fx = await makeFixture({ identifier: 'CAN' });
+    const open = await createWorkItem(fx, { kind: 'task', title: 'Open' });
+    const done = await createWorkItem(fx, { kind: 'task', title: 'Done' });
+    const cancelled = await createWorkItem(fx, { kind: 'task', title: 'Cancelled' });
+    await setStatus(done.id, 'done');
+    await setStatus(cancelled.id, 'cancelled');
+
+    // `cancelled` is `category: 'done'` in the default workflow, so a filter
+    // written against the KEY would let this one through. CAN-1 is the positive
+    // control — the open row, which must survive.
+    expect(open.identifier).toBe('CAN-1');
+    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['CAN-1']);
+    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(1);
+  });
+
+  it('drops a finished item from WATCHING too, and from its badge', async () => {
+    const fx = await makeFixture({ identifier: 'WDN' });
+    const other = await enrolMember(fx, 'wdn');
+    const open = await createWorkItem(fx, { kind: 'task', title: 'Watched, still open' });
+    const finished = await createWorkItem(fx, { kind: 'task', title: 'Watched, shipped' });
+    // Owned by someone else, so ONLY the watch relation can put them in the tab.
+    await own(open.id, { assignee: other.id, reporter: other.id });
+    await own(finished.id, { assignee: other.id, reporter: other.id });
+    await setStatus(finished.id, 'done');
+    await adminDb.$transaction(async (tx) => {
+      await watcherRepository.add(open.id, fx.ownerId, tx);
+      await watcherRepository.add(finished.id, fx.ownerId, tx);
+    });
+
+    // An item you watch that has shipped is not waiting on you either, and its
+    // notification already fired through the bell.
+    expect(keys((await homeService.listWatching(fx.ctx)).items)).toEqual(['WDN-1']);
+    expect((await homeService.tabCounts(fx.ctx)).watching).toBe(1);
+  });
+
+  it('resolves the exclusion from EACH ROW S OWN project workflow', async () => {
+    const fx = await makeFixture({ identifier: 'PRA' });
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Second',
+      identifier: 'PRB',
+    });
+    const fxB = { ...fx, project: other, projectId: other.id, projectIdentifier: other.identifier };
+
+    // The SAME status key, terminal in one project and open in the other —
+    // statuses are project-defined open vocabulary, and Home is the one surface
+    // that reads across projects at once.
+    for (const [projectId, category] of [
+      [fx.projectId, 'done'],
+      [other.id, 'in_progress'],
+    ] as const) {
+      await workflowsService.createStatus({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        projectId,
+        key: 'released',
+        label: 'Released',
+        category,
+      });
+    }
+
+    const terminalInA = await createWorkItem(fx, { kind: 'task', title: 'Released in A' });
+    const openInA = await createWorkItem(fx, { kind: 'task', title: 'Open in A' });
+    const openInB = await createWorkItem(fxB, { kind: 'task', title: 'Released in B, still open' });
+    await setStatus(terminalInA.id, 'released');
+    await setStatus(openInB.id, 'released');
+
+    // A FLAT `status: { notIn: [...] }` across the workspace passes every
+    // single-project test and fails exactly here.
+    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['PRA-2', 'PRB-1']);
+    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(2);
+    expect(openInA.identifier).toBe('PRA-2');
+  });
+
+  it('is a query PREDICATE — a full page still returns `limit` rows, and the cursor holds', async () => {
+    const fx = await makeFixture({ identifier: 'PRD' });
+    const open: string[] = [];
+    // Interleaved, so a post-read filter would shorten page one to two rows.
+    for (let i = 0; i < 8; i += 1) {
+      const item = await createWorkItem(fx, { kind: 'task', title: `Item ${i}` });
+      await touch(item.id, `2026-08-0${i + 1}T00:00:00.000Z`);
+      if (i % 2 === 0) await setStatus(item.id, i % 4 === 0 ? 'done' : 'cancelled');
+      else open.push(item.identifier);
+    }
+
+    const first = await homeService.listMyWork(fx.ctx, { limit: 2 });
+    const second = await homeService.listMyWork(fx.ctx, { limit: 2, cursor: first.nextCursor });
+
+    expect(first.items).toHaveLength(2); // asked for 2, got 2 — nothing dropped afterwards
+    const seen = [...first.items, ...second.items].map((r) => r.identifier);
+    expect(new Set(seen).size).toBe(seen.length); // no repeats across the boundary
+    expect(seen.sort()).toEqual(open.sort()); // and no drops: exactly the open set
+    expect(second.nextCursor).toBeNull();
+    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(4);
+  });
+
+  it('lets a reader whose work is ALL finished reach the empty state', async () => {
+    const fx = await makeFixture({ identifier: 'EMP' });
+    for (let i = 0; i < 3; i += 1) {
+      const item = await createWorkItem(fx, { kind: 'task', title: `Closed ${i}` });
+      await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
+      await setStatus(item.id, 'done');
+    }
+
+    // Before this card the empty state was unreachable for anyone with history:
+    // a reader with 2 000 closed items and none open saw a full page of them.
+    expect(await homeService.listMyWork(fx.ctx)).toEqual({ items: [], nextCursor: null });
+    expect(await homeService.listWatching(fx.ctx)).toEqual({ items: [], nextCursor: null });
+    expect(await homeService.tabCounts(fx.ctx)).toEqual({ myWork: 0, watching: 0 });
   });
 });

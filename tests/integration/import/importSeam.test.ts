@@ -15,6 +15,7 @@ import type {
   SourceIssue,
   SourceIssuePage,
 } from '@/lib/import/connectors/types';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestUser } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -47,7 +48,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 async function truncateAll(): Promise<void> {
   // work_item CASCADE carries away import / imported_issue rows.
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -103,7 +104,7 @@ async function makeDraftImport(
   fx: WorkItemFixture,
   source: IssueSourceConnector['source'] = 'jira',
 ): Promise<string> {
-  const row = await db.$transaction((tx) =>
+  const row = await adminDb.$transaction((tx) =>
     importRepository.create(
       { workspaceId: fx.workspaceId, projectId: fx.projectId, source, createdById: fx.ownerId },
       tx,
@@ -155,11 +156,11 @@ async function runOnce(
 }
 
 async function workItemCount(fx: WorkItemFixture): Promise<number> {
-  return db.workItem.count({ where: { projectId: fx.projectId } });
+  return adminDb.workItem.count({ where: { projectId: fx.projectId } });
 }
 
 async function mappingRowCount(fx: WorkItemFixture): Promise<number> {
-  return db.importedIssue.count({ where: { projectId: fx.projectId } });
+  return adminDb.importedIssue.count({ where: { projectId: fx.projectId } });
 }
 
 const MAPPING: ImportMapping = {
@@ -225,7 +226,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     const map = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-100', tx),
     );
-    const item = await db.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
 
     // Scalar field mapping.
     expect(item.kind).toBe('story'); // type → kind
@@ -240,14 +241,14 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     expect(item.reporterId).toBe(fx.ownerId);
 
     // Labels → find-or-create + attach.
-    const labels = await db.workItemLabel.findMany({
+    const labels = await adminDb.workItemLabel.findMany({
       where: { workItemId: item.id },
       include: { label: true },
     });
     expect(labels.map((l) => l.label.name).sort()).toEqual(['api', 'ux']);
 
     // Comment → imported once, author + timestamp preserved in the body.
-    const comments = await db.comment.findMany({ where: { workItemId: item.id } });
+    const comments = await adminDb.comment.findMany({ where: { workItemId: item.id } });
     expect(comments).toHaveLength(1);
     expect(comments[0]!.bodyMd).toContain('Jane Source');
     expect(comments[0]!.bodyMd).toContain('2023-01-02T00:00:00.000Z');
@@ -268,7 +269,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     const mapA = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-1', tx),
     );
-    const itemA = await db.workItem.findUniqueOrThrow({ where: { id: mapA!.workItemId } });
+    const itemA = await adminDb.workItem.findUniqueOrThrow({ where: { id: mapA!.workItemId } });
     expect(itemA.assigneeId).toBeNull();
     expect(
       unassignEvents.some((e) => e.type === 'item' && e.warnings.some((w) => /unset/i.test(w))),
@@ -285,7 +286,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     const mapB = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'U-2', tx),
     );
-    const itemB = await db.workItem.findUniqueOrThrow({ where: { id: mapB!.workItemId } });
+    const itemB = await adminDb.workItem.findUniqueOrThrow({ where: { id: mapB!.workItemId } });
     expect(itemB.assigneeId).toBe(fx.ownerId);
     expect(
       importerEvents.some(
@@ -315,7 +316,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     const map = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ORPHAN', tx),
     );
-    const item = await db.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
     expect(item.kind).toBe('task');
     expect(item.parentId).toBeNull();
   });
@@ -352,13 +353,13 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     const sibMap = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'SIB', tx),
     );
-    const child = await db.workItem.findUniqueOrThrow({ where: { id: childMap!.workItemId } });
+    const child = await adminDb.workItem.findUniqueOrThrow({ where: { id: childMap!.workItemId } });
     // Restored to subtask AND parented to the story (deferred-parent path).
     expect(child.kind).toBe('subtask');
     expect(child.parentId).toBe(parentMap!.workItemId);
     // The relationship link landed as a real work_item_link edge (relates_to
     // is stored with a reciprocal, so ≥1 row connects the two either way).
-    const links = await db.workItemLink.findMany({
+    const links = await adminDb.workItemLink.findMany({
       where: {
         OR: [
           { fromId: childMap!.workItemId, toId: sibMap!.workItemId },
@@ -389,7 +390,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
     );
     expect(summaryOf(events).counts).toMatchObject({ created: 2, failed: 0 });
 
-    const items = await db.workItem.findMany({
+    const items = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { key: 'asc' },
     });
@@ -400,7 +401,7 @@ describe('MOTIR-944 seam · mapping correctness (end-to-end through persist)', (
       expect(w.priority).toBe('medium'); // no priority column → the mapping default
       expect(w.assigneeId).toBeNull(); // no assignee column
     }
-    const labelCount = await db.workItemLabel.count({
+    const labelCount = await adminDb.workItemLabel.count({
       where: { workItem: { projectId: fx.projectId } },
     });
     expect(labelCount).toBe(0); // no labels column
@@ -461,7 +462,7 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1', tx),
     );
     expect(after!.workItemId).toBe(before!.workItemId); // same work item, in place
-    const edited = await db.workItem.findUniqueOrThrow({ where: { id: after!.workItemId } });
+    const edited = await adminDb.workItem.findUniqueOrThrow({ where: { id: after!.workItemId } });
     expect(edited.title).toBe('First (edited)');
   });
 
@@ -473,7 +474,7 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
     );
 
     // A local estimate/points edit — fields the importer does NOT own.
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: map!.workItemId },
       data: { storyPoints: 8, estimateMinutes: 120 },
     });
@@ -495,7 +496,7 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
       ),
     );
     expect(run.counts).toMatchObject({ updated: 1 });
-    const item = await db.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: map!.workItemId } });
     expect(item.title).toBe('First (source moved on)'); // source field re-synced
     expect(Number(item.storyPoints)).toBe(8); // local edit survived
     expect(item.estimateMinutes).toBe(120); // local edit survived
@@ -537,7 +538,7 @@ describe('MOTIR-944 seam · idempotency (re-run creates no duplicates)', () => {
     // Neither run aborts — each surfaces its per-issue outcome and finishes.
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     // The invariant the constraint guarantees: no duplicate mapping row.
-    const rows = await db.importedIssue.count({
+    const rows = await adminDb.importedIssue.count({
       where: { projectId: fx.projectId, source: 'jira', externalId: 'RACE-1' },
     });
     expect(rows).toBe(1);

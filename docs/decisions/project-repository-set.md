@@ -1063,9 +1063,15 @@ deliberately stops short and points at (d).
   (`classification` / `platform` / `designStarter`), §0.1's secondary signals.
 - `lib/services/plansService.ts` — `approvePlan` / `materialize`, the transaction the
   establish step joins and where §5's resolution runs.
-- `motir-ai/src/llm/treeGeneration.ts` — `SHARED_PLANNING_RULES`' multi-repo architecture
-  rule and the proposal schema §5 extends (search with python/node — grep fails on the long
-  lines).
+- `motir-ai/src/llm/planningRulePacks.ts` — `SHARED_PLANNING_RULES`' multi-repo architecture
+  rule. **Corrected 2026-08-17:** this reference named `src/llm/treeGeneration.ts`, where the
+  constant lived until MOTIR-2624's pack split (`78b4e6d`, 2026-08-11); that file now only
+  re-exports it, so reading there shows the symbol and no rule text. The rules are ~32 named
+  constants tagged with their pack in `CORPUS_ORDER`. `grep` works on the packs file (501
+  lines), but extract a constant to the backtick followed by `;`/`,`/`)` — the rule text
+  contains markdown code spans.
+- `motir-ai/src/llm/treeGeneration.ts` — `buildGenerationSystemPrompt` and the proposal
+  schema §5 extends (long lines; search with python/node — `grep` fails on this file).
 - `nextjs-prisma-vercel-starter` — the one default platform starter; its `-with-design`
   sibling is retired and archived.
 - `docs/decisions/code-access-for-planning.md` — the sibling ADR whose "a NO decision files

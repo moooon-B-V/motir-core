@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItem } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';
@@ -35,6 +35,23 @@ import { truncateAuthTables } from '../helpers/db';
 // the constraint. So the admin client is what PRESERVES these claims rather than
 // weakening them. The policies' own behaviour is proved separately, under the role,
 // in the *-rls suites this header already points at.
+//
+// ⚠️ AND SO DO THIS FILE'S READS (MOTIR-2881). MOTIR-2751 migrated the WRITES and
+// left the assertion-side READS on the `@/lib/db` singleton — which under the role
+// is `motir_app`, binds no workspace GUC, and returns NOTHING. A refused write says
+// so (`42501`); a refused read just returns `null` / `[]` / `0` / `false`, so ten
+// assertions here went red and the ones expecting emptiness (`findByNameLower('web')`
+// → null, `existsFor` → false) passed for the wrong reason. `readAsOwner` routes them
+// through the SAME owner client the writes use, keeping RLS inert as the header says.
+//
+// One claim did NOT survive that move and is recorded rather than quietly dropped:
+// two reads here were written to exercise the repositories' `tx ?? db` FALLBACK arm
+// ("both client paths (bare `db` + in-`tx`)"). Under the role that arm no longer
+// returns rows to assert on — deliberately, since a read nobody bound cannot see the
+// tenant — so those sites now pass a tx like every other read. The arm itself is a
+// per-role subject and belongs to `tests/rls/tx-fallback-arm.test.ts` (MOTIR-2815),
+// which asserts rows under the owner and EMPTY under `motir_app`; it is not something
+// a contract test can carry once the suite's only connection is the restricted role.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -58,6 +75,16 @@ async function makeOrganisationFixture(): Promise<OrganisationFixture> {
   const fx = await makeWorkItemFixture();
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Organised task' });
   return { fx, issue };
+}
+
+/**
+ * Run a repository READ through the OWNER client, exactly as this file's writes run.
+ * The repository method under test is still what is exercised — only the connection
+ * changes, so RLS stays inert (see the header) and an empty answer is the query's own
+ * scoping rather than a policy.
+ */
+function readAsOwner<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return adminDb.$transaction(fn);
 }
 
 /** Find-or-create a label + attach it to an issue through the required-`tx` write path. */
@@ -222,15 +249,21 @@ describe('labelRepository + workItemLabelRepository', () => {
       );
     }
 
-    const hits = await labelRepository.searchByPrefix(c.fx.projectId, 'PERF');
+    const hits = await readAsOwner((tx) =>
+      labelRepository.searchByPrefix(c.fx.projectId, 'PERF', undefined, tx),
+    );
     expect(hits.map((l) => l.name)).toEqual(['Perf-Q3', 'perf-q4', 'performance']);
 
-    const bounded = await labelRepository.searchByPrefix(c.fx.projectId, 'perf', 2);
+    const bounded = await readAsOwner((tx) =>
+      labelRepository.searchByPrefix(c.fx.projectId, 'perf', 2, tx),
+    );
     expect(bounded).toHaveLength(2);
 
     // Empty prefix = "open the picker before typing": the first `take`
     // existing labels, name-ordered — bounded, never a semantic error.
-    const all = await labelRepository.searchByPrefix(c.fx.projectId, '', 3);
+    const all = await readAsOwner((tx) =>
+      labelRepository.searchByPrefix(c.fx.projectId, '', 3, tx),
+    );
     expect(all.map((l) => l.nameLower)).toEqual(['backend', 'perf-q3', 'perf-q4']);
   });
 
@@ -249,14 +282,16 @@ describe('labelRepository + workItemLabelRepository', () => {
       expect(await labelRepository.lockById('missing-label-id', tx)).toBeNull();
     });
 
-    const labels = await labelRepository.listByWorkItem(c.issue.id);
+    const labels = await readAsOwner((tx) => labelRepository.listByWorkItem(c.issue.id, tx));
     expect(labels.map((l) => l.name)).toEqual(['infra']);
-    const joins = await workItemLabelRepository.listByWorkItem(c.issue.id);
+    const joins = await readAsOwner((tx) => workItemLabelRepository.listByWorkItem(c.issue.id, tx));
     expect(joins).toHaveLength(1);
 
-    // Both client paths of the optional-`tx` reads (the bare-`db` half of
-    // findByNameLower, the in-`tx` half of the two list reads).
-    const bare = await labelRepository.findByNameLower(c.fx.projectId, 'infra');
+    // `findByNameLower` on the owner client — this used to be the file's bare-`db`
+    // half; see the header for why the fallback arm is no longer asserted here.
+    const bare = await readAsOwner((tx) =>
+      labelRepository.findByNameLower(c.fx.projectId, 'infra', tx),
+    );
     expect(bare?.id).toBe(labelId);
     await adminDb.$transaction(async (tx) => {
       expect(await labelRepository.listByWorkItem(c.issue.id, tx)).toHaveLength(1);
@@ -317,9 +352,13 @@ describe('componentRepository + workItemComponentRepository', () => {
       ),
     ).rejects.toMatchObject({ code: 'P2002' });
 
-    const probe = await componentRepository.findByNameLower(c.fx.projectId, 'api');
+    const probe = await readAsOwner((tx) =>
+      componentRepository.findByNameLower(c.fx.projectId, 'api', tx),
+    );
     expect(probe?.id).toBe(id);
-    expect(await componentRepository.findByNameLower(c.fx.projectId, 'web')).toBeNull();
+    expect(
+      await readAsOwner((tx) => componentRepository.findByNameLower(c.fx.projectId, 'web', tx)),
+    ).toBeNull();
 
     const updated = await adminDb.$transaction(async (tx) =>
       componentRepository.update(id, { description: 'The API surface' }, tx),
@@ -327,7 +366,7 @@ describe('componentRepository + workItemComponentRepository', () => {
     expect(updated.description).toBe('The API surface');
 
     await adminDb.$transaction(async (tx) => componentRepository.delete(id, tx));
-    expect(await componentRepository.findById(id)).toBeNull();
+    expect(await readAsOwner((tx) => componentRepository.findById(id, tx))).toBeNull();
   });
 
   it('listByProject is name-ordered with in-use counts; listByWorkItem rides the issue', async () => {
@@ -344,15 +383,17 @@ describe('componentRepository + workItemComponentRepository', () => {
       ),
     );
 
-    const list = await componentRepository.listByProject(c.fx.projectId);
+    const list = await readAsOwner((tx) => componentRepository.listByProject(c.fx.projectId, tx));
     expect(list.map((x) => [x.name, x._count.workItems])).toEqual([
       ['API', 1],
       ['Web', 1],
     ]);
 
-    const mine = await componentRepository.listByWorkItem(c.issue.id);
+    const mine = await readAsOwner((tx) => componentRepository.listByWorkItem(c.issue.id, tx));
     expect(mine.map((x) => x.name)).toEqual(['API', 'Web']);
-    expect(await workItemComponentRepository.countByComponent(apiId)).toBe(1);
+    expect(await readAsOwner((tx) => workItemComponentRepository.countByComponent(apiId, tx))).toBe(
+      1,
+    );
   });
 
   it('findFirstDefaultAssignee picks the first-alphabetical component HAVING a default; empty input guards to null', async () => {
@@ -365,13 +406,19 @@ describe('componentRepository + workItemComponentRepository', () => {
     const mobileId = await addComponent(c, 'Mobile', { defaultAssigneeId: odie.id });
     const webId = await addComponent(c, 'Web', { defaultAssigneeId: bo.id });
 
-    const winner = await componentRepository.findFirstDefaultAssignee([apiId, webId, mobileId]);
+    const winner = await readAsOwner((tx) =>
+      componentRepository.findFirstDefaultAssignee([apiId, webId, mobileId], tx),
+    );
     expect(winner?.id).toBe(mobileId);
     expect(winner?.defaultAssigneeId).toBe(odie.id);
 
-    expect(await componentRepository.findFirstDefaultAssignee([apiId])).toBeNull();
+    expect(
+      await readAsOwner((tx) => componentRepository.findFirstDefaultAssignee([apiId], tx)),
+    ).toBeNull();
     // Empty-input guard (coverage gate): no statement, null.
-    expect(await componentRepository.findFirstDefaultAssignee([])).toBeNull();
+    expect(
+      await readAsOwner((tx) => componentRepository.findFirstDefaultAssignee([], tx)),
+    ).toBeNull();
   });
 
   it('RESTRICT backstop: a component with join rows cannot be deleted until the joins go', async () => {
@@ -390,7 +437,7 @@ describe('componentRepository + workItemComponentRepository', () => {
       expect(await workItemComponentRepository.deleteByComponent(id, tx)).toBe(1);
       await componentRepository.delete(id, tx); // now clean
     });
-    expect(await componentRepository.findById(id)).toBeNull();
+    expect(await readAsOwner((tx) => componentRepository.findById(id, tx))).toBeNull();
     await adminDb.$transaction(async (tx) => {
       expect(await componentRepository.lockById('missing-component-id', tx)).toBeNull();
     });
@@ -420,14 +467,21 @@ describe('componentRepository + workItemComponentRepository', () => {
       expect(await workItemComponentRepository.deleteByComponent(fromId, tx)).toBe(1);
     });
 
-    expect(await workItemComponentRepository.countByComponent(toId)).toBe(2);
-    expect(await workItemComponentRepository.countByComponent(fromId)).toBe(0);
+    expect(await readAsOwner((tx) => workItemComponentRepository.countByComponent(toId, tx))).toBe(
+      2,
+    );
+    expect(
+      await readAsOwner((tx) => workItemComponentRepository.countByComponent(fromId, tx)),
+    ).toBe(0);
     // Issues untouched either way (the verified rule).
     const workItemCount = await adminDb.workItem.count({ where: { projectId: c.fx.projectId } });
     expect(workItemCount).toBe(2);
 
-    // The set-diff reads, on both client paths (bare `db` + in-`tx`).
-    const joins = await workItemComponentRepository.listByWorkItem(issue2.id);
+    // The set-diff reads. Both call sites now pass a tx — see the header for why the
+    // bare-`db` half stopped being assertable here.
+    const joins = await readAsOwner((tx) =>
+      workItemComponentRepository.listByWorkItem(issue2.id, tx),
+    );
     expect(joins.map((j) => j.componentId)).toEqual([toId]);
     await adminDb.$transaction(async (tx) => {
       expect(await workItemComponentRepository.listByWorkItem(c.issue.id, tx)).toHaveLength(1);
@@ -478,11 +532,11 @@ describe('componentRepository + workItemComponentRepository', () => {
 
     // Issue delete cascades the join (RESTRICT is only on the component side).
     await adminDb.workItem.delete({ where: { id: c.issue.id } });
-    expect(await workItemComponentRepository.countByComponent(id)).toBe(0);
+    expect(await readAsOwner((tx) => workItemComponentRepository.countByComponent(id, tx))).toBe(0);
 
     // Deleting the default assignee clears the pointer, never blocks.
     await adminDb.user.delete({ where: { id: user.id } });
-    const after = await componentRepository.findById(id);
+    const after = await readAsOwner((tx) => componentRepository.findById(id, tx));
     expect(after).not.toBeNull();
     expect(after?.defaultAssigneeId).toBeNull();
   });
@@ -499,8 +553,10 @@ describe('watcherRepository', () => {
     );
     expect(again.id).toBe(first.id); // upsert no-op, same row
 
-    expect(await watcherRepository.existsFor(c.issue.id, c.fx.ownerId)).toBe(true);
-    expect(await watcherRepository.countByWorkItem(c.issue.id)).toBe(1);
+    expect(
+      await readAsOwner((tx) => watcherRepository.existsFor(c.issue.id, c.fx.ownerId, tx)),
+    ).toBe(true);
+    expect(await readAsOwner((tx) => watcherRepository.countByWorkItem(c.issue.id, tx))).toBe(1);
   });
 
   it('remove is an idempotent count; existsFor turns false', async () => {
@@ -517,7 +573,9 @@ describe('watcherRepository', () => {
         watcherRepository.remove(c.issue.id, c.fx.ownerId, tx),
       ),
     ).toBe(0);
-    expect(await watcherRepository.existsFor(c.issue.id, c.fx.ownerId)).toBe(false);
+    expect(
+      await readAsOwner((tx) => watcherRepository.existsFor(c.issue.id, c.fx.ownerId, tx)),
+    ).toBe(false);
   });
 
   it('listByWorkItem pages with a cursor (stable order, user riding along, no skip/repeat at the boundary)', async () => {
@@ -528,22 +586,22 @@ describe('watcherRepository', () => {
       await adminDb.$transaction(async (tx) => watcherRepository.add(c.issue.id, u.id, tx));
     }
 
-    const page1 = await watcherRepository.listByWorkItem(c.issue.id, { take: 2 });
+    const page1 = await readAsOwner((tx) =>
+      watcherRepository.listByWorkItem(c.issue.id, { take: 2 }, tx),
+    );
     expect(page1).toHaveLength(2);
     expect(page1[0]!.user.name).toBeTruthy(); // the popover's Avatar · name shape
 
-    const page2 = await watcherRepository.listByWorkItem(c.issue.id, {
-      take: 2,
-      cursor: page1[1]!.id,
-    });
-    const page3 = await watcherRepository.listByWorkItem(c.issue.id, {
-      take: 2,
-      cursor: page2[1]!.id,
-    });
+    const page2 = await readAsOwner((tx) =>
+      watcherRepository.listByWorkItem(c.issue.id, { take: 2, cursor: page1[1]!.id }, tx),
+    );
+    const page3 = await readAsOwner((tx) =>
+      watcherRepository.listByWorkItem(c.issue.id, { take: 2, cursor: page2[1]!.id }, tx),
+    );
     const seen = [...page1, ...page2, ...page3].map((w) => w.userId);
     expect(seen).toHaveLength(5);
     expect(new Set(seen).size).toBe(5); // every watcher exactly once
-    expect(await watcherRepository.countByWorkItem(c.issue.id)).toBe(5);
+    expect(await readAsOwner((tx) => watcherRepository.countByWorkItem(c.issue.id, tx))).toBe(5);
   });
 
   it('cascades both sides: an issue delete sheds its watchers; a user delete stops their watching', async () => {
@@ -555,7 +613,7 @@ describe('watcherRepository', () => {
     });
 
     await adminDb.user.delete({ where: { id: user.id } });
-    expect(await watcherRepository.countByWorkItem(c.issue.id)).toBe(1);
+    expect(await readAsOwner((tx) => watcherRepository.countByWorkItem(c.issue.id, tx))).toBe(1);
 
     await adminDb.workItem.delete({ where: { id: c.issue.id } });
     const watcherCount = await adminDb.watcher.count();

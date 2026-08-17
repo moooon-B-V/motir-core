@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { importedIssueRepository } from '@/lib/repositories/importedIssueRepository';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
@@ -11,16 +12,23 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // (MOTIR-939): importRepository + importedIssueRepository. Real Postgres (no
 // mocks), per CLAUDE.md. These assert the repository CONTRACT — the single-op
 // create/update reads/writes, the required-`tx` on writes (exercised inside a
-// real `db.$transaction`), the idempotency lookup + upsert, the DB-level UNIQUE
-// that makes a re-import a no-op/update (not a duplicate), the FOR UPDATE lock,
-// and the onDelete semantics the schema declares (work_item CASCADE, import
-// SET NULL). The mapping/persist ENGINE behaviour (dry-run, create-vs-update,
-// P2002 translation) is MOTIR-941's suite; here we prove the leaves.
+// real transaction), the idempotency lookup + upsert, the DB-level UNIQUE that
+// makes a re-import a no-op/update (not a duplicate), the FOR UPDATE lock, and
+// the onDelete semantics the schema declares (work_item CASCADE, import SET
+// NULL). The mapping/persist ENGINE behaviour (dry-run, create-vs-update, P2002
+// translation) is MOTIR-941's suite; here we prove the leaves.
+//
+// ⚠️ The write transactions run on `adminDb` — the OWNER (MOTIR-2871). What is
+// under test here is the repository CONTRACT and the migration-built
+// CONSTRAINTS, with RLS deliberately inert: a UNIQUE-violation or an onDelete
+// assertion proves nothing if a POLICY is what hid the row. The bound READS
+// stay on the singleton via `withWorkspaceServiceContext`, which is where the
+// policies do belong.
 
 async function truncateAll(): Promise<void> {
   // imported_issue / import FK work_item + workspace (CASCADE), so the work_item
   // + workspace truncates carry them; mirror the sprints/work-item repo tests.
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -30,6 +38,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Insert an import RUN row through the repository's required-`tx` create. */
@@ -40,7 +49,7 @@ async function makeImport(
     sourceRef: string;
   }> = {},
 ): Promise<string> {
-  const row = await db.$transaction((tx) =>
+  const row = await adminDb.$transaction((tx) =>
     importRepository.create(
       {
         workspaceId: fx.workspaceId,
@@ -58,7 +67,7 @@ async function makeImport(
 describe('importRepository', () => {
   it('create inserts a run with schema defaults (draft, zero counts) and findById reads it back', async () => {
     const fx = await makeWorkItemFixture();
-    const created = await db.$transaction((tx) =>
+    const created = await adminDb.$transaction((tx) =>
       importRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -90,7 +99,7 @@ describe('importRepository', () => {
     const fx = await makeWorkItemFixture();
     const id = await makeImport(fx);
 
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       importRepository.update(
         id,
         {
@@ -116,7 +125,7 @@ describe('importRepository', () => {
     const id = await makeImport(fx);
 
     // Deleting the user must not destroy the import run — createdBy SET NULL.
-    await db.user.delete({ where: { id: fx.ownerId } });
+    await adminDb.user.delete({ where: { id: fx.ownerId } });
 
     const read = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importRepository.findById(id, tx),
@@ -137,7 +146,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     const importId = await makeImport(fx);
     const workItemId = await seedWorkItem(fx);
 
-    const mapped = await db.$transaction((tx) =>
+    const mapped = await adminDb.$transaction((tx) =>
       importedIssueRepository.upsert(
         {
           workspaceId: fx.workspaceId,
@@ -171,7 +180,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     const firstImport = await makeImport(fx);
     const workItemId = await seedWorkItem(fx);
 
-    const first = await db.$transaction((tx) =>
+    const first = await adminDb.$transaction((tx) =>
       importedIssueRepository.upsert(
         {
           workspaceId: fx.workspaceId,
@@ -188,7 +197,7 @@ describe('importedIssueRepository — the idempotency map', () => {
 
     // Re-run: same identity, a NEW import run + a changed source hash.
     const secondImport = await makeImport(fx);
-    const second = await db.$transaction((tx) =>
+    const second = await adminDb.$transaction((tx) =>
       importedIssueRepository.upsert(
         {
           workspaceId: fx.workspaceId,
@@ -207,7 +216,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     expect(second.sourceHash).toBe('v2');
     expect(second.importId).toBe(secondImport);
 
-    const count = await db.importedIssue.count({
+    const count = await adminDb.importedIssue.count({
       where: { projectId: fx.projectId, source: 'jira', externalId: 'ACME-1' },
     });
     expect(count).toBe(1);
@@ -217,7 +226,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     const fx = await makeWorkItemFixture();
     const workItemId = await seedWorkItem(fx);
 
-    await db.importedIssue.create({
+    await adminDb.importedIssue.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -231,7 +240,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     // rejected by the unique index — proving the guarantee is at the DB, not
     // only in the application upsert. Prisma surfaces it as P2002.
     await expect(
-      db.importedIssue.create({
+      adminDb.importedIssue.create({
         data: {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
@@ -244,7 +253,7 @@ describe('importedIssueRepository — the idempotency map', () => {
 
     // Same externalId under a DIFFERENT source is a distinct identity → allowed.
     await expect(
-      db.importedIssue.create({
+      adminDb.importedIssue.create({
         data: {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
@@ -263,12 +272,12 @@ describe('importedIssueRepository — the idempotency map', () => {
     // Absent row → no throw (a first-time import; the unique + P2002 catch
     // converge concurrent first inserts).
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         importedIssueRepository.lockBySourceId(fx.projectId, 'csv', 'row-1', tx),
       ),
     ).resolves.toBeUndefined();
 
-    await db.importedIssue.create({
+    await adminDb.importedIssue.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -279,7 +288,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     });
 
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         importedIssueRepository.lockBySourceId(fx.projectId, 'csv', 'row-1', tx),
       ),
     ).resolves.toBeUndefined();
@@ -297,8 +306,12 @@ describe('importedIssueRepository — the idempotency map', () => {
     };
 
     const results = await Promise.allSettled([
-      db.$transaction((tx) => importedIssueRepository.upsert({ ...input, sourceHash: 'a' }, tx)),
-      db.$transaction((tx) => importedIssueRepository.upsert({ ...input, sourceHash: 'b' }, tx)),
+      adminDb.$transaction((tx) =>
+        importedIssueRepository.upsert({ ...input, sourceHash: 'a' }, tx),
+      ),
+      adminDb.$transaction((tx) =>
+        importedIssueRepository.upsert({ ...input, sourceHash: 'b' }, tx),
+      ),
     ]);
 
     // At least one must succeed; a loser may hit the unique race (P2002) — an
@@ -308,7 +321,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     for (const r of results) {
       if (r.status === 'rejected') expect(r.reason).toMatchObject({ code: 'P2002' });
     }
-    const count = await db.importedIssue.count({
+    const count = await adminDb.importedIssue.count({
       where: { projectId: fx.projectId, source: 'github', externalId: 'acme/repo#42' },
     });
     expect(count).toBe(1);
@@ -317,7 +330,7 @@ describe('importedIssueRepository — the idempotency map', () => {
   it('deleting the work item CASCADES its mapping row away (so a re-import re-creates it)', async () => {
     const fx = await makeWorkItemFixture();
     const workItemId = await seedWorkItem(fx);
-    await db.importedIssue.create({
+    await adminDb.importedIssue.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -327,7 +340,7 @@ describe('importedIssueRepository — the idempotency map', () => {
       },
     });
 
-    await db.workItem.delete({ where: { id: workItemId } });
+    await adminDb.workItem.delete({ where: { id: workItemId } });
 
     const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-5', tx),
@@ -339,7 +352,7 @@ describe('importedIssueRepository — the idempotency map', () => {
     const fx = await makeWorkItemFixture();
     const importId = await makeImport(fx);
     const workItemId = await seedWorkItem(fx);
-    await db.importedIssue.create({
+    await adminDb.importedIssue.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -350,7 +363,7 @@ describe('importedIssueRepository — the idempotency map', () => {
       },
     });
 
-    await db.import.delete({ where: { id: importId } });
+    await adminDb.import.delete({ where: { id: importId } });
 
     const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-6', tx),

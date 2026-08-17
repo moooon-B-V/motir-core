@@ -1,9 +1,14 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { workItemRepository, type HomeWorkItemRow } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type HomeProjectScope,
+  type HomeWorkItemRow,
+} from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
 import { decodeHomeCursor, encodeHomeCursor } from '@/lib/home/cursor';
 import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
@@ -39,7 +44,8 @@ function clampLimit(limit: number | undefined): number {
 }
 
 /**
- * The ids of the projects the actor may BROWSE in this workspace.
+ * The projects the actor may BROWSE in this workspace, each paired with ITS OWN
+ * done-category status keys — the two axes Home's reads scope on.
  *
  * ⚠️ This is the load-bearing line of the whole card, and it is resolved through
  * the shipped `projectAccessService` rather than left to RLS. RLS is
@@ -49,17 +55,40 @@ function clampLimit(limit: number | undefined): number {
  * NONE, so a stranger's read is empty rather than an error — the no-existence-
  * leak convention every other project gate follows.
  *
- * The result is passed INTO the query as `projectIds`, never applied to its
+ * The result is passed INTO the query as `projectScopes`, never applied to its
  * output. Filtering after the read would shorten pages instead of failing, and
  * "the list sometimes ends early" is a bug nobody traces back to an access rule.
+ * The lifecycle half rides the same rule, for the same reason.
  */
-async function browsableProjectIds(
+async function browsableProjectScopes(
   ctx: AccessActorContext,
   tx: Prisma.TransactionClient,
-): Promise<string[]> {
+): Promise<HomeProjectScope[]> {
   const projects = await projectRepository.findByWorkspace(ctx.workspaceId, tx);
   const browsable = await projectAccessService.filterBrowsable(projects, ctx, tx);
-  return browsable.map((project) => project.id);
+  const projectIds = browsable.map((project) => project.id);
+  // The LIFECYCLE axis, resolved beside the access one and passed into the query
+  // with it (MOTIR-2758). One batched read for every project — the same resolver
+  // `workItemsService.isReady`, `sprintsService` and `planValidityService`
+  // already ask "is this terminal, in ITS OWN project" with.
+  //
+  // ⚠️ Threaded `tx`, not a second context. `workflow_status` is RLS-gated on
+  // `app.workspace_id` (`…_add_workflow_status_and_transition_rls`), and that GUC
+  // is bound by the `withWorkspaceContext` transaction the caller is already
+  // inside. Read on any other connection under the non-bypass `motir_app` role
+  // and the answer is NOTHING — an empty done-key set, an exclusion that
+  // silently no-ops in production, and a test suite that stays green because it
+  // connects as the owner.
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    projectIds,
+    ctx.workspaceId,
+    tx,
+  );
+  return projectIds.map((projectId) => ({
+    projectId,
+    /* istanbul ignore next -- defensive: the resolver seeds an entry for every requested project id, so the `?? []` arm is unreachable */
+    doneStatusKeys: [...(terminalByProject.get(projectId) ?? [])],
+  }));
 }
 
 /**
@@ -100,11 +129,11 @@ export const homeService = {
     const limit = clampLimit(options.limit);
     const cursor = decodeHomeCursor(options.cursor);
     const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const projectIds = await browsableProjectIds(ctx, tx);
+      const projectScopes = await browsableProjectScopes(ctx, tx);
       return workItemRepository.findByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
-        { projectIds, take: limit + 1, cursor },
+        { projectScopes, take: limit + 1, cursor },
         tx,
       );
     });
@@ -122,15 +151,15 @@ export const homeService = {
    */
   async tabCounts(ctx: AccessActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const projectIds = await browsableProjectIds(ctx, tx);
+      const projectScopes = await browsableProjectScopes(ctx, tx);
       const [myWork, watching] = await Promise.all([
         workItemRepository.countByAssigneeOrReporterInWorkspace(
           ctx.userId,
           ctx.workspaceId,
-          projectIds,
+          projectScopes,
           tx,
         ),
-        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectIds, tx),
+        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
       ]);
       return { myWork, watching };
     });
@@ -149,11 +178,11 @@ export const homeService = {
     const limit = clampLimit(options.limit);
     const cursor = decodeHomeCursor(options.cursor);
     const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const projectIds = await browsableProjectIds(ctx, tx);
+      const projectScopes = await browsableProjectScopes(ctx, tx);
       return watcherRepository.listByUser(
         ctx.userId,
         ctx.workspaceId,
-        { projectIds, take: limit + 1, cursor },
+        { projectScopes, take: limit + 1, cursor },
         tx,
       );
     });

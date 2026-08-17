@@ -11,6 +11,7 @@ import {
 import { decodeRankedCursor, encodeRankedCursor } from '@/lib/projectSquare/rankCursor';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.13 · Subtask 6.13.4 — the PROJECT SQUARE ranking: trending (recent
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Make `fx`'s project `public` directly (no go-public stamp), optionally pinning timestamps. */
@@ -33,7 +35,7 @@ async function makePublic(
   projectId: string,
   pins: { madePublicAt?: Date | null; createdAt?: Date } = {},
 ): Promise<void> {
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: projectId },
     data: {
       accessLevel: 'public',
@@ -52,7 +54,7 @@ async function addVotesAt(
   const request = await createTestWorkItem(fx, { kind: 'task', title: 'a public request' });
   for (let i = 0; i < count; i++) {
     const voter = await createTestUser();
-    await db.publicRequestVote.create({
+    await adminDb.publicRequestVote.create({
       data: { workItemId: request.id, userId: voter.id, createdAt: at },
     });
   }
@@ -173,7 +175,9 @@ describe('projectRepository.listPublicDirectoryRanked — keyset determinism', (
 describe('projectMembersService.setAccessLevel — madePublicAt stamp', () => {
   it('stamps madePublicAt on the transition INTO public and keeps it on re-save', async () => {
     const fx = await makeWorkItemFixture({ name: 'Pub', identifier: 'PUB' });
-    expect((await db.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt).toBeNull();
+    expect(
+      (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt,
+    ).toBeNull();
 
     await projectMembersService.setAccessLevel({
       key: fx.projectIdentifier,
@@ -181,7 +185,7 @@ describe('projectMembersService.setAccessLevel — madePublicAt stamp', () => {
       ctx: fx.ctx,
       level: 'public',
     });
-    const first = (await db.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt;
+    const first = (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt;
     expect(first).not.toBeNull();
 
     // Re-saving an already-public project keeps the original go-public moment.
@@ -191,7 +195,8 @@ describe('projectMembersService.setAccessLevel — madePublicAt stamp', () => {
       ctx: fx.ctx,
       level: 'public',
     });
-    const second = (await db.project.findUnique({ where: { id: fx.projectId } }))!.madePublicAt;
+    const second = (await adminDb.project.findUnique({ where: { id: fx.projectId } }))!
+      .madePublicAt;
     expect(second!.getTime()).toBe(first!.getTime());
 
     // The freshly-public project shows up in the Recent rank.

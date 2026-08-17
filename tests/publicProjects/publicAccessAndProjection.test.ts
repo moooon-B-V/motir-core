@@ -126,6 +126,47 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     });
   });
 
+  // The SITEMAP read (6.12.4) — the one public read with no HTTP gate in front of
+  // it and, until MOTIR-2833, no test at all. It went unnoticed because it is the
+  // only public read whose caller is a framework boundary (`app/sitemap.ts`)
+  // rather than a route, so no route test reached it either.
+  //
+  // Its `public` verdict in `tests/rls/singleton-read-guard.test.ts` rests on this
+  // case: `project_public_read` is an UNGATED `"accessLevel" = 'public'` arm, so
+  // an unbound cross-tenant list is admitted — which is exactly what a sitemap
+  // needs and exactly what nothing had watched happen.
+  it('listPublicForSitemap lists every PUBLIC project CROSS-TENANT and excludes non-public + archived', async () => {
+    const a = await makePublicProjectFixture('Sitemap Org A');
+    const b = await makeWorkItemFixture({ name: 'Sitemap Org B', identifier: 'SMB' });
+    await adminDb.project.update({
+      where: { id: b.projectId },
+      data: { accessLevel: 'public' },
+    });
+    // A third public project, ARCHIVED — the read filters `archivedAt: null`.
+    const archived = await makeWorkItemFixture({ name: 'Sitemap Org C', identifier: 'SMC' });
+    await adminDb.project.update({
+      where: { id: archived.projectId },
+      data: { accessLevel: 'public', archivedAt: new Date() },
+    });
+    // And a NON-public one, which must never be crawlable.
+    const priv = await makeWorkItemFixture({ name: 'Sitemap Private', identifier: 'SMP' });
+
+    const rows = await publicProjectsService.listPublicForSitemap();
+    const identifiers = rows.map((r) => r.identifier);
+
+    // Two DIFFERENT tenants in one unbound list — the cross-tenant property the
+    // sitemap depends on, and the one a workspace-scoped read cannot provide.
+    expect(identifiers).toContain(a.projectIdentifier);
+    expect(identifiers).toContain(b.projectIdentifier);
+    expect(identifiers).not.toContain(archived.projectIdentifier);
+    expect(identifiers).not.toContain(priv.projectIdentifier);
+    // Every row carries what the sitemap actually writes out.
+    for (const row of rows) {
+      expect(typeof row.identifier).toBe('string');
+      expect(row.updatedAt).toBeInstanceOf(Date);
+    }
+  });
+
   it('a NON-public project reads as 404 through every public read (the cross-org exception is public-only)', async () => {
     const fx = await makeWorkItemFixture({ name: 'Private Co' }); // default access — NOT public
     const crossOrg = await createTestUser();

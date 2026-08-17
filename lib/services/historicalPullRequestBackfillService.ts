@@ -6,7 +6,7 @@ import {
 } from '@/lib/github/historicalPullRequests';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { resolveChangeRequestWorkItem } from './changeRequestStatusSync';
 
 // Historical pull-request MIRROR backfill (MOTIR-1965) — the service behind
@@ -204,7 +204,20 @@ async function sweepRepo(
       //     rehearsed — while a per-PR one is four queries.
       // It is also the finer resumability boundary: every PR that lands, stays.
       for (const pr of page.merged) {
-        await withSystemContext((tx) => applyOne(tx, repo, pr, dryRun, report));
+        await withSystemContext(async (tx) => {
+          // ⚠️ BIND THE TENANT FIRST (MOTIR-2880). `github_pull_request` reads on
+          // the system flag, so the lock / read / upsert in `applyOne` were fine —
+          // but its `resolveChangeRequestWorkItem` reads `work_item`, which has no
+          // such arm, so under `motir_app` EVERY historical PR resolved to
+          // `unresolvable` and the whole backfill mirrored a null link. Silent: an
+          // unresolvable PR is a legitimate outcome the report counts.
+          //
+          // The repo row carries the tenancy (MOTIR-1931), and it is already
+          // resolved here — the loop is inside the per-repo pass — so there is
+          // nothing to discover and the bind goes at the top of the block.
+          await bindWorkspaceContext(tx, repo.workspaceId);
+          return applyOne(tx, repo, pr, dryRun, report);
+        });
       }
     }
   } catch (err) {

@@ -4,6 +4,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { historicalPullRequestBackfillService } from '@/lib/services/historicalPullRequestBackfillService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The historical-PR mirror backfill against real Postgres (MOTIR-1965) — the
@@ -31,7 +32,7 @@ const REPO_PROVIDER_ID = '9001';
 let fetchMock: ReturnType<typeof vi.fn>;
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "github_pull_request", "github_repo", "github_installation", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -50,13 +51,14 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A workspace + project + a connected GitHub repo, mirrored exactly as
  *  `githubInstallationService.persistInstallation` writes them. */
 async function makeConnectedRepo(): Promise<{ fx: WorkItemFixture; repoId: string }> {
   const fx = await makeWorkItemFixture();
-  const inst = await db.githubInstallation.create({
+  const inst = await adminDb.githubInstallation.create({
     data: {
       installationId: INSTALLATION_ID,
       workspaceId: fx.workspaceId,
@@ -65,7 +67,7 @@ async function makeConnectedRepo(): Promise<{ fx: WorkItemFixture; repoId: strin
       provider: 'github',
     },
   });
-  const repo = await db.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -140,7 +142,7 @@ const CONTENT_COLUMNS = {
 } as const;
 
 function readRow(repoId: string, number: number) {
-  return db.githubPullRequest.findUniqueOrThrow({
+  return adminDb.githubPullRequest.findUniqueOrThrow({
     where: { repoId_number: { repoId, number } },
     select: CONTENT_COLUMNS,
   });
@@ -190,7 +192,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     await expect(readRow(repoId, 4)).rejects.toThrow();
     // The whole point: with no row, the classifier still abstains on this item
     // rather than claiming a BYOK agent shipped it.
-    expect(await db.githubPullRequest.count()).toBe(0);
+    expect(await adminDb.githubPullRequest.count()).toBe(0);
   });
 
   it("walks past a FULL page onto the next, accumulating both pages' counts", async () => {
@@ -220,7 +222,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     // the only row written, and page 1's hundred abandoned PRs wrote none.
     expect(repo.written).toBe(1);
     expect(repo.resolved).toBe(1);
-    expect(await db.githubPullRequest.count()).toBe(1);
+    expect(await adminDb.githubPullRequest.count()).toBe(1);
     expect((await readRow(repoId, 101)).workItemId).toBe(item.id);
   });
 
@@ -243,7 +245,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     serveListing([ghPull(6, { headRef: `subtask/${item.identifier}` })]);
 
     await historicalPullRequestBackfillService.backfillMergedPullRequests(APPLY);
-    const first = await db.githubPullRequest.findUniqueOrThrow({
+    const first = await adminDb.githubPullRequest.findUniqueOrThrow({
       where: { repoId_number: { repoId, number: 6 } },
     });
 
@@ -251,7 +253,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
 
     expect(second.repos[0]!.written).toBe(0);
     expect(second.repos[0]!.unchanged).toBe(1);
-    const after = await db.githubPullRequest.findUniqueOrThrow({
+    const after = await adminDb.githubPullRequest.findUniqueOrThrow({
       where: { repoId_number: { repoId, number: 6 } },
     });
     // Not merely "the values are the same" — the row was never WRITTEN. A blind
@@ -263,7 +265,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     const { fx, repoId } = await makeConnectedRepo();
     const branchItem = await createTestWorkItem(fx, { kind: 'task', title: 'Named by branch' });
     const manualItem = await createTestWorkItem(fx, { kind: 'task', title: 'Linked by hand' });
-    await db.githubPullRequest.create({
+    await adminDb.githubPullRequest.create({
       data: {
         provider: 'github',
         repoId,
@@ -290,7 +292,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
 
     // A second tenant with its own connection, plus a GitLab project.
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
-    const otherInst = await db.githubInstallation.create({
+    const otherInst = await adminDb.githubInstallation.create({
       data: {
         installationId: 'inst-other',
         workspaceId: other.workspaceId,
@@ -299,7 +301,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
         provider: 'github',
       },
     });
-    await db.githubRepo.create({
+    await adminDb.githubRepo.create({
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
@@ -310,7 +312,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
         provider: 'github',
       },
     });
-    await db.githubRepo.create({
+    await adminDb.githubRepo.create({
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
@@ -346,7 +348,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     const { fx } = await makeConnectedRepo();
     await createTestWorkItem(fx, { kind: 'task', title: 'Anything' });
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
-    const otherInst = await db.githubInstallation.create({
+    const otherInst = await adminDb.githubInstallation.create({
       data: {
         installationId: 'inst-other',
         workspaceId: other.workspaceId,
@@ -355,7 +357,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
         provider: 'github',
       },
     });
-    await db.githubRepo.create({
+    await adminDb.githubRepo.create({
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
@@ -433,11 +435,11 @@ describe('composed with the provenance backfill', () => {
     const { fx } = await makeConnectedRepo();
     const recovered = await createTestWorkItem(fx, { kind: 'task', title: 'Pre-App merge' });
     const alreadyStamped = await createTestWorkItem(fx, { kind: 'task', title: 'Already stamped' });
-    await db.workItem.updateMany({
+    await adminDb.workItem.updateMany({
       where: { id: { in: [recovered.id, alreadyStamped.id] } },
       data: { status: 'done', executor: 'coding_agent', type: 'code' },
     });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: alreadyStamped.id },
       data: { implementationSource: 'manual' },
     });
@@ -460,7 +462,7 @@ describe('composed with the provenance backfill', () => {
       dryRun: false,
     });
 
-    const rows = await db.workItem.findMany({
+    const rows = await adminDb.workItem.findMany({
       where: { id: { in: [recovered.id, alreadyStamped.id] } },
       select: {
         id: true,

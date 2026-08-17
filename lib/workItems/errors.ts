@@ -29,7 +29,8 @@ export type WorkItemErrorTag =
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
-  | 'ARCHIVED_TARGET_REPO';
+  | 'ARCHIVED_TARGET_REPO'
+  | 'MISSING_ARTIFACT_EVIDENCE';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -111,14 +112,25 @@ export class WorkItemKeyConflictError extends WorkItemError {
 }
 
 /**
- * A parent was specified that lives in a DIFFERENT project than the child
- * (Subtask 1.4.4). This is a service-layer pre-flight check — the work-item
- * tree is project-local, so a cross-project parent is structurally illegal.
- * Distinct from IllegalParentTypeError (the DB trigger's kind-matrix class):
- * a cross-project parent might still be a kind-legal pair, so it needs its
- * own typed error. There is no DB trigger backstop for THIS rule today (the
- * kind/depth/cycle triggers don't compare projectId), so this assertion is
- * the primary guard — kept friendly + explicit at the service edge.
+ * A parent was specified that lives in a DIFFERENT project — or, since
+ * MOTIR-2895, a different WORKSPACE — than the child (Subtask 1.4.4). The
+ * work-item tree is project-local, so a cross-project parent is structurally
+ * illegal. Distinct from IllegalParentTypeError (the DB trigger's kind-matrix
+ * class): a cross-project parent might still be a kind-legal pair, so it needs
+ * its own typed error.
+ *
+ * TWO layers now raise it, and deliberately the same class from both:
+ *   * `workItemsService`'s pre-flight check (create + both re-parent paths) —
+ *     the friendly, explicit guard, which is what users normally hit.
+ *   * `enforce_work_item_parent_tenancy()`, the DB trigger MOTIR-2895 added,
+ *     via `workItemRepository`'s 23514 translation of the
+ *     `WI_PARENT_CROSS_WORKSPACE` / `WI_PARENT_CROSS_PROJECT` markers. Until
+ *     then the database compared parent tenancy nowhere at all, which left the
+ *     kind/depth/cycle triggers' own parent lookups resting on this
+ *     service-layer check — the circularity that card exists to break.
+ * A caller must not have to learn a second vocabulary depending on which layer
+ * caught the same mistake, so the marker (not the class) carries which boundary
+ * was crossed, and it rides along in the message.
  */
 export class CrossProjectParentError extends WorkItemError {
   readonly tag = 'CROSS_PROJECT_PARENT' as const;
@@ -316,6 +328,34 @@ export class ArchivedTargetRepoError extends WorkItemError {
         "at a different repository in the project's set.",
     );
     this.name = 'ArchivedTargetRepoError';
+  }
+}
+
+/**
+ * A `type: 'deploy'` work item was moved into a `done`-category status while no
+ * comment on it records what got published (MOTIR-2709;
+ * `lib/workItems/artifactEvidence.ts` carries the rule and its evidence).
+ *
+ * A client error → 422. The message TEACHES rather than merely refusing: it
+ * names the three accepted forms and the declared exemption, so the person who
+ * hits it can satisfy it in one hop instead of guessing what "evidence" means.
+ * That matters more here than on most refusals — this is the one gate that fires
+ * at the moment somebody has decided they are finished.
+ */
+export class MissingArtifactEvidenceError extends WorkItemError {
+  readonly tag = 'MISSING_ARTIFACT_EVIDENCE' as const;
+  readonly code = 'MISSING_ARTIFACT_EVIDENCE' as const;
+  readonly statusKey: string;
+  constructor(statusKey: string) {
+    super(
+      `A "deploy" work item cannot reach "${statusKey}" until a comment on it records the ` +
+        'artifact it published — a version (1.4.0), a registry digest (sha256:…) or an ' +
+        'integrity hash (sha512-…). If this deliverable genuinely has no identifier (a DNS ' +
+        'cutover, a console toggle), say so in a comment beginning "NO ARTIFACT:" followed by ' +
+        'the reason.',
+    );
+    this.name = 'MissingArtifactEvidenceError';
+    this.statusKey = statusKey;
   }
 }
 

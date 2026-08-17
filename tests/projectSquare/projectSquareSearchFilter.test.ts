@@ -7,6 +7,7 @@ import {
 } from '@/lib/projectSquare/errors';
 import { encodeRankedCursor } from '@/lib/projectSquare/rankCursor';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.13 · Subtask 6.13.3 — the PROJECT SQUARE search + category/tag filter.
@@ -21,6 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -35,7 +37,7 @@ async function makeProject(opts: {
   overview?: string;
 }): Promise<string> {
   const fx = await makeWorkItemFixture({ identifier: opts.identifier });
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: fx.projectId },
     data: {
       name: opts.name,
@@ -48,12 +50,12 @@ async function makeProject(opts: {
 
 /** Assign a curated tag (by slug) to a project, materializing the shared tag row. */
 async function tagProject(projectId: string, slug: string, label: string): Promise<void> {
-  const tag = await db.projectTag.upsert({
+  const tag = await adminDb.projectTag.upsert({
     where: { slug },
     create: { slug, label },
     update: {},
   });
-  await db.projectTagAssignment.create({ data: { projectId, tagId: tag.id } });
+  await adminDb.projectTagAssignment.create({ data: { projectId, tagId: tag.id } });
 }
 
 /** The directory identifiers for a query, sorted so the assertion is rank-agnostic. */

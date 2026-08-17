@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -63,7 +64,7 @@ function useProject(fx: WorkItemFixture) {
 
 async function seedConnectedRepo(fx: WorkItemFixture) {
   const rand = randomToken(6);
-  const inst = await db.githubInstallation.create({
+  const inst = await adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
@@ -71,7 +72,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
       accountType: 'Organization',
     },
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -85,7 +86,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   await truncateJobRuns();
   await truncateAuthTables();
   sessionRef.current = null;
@@ -95,6 +96,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/onboarding/migrate — start', () => {

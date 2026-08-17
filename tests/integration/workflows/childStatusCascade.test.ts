@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -11,6 +12,7 @@ import {
   type WorkItemFixture,
 } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // `childStatusCascadeService.cascadeToChildren` — the DOWNWARD half of
 // bidirectional status derivation (Story MOTIR-1615 · Subtask MOTIR-1647). Real
@@ -40,14 +42,15 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function statusOf(id: string): Promise<string> {
-  return (await db.workItem.findUniqueOrThrow({ where: { id } })).status;
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
 /** A done story over children in the given statuses. */
@@ -72,16 +75,16 @@ describe('the cascade — a done parent completes its children', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
     expect(await statusOf(children[0]!.id)).toBe('done');
 
     // …and the ordinary user path still refuses that same move, so the cascade
     // did NOT buy its power by adding a user-draggable edge.
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
-    const userEdge = await db.workflowTransition.findFirst({
+    const userEdge = await adminDb.workflowTransition.findFirst({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('todo'),
@@ -99,7 +102,7 @@ describe('the cascade — a done parent completes its children', () => {
       'in_review',
     ]);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'cascaded' });
     expect((res as { childIds: string[] }).childIds).toHaveLength(3);
@@ -109,19 +112,19 @@ describe('the cascade — a done parent completes its children', () => {
   it('keeps the done invariants: a revision per child, and sessionBranch cleared', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['in_review']);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: children[0]!.id },
       data: { sessionBranch: 'motir/auto-1' },
     });
 
-    await childStatusCascadeService.cascadeToChildren(story.id);
+    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
-    const child = await db.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
+    const child = await adminDb.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
     expect(child.status).toBe('done');
     // The system set skips ONLY the legality check — every other invariant holds.
     expect(child.sessionBranch).toBeNull();
 
-    const revs = await db.workItemRevision.findMany({
+    const revs = await adminDb.workItemRevision.findMany({
       where: { workItemId: children[0]!.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -144,7 +147,7 @@ describe('the cascade — a done parent completes its children', () => {
     });
     await setStatus(story.id, 'todo');
 
-    await childStatusCascadeService.cascadeToChildren(epic.id);
+    await childStatusCascadeService.cascadeToChildren(epic.id, fx.workspaceId);
     expect(await statusOf(story.id)).toBe('done');
   });
 
@@ -161,7 +164,7 @@ describe('the cascade — a done parent completes its children', () => {
     });
     await setStatus(leaf.id, 'todo');
 
-    await childStatusCascadeService.cascadeToChildren(story.id);
+    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     expect(await statusOf(task.id)).toBe('done');
     // Untouched by THIS pass — it is reached by the event emitted for `task`.
@@ -171,13 +174,16 @@ describe('the cascade — a done parent completes its children', () => {
   });
 });
 
-describe('forward-only, gates, and no-ops', () => {
+// The cascade's trigger is unchanged by MOTIR-2888: it fires only on ENTRY into a
+// done-category status, never on exit. That is what keeps a parent which has just
+// come BACK to todo from force-closing the child that brought it there.
+describe('entry-triggered only, gates, and no-ops', () => {
   it('a NON-done transition is a clean no-op (the trigger is entry into done)', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
     await setStatus(story.id, 'in_progress');
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toEqual({
+    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
       outcome: 'not_done',
     });
     expect(await statusOf(children[0]!.id)).toBe('todo');
@@ -189,7 +195,9 @@ describe('forward-only, gates, and no-ops', () => {
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
     await setStatus(story.id, 'cancelled');
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toMatchObject({
+    expect(
+      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
+    ).toMatchObject({
       outcome: 'cascaded',
     });
     expect(await statusOf(children[0]!.id)).toBe('done');
@@ -199,7 +207,7 @@ describe('forward-only, gates, and no-ops', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['done', 'cancelled']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'no_open_children', itemId: story.id });
     // A cancelled child keeps the terminal status its team chose.
@@ -212,7 +220,7 @@ describe('forward-only, gates, and no-ops', () => {
     const leaf = await createTestWorkItem(fx, { kind: 'story', title: 'Leaf' });
     await setStatus(leaf.id, 'done');
 
-    expect(await childStatusCascadeService.cascadeToChildren(leaf.id)).toEqual({
+    expect(await childStatusCascadeService.cascadeToChildren(leaf.id, fx.workspaceId)).toEqual({
       outcome: 'no_open_children',
       itemId: leaf.id,
     });
@@ -221,12 +229,12 @@ describe('forward-only, gates, and no-ops', () => {
   it('the toggle OFF suppresses the cascade entirely', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoCompleteChildrenOnParentDone: false },
     });
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toEqual({
+    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
       outcome: 'toggle_off',
       itemId: story.id,
     });
@@ -236,12 +244,14 @@ describe('forward-only, gates, and no-ops', () => {
   it('the UPWARD toggle does not suppress the downward cascade', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { autoRollupParentStatus: false },
     });
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toMatchObject({
+    expect(
+      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
+    ).toMatchObject({
       outcome: 'cascaded',
     });
     expect(await statusOf(children[0]!.id)).toBe('done');
@@ -250,12 +260,12 @@ describe('forward-only, gates, and no-ops', () => {
   it('archived and triage children are left out of the cascade', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo', 'todo']);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: children[1]!.id },
       data: { archivedAt: new Date() },
     });
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     expect((res as { childIds: string[] }).childIds).toEqual([children[0]!.id]);
     // An archived child must not be resurrected into `done`.
@@ -263,8 +273,8 @@ describe('forward-only, gates, and no-ops', () => {
   });
 
   it('an unknown item id is a clean no-op', async () => {
-    await makeWorkItemFixture();
-    expect(await childStatusCascadeService.cascadeToChildren('nope')).toEqual({
+    const fx = await makeWorkItemFixture();
+    expect(await childStatusCascadeService.cascadeToChildren('nope', fx.workspaceId)).toEqual({
       outcome: 'unresolvable',
     });
   });
@@ -278,14 +288,16 @@ describe('the two directions cannot loop', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo', 'in_progress']);
 
-    await childStatusCascadeService.cascadeToChildren(story.id);
+    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
 
     for (const c of children) expect(await statusOf(c.id)).toBe('done');
     expect(await statusOf(story.id)).toBe('done');
 
     // Re-running the cascade is idempotent — no children left open, no events.
     sent.length = 0;
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toMatchObject({
+    expect(
+      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
+    ).toMatchObject({
       outcome: 'no_open_children',
     });
     expect(sent).toHaveLength(0);
@@ -302,7 +314,7 @@ describe('defensive error routing — the job must never fail behind a user tran
     const fx = await makeWorkItemFixture();
     const { story } = await doneStoryWithChildren(fx, ['todo']);
     vi.spyOn(workItemsService, 'applyStatusTransition').mockRejectedValue(err);
-    const res = await childStatusCascadeService.cascadeToChildren(story.id);
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
     vi.restoreAllMocks();
     return res;
   }
@@ -337,11 +349,48 @@ describe('defensive error routing — the job must never fail behind a user tran
     // statuses, which the workflow service protects.
     vi.spyOn(workflowsService, 'resolveStatusKey').mockResolvedValue(null);
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id)).toEqual({
+    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
       outcome: 'no_matching_status',
       itemId: story.id,
     });
     vi.restoreAllMocks();
     expect(await statusOf(children[0]!.id)).toBe('todo');
+  });
+});
+
+describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => {
+  // ⚠️ REPRODUCE-BEFORE-FIX — the exact mirror of the rollup's case, and the same
+  // one mechanism. Phase 1 used to open a `withSystemContext`, whose single GUC
+  // `app.system_admin` no `work_item` or `workspace_membership` policy reads, so
+  // under `motir_app` `findById(itemId)` returned NULL and EVERY cascade answered
+  // `{ outcome: 'unresolvable' }` — silently, because an RLS-denied SELECT returns
+  // fewer rows rather than raising.
+  //
+  // Unconditional for the reason `tests/app-role-bound-context-reads.test.ts`
+  // gives (CI does not set the flag): trivially green under the bypass role, red
+  // on `main` and green here under `TEST_DB_APP_ROLE=1`.
+
+  it('completes the children under the non-bypass role — the read is workspace-bound', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+
+    // On `main` under TEST_DB_APP_ROLE=1 this is `{ outcome: 'unresolvable' }`.
+    expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
+    expect(await statusOf(children[0]!.id)).toBe('done');
+  });
+
+  it('a FOREIGN workspaceId resolves nothing — the binding is real, not decorative', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ identifier: 'OTHR' });
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+
+    const res = await childStatusCascadeService.cascadeToChildren(story.id, other.workspaceId);
+
+    if (isAppRoleTestMode()) {
+      expect(res).toEqual({ outcome: 'unresolvable' });
+      expect(await statusOf(children[0]!.id)).toBe('todo');
+    }
   });
 });

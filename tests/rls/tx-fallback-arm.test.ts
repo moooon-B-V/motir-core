@@ -12,6 +12,15 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
+import { labelRepository } from '@/lib/repositories/labelRepository';
+import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';
+import { componentRepository } from '@/lib/repositories/componentRepository';
+import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
+import { watcherRepository } from '@/lib/repositories/watcherRepository';
+import { commentRepository } from '@/lib/repositories/commentRepository';
+import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';
+import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { customFieldValueRepository } from '@/lib/repositories/customFieldValueRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { codeGraphOffboardingRepository } from '@/lib/repositories/codeGraphOffboardingRepository';
@@ -703,5 +712,180 @@ describe('workItemRepository — all 68 fallback arms have a caller', () => {
         true,
       );
     }
+  });
+});
+
+// ── The arms MOTIR-2881 stranded ─────────────────────────────────────────────
+//
+// The third sweep, and the same consequence. MOTIR-2881 routed the ASSERTION-side
+// reads of twelve test files onto a client that can see the row — the owner for the
+// files whose subject is the repository contract with RLS deliberately inert, a bound
+// context for the rest — and in doing so removed the last unbound caller from eight
+// more repositories, all of them gated at the ≥90% branch floor. Their production
+// callers all thread a `tx` (MOTIR-2796 saw to that), so nothing else reaches the arm.
+//
+// The argument is unchanged from the two blocks above and is not repeated: the
+// fallback is what a repository does when nobody bound a transaction, the answer in
+// that state is EMPTY under `motir_app`, and that is the claim worth pinning.
+
+describe('the fallback arms MOTIR-2881 left without a caller', () => {
+  it('labelRepository + workItemLabelRepository — the picker, the ride-along, the name probe', async () => {
+    const { fx, itemId } = await seedItem('FC1');
+    const label = await adminDb.label.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Perf-Q3',
+        nameLower: 'perf-q3',
+      },
+    });
+    await adminDb.workItemLabel.create({ data: { workItemId: itemId, labelId: label.id } });
+
+    expectFallbackAnswer(await labelRepository.searchByPrefix(fx.projectId, 'perf'), 1);
+    expectFallbackAnswer(await labelRepository.listByWorkItem(itemId), 1);
+    expectFallbackAnswer(await workItemLabelRepository.listByWorkItem(itemId), 1);
+
+    const byName = await labelRepository.findByNameLower(fx.projectId, 'perf-q3');
+    if (isAppRoleTestMode()) expect(byName).toBeNull();
+    else expect(byName?.id).toBe(label.id);
+  });
+
+  it('componentRepository + workItemComponentRepository — the list, the join, the default assignee', async () => {
+    const { fx, itemId } = await seedItem('FC2');
+    const component = await adminDb.component.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'API',
+        nameLower: 'api',
+        defaultAssigneeId: fx.ownerId,
+      },
+    });
+    await adminDb.workItemComponent.create({
+      data: { workItemId: itemId, componentId: component.id },
+    });
+
+    expectFallbackAnswer(await componentRepository.listByProject(fx.projectId), 1);
+    expectFallbackAnswer(await componentRepository.listByWorkItem(itemId), 1);
+    expectFallbackAnswer(await workItemComponentRepository.listByWorkItem(itemId), 1);
+    expectFallbackCount(await workItemComponentRepository.countByComponent(component.id), 1);
+
+    const byId = await componentRepository.findById(component.id);
+    if (isAppRoleTestMode()) expect(byId).toBeNull();
+    else expect(byId?.id).toBe(component.id);
+
+    const byName = await componentRepository.findByNameLower(fx.projectId, 'api');
+    if (isAppRoleTestMode()) expect(byName).toBeNull();
+    else expect(byName?.id).toBe(component.id);
+
+    const defaulted = await componentRepository.findFirstDefaultAssignee([component.id]);
+    if (isAppRoleTestMode()) expect(defaulted).toBeNull();
+    else expect(defaulted?.defaultAssigneeId).toBe(fx.ownerId);
+  });
+
+  it('watcherRepository — the popover page, the count, and the membership probe', async () => {
+    // `createWorkItem` auto-watches the creator, so the row is already there —
+    // creating a second one trips the (work_item_id, user_id) unique.
+    const { fx, itemId } = await seedItem('FC3');
+
+    expectFallbackAnswer(await watcherRepository.listByWorkItem(itemId, { take: 5 }), 1);
+    expectFallbackCount(await watcherRepository.countByWorkItem(itemId), 1);
+
+    // `existsFor` is the boolean form of the same arm: FALSE unbound under the role
+    // is the "no rows admitted" answer, not "this person is not watching".
+    const watching = await watcherRepository.existsFor(itemId, fx.ownerId);
+    expect(watching).toBe(!isAppRoleTestMode());
+  });
+
+  it('commentRepository + commentMentionRepository — the thread, its counts, the mentions', async () => {
+    const { fx, itemId } = await seedItem('FC4');
+    const root = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: itemId,
+        authorId: fx.ownerId,
+        bodyMd: 'root',
+      },
+    });
+    await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: itemId,
+        authorId: fx.ownerId,
+        parentCommentId: root.id,
+        bodyMd: 'reply',
+      },
+    });
+    await adminDb.commentMention.create({
+      data: { commentId: root.id, mentionedUserId: fx.ownerId },
+    });
+
+    expectFallbackAnswer(await commentRepository.listThreadsByWorkItem(itemId), 1);
+    expectFallbackAnswer(await commentMentionRepository.findByCommentIds([root.id]), 1);
+    expectFallbackCount(await commentRepository.countByWorkItem(itemId), 2);
+    expectFallbackCount(await commentRepository.countRootsByWorkItem(itemId), 1);
+    expectFallbackCount(await commentRepository.countByParent(root.id), 1);
+
+    const one = await commentRepository.findById(root.id);
+    if (isAppRoleTestMode()) expect(one).toBeNull();
+    else expect(one?.id).toBe(root.id);
+  });
+
+  it('notificationRepository — the drawer page, the badge count, the id lookup', async () => {
+    const { fx, itemId } = await seedItem('FC5');
+    const row = await adminDb.notification.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        recipientUserId: fx.ownerId,
+        type: 'mentioned',
+        category: 'direct',
+        workItemId: itemId,
+        actorId: fx.ownerId,
+        data: {},
+        dedupeKey: 'fallback-arm:1',
+      },
+    });
+
+    expectFallbackAnswer(await notificationRepository.listByRecipient(fx.ownerId, { take: 5 }), 1);
+    expectFallbackCount(await notificationRepository.countUnreadByRecipient(fx.ownerId), 1);
+
+    const one = await notificationRepository.findById(row.id);
+    if (isAppRoleTestMode()) expect(one).toBeNull();
+    else expect(one?.id).toBe(row.id);
+  });
+
+  it('customFieldValueRepository — the issue’s values and the two guard counts', async () => {
+    const { fx, itemId } = await seedItem('FC6');
+    const field = await adminDb.customFieldDefinition.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'severity',
+        label: 'Severity',
+        fieldType: 'select',
+        position: 'a0',
+      },
+    });
+    const option = await adminDb.customFieldOption.create({
+      data: { fieldId: field.id, label: 'High', position: 'a0' },
+    });
+    await adminDb.customFieldValue.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: itemId,
+        fieldId: field.id,
+        valueOptionId: option.id,
+      },
+    });
+
+    expectFallbackAnswer(
+      await customFieldValueRepository.listByWorkItem(itemId, fx.workspaceId),
+      1,
+    );
+    expectFallbackCount(await customFieldValueRepository.countByField(field.id, fx.workspaceId), 1);
+    expectFallbackCount(
+      await customFieldValueRepository.countByOption(option.id, fx.workspaceId),
+      1,
+    );
   });
 });

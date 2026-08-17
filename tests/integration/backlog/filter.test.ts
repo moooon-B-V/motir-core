@@ -5,6 +5,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { backlogService } from '@/lib/services/backlogService';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { FILTER_UNASSIGNED_TOKEN, type FilterAst } from '@/lib/filters/ast';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -18,7 +19,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // the route maps to 422). An unfiltered call is byte-identical to today.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Build a FilterAst literal (loosely typed so a test can craft an INVALID one). */
@@ -40,7 +42,7 @@ function buildAst(
 
 /** Rank an item into the backlog through the repository's required-`tx` write. */
 async function setRank(itemId: string, rank: string): Promise<void> {
-  await db.$transaction((tx) => workItemRepository.setBacklogRank(itemId, rank, tx));
+  await adminDb.$transaction((tx) => workItemRepository.setBacklogRank(itemId, rank, tx));
 }
 
 type SeedSpec = {
@@ -66,7 +68,7 @@ async function seedBacklog(
   const out: Record<string, WorkItem> = {};
   for (const s of specs) {
     const item = await createTestWorkItem(fx, { kind: s.kind, title: s.title ?? s.rank });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: item.id },
       data: {
         type: s.type ?? null,

@@ -30,6 +30,8 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
+import { commentRepository } from '@/lib/repositories/commentRepository';
+import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -67,6 +69,7 @@ import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
   IllegalTransitionError,
+  MissingArtifactEvidenceError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -715,9 +718,13 @@ export const workItemsService = {
       await assertAssigneeMember(input.assigneeId, workspaceId);
     }
 
-    // Parent pre-flight: same project + kind-legal parent (the DB trigger
-    // backstops kind/depth/cycle; cross-project parenting has no trigger, so
-    // this assertion is the primary guard for it).
+    // Parent pre-flight: same project + kind-legal parent. Every rule here is
+    // ALSO backstopped in the database — kind/depth/cycle since 1.4.2, and
+    // cross-project / cross-workspace parenting since MOTIR-2895
+    // (`enforce_work_item_parent_tenancy`, which the repository translates back
+    // to this same `CrossProjectParentError`). This check stays because it is the
+    // friendlier error and it runs before a key is burned, not because it is the
+    // only thing standing behind the rule.
     if (input.parentId != null) {
       const parent = await readWorkItem(input.parentId, ctx);
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
@@ -1815,6 +1822,46 @@ export const workItemsService = {
       if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
     }
 
+    // THE CLOSE-OUT ARTIFACT-EVIDENCE GATE (MOTIR-2709). A `type: 'deploy'`
+    // card's deliverable lives outside this repository, so "done" is a claim
+    // rather than a diff — and it has been a false claim three times. The rule
+    // and the reasoning are in `lib/workItems/artifactEvidence.ts`; the gate is
+    // HERE because this is the one place every close-out passes through (the
+    // detail page, the board drag, the v1 route and the MCP `transition_status`
+    // all land on this method), and because the failure is specifically that
+    // nobody looked AT THE MOMENT OF CLOSING.
+    //
+    // It BLOCKS rather than advises, deliberately. The `advisories` channel is
+    // computed at authoring/dispatch time and is non-blocking, and a notice
+    // delivered to somebody who has by construction just stopped checking is not
+    // a safeguard — it is a record of the thing happening again.
+    //
+    // Scoped the same three ways the manual-provenance stamp below is:
+    //   • `cancelled` is EXEMPT — a `done`-CATEGORY status meaning ABANDONED
+    //     (MOTIR-2221). A release card that published nothing ON PURPOSE is
+    //     exactly what cancelling says, so refusing it would be backwards.
+    //   • `opts.system` is EXEMPT — the issue importer (MOTIR-941) brings closed
+    //     source issues in as closed, and the downward cascade
+    //     (`childStatusCascadeService`) completes children behind a status change
+    //     the user already made successfully. Neither is a person deciding this
+    //     release is finished, and a background job must not fail on a business
+    //     rule. ⚠️ The cascade therefore remains a path by which an
+    //     evidence-less `deploy` child can reach done; it is narrower than the
+    //     gap this card closes (it needs a human to close the PARENT), and
+    //     tightening it belongs with the derivation service, not here.
+    //   • The firing set is the named predicate, not an inline `type ===`.
+    if (
+      target.category === 'done' &&
+      toStatusKey !== ROADMAP_CANCELLED_KEY &&
+      !opts.system &&
+      requiresArtifactEvidence(current.type)
+    ) {
+      const bodies = await commentRepository.listBodiesByWorkItem(workItemId, tx);
+      if (assessArtifactEvidence(bodies).outcome === 'missing') {
+        throw new MissingArtifactEvidenceError(toStatusKey);
+      }
+    }
+
     // Build the row write. Reaching a `done`-category status CLEARS the
     // integration branch (Subtask 7.8.11 invariant: done ⇒ sessionBranch null,
     // so a merged dep never leaves a stale lineage for dependents to inherit —
@@ -2292,7 +2339,7 @@ export const workItemsService = {
    * explicit action — never a side effect of archive.
    */
   async archiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
       // Resolve + tenant-gate first so the access gate (6.4.3) has the item's
       // project, and a cross-workspace id is a 404 (no existence leak) before
       // the archive write.
@@ -2310,8 +2357,23 @@ export const workItemsService = {
         },
         tx,
       );
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), parentId: current.parentId };
     });
+
+    // Status derivation, child-set trigger (Story MOTIR-2888 · MOTIR-2892, ADR
+    // §3a). An archived child LEAVES its parent's aggregate — every child read
+    // excludes `archivedAt IS NOT NULL` — so archiving the last open child of a
+    // parent completes it. Post-commit, and only when there is a parent to
+    // recompute.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'archived',
+      });
+    }
+    return dto;
   },
 
   /**
@@ -2324,7 +2386,7 @@ export const workItemsService = {
    * carried before the restore (null if it was already live — a no-op restore).
    */
   async unarchiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, parentId } = await withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
@@ -2340,8 +2402,21 @@ export const workItemsService = {
         },
         tx,
       );
-      return toWorkItemDto(row);
+      return { dto: toWorkItemDto(row), parentId: current.parentId };
     });
+
+    // The mirror of archive's trigger (MOTIR-2892, ADR §3a): a restored child
+    // RE-ENTERS its parent's aggregate, so unarchiving an open child brings a
+    // completed parent back.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'unarchived',
+      });
+    }
+    return dto;
   },
 
   /**
@@ -2374,7 +2449,7 @@ export const workItemsService = {
    * raw Prisma error. Returns nothing — the rows are gone, there is no DTO to map.
    */
   async deleteWorkItem(id: string, ctx: ServiceContext): Promise<void> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const parentId = await withWorkspaceContext(ctx, async (tx) => {
       // 1. Lock the root + tenant-gate (404 on cross-workspace / already-deleted).
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
@@ -2413,7 +2488,21 @@ export const workItemsService = {
 
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
+      return root.parentId;
     });
+
+    // Status derivation, child-set trigger (MOTIR-2892, ADR §3a). The deleted
+    // root's own parent SURVIVES and has one fewer child — deleting the last
+    // open child of a parent completes it. Only the root's parent needs it:
+    // every other parent in the subtree went with the subtree.
+    if (parentId) {
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds: [parentId],
+        workItemId: id,
+        reason: 'deleted',
+      });
+    }
   },
 
   /**
@@ -2494,7 +2583,7 @@ export const workItemsService = {
     input: MoveWorkItemInput,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    const { dto, movedBetween } = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -2535,7 +2624,7 @@ export const workItemsService = {
       }
 
       if (!parentChanged && newPosition === current.position) {
-        return toWorkItemDto(current); // true no-op
+        return { dto: toWorkItemDto(current), movedBetween: null }; // true no-op
       }
 
       const update: Prisma.WorkItemUncheckedUpdateInput = {
@@ -2553,8 +2642,38 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
         tx,
       );
-      return toWorkItemDto(row);
+      return {
+        dto: toWorkItemDto(row),
+        // A pure REORDER changes no parent's child SET, so it derives nothing.
+        movedBetween: parentChanged
+          ? { previousParentId: current.parentId, newParentId: targetParentId }
+          : null,
+      };
     });
+
+    // Status derivation, child-set trigger (Story MOTIR-2888 · MOTIR-2892, ADR
+    // §3a) — and, until now, this function emitted NOTHING AT ALL, so a
+    // `move_to_parent` was invisible to every job in the system.
+    //
+    // BOTH parents are recomputed, because one move changes two child sets in
+    // opposite directions: the previous parent may now be finished (its last
+    // open child left) and the new one may need to come back (it just gained
+    // one). Either end may be null — an item moved to or from the top level —
+    // and a move with no parent on either side emits nothing.
+    if (movedBetween) {
+      // At least one end is non-null by construction: `parentChanged` means the
+      // two differ, so they cannot both be null.
+      const parentIds = [movedBetween.previousParentId, movedBetween.newParentId].filter(
+        (p): p is string => p !== null,
+      );
+      await sendEvent('work-item/child-set.changed', {
+        workspaceId: ctx.workspaceId,
+        parentIds,
+        workItemId: id,
+        reason: 'reparented',
+      });
+    }
+    return dto;
   },
 
   /**

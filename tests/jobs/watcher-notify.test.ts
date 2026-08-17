@@ -176,7 +176,7 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
       level: 'private',
     });
     const { user: late } = await addWsMember(s.fx, 'late@example.com', 'Late Member');
-    await db.$transaction((tx) => watcherRepository.add(s.issueId, late.id, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(s.issueId, late.id, tx));
     capture.events.length = 0;
 
     const result = await watcherNotificationsService.fanOut({
@@ -323,7 +323,7 @@ describe('watcherNotificationsService.fanOut — transition events', () => {
 // row is seeded directly via the repository here as a test shortcut — the gate
 // (`filterChannelEnabled`) reads the stored value regardless of `settable`.
 async function setTransitionedEmailPref(userId: string, enabled: boolean) {
-  await db.$transaction((tx) =>
+  await adminDb.$transaction((tx) =>
     notificationPreferenceRepository.upsert(
       { userId, eventType: NOTIFICATION_EVENT_TYPE.transitioned, channel: 'email', enabled },
       tx,

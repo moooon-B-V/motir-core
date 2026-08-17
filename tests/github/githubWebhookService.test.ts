@@ -10,7 +10,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { inngest } from '@/lib/jobs/client';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -187,7 +187,20 @@ describe('githubWebhookService — pull_request → status sync', () => {
       password: PASSWORD,
       name: 'Dev',
     });
-    await withSystemContext(async (tx) => {
+    // MOTIR-2868: `withSystemContext` does NOT admit the membership write.
+    // Neither tenant-root membership policy has a `system_admin` arm at all —
+    // `membership_insert_active_or_bootstrap` is `"workspaceId" =
+    // app.workspace_id` OR the bootstrap-slug arm, and nothing else — so under
+    // `motir_app` the row was refused.
+    //
+    // The two writes below want DIFFERENT GUCs, which is why this is
+    // `withWorkspaceContext` and not the workspace-only helper:
+    // `workspace_membership` gates on `app.workspace_id`, while
+    // `github_identity_owner_or_system` gates on `user_id = app.user_id` (its
+    // other arm is the system one). Binding only the workspace fixes the first
+    // and breaks the second. Enumerate the arms per TABLE, not per transaction.
+    // (Same client as before; only the context changed.)
+    await withWorkspaceContext({ userId: dev.id, workspaceId: s.workspace.id }, async (tx) => {
       await workspaceMembershipRepository.create(
         { userId: dev.id, workspaceId: s.workspace.id, role: 'member' },
         tx,

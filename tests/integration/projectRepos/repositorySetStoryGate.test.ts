@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
 
 import { db } from '@/lib/db';
+import { adminDb } from '../../helpers/adminDb';
 import { inngest } from '@/lib/jobs/client';
 import { getPreplanState } from '@/lib/ai/motirAiClient';
 import { plansService } from '@/lib/services/plansService';
@@ -199,7 +200,7 @@ function leaf(title: string, role: string | null): ProposalInput {
 
 /** The materialized work items, by title. */
 async function itemsByTitle(projectId: string) {
-  const rows = await db.workItem.findMany({ where: { projectId } });
+  const rows = await adminDb.workItem.findMany({ where: { projectId } });
   return new Map(rows.map((r) => [r.title, r]));
 }
 
@@ -235,6 +236,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── 1 · the N-repo create → index seam, through the CONSUMERS' DTOs ──────────
