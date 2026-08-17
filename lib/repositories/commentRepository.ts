@@ -269,4 +269,29 @@ export const commentRepository = {
     });
     return row !== null;
   },
+
+  /**
+   * Every comment BODY on a work item, oldest first (MOTIR-2709) — the read
+   * behind the close-out artifact-evidence check
+   * (`lib/workItems/artifactEvidence.ts`), which scans them with a regex and so
+   * cannot be expressed as {@link someBodyReferences}'s `contains` probe.
+   *
+   * Replies are INCLUDED: a digest quoted in a reply to "did this actually
+   * publish?" is exactly as good a record as one in a root comment, and the
+   * evidence check has no interest in thread shape.
+   *
+   * ⚠️ `tx` is REQUIRED, unlike its neighbours here. The only caller runs inside
+   * `applyStatusTransition`'s transaction, where the row is already
+   * `FOR UPDATE`-locked and the workspace binding is set — so the read must see
+   * THAT snapshot (a comment posted in the same transaction counts), and the
+   * `tx ?? db` arm every optional-`tx` read carries would have no caller at all.
+   */
+  async listBodiesByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.comment.findMany({
+      where: { workItemId },
+      select: { bodyMd: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => row.bodyMd);
+  },
 };

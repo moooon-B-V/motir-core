@@ -1,4 +1,4 @@
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -68,10 +68,17 @@ export const childStatusCascadeService = {
    *
    * Never throws for a business reason; returns a typed outcome instead.
    */
-  async cascadeToChildren(itemId: string): Promise<CascadeOutcome> {
-    // Phase 1 — resolve the neighbourhood under a system context (no acting user
-    // on a background job; the change-request-sync precedent).
-    const resolved = await withSystemContext(async (tx) => {
+  async cascadeToChildren(itemId: string, workspaceId: string): Promise<CascadeOutcome> {
+    // Phase 1 — resolve the neighbourhood. No acting USER on a background job, but
+    // there IS a tenant: `work-item/transitioned` carries `workspaceId`, so this
+    // binds the WORKSPACE tier.
+    //
+    // ⚠️ THIS USED TO BE `withSystemContext`, AND IT WAS DEAD (MOTIR-2880) — the
+    // exact mirror of the rollup's phase 1. `work_item` and `workspace_membership`
+    // carry no `system_admin` arm, so `findById(itemId)` returned NULL under
+    // `motir_app`, `resolved` was null, and every cascade answered
+    // `{ outcome: 'unresolvable' }` without raising.
+    const resolved = await withWorkspaceServiceContext(workspaceId, async (tx) => {
       const item = await workItemRepository.findById(itemId, tx);
       if (!item) return null;
       const settings = await projectRepository.findStatusAutomation(item.projectId, tx);
@@ -79,7 +86,6 @@ export const childStatusCascadeService = {
       const children = await workItemRepository.findChildren(itemId, tx);
       return {
         projectId: item.projectId,
-        workspaceId: item.workspaceId,
         status: item.status,
         enabled: settings?.autoCompleteChildrenOnParentDone ?? false,
         ownerUserId: owner?.userId ?? null,
@@ -89,7 +95,9 @@ export const childStatusCascadeService = {
 
     if (!resolved) return { outcome: 'unresolvable' };
 
-    const { projectId, workspaceId, ownerUserId } = resolved;
+    // `workspaceId` is the caller's — phase 1 was RLS-scoped to it, so the item it
+    // resolved is that workspace's by construction.
+    const { projectId, ownerUserId } = resolved;
 
     // The trigger is ENTRY INTO a done-category status. Any other transition is a
     // clean no-op — which is also half of why the two directions cannot loop.

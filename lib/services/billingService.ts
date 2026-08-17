@@ -3,7 +3,7 @@ import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { withOrgContext } from '@/lib/organizations/context';
+import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { isOrgOwnerRole } from '@/lib/organizations/roles';
 import {
@@ -337,6 +337,14 @@ export const billingService = {
     if (!isCloudBilling()) return { applied: false, outcome: 'no_active_tracker_subscription' };
 
     const { isScaledActive, memberCount, aiIncludedSeat } = await withSystemContext(async (tx) => {
+      // ⚠️ BIND THE ORG (MOTIR-2880). `organization` and `organization_membership`
+      // have no `system_admin` arm — their SELECT policies read `app.organization_id`
+      // (and, for the membership, `app.user_id`) — so under `motir_app` both reads
+      // below returned empty: `org` null and `count` 0. The method then answered
+      // `no_active_tracker_subscription` for every org, and seat billing silently
+      // stopped converging. Additive to the flag, and the id is a trusted argument
+      // (the job's own envelope), which is `withOrgServiceWriteContext`'s constraint.
+      await bindOrganizationContext(tx, organizationId);
       const org = await organizationRepository.findByIdInTx(organizationId, tx);
       const scaled = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
       const count = await organizationMembershipRepository.countByOrg(organizationId, tx);

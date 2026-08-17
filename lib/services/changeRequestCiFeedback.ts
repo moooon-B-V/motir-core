@@ -1,5 +1,5 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -96,6 +96,14 @@ export async function applyCiStatusFeedback(
     if (ctx.kind === 'unknown_installation') return { kind: 'unknown_installation' as const };
     if (ctx.kind === 'unknown_repo') return { kind: 'unknown_repo' as const };
     const { installation, repo, buildChecksUrl } = ctx;
+
+    // ⚠️ BIND THE TENANT NOW (MOTIR-2880). `resolveContext` reached the CONNECTION
+    // tier, which is what the system flag arms; the `work_item` and
+    // `workspace_membership` reads below have no such arm, so before this call they
+    // returned NULL under `motir_app` and every CI event resolved to
+    // `no_work_item` — no feedback comment, no verification state, nothing raised.
+    // Additive: `github_check_run` keeps its system arm for the write that follows.
+    await bindWorkspaceContext(tx, repo.workspaceId);
 
     const cr = await resolveChangeRequest(repo.id, event, tx);
     if (!cr) return { kind: 'no_pull_request' as const };
