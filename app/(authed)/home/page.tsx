@@ -3,14 +3,15 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { CircleCheck, CircleDot, Star } from 'lucide-react';
 import { getSession } from '@/lib/auth';
-import { getWorkspaceContext } from '@/lib/workspaces';
+import { getActiveProject } from '@/lib/projects';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { homeService } from '@/lib/services/homeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import { parseHomeTab, homeTabHref } from '@/lib/home/tab';
-import type { WorkflowDto } from '@/lib/dto/workflows';
+import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { HomeTabs } from './_components/HomeTabs';
 import { HomeList } from './_components/HomeList';
@@ -18,14 +19,17 @@ import { toHomeRowViews } from './_components/homeRows';
 
 // `/home` — the signed-in landing surface (Story MOTIR-2649 · Subtask
 // MOTIR-2653), per `design/home/`. A Server Component that resolves the session
-// + WORKSPACE and reads `homeService` directly (the server-component 4-layer
-// path).
+// + the ACTIVE PROJECT and reads `homeService` directly (the server-component
+// 4-layer path).
 //
-// ⚠️ IT RESOLVES NO ACTIVE PROJECT, unlike every other list surface in the
-// product. `/items`, `/ready` and `/boards` all call `getActiveProject()` first;
-// Home deliberately does not, because "related to me" stops meaning much if it
-// hides the projects you are not currently switched into. Switching the active
-// project changes nothing here — and MOTIR-2655 asserts it.
+// ⚠️ IT RESOLVES THE ACTIVE PROJECT, exactly like `/items`, `/ready` and
+// `/boards` (MOTIR-2761). It did not until 2026-08-17, and the shell said
+// otherwise the whole time: the rail's primary section is built inside
+// `if (hasProject)` with Home as its FIRST row, under a project switcher the
+// top bar renders on every authed page. A switcher that changes nothing on the
+// first screen after sign-in is a control that lies. The cross-project question
+// is retained at the workspace tier as MOTIR-2920, not dropped
+// (`docs/decisions/home-scope.md`).
 //
 // ⚠️ AND IT MOUNTS NO NOTIFICATIONS. An earlier shape of this story put a
 // "Needs you" widget here — a second mount of the notification stream. It was
@@ -35,6 +39,13 @@ import { toHomeRowViews } from './_components/homeRows';
 // This page touches nothing about notifications; do not add it back without
 // reopening that decision.
 
+// The post-auth settle target. `_helpers/shell-session.ts` waits on a RENDERED
+// Home rather than on a URL that merely reads right (MOTIR-2645's contract: an
+// authoritative signal, never an interval) — so BOTH branches carry it, the way
+// `/dashboard` carries its own across the same split. A fresh sign-up has no
+// project, and it still lands here.
+const HOME_TESTID = 'home-page';
+
 export default async function HomePage({
   searchParams,
 }: {
@@ -43,8 +54,22 @@ export default async function HomePage({
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const ctx = await getWorkspaceContext();
-  if (!ctx) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  // NO ACTIVE PROJECT — and `getActiveProject` returns null only when the actor
+  // can see ZERO projects in this workspace (the resolver recovers to the first
+  // visible one and persists the pointer), so this is "there is nothing to
+  // pick", never "you have not picked yet". A route a reader is LANDED on gets
+  // the create-first door; `/ready`, `/items` and `/boards` are navigated to and
+  // keep their actionless notice (`docs/decisions/home-scope.md` §1–2.2). The
+  // component is the shipped one `/dashboard` already renders here — reused,
+  // not reimplemented, so it brings its own copy in both catalogues.
+  if (!ctx) {
+    return (
+      <div data-testid={HOME_TESTID}>
+        <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />
+      </div>
+    );
+  }
 
   const params = await searchParams;
   const tab = parseHomeTab(params['tab']);
@@ -53,43 +78,30 @@ export default async function HomePage({
 
   const t = await getTranslations('home');
 
-  const [page, counts, members, workspace] = await Promise.all([
+  const [page, counts, members, workflow] = await Promise.all([
     tab === 'watching'
       ? homeService.listWatching(ctx, { cursor })
       : homeService.listMyWork(ctx, { cursor }),
     homeService.tabCounts(ctx),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-    workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
+    // ONE workflow, for the one project the page reads. Home used to resolve a
+    // workflow PER PROJECT ON THE PAGE, because two projects can spell the same
+    // lifecycle differently — rent this surface was paying on a boundary it
+    // should not have crossed. Narrowing to the active project retires it.
+    workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
   ]);
 
-  // One workflow per DISTINCT project ON THE PAGE — not per browsable project.
-  // Two projects can label the same lifecycle differently, so a row resolves
-  // its status against its own project's workflow (see homeRows.ts); reading
-  // only the projects actually rendered keeps that from costing a workflow read
-  // per project in the workspace.
-  const projectIds = [...new Set(page.items.map((row) => row.project.id))];
-  const workflows = await Promise.all(
-    projectIds.map(
-      async (id): Promise<[string, WorkflowDto]> => [
-        id,
-        await workflowsService.getWorkflow(id, ctx.workspaceId),
-      ],
-    ),
-  );
-  const rows = toHomeRowViews(page.items, new Map(workflows), members, tab);
+  const rows = toHomeRowViews(page.items, workflow, members, tab);
 
   const isEmpty = rows.length === 0;
 
   return (
-    // `data-testid` is the E2E settle target — `_helpers/shell-session.ts`
-    // returns on a RENDERED Home rather than on a URL that merely reads right
-    // (MOTIR-2645's contract: an authoritative signal, never an interval).
-    <div data-testid="home-page" className="flex flex-col gap-6">
+    <div data-testid={HOME_TESTID} className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
           <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { workspace: workspace?.name ?? '' })}
+            {t('subtitle', { project: ctx.project.name })}
           </p>
         </div>
       </header>

@@ -5,7 +5,6 @@ import { Bot } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Pill } from '@/components/ui/Pill';
 import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import type { HomeRowView } from './homeRows';
@@ -19,22 +18,26 @@ import type { HomeRowView } from './homeRows';
 // minimum width of 1204px; the shell gives a page 896px at a 1200 viewport and
 // 976 at 1280, so that row does not fit at any common laptop width (which is
 // the known MOTIR-1307 clipping — Home must not inherit it). Home's set is
-// `Title · Project · Your role · Assignee · Status`, minimum 754px, and it uses
+// `Title · Your role · Assignee · Status`, minimum 622px, and it uses
 // `IssueTypeIcon`, the row `Avatar` and `StatusValue` unchanged, so a cell
 // renders identically here and on /items.
 //
-// Two cells exist only here: the PROJECT chip (a project-scoped list never has
-// to say which project it is in) and YOUR ROLE (the merged assigned-OR-reported
-// read is the story's central decision, and this is the only place a reader can
-// see the dedupe hold — a `Both` row appears exactly once).
+// ⚠️ THE PROJECT CHIP IS GONE (MOTIR-2761). It was here because Home spanned
+// every project the reader could browse and a row had to say which one it came
+// from. Home now reads the ACTIVE project, so every row would carry the same
+// value as the switcher two rows above it — a column that repeats the page's own
+// header is not information. ONE cell exists only here now: YOUR ROLE (the
+// merged assigned-OR-reported read is the story's central decision, and this is
+// the only place a reader can see the dedupe hold — a `Both` row appears
+// exactly once).
 //
 // Below `md` the row COLLAPSES to two lines rather than clipping: the meta
 // wrapper is a wrapping flex row at narrow widths and `display: contents` at
-// `md`, so its four cells become grid children of the row itself. One DOM tree,
+// `md`, so its three cells become grid children of the row itself. One DOM tree,
 // two arrangements — no duplicated markup to drift.
 
 /** The Home column set. See design-notes §Measurements for the numbers. */
-const GRID_TEMPLATE = 'minmax(10rem,1fr) 116px 96px 140px 108px';
+const GRID_TEMPLATE = 'minmax(10rem,1fr) 96px 140px 108px';
 
 /** The whole-row navigation + peek link, stretched behind the cells. */
 function RowLink({ row, label }: { row: HomeRowView; label: string }) {
@@ -119,14 +122,9 @@ function HomeRow({ row }: { row: HomeRowView }) {
         </span>
       </div>
 
-      {/* The meta line. `md:contents` promotes these four to grid children of
+      {/* The meta line. `md:contents` promotes these three to grid children of
           the row at `md`; below it they wrap as one indented flex line. */}
       <div role="presentation" className="flex flex-wrap items-center gap-2 pl-6 md:contents">
-        <div role="cell" className="flex min-w-0 items-center">
-          <Pill tone="neutral" className="min-w-0">
-            <span className="truncate">{row.projectName}</span>
-          </Pill>
-        </div>
         <div role="cell" className="flex min-w-0 items-center">
           <span
             className={cn(
@@ -156,7 +154,6 @@ export function HomeList({ rows, label }: { rows: HomeRowView[]; label: string }
   const t = useTranslations('home');
   const columns = [
     t('columns.title'),
-    t('columns.project'),
     t('columns.role'),
     t('columns.assignee'),
     t('columns.status'),
