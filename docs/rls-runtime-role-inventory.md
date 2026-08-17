@@ -921,3 +921,195 @@ keys on a refusal:
 Filed as a bug rather than absorbed (`notes.html` #27). They belong to the READ surface MOTIR-2796
 closed and are a counter-example to its instruments: both scanners ask whether a repository read
 _takes_ a `tx`, and these three pass one — from a transaction that binds nothing.
+
+---
+
+## THE DOWNSTREAM POPULATION, RE-MEASURED (MOTIR-2872, 2026-08-16)
+
+The measurement MOTIR-2862 deferred. Its class 3 was 246 failures whose error was an assertion rather
+than a database refusal, and it made **no claim** about what they become once classes 1 and 2 clear
+(`notes.html` #249). This section takes that measurement on a tree where both have landed, and carves a
+card per surviving class. **This section fixes nothing.**
+
+### How it was measured
+
+`TEST_DB_APP_ROLE=1 pnpm vitest run` on `origin/main` at **`1ca67750`** — MOTIR-2865 (`1ce054ff`),
+MOTIR-2871 (`8d9acbf2`) and MOTIR-2874 (`923366e9`) all merged — against a Postgres cluster and base
+database created for this run alone (`prodect_b2872`, worker DBs `prodect_b2872_test_wN`, so no
+concurrent session's teardown can drop them).
+
+|                      | MOTIR-2862 (`6d1a385f`) | this run (`1ca67750`) |
+| -------------------- | ----------------------: | --------------------: |
+| test files           |                   1 018 |             **1 026** |
+| red files            |                     108 |                **67** |
+| tests                |                  14 356 |            **14 636** |
+| **failed**           |                 **652** |               **342** |
+| passed               |                  13 703 |                14 293 |
+| skipped              |                       1 |                     1 |
+| **`does not exist`** |                   **0** |                 **0** |
+
+**The `does not exist` count is 0 — a clean run.** A run showing hundreds of those has been trampled by
+a concurrent vitest and must be discarded, not read.
+
+> ⚠️ **Count `3D000` / `database "…_test_wN" does not exist`, not the bare phrase.** A loose grep for
+> _"does not exist"_ over the run LOG also matches ordinary test NAMES: this run's log carries **10**
+> such lines and **all 10 are on a passing test** (`✓ rejects a project that does not exist with
+ProjectNotFoundError`), against **0** occurrences of `3D000`. Among failure MESSAGES specifically both
+> counts are 0. The loose form reads a clean measurement as a trampled one.
+
+Classified on **two axes kept separate** (`notes.html` #257) — the error's own class, and the first
+non-`node_modules` frame — and then attributed by **reading the source of each failing (file, site)
+pair**, which is what actually separates a fixture from an application defect.
+
+### The two predecessor classes, by name, before and after
+
+| named class                                                            | before |                                                            after |
+| ---------------------------------------------------------------------- | -----: | ---------------------------------------------------------------: |
+| **MOTIR-2865 — the WRITE surface, application side**                   |    166 |                                                            **0** |
+| **MOTIR-2871 — the test-side residue** (statements through `@/lib/db`) |    240 | **0 within its 40 files**; 49 remain in 7 files it never covered |
+
+Both named classes reached **zero inside their own scope**, which is the completion signal
+(`notes.html` #249) — cross-checked mechanically: of MOTIR-2871's 40 changed test files, 9 are still
+red and **not one carries an RLS refusal**; of MOTIR-2865's 15 changed files, 1 is still red, likewise
+with **0 refusals**. The failures remaining in those files are assertions, i.e. they have moved into the
+downstream population this section measures.
+
+**The suite total did NOT fall by 406.** It fell by 310, from 652 to 342. **That is the expected shape,
+not a failed fix** — what sat behind a refused INSERT is the next layer, not nothing. A reader who
+expects the total to move by the sum of the class sizes will read two correct fixes as broken ones. This
+is the third time this document has had to say so; it is said here before the question is asked.
+
+### The partition — four classes, no residual bucket
+
+| class                                                                | failures |    % | files |
+| -------------------------------------------------------------------- | -------: | ---: | ----: |
+| **1 — `withSystemContext` reads a table with no `system_admin` arm** |  **219** | 64.0 |    44 |
+| **2 — test-side unbound repository READ in an assertion**            |   **67** | 19.6 |    12 |
+| **3 — fixture write refused, in files no batch covered**             |   **49** | 14.3 |     7 |
+| **Z — measurement artifact (not product state)**                     |    **7** |  2.0 |     4 |
+|                                                                      |  **342** |  100 |    67 |
+
+**There is no "other" bucket.** Every one of the 342 lands in exactly one class.
+
+#### Class 1 — `withSystemContext` binds no workspace, and 45 of 69 tables have no arm for it (219, 44 files)
+
+**This is a production defect class, and it is the reason class 3 could not be diagnosed from its
+assertion text.** `withSystemContext` (`lib/workspaces/context.ts:121`) opens a transaction that sets
+**only** `app.system_admin`:
+
+```ts
+return db.$transaction(async (tx) => {
+  await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
+  return fn(tx);
+});
+```
+
+Read back from the live cluster: of the **69** RLS tables, **24 carry a `system_admin` arm** on a
+SELECT/ALL policy and **45 do not** — including `work_item`, `workspace`, `organization`,
+`workspace_membership`, `sprint`, `comment`, `notification`, `watcher` and `custom_field_definition`.
+So under `motir_app` every `withSystemContext` read of one of those 45 **returns empty and raises
+nothing**. There are **89 call sites across 41 service files**.
+
+Two proven instances, both read at their failing line:
+
+- `parentStatusRollupService.rollUpForChild` (`:90`) resolves the neighbourhood in
+  `withSystemContext`, whose first statement is `workItemRepository.findById(childId, tx)`. `work_item`
+  has no arm ⇒ `resolved` is `null` ⇒ **`{ outcome: 'no_parent' }`**, which is exactly what
+  `parentStatusRollup` (24) and `childStatusCascade` (18, via `childStatusCascadeService.ts:74`) assert
+  against. **Status rollup and cascade silently stop working** once MOTIR-2515 points production at
+  `motir_app`.
+- `codeGraphIndexService.resolveIndexTarget` (`:154`) reads `githubInstallationRepository` and
+  `projectRepository` — both **armed** — and then `workspaceRepository.findByIdInTx`, which is **not**;
+  all four of `workspace`'s SELECT policies lack the arm. That is the `code-graph-index*` cluster (47).
+
+This generalises MOTIR-2865's finding 2 (_"`withSystemContext` is not an escape hatch for the
+tenant-root tables"_) from the WRITE side to the READ side, and from two membership tables to 45.
+
+> **⚠️ Attribution confidence, stated rather than implied.** The mechanism is **proven** for the
+> services named above. The per-file counts below are assigned by **association** — the test exercises a
+> service that calls `withSystemContext` — not by reading all 89 sites. The carved card must confirm
+> site by site; some of the tail may belong to class 2. The counts are given so the card can be sized,
+> which is what they are for.
+
+`jobs/code-graph-index` 29 · `integration/workflows/parentStatusRollup` 24 ·
+`integration/workflows/childStatusCascade` 18 · `integration/workflows/statusDerivation` 12 ·
+`github/githubCiFeedback` 9 · `github/githubWebhookService` 9 · `jobs/code-graph-index-first-audit` 9 ·
+`gitlab/gitlabWebhookService` 8 · `projectRepos/projectRepoTeamAccess` 8 ·
+`github/changeRequestTrunkGate` 7 · `github/githubWebhookEdges` 7 ·
+`projectRepos/projectRepoTakeoverService` 7 · `integration/github/historical-pr-backfill` 6 ·
+`cli/cliDeviceService` 5 · `jobs/code-graph-index-ledger-seam` 5 · `mcp/dependency-edges` 5 ·
+`github/codeGraphIndexService` 4 · `billingService` 3 · `gitlab/gitlabWebhookCustomWorkflow` 3 ·
+`gitlab/gitlabWebhookEdges` 3 · `github/explicitPrLink` 3 · `github/githubWebhookCustomWorkflow` 3 ·
+`publicRequests/upvoteComment` 3 · `integration/work-items/provenance-backfill-gate` 3 · and 20 files
+with 1–2 each.
+
+#### Class 2 — the fixture's WRITE was migrated, its assertion's READ was not (67, 12 files)
+
+The mirror of class 1, test-side. The twenty batches converted fixture **writes** to `adminDb` —
+writes fail loudly with a refusal — and left the **reads** on the unbound `db` singleton, where they
+fail silently by returning nothing. `tests/comments/repositories.test.ts` is the clean specimen: it
+writes through `adminDb.$transaction(...)` at `:91` and then asserts on
+`commentRepository.findById(b.id)` at `:98`, a bare read with no bound context.
+
+Note that passing a `workspaceId` **argument** does not save these — `sprintRepository.findById(s,
+a.workspaceId)` is an application-level filter, not the RLS GUC.
+
+`integration/sprints/repository` 11 · `custom-fields/repositories` 10 ·
+`labels-components-watch/repositories` 10 · `comments/repositories` 9 · `notifications/repositories` 7 ·
+`last-active-project-seam` 4 · `boards/repositories` 4 · `integration/work-items/link-repository` 4 ·
+`last-active-project` 3 · `api/live-projects-route` 2 · `automation/automation-rules-service` 2 ·
+`ai/planChangeSessionsService` 1.
+
+#### Class 3 — MOTIR-2871's shape, in seven files its scope never included (49, 7 files)
+
+Every one is a fixture helper issuing a repository write through `db.$transaction` — the `@/lib/db`
+singleton, which binds no workspace — e.g.
+`db.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx))`. **MOTIR-2871 changed 42
+files and none of these seven**, so this is residue outside its scope, not an incomplete migration of
+it. Tables: `notification` (12), `work_item_embedding` (10), `import` (10), `custom_field_value` (6),
+`watcher` (10), `custom_field_definition` (1).
+
+`notifications/notificationsService` 12 · `embeddings/workItemEmbeddingRls` 10 ·
+`integration/import/importSeam` 10 · `custom-fields/definitionsService` 7 ·
+`integration/home/personal-reads` 6 · `integration/home/story-seams` 3 · `jobs/watcher-notify` 1.
+
+`tests/embeddings/workItemEmbeddingRls.test.ts` is worth naming: its own comment says the fixture is
+_"Seeded as the OWNER (fixtures legitimately span tenants — adminDb rationale)"_ while the code below
+it uses `db`. The intent was recorded and the client was not changed.
+
+#### Class Z — measurement artifact, NOT product state (7, 4 files)
+
+Recorded so the 342 reconciles, and excluded from the carve. All 7 pass on a re-run of their own files
+(8 files, 86/86):
+
+- **3 — `58P01 could not load library …/llvmjit.so`** in `projectSquare/projectSquareGuarantees` (2) and
+  `projectSquareRanking` (1). An artifact of the **userspace Postgres this run used**: the install
+  recipe skips `libllvm14`, so JIT cannot load on the queries expensive enough to trigger it. Fixed for
+  future runs with `ALTER SYSTEM SET jit = off`. **Add that to the isolated-cluster recipe.**
+- **4 — `STACK_TRACE_ERROR`** in `auth/session-request-memo` (3) and `ciFleet/orchestratorPortBoundary`
+  (1). Both spawn a child-process probe and parse its stdout; both were starved under full-suite load.
+
+### Cards filed from this partition
+
+| card           | class                                                  | kind | points |
+| -------------- | ------------------------------------------------------ | ---- | -----: |
+| **MOTIR-2880** | 1 — `withSystemContext` vs the 45 unarmed tables (219) | task |      8 |
+| **MOTIR-2881** | 2 — test-side unbound repository reads (67)            | task |      5 |
+| **MOTIR-2882** | 3 — fixture writes in seven uncovered files (49)       | task |      3 |
+
+**MOTIR-2734** (retire `TEST_DB_APP_ROLE`) is now `blocked_by` MOTIR-2880, MOTIR-2881 and MOTIR-2882,
+and its edge to MOTIR-2872 is dropped.
+
+**MOTIR-2864** already owns `public_request_vote`'s missing workspace-member read arm; its PR was still
+open at the time of this run, so `publicRequests/upvoteComment` (3) is still red here and is **not**
+carved into any card above.
+
+### ⚠️ What this partition does NOT claim
+
+**Class 1 is the last layer this instrument can see, not necessarily the last layer.** Every measurement
+in this document has been a census of what fails FIRST, and each one has revealed a layer the one before
+it could not. A read that returns empty because `withSystemContext` binds nothing may itself be standing
+in front of a further defect that only executes once the row is visible. The honest form of the
+prediction is the same one MOTIR-2862 used: **no claim is made about what these 342 become once class 1
+clears.** That is the next re-measurement's job, and it should be taken the same way — on a tree where
+this class is already suppressed, with its own base database, and with the total expected NOT to fall by 219.
