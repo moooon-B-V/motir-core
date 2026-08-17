@@ -1,0 +1,14 @@
+// Fixture schema for the BARE-TRANSACTION scanner's negative case (MOTIR-2876).
+// Two models: one workspace-scoped, one not, so the scanner's policy-gated
+// filter is exercised in both directions — the same pair the sibling fixtures
+// use, for the same reason.
+
+model Widget {
+  id          String @id
+  workspaceId String
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}
