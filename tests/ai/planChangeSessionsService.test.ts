@@ -293,9 +293,13 @@ describe('planChangeSessionsService — tenant isolation', () => {
     const other = await makeWorkItemFixture({ name: 'Rival', identifier: 'RIVL' });
     await planChangeSessionsService.getOrCreateForProject(projectCtx(other));
 
-    // The row exists — but not for tenant A's workspace scope.
+    // The row exists — but not for tenant A's workspace scope. BOTH reads bind
+    // tenant B (MOTIR-2881): the row has to be VISIBLE for the pair to say anything,
+    // and then the only difference between them is the `workspaceId` ARGUMENT — which
+    // is the repository gate under test. Bound to A, the second read came back null
+    // because the POLICY hid the row, and the existence half proved nothing.
     expect(
-      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      await withWorkspaceServiceContext(other.workspaceId, (tx) =>
         planChangeSessionRepository.findByProjectAndScope(
           other.projectId,
           PROJECT_SCOPE_KEY,
@@ -305,7 +309,7 @@ describe('planChangeSessionsService — tenant isolation', () => {
       ),
     ).toBeNull();
     expect(
-      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      await withWorkspaceServiceContext(other.workspaceId, (tx) =>
         planChangeSessionRepository.findByProjectAndScope(
           other.projectId,
           PROJECT_SCOPE_KEY,
