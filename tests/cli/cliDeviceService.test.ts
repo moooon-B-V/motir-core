@@ -37,6 +37,7 @@ const { toDeviceGrantTokenDTO } = await import('@/lib/mappers/cliDeviceMappers')
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
+const { adminDb } = await import('../helpers/adminDb');
 
 // Service-layer tests for the `motir login` device-authorization flow (Story
 // MOTIR-1863 · Subtask MOTIR-1865, implementing docs/decisions/cli-login.md).
@@ -56,6 +57,34 @@ const { truncateAuthTables } = await import('../helpers/db');
 // claim + approve/deny (the browser), and `poll` (the terminal exchanges the grant
 // for a PAT). The `device_code` rows are reached by `truncateAuthTables`'s
 // user/workspace CASCADE.
+//
+// ── WHICH CLIENT EACH DIRECT-DB LINE TAKES, AND WHY (MOTIR-2911) ─────────────
+// Under `motir_app` this file ran every direct-DB line through ONE client where
+// it needs two — `api_token` and the two membership deletes were on the wrong one.
+// `api_token`'s only policy is `api_token_owner_or_system` — `user_id =
+// current_setting('app.user_id')` OR `app.system_admin` — and `organization_
+// membership` / `workspace_membership` are workspace-keyed, so a statement on
+// the `@/lib/db` singleton (which binds neither GUC here) is admitted no rows.
+// A read returns `[]` / `0`; a delete removes nothing and raises nothing.
+//
+//   line(s)                   | class                        | client
+//   --------------------------|------------------------------|-------------------
+//   every `apiToken` count /  | MOTIR-2881's class 2 — an    | `adminDb`, the
+//   findMany assertion        | ASSERTION doing direct DB    | database OWNER: an
+//                             | work, not the subject of the | assertion needs to
+//                             | test                         | see the row the
+//                             |                              | service just wrote,
+//                             |                              | under no tenant
+//   the two `deleteMany`      | MOTIR-2882's class 3 — a     | `adminDb`: the
+//   membership fixture writes | FIXTURE write staging the    | fixture must DELETE
+//   in "the approver lost the | precondition                 | a row whose policy
+//   workspace"                |                              | exists to protect it
+//
+// `deviceCode` stays on `db`: `device_code` carries no RLS policy at all, so
+// those statements are already admitted and moving them would say something
+// false about why. The SUBJECT of every test here is `cliDeviceService`, which
+// keeps running on the singleton exactly as production does — none of this
+// touches the code under test.
 
 const BASE_URL = 'http://localhost:3000';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,6 +99,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Sign in for real and return the headers a browser would send next — the only way
@@ -205,7 +235,7 @@ describe('poll — the five states', () => {
 
     // Denied grants are deleted on discovery: not re-pollable, and nothing minted.
     expect(await db.deviceCode.count({ where: { deviceCode: grant.device_code } })).toBe(0);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('answers expired_token past the expiry, and reaps the row', async () => {
@@ -247,7 +277,7 @@ describe('approve → poll — the mint', () => {
 
     // Approval records a DECISION and mints nothing — the invariant that makes
     // "approve then kill the CLI" leave no credential behind.
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
     const approved = await db.deviceCode.findUniqueOrThrow({
       where: { deviceCode: grant.device_code },
     });
@@ -271,7 +301,7 @@ describe('approve → poll — the mint', () => {
     });
 
     // Exactly one token row, with the ADR's label / grant / expiry / binding.
-    const tokens = await db.apiToken.findMany();
+    const tokens = await adminDb.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label).toBe('CLI · workbox');
     expect([...tokens[0]!.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
@@ -306,7 +336,7 @@ describe('approve → poll — the mint', () => {
     await poll(grant.device_code);
 
     await expect(poll(grant.device_code)).rejects.toBeInstanceOf(InvalidDeviceGrantError);
-    expect(await db.apiToken.count()).toBe(1);
+    expect(await adminDb.apiToken.count()).toBe(1);
   });
 
   it('mints a NARROWER grant than a settings-minted token (never the default set)', async () => {
@@ -422,7 +452,7 @@ describe('approve — the gates', () => {
         headers: bobHeaders,
       }),
     ).rejects.toBeInstanceOf(DeviceGrantForbiddenError);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('refuses an already-approved grant rather than replaying it', async () => {
@@ -517,7 +547,7 @@ describe('approve — the flip refuses after the pre-checks passed', () => {
     });
     expect(row.status).toBe('pending');
     expect(row.workspaceId).toBe(workspace.id);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('refuses a flip carrying a DIFFERENT signed-in session than the one that claimed', async () => {
@@ -889,7 +919,7 @@ describe('concurrency (real Postgres, warm pool)', () => {
         rejected[0]!.reason instanceof DeviceGrantSlowDownError,
     ).toBe(true);
 
-    const tokens = await db.apiToken.findMany();
+    const tokens = await adminDb.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     // The winner's plaintext is the one that works; there is no second credential.
     const verified = await apiTokensService.verify(fulfilled[0]!.value.access_token);
@@ -937,12 +967,12 @@ describe('concurrency (real Postgres, warm pool)', () => {
     });
     expect(row.status).toBe('approved');
     expect(row.workspaceId).toBe(workspace.id);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
 
     // And the grant still mints exactly once afterwards.
     await clearPollThrottle(grant.device_code);
     await poll(grant.device_code);
-    expect(await db.apiToken.count()).toBe(1);
+    expect(await adminDb.apiToken.count()).toBe(1);
   });
 });
 
@@ -976,7 +1006,7 @@ describe('poll — the states only a corrupted or shifted grant reaches', () => 
     });
 
     await expect(poll(grant.device_code)).rejects.toBeInstanceOf(InvalidDeviceGrantError);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('refuses to mint from an APPROVED grant that carries no workspace binding', async () => {
@@ -1001,7 +1031,7 @@ describe('poll — the states only a corrupted or shifted grant reaches', () => 
     });
 
     await expect(poll(grant.device_code)).rejects.toBeInstanceOf(DeviceGrantUnboundError);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('answers invalid_grant when the approver lost the workspace before the poll', async () => {
@@ -1023,13 +1053,15 @@ describe('poll — the states only a corrupted or shifted grant reaches', () => 
     // Org membership is what gates workspace access (`resolveWorkspaceAccess`
     // returns null without it, even with a stale workspace-membership row), so
     // removing the user from the ORG is what "lost the workspace" means here.
-    await db.organizationMembership.deleteMany({ where: { userId: owner.id } });
-    await db.workspaceMembership.deleteMany({
+    // Class 3 (a fixture WRITE) → `adminDb`: on the singleton both deletes match
+    // nothing and the precondition this test is named for never happens.
+    await adminDb.organizationMembership.deleteMany({ where: { userId: owner.id } });
+    await adminDb.workspaceMembership.deleteMany({
       where: { workspaceId: workspace.id, userId: owner.id },
     });
 
     await expect(poll(grant.device_code)).rejects.toBeInstanceOf(InvalidDeviceGrantError);
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
     // Consumed either way: the claim committed before the mint was attempted, so a
     // failed mint does NOT resurrect the grant.
     expect(await db.deviceCode.count()).toBe(0);

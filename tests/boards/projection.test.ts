@@ -6,6 +6,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -297,6 +298,16 @@ describe('boardsService.getBoard — projection', () => {
   });
 
   it('findBlockerStatesForItems short-circuits an empty id set without a query', async () => {
-    expect(await workItemLinkRepository.findBlockerStatesForItems([])).toEqual([]);
+    // Bound even though the short-circuit returns before any client is touched
+    // (MOTIR-2911): `work_item_link` is gated and this method is bindable, so an
+    // unbound call here is indistinguishable — to a reader and to
+    // `tests/rls/test-call-site-guard.test.ts` — from one that DOES reach the
+    // singleton and silently reads nothing.
+    const fx = await makeFixture('empty-blocker-states@example.com');
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemLinkRepository.findBlockerStatesForItems([], tx),
+      ),
+    ).toEqual([]);
   });
 });

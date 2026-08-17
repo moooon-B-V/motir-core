@@ -7,6 +7,7 @@ import { inngest } from '@/lib/jobs/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { SprintValidityDto } from '@/lib/dto/sprints';
@@ -453,7 +454,16 @@ describe('sprintsService.validateSprint — condition: loose vs tight (Subtask 7
 
 describe('workItemLinkRepository.findBlockerEdgesForItems', () => {
   it('short-circuits on an empty id set', async () => {
-    expect(await workItemLinkRepository.findBlockerEdgesForItems([])).toEqual([]);
+    // Bound although the short-circuit precedes any client use (MOTIR-2911):
+    // `work_item_link` is gated and this read is bindable, so an unbound call
+    // reads — to a human and to `tests/rls/test-call-site-guard.test.ts` — as
+    // one that reaches the singleton and sees nothing under `motir_app`.
+    const fx = await makeWorkItemFixture();
+    expect(
+      await withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.findBlockerEdgesForItems([], undefined, tx),
+      ),
+    ).toEqual([]);
   });
 });
 
