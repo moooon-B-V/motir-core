@@ -268,19 +268,46 @@ export function renderTable(rows) {
   ].join('\n');
 }
 
+/**
+ * Wrap a paragraph at the ~80 columns the rest of the file uses.
+ *
+ * Prettier does not reflow prose (`proseWrap` is left at its default), so these
+ * line breaks are the ones that SHIP: a paragraph emitted as one long line passes
+ * the format gate and still reads as machine-written beside its neighbours. Hand
+ * wrapping was the first attempt and it goes stale — the version and the `N of N`
+ * counts are interpolated, so their widths move the breaks.
+ *
+ * Breaks only at spaces, which is why it cannot corrupt an inline code span (a
+ * `` `:<profile>-0.3.0` `` is one whitespace-free token). A break inside a bold
+ * span is fine and the hand-written sections already contain several.
+ */
+export function wrapProse(text, width = 80) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && `${line} ${word}`.length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
+}
+
 /** The paragraph whose TENSE changes when the next release supersedes this one. */
 function renderCurrency(version, supersededBy) {
-  return supersededBy
-    ? [
-        `Each row's immutable twin — \`:<profile>-${version}\` — points at the same manifest. It`,
-        `**was** the current release until \`cli-v${supersededBy}\`; the moving \`:<profile>\` tags`,
-        `have since moved on and no longer point here, which is exactly what a moving tag is for`,
-        'and why the immutable twin exists.',
-      ].join('\n')
-    : [
-        `Each row's immutable twin — \`:<profile>-${version}\` — points at the same manifest, and`,
-        'the moving `:<profile>` tags point here too: this is the current release.',
-      ].join('\n');
+  return wrapProse(
+    supersededBy
+      ? `Each row's immutable twin — \`:<profile>-${version}\` — points at the same ` +
+          `manifest. It **was** the current release until \`cli-v${supersededBy}\`; the ` +
+          'moving `:<profile>` tags have since moved on and no longer point here, which ' +
+          'is exactly what a moving tag is for and why the immutable twin exists.'
+      : `Each row's immutable twin — \`:<profile>-${version}\` — points at the same ` +
+          'manifest, and the moving `:<profile>` tags point here too: this is the ' +
+          'current release.',
+  );
 }
 
 /**
@@ -300,35 +327,33 @@ export function renderSection({ image, version, runUrl, rows, novelty }) {
   const exampleTag = `${rows.find((row) => row.name !== 'base')?.name ?? 'base'}-${version}`;
   const count = `${rows.length} of ${rows.length}`;
 
-  // Wrapped at the ~80 columns the rest of the file uses. Prettier does not
-  // reflow prose (`proseWrap` is left at its default), so these line breaks are
-  // the ones that ship — a paragraph emitted as one long line would pass the
-  // format gate and still read as machine-written beside its neighbours.
-  const invariants = [
-    'Two things CHECKED rather than assumed, by the release lane that wrote this',
-    'section (MOTIR-2699): each moving `:<profile>` tag resolves to the **same**',
-    `manifest as its \`:<profile>-${version}\` twin (${count}), and`,
-    ...(novelty.checked
-      ? [
-          `**every digest below differs from its \`cli-v${novelty.against}\` row** (${count}) — an`,
-          'unchanged digest across a version bump would mean a variant did not',
-          'actually rebuild, which is a finding, not a formatting detail.',
-        ]
-      : [
-          'the novelty invariant is vacuous here rather than passed: there is no',
-          'earlier release to compare these digests against.',
-        ]),
-  ].join('\n');
+  const invariants = wrapProse(
+    'Two things CHECKED rather than assumed, by the release lane that wrote this ' +
+      'section (MOTIR-2699): each moving `:<profile>` tag resolves to the **same** ' +
+      `manifest as its \`:<profile>-${version}\` twin (${count}), and ` +
+      (novelty.checked
+        ? `**every digest below differs from its \`cli-v${novelty.against}\` row** ` +
+          `(${count}) — an unchanged digest across a version bump would mean a variant ` +
+          'did not actually rebuild, which is a finding, not a formatting detail.'
+        : 'the novelty invariant is vacuous here rather than passed: there is no ' +
+          'earlier release to compare these digests against.'),
+  );
 
   return [
     MARKERS.release(version),
     '',
     RELEASE_HEADING(version),
     '',
+    // The run link gets its own line, unwrapped, exactly as the hand-written
+    // sections have it: `[run 12345](url)` is two whitespace-separated tokens, so
+    // the wrapper would happily break between them — which markdown renders fine
+    // and reads as a mistake.
     `([run ${runUrl.split('/').pop()}](${runUrl})).`,
-    'The `motir` inside each image is',
-    `[\`@motir/cli@${version}\`](https://www.npmjs.com/package/@motir/cli/v/${version}), the same`,
-    'build npm serves.',
+    wrapProse(
+      'The `motir` inside each image is ' +
+        `[\`@motir/cli@${version}\`](https://www.npmjs.com/package/@motir/cli/v/${version}), ` +
+        'the same build npm serves.',
+    ),
     '',
     MARKERS.currencyStart,
     '',
@@ -336,10 +361,16 @@ export function renderSection({ image, version, runUrl, rows, novelty }) {
     '',
     MARKERS.currencyEnd,
     '',
-    "**Read from the registry, not from the run's job summary** (MOTIR-2220). Every",
-    'digest below is the `Docker-Content-Digest` GHCR returned for that tag, fetched',
-    'with a token minted from the anonymous endpoint — no `Authorization` on the token',
-    "request, so it is the answer a stranger gets, not the publisher's:",
+    // The same paragraph the four hand-written sections carry. Through the
+    // wrapper like every other paragraph here — one rule, no verbatim carve-out
+    // that a later edit would have to remember.
+    wrapProse(
+      "**Read from the registry, not from the run's job summary** (MOTIR-2220). " +
+        'Every digest below is the `Docker-Content-Digest` GHCR returned for that ' +
+        'tag, fetched with a token minted from the anonymous endpoint — no ' +
+        '`Authorization` on the token request, so it is the answer a stranger gets, ' +
+        "not the publisher's:",
+    ),
     '',
     '```sh',
     `TOKEN=$(curl -s "https://${registry}/token?scope=repository:${repository}:pull&service=${registry}" | jq -r .token)`,

@@ -15,6 +15,7 @@ import {
   parseRows,
   parseSections,
   renderSection,
+  wrapProse,
   renderTable,
   resolveDigestRows,
   resolveNames,
@@ -268,17 +269,58 @@ describe('the rendered markdown', () => {
     });
     expect(parseRows(section)).toEqual(rows);
     // The section states its own provenance and both counts, so a reader is not
-    // asked to take the invariants on trust.
+    // asked to take the invariants on trust. Asserted against the prose with its
+    // line breaks collapsed: the paragraph is wrapped at 80 columns and the
+    // interpolated version and counts move the breaks, so a raw substring would
+    // be asserting today's wrapping rather than the sentence.
+    const prose = section.replace(/\s+/g, ' ');
     expect(section).toContain('### Release `cli-v0.4.0`');
-    expect(section).toContain(
+    expect(prose).toContain(
       '([run 999](https://github.com/moooon-B-V/motir-core/actions/runs/999))',
     );
-    expect(section).toContain('twin (2 of 2)');
-    expect(section).toContain('differs from its `cli-v0.3.0` row** (2 of 2)');
-    expect(section).toContain('this is the current release');
+    expect(prose).toContain('twin (2 of 2)');
+    expect(prose).toContain('differs from its `cli-v0.3.0` row** (2 of 2)');
+    expect(prose).toContain('this is the current release');
     // Never uppercase in a reference docker has to resolve (`sandboxCi.test.ts`
     // asserts the same thing about the file as a whole).
     expect(section).not.toMatch(/ghcr\.io\/\S*[A-Z]/);
+  });
+
+  it('wraps every prose line to the file’s width, and never inside a code span', () => {
+    // The generated section lands on `main` through a commit that starts no CI, so
+    // nothing downstream would notice a paragraph emitted as one 400-column line.
+    // A long URL is the one legitimate over-width line — it is a single token, and
+    // the hand-written sections carry the same.
+    const section = renderSection({
+      image: 'ghcr.io/moooon-b-v/motir-sandbox',
+      version: '0.10.11',
+      runUrl: 'https://github.com/moooon-B-V/motir-core/actions/runs/31529928332',
+      rows: Array.from({ length: 9 }, (_, index) => ({
+        name: `profile-${index}`,
+        tag: `ghcr.io/moooon-b-v/motir-sandbox:profile-${index}`,
+        digest: digest(String(index)),
+      })),
+      novelty: { checked: true, problems: [], against: '0.9.0' },
+    });
+    const overlong = section
+      .split('\n')
+      .filter((line) => line.length > 80 && !line.startsWith('|') && !/\S{60}/.test(line));
+    expect(overlong).toEqual([]);
+    // No line break landed inside an inline code span — an odd count of backticks
+    // on a line is exactly that, and it would render the newline as a space
+    // inside a tag reference.
+    for (const line of section.split('\n')) {
+      if (line.startsWith('```') || line.startsWith('TOKEN=') || line.startsWith('  ')) continue;
+      expect((line.match(/`/g) ?? []).length % 2, `unbalanced backticks: ${line}`).toBe(0);
+    }
+  });
+
+  it('wraps a paragraph greedily at the given width', () => {
+    expect(wrapProse('aaa bbb ccc ddd', 7)).toBe('aaa bbb\nccc ddd');
+    // A token longer than the width goes on its own line rather than being split.
+    expect(wrapProse('aa https://example.com/very/long bb', 10)).toBe(
+      'aa\nhttps://example.com/very/long\nbb',
+    );
   });
 
   it('says the novelty invariant is VACUOUS on a first release instead of claiming it', () => {

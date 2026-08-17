@@ -108,6 +108,9 @@ export declare function checkRecorded(
   rows: DigestRow[],
   recorded: Record<string, string> | null,
 ): InvariantCheck;
+/** Greedy word wrap at `width` columns (default 80). Never splits a token, so an
+ *  inline code span cannot be broken across lines. */
+export declare function wrapProse(text: string, width?: number): string;
 export declare function renderTable(rows: DigestRow[]): string;
 export declare function renderSection(options: RenderOptions): string;
 export declare function parseSections(readme: string): ParsedSection[];
