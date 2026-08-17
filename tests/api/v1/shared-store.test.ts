@@ -5,6 +5,7 @@ import { tokenFingerprint } from '@/lib/api/v1/bearer';
 import {
   __useDefaultRateLimitStoreForTest,
   rateLimitBudget,
+  type RateLimitStore,
   setRateLimitStore,
 } from '@/lib/api/v1/rateLimit';
 import {
@@ -14,6 +15,7 @@ import {
 import {
   RATE_LIMIT_STORE_ENV,
   __resetSharedRateLimitStoreForTest,
+  resolveRateLimitBackend,
   sharedRateLimitStore,
 } from '@/lib/rateLimit/store';
 import { rateLimitCounterRepository } from '@/lib/repositories/rateLimitCounterRepository';
@@ -206,22 +208,202 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
 });
 
 describe('the shared counter stays ATOMIC and time-bounded under the wrapper', () => {
+  // ── ⚠️ A 200 IS TWO DIFFERENT ANSWERS, AND THE STATUS CANNOT SEPARATE THEM ──
+  // The concurrent batch below used to read only `r.status`, and a request
+  // served because the counter was under budget carries the same 200 as one
+  // served because the store TIMED OUT and the limiter failed open
+  // (`degraded: true`, `lib/api/v1/rateLimit.ts`). So the property this case is
+  // named for — the counter is atomic under concurrency — was not actually
+  // asserted: a run in which the store answered NOTHING would sail through the
+  // 429 count as easily as MOTIR-2658's run failed it.
+  //
+  // That is not hypothetical. On PR #2035, 2 of 12 concurrent increments blew
+  // the shipped 250 ms deadline against a loaded CI Postgres, the store saw 10
+  // of a budget of 11, and every request came back 200 — reported as
+  // "expected 11 got 12", which is byte-identical to the epoch-aligned window
+  // straddle (MOTIR-2101) that five cards have chased. The only thing telling
+  // the two apart was two lines of stderr fifteen hundred lines up.
+  //
+  // Both halves of that are fixed here, and neither touches the window: the
+  // batch now asserts on `degraded` FIRST so the failure names itself, and its
+  // store gets a deadline generous enough that a CI hiccup is not a red PR.
+
+  /** The failures a batch's store hit — one per DEGRADED decision it caused. */
+  interface InstrumentedStore {
+    store: RateLimitStore;
+    degradedBy: () => string[];
+  }
+
+  /**
+   * How long ONE increment gets in this section — a deliberate, generous
+   * override of the shipped `DEFAULT_RATE_LIMIT_STORE_TIMEOUT_MS` through the
+   * seam `createPostgresRateLimitStore` already offers (MOTIR-2658).
+   *
+   * The deadline is a PRODUCTION policy — the limiter must never become the
+   * outage it exists to prevent — and this is not the case that proves it
+   * works: "ALLOWS the request when the store HANGS" below is, at a deadline of
+   * its own. Here the deadline's only possible contribution is to FIRE, and a
+   * fired deadline DESTROYS the property under test, because a failed-open
+   * increment never reaches the counter the batch is measuring.
+   *
+   * 5 s against a batch measured at 19 ms worst-of-20 (MOTIR-2224) is a ~260x
+   * margin — held to the same "exceeding it means a broken machine, not bad
+   * luck" standard as `ALIGNED_WINDOW_MS` itself.
+   */
+  const ATOMICITY_STORE_TIMEOUT_MS = 5_000;
+
+  /**
+   * The deadline the guard case pins — short enough that its hung increments
+   * blow it promptly, and still ~10x the 19 ms worst-of-20 a real increment
+   * costs, so the increments it does NOT hang are not degraded by accident.
+   * (If a loaded runner degrades them too, the guard's assertion still fires —
+   * it just observes more failures than it staged.)
+   */
+  const DEGRADED_STORE_TIMEOUT_MS = 200;
+
+  /** How many of the guard case's increments hang — MOTIR-2658 saw 2 of 12. */
+  const STAGED_TIMEOUTS = 2;
+
+  /**
+   * The real Postgres store, wrapped so the test can SEE the one bit the batch
+   * could not: whether an increment failed and its request was therefore served
+   * DEGRADED.
+   *
+   * `consumeRateLimit` returns `degraded: true` exactly when `increment` throws,
+   * so a record of the throws IS the record of the degraded decisions — taken
+   * at the same seam the wrapper catches at, with the causing error still
+   * attached so the message can name it.
+   */
+  function instrumentedPostgresStore(timeoutMs: number): InstrumentedStore {
+    const inner = createPostgresRateLimitStore({ timeoutMs });
+    const failures: string[] = [];
+
+    return {
+      degradedBy: () => [...failures],
+      store: {
+        async increment(key, windowStart, windowMs) {
+          try {
+            return await inner.increment(key, windowStart, windowMs);
+          } catch (err) {
+            failures.push(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+            throw err;
+          }
+        },
+      },
+    };
+  }
+
+  /**
+   * Fire N simultaneous requests against a budget of N−1 through `instrumented`
+   * and assert the atomicity properties.
+   *
+   * Extracted so the guard case below can run the SAME assertions against a
+   * deliberately-degraded store and watch them go red — a guard nobody has
+   * watched fail is indistinguishable from no guard.
+   */
+  async function assertAtomicUnderConcurrency(instrumented: InstrumentedStore): Promise<void> {
+    const N = 12;
+    // ⚠️ UNCHANGED, and deliberately so (MOTIR-2658 acceptance #4): this file is
+    // a correct member of the aligned set and the window is not the defect.
+    budget(N - 1, ALIGNED_WINDOW_MS);
+    setRateLimitStore(instrumented.store);
+    const caller = await createV1Caller();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+
+    const responses = await Promise.all(Array.from({ length: N }, () => GET(req(caller.headers))));
+    const statuses = responses.map((r) => r.status);
+
+    // ⚠️ FIRST, and the ORDER is the point. Everything after this line reads a
+    // status, and a degraded batch makes those counts meaningless while leaving
+    // them plausible — so the reader has to be told the store gave up BEFORE
+    // being handed a number that looks like a window bug.
+    const degraded = instrumented.degradedBy();
+    expect(
+      degraded,
+      `the rate-limit store FAILED OPEN during the atomicity batch — ${degraded.length} of ${N} ` +
+        `increments never reached the shared counter: ${degraded.join(' · ')}. The 200/429 ` +
+        `split below therefore cannot tell an ATOMIC store from one that gave up, so this run ` +
+        `proves nothing either way. ⚠️ This is NOT the epoch-aligned window straddle ` +
+        `(MOTIR-2101): the window here is pinned and aligned, and touching it fixes nothing. ` +
+        `See MOTIR-2658`,
+    ).toEqual([]);
+
+    // The same bit read off the RESPONSE rather than the store, so the decision
+    // is checked at the boundary a client sees too: the fail-open arm returns
+    // the WHOLE budget as remaining, while any genuinely counted request has
+    // spent at least one of it. `remaining === limit` is therefore exactly
+    // `degraded`, and nothing else can produce it.
+    const fullBudget = responses.filter(
+      (r) => r.headers.get('x-ratelimit-remaining') === String(N - 1),
+    );
+    expect(
+      fullBudget.length,
+      `${fullBudget.length} response(s) advertised the FULL budget as remaining, which only the ` +
+        `fail-open arm does — the limiter served them without counting them (MOTIR-2658)`,
+    ).toBe(0);
+
+    expect(statuses.filter((s) => s === 200)).toHaveLength(N - 1);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+  }
+
   // The property a read → compare → write store fails. A serial loop passes
   // against a broken implementation; simultaneous requests do not — and this is
   // the assertion that has to survive the move from a single-threaded Map to a
   // database several connections are hitting at once.
   it('fires N SIMULTANEOUS requests against a budget of N−1 and refuses exactly one', async () => {
-    const N = 12;
-    budget(N - 1, ALIGNED_WINDOW_MS);
-    const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    // The pin is a deadline override, NOT a different backend: the store below
+    // is the one this deployment resolves by default, so the batch still runs
+    // against the shared Postgres counter it is here to prove.
+    expect(resolveRateLimitBackend()).toBe('postgres');
+    expect(ATOMICITY_STORE_TIMEOUT_MS).toBeGreaterThan(DEFAULT_RATE_LIMIT_STORE_TIMEOUT_MS);
 
-    const statuses = (
-      await Promise.all(Array.from({ length: N }, () => GET(req(caller.headers))))
-    ).map((r) => r.status);
+    await assertAtomicUnderConcurrency(instrumentedPostgresStore(ATOMICITY_STORE_TIMEOUT_MS));
+  });
 
-    expect(statuses.filter((s) => s === 200)).toHaveLength(N - 1);
-    expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+  // ⚠️ The guard proven by DELIBERATELY introducing the failure — the same
+  // discipline `rate-limit-window-alignment.test.ts` holds itself to, and the
+  // reason it is owed here is that the assertion above replaced one that
+  // silently passed through the very failure it exists to catch.
+  it('goes red naming the DEGRADED store — not "a length of 11" — when the store times out', async () => {
+    // ⚠️ PARTIAL degradation, on purpose: MOTIR-2658's occurrence hung 2 of 12
+    // increments, not all of them, and that is the shape the old assertion
+    // could not read. The remaining 10 count normally against a budget of 11,
+    // so every request is served, nothing is refused, and the batch reports
+    // "expected 11 got 12" — byte-identical to the epoch-aligned straddle
+    // (MOTIR-2101). A guard that only hung the WHOLE store would prove the
+    // assertion fires; this one proves it fires on the occurrence.
+    const realIncrement = rateLimitService.increment.bind(rateLimitService);
+    let hung = 0;
+    vi.spyOn(rateLimitService, 'increment').mockImplementation((...args) =>
+      hung++ < STAGED_TIMEOUTS ? new Promise<number>(() => {}) : realIncrement(...args),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const failure = await assertAtomicUnderConcurrency(
+      instrumentedPostgresStore(DEGRADED_STORE_TIMEOUT_MS),
+    ).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(
+      failure,
+      'the atomicity case PASSED a batch the store never fully counted',
+    ).not.toBeNull();
+    // It names the CAUSE, and names it in the message rather than leaving it to
+    // a stderr line fifteen hundred lines above the assertion.
+    expect(failure?.message).toContain('FAILED OPEN');
+    expect(failure?.message).toContain('RateLimitStoreTimeoutError');
+    expect(failure?.message).toContain('MOTIR-2658');
+    // …and it says HOW MANY of the batch went uncounted, which is what tells a
+    // reader this is the fail-open arm rather than a counter that reset.
+    // Tolerant of a loaded runner degrading more than the two it staged; the
+    // staging is exact (verified at 2 of 12), the assertion just must not be
+    // the thing that goes red when the machine is slow.
+    expect(failure?.message).toMatch(/\b[1-9]\d* of 12 increments never reached/);
+    // And it does NOT read as the length mismatch that sent MOTIR-2658's reader
+    // to the window — the one place the cause was not.
+    expect(failure?.message).not.toContain('to have a length of');
   });
 
   it('resets when the window rolls over — a new window is a new row', async () => {
