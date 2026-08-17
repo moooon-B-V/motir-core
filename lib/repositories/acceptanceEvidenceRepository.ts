@@ -53,6 +53,13 @@ export const acceptanceEvidenceRepository = {
    * rule), so two concurrent publishes for the same story cannot both see a
    * replaceable `pending` row and both write.
    *
+   * ⚠️ BOTH SIDES OF THE SEAM TAKE THIS LOCK, AND THAT IS THE POINT (MOTIR-2851).
+   * `acceptanceEvidenceService.decide` calls it too, before deriving which row an
+   * approval stamps. A lock only serialises the paths that TAKE it: while the
+   * publish held it alone, an approval could stamp the very row the publish was
+   * superseding, leaving an `approved` receipt with `isCurrent: false` and
+   * unlinked attachments. Do not "simplify" either caller back out of it.
+   *
    * Deliberately NOT folded into a status predicate on `markSupersededByWorkItem`:
    * a supersede that silently affects zero rows would let the insert proceed and
    * collide with the partial-unique slot, surfacing a P2002 instead of the typed
