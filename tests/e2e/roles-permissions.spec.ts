@@ -26,8 +26,10 @@ import {
 //
 // ⚠️ THIS FILE IS MOTIR-2282'S RECEIPT, AND ONLY A PULL REQUEST TOUCHING IT CAN
 // RE-PUBLISH ONE. `acceptance-video.yml` triggers on `pull_request` + a `paths:`
-// filter over `tests/e2e/acceptance*.spec.ts` and has no `push:` trigger, so
-// `main` never runs the lane (MOTIR-1949, deliberate); the uploader then narrows
+// filter over `tests/e2e/acceptance*.spec.ts` (MOTIR-1949, deliberate). Since
+// MOTIR-2760 it ALSO runs on `push: main` while the lane holds a spec — but that
+// baseline publishes nothing by construction, so the claim this note rests on is
+// unchanged: only a PR can re-publish. The uploader then narrows
 // again to the specs the PR actually CHANGED (MOTIR-1937), so a run that merely
 // re-records this spec publishes nothing. Both gates are correct and neither is
 // reachable after the story's own PR merges — which is why a lost receipt costs a

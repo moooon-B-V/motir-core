@@ -384,6 +384,8 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
   `./.github/actions/e2e-setup` composite takes a `next-build: build` input for
   exactly this). That is one extra build, paid only on the PRs that own a spec —
   where the 11-minute lane dwarfs it. There is deliberately no `push:` trigger.
+  **(Superseded 2026-08-17 by the MOTIR-2760 amendment below — there is now a
+  `push: main` baseline, gated on the lane holding a spec.)**
 - **What this costs, said out loud.** The watchability floor and story resolution
   (§2's amendment / MOTIR-1772, MOTIR-1905) now run **only on the owning run** — a
   spec that drifts below the floor is caught when its own PR next touches it, not
@@ -404,8 +406,85 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
   any surface the failing spec renders. The second consequence of the `paths:` filter
   compounds it — a PR adding ONE acceptance spec runs, and becomes answerable for,
   all of them. Budget for that when a story plans its acceptance E2E.
+  **(Amended 2026-08-17 by MOTIR-2760: there IS a `main` baseline now, whenever the
+  lane holds a spec — so the discriminator is available exactly when there is
+  something to discriminate. It is still unavailable on an EMPTY lane, where by
+  definition there is no red to diagnose.)**
 
 The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches it.
+
+#### Amendment 2026-08-17 (MOTIR-2760) — the MAIN BASELINE: `push: main`, gated on membership
+
+The amendment above bought its cost saving with a blind spot it named honestly and
+left open: the `paths:` filter cuts between an app change and the specs that read
+it, so **an app change could break every acceptance spec, merge green, and wait on
+`main` until an unrelated PR happened to touch a spec** — at which point that PR's
+author inherited the diagnosis. Measured instance: MOTIR-2654 moved sign-in's
+`callbackURL` to `/home`, `acceptance-ai-callout.spec.ts` broke at `c6b5d19d`, and
+it surfaced on MOTIR-2664's PR (#2045), which does not own that spec. MOTIR-2620
+had already declined to close it by widening the filter, and was right to.
+
+**The decision: the lane also runs on `push: main`, but only while it holds a spec,
+and a baseline run TESTS without ever PUBLISHING.**
+
+| Run                                             | Lane runs         | Publishes   |
+| ----------------------------------------------- | ----------------- | ----------- |
+| PR changing an `acceptance*.spec.ts`            | yes (4 shards)    | that story  |
+| PR changing a lane-definition file (MOTIR-2600) | yes (4 shards)    | nothing     |
+| PR changing anything else                       | **no lane**       | nothing     |
+| push to `main`, lane holds ≥ 1 spec             | yes (4 shards)    | **nothing** |
+| push to `main`, lane empty                      | **gate job only** | nothing     |
+
+**Why the gate is the load-bearing half, against this ADR's budget.** Measured on
+run `31740853229` (the MOTIR-2765 merge, against an already-empty lane): `build`
+6 min + four shards at 3 min = **18 machine-minutes to run zero tests**. The cost
+is setup and a `next build`, not the specs, so it does not shrink with the lane.
+`main` takes roughly 20 merges/day, so an ungated `push:` trigger would spend
+**~360 machine-minutes/day** — and after MOTIR-2769's triage an empty lane is the
+STEADY STATE, not an edge case. Gated, an empty lane costs one ~10-second checkout
+per merge (~3 min/day), and the fan-out is paid only inside the window a story is
+actually in review. That is the difference between this being affordable and not.
+
+**Why not the alternatives**, all of which MOTIR-2760 was written to weigh and all
+of which MOTIR-2765 re-priced:
+
+- **Widening `paths:` to `app/**`/`lib/**`** — still rejected. MOTIR-2620's
+  reason (the specs read most of the app) stands, and post-triage it is worse:
+  widening would run an 18-machine-minute lane on nearly every PR to execute
+  nothing at all.
+- **A nightly run** — cheaper, but its red names a commit RANGE where the baseline
+  names one merge, and attribution is the entire product here. On an empty lane it
+  is also pure waste, which is most nights.
+- **A cheap smoke subset on every PR** — there is no subset to take: the lane is
+  usually empty and otherwise holds one or two specs.
+
+**MOTIR-1949's requirement is untouched, and the reason is subtle enough to state.**
+"Absent, not skipped" is a constraint about **pull requests** — a greyed check on
+someone's PR. A `push` event attaches its checks to the commit on `main` and adds
+nothing to any open PR, so the gate may skip freely there at no cost to anyone. On
+`pull_request` the gate returns `true` unconditionally: the `paths:` filter has
+already decided, and MOTIR-2600 deliberately wants a lane-definition PR to rehearse
+against an empty membership. The gate also sits on `build` rather than on the shard
+job, so `tests/ci-acceptance-lane.test.ts`'s assertion that the shard job carries no
+job-level `if:` stays literally true.
+
+**The baseline never publishes, via two independent mechanisms** — because the
+failure mode is not a wasted run but a SUPERSEDED receipt (MOTIR-1937): the publish
+step is `if:`-gated to `pull_request`, and the owned-specs step emits an empty list
+on `push` (there is no base ref to diff), which the uploader already fails closed
+on. The §4 rule that only the owning PR may publish is therefore strengthened, not
+weakened: a merge is not a new moment to record.
+
+**And `cancel-in-progress` becomes PR-only.** Cancelling a superseded run is right
+for a PR and wrong for a baseline: back-to-back merges would cancel each other and
+hand back exactly the ambiguity about _which merge broke it_ that this trigger
+exists to remove.
+
+**What is still deliberately not covered.** The PR that BREAKS a spec still goes
+green; the baseline catches it one merge later. Closing that requires the widening
+rejected above, so the accepted cost is a red `main` for the length of one fix —
+bounded, attributed to the author who caused it, and no longer inherited by the
+next passer-by.
 
 #### Amendment 2026-08-10 (MOTIR-2600) — the lane is SHARDED, and it triggers on its own definition
 
