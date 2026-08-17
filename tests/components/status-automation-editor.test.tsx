@@ -13,7 +13,10 @@ import type { ProjectStatusAutomationDto } from '@/lib/dto/projectStatusAutomati
 // of `PATCH /api/projects/[key]/status-automation`, so global fetch is stubbed
 // and the design's states are asserted:
 //   (a) both switches render ON by default, with the ladder read-out and the
-//       cascade's consequence sentence;
+//       cascade's consequence sentence. The read-out carries FOUR rungs since
+//       Story MOTIR-2888 · Subtask MOTIR-2893 — derivation became a RECOMPUTE,
+//       so the surface must say a parent can come BACK, and must no longer
+//       promise the forward-only behaviour it was shipped describing;
 //   (b) each switch flips INDEPENDENTLY — the upward-only case (design panel 2)
 //       the two-switch model exists to express;
 //   (c) Save fires the right PATCH, is optimistic, and REVERTS on failure;
@@ -79,8 +82,40 @@ describe('StatusAutomationEditor — the default state (MOTIR-1622)', () => {
     // The whole reason the <dl> exists (design §4): "rolls up parent status"
     // alone does not let an admin predict the behaviour on their board.
     expect(screen.getByText('as soon as any child starts')).toBeTruthy();
-    expect(screen.getByText('when the last open child reaches review')).toBeTruthy();
+    expect(screen.getByText('when every unfinished child is in review')).toBeTruthy();
     expect(screen.getByText('when every child is finished or cancelled')).toBeTruthy();
+  });
+
+  it('renders the FOURTH rung — the parent can come BACK to To Do (MOTIR-2893)', () => {
+    render(editor());
+
+    // Derivation became a recompute (MOTIR-2891): a parent returns to To Do
+    // when a child is added or reopened and none has started. The rung is the
+    // only place the surface says so, so its absence would leave the page
+    // describing a ratchet the product no longer is.
+    expect(screen.getByText('when a child is added or reopened and none has started')).toBeTruthy();
+  });
+
+  it('renders the four rungs IN ORDER, with To Do last — the return trip', () => {
+    const { container } = render(editor());
+
+    // Row-for-row against design/projects/status-automation. The ORDER is the
+    // assertion: To Do reads as what happens after Done, not as the bottom of
+    // an ascending ladder, and a re-ordering would be a silent design change.
+    const terms = [...container.querySelectorAll('dl dt')].map((el) => el.textContent);
+    expect(terms).toEqual(['In Progress', 'In Review', 'Done', 'To Do']);
+  });
+
+  it('promises the rollup BOTH ways — no surviving forward-only clause', () => {
+    render(editor());
+
+    // The retired copy said the rollup "only ever moves a parent forward …
+    // reopening a child never moves a parent back". Asserting the new promise
+    // AND the absence of the old one, because a hint that merely gained a
+    // sentence would still be false.
+    expect(screen.getByText(/both ways/i)).toBeTruthy();
+    expect(screen.queryByText(/only ever moves a parent forward/i)).toBeNull();
+    expect(screen.queryByText(/never moves a parent back/i)).toBeNull();
   });
 
   it('states the cascade CONSEQUENCE — that unstarted children are completed too', () => {

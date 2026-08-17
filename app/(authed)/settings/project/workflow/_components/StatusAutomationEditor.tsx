@@ -164,9 +164,20 @@ export function StatusAutomationEditor({
       >
         {/* The ladder read-out (design §4). "Rolls up parent status" does not
             tell an admin WHEN each rung fires, which is the one thing they need
-            to predict the behaviour on their own board. A <dl> of three pairs —
+            to predict the behaviour on their own board. A <dl> of four pairs —
             a table would over-structure it, and a new primitive for one read-out
-            is the complexity the design system asks us not to add. */}
+            is the complexity the design system asks us not to add.
+
+            FOUR pairs since MOTIR-2893, matching `design/projects/status-automation`
+            row-for-row. `To Do` is LAST, after Done, and deliberately so: the
+            list reads as a sequence of things that happen to a parent, and the
+            todo rung is the RETURN TRIP (the recompute — MOTIR-2891 — brings a
+            parent back when a child reopens or an unstarted one is added). It is
+            also the only row that can fire on a parent the admin already
+            considers finished, which is the move they will be surprised by.
+            Putting it first, where an ascending ladder would want it, would
+            re-order the three existing rows to invent a second ordering of the
+            same ladder. */}
         <dl className="border-(--el-border) mt-2.5 grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1 border-l pl-3 text-xs leading-relaxed">
           <dt className="font-semibold whitespace-nowrap text-(--el-text-secondary)">
             {t('statusAutomation.rollup.ladder.inProgressStatus')}
@@ -185,6 +196,12 @@ export function StatusAutomationEditor({
           </dt>
           <dd className="text-(--el-text-helper) m-0">
             {t('statusAutomation.rollup.ladder.doneWhen')}
+          </dd>
+          <dt className="font-semibold whitespace-nowrap text-(--el-text-secondary)">
+            {t('statusAutomation.rollup.ladder.todoStatus')}
+          </dt>
+          <dd className="text-(--el-text-helper) m-0">
+            {t('statusAutomation.rollup.ladder.todoWhen')}
           </dd>
         </dl>
       </SwitchRow>

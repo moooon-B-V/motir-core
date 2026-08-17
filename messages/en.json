@@ -1594,14 +1594,16 @@
       "subtitle": "Keep a parent and its children in step. Motir derives status in both directions by default; each switch turns its own direction off.",
       "rollup": {
         "label": "Roll up parent status from children",
-        "hint": "A parent follows its children's progress. It only ever moves a parent forward, along moves your workflow already allows — reopening a child never moves a parent back.",
+        "hint": "A parent follows its children's progress, both ways — it moves forward as they progress, and comes back when one reopens or when a new unstarted child is added to it.",
         "ladder": {
           "inProgressStatus": "In Progress",
           "inProgressWhen": "as soon as any child starts",
           "inReviewStatus": "In Review",
-          "inReviewWhen": "when the last open child reaches review",
+          "inReviewWhen": "when every unfinished child is in review",
           "doneStatus": "Done",
-          "doneWhen": "when every child is finished or cancelled"
+          "doneWhen": "when every child is finished or cancelled",
+          "todoStatus": "To Do",
+          "todoWhen": "when a child is added or reopened and none has started"
         }
       },
       "cascade": {
