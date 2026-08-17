@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signIn, POST_AUTH_LANDING } from './_helpers/shell-session';
+import { signIn, signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -43,9 +43,21 @@ import { projectsService } from '@/lib/services/projectsService';
 //
 // The `goto` assertion below is then the behaviour that property buys, written
 // the way the three occurrences were written: sign in, navigate, land.
+//
+// ── And the second test: the two credential flows land in the SAME place ──
+//
+// MOTIR-2654 moved sign-IN to `/home` and left sign-UP on `/dashboard`, so for
+// a season the answer to "where does authenticating put me" depended on which
+// of two visually identical forms you had filled in — and the flow on the old
+// route was the one a brand-new account takes. MOTIR-2921 closed that. The
+// sign-up test below asserts the landing ROUTE, the RENDERED page there, and
+// the same one-navigation property, all against the SAME `POST_AUTH_LANDING`
+// the sign-in test uses: pinning both flows to one constant is what makes a
+// future divergence a red test rather than a quiet fork.
 
 const PWD = 'post-auth-landing-e2e-pass-123';
 const OWNER_EMAIL = 'landing-owner@example.com';
+const SIGNUP_EMAIL = 'landing-newcomer@example.com';
 
 test.describe('post-auth landing', () => {
   test.beforeEach(async () => {
@@ -99,5 +111,49 @@ test.describe('post-auth landing', () => {
     await page.goto('/items');
     await expect(page).toHaveURL(/\/items$/);
     await expect(page.getByRole('heading', { name: 'Work Items', exact: true })).toBeVisible();
+  });
+
+  test('signing UP lands on the same route as signing in, on the create-first door', async ({
+    page,
+  }) => {
+    // Counted the same way as the sign-in test: every non-prefetch fetch of the
+    // landing route, labelled by kind. Sign-up performs the page's own
+    // `router.push` and nothing else — Better-Auth's sign-up/email route, unlike
+    // sign-in's, does not answer `{ redirect: true, url }` (it has no `redirect`
+    // field at all), so its client redirect plugin never fires and there is no
+    // second, document navigation to race the first. Asserting the count here
+    // is what would catch that changing under us.
+    const landingNavigations: string[] = [];
+    page.on('request', (r) => {
+      if (new URL(r.url()).pathname !== POST_AUTH_LANDING) return;
+      if (r.headers()['next-router-prefetch'] === '1') return;
+      landingNavigations.push(r.isNavigationRequest() ? 'document' : 'rsc');
+    });
+
+    // The shared helper settles on a RENDERED `/home` — the URL AND the
+    // `home-page` marker — so reaching this line already proves the route.
+    await signUp(page, SIGNUP_EMAIL);
+    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+
+    expect(
+      landingNavigations,
+      'signing up must navigate to the landing route exactly ONCE, for the same reason signing in must: a second navigation to the same place races the first, and whichever loses is what aborts the next goto.',
+    ).toHaveLength(1);
+
+    // A brand-new account has an auto-created workspace with ZERO projects, so
+    // `/home` renders the shipped create-first door rather than its My-work
+    // list (MOTIR-2761; `docs/decisions/home-scope.md` §2.2). This is the
+    // criterion the landing move turns on — the actor most affected by "where
+    // does post-auth land" is the one who has nothing yet, and what they must
+    // find here is a way to start.
+    await expect(
+      page.getByRole('heading', { name: 'Create your first project', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create project' }).first()).toBeVisible();
+
+    // `/dashboard` still exists and still renders — it stopped being a landing,
+    // it did not stop being a page.
+    await page.goto('/dashboard');
+    await expect(page.getByTestId('dashboard-page')).toBeVisible();
   });
 });

@@ -19,7 +19,7 @@
 // surfaces.
 //
 // Setup mirrors issue-list-flow.spec.ts: sign up through the real UI
-// (shell-session.signUp → auto-workspace → /dashboard), then seed the project +
+// (shell-session.signUp → auto-workspace → /home), then seed the project +
 // the host work item SERVER-SIDE through the shipped services (the one
 // sanctioned cross-layer reach for tests). The submit, promote, and decline
 // themselves go through the BROWSER — that is the surface under test.

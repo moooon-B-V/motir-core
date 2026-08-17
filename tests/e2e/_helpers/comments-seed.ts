@@ -2,7 +2,8 @@
 //
 // Stands up the comment journey's cast + surface: the PM signs up through the
 // real browser UI (shell-session signUp — the page needs a live session) and
-// creates the first project via the dashboard CTA (which pins it active);
+// creates the first project via the projects-empty-state CTA on /home (which
+// pins it active);
 // then, server-side via the sanctioned test cross-layer reach, a second
 // workspace member ("Bo Philips" — the mention target the Story verification
 // recipe names) and the issue under comment are minted directly through the
@@ -43,7 +44,7 @@ export interface CommentsFixture {
 /**
  * Browser sign-up for the PM + first project, then server-side: Bo (a second
  * workspace member, the mention target) and one task to comment on. Leaves
- * the page signed in as the PM on /dashboard with the project active.
+ * the page signed in as the PM on /home with the project active.
  */
 export async function seedCommentsFixture(
   page: Page,

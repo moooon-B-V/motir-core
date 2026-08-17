@@ -52,7 +52,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     await createButton.click();
     const landed = await Promise.race([
       page
-        .waitForURL('**/dashboard', { timeout: 9_000 })
+        .waitForURL('**/home', { timeout: 9_000 })
         .then(() => true)
         .catch(() => false),
       rateLimitAlert
@@ -60,12 +60,12 @@ async function signUp(page: Page, email: string): Promise<void> {
         .then(() => false)
         .catch(() => false),
     ]);
-    if (landed || page.url().includes('/dashboard')) return;
+    if (landed || page.url().includes('/home')) return;
     // Throttled — wait out the full 10s window (+buffer) so the bucket
     // resets before the next single click.
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
 }
 
 // Navigate to an authed route, tolerating the rare post-sign-up race

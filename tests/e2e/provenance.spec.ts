@@ -15,7 +15,7 @@
 //     mark_integrated, the implementation triple (BYOK + harness + model) appears.
 //
 // Setup mirrors work-item-type / epic2-acceptance: sign up through the real UI
-// (auto-workspace → /dashboard), seed the project + pin it active SERVER-SIDE via
+// (auto-workspace → /home), seed the project + pin it active SERVER-SIDE via
 // projectsService, then seed the non-UI provenance items directly through
 // workItemsService (the one sanctioned cross-layer reach for tests) and drive the
 // manual create + every assertion through the real shell. Every persisted-state

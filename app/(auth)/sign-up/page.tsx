@@ -56,19 +56,28 @@ function SignUpForm() {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  // ⚠️ SIGN-UP KEEPS `/dashboard`, and it is a decision rather than an
-  // oversight (Subtask MOTIR-2654). Sign-IN now lands on `/home` — but a
-  // brand-new account has nothing waiting on it, so Home would greet its very
-  // first visitor with an empty state whose next action (`/ready`) needs a
-  // project they do not have yet. `/dashboard`'s projects-empty branch offers
-  // the one thing that IS the next action here: create your first project.
+  // The post-auth landing: `/home`, the SAME destination sign-in defaults to
+  // (`sign-in/page.tsx`). Both credential flows land in one place, and that is
+  // now the whole answer to "where does signing in put me" (MOTIR-2921).
   //
-  // The two destinations are the same question answered for two different
-  // people — "what is waiting on you" for someone with a workspace, "start
-  // something" for someone with nothing — which is why this is not a fork to
-  // collapse later. If Home ever learns the no-project case, this is the line
-  // to revisit.
-  const callbackURL = searchParams.get('next') ?? '/dashboard';
+  // ⚠️ This line USED to read `/dashboard`, and the comment here defended it:
+  // a brand-new account has nothing waiting on it, so Home would have greeted
+  // its first visitor with a My-work empty state whose next action (`/ready`)
+  // needs a project they do not have — while `/dashboard`'s projects-empty
+  // branch offered the one thing that IS next, create your first project. That
+  // reasoning was correct, and it named its own expiry: *"if Home ever learns
+  // the no-project case, this is the line to revisit."*
+  //
+  // It has. MOTIR-2761 narrowed `/home` to the ACTIVE PROJECT and gave its
+  // no-project branch the shipped `ProjectsEmptyState` — the very component
+  // `/dashboard` renders there — so the create-first door is what a
+  // project-less actor now sees on Home. `docs/decisions/home-scope.md` §2.2
+  // writes down the discriminator (a route a reader is LANDED on gets the
+  // create-first door) and §2.3 decides post-auth lands on `/home`
+  // unconditionally, naming this line's split as the defect to close.
+  //
+  // An explicit `?next=` still WINS, exactly as on sign-in.
+  const callbackURL = searchParams.get('next') ?? '/home';
 
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [email, setEmail] = useState('');

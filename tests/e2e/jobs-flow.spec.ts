@@ -58,7 +58,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/dashboard', { timeout: 30_000 });
+  await page.waitForURL('**/home', { timeout: 30_000 });
 }
 
 // The signed-up user's auto-created workspace is "{local-part}'s Workspace".

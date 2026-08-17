@@ -7,7 +7,7 @@
 // gate the card folds 2.5.6 into); this file owns the behavioural flow.
 //
 // Setup mirrors issue-create-edit-flow.spec.ts: sign up through the real UI
-// (shell-session.signUp → auto-workspace → /dashboard), then seed the project +
+// (shell-session.signUp → auto-workspace → /home), then seed the project +
 // work items SERVER-SIDE through the shipped services (projectsService /
 // workItemsService) — the one sanctioned cross-layer reach for tests, the same
 // path seedActiveProject + the work-item integration tests use, and the path
