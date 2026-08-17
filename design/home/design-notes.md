@@ -1,14 +1,50 @@
 # Home — design notes
 
 Design reference for the `home` UI area — **`/home`, the signed-in landing
-surface** (Story MOTIR-2649, drawn by the MOTIR-2650 design gate). There was no
-`design/home/` before this asset. It is the layout source of truth for
-**MOTIR-2653** (the page) and **MOTIR-2654** (the door), and both carry it in
-`blocked_by`.
+surface** (Story MOTIR-2649, drawn by the MOTIR-2650 design gate, **revised by
+MOTIR-2761**). There was no `design/home/` before this asset. It is the layout
+source of truth for **MOTIR-2653** (the page) and **MOTIR-2654** (the door), and
+both carry it in `blocked_by`.
 
-| Surface                      | Asset                              | Notes                                                                                                                                     |
-| ---------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **The `/home` landing page** | **`home.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · populated · Watching · the all-empty page · both empty states · narrow. Exports to `home.png`. |
+| Surface                      | Asset                              | Notes                                                                                                                                                         |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The `/home` landing page** | **`home.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · populated · Watching · the all-empty page · both empty states · narrow · no active project. Exports to `home.png`. |
+
+**Panels:** A the door · 1 populated · 2 Watching · 3 the all-empty page · 4 both
+empty states · 5 narrow (`< md`) · **6 no active project** (added by MOTIR-2761).
+
+---
+
+## ⚠️ Scope — the ACTIVE PROJECT (revised 2026-08-17, MOTIR-2761)
+
+**`/home` reads the active project, exactly like `/items`, `/ready` and
+`/boards`.** This asset drew it **workspace-scoped**, and that was the defect
+MOTIR-2761 fixed rather than a preference someone changed.
+
+MOTIR-2649 settled the scope from external precedent — Jira Cloud "Your work",
+Linear Inbox, Plane Home. The research was real and correctly summarised, and it
+was applied one level too shallowly: **in all three products that surface sits
+ABOVE the project selector.** Its scope is cross-project because its _placement_
+is cross-project; they are one decision. Motir imported the scope and then
+MOTIR-2654 put Home **first in the PROJECT tier of the rail** — `SidebarNav`'s
+primary section is built inside `if (hasProject)` — directly under the
+`org › workspace › project` switcher the shell renders on every authed page. The
+shipped result was a switcher that did nothing on the first screen a new user
+ever sees, with a passing E2E test asserting exactly that.
+
+Three consequences for this asset, all drawn:
+
+1. **No `Project` column**, in any panel. Every row is in the active project,
+   which the switcher two rows above already names.
+2. **The subtitle names the PROJECT**, not the workspace.
+3. **A no-project state exists** — Panel 6 — which a workspace-scoped surface
+   did not need.
+
+**What did NOT change:** the row's other cells, the tab strip, the two empty
+states, the narrow collapse, the agent badge, and the post-auth landing. The
+cross-project question — _"what is on me across this whole workspace"_ — is
+**retained**, at the workspace tier, as **MOTIR-2920**; it is a different
+surface, not this one. `docs/decisions/home-scope.md` is the record.
 
 ---
 
@@ -72,8 +108,9 @@ because the selected tab must live in the URL (below).
 
 A new authed route **`app/(authed)/home/page.tsx`** (Server Component), rendering
 inside the shipped shell (`AppLayout`: top nav, the 240px rail, `<main id="main">`
-with `px-4 py-6 sm:px-6 lg:px-8`). It resolves the session + **workspace** and
-calls `homeService` — it does **not** resolve an active project.
+with `px-4 py-6 sm:px-6 lg:px-8`). It resolves the session and the **ACTIVE
+PROJECT** — `getActiveProject()`, the same resolver `/items`, `/ready` and
+`/boards` use — and calls `homeService` with it (§Scope; MOTIR-2761).
 
 **Two doors, both drawn in Panel A:**
 
@@ -86,7 +123,17 @@ calls `homeService` — it does **not** resolve an active project.
    free.
 2. **The post-auth landing.** Signing in with no `?next=` lands on `/home`
    (MOTIR-2654 moves the `callbackURL` default). `?next=` still wins; the
-   `draftId → /onboarding` branch is untouched.
+   `draftId → /onboarding` branch is untouched. **Unchanged by MOTIR-2761** —
+   including for an actor with no project, who lands on Panel 6 rather than being
+   branched away by the auth page (`docs/decisions/home-scope.md` §2.3).
+
+**And with NO active project, there is NO rail row — Panel 6.** The `!hasProject`
+duplicate Home entry MOTIR-2654 added is deleted: it justified itself by _"Home is
+workspace-scoped: it works with no project"_, the property §Scope removed. Home is
+now correctly absent there alongside every other primary entry, so `/home` is only
+ever LANDED on — which is why its no-project state is the **create-first door**
+(the shipped `ProjectsEmptyState`, reused from `/dashboard`) rather than the
+actionless `noProject` notice `/ready`, `/items` and `/boards` show.
 
 The halo around the Home entry in Panel A is **review decoration** — it is not
 part of the design.
@@ -125,11 +172,12 @@ it.)
 **Home's column set — the same cells, a Home-specific set:**
 
 ```
-Title (minmax(10rem,1fr)) · Project (116) · Your role (96) · Assignee (140) · Status (108)
+Title (minmax(10rem,1fr)) · Your role (96) · Assignee (140) · Status (108)
 ```
 
-→ minimum **754px**; measured title track **324px** at the 1200 viewport, 404 at
-1280, 564 at 1440. Rows stay the shipped 44px.
+→ minimum **622px**; measured title track **440px** at the 1200 viewport, 520 at
+1280, 680 at 1440. Rows stay the shipped 44px. _(Was five columns with `Project`
+at 116px and a 754px minimum, until MOTIR-2761 — §Scope.)_
 
 **What was dropped, and why.** `Reporter` (on a list defined by _you are the
 assignee or the reporter_, a Reporter column answers a question the list has
@@ -137,21 +185,14 @@ already answered — "Your role" carries it), `Est.`, `Points`, and the trailing
 row-actions `⋯` (the whole-row link + the `?peek=` quick view are the two
 affordances Home needs; bulk actions belong on `/items`).
 
-**What was added.** `Project` — the AC requires the row to identify its project,
-and Home is the first list in the product that spans projects. `Your role` — see
-below.
+**What was added.** `Your role` — see below. _(`Project` was also added, and
+REMOVED again by MOTIR-2761: it existed because Home spanned projects, and once
+the surface reads the active project every row would repeat the value the
+switcher two rows above already names.)_
 
 ---
 
-## The two cells that only exist here
-
-### `Project`
-
-The shipped neutral `Pill` (`--el-chip-bg` fill, `--el-chip-border`,
-`--el-text-secondary` ink, `--radius-badge`, `--spacing-chip-x/y`), carrying the
-project **name**, truncated. Not the key: the identifier beside it already starts
-with the key (`MOTIR-2651`), so repeating it would add a column and no
-information; the name is the part a reader of an unfamiliar key does not have.
+## The one cell that only exists here
 
 ### `Your role` — "Assigned" · "Reported" · "Both" (and "Watching" on tab 2)
 
@@ -277,9 +318,9 @@ The rail goes off-canvas into the shipped drawer; content is `viewport − 32`
 (`px-4`). At 420px that is **388px**, and a five-column grid cannot survive it.
 
 **The row COLLAPSES to two lines rather than clipping.** Line 1: type glyph +
-mono key + title. Line 2, indented to the title and wrapping: the project chip,
-the role, the assignee (avatar + name, **agent badge intact**), the status chip.
-The row grows 44px → ~60px. The whole-row stretched link is unchanged.
+mono key + title. Line 2, indented to the title and wrapping: the role, the
+assignee (avatar + name, **agent badge intact**), the status chip. The row grows
+44px → ~60px. The whole-row stretched link is unchanged.
 
 The **tab strip keeps its counts and does not shrink** — it is how the reader
 switches audience, and with the widgets gone it is the only control on the page,
@@ -292,9 +333,11 @@ so there is nothing to trade it against.
 The `/items` · `/ready` page-header grammar:
 
 - `h1` — `font-serif text-2xl font-semibold text-(--el-text)` reading **"Home"**.
-- Subtitle — `text-sm text-(--el-text-muted)` reading **"Everything across
-  {workspace} that is waiting on you."** The noun is the **workspace**, not a
-  project, because that is exactly the scope change this surface makes.
+- Subtitle — `text-sm text-(--el-text-muted)` reading **"Everything in {project}
+  that is waiting on you."** The noun is the **project**, matching the switcher
+  directly above it in the shell. _(It read "across {workspace}" until
+  MOTIR-2761 — §Scope. The key keeps its name, `home.subtitle`, in both
+  catalogues; only its placeholder and copy change, so parity holds.)_
 
 No count chip beside the title: the tabs carry the counts, and a third number
 would be a fourth thing to reconcile.
@@ -315,7 +358,6 @@ would be a fourth thing to reconcile.
 | type glyph                        | `--el-type-{epic,story,task,bug,subtask}`                                                                                            | `h-4 w-4`                                                                                      |
 | identifier                        | `--el-text-muted`, `font-mono text-xs`                                                                                               | —                                                                                              |
 | title                             | `--el-text`                                                                                                                          | truncate                                                                                       |
-| project chip                      | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                                          | `--radius-badge` · `--spacing-chip-x/y`                                                        |
 | Your role · `Both`                | `--el-text-secondary` · `--el-text-strong` + `font-medium`                                                                           | `text-xs`                                                                                      |
 | avatar                            | `bg-(--el-text)` / `--el-text-inverted`                                                                                              | `rounded-full` 22px                                                                            |
 | **agent badge**                   | **`--el-executor-agent`** / `--el-accent-text`, `ring-(--el-page-bg)`                                                                | `rounded-full` 14px                                                                            |
@@ -338,7 +380,12 @@ would be a fourth thing to reconcile.
   cursor-paged and hand back an opaque `nextCursor`; MOTIR-2653 picks the control
   (the shipped `IssueListPager` is the obvious reuse) and keeps the cursor in the
   URL beside `?tab=`.
-- **Where a newly signed-up user lands** — MOTIR-2654 decides and justifies it.
+- **Where a newly signed-up user lands** — MOTIR-2654 decides and justifies it,
+  and MOTIR-2921 corrects sign-UP's divergent `/dashboard` default. Not this
+  asset's call either way.
+- **The cross-project "my work" surface** — retained at the workspace tier as
+  MOTIR-2920 (`docs/decisions/home-scope.md` §3). It will have its own design
+  area; nothing here draws it.
 
 ## Context refs
 

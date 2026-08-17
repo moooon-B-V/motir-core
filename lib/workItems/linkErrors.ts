@@ -61,6 +61,38 @@ export class WorkItemLinkCycleError extends WorkItemLinkError {
  * The two referenced work items live in different workspaces — cross-
  * workspace links are forbidden (RLS tenancy boundary). Surfaced from the
  * WI_LINK_CROSS_WORKSPACE trigger marker.
+ *
+ * ⚠️ **This is a DB-BACKSTOP error, not the answer a caller gets.** Decided
+ * 2026-08-17 (MOTIR-2919). `workItemsService.linkWorkItems` and the
+ * create-with-links path both answer `WorkItemNotFoundError` for a far end in
+ * another workspace. Reaching this class means the SERVICE guard was bypassed
+ * — a direct `workItemLinkRepository.create`, or a service bug — and the
+ * trigger caught it (`tests/integration/work-items/link-repository.test.ts`).
+ *
+ * **Why the service does not raise it.** Telling a caller "cannot link ACROSS
+ * WORKSPACES" confirms that the id they named resolves in some other tenant.
+ * That is the existence oracle the 404-not-403 contract refuses everywhere
+ * else in this codebase — see `docs/decisions/public-api-conventions.md` §
+ * *Errors* ("a 403 on a resource in another workspace confirms that the
+ * resource EXISTS"). The public API had already applied it to this exact code
+ * (`lib/api/v1/errors.ts`: `CROSS_WORKSPACE_LINK: 404`, *"404 on the TARGET
+ * key, not 403"*), and `app/api/v1/work-items/[key]/links/route.ts` already
+ * DOCUMENTED the service as answering 404. The service was the layer that had
+ * drifted; MOTIR-2919 aligned it rather than deciding anything new.
+ *
+ * **What was weighed against it.** The typed error carries a message a user
+ * could act on in the one case that is not an attack — an id they legitimately
+ * hold in a workspace they are also a member of. It was rejected because the
+ * message is a constant that names no workspace and offers no link, so it is
+ * barely more actionable than "not found"; making it genuinely actionable
+ * would mean naming the other tenant, which is a strictly larger leak. A
+ * membership-aware variant (distinguish only when the caller is a member of
+ * BOTH workspaces) is the door left open — it needs a deliberate privileged
+ * read and a decision of its own, and nobody has asked for one.
+ *
+ * **Do not "restore" the service-layer throw to make a test green.** The
+ * assertions that used to expect it now say so in a comment; changing them
+ * back reopens a settled question and reintroduces the oracle.
  */
 export class CrossWorkspaceLinkError extends WorkItemLinkError {
   readonly tag = 'CROSS_WORKSPACE_LINK' as const;

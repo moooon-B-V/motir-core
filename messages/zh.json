@@ -6078,7 +6078,7 @@
   },
   "home": {
     "heading": "主页",
-    "subtitle": "{workspace} 中所有等待你处理的工作。",
+    "subtitle": "{project} 中所有等待你处理的工作。",
     "tabs": {
       "label": "主页视图",
       "myWork": "我的工作",
@@ -6086,7 +6086,6 @@
     },
     "columns": {
       "title": "标题",
-      "project": "项目",
       "role": "你的角色",
       "assignee": "负责人",
       "status": "状态"

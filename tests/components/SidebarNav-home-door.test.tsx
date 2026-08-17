@@ -10,11 +10,13 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // nobody has, so this is the half of the story that has to be asserted rather
 // than assumed.
 //
-// Two of these cover traps rather than behaviour: the row is dropped SILENTLY if
-// `/home` is missing from the nav-access map (`canOfferNavDestination` answers
-// false for an href it does not carry), and it would be absent for a reader with
-// no active project, who is exactly the reader most likely to have just signed
-// in and landed there.
+// One of these covers a trap rather than behaviour: the row is dropped SILENTLY
+// if `/home` is missing from the nav-access map (`canOfferNavDestination`
+// answers false for an href it does not carry), so its absence would not fail
+// loudly anywhere else.
+//
+// ⚠️ The no-project case INVERTED with MOTIR-2761 — `/home` is project-scoped
+// now, so the row is absent there rather than duplicated into it. See that test.
 
 let pathname = '/home';
 vi.mock('next/navigation', () => ({
@@ -70,14 +72,27 @@ describe('SidebarNav — the Home entry', () => {
     );
   });
 
-  it('is STILL OFFERED with no active project — the state a fresh sign-in lands in', () => {
-    // Every other primary entry is project-scoped and correctly absent here.
-    // Home is workspace-scoped and is where signing in now lands, so a reader
-    // without a project would otherwise have no row back to the page they
-    // arrived on.
+  it('is ABSENT with no active project — the row promised a room the page cannot open', () => {
+    // The INVERSE of what this asserted until MOTIR-2761, and the inversion is
+    // the point: the duplicate `!hasProject` Home row justified itself by "Home
+    // is workspace-scoped: it works with no project", which is exactly the
+    // property the narrowing removed. Home now joins every other primary entry
+    // in being correctly absent — asserted beside `Boards`, which has always
+    // been (`docs/decisions/home-scope.md` §2.1).
+    //
+    // `/home` stays reachable by URL in this state and renders the create-first
+    // door there; what goes is the NAV row, not the route.
     renderWithIntl(<SidebarNav activeProject={null} user={USER} />);
-    expect(screen.getByRole('link', { name: 'Home' }).getAttribute('href')).toBe('/home');
+    expect(screen.queryByRole('link', { name: 'Home' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Boards' })).toBeNull();
+    // …and no primary destination survives at all — the rail keeps only its
+    // bottom section, so this cannot pass by Home merely moving.
+    expect(
+      screen
+        .getAllByRole('link')
+        .map((a) => a.getAttribute('href'))
+        .filter((h) => h === '/home' || h === '/dashboard' || h === '/items'),
+    ).toEqual([]);
   });
 
   it('survives the nav-access gate — the row is not silently dropped', () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Guard for MOTIR-1949: a PR that changes no `tests/e2e/acceptance*.spec.ts`
@@ -193,15 +195,22 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     expect(acceptanceBuildJob).toBeDefined();
     expect(acceptanceBuildJob).toContain('pnpm build');
     expect(acceptanceBuildJob).toMatch(/name:\s*next-build/);
-    expect(acceptanceJob).toMatch(/^\s*needs:\s*build\s*$/m);
+    // BOTH edges since MOTIR-2908: `build` for the artifact and the gate it
+    // carries, `membership` because a job can only read the outputs of a job it
+    // needs and that is where the leg count is derived. Asserted as the pair so
+    // dropping either one is a failure rather than a silent behaviour change.
+    expect(acceptanceJob).toMatch(/^\s*needs:\s*\[membership, build\]\s*$/m);
   });
 
   it('runs the suite as a shard matrix, passing the leg through to Playwright', () => {
     // The matrix and the CLI flag have to agree: a matrix that never reaches
-    // `--shard` would run the WHOLE suite four times and publish each receipt
-    // four times over.
-    expect(acceptanceJob).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
-    expect(acceptanceJob).toMatch(/total:\s*\[4\]/);
+    // `--shard` would run the WHOLE suite N times and publish each receipt N
+    // times over. Since MOTIR-2908 they agree by reading the SAME output — the
+    // matrix is `fromJSON(shards)` and the denominator is `legs`, both from the
+    // one gate step, so they cannot drift apart.
+    expect(acceptanceJob).toMatch(
+      /shard:\s*\$\{\{\s*fromJSON\(needs\.membership\.outputs\.shards\)\s*\}\}/,
+    );
     // `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
     // the stories in review, so an EMPTY lane — and a shard leg that draws zero
     // specs from a small one — is a legitimate state, not a misconfiguration.
@@ -209,8 +218,12 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     // PR touching this workflow goes red while no story is in flight.
     expect(acceptanceJob).toContain(
       'pnpm test:e2e --config playwright.acceptance.config.ts ' +
-        '--pass-with-no-tests --shard=${{ matrix.shard }}/${{ matrix.total }}',
+        '--pass-with-no-tests --shard=${{ matrix.shard }}/${{ needs.membership.outputs.legs }}',
     );
+    // The fixed sizing MOTIR-2600 shipped is GONE, not merely shadowed. A
+    // literal matrix left behind alongside the derived one would win silently.
+    expect(acceptanceJob).not.toMatch(/shard:\s*\[1, 2, 3, 4\]/);
+    expect(acceptanceJob).not.toMatch(/matrix\.total/);
   });
 
   it('lets every leg finish — a red shard does not cancel the others', () => {
@@ -244,7 +257,14 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     expect(publish).toContain('ACCEPTANCE_CHANGED_SPECS: ${{ steps.owned-specs.outputs.specs }}');
     // Nothing gates the publish on a particular shard — that would make one leg
     // responsible for receipts recorded on another, which it cannot see.
-    expect(publish).not.toMatch(/matrix\.shard/);
+    //
+    // Through `codeOf` (MOTIR-2908), for the same reason the `continue-on-error`
+    // assertion above uses it: this asks what the step DOES. The splitter
+    // attributes a step's leading comment block to the step BEFORE it, so the
+    // report-upload step's prose lands in this chunk — and that prose is exactly
+    // where `matrix.shard` gets EXPLAINED. A guard that a correct explanation can
+    // fail is a guard that pushes the next reader to delete the explanation.
+    expect(codeOf(publish!)).not.toMatch(/matrix\.shard/);
   });
 });
 
@@ -294,9 +314,12 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
     expect(membershipJob).not.toContain('actions/postgres');
     expect(membershipJob).not.toContain('pnpm build');
     // The gate hangs off `build`, and `acceptance` inherits the skip via `needs`.
+    // MOTIR-2908 added a SECOND edge, `membership`, for the derived leg count —
+    // it changes nothing here: `membership` always runs, so it never skips
+    // `acceptance`, and the skip still arrives through `build`.
     expect(buildJob).toMatch(/^\s*needs:\s*membership\s*$/m);
     expect(buildJob).toMatch(/^\s*if:\s*needs\.membership\.outputs\.run == 'true'\s*$/m);
-    expect(acceptanceJob).toMatch(/^\s*needs:\s*build\s*$/m);
+    expect(acceptanceJob).toMatch(/^\s*needs:\s*\[membership, build\]\s*$/m);
   });
 
   it('matches the lane the Playwright config would actually collect', () => {
@@ -340,6 +363,155 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
     expect(codeOf(acceptanceWorkflow)).toMatch(
       /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
     );
+  });
+});
+
+// ── MOTIR-2908 ───────────────────────────────────────────────────────────────
+//
+// The leg count is DERIVED from the lane's membership instead of fixed at four.
+// `4` was right for the 26-spec lane MOTIR-2600 measured and stopped being right
+// six days later, when MOTIR-2765 gave an acceptance spec a lifecycle and
+// MOTIR-2769 triaged every member out: a leg is ~3 machine-minutes of pure setup,
+// so four legs over a lane holding nothing is three copies of a checkout, a
+// Postgres, a Playwright install and an artifact download, drawing no tests.
+//
+// ⚠️ THESE ASSERTIONS RUN THE SHIPPED SHELL — they do not describe it. Every
+// other guard in this file is a text match, which is the right tool for a
+// STRUCTURE (a `needs:` edge, an artifact name) and the wrong one for
+// ARITHMETIC: a regex that agrees with `LEGS="${COUNT}"` agrees just as happily
+// with an off-by-one, and the floor and the cap are exactly where an off-by-one
+// would sit. So the gate step's `run:` block is extracted from the workflow and
+// executed by `bash` against a fabricated lane, and the outputs it writes to
+// `$GITHUB_OUTPUT` are read back — the same mechanism the runner uses.
+describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
+  const membershipJob = jobsOf(acceptanceWorkflow).get('membership');
+
+  /**
+   * The `gate` step's `run: |` block, dedented — the literal script the runner
+   * executes. Anchored on `id: gate` so a second `run:` block in the job cannot
+   * be picked up by accident.
+   */
+  const gateScript = ((): string => {
+    const lines = acceptanceWorkflow.split('\n');
+    const gateAt = lines.findIndex((l) => /^\s*- id: gate\s*$/.test(l));
+    expect(gateAt).toBeGreaterThan(-1);
+    const runAt = lines.findIndex((l, i) => i > gateAt && /^\s*run: \|\s*$/.test(l));
+    expect(runAt).toBeGreaterThan(gateAt);
+    const indent = /^ */.exec(lines[runAt + 1]!)![0].length;
+    const body: string[] = [];
+    for (const line of lines.slice(runAt + 1)) {
+      if (line.trim() !== '' && /^ */.exec(line)![0].length < indent) break;
+      body.push(line.slice(indent));
+    }
+    return body.join('\n');
+  })();
+
+  /** Run the shipped gate over a lane holding `specCount` members. */
+  function runGate(specCount: number, eventName: 'pull_request' | 'push') {
+    const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
+    try {
+      mkdirSync(join(dir, 'tests/e2e'), { recursive: true });
+      for (let i = 1; i <= specCount; i++) {
+        writeFileSync(join(dir, `tests/e2e/acceptance-story-${i}.spec.ts`), '');
+      }
+      // A member of the MAIN lane, not this one: `testMatch` is on the BASENAME,
+      // so `acceptance` must be a PREFIX. Counting it would hold the baseline
+      // permanently on — and, now, would also over-size the fan-out.
+      writeFileSync(join(dir, 'tests/e2e/epic2-acceptance.spec.ts'), '');
+      const outPath = join(dir, 'github-output');
+      const summaryPath = join(dir, 'github-step-summary');
+      writeFileSync(outPath, '');
+      writeFileSync(summaryPath, '');
+      execFileSync('bash', ['-c', gateScript], {
+        cwd: dir,
+        env: {
+          ...process.env,
+          EVENT_NAME: eventName,
+          GITHUB_OUTPUT: outPath,
+          GITHUB_STEP_SUMMARY: summaryPath,
+        },
+        stdio: 'pipe',
+      });
+      return Object.fromEntries(
+        readFileSync(outPath, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            const at = line.indexOf('=');
+            return [line.slice(0, at), line.slice(at + 1)] as const;
+          }),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('publishes the derived fan-out as job outputs', () => {
+    // A `steps.*` output is only readable by another job if the JOB re-exports
+    // it. Without these two lines the matrix expression below resolves to the
+    // empty string and the shard job produces no legs at all.
+    expect(membershipJob).toMatch(/^\s*shards:\s*\$\{\{\s*steps\.gate\.outputs\.shards\s*\}\}/m);
+    expect(membershipJob).toMatch(/^\s*legs:\s*\$\{\{\s*steps\.gate\.outputs\.legs\s*\}\}/m);
+  });
+
+  it('interpolates nothing into the gate script', () => {
+    // The script reads its one variable input through `env:` (`EVENT_NAME`). A
+    // `${{ }}` inside the `run:` body would be substituted by the runner before
+    // bash ever sees it — which would make the executed-script assertions below
+    // test something the runner does not run, and is the shape script injection
+    // takes in a workflow.
+    expect(gateScript).not.toContain('${{');
+    expect(membershipJob).toContain('EVENT_NAME: ${{ github.event_name }}');
+  });
+
+  it.each([
+    { specs: 0, legs: 1 },
+    { specs: 1, legs: 1 },
+    { specs: 2, legs: 2 },
+    { specs: 3, legs: 3 },
+    { specs: 4, legs: 4 },
+    { specs: 9, legs: 4 },
+    { specs: 26, legs: 4 },
+  ])('sizes a $specs-spec lane to $legs leg(s)', ({ specs, legs }) => {
+    const out = runGate(specs, 'pull_request');
+    expect(out.count).toBe(String(specs));
+    expect(out.legs).toBe(String(legs));
+    // The matrix reads `shards` through `fromJSON`, so it must be a JSON array —
+    // and it must enumerate exactly the legs the denominator promises, or
+    // Playwright is handed a shard index outside its own partition.
+    expect(JSON.parse(out.shards!)).toEqual(Array.from({ length: legs }, (_, i) => i + 1));
+  });
+
+  it('keeps MOTIR-2600 whole at the cap — a grown lane gets the sizing it measured', () => {
+    // THE regression this cap exists to prevent. MOTIR-2600 sized four legs
+    // against 26 specs and 25.7 min of test time; a lane that fills up again
+    // must get that shape back byte-for-byte, not a serial run.
+    expect(runGate(26, 'pull_request').shards).toBe('[1,2,3,4]');
+    expect(runGate(4, 'push').shards).toBe('[1,2,3,4]');
+  });
+
+  it('floors an empty lane at ONE leg, and only on a PR', () => {
+    // A `push` against an empty lane never reaches the fan-out at all — the
+    // MOTIR-2760 gate stops at the ~10s membership job — so the floor is about
+    // the PR case: a lane-definition PR runs no tests either way, and the one
+    // leg is what still proves the harness BOOTS. Zero legs would prove nothing
+    // on precisely the PRs whose subject is this lane.
+    const push = runGate(0, 'push');
+    expect(push.run).toBe('false');
+    expect(push.legs).toBe('1');
+
+    const pr = runGate(0, 'pull_request');
+    expect(pr.run).toBe('true');
+    expect(pr.legs).toBe('1');
+    expect(pr.shards).toBe('[1]');
+  });
+
+  it('counts the lane the Playwright config would collect, not the word', () => {
+    // Every case above plants an `epic2-acceptance.spec.ts` decoy; this is the
+    // one that reads it. A `*acceptance*` match would count it and size a
+    // one-spec lane to two legs — and hold the `push` baseline permanently on.
+    expect(runGate(0, 'push').count).toBe('0');
+    expect(runGate(1, 'pull_request').count).toBe('1');
   });
 });
 
