@@ -23,6 +23,17 @@
   four-rung settings surface), MOTIR-2891 (`parentStatusRollupService` — rung 4 + the
   recompute), MOTIR-2892 (the trigger seam), MOTIR-2893 (settings copy, en + zh),
   MOTIR-2894 (integration + E2E).
+- **Amended:** 2026-08-17 (Yue · MOTIR-2901) — **the FORWARD arm applies the recompute by
+  WALKING the ladder**, taking the highest legal stepping stone at or below the target and
+  repeating, instead of one hop with a fallback to the next matching rung. The single-hop
+  rule stranded a parent whose whole child set finished before the first derivation pass
+  ran: the all-done aggregate matches exactly one rung, so there was nothing below `done`
+  to fall to, and `todo → done` is not an edge. §3's FORWARD bullet and its
+  one-move-per-pass bullet are **replaced**; §5's termination proof gains **part 3** (the
+  walk is bounded by a strictly increasing rank on a four-point scale, inside one pass, and
+  re-emits nothing without a child-set change); **Consequence 10** records the multi-revision
+  activity feed. **NO `workflow_transition` row was added** — in particular not
+  `todo → done`; the board's draggable edges are unchanged.
 
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
@@ -137,6 +148,13 @@ rung-3 condition dropped its clause about where the parent currently stands, and
 whole evaluation became a **recompute** rather than a climb — see §5's first bullet for
 the semantics and the paragraph below for the mechanism._
 
+_Amended again 2026-08-17 (MOTIR-2901). The FORWARD arm applies the recompute by **walking**
+the ladder rather than taking one hop with a fallback: the single-hop rule stranded a parent
+whose whole child set finished before the first derivation pass ran, because the all-done
+aggregate matches exactly one rung and there is nothing below it to fall to. **No
+`workflow_transition` row was added** — see the walk bullet at the end of this section, and
+§5's termination argument, part 3._
+
 **The parent's status is a FUNCTION of its children's current statuses.** Evaluate the
 function, and set the parent to what it returns — forward if that is ahead of where the
 parent stands, backward if it is behind. Evaluated against the **direct**,
@@ -182,10 +200,12 @@ Notes that are decisions, not detail:
 - **THE DIRECTION DECIDES THE AUTHORITY** _(amended 2026-08-17)_. Rank the target on the
   same scale as the parent's current status, and use the comparison to pick **which call
   to make**, never to veto the move:
-  - **FORWARD** (the target ranks ahead of where the parent stands) — **unchanged, and
-    still legality-gated.** The move goes through the ordinary `applyStatusTransition`
-    **without** `system`, i.e. along the project's **real** workflow edges, keeping the
-    highest-legal-rung fallback below. An illegal move is a **logged no-op, never a
+  - **FORWARD** (the target ranks ahead of where the parent stands) — **still
+    legality-gated.** The move goes through the ordinary `applyStatusTransition`
+    **without** `system`, i.e. along the project's **real** workflow edges, WALKING the
+    ladder one legal edge at a time (the walk bullet below; MOTIR-2901 replaced the
+    single-hop-with-fallback this line used to describe). A target with no legal PATH is a
+    **logged no-op, never a
     throw**: a team whose workflow has no path to the derived status simply gets no
     derivation, which is the conservative reading of "the derivation respects your
     workflow". This is why MOTIR-1625 adds the `in_progress → done` edge to the default
@@ -213,21 +233,61 @@ Notes that are decisions, not detail:
     (forward is legality-gated, backward is a system set). Both exist for the same
     underlying reason — a move no user path allows is exactly the move a derivation must
     still be able to make.
-- **One move per pass, with a FALLBACK to the next legal rung — FORWARD only.** The
-  recompute transitions the parent **once**; if that moves it, the re-emitted event
-  re-evaluates, so a parent can travel several rungs across successive events without any
-  loop in the service. When more than one rung matches, it takes the **highest**; if that
-  target is forward and this project's workflow has no edge for it, it falls to the next
-  matching rung down. _(Amended after MOTIR-1623's integration test found the gap: taking
-  only the top rung STRANDS a parent whose graph cannot make that jump — a `todo` parent
-  whose only child goes straight to review matches the in-review rung, `todo → in_review`
-  is not an edge, and no later event changes that aggregate, so it would sit in `todo`
-  forever. The fallback keeps the derivation convergent while still only ever walking real
-  edges. If NO matching rung is legal, the outcome names the one it wanted and nothing
-  moves.)_ **The fallback has no backward counterpart, and needs none:** a backward move
-  is a system set that no edge can refuse, so there is nothing to fall back from. A
-  target the parent is ALREADY in is a no-op that emits nothing — the fixed point that
-  §5's termination argument rests on.
+- **One RECOMPUTE per pass, applied by WALKING the ladder — FORWARD only**
+  _(amended 2026-08-17, MOTIR-2901; this bullet previously read "one move per pass, with a
+  fallback to the next legal rung")_. The recompute picks the **highest matching rung** as
+  what the parent IS, and then reaches it by taking the highest **stepping stone** at or
+  below that rung which the project's workflow can legally reach, repeating from there
+  until the target is reached or nothing above the cursor is legal. If nothing above it is
+  legal at all, the outcome names the rung it wanted and nothing moves.
+
+  **A stepping stone is a LADDER RUNG, not any status.** The walk resolves all four rungs
+  against the project's workflow and may stand only on those, whether or not the current
+  child set matches them. That is the containment property that makes it safe: every status
+  the walk passes through is one the derivation **could have set outright** for some other
+  child set, so a walk can never invent a resting place — only reach one sooner. A
+  project's own extra statuses are never used as a bridge, even when they are the only way
+  through.
+
+  _(Why a walk and not a single hop. MOTIR-1623 found that taking only the top rung STRANDS
+  a parent whose graph cannot make that jump — a `todo` parent whose only child goes
+  straight to review matches the in-review rung, `todo → in_review` is not an edge, and no
+  later event changes that aggregate. The answer then was to fall to the next MATCHING rung,
+  and **that answer has a hole, which MOTIR-2901 fell into**: when every child finishes
+  before the first derivation pass runs — a user dragging a card twice, or the agent loop's
+  dispatch → PR-open → merge sequence — every pass reads the same final all-done aggregate,
+  `done` is the ONLY matching rung, and **there is nothing below it to fall to**. `todo →
+done` is not an edge and must not become one (see below), so the parent sat in `todo`
+  permanently. Exactly MOTIR-1623's stranding, in the one shape its fallback could not
+  reach. The walk subsumes the fallback: it lands on the wanted rung whenever any ladder
+  path exists, and as far up it as the graph allows otherwise.)_
+
+  **"You configure your workflow, the derivation respects it" is untouched, and the third
+  rejected alternative is why the walk is the fix.** Every hop is a real `workflow_transition`
+  row of the team's own graph — no `system` bypass on the forward arm, and **no new
+  transition row anywhere**. A graph with no path to the target still gets a logged no-op.
+  What the walk changes is only that the derivation now takes the moves a _person_ would
+  have had to take by hand, instead of giving up because it could not take them all at once.
+  The rejected alternatives, both weighed on MOTIR-2901's card: making an illegal FORWARD
+  derivation a **system set** — simplest, and it would have force-completed parents in teams
+  that deliberately have no path to `done`, breaking the §1 promise for advancement; and
+  carrying the **event's `toStatusKey`** as a floor — which reads one child's move where the
+  recompute is a function of the whole child SET, and gives up the idempotence §3a's
+  aggregate-only read buys.
+
+  **The walk applies its hops in ONE transaction, writes one revision per hop, and emits ONE
+  event.** A revision is a RECORD, so the feed shows each status the item genuinely held; an
+  event is a NOTIFICATION, so watchers, the automation engine, the grandparent's recompute
+  and the downward cascade each see the single NET move. Telling a watcher twice about one
+  derivation, or recomputing the grandparent once per hop, would be a defect of the fix
+  rather than a property of it. The `rolled_up` outcome carries the intermediate rungs as
+  `via` when there were any, so a run log can answer "did a derivation pass through a status
+  nobody set?".
+
+  **The walk has no backward counterpart, and needs none:** a backward move is a system set
+  that no edge can refuse, so it reaches any status in one hop. A target the parent is
+  ALREADY in is a no-op that emits nothing — the fixed point that §5's termination argument
+  rests on.
 
 ### 3a. The TRIGGER SURFACE — every edit to the CHILD SET recomputes _(added 2026-08-17)_
 
@@ -335,11 +395,12 @@ asymmetries on two axes.)_
   (it _is_ one: the same `updated` revision with a `status: {from, to}` diff), so no new
   revision kind or feed renderer is needed.
 - **Recursion and termination** _(proof replaced 2026-08-17 — the old one appealed to
-  forward-only, which no longer holds; the shape of the mechanism is unchanged)_. Each
-  pass transitions only the **direct** neighbour(s). The next level derives when its own
-  transition **re-emits** `work-item/transitioned` — emitted only on a _real_ transition.
-  **No explicit ancestor/descendant walk and no loop-guard flag**, and depth is bounded
-  by the tree anyway (epic → story → task/bug → subtask). The argument, in two parts:
+  forward-only, which no longer holds; part 3 added the same day for MOTIR-2901's forward
+  walk; the shape of the mechanism is unchanged)_. Each pass transitions only the
+  **direct** neighbour(s). The next level derives when its own transition **re-emits**
+  `work-item/transitioned` — emitted only on a _real_ transition. **No explicit
+  ancestor/descendant walk and no loop-guard flag**, and depth is bounded by the tree
+  anyway (epic → story → task/bug → subtask). The argument, in three parts:
   1. **A level cannot oscillate while its children hold still.** Each pass sets a level
      to a target that is a **pure function of that level's children**. Run it twice on an
      unchanged child set and it computes the same target both times — and the second pass
@@ -354,6 +415,16 @@ asymmetries on two axes.)_
      cascade fires only on **entry into** a done-category status (§4), never on exit. So
      the one new motion this amendment introduces — a parent coming back — starts no
      downward wave that could push it forward again.
+  3. **The forward WALK terminates, and does not touch parts 1 and 2** _(MOTIR-2901)_. The
+     walk is INSIDE one pass, not a re-entry: it does not re-emit without a child-set change
+     and it adds no new trigger. It terminates on its own because each hop moves the parent
+     to a **strictly higher rank** on the four-point ladder scale, bounded above by the
+     target the pass computed **before it started** — so at most three hops, no stone
+     revisited, and the loop is additionally capped at the number of distinct rungs. It also
+     STRENGTHENS part 1 rather than weakening it: the pass now lands ON the target it
+     computed whenever any path exists, so the very next pass over an unchanged child set is
+     the `already_there` fixed point, where before it could take several passes of
+     single-hop fallbacks to get there.
 
   What the old proof got from forward-only, the fixed point now gets from
   _already-there emits nothing_, which is a property of `applyStatusTransition` itself
@@ -403,7 +474,12 @@ there is no backfill job, only the column default; derivation begins at the next
    the change-request sync keeps identical behaviour through the shared function.
 5. **A project on a custom workflow with no path to a derived status silently gets no
    derivation** for that rung. That is deliberate (rung 3's legality gate) and is why
-   the outcome is _logged_, so it is diagnosable rather than invisible.
+   the outcome is _logged_, so it is diagnosable rather than invisible. _(MOTIR-2901: "no
+   path" now means what it says — a chain of ladder edges, not a single one. A team that
+   removed `in_progress → done` but kept `in_progress → in_review → done` DOES get the
+   derivation, over the edges they kept. That is the intended reading of "respects your
+   workflow": the derivation may take any sequence of moves a person on that board could,
+   and no others.)_
 6. **A generic parent/child automation rule remains unbuilt.** If one is ever wanted,
    it extends the 6.6 engine and must reckon with these built-ins (most likely: the
    built-in toggles off, the rule on).
@@ -442,3 +518,17 @@ _Consequences 7–9 added 2026-08-17 with the recompute amendment._
    - **Declare the home's status meaningless and document it** — rejected: it leaves a
      `done` mistake log reading "no planning bugs", and owes a manual revert after every
      sweep.
+
+_Consequence 10 added 2026-08-17 with the forward-walk amendment (MOTIR-2901)._
+
+10. **A forward derivation can now write more than one revision for one pass.** A parent
+    that walks two or three rungs shows each hop in its activity feed, at the same instant,
+    attributed to the workspace owner. That is the honest record — each is a status the item
+    genuinely held, reached over an edge the team configured — and it is paired with exactly
+    ONE `work-item/transitioned` for the NET move, so watchers, the automation engine, the
+    grandparent's recompute and the downward cascade are not multiplied. **An automation rule
+    keyed on entry into an intermediate status will therefore NOT fire for a rung the walk
+    merely passed through**, which is deliberate: the parent was never meaningfully there,
+    and firing rules for a state that existed for the width of one transaction would be
+    worse than not firing them. The `rolled_up` outcome carries the passed-through rungs as
+    `via`, so the run log can say what the feed shows.

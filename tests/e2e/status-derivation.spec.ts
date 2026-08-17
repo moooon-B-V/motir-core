@@ -271,13 +271,19 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     const child = await createItem(page, tenant.projectId, 'subtask', 'The only child', story.id);
 
     // ⚠️ Await the DERIVED status between transitions, exactly as the UPWARD
-    // test above does. This is not politeness: firing the three back-to-back
-    // STRANDS the story at To Do, because every job then reads the same final
-    // `{ done }` aggregate, wants the `done` rung, and `todo → done` is not an
-    // edge in the default workflow — with no lower rung to fall back to. That is
-    // MOTIR-2901, a PRE-EXISTING defect verified on `origin/main` @ 0297a33a and
-    // filed rather than absorbed here; this test is about the recompute coming
-    // BACK, and must not fail for an unrelated reason on the way in.
+    // test above does — the wait-on-the-authoritative-signal rule, not politeness.
+    //
+    // It used to be load-bearing for a second reason: firing the three
+    // back-to-back STRANDED the story at To Do, because every job then read the
+    // same final `{ done }` aggregate, wanted the `done` rung, and `todo → done`
+    // is not an edge in the default workflow — with no lower rung to fall back
+    // to. That was MOTIR-2901, and it is FIXED: the forward arm now WALKS the
+    // ladder (`todo → in_progress → done`, both real edges), so the race lands on
+    // Done either way. The regression coverage for it is at the integration tier,
+    // where the transitions can be committed back-to-back deterministically
+    // (`tests/integration/workflows/statusDerivation.test.ts`); the waits stay
+    // here because racing an async derivation from a browser is how a spec
+    // becomes flaky.
     await transition(page, child.id, 'in_progress');
     await expectDerivedStatus(story.id, 'in_progress', 'the story (rung 1)');
     await transition(page, child.id, 'in_review');
