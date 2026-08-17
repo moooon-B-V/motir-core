@@ -89,9 +89,10 @@ const tokenRow = (page: Page, label: string) =>
   page.getByRole('row', { name: new RegExp(escapeRegExp(label)) });
 
 /**
- * Sign in and land back on the `/device` hand-off rather than `/dashboard`.
+ * Sign in and land back on the `/device` hand-off rather than the default
+ * landing.
  *
- * The shared `signIn` helper waits for `**\/dashboard`, which is right for every
+ * The shared `signIn` helper waits for `**\/home`, which is right for every
  * other spec and wrong for exactly this flow: `DeviceSignedOut` links to
  * `/sign-in?next=/device?user_code=…`, and the whole point of the signed-out
  * state is that the return carries the code.

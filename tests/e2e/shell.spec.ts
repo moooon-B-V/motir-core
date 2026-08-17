@@ -33,17 +33,18 @@ async function signUp(page: Page, email: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/dashboard', { timeout: 9_000 })
+      .waitForURL('**/home', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/dashboard')) return;
+    if (landed || page.url().includes('/home')) return;
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
 }
 
 async function createFirstProject(page: Page, name: string): Promise<void> {
-  // The dashboard empty-state CTA opens the create-project modal.
+  // The projects-empty-state CTA (on /home, where sign-up lands) opens the
+  // create-project modal.
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill(name);

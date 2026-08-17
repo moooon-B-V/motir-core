@@ -15,12 +15,17 @@ import { dashboardsService } from '@/lib/services/dashboardsService';
 import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { DashboardsHome } from './_components/DashboardsHome';
 
-// The post-auth landing marker. `/dashboard` is where both credential flows
-// land, and BOTH of its branches carry this — so `tests/e2e/_helpers/
-// shell-session.ts` has one authoritative "the dashboard has rendered" signal
-// to wait on whether or not the workspace has a project yet (MOTIR-2645). It is
-// on a bare wrapper rather than on one branch's root so neither branch's own
-// layout is touched.
+// The "the dashboards page has rendered" marker, on BOTH branches — a bare
+// wrapper rather than one branch's root, so neither branch's own layout is
+// touched.
+//
+// ⚠️ `/dashboard` IS NO LONGER A POST-AUTH LANDING. It was, for both credential
+// flows, and this comment said so; MOTIR-2654 moved sign-IN to `/home` and
+// MOTIR-2921 moved sign-UP after it, so BOTH now land on `/home` and settle on
+// its `home-page` marker (`tests/e2e/_helpers/shell-session.ts`, MOTIR-2645's
+// authoritative-signal contract; `docs/decisions/home-scope.md` §2.3).
+// `/dashboard` keeps its route and its own rail entry, and is reached by
+// navigating to it. The marker stays for a spec that lands here deliberately.
 const DASHBOARD_TESTID = 'dashboard-page';
 
 export default async function DashboardPage() {
