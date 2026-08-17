@@ -108,10 +108,13 @@ describe('the acceptance-video lane is story-scoped (MOTIR-1949)', () => {
     }
     // A JOB-level key sits at exactly four spaces (`jobs:` → id → keys); the
     // step-level `if: success()` / `if: always()` below are at eight and fine.
+    //
+    // ⚠️ STILL TRUE AFTER MOTIR-2760, and deliberately so. That card added a
+    // `push: main` baseline gated by a job-level `if:`, but put it on `build` —
+    // which `acceptance` already `needs:` — precisely so this assertion could
+    // stay literal. It is what stops a future edit from gating the SHARD job on
+    // something that would show a PR a greyed check.
     expect(acceptanceJob).not.toMatch(/^ {4}if:/m);
-    // No `push:` trigger — `main` never runs the lane (the PR already published
-    // the receipt while its story was in review).
-    expect(codeOf(acceptanceWorkflow)).not.toMatch(/^\s*push:/m);
   });
 
   it('the e2e matrix carries no acceptance leg', () => {
@@ -242,6 +245,101 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
     // Nothing gates the publish on a particular shard — that would make one leg
     // responsible for receipts recorded on another, which it cannot see.
     expect(publish).not.toMatch(/matrix\.shard/);
+  });
+});
+
+// ── MOTIR-2760 ───────────────────────────────────────────────────────────────
+//
+// The lane's `pull_request` filter is blind to the app the specs drive, so an
+// app change could break every acceptance spec, merge green, and wait on `main`
+// for an unrelated PR to inherit it (measured: MOTIR-2654 broke
+// `acceptance-ai-callout.spec.ts` at c6b5d19d; MOTIR-2664's PR #2045 found it).
+// The answer is a `push: main` baseline that TESTS and never PUBLISHES, gated on
+// the lane actually holding a spec.
+//
+// These assertions pin the three things that make that affordable and safe, each
+// of which is silently reversible by a one-line edit: the gate, the
+// never-publish, and the PR-only cancellation.
+describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
+  const membershipJob = jobsOf(acceptanceWorkflow).get('membership');
+  const buildJob = jobsOf(acceptanceWorkflow).get('build');
+
+  it('triggers on a push to main, in ADDITION to the pull_request filter', () => {
+    // Both triggers, and the PR one still first — the `paths:` assertion above
+    // matches `on:` → `pull_request:` → `paths:` as adjacent lines.
+    expect(codeOf(acceptanceWorkflow)).toMatch(/^\s*push:\s*$/m);
+    expect(codeOf(acceptanceWorkflow)).toMatch(/^\s*branches:\s*\[main\]\s*$/m);
+  });
+
+  it('does NOT paths-filter the push trigger', () => {
+    // While the lane holds a spec, ANY merge could be the one that breaks it,
+    // and WHICH sources those specs read is exactly what a filter cannot know —
+    // that is the MOTIR-2620 rejection. The membership gate is what bounds the
+    // cost instead. A `paths:` under `push:` would silently reopen the gap.
+    const push = /^\s*push:\s*\n((?:\s{4,}.*\n|\s*\n)*)/m.exec(codeOf(acceptanceWorkflow));
+    expect(push).not.toBeNull();
+    expect(push![1]).not.toMatch(/paths:/);
+  });
+
+  it('gates the fan-out on the lane actually holding a spec', () => {
+    // THE cost control. Measured on run 31740853229 (an empty lane): 6m build +
+    // 4x3m shards = 18 machine-minutes to run zero tests, and `main` takes ~20
+    // merges/day. Ungated, the baseline would burn ~360 machine-min/day on an
+    // empty lane — which, after the MOTIR-2769 triage, is the steady state.
+    expect(membershipJob).toBeDefined();
+    expect(membershipJob).toMatch(/^\s*run:\s*\$\{\{\s*steps\.gate\.outputs\.run\s*\}\}/m);
+    // It must stay CHEAP, or it is just the fan-out with extra steps: a checkout
+    // and a glob — no Postgres, no install, no build.
+    expect(membershipJob).not.toContain('pnpm install');
+    expect(membershipJob).not.toContain('actions/postgres');
+    expect(membershipJob).not.toContain('pnpm build');
+    // The gate hangs off `build`, and `acceptance` inherits the skip via `needs`.
+    expect(buildJob).toMatch(/^\s*needs:\s*membership\s*$/m);
+    expect(buildJob).toMatch(/^\s*if:\s*needs\.membership\.outputs\.run == 'true'\s*$/m);
+    expect(acceptanceJob).toMatch(/^\s*needs:\s*build\s*$/m);
+  });
+
+  it('matches the lane the Playwright config would actually collect', () => {
+    // `testMatch: '**/acceptance*.spec.ts'` matches on the BASENAME, so
+    // `epic2-acceptance.spec.ts` is NOT a member (it rides the main lane). A gate
+    // that counted `*acceptance*` would hold the baseline permanently ON against
+    // an empty lane — the exact cost this job exists to avoid.
+    expect(membershipJob).toContain("-name 'acceptance*.spec.ts'");
+  });
+
+  it('never lets a PR see a skipped check because of the gate', () => {
+    // MOTIR-1949's requirement is about PULL REQUESTS. A `push` event attaches
+    // its checks to the commit on `main`, so a skip there costs no PR anything —
+    // but only because the gate is unconditionally true for a PR. If that ever
+    // becomes conditional, every PR touching the four lane-definition paths
+    // grows a greyed check and the requirement is gone.
+    expect(membershipJob).toMatch(/EVENT_NAME[\s\S]*=[\s\S]*'pull_request'/);
+    expect(membershipJob).toMatch(/RUN=true/);
+  });
+
+  it('TESTS on main but never PUBLISHES — both mechanisms', () => {
+    // Publishing SUPERSEDES a story's evidence (MOTIR-1937), and the receipt
+    // belongs to the moment the story was in review — not to a later merge. Two
+    // independent guards, because one wrong answer destroys a receipt.
+    const steps = acceptanceJob!.split(/^ {6}- /m).slice(1);
+    const publish = steps.find((s) => s.includes('node scripts/upload-acceptance-video.mjs'));
+    expect(publish).toBeDefined();
+    // 1 — the step itself only runs on a PR.
+    expect(publish).toMatch(/if:\s*success\(\) && github\.event_name == 'pull_request'/);
+    // 2 — and the owned set is empty on a push anyway, which the uploader fails
+    //     closed on, so even a mis-edited `if:` publishes nothing.
+    const owned = steps.find((s) => s.includes('owned acceptance specs'));
+    expect(owned).toContain('if [ -z "${BASE_SHA}" ]; then');
+    expect(owned).toContain('echo "specs=" >> "$GITHUB_OUTPUT"');
+  });
+
+  it('cancels superseded runs on a PR but NEVER on main', () => {
+    // The baseline's product is knowing WHICH merge broke the lane. Blanket
+    // `cancel-in-progress: true` would have back-to-back merges cancel each
+    // other and hand back exactly the ambiguity this trigger removes.
+    expect(codeOf(acceptanceWorkflow)).toMatch(
+      /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
+    );
   });
 });
 

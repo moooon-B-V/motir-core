@@ -202,9 +202,11 @@ jobs:
       #
       # ⚠️ `pull_request` ONLY. `ci.yml` also runs on `push: main`, and
       # re-publishing an identical result after merge is exactly what
-      # `acceptance-video.yml` avoids by having no `push:` trigger
-      # (docs/decisions/design-result.md §6). Same decision, reached with a
-      # condition because the host job is shared.
+      # `acceptance-video.yml` avoids too (docs/decisions/design-result.md §6).
+      # Since MOTIR-2760 that lane reaches the same decision the SAME way this
+      # one does — it now has a `push: main` baseline, and gates its publish
+      # step on `github.event_name == 'pull_request'`. (It used to have no
+      # `push:` trigger at all, which is what this comment described.)
       #
       # ⚠️ NO `continue-on-error`. MOTIR-2499 removed one from the acceptance
       # publish after it rewrote a failing step's conclusion to `success` for
