@@ -6,7 +6,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
-import type { WorkItem } from '@/generated/prisma/client';
+import type { Prisma, WorkItem } from '@/generated/prisma/client';
 
 // Repository-layer tests for the Story-4.1 sprint + backlog-rank data-access
 // leaves (Subtask 4.1.2): sprintRepository + the new work_item sprint/rank
@@ -29,6 +29,16 @@ import type { WorkItem } from '@/generated/prisma/client';
 // and the empty-input short-circuit the coverage gate needs covered. The
 // state-machine + association BEHAVIOUR (guards, carry-over, scale) is Story
 // 4.1.5's dedicated suite; here we prove the leaves.
+//
+// ⚠️ AND THE READS RUN THROUGH IT TOO (MOTIR-2881). MOTIR-2739/2747 migrated the
+// WRITES and left the assertion-side READS on the `@/lib/db` singleton — which under
+// the role is `motir_app`, binds no workspace GUC, and returns NOTHING. A refused
+// write says so (`42501`); a refused read just returns `null` / `[]` / `0`, so eleven
+// assertions here went red while every cross-workspace gate probe passed for the
+// wrong reason. Passing `a.workspaceId` as an ARGUMENT does not save them: that is
+// the application's WHERE clause, not the RLS GUC, which is exactly the distinction
+// this file exists to test. `readAsOwner` routes the reads through the SAME owner
+// client the writes use, so a `null` here is still the WHERE-clause gate.
 
 async function truncateAll(): Promise<void> {
   // sprint FKs workspace/project (onDelete Cascade) so the workspace truncate
@@ -67,6 +77,16 @@ async function makeSprint(args: {
   return row.id;
 }
 
+/**
+ * Run a repository READ through the OWNER client, exactly as this file's writes run.
+ * The repository method under test is still what is exercised — only the connection
+ * changes, so RLS stays out of the picture (see the header) and a cross-workspace
+ * `null` / `[]` is the explicit `workspaceId` gate, finding #26's subject.
+ */
+function readAsOwner<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return adminDb.$transaction(fn);
+}
+
 /** Set a work item's backlogRank through the repository's required-`tx` write. */
 async function setRank(itemId: string, rank: string): Promise<void> {
   await adminDb.$transaction((tx) => workItemRepository.setBacklogRank(itemId, rank, tx));
@@ -82,8 +102,10 @@ describe('sprintRepository — reads + workspace gate', () => {
       name: 'Sprint 1',
       sequence: 1,
     });
-    expect((await sprintRepository.findById(s, a.workspaceId))?.id).toBe(s);
-    expect(await sprintRepository.findById(s, b.workspaceId)).toBeNull();
+    expect((await readAsOwner((tx) => sprintRepository.findById(s, a.workspaceId, tx)))?.id).toBe(
+      s,
+    );
+    expect(await readAsOwner((tx) => sprintRepository.findById(s, b.workspaceId, tx))).toBeNull();
   });
 
   it('findActiveByProject returns the single active sprint, null when none active', async () => {
@@ -94,7 +116,11 @@ describe('sprintRepository — reads + workspace gate', () => {
       name: 'Planned',
       sequence: 1,
     });
-    expect(await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId, tx),
+      ),
+    ).toBeNull();
     const active = await makeSprint({
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -102,12 +128,20 @@ describe('sprintRepository — reads + workspace gate', () => {
       sequence: 2,
       state: 'active',
     });
-    expect((await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId))?.id).toBe(
-      active,
-    );
+    expect(
+      (
+        await readAsOwner((tx) =>
+          sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId, tx),
+        )
+      )?.id,
+    ).toBe(active);
     // cross-workspace gate
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await sprintRepository.findActiveByProject(fx.projectId, other.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        sprintRepository.findActiveByProject(fx.projectId, other.workspaceId, tx),
+      ),
+    ).toBeNull();
   });
 
   it('listByProject returns sprints in sequence order, workspace-gated', async () => {
@@ -124,10 +158,16 @@ describe('sprintRepository — reads + workspace gate', () => {
       name: 'First',
       sequence: 1,
     });
-    const list = await sprintRepository.listByProject(fx.projectId, fx.workspaceId);
+    const list = await readAsOwner((tx) =>
+      sprintRepository.listByProject(fx.projectId, fx.workspaceId, tx),
+    );
     expect(list.map((s) => s.name)).toEqual(['First', 'Second']);
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await sprintRepository.listByProject(fx.projectId, other.workspaceId)).toEqual([]);
+    expect(
+      await readAsOwner((tx) =>
+        sprintRepository.listByProject(fx.projectId, other.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 
   it('countByProjectAndState counts per state', async () => {
@@ -152,16 +192,24 @@ describe('sprintRepository — reads + workspace gate', () => {
       state: 'active',
     });
     expect(
-      await sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'planned'),
+      await readAsOwner((tx) =>
+        sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'planned', tx),
+      ),
     ).toBe(2);
     expect(
-      await sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'active'),
+      await readAsOwner((tx) =>
+        sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'active', tx),
+      ),
     ).toBe(1);
   });
 
   it('maxSequenceForProject returns 0 when empty, else the max', async () => {
     const fx = await makeWorkItemFixture();
-    expect(await sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId)).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId, tx),
+      ),
+    ).toBe(0);
     await makeSprint({
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -174,7 +222,11 @@ describe('sprintRepository — reads + workspace gate', () => {
       name: 'S3',
       sequence: 3,
     });
-    expect(await sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId)).toBe(5);
+    expect(
+      await readAsOwner((tx) =>
+        sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId, tx),
+      ),
+    ).toBe(5);
   });
 });
 
@@ -204,7 +256,9 @@ describe('sprintRepository — writes (required tx) + FOR-UPDATE lock', () => {
 
     const deleted = await adminDb.$transaction((tx) => sprintRepository.delete(created.id, tx));
     expect(deleted.id).toBe(created.id);
-    expect(await sprintRepository.findById(created.id, fx.workspaceId)).toBeNull();
+    expect(
+      await readAsOwner((tx) => sprintRepository.findById(created.id, fx.workspaceId, tx)),
+    ).toBeNull();
   });
 
   it('findActiveByProjectForUpdate locks the active row, null when none active', async () => {
@@ -315,9 +369,9 @@ describe('workItemRepository — bounded backlog/sprint reads (finding #57)', ()
   it('findBacklogPage returns backlog issues in rank order, fetching take+1', async () => {
     const { fx, backlog } = await seedBacklog();
     // take=2 → take+1=3 rows so the service can detect a next page
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 2,
-    });
+    const page = await readAsOwner((tx) =>
+      workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, { take: 2 }, tx),
+    );
     expect(page).toHaveLength(3);
     expect(page.map((w) => w.id)).toEqual([backlog[0]!.id, backlog[1]!.id, backlog[2]!.id]);
     // excludes sprint-committed + archived issues
@@ -326,10 +380,14 @@ describe('workItemRepository — bounded backlog/sprint reads (finding #57)', ()
 
   it('findBacklogPage honours the cursor (skips the cursor row)', async () => {
     const { fx, backlog } = await seedBacklog();
-    const page = await workItemRepository.findBacklogPage(fx.projectId, fx.workspaceId, {
-      take: 2,
-      cursor: backlog[0]!.id,
-    });
+    const page = await readAsOwner((tx) =>
+      workItemRepository.findBacklogPage(
+        fx.projectId,
+        fx.workspaceId,
+        { take: 2, cursor: backlog[0]!.id },
+        tx,
+      ),
+    );
     expect(page.map((w) => w.id)).toEqual([backlog[1]!.id, backlog[2]!.id, backlog[3]!.id]);
   });
 
@@ -337,36 +395,57 @@ describe('workItemRepository — bounded backlog/sprint reads (finding #57)', ()
     const { fx } = await seedBacklog();
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
     expect(
-      await workItemRepository.findBacklogPage(fx.projectId, other.workspaceId, { take: 50 }),
+      await readAsOwner((tx) =>
+        workItemRepository.findBacklogPage(fx.projectId, other.workspaceId, { take: 50 }, tx),
+      ),
     ).toEqual([]);
   });
 
   it('countBacklog counts only non-archived backlog issues', async () => {
     const { fx } = await seedBacklog();
-    expect(await workItemRepository.countBacklog(fx.projectId, fx.workspaceId)).toBe(4);
+    expect(
+      await readAsOwner((tx) =>
+        workItemRepository.countBacklog(fx.projectId, fx.workspaceId, [], undefined, tx),
+      ),
+    ).toBe(4);
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    expect(await workItemRepository.countBacklog(fx.projectId, other.workspaceId)).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        workItemRepository.countBacklog(fx.projectId, other.workspaceId, [], undefined, tx),
+      ),
+    ).toBe(0);
   });
 
   it('findSprintIssues + countSprintIssues return the sprint set (cursor honoured)', async () => {
     const { fx, sprintId, sprintItem } = await seedBacklog();
-    const page = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50 });
+    const page = await readAsOwner((tx) =>
+      workItemRepository.findSprintIssues(sprintId, fx.workspaceId, { take: 50 }, tx),
+    );
     expect(page.map((w) => w.id)).toEqual([sprintItem.id]);
-    expect(await workItemRepository.countSprintIssues(sprintId, fx.workspaceId)).toBe(1);
+    expect(
+      await readAsOwner((tx) =>
+        workItemRepository.countSprintIssues(sprintId, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(1);
     // cursor branch: skipping the only row yields an empty page
-    const empty = await workItemRepository.findSprintIssues(sprintId, fx.workspaceId, {
-      take: 50,
-      cursor: sprintItem.id,
-    });
+    const empty = await readAsOwner((tx) =>
+      workItemRepository.findSprintIssues(
+        sprintId,
+        fx.workspaceId,
+        { take: 50, cursor: sprintItem.id },
+        tx,
+      ),
+    );
     expect(empty).toEqual([]);
   });
 
   it('findBacklogRankByIds returns ranks; empty input short-circuits', async () => {
     const { fx, backlog } = await seedBacklog();
-    expect(await workItemRepository.findBacklogRankByIds([], fx.workspaceId)).toEqual([]);
-    const ranks = await workItemRepository.findBacklogRankByIds(
-      [backlog[0]!.id, backlog[2]!.id],
-      fx.workspaceId,
+    expect(
+      await readAsOwner((tx) => workItemRepository.findBacklogRankByIds([], fx.workspaceId, tx)),
+    ).toEqual([]);
+    const ranks = await readAsOwner((tx) =>
+      workItemRepository.findBacklogRankByIds([backlog[0]!.id, backlog[2]!.id], fx.workspaceId, tx),
     );
     expect(ranks.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [
@@ -379,28 +458,38 @@ describe('workItemRepository — bounded backlog/sprint reads (finding #57)', ()
   it('findBoundaryBacklogRank returns min/max of the scope, null when empty', async () => {
     const { fx, sprintId } = await seedBacklog();
     expect(
-      await workItemRepository.findBoundaryBacklogRank(fx.projectId, fx.workspaceId, null, 'min'),
+      await readAsOwner((tx) =>
+        workItemRepository.findBoundaryBacklogRank(fx.projectId, fx.workspaceId, null, 'min', tx),
+      ),
     ).toBe('a0');
     expect(
-      await workItemRepository.findBoundaryBacklogRank(fx.projectId, fx.workspaceId, null, 'max'),
+      await readAsOwner((tx) =>
+        workItemRepository.findBoundaryBacklogRank(fx.projectId, fx.workspaceId, null, 'max', tx),
+      ),
     ).toBe('a3'); // a9 is archived → excluded
     // the sprint scope has one ranked issue
     expect(
-      await workItemRepository.findBoundaryBacklogRank(
-        fx.projectId,
-        fx.workspaceId,
-        sprintId,
-        'max',
+      await readAsOwner((tx) =>
+        workItemRepository.findBoundaryBacklogRank(
+          fx.projectId,
+          fx.workspaceId,
+          sprintId,
+          'max',
+          tx,
+        ),
       ),
     ).toBe('b0');
     // empty scope (a fresh project) → null
     const fresh = await makeWorkItemFixture({ name: 'Fresh', identifier: 'FRS' });
     expect(
-      await workItemRepository.findBoundaryBacklogRank(
-        fresh.projectId,
-        fresh.workspaceId,
-        null,
-        'min',
+      await readAsOwner((tx) =>
+        workItemRepository.findBoundaryBacklogRank(
+          fresh.projectId,
+          fresh.workspaceId,
+          null,
+          'min',
+          tx,
+        ),
       ),
     ).toBeNull();
   });
