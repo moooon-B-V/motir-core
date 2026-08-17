@@ -127,7 +127,7 @@ describe('status-derivation/transitioned — the wiring (MOTIR-1621)', () => {
 });
 
 describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
-  it('dispatches BOTH directions from one event, with the transitioned item id', async () => {
+  it('dispatches BOTH directions from one event, with the item id AND its workspace', async () => {
     const { rollUp, cascade } = stubBothDirections();
 
     const engine = new InngestTestEngine({
@@ -136,12 +136,21 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     });
     const { result } = await engine.execute();
 
+    // ⚠️ BOTH ARGUMENTS ARE ASSERTED, and `workspaceId` is the load-bearing one
+    // (MOTIR-2880). Each service's phase-1 read of `work_item` /
+    // `workspace_membership` is now `withWorkspaceServiceContext`-bound, because
+    // no policy on either table reads `app.system_admin` — so under `motir_app`
+    // a handler that dropped this argument would resolve NOTHING and return
+    // `no_parent` / `unresolvable` for every transition, silently. This
+    // assertion is the seam where that argument is either threaded off the
+    // envelope or lost, so it pins the value and not merely the arity.
     expect(rollUp).toHaveBeenCalledTimes(1);
-    expect(rollUp).toHaveBeenCalledWith('wi-1');
+    expect(rollUp).toHaveBeenCalledWith('wi-1', 'ws-1');
     expect(cascade).toHaveBeenCalledTimes(1);
-    expect(cascade).toHaveBeenCalledWith('wi-1');
+    expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1');
     // The payload carries no parentId, so each service resolves its own
-    // neighbours — the handler passes the item id and nothing else.
+    // neighbours WITHIN that workspace — the handler passes the item id and the
+    // tenant, and nothing else.
     expect(result).toEqual({
       rollup: { outcome: 'no_parent' },
       cascade: { outcome: 'not_done' },
