@@ -78,7 +78,7 @@ import {
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
-import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -1063,7 +1063,10 @@ export const workItemsService = {
         for (const pending of input.links) {
           const target = await workItemRepository.findById(pending.targetId, tx);
           if (!target) throw new WorkItemNotFoundError(pending.targetId);
-          if (target.workspaceId !== workspaceId) throw new CrossWorkspaceLinkError();
+          // Same contract as `linkWorkItems` below: a target in another
+          // workspace is NOT FOUND, never a distinguishable cross-workspace
+          // error (MOTIR-2919). The whole create still rolls back.
+          if (target.workspaceId !== workspaceId) throw new WorkItemNotFoundError(pending.targetId);
 
           const directed = relationshipToLink(pending.relationship, row.id, pending.targetId);
           await workItemLinkRepository.create(
@@ -3260,7 +3263,10 @@ export const workItemsService = {
 
   /**
    * Create a link "fromId <kind> toId". Asserts both items exist and share a
-   * workspace (the trigger backstops with CrossWorkspaceLinkError), writes the
+   * workspace — a far end in ANOTHER workspace is a `WorkItemNotFoundError`,
+   * NOT a distinguishable cross-workspace error (see the decision recorded on
+   * `CrossWorkspaceLinkError` in `lib/workItems/linkErrors.ts`); the trigger
+   * still backstops the write itself. Writes the
    * row with the from-item's workspaceId, and for `relates_to` ALSO persists
    * the reciprocal toId→fromId row in the same transaction. The reciprocal is
    * idempotent: we check for an existing mirror first and skip when present —
@@ -3276,7 +3282,14 @@ export const workItemsService = {
       if (!fromItem) throw new WorkItemNotFoundError(input.fromId);
       const toItem = await workItemRepository.findById(input.toId, tx);
       if (!toItem) throw new WorkItemNotFoundError(input.toId);
-      if (fromItem.workspaceId !== toItem.workspaceId) throw new CrossWorkspaceLinkError();
+      // A far end in ANOTHER workspace is NOT FOUND, not "cross-workspace"
+      // (MOTIR-2919, 2026-08-17). Naming the reason confirms the id resolves in
+      // some other tenant — the existence oracle the 404-not-403 contract
+      // forbids everywhere else. Under `motir_app` the read above already
+      // answers this way, because RLS hides the row; this line is what makes a
+      // BYPASSING role (the owner connection, a system context) answer
+      // identically instead of leaking. Keep both — the pair is the invariant.
+      if (fromItem.workspaceId !== toItem.workspaceId) throw new WorkItemNotFoundError(input.toId);
 
       // Project access gate (6.4.3): a link is an edit of the FROM item (the
       // side that owns the revision). The TO item can be cross-project; the

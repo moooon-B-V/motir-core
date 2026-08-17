@@ -215,6 +215,25 @@ Three of those rows are decisions, not defaults:
   data. **Rung 2:** this is already the product's behaviour, and the public API
   must not weaken it. The rule: 403 answers "your token may not do this KIND of
   thing"; 404 answers "there is no such resource _for you_".
+  - **The rule binds the ERROR IDENTITY, not just the status code** (decided
+    2026-08-17, MOTIR-2919). A distinctly-named error is an oracle even when it
+    is served as a 404: `CROSS_WORKSPACE_LINK` was already mapped to 404 here
+    (`lib/api/v1/errors.ts`) and still told the caller, in its code and its
+    message, that the id they named resolves in another tenant. So a
+    cross-tenant reference is now a plain **not-found** all the way down —
+    `workItemsService.linkWorkItems` and the create-with-links path raise
+    `WorkItemNotFoundError`, and `CrossWorkspaceLinkError` survives only as the
+    DB-trigger backstop for a bypassed service guard. **Ask of a new error:
+    could a caller who cannot see the resource learn it exists by reading this?**
+    If yes, it is the same defect regardless of its status.
+  - **And it must hold in every CONNECTION MODE.** Under the non-bypass
+    `motir_app` role RLS hides the foreign row, so the resolve fails first and
+    404 falls out for free; under a bypassing role (the owner connection, a
+    system context) the row is visible and only an explicit check produces the
+    same answer. Both are required: the mode a query happens to run in must
+    never change which error a boundary owes. This is what the service's
+    surviving `workspaceId` comparison is for — it is not dead code, it is the
+    bypassing-role arm of one invariant.
 - **A 500 leaks nothing.** No `code` (there is no stable contract for an
   unexpected fault), no stack, no Prisma or driver message. An unrecognised error
   reaching the wrapper becomes a bare 500 — asserted by throwing a raw error

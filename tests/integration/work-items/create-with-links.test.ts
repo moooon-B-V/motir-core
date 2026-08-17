@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { CrossWorkspaceLinkError, WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
+import { WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -150,7 +150,12 @@ describe('createWorkItem with links (2.4.10)', () => {
         },
         ws1.ctx,
       ),
-    ).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
+      // NOT FOUND, never a named cross-workspace error — decided 2026-08-17
+      // (MOTIR-2919); reasoning on the error class in `lib/workItems/linkErrors.ts`
+      // and beside the 404-not-403 clause in `docs/decisions/public-api-conventions.md`.
+      // Naming the reason would confirm `foreign.id` resolves in another tenant.
+      // The rollback below is what this test is really about, and it is unchanged.
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
 
     const workItemRow = await adminDb.workItem.findFirst({
       where: { title: 'Cross-tenant issue' },
