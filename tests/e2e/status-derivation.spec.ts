@@ -431,8 +431,9 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     // Rollup is ON in this test, so the child's create-recompute really can put the
     // story back to `todo` — and it used to do so BETWEEN the two hops below, which
     // made `todo → done` illegal and 422'd the driving transition itself (1 run in
-    // 10, MOTIR-2957). Nothing about the cascade toggle is under test in that
-    // window, so the setup settles first.
+    // 10). Nothing about the cascade toggle is under test in that window, so the
+    // setup settles first. The 422 the user would get in that same interleaving is
+    // a real defect and is MOTIR-2965's, not this spec's to assert.
     await settleCreates(2);
 
     await transition(page, story.id, 'in_progress');
