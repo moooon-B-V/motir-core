@@ -68,7 +68,11 @@ import {
   StatusMappingConflictError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
-import { IllegalTransitionError, WorkItemNotFoundError } from '@/lib/workItems/errors';
+import {
+  IllegalTransitionError,
+  MissingArtifactEvidenceError,
+  WorkItemNotFoundError,
+} from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
@@ -473,8 +477,10 @@ export const boardsService = {
    *  - `BoardNotFoundError` / `BoardColumnNotFoundError` (404) — unknown board / column;
    *  - `UnmappedColumnTargetError` (422) — the column maps no live status;
    *  - `IllegalBoardMoveError` (409) — the resolved cross-column transition is
-   *    illegal under `restricted` policy (status + rank left unchanged — the
-   *    snapback contract the 3.2 UI branches on).
+   *    illegal under `restricted` policy, OR a `deploy` card was dragged into a
+   *    done column with no artifact evidence recorded on it (MOTIR-2709). Both
+   *    leave status + rank unchanged — the snapback contract the 3.2 UI branches
+   *    on — and the error's `reason` says which.
    */
   async moveCard(
     boardId: string,
@@ -559,6 +565,15 @@ export const boardsService = {
                 err.toKey,
                 'no such workflow transition',
               );
+            }
+            // Same treatment for the close-out artifact-evidence refusal
+            // (MOTIR-2709): dragging a `deploy` card into a done column with
+            // nothing recorded is a move the board must SNAP BACK, not a 500.
+            // The reason carries the whole refusal message, so the card returns
+            // to its column with the three accepted forms named rather than a
+            // bare "something went wrong".
+            if (err instanceof MissingArtifactEvidenceError) {
+              throw new IllegalBoardMoveError(item.status, targetStatus.key, err.message);
             }
             throw err;
           }
