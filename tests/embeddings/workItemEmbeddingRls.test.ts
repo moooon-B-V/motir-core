@@ -3,6 +3,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemEmbeddingRepository } from '@/lib/repositories/workItemEmbeddingRepository';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `work_item_embedding` RLS — the direct-DB tenancy proof (Story MOTIR-2694 ·
@@ -69,7 +70,7 @@ async function makeTenants(): Promise<Tenants> {
     [fxA, itemA, 1],
     [fxB, itemB, 2],
   ] as const) {
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       workItemEmbeddingRepository.upsert(
         {
           workItemId: item.id,
@@ -203,7 +204,7 @@ describe('work_item_embedding RLS — write isolation', () => {
     );
 
     // Read back as the OWNER: W2's row still carries its original hash.
-    const row = await db.workItemEmbedding.findUnique({ where: { workItemId: t.item2 } });
+    const row = await adminDb.workItemEmbedding.findUnique({ where: { workItemId: t.item2 } });
     expect(row?.contentHash).toBe('hash-2');
   });
 });
@@ -211,21 +212,23 @@ describe('work_item_embedding RLS — write isolation', () => {
 describe('work_item_embedding — the row dies with the item (ADR §4)', () => {
   it('hard-deleting the work item cascades the embedding away', async () => {
     const t = await makeTenants();
-    await db.workItem.delete({ where: { id: t.item1 } });
-    expect(await db.workItemEmbedding.findUnique({ where: { workItemId: t.item1 } })).toBeNull();
+    await adminDb.workItem.delete({ where: { id: t.item1 } });
+    expect(
+      await adminDb.workItemEmbedding.findUnique({ where: { workItemId: t.item1 } }),
+    ).toBeNull();
   });
 
   it('ARCHIVING the work item KEEPS the embedding (ADR §5 — un-archive needs no re-embed)', async () => {
     const t = await makeTenants();
-    await db.workItem.update({ where: { id: t.item1 }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: t.item1 }, data: { archivedAt: new Date() } });
     expect(
-      await db.workItemEmbedding.findUnique({ where: { workItemId: t.item1 } }),
+      await adminDb.workItemEmbedding.findUnique({ where: { workItemId: t.item1 } }),
     ).not.toBeNull();
   });
 
   it('an ARCHIVED item is excluded from RESULTS while its row is kept', async () => {
     const t = await makeTenants();
-    await db.workItem.update({ where: { id: t.item1 }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: t.item1 }, data: { archivedAt: new Date() } });
     const [rows, count] = await asAppRole({ workspaceId: t.w1 }, async (tx) => [
       await workItemEmbeddingRepository.rankByEmbedding(
         {

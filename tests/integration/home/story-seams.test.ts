@@ -327,7 +327,7 @@ describe('Home story seam — the access matrix', () => {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(open.id, member.id, tx);
       await watcherRepository.add(hidden.id, member.id, tx);
     });
@@ -394,7 +394,7 @@ describe('Home story seam — the two tabs are different questions', () => {
     const watchedOnly = await createWorkItem(fx, { kind: 'task', title: 'Watched only' });
     const both = await createWorkItem(fx, { kind: 'task', title: 'Owned and watched' });
     await own(watchedOnly.id, { assignee: other.id, reporter: other.id });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(watchedOnly.id, fx.ownerId, tx);
       await watcherRepository.add(both.id, fx.ownerId, tx);
     });
@@ -421,7 +421,7 @@ describe('Home story seam — an agent-executed item is not special', () => {
       type: 'code',
       executor: 'coding_agent',
     });
-    await db.$transaction((tx) => watcherRepository.add(agentItem.id, fx.ownerId, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(agentItem.id, fx.ownerId, tx));
 
     const work = (await homeService.listMyWork(fx.ctx)).items;
     const watching = (await homeService.listWatching(fx.ctx)).items;

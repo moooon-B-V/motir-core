@@ -323,7 +323,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const ownedOnly = await createWorkItem(fx, { kind: 'task', title: 'Mine, not watched' });
     await own(watchedOnly.id, { assignee: other.id, reporter: other.id });
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(watchedOnly.id, fx.ownerId, tx);
       await watcherRepository.add(ownedAndWatched.id, fx.ownerId, tx);
     });
@@ -345,7 +345,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const other = await enrolMember(fx, 'wrel');
     const item = await createWorkItem(fx, { kind: 'task', title: 'Watched only' });
     await own(item.id, { assignee: other.id, reporter: other.id });
-    await db.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
 
     const page = await homeService.listWatching(fx.ctx);
 
@@ -367,7 +367,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     );
 
     const member = await enrolMember(fx, 'watcher');
-    await db.$transaction((tx) => watcherRepository.add(hidden.id, member.id, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(hidden.id, member.id, tx));
 
     const page = await homeService.listWatching({ userId: member.id, workspaceId: fx.workspaceId });
 
@@ -378,7 +378,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const fx = await makeFixture({ identifier: 'WSTR' });
     const item = await createWorkItem(fx, { kind: 'task', title: 'Watched by a stranger' });
     const stranger = await createTestUser({ email: `wstr-${Date.now()}@example.com` });
-    await db.$transaction((tx) => watcherRepository.add(item.id, stranger.id, tx));
+    await adminDb.$transaction((tx) => watcherRepository.add(item.id, stranger.id, tx));
 
     // The watch row EXISTS — only the empty browsable set keeps it out, and the
     // read short-circuits before issuing a degenerate `IN ()` rather than
@@ -396,7 +396,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
       const item = await createWorkItem(fx, { kind: 'task', title: `W${i}` });
       made.push(item.identifier);
       await touch(item.id, `2026-08-1${i}T00:00:00.000Z`);
-      await db.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
+      await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
     }
 
     const first = await homeService.listWatching(fx.ctx, { limit: 2 });
@@ -458,7 +458,7 @@ describe('homeService.tabCounts — the tab badges', () => {
       { kind: 'task', title: 'Hidden' },
     );
     const watched = await createWorkItem(fx, { kind: 'task', title: 'Watched' });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(watched.id, fx.ownerId, tx);
       await watcherRepository.add(hidden.id, fx.ownerId, tx);
     });
