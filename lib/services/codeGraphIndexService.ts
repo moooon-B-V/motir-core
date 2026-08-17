@@ -1,4 +1,4 @@
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
 import type { GitProviderId, NormalizedRepo } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
@@ -159,6 +159,15 @@ export const codeGraphIndexService = {
       // The installation is still read — it supplies the provider discriminator
       // the tarball fetch dispatches on — but NOT the tenant (MOTIR-1931).
       if (!installation) return { kind: 'installation_missing' as const };
+
+      // ⚠️ BIND THE TENANT (MOTIR-2880). `github_installation` reads on the system
+      // flag; `workspace` does NOT — all four of its SELECT policies key on
+      // `app.workspace_id`, `app.user_id` or `app.bootstrap_slug`. So under
+      // `motir_app` the read below returned null and EVERY first index reported
+      // `workspace_missing` for a workspace that was right there. The workspace is
+      // an input, so there is nothing to discover — it is bound here rather than at
+      // the wrapper only because the installation read above still wants the flag.
+      await bindWorkspaceContext(tx, input.workspaceId);
 
       const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
       if (!workspace) return { kind: 'workspace_missing' as const };

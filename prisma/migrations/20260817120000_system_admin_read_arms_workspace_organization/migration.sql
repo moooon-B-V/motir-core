@@ -1,0 +1,167 @@
+-- ===========================================================================
+-- RLS: a `system_admin` READ arm for the two tenant-root tables that are read
+-- CROSS-TENANT by design (MOTIR-2880) — `workspace` and `organization`.
+--
+-- ---------------------------------------------------------------------------
+-- THE CLASS, AND WHY ONLY TWO TABLES OF THE FORTY-FIVE ARE ARMED
+-- ---------------------------------------------------------------------------
+-- `withSystemContext` (lib/workspaces/context.ts) binds ONE GUC,
+-- `app.system_admin`, and that GUC is read by a policy ARM that was added per
+-- table for the jobs runtime and operator tooling. Measured on the migrated
+-- schema: of the 69 tables with RLS enabled, 24 carry such an arm on a
+-- SELECT/ALL permissive policy and 45 do not — `work_item`, `workspace`,
+-- `organization`, `workspace_membership`, `sprint`, `comment`, `notification`,
+-- `watcher` among them. A read of an unarmed table inside a system context
+-- returns ZERO ROWS AND RAISES NOTHING, so the caller reads a live row's
+-- absence as data.
+--
+-- 88 `withSystemContext` call sites were adjudicated against the tables each
+-- query actually touches — FROM *and* JOIN, one hop through the repository
+-- method and through same-file helpers. 78 touch only armed tables. TEN did
+-- not, and the fix for EIGHT of them is not a policy at all: the tenant was
+-- either already in hand (a job event's `workspaceId`, a method argument) or one
+-- armed CONNECTION-tier read away (`github_repo` carries the tenancy), so those
+-- sites now bind `app.workspace_id` / `app.organization_id` — additively, with
+-- the system flag left set for the connection reads in the same transaction.
+-- Binding is the default disposition precisely because it does not widen
+-- anything.
+--
+-- TWO sites cannot bind, because there is no single tenant to bind:
+--
+--   site                                          | joins        | blocked by
+--   ----------------------------------------------+--------------+--------------
+--   liveProjectsService#resolve                   | project      | workspace
+--     -> projectRepository#findLivePairs          |   -> workspace|
+--   ciFleetCostMeterService#recordPeriodCosts     | ci_container_| organization
+--     -> ciContainerPeriodCostRepository#         |   period_cost|
+--        sumForPeriodByMetaSplit                  |   -> organiz.|
+--
+-- `resolve` answers a BATCH of (workspaceId, projectId) pairs sent by motir-ai
+-- in one call — spanning workspaces is the whole point of the endpoint — and
+-- `sumForPeriodByMetaSplit` groups every org's container cost by
+-- `organization."isMeta"` to split Motir's own spend from its tenants'. Neither
+-- has one workspace to name, and binding one arbitrarily would be a wrong
+-- answer rather than a narrower one.
+--
+-- ⚠️ BOTH READS ARE JOINS, WHICH IS WHY NEITHER WAS FOUND BY THE ARM INVENTORY
+-- ALONE. `findLivePairs` reads `project` — which IS armed — and fails on the
+-- `workspace: { is: {} }` relation filter it uses to assert the tenant is still
+-- alive. `sumForPeriodByMetaSplit` reads `ci_container_period_cost` — armed —
+-- and fails on `JOIN "organization"`. This is `notes.html` #269 one context
+-- over: a read is admitted only if EVERY table it touches is admitted, and a
+-- policy-arm inventory describes the FROM clause, not the query.
+--
+-- ---------------------------------------------------------------------------
+-- FOR SELECT ONLY — the write refusal is load-bearing and is NOT touched
+-- ---------------------------------------------------------------------------
+-- MOTIR-2865 established that the ABSENCE of a system arm on the tenant-root
+-- WRITE policies does useful work: `membership_insert_active_or_bootstrap` and
+-- `org_membership_insert_active_or_bootstrap` REFUSE a `withSystemContext`
+-- write rather than over-permitting it, and a webhook service that reached for
+-- one was red for exactly that reason. Postgres combines policies per COMMAND
+-- — (permissive_1 OR permissive_2 OR …) AND (restrictive_1 AND …) — so a policy
+-- declared FOR SELECT widens reads and only reads. `workspace_mutate_active`,
+-- `workspace_delete_active`, `workspace_insert_bootstrap` and the three
+-- `organization` equivalents keep governing writes unchanged, and no WITH CHECK
+-- is added anywhere. DELETE is the verb to say this about explicitly, because it
+-- has no WITH CHECK to catch a widened USING: had these been FOR ALL, a system
+-- context could have deleted a tenant root. They are not.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT IT WIDENS, STATED
+-- ---------------------------------------------------------------------------
+-- A caller that has already set `app.system_admin` can now SELECT any
+-- `workspace` or `organization` row — including `workspace.subtaskPrMergeMode`
+-- and `organization.scaledTrackerSubscription` / `aiIncludedSeat` / `isMeta`,
+-- since RLS admits the ROW and not a column list. That is accepted for the
+-- reason the helper's own docstring gives: `withSystemContext` binds a CONSTANT
+-- and is never fed user input, a tenant request path uses `withWorkspaceContext`
+-- (which cannot set this GUC), and every caller is server-side job or operator
+-- code. The reach it grants is the reach those two callers were WRITTEN to have
+-- and silently did not.
+--
+-- It is also the arm shape these two tables' own siblings already carry:
+-- `project_workspace_or_system_read`, `github_installation_workspace_or_system`,
+-- `job_run_workspace_or_system_admin` and 21 more are `system_admin OR
+-- workspace_id = GUC` on a FOR ALL policy. This is the strictly narrower,
+-- read-only version of that.
+--
+-- ---------------------------------------------------------------------------
+-- MEASURED — a bound tenant session pays nothing
+-- ---------------------------------------------------------------------------
+-- The predicate is row-INDEPENDENT (`current_setting(...) = 'true'`), so it
+-- appears as one more constant comparison inside the policy's OR chain: no
+-- join, no subplan, no index work, and it cannot change which access path the
+-- planner picks. `EXPLAIN (ANALYZE, COSTS OFF)` under `motir_app` on the
+-- migrated schema, reading one workspace's own row with `app.workspace_id`
+-- bound and `app.system_admin` UNSET — i.e. every ordinary tenant request:
+--
+--   Index Scan using workspace_pkey on workspace (actual rows=… loops=1)
+--     Index Cond: (id = 'ws_probe')
+--     Filter: ((slug = current_setting('app.bootstrap_slug', true))
+--          OR (current_setting('app.system_admin', true) = 'true')   <-- THIS ARM
+--          OR ((COALESCE(current_setting('app.workspace_id', true), '') = '')
+--              AND (hashed SubPlan 2))
+--          OR (hashed SubPlan 3)
+--          OR (id = current_setting('app.workspace_id', true)))
+--     SubPlan 2 -> Seq Scan on project p              (never executed)
+--     SubPlan 3 -> Index Only Scan on workspace_membership (never executed)
+--
+-- The primary-key index scan is untouched, and BOTH pre-existing subplans still
+-- report `never executed` — the two hashed SubPlans belong to
+-- `workspace_public_project_read` and `workspace_membership_visible`, not to
+-- this arm, and reading them as its cost is the mistake to avoid.
+-- ===========================================================================
+
+-- ===========================================================================
+-- workspace — read by `projectRepository#findLivePairs` (liveProjectsService).
+--
+-- The service resolves a batch of (workspaceId, projectId) pairs to
+-- live / absent for motir-ai's graph reconciler. The `workspace` row is a pure
+-- EXISTENCE HOP — no column of it reaches the response — but the read asserts it
+-- deliberately: `project` cascades with its workspace, so a surviving project
+-- implies a surviving workspace, and the repository ASSERTS that rather than
+-- assuming it "because this read is what stands between a reconciler and a live
+-- tenant's data" (its own comment). Under RLS the assertion silently became
+-- always-false, so the endpoint answered `absent` for every pair — the single
+-- most dangerous answer it can give, since the caller deletes on it.
+--
+-- Existing policy inventory (7): SELECT `workspace_active`,
+-- `workspace_membership_visible`, `workspace_visible_bootstrap`,
+-- `workspace_public_project_read` (20260815200000); UPDATE
+-- `workspace_mutate_active`; DELETE `workspace_delete_active`; INSERT
+-- `workspace_insert_bootstrap`. Only a fifth permissive SELECT policy is added.
+-- ===========================================================================
+
+CREATE POLICY "workspace_system_read" ON "workspace"
+  FOR SELECT
+  USING (current_setting('app.system_admin', true) = 'true');
+
+-- ===========================================================================
+-- organization — read by `ciContainerPeriodCostRepository#
+-- sumForPeriodByMetaSplit` (ciFleetCostMeterService).
+--
+--     FROM "ci_container_period_cost" AS "cost"
+--     JOIN "organization" ON "organization"."id" = "cost"."organization_id"
+--     GROUP BY "organization"."isMeta", "cost"."workload"
+--
+-- `ci_container_period_cost` already carries
+-- `ci_container_period_cost_workspace_or_system`, so the FROM clause was
+-- admitted and the JOIN was not — the aggregate returned no groups at all and
+-- the meta/tenant cost split reported zero for both halves. An aggregate over a
+-- denied set is the worst case of this class: `SUM` of no rows is a number, and
+-- a cost report of 0 looks like a quiet week.
+--
+-- Existing policy inventory (7): SELECT `organization_active`,
+-- `organization_membership_visible`, `organization_visible_bootstrap`,
+-- `organization_public_project_read` (20260815200000); UPDATE
+-- `organization_mutate_active`; DELETE `organization_delete_active`; INSERT
+-- `organization_insert_bootstrap`. The write trio is untouched, which matters
+-- more here than on any other table in the schema: the org row carries billing
+-- state, so a widened write verb would be a billing-TAMPERING surface rather
+-- than a leak.
+-- ===========================================================================
+
+CREATE POLICY "organization_system_read" ON "organization"
+  FOR SELECT
+  USING (current_setting('app.system_admin', true) = 'true');

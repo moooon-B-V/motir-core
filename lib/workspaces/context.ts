@@ -113,6 +113,29 @@ export async function withWorkspaceContext<T>(
  *   * operator tooling that must see SYSTEM rows (workspace_id IS NULL) or span
  *     workspaces (the 1.6.5 dashboard's system tab).
  *
+ * ⚠️ IT IS NOT A UNIVERSAL ESCAPE HATCH, AND THE FAILURE IS SILENT (MOTIR-2880).
+ * `app.system_admin` is read by a policy ARM, and that arm was added per table for
+ * operator tooling — measured on the migrated schema, **24 of the 69 RLS tables
+ * carry one on a SELECT/ALL policy and 45 do not**, `work_item` / `workspace` /
+ * `workspace_membership` / `organization` / `sprint` / `comment` among them. A read
+ * of an unarmed table inside this context returns ZERO ROWS AND RAISES NOTHING, so
+ * the caller reads a real row's absence as data. The rule that follows:
+ *
+ *   * The CONNECTION tier — `github_installation` / `github_repo` /
+ *     `github_pull_request` / `job_run` / the CI meters — is what this context is
+ *     for. Those policies are `system_admin OR workspace_id = app.workspace_id`.
+ *   * A TENANT table read in the same transaction owes a tenant binding. Call
+ *     {@link bindWorkspaceContext} (or `bindOrganizationContext`) the moment the id
+ *     is known — it is additive, so the connection reads keep their arm.
+ *   * A read that is cross-tenant BY DESIGN (no single tenant exists — the
+ *     cross-workspace live-project resolve, the meta/tenant cost split) is the only
+ *     case that earns a new `system_admin` READ arm on the table.
+ *
+ * The arms are READ-side only, deliberately: `withSystemContext` is REFUSED on the
+ * tenant-root WRITE policies (`membership_insert_active_or_bootstrap` and friends,
+ * MOTIR-2865) and that refusal is load-bearing. Do not answer a blind read by arming
+ * an INSERT/UPDATE policy.
+ *
  * SECURITY: this helper is NEVER fed user input — it binds a constant. A tenant
  * request path uses withWorkspaceContext (which binds only user/workspace/
  * project), so a tenant can never elevate itself to system_admin. Keep it that
@@ -125,6 +148,49 @@ export async function withSystemContext<T>(
     await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     return fn(tx);
   });
+}
+
+/**
+ * Bind `app.workspace_id` on a transaction that is ALREADY open — the one case the
+ * `with*Context` wrappers above cannot serve, because the workspace is not known
+ * until partway through the transaction. The workspace-tier twin of
+ * `bindOrganizationContext` (`lib/organizations/context.ts`), and its callers are
+ * the mirror image: there the org is learned from a workspace row mid-write; here
+ * the WORKSPACE is learned from a connection-tier row mid-read.
+ *
+ * ⚠️ THE CASE IT EXISTS FOR (MOTIR-2880). `withSystemContext` binds ONE flag, and
+ * only 24 of the 69 RLS tables carry an arm that reads it. A webhook / job path
+ * legitimately opens a system transaction to reach the CONNECTION tier — the
+ * `github_installation` / `github_repo` / `job_run` family, whose policies are
+ * `system_admin OR workspace_id = app.workspace_id` — and then reads TENANT tables
+ * (`work_item`, `workspace_membership`, `project_repository`, …) whose policies have
+ * no system arm at all. Those reads return ZERO ROWS AND RAISE NOTHING. The tenant
+ * is discovered by the FIRST read, so no wrapper could have bound it up front:
+ * the binding has to move to the point where the id becomes known.
+ *
+ * Binding here is ADDITIVE, never a swap. `app.system_admin` stays set, so the
+ * connection-tier reads in the same transaction keep their arm; the workspace GUC
+ * only ADMITS rows that were invisible before. It is also strictly NARROWING in
+ * effect — nothing this grants sight of is outside the one workspace named.
+ *
+ * `set_config(..., true)` is transaction-LOCAL, so the binding dies with `tx` exactly
+ * as the wrappers' do.
+ *
+ * ⚠️ POSITION IS THE WHOLE POINT: a statement issued BEFORE this call is still
+ * unbound. Call it immediately after the read that resolves the workspace, before
+ * the first tenant-table statement — `tests/rls/system-context-arm-guard.test.ts`
+ * adjudicates each statement against this call's position, exactly as
+ * `bareTransactionScan` does for an inline `set_config`.
+ *
+ * SECURITY: same constraint as `withWorkspaceServiceContext` — the id must come from
+ * a TRUSTED resolution (a stored `github_repo` / `github_installation` row, a job
+ * event envelope), never from request input.
+ */
+export async function bindWorkspaceContext(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+): Promise<void> {
+  await tx.$executeRaw`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
 }
 
 /**

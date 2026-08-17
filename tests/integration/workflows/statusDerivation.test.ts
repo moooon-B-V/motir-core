@@ -31,7 +31,11 @@ import { truncateAuthTables } from '../../helpers/db';
 
 interface Emitted {
   name: string;
-  data: { workItemId: string; toStatusKey: string };
+  // `workspaceId` is carried because the two derivation services BIND it
+  // (MOTIR-2880) — the real `work-item/transitioned` envelope has always had it,
+  // and the pump reads it off the event rather than inventing one, so the drain
+  // drives the production path.
+  data: { workItemId: string; workspaceId: string; toStatusKey: string };
 }
 
 const queue: Emitted[] = [];
@@ -65,8 +69,15 @@ async function drain(): Promise<number> {
     expect(event.name).toBe('work-item/transitioned');
     // The job's order, deliberately: rollup first — it is the direction that can
     // CREATE work for the other.
-    await parentStatusRollupService.rollUpForChild(event.data.workItemId);
-    await childStatusCascadeService.cascadeToChildren(event.data.workItemId);
+    // ⚠️ The workspace comes off the EVENT, exactly as `statusDerivation`'s job
+    // step takes it from `payload.workspaceId` (MOTIR-2880). Both phases bind a
+    // workspace context now, so a drain that invented one would not be driving
+    // the production path.
+    await parentStatusRollupService.rollUpForChild(event.data.workItemId, event.data.workspaceId);
+    await childStatusCascadeService.cascadeToChildren(
+      event.data.workItemId,
+      event.data.workspaceId,
+    );
   }
   return steps;
 }
@@ -398,8 +409,8 @@ describe('recursion, termination, and up↔down non-interference', () => {
     const revsBefore = await adminDb.workItemRevision.count({ where: { workItemId: story.id } });
 
     // Redeliver the last event: same dispatch, same item, already-settled tree.
-    await parentStatusRollupService.rollUpForChild(children[1]!.id);
-    await childStatusCascadeService.cascadeToChildren(children[1]!.id);
+    await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
+    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId);
     const extra = await drain();
 
     expect(extra).toBe(0); // nothing moved ⇒ nothing emitted
