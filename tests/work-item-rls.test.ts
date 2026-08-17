@@ -578,6 +578,137 @@ describe('PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS', () =
   });
 });
 
+// ---------------------------------------------------------------------------
+// MOTIR-2884 — the cross-workspace check must hold for a BOUND writer
+// ---------------------------------------------------------------------------
+// The block above proves the six triggers still fire when every row they walk
+// lies INSIDE the bound context. That is the easy half, and 1.4.5 measured
+// only that half — which is how the following survived a year.
+//
+// enforce_work_item_link_workspace() is the one function whose SUBJECT is a
+// row in another tenant: it exists to compare fromItem.workspaceId with
+// toItem.workspaceId, so a genuine violation puts one endpoint OUTSIDE the
+// writer's workspace BY CONSTRUCTION. As a plain SECURITY INVOKER function its
+// two lookups ran under the invoking statement's policies, the foreign
+// endpoint read NULL, and the function took its "defer to the FK" branch — but
+// the FK is satisfied, because the row exists (referential-integrity checks are
+// themselves exempt from RLS). The write the trigger exists to REFUSE went
+// through, silently, with no error and no log.
+//
+// So these cases attempt the VIOLATION as a bound motir_app writer rather than
+// as the owner. They are RED against the pre-MOTIR-2884 function and green once
+// 20260817120000_link_workspace_trigger_security_definer marks it SECURITY
+// DEFINER; the migration carries the per-function verdict for the other five.
+describe('MOTIR-2884 — link workspace trigger refuses a cross-tenant write as motir_app', () => {
+  it('REFUSES a link whose toId lives in another workspace (WI_LINK_CROSS_WORKSPACE)', async () => {
+    const fx = await makeWorkItemTenants();
+    // Bound to W1. fromId is W1's item, toId is W2's — invisible to this
+    // writer, which is exactly the case the trigger is FOR. The link row's own
+    // workspaceId is W1, so the RLS WITH CHECK passes and the trigger is the
+    // only thing standing between this statement and a cross-tenant row.
+    await expect(
+      asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: '' }, (tx) =>
+        tx.workItemLink.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            fromId: fx.itemP1aId,
+            toId: fx.itemP2aId,
+            kind: 'relates_to',
+            createdById: fx.userAId,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_LINK_CROSS_WORKSPACE') },
+    });
+
+    // And nothing was written — the assertion above would also pass if the
+    // insert failed for some unrelated reason, so read the table back.
+    const rows = await adminDb.workItemLink.findMany({ where: { toId: fx.itemP2aId } });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('REFUSES a link whose denormalized workspaceId disagrees with fromItem (WI_LINK_WORKSPACE_MISMATCH)', async () => {
+    const fx = await makeWorkItemTenants();
+    // Bound to W2, writing a link row stamped W2 whose two endpoints both live
+    // in W1. Under the invoker function BOTH lookups came back NULL and the
+    // mismatch branch was never reached; the row landed in W2 pointing at W1's
+    // items, which is precisely the tenancy corruption the denormalized column
+    // exists to make impossible.
+    await expect(
+      asAppRole({ userId: fx.userBId, workspaceId: fx.workspaceW2Id, projectId: '' }, (tx) =>
+        tx.workItemLink.create({
+          data: {
+            workspaceId: fx.workspaceW2Id,
+            fromId: fx.itemP1aId,
+            toId: fx.itemP1bId_inP1,
+            kind: 'relates_to',
+            createdById: fx.userBId,
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_LINK_WORKSPACE_MISMATCH') },
+    });
+
+    // Scoped to W2 — the fixture already owns a legitimate W1 link out of
+    // itemP1a, so an unscoped read here would match that and prove nothing.
+    const rows = await adminDb.workItemLink.findMany({
+      where: { fromId: fx.itemP1aId, workspaceId: fx.workspaceW2Id },
+    });
+    expect(rows).toHaveLength(0);
+  });
+
+  it('REFUSES the cross-workspace link even when app.project_id narrows the lookup', async () => {
+    const fx = await makeWorkItemTenants();
+    // The second axis of the same defect, and the one the 1.4.5 comment waved
+    // through as "not reachable in practice": work_item carries a RESTRICTIVE
+    // FOR SELECT policy that narrows to app.project_id, so a bound project
+    // hides an in-WORKSPACE endpoint too. With P1 bound, W2's item is hidden
+    // twice over. The refusal must not depend on which GUCs happen to be set.
+    await expect(
+      asAppRole(
+        { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+        (tx) =>
+          tx.workItemLink.create({
+            data: {
+              workspaceId: fx.workspaceW1Id,
+              fromId: fx.itemP1aId,
+              toId: fx.itemP2aId,
+              kind: 'relates_to',
+              createdById: fx.userAId,
+            },
+          }),
+      ),
+    ).rejects.toMatchObject({
+      cause: { code: '23514', message: expect.stringContaining('WI_LINK_CROSS_WORKSPACE') },
+    });
+  });
+
+  it('still ACCEPTS a legal cross-PROJECT link with app.project_id bound (the widened reach does not over-reject)', async () => {
+    const fx = await makeWorkItemTenants();
+    // The guard on the fix itself. A cross-project link inside one workspace is
+    // a v1 use case, and with P1 bound the P1b endpoint is hidden from the
+    // INVOKER — so before this fix the trigger passed this write by SKIPPING
+    // its check, and after it the trigger passes by actually performing it.
+    // Both endpoints resolve to W1 and the row's workspaceId matches.
+    const created = await asAppRole(
+      { userId: fx.userAId, workspaceId: fx.workspaceW1Id, projectId: fx.projectP1Id },
+      (tx) =>
+        tx.workItemLink.create({
+          data: {
+            workspaceId: fx.workspaceW1Id,
+            fromId: fx.itemP1aId,
+            toId: fx.itemP1b_otherProjectId,
+            kind: 'clones',
+            createdById: fx.userAId,
+          },
+        }),
+    );
+    expect(created.id).toBeTruthy();
+  });
+});
+
 describe('withWorkspaceContext binds app.project_id', () => {
   // Directly exercises the lib/workspaces/context.ts change: the helper must
   // bind app.project_id as a third GUC (empty string when projectId is

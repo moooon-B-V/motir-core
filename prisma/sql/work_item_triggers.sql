@@ -35,14 +35,31 @@
 -- Tests that target the kind-parent rule in isolation construct shallow,
 -- acyclic fixtures so neither depth nor cycle trips first.
 --
--- NOTE for Subtask 1.4.5 (RLS): these functions SELECT sibling rows from
--- work_item by id. When FORCE ROW LEVEL SECURITY lands on this table, the
--- trigger's internal lookups will be subject to the same workspace GUC
--- policy as the invoking statement. Within a single subtree every row shares
--- one workspaceId (the service enforces same-project parenting), so the
--- active app.workspace_id GUC will match — but 1.4.5 must verify this and,
--- if needed, mark these functions SECURITY DEFINER. Logged as a forward note
--- in PRODECT_FINDINGS.md.
+-- RLS (Subtask 1.4.5, ANSWERED — re-examined by MOTIR-2884): these functions
+-- SELECT sibling rows from work_item by id, and under FORCE ROW LEVEL SECURITY
+-- a SECURITY INVOKER function's internal lookups run under the invoking
+-- statement's policies — narrowed by BOTH app.workspace_id (the permissive
+-- gate) and app.project_id (the restrictive FOR SELECT narrowing). All three
+-- functions here remain SECURITY INVOKER.
+--
+-- Read that verdict precisely, because the note it replaces was too generous.
+-- Their in-context premise — "within a single subtree every row shares one
+-- workspaceId" — is TRUE, but it holds because the SERVICE enforces
+-- same-project parenting (`CrossProjectParentError` in workItemsService), and
+-- nothing in the database compares parent.workspaceId / parent.projectId with
+-- the child's. So a chain that left the bound context would TRUNCATE these
+-- walks silently (an under-counted depth, an undetected cycle, an unapplied
+-- kind matrix) — the DB backstop's completeness rests on the application check
+-- it exists to backstop. Marking these SECURITY DEFINER does NOT fix that: it
+-- would restore the three checks while still admitting the cross-tenant
+-- parentId, which is the actual gap and is equally open under the owner role.
+-- The fix is a DB-level parent-tenancy check, carded separately.
+--
+-- The full six-function verdict lives in migration
+-- 20260817120000_link_workspace_trigger_security_definer, which marks the ONE
+-- function whose subject IS a row in another tenant
+-- (`enforce_work_item_link_workspace`, work_item_link_triggers.sql) SECURITY
+-- DEFINER. Read it before changing any trigger's security label.
 
 -- 1. Kind-parent matrix ------------------------------------------------------
 --    epic.parentId    IS NULL                       (epics are always roots)
