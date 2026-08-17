@@ -322,6 +322,24 @@ export interface TransactionBudget {
  *
  * Once the active workspace is known, tenant-scoped query paths should use
  * withWorkspaceContext (both GUCs) instead.
+ *
+ * SUFFICIENCY, table by table — and the caveat above is the whole trap
+ * (MOTIR-2886). "The membership-scoped RLS policies still bite" is true and is
+ * NOT the same claim as "the tables this context reads are admitted": a table
+ * with no `app.user_id` arm returns ZERO ROWS here and raises nothing, so the
+ * caller reads the denial as absence. Sufficient for `workspace`
+ * (`workspace_membership_visible`), `workspace_membership`
+ * (`membership_visible_active_or_own`), `organization` /
+ * `organization_membership` (their `_active_or_own` arms), `user` (no RLS), and
+ * — since `20260817140000` — `project`, whose `project_user_membership_read` arm
+ * exists for exactly this context and is gated on `app.workspace_id` being
+ * UNBOUND so it cannot widen a tenant request. NOT sufficient for any other
+ * tenant table: `work_item`, `board`, `sprint` and the rest key purely on
+ * `app.workspace_id`, and a resolution path that needs one of them is resolving
+ * too much — finish resolving the workspace, then open withWorkspaceContext.
+ * Before adding a read here, check `pg_policies` for an arm that reads
+ * `app.user_id`, and check it for every table the query JOINS, not just the one
+ * it targets.
  */
 export async function withUserContext<T>(
   userId: string,
