@@ -502,6 +502,17 @@ export const workspacesService = {
    * runs under `withUserContext`, and the access-gate re-check
    * (`organizationsService.resolveWorkspaceAccess`) reuses that bound
    * transaction so the membership rows are RLS-visible in the same snapshot.
+   *
+   * ⚠️ The `project` read below is RLS-load-bearing (MOTIR-2886). `withUserContext`
+   * binds only `app.user_id`, and until `20260817140000` no `project` policy read
+   * that GUC — so under the non-bypass `motir_app` role the read returned null,
+   * raised nothing, and this method returned null for EVERY user: the landing
+   * silently degraded to `resolveActiveWorkspace`'s first-by-createdAt default,
+   * and the access gate below was never reached. `project_user_membership_read`
+   * admits it, keyed on WORKSPACE membership only, so the ORG-keyed gate below
+   * still decides access rather than the policy deciding it invisibly. If this
+   * method ever grows a read of another tenant table, check that table's arms for
+   * this context first — see `withUserContext`'s sufficiency note.
    */
   async resolveLastActiveContext(
     userId: string,
