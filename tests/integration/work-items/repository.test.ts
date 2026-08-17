@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
+  CrossProjectParentError,
   DepthLimitExceededError,
   IllegalParentTypeError,
   ParentCycleError,
@@ -15,6 +16,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
+  createTestProject,
   createTestWorkItem as createWorkItem,
 } from '../../fixtures';
 
@@ -100,6 +102,53 @@ describe('workItemRepository.create — kind-parent trigger', () => {
     await expect(createWorkItem(fx, { kind: 'subtask', title: 'Orphan' })).rejects.toBeInstanceOf(
       IllegalParentTypeError,
     );
+  });
+});
+
+describe('workItemRepository.create — parent-tenancy trigger (MOTIR-2895)', () => {
+  // The trigger's REJECTION is proved under the non-bypass role in
+  // tests/work-item-rls.test.ts (where the parent is genuinely invisible to the
+  // writer). What these two cases pin is the OTHER half — the repository edge
+  // TRANSLATING its two markers into a typed error the service layer already
+  // knows, so `CrossProjectParentError` means the same thing whether the service
+  // pre-flight caught it or the database did. A raw 23514 escaping this edge
+  // would reach a route as a bare 500.
+  it('rejects a parent in another PROJECT of the same workspace with CrossProjectParentError', async () => {
+    const fx = await makeFixture();
+    const otherProject = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Sibling project',
+      identifier: 'SIBL',
+    });
+    const fxOther = {
+      ...fx,
+      project: otherProject,
+      projectId: otherProject.id,
+      projectIdentifier: otherProject.identifier,
+    };
+    const foreignEpic = await createWorkItem(fxOther, { kind: 'epic', title: 'Epic over there' });
+
+    // Kind-legal (a story under an epic) and shallow, so only the tenancy check
+    // can reject it — and it sorts first anyway.
+    await expect(
+      createWorkItem(fx, { kind: 'story', title: 'Story here', parentId: foreignEpic.id }),
+    ).rejects.toBeInstanceOf(CrossProjectParentError);
+  });
+
+  it('rejects a parent in another WORKSPACE with CrossProjectParentError', async () => {
+    const fx = await makeFixture();
+    const otherTenant = await makeFixture({ name: 'Other Co', identifier: 'OTHR' });
+    const foreignEpic = await createWorkItem(otherTenant, {
+      kind: 'epic',
+      title: 'Another tenant’s epic',
+    });
+
+    // The same typed error deliberately: the marker distinguishes the workspace
+    // case from the project case, the class does not (see the error's docstring).
+    await expect(
+      createWorkItem(fx, { kind: 'story', title: 'Story here', parentId: foreignEpic.id }),
+    ).rejects.toBeInstanceOf(CrossProjectParentError);
   });
 });
 
