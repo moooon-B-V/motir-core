@@ -965,6 +965,95 @@ request** — no error, no warning, just the 6.12.6 sort key quietly ceasing to 
 
 ---
 
+---
+
+## CLOSED — both ratchets are at their floor (MOTIR-2833, 2026-08-16)
+
+`tests/rls/singleton-read-guard.test.ts` carried two ratchets; this is where both finish, and they
+closed for **different reasons**, which is the distinction the whole two-ratchet apparatus existed to
+preserve. (Written while the WRITE surface was still open, and landed after it and the two arms
+above had closed — the read-adjudication axis is independent of all three, so its position among the
+closing entries carries no ordering claim.)
+
+| ratchet                     | measures                                 | peak | final | closed by                          |
+| --------------------------- | ---------------------------------------- | ---: | ----: | ---------------------------------- |
+| `UNBOUND_READ_PATH_CEILING` | reads confirmed BROKEN under `motir_app` |   55 | **0** | MOTIR-2796 — RETIRED by MOTIR-2814 |
+| `UNREVIEWED_CEILING`        | reads nobody had LOOKED at               |   73 | **0** | MOTIR-2833                         |
+
+`'unreviewed'` is also gone from the `Verdict` union, so the state cannot be re-entered without an
+explicit type change — the count and the type now say the same thing, which is the property a bare
+ceiling could not give (it sat stale at 14 through four cards that each thought they had lowered it).
+
+### The last eight, and the prediction that was wrong about half of them
+
+The eight were all public-surface reads, and the closing card's own plan predicted all eight would
+return `public`, on this reasoning: _"only `project` and `work_item` carry public arms … the reads
+below all target `project` or `work_item`, which is why they are plausibly `public` rather than
+plausibly broken."_
+
+**Four of them were broken, by the very fact that sentence quotes.** They TARGET `project` /
+`work_item` and they JOIN a third table that had no arm:
+
+| read                                             | unarmed table it joined      |
+| ------------------------------------------------ | ---------------------------- |
+| `workItemRepository#findPublicRoadmapSubmitted`  | `workflow_status`            |
+| `workItemRepository#countPublicRoadmapSubmitted` | `workflow_status`            |
+| `workItemRepository#findPublicRequestMatches`    | `workflow_status`            |
+| `projectRepository#listPublicDirectoryRanked`    | `workspace` → `organization` |
+
+Under RLS an unadmitted join returns **zero rows and raises nothing**, so each of these was a live
+production defect — latent only because production still runs a `BYPASSRLS` role, and due to arrive
+all at once at MOTIR-2515's cutover, on the roadmap, the duplicate-detection pre-check and the whole
+project square. `publicProjectsService` and `projectSquareService` bind no context anywhere, so the
+request path IS the context-less connection the tests reproduce.
+
+**A read is admitted only if EVERY table it touches is admitted.** A policy-arm inventory describes
+the FROM clause, not the query. Recorded as `notes.html` #269, planning bug MOTIR-2858.
+
+The control that makes this a measurement rather than a story: `findPublicRoadmapByStatus` joins only
+armed tables and PASSED under `motir_app` in the same run in which its three neighbours failed.
+
+### What each card contributed
+
+- **MOTIR-2856** — the three missing arms (`workflow_status_public_project_read`,
+  `workspace_public_project_read`, `organization_public_project_read`), each gated on an unbound
+  `app.workspace_id` so a tenant read pays nothing (all three subplans report `never executed` on the
+  bound path). Its measurement also found that a correlated `EXISTS` beats an uncorrelated hashed
+  `IN` by ~8× under the project square's `LIMIT` — `hashed SubPlan` is not a win to chase.
+- **MOTIR-2857** — the two test defects that had hidden the class. `tests/projectSquare` wrote its
+  fixtures through the app-role client (so `makePublic` silently failed), and
+  `publicProjects/publicRoadmap.test.ts` never marked its project `public` at all. Both suites were
+  green for months while asserting a public-visibility guarantee against a private project.
+- **MOTIR-2833** — the eight verdicts, each naming its policy arm AND the run that settles it; the
+  ceiling to 0; `'unreviewed'` out of the union; and one missing test: `projectRepository#listPublic`
+  (the sitemap read) had **no test anywhere**, so no run could be cited for it. It is now covered in
+  `publicProjects/publicAccessAndProjection.test.ts`, and mutation-checked — dropping
+  `project_public_read` turns it red.
+
+### The evidence, as run
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/publicProjects
+  Test Files  11 passed (11)        Tests  87 passed (87)
+
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/projectSquare
+  Test Files   6 passed (6)         Tests  76 passed (76)
+
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/rls/singleton-read-guard.test.ts
+  Test Files   1 passed (1)         Tests   5 passed (5)
+```
+
+### What this does NOT close
+
+**This entry closes the two ratchets in `singleton-read-guard.test.ts` — not the flag.** Flipping
+`TEST_DB_APP_ROLE` is MOTIR-2734, and cutting the deployment over is MOTIR-2515.
+
+The WRITE surface this section originally listed as still-open closed one day later — see _"CLOSED —
+the WRITE surface is bound"_ (MOTIR-2865), which bound `importService.createDraft`/`preview`, the
+very `tests/import` denials cited here while this card was in review. What remains between here and
+the flag is the assertion residue MOTIR-2872 re-measures and the fixture population MOTIR-2871 owns;
+neither is a read returning empty.
+
 ## THE DOWNSTREAM POPULATION, RE-MEASURED (MOTIR-2872, 2026-08-16)
 
 The measurement MOTIR-2862 deferred. Its class 3 was 246 failures whose error was an assertion rather
@@ -1081,6 +1170,17 @@ tenant-root tables"_) from the WRITE side to the READ side, and from two members
 > service that calls `withSystemContext` — not by reading all 89 sites. The carved card must confirm
 > site by site; some of the tail may belong to class 2. The counts are given so the card can be sized,
 > which is what they are for.
+
+> **⚠️ AND THE 24/45 SPLIT IS A FLOOR, NOT THE BLAST RADIUS — `notes.html` #269 applies to it directly.**
+> The MOTIR-2833 entry directly above establishes that **_"a read is admitted only if EVERY table it
+> touches is admitted. A policy-arm inventory describes the FROM clause, not the query."_** The split
+> above is exactly such an inventory, so a `withSystemContext` read whose target table IS armed can
+> still return nothing because of an unarmed table it JOINS. **This measurement already contains an
+> instance of that and it was not read as one at first:** `codeGraphIndexService.resolveIndexTarget`
+> reads two armed tables (`github_installation`, `project`) and fails only on the third,
+> `workspace` — the same shape as `projectRepository#listPublicDirectoryRanked` in MOTIR-2833's table,
+> against a different context. So MOTIR-2880 must audit each site's whole query, not its FROM clause,
+> and should expect the 219 to be a lower bound on what the class actually covers.
 
 `jobs/code-graph-index` 29 · `integration/workflows/parentStatusRollup` 24 ·
 `integration/workflows/childStatusCascade` 18 · `integration/workflows/statusDerivation` 12 ·
