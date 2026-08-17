@@ -47,10 +47,10 @@ export const statusDerivationOnTransitioned = defineJob(
     const payload = ctx.event.data as WorkItemTransitionedData;
 
     const rollup = await ctx.step.run('roll-up-parent', () =>
-      services.parentStatusRollup.rollUpForChild(payload.workItemId),
+      services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
     const cascade = await ctx.step.run('cascade-to-children', () =>
-      services.childStatusCascade.cascadeToChildren(payload.workItemId),
+      services.childStatusCascade.cascadeToChildren(payload.workItemId, payload.workspaceId),
     );
 
     // Returned for the run log — which direction acted, and on what. Both

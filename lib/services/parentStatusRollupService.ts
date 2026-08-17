@@ -1,4 +1,4 @@
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -19,9 +19,11 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // level that does not change emits nothing. The downward mirror is
 // `childStatusCascadeService` (MOTIR-1647).
 //
-// Runs under a system context: there is no acting user on a background job, so
-// the move is attributed to the WORKSPACE OWNER, the same fallback the
-// change-request status sync uses.
+// Runs WITHOUT an acting user — it is a background job — so the move is
+// attributed to the WORKSPACE OWNER, the same fallback the change-request status
+// sync uses. It is NOT userless in the tenant sense: the triggering event carries
+// `workspaceId`, so both phases bind a workspace context (MOTIR-2880 — phase 1
+// used to open a system context, which no `work_item` policy admits).
 
 /** The ladder, highest rung first — the FIRST match wins. Each rung names the
  *  intent it wants; the concrete status key is resolved against the project's own
@@ -84,10 +86,18 @@ export const parentStatusRollupService = {
    *
    * Never throws for a business reason; returns a typed outcome instead.
    */
-  async rollUpForChild(childId: string): Promise<RollupOutcome> {
-    // Phase 1 — resolve the neighbourhood. No acting user yet, so a system
-    // context (the change-request-sync precedent).
-    const resolved = await withSystemContext(async (tx) => {
+  async rollUpForChild(childId: string, workspaceId: string): Promise<RollupOutcome> {
+    // Phase 1 — resolve the neighbourhood. No acting USER on a background job, but
+    // there IS a tenant: `work-item/transitioned` carries `workspaceId`, so the
+    // read binds the WORKSPACE tier rather than reaching for `withSystemContext`.
+    //
+    // ⚠️ THIS USED TO BE `withSystemContext`, AND IT WAS DEAD (MOTIR-2880). That
+    // context binds only `app.system_admin`, and `work_item` /
+    // `workspace_membership` carry no arm that reads it — so under `motir_app` the
+    // very first statement here (`findById(childId)`) returned NULL, `resolved`
+    // was null, and every rollup answered `{ outcome: 'no_parent' }` without
+    // raising. Silent, because RLS does not refuse a SELECT, it empties it.
+    const resolved = await withWorkspaceServiceContext(workspaceId, async (tx) => {
       const child = await workItemRepository.findById(childId, tx);
       if (!child?.parentId) return null;
       const parent = await workItemRepository.findById(child.parentId, tx);
@@ -100,7 +110,6 @@ export const parentStatusRollupService = {
       return {
         parentId: parent.id,
         projectId: parent.projectId,
-        workspaceId: parent.workspaceId,
         enabled: settings?.autoRollupParentStatus ?? false,
         ownerUserId: owner?.userId ?? null,
       };
@@ -112,7 +121,9 @@ export const parentStatusRollupService = {
     // in that state has bigger problems than a missing rollup.
     if (!resolved.ownerUserId) return { outcome: 'unresolvable' };
 
-    const { parentId, projectId, workspaceId, ownerUserId } = resolved;
+    // `workspaceId` is the caller's — the phase-1 read was RLS-scoped to it, so the
+    // parent it resolved is that workspace's by construction.
+    const { parentId, projectId, ownerUserId } = resolved;
     const ctx = { userId: ownerUserId, workspaceId };
 
     // Resolve the ladder's candidate keys ONCE, outside the locked transaction —
