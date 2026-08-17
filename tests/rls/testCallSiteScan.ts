@@ -124,6 +124,30 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   'tests/rls/tx-fallback-arm.test.ts':
     'MOTIR-2815: the subject IS the `tx ?? db` arm; every read is unbound on purpose and asserted per role.',
 
+  // ── MOTIR-2734: the ONE unbound arm in an otherwise-bound file ────────────
+  // Unlike every other entry here, this file's subject is the BOUND read — which
+  // is why it is named `app-role-bound-context-reads`. It carries exactly one
+  // deliberately-unbound call, at the `findByIds` case that puts the two arms of
+  // `tx ?? db` side by side: the bound arm asserts the rows (the contract), the
+  // unbound arm asserts `[]`, because asserting rows there would be asserting
+  // that a path with no binding works. Same argument as `tx-fallback-arm.test.ts`
+  // above, at one site instead of a whole file.
+  //
+  // ⚠️ It only became unbound in MOTIR-2734. It read `findByIds([blocker.id], tx)`
+  // — a second copy of the bound call directly above it — and the retired
+  // `TEST_DB_APP_ROLE` branch hid that perfectly: the arm CI ran asserted rows,
+  // which a bound read of course returns, and the `[]` arm that would have caught
+  // it ran only under the flag. Collapsing the branch made it a hard failure.
+  //
+  // ⚠️ And the cost of the file-level ruling is higher here than elsewhere,
+  // because the rest of this file IS in-scope: a future accidental unbound read
+  // added to it inherits this exemption in silence. The bound sites keep their
+  // own `already-bound` verdict, so the ruling covers only reads that are
+  // genuinely unbound — but that is a bound on the damage, not a guard.
+  'tests/app-role-bound-context-reads.test.ts':
+    'MOTIR-2734: one deliberate unbound arm — the `tx ?? db` pair asserted side by side, ' +
+    'rows bound and `[]` unbound. The rest of the file is bound and stays in scope.',
+
   // ── MOTIR-2755 / MOTIR-2840: the batched-read QUERY COUNT ─────────────────
   // A different incompatibility from the others. This file's subject is how MANY
   // queries a batched read issues (the N+1 guard), measured by spying on

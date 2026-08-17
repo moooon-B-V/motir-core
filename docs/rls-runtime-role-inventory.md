@@ -1930,3 +1930,87 @@ still raises the number it must not raise.
 class survive five scanners:** it reads `tests/` only, never `lib/` / `app/` / `scripts/`; it does not
 follow a client passed into a helper as a parameter; and it does not resolve `db` re-exported under
 another name.
+
+---
+
+# CLOSED — `motir_app` is the suite's only connection (MOTIR-2734, 2026-08-17)
+
+**`TEST_DB_APP_ROLE` no longer exists.** `isAppRoleTestMode()` is deleted and `currentWorkerUrl()`
+returns `withAppRoleCredentials(url)` with no branch, so every vitest worker connects `@/lib/db` as the
+non-bypass role. There is no longer a mode to be in — which was the point. `withAppRoleCredentials` and
+`currentWorkerAdminUrl` both survive: the two-client model is what the flag was opt-in _to_, not what
+was retired _with_ it.
+
+This closes the document. Everything above it is the work that made the flip survivable.
+
+## The count
+
+The inventory opened at **1001 failures / 1225 tests** across four sampled directories (MOTIR-2514,
+2026-08-10), and the widest single reading was **1048** under the flag. The measurements that followed
+were taken on a moving tree, so they are a sequence rather than a series:
+
+| date       | reading                              | taken on                                          |
+| ---------- | ------------------------------------ | ------------------------------------------------- |
+| 2026-08-10 | 1001 / 1225 (4 directories)          | MOTIR-2514's opening survey                       |
+| 2026-08-12 | 2542 failed / 3979 passed            | batches 4–20 under the flag, before the app fixes |
+| 2026-08-15 | 1146 / 13 390                        | MOTIR-2796's branch, under the flag               |
+| 2026-08-15 | **759** failed / 13 695 passed       | `origin/main` @ `c99efdc7`, 118 red files         |
+| 2026-08-17 | **0** in the flag's own blast radius | this card — see below                             |
+
+**The final full-suite number is this PR's CI run, deliberately and not evasively.** A suite-wide count
+is measured on a clean runner, merged with `main`, with the coverage gate — which is what CI is, and a
+local re-run of it would be a second, worse copy taken against one developer's Postgres. What was
+measured here is the diff's blast radius, which is the part a local run can answer better than CI can:
+
+```
+$ vitest run tests/rls/ tests/permissions/ <the 9 reader files>
+  Test Files  38 passed | 1 failed (39)
+       Tests  862 passed | 1 skipped | 1 failed (864)
+```
+
+The one failure is **not this card's and not new**: `test-singleton-statement-guard`'s `tests/e2e/**`
+ceiling, which is red on `origin/main` @ `05ac5337` with a byte-identical message (verified on a clean
+detached worktree). Filed as **MOTIR-2939**.
+
+## The twelve readers, and why the number moved twice
+
+The card enumerated **five** code readers, grepped on `origin/main` @ `9e7637cf` (2026-08-11). It ran
+against **twelve**. Both re-counts are on the record as dated amendments, and the drift is the
+interesting part rather than an embarrassment: this card is terminal by construction, so its own
+subject matter kept being written by the siblings it was waiting for.
+
+| readers | grepped at             | what had landed in between                             |
+| ------: | ---------------------- | ------------------------------------------------------ |
+|       5 | `9e7637cf`, 2026-08-11 | —                                                      |
+|       9 | `c99efdc7`, 2026-08-15 | MOTIR-2755, MOTIR-2796, MOTIR-2797 — 400+ test files   |
+|      12 | `b99f7e53`, 2026-08-17 | MOTIR-2871 / 2881 (tx-fallback cases), MOTIR-2888 (×2) |
+
+## Two defects the mode split was standing in front of
+
+Collapsing a branch is how a masked defect becomes a hard failure, and this happened twice — the same
+shape `notes.html` #249 names, one level down.
+
+1. **`app-role-bound-context-reads.test.ts`** — the arm labelled `unbound` called
+   `workItemRepository.findByIds([blocker.id], tx)`, **passing `tx`**: a second copy of the bound call
+   directly above it. The arm CI ran asserted rows, which a bound read of course returns; the `[]` arm
+   that would have caught it ran only under the flag. The `tx` is dropped, and the site is now
+   adjudicated in `ADJUDICATED_UNBOUND_FILES` — the `tx ?? db` pair asserted side by side, rows bound
+   and `[]` unbound.
+2. **`parentStatusRollup` / `childStatusCascade`** (arrived with MOTIR-2888) — each gated its
+   FOREIGN-`workspaceId` case behind the flag, so on CI each was empty. Both now execute, and both
+   pass: that pair is what pins the binding, and a system context would have crossed the tenant
+   boundary silently.
+
+## What got it here
+
+Twenty fixture batches — **MOTIR-2735 … MOTIR-2754** — migrated the DB-backed fixtures onto `adminDb`,
+directory by directory. Around them: MOTIR-2513 (the two-client harness), MOTIR-2684/2685/2796 (the
+read surface), MOTIR-2797 (458 test call sites), MOTIR-2865 (the write surface), MOTIR-2861 (the raw
+TRUNCATEs), MOTIR-2871/2881/2882/2887/2911 (the fixture classes five enumerations kept missing),
+MOTIR-2880 (the system-context class), MOTIR-2884/2895/2919 (the trigger and boundary defects),
+MOTIR-2886/2910 (the two user-context reads), and MOTIR-2862/2872 (the re-measurements that carved the
+rest).
+
+**The deployed cutover is MOTIR-2515 and is NOT done.** Production still connects as the owner; this
+card changes the test suite only. Until 2515 lands, the policies are exercised on every run and enforced
+nowhere that a customer can see.
