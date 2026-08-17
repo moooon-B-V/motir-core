@@ -578,6 +578,80 @@ as the verdict — and the fixture that feeds it is next door.
 stretches of nothing, so a healthy recording's median idle gap is a reading of the
 hold schedule. The long-task and probe-latency signals carry no such contamination.
 
+#### Amendment 2026-08-17 (MOTIR-2908) — the fan-out is SIZED to the lane, not fixed at four
+
+Clause 1 of the MOTIR-2600 amendment is superseded in its NUMBER, not in its shape.
+The lane still runs one `build` plus N sharded legs; N is no longer the literal `4`.
+
+**Why the number moved without anyone touching it.** `4` was sized against the lane
+as it stood on 2026-08-10: **26 specs, 25.7 minutes of test time**, lengthening with
+every story that added one. Six days later MOTIR-2765 made an acceptance spec a
+**receipt with a lifecycle** and MOTIR-2769 triaged every existing member out of the
+lane. The lane's steady-state membership is now **zero**, and its ceiling is "the
+stories currently in review" — realistically one or two. Nothing about that
+invalidated MOTIR-2600's engineering; it invalidated the input MOTIR-2600 was
+correct about.
+
+**Why the leftover legs are not free.** A leg's cost in this lane is almost entirely
+SETUP — a checkout, a Postgres container, a Playwright install, a build-artifact
+download — roughly **3 machine-minutes before it looks at a spec**. Measured on run
+`31740853229` (the MOTIR-2765 merge, an already-empty lane): `build` 6 min + four
+legs at 3 min = **18 machine-minutes to run zero tests**. Three of those legs drew
+no specs at all. `--pass-with-no-tests` (MOTIR-2769) is what made that state LEGAL,
+and therefore invisible: the lane was green, and fast in wall-clock terms, while
+being expensive in machine terms.
+
+It also stopped being a PR-only cost. MOTIR-2760's `push: main` baseline means the
+fan-out is paid **per merge** for as long as a receipt window is open. That card
+bounded _when_ the lane runs; this one bounds _what a run costs_.
+
+**The derivation**, computed by the `membership` gate that already counts the lane:
+
+```
+legs = min(specs, 4), floored at 1
+```
+
+| specs in the lane        | legs | machine-minutes (6 min build + 3 min/leg) |
+| ------------------------ | ---- | ----------------------------------------- |
+| 0 (a lane-definition PR) | 1    | 18 → **9**                                |
+| 1                        | 1    | 18 → **9**                                |
+| 2                        | 2    | 18 → **12**                               |
+| ≥ 4                      | 4    | 18 → **18** (unchanged)                   |
+
+Two bounds, each protecting something a plain "one leg per spec" would break:
+
+- **The CAP keeps MOTIR-2600 whole.** At ≥ 4 specs the matrix is exactly the
+  `[1, 2, 3, 4]` that amendment measured, so a lane that legitimately fills up
+  again gets the parallelism it was sized for and never regresses toward the serial
+  runtime it replaced.
+- **The FLOOR of 1 keeps the rehearsal.** A PR that only restructures the lane runs
+  no tests either way — what it still proves is that the harness BOOTS (the
+  Playwright config loads, the webServer comes up, `e2e-setup`'s download path
+  works). Zero legs would prove nothing, on precisely the PRs whose subject is this
+  lane.
+
+**Nothing about publishing moves, and the reason is that the exactly-once argument
+never mentioned four.** `--shard` partitions the suite at any N, and ownership is
+decided per RECORDING (`isOwnedRecording` against the changed-spec list) rather than
+per run — so each leg still holds a disjoint subset and the subsets still cover it.
+The distinct-artifact-name requirement survives for the same reason: `matrix.shard`
+is `1..N`, distinct within a run at every N.
+
+**Mechanically**, the gate re-exports two job outputs — `shards` (a JSON array the
+matrix reads through `fromJSON`) and `legs` (the same number as a scalar, used for
+the `--shard=i/N` denominator and the job name) — and the shard job gains a second
+`needs:` edge to `membership`, because a job can only read the outputs of a job it
+needs. That edge adds no gating: `membership` always runs, and the MOTIR-2760 skip
+still arrives through `build`. The shard job still carries no job-level `if:`, so
+MOTIR-1949's "absent, not skipped" requirement is untouched.
+
+**Asserted by EXECUTING the gate, not by describing it** — `tests/ci-acceptance-lane.test.ts`
+extracts the step's `run:` block from the workflow and runs it under `bash` against
+a fabricated lane of 0 / 1 / 2 / 3 / 4 / 9 / 26 specs, reading back what it writes to
+`$GITHUB_OUTPUT`. A text assertion is the right tool for a `needs:` edge and the
+wrong one for arithmetic: a regex that agrees with the derivation agrees just as
+happily with an off-by-one, and the floor and the cap are exactly where one would sit.
+
 ---
 
 ## Consequences

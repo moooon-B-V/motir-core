@@ -56,13 +56,15 @@ name: Acceptance video
 # ── THE MAIN BASELINE — `push: main`, gated on the lane having a member ──────
 #   (MOTIR-2760; ADR amendment 2026-08-17 in `docs/decisions/acceptance-video.md`)
 #
-# WHAT RUNS WHEN, in full — this table is the whole trigger policy:
+# WHAT RUNS WHEN, in full — this table is the whole trigger policy. The leg
+# count is DERIVED from the lane's membership (MOTIR-2908): min(specs, 4),
+# floored at 1 — see "SIZED TO THE LANE" below.
 #
-#   PR changing an `acceptance*.spec.ts`      lane runs (4 shards) · PUBLISHES
-#   PR changing one of the 4 lane-definition  lane runs (4 shards) · rehearses
+#   PR changing an `acceptance*.spec.ts`      lane runs (N legs) · PUBLISHES
+#   PR changing one of the 4 lane-definition  lane runs (N legs) · rehearses
 #     files below                               (no spec changed ⇒ nothing owned)
 #   PR changing anything else                 NO RUN, NO CHECK  (MOTIR-1949)
-#   push to `main`, lane HAS ≥1 spec          lane runs (4 shards) · NEVER publishes
+#   push to `main`, lane HAS ≥1 spec          lane runs (N legs) · NEVER publishes
 #   push to `main`, lane is EMPTY             gate job only (~10s), nothing else
 #
 # THE PROBLEM IT CLOSES. The `pull_request` filter is deliberately blind to the
@@ -93,6 +95,8 @@ name: Acceptance video
 # UNCONDITIONAL `push:` trigger would burn ~360 machine-minutes/day testing
 # nothing. Gated, an empty lane costs one ~10s checkout per merge, and the real
 # cost is paid only inside the receipt window a story is actually in review.
+# (MOTIR-2908 then shrank what a RUN costs inside that window — the 18 above is
+# the four-leg shape it replaced, and is left as the measurement it was.)
 #
 # ⚠️ MOTIR-1949's REQUIREMENT IS UNTOUCHED, and the reason is worth stating
 # because the gate LOOKS like the job-level `if:` that requirement forbids.
@@ -188,6 +192,49 @@ name: Acceptance video
 # uploading one name is a hard error in upload-artifact v4+, and it would have
 # cost the lane its reports rather than its receipts.
 #
+# ── SIZED TO THE LANE, NOT FIXED AT FOUR (MOTIR-2908) ────────────────────────
+#
+# `4` was the right number for the lane MOTIR-2600 measured: 26 specs, 25.7 min
+# of test time. It stopped being the right number six days later without anyone
+# changing it, because MOTIR-2765 gave an acceptance spec a LIFECYCLE and
+# MOTIR-2769 triaged every existing member out — so the lane's steady state is
+# now ZERO members and its ceiling is "the stories currently in review",
+# realistically one or two.
+#
+# A leg's cost here is almost entirely SETUP: a checkout, a Postgres, a
+# Playwright install and a build-artifact download, ~3 machine-minutes before it
+# looks at a spec. So four legs over ≤2 specs is not parallelism — it is three
+# extra copies of the setup, drawing no tests. `--pass-with-no-tests` (added by
+# MOTIR-2769 for exactly the empty-lane case) is what made that LEGAL, and
+# therefore invisible: the lane was green, fast in wall-clock, and expensive in
+# machine-minutes.
+#
+# THE DERIVATION lives in the `membership` gate, which already counts the lane:
+#
+#   legs = min(specs, 4), floored at 1
+#
+#   0 specs → 1 leg    (a PR against an empty lane; `push` skips entirely)
+#   1 spec  → 1 leg    2 specs → 2 legs    3 specs → 3 legs    ≥ 4 → 4 legs
+#
+# Two things that number is chosen to protect, both of which a plain "one leg per
+# spec" would break:
+#   • THE CAP keeps MOTIR-2600 intact. At ≥ 4 specs the matrix is exactly the
+#     `[1, 2, 3, 4]` that card measured against 29 minutes of test time, so a
+#     lane that legitimately grows again gets the parallelism it was sized for
+#     and never regresses toward the serial runtime it replaced.
+#   • THE FLOOR of 1 keeps the rehearsal. A lane-definition PR against an empty
+#     lane runs no tests either way — what it still proves is that the harness
+#     BOOTS (the Playwright config loads, the webServer comes up, `e2e-setup`'s
+#     artifact path works). Zero legs would prove nothing, on precisely the PRs
+#     whose subject is this lane.
+#
+# It does NOT weaken the exactly-once publish argument above, and the reason is
+# that the argument never mentioned four: `--shard` partitions the suite at any
+# N, and ownership is decided per RECORDING inside the uploader, so each leg
+# still holds a disjoint subset and the subsets still cover it. Nor does it
+# collide with the artifact-name rule — `matrix.shard` is `1..N`, distinct within
+# any one run at every N.
+#
 # ⚠️ THE LANE'S OWN DEFINITION IS ALSO A TRIGGER (MOTIR-2600). The spec glob was
 # the only path until this card, which meant a PR that RESTRUCTURED the lane —
 # this file, its Playwright config, its fixture harness — changed no acceptance
@@ -256,6 +303,11 @@ jobs:
     outputs:
       run: ${{ steps.gate.outputs.run }}
       count: ${{ steps.gate.outputs.count }}
+      # The DERIVED fan-out (MOTIR-2908). `shards` is a JSON array the shard
+      # job's matrix reads through `fromJSON`; `legs` is the same number as a
+      # scalar, for the `--shard=i/N` denominator and the job name.
+      shards: ${{ steps.gate.outputs.shards }}
+      legs: ${{ steps.gate.outputs.legs }}
     steps:
       - uses: actions/checkout@v6
       - id: gate
@@ -277,19 +329,46 @@ jobs:
           else
             RUN=false
           fi
+          # SIZE THE FAN-OUT FROM THE MEMBERSHIP (MOTIR-2908). One leg per spec,
+          # floored at 1 and capped at MAX_LEGS. A leg's cost is almost entirely
+          # setup — checkout, Postgres, a Playwright install, the build-artifact
+          # download — so a leg that draws no spec is ~3 machine-minutes spent to
+          # run nothing, and until this card the lane paid four of them whatever
+          # it held. The FLOOR is 1 rather than 0 because a run with no legs at
+          # all would stop proving the harness still boots, which is the only
+          # thing a lane-definition PR against an empty lane can prove.
+          MAX_LEGS=4
+          if [ "${COUNT}" -lt 1 ]; then
+            LEGS=1
+          elif [ "${COUNT}" -gt "${MAX_LEGS}" ]; then
+            LEGS="${MAX_LEGS}"
+          else
+            LEGS="${COUNT}"
+          fi
+          # The CAP is what keeps MOTIR-2600's sizing intact: at ≥ MAX_LEGS specs
+          # the matrix is byte-for-byte the [1,2,3,4] that card measured, so a
+          # lane that legitimately grows again gets exactly the parallelism it
+          # was sized for and never regresses toward the serial runtime.
+          SHARDS="[$(seq -s, 1 "${LEGS}")]"
+          echo "legs=${LEGS} shards=${SHARDS}"
           echo "event=${EVENT_NAME} run=${RUN}"
           echo "run=${RUN}" >> "$GITHUB_OUTPUT"
           echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "legs=${LEGS}" >> "$GITHUB_OUTPUT"
+          echo "shards=${SHARDS}" >> "$GITHUB_OUTPUT"
           {
             echo "### Acceptance lane membership"
             echo ""
             echo "- specs in the lane: **${COUNT}**"
             echo "- event: \`${EVENT_NAME}\`"
             echo "- running the lane: **${RUN}**"
+            if [ "${RUN}" = 'true' ]; then
+              echo "- shard legs: **${LEGS}** (one per spec, capped at ${MAX_LEGS})"
+            fi
             if [ "${RUN}" = 'false' ]; then
               echo ""
               echo "The lane is empty, so this baseline stopped here rather than"
-              echo "spending ~18 machine-minutes to run zero tests (MOTIR-2760)."
+              echo "spending machine-minutes to run zero tests (MOTIR-2760)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -367,17 +446,27 @@ jobs:
           include-hidden-files: true
 
   acceptance:
-    name: Playwright E2E (acceptance-video) ${{ matrix.shard }}/${{ matrix.total }}
+    name: Playwright E2E (acceptance-video) ${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
     runs-on: ubuntu-latest
-    needs: build
+    # BOTH edges, and each is load-bearing (MOTIR-2908):
+    #   · `build` publishes the `.next/` artifact every leg downloads, and it is
+    #     where the MOTIR-2760 gate lives — a skipped build skips the fan-out.
+    #   · `membership` is where the leg count is DERIVED, and a job can only read
+    #     the outputs of a job it needs. This is the ONLY reason the edge exists;
+    #     it adds no gating (`membership` always runs) and no `if:` to this job.
+    needs: [membership, build]
     strategy:
       # Every leg runs to completion: a red shard must not cancel the legs that
       # are still recording, or one failure costs the run every other shard's
       # report — the artifact a red lane is debugged from at all (MOTIR-1706).
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        total: [4]
+        # SIZED FROM THE LANE'S MEMBERSHIP (MOTIR-2908) — `[1]` … `[1, 2, 3, 4]`,
+        # derived by the `membership` gate above. It was a literal `[1, 2, 3, 4]`
+        # from MOTIR-2600 until MOTIR-2765 gave a spec a lifecycle and MOTIR-2769
+        # triaged the lane empty; four legs over ≤2 specs is not parallelism, it
+        # is four copies of the setup. At ≥4 specs this is the same matrix again.
+        shard: ${{ fromJSON(needs.membership.outputs.shards) }}
     # Keyless acceptance-video publish (MOTIR-1650): the publish step requests a
     # GitHub OIDC token, which needs `id-token: write`. `contents: read` keeps
     # checkout working. (OIDC is NOT granted to fork PRs, so a fork falls back to
@@ -474,6 +563,12 @@ jobs:
       # `--shard=i/N` (MOTIR-2600). Playwright partitions the suite across the
       # legs, so every recording is produced by exactly one of them — which is
       # what makes the per-shard publish step below publish each receipt once.
+      # N is `needs.membership.outputs.legs` rather than a matrix key
+      # (MOTIR-2908): the denominator has to be the SAME number the matrix was
+      # built from, and reading both from the one output is what guarantees that.
+      # The partition argument is indifferent to N — `--shard` partitions at any
+      # leg count, and `isOwnedRecording` matches per recording — so exactly-once
+      # publishing holds at 1 leg exactly as it did at 4.
       # `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
       # the stories currently IN REVIEW, so an EMPTY lane is a legitimate — and
       # after a triage, common — state rather than a misconfiguration. Playwright
@@ -481,7 +576,7 @@ jobs:
       # PR that touches this workflow or the config while no story is in flight.
       # A shard leg can also legitimately draw zero specs once the lane is small.
       - name: Run E2E (acceptance-video)
-        run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ needs.membership.outputs.legs }}
 
       # On a GREEN acceptance run, publish the recordings this PR owns to their
       # OWN STORY's acceptance panel (BYOK). The lane carries one chaptered
@@ -556,9 +651,12 @@ jobs:
       # left no trace, screenshot or report behind).
       # ⚠️ The name is SHARD-SCOPED (MOTIR-2600). upload-artifact v4+ rejects a
       # second upload under a name that already exists, so a single name would
-      # red-light three of the four legs at their last step and leave the run
-      # without the reports a red lane is read from. It also carries the
-      # `client-diagnostics.json` this card's fixture attaches on failure.
+      # red-light every leg but the first at its last step and leave the run
+      # without the reports a red lane is read from. Still true at a DERIVED leg
+      # count (MOTIR-2908): `matrix.shard` is `1..N` and distinct within a run at
+      # every N, so the names stay distinct without depending on N being 4. It
+      # also carries the `client-diagnostics.json` this card's fixture attaches
+      # on failure.
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
