@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { withUserContext } from '@/lib/workspaces/context';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
@@ -34,6 +36,18 @@ async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
 
 async function makeProject(ownerUserId: string, workspaceId: string, name: string) {
   return projectsService.createProject({ workspaceId, actorUserId: ownerUserId, name });
+}
+
+async function pointerOf(userId: string): Promise<string | null> {
+  const row = await adminDb.user.findUniqueOrThrow({ where: { id: userId } });
+  return row.lastActiveProjectId;
+}
+
+// The resolver's own first read, in isolation: can this user SEE that project
+// from the half-context the resolver runs in? Every "returns null" assertion in
+// this file is ambiguous without it — see the MOTIR-2886 block below.
+function readProjectAsUser(userId: string, projectId: string) {
+  return withUserContext(userId, (tx) => projectRepository.findById(projectId, tx));
 }
 
 // A user who is a member of TWO org-backed workspaces — wsA created first (so it
@@ -126,9 +140,19 @@ describe('resolveLastActiveContext (project → workspace → org)', () => {
     });
   });
 
-  it('returns null when the pointer is unset', async () => {
+  it('returns null when the pointer is unset — because of the POINTER, not a dead project read', async () => {
     const owner = await createTestUser();
-    await workspacesService.createWorkspace({ name: 'Acme', ownerUserId: owner.id });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: owner.id,
+    });
+    const project = await makeProject(owner.id, workspace.id, 'Acme Project');
+
+    // The two intermediates that make the null below mean what the title says.
+    expect(await pointerOf(owner.id)).toBeNull();
+    // …and the read the resolver would have made IS live in this very context,
+    // so a null cannot be coming from there (MOTIR-2886).
+    expect(await readProjectAsUser(owner.id, project.id)).not.toBeNull();
 
     const ctx = await withUserContext(owner.id, (tx) =>
       workspacesService.resolveLastActiveContext(owner.id, tx),
@@ -142,12 +166,26 @@ describe('resolveLastActiveContext (project → workspace → org)', () => {
     const orgB = await orgIdOfWorkspace(wsB.id);
     await workspacesService.recordLastActiveProject(member.id, projectB.id);
 
-    // Revoke the member's org membership for B → the gate now denies wsB.
+    // Revoke the member's org membership for B → the gate now denies wsB. The
+    // WORKSPACE membership row survives, which is the whole point of the 6.10.4
+    // gate — and, since MOTIR-2886, of keeping the new `project` read arm keyed
+    // on workspace membership alone.
     await organizationsService.removeMember({
       organizationId: orgB,
       userId: member.id,
       actorUserId: owner.id,
     });
+
+    // The intermediates, in the order the resolver hits them: the pointer is
+    // set, the project still RESOLVES, and the gate is what says no. Assert the
+    // gate's own verdict — before MOTIR-2886 the read above returned null and
+    // this test passed without the gate ever executing.
+    expect(await pointerOf(member.id)).toBe(projectB.id);
+    expect(await readProjectAsUser(member.id, projectB.id)).not.toBeNull();
+    const access = await withUserContext(member.id, (tx) =>
+      organizationsService.resolveWorkspaceAccess(member.id, wsB.id, tx),
+    );
+    expect(access).toBeNull();
 
     const ctx = await withUserContext(member.id, (tx) =>
       workspacesService.resolveLastActiveContext(member.id, tx),
@@ -156,6 +194,113 @@ describe('resolveLastActiveContext (project → workspace → org)', () => {
     expect(ctx).toBeNull();
   });
 });
+
+// MOTIR-2886 — the RLS arm the resolver depends on, asserted in both directions.
+//
+// `resolveLastActiveContext` runs inside `withUserContext`, which binds only
+// `app.user_id`. `project`'s pre-existing policies key on `app.workspace_id` /
+// `app.system_admin` / `accessLevel = 'public'`, so under `motir_app` NO arm
+// admitted this read: it returned null and raised nothing, and every "returns
+// null" assertion in the suite above passed for the wrong reason.
+// `project_user_membership_read` (20260817140000) closes it.
+//
+// ⚠️ THE ADMIT DIRECTION COMES FIRST, and the denial assertions are the ones
+// that would keep passing if the arm were dropped tomorrow — a table nobody can
+// read satisfies every cross-tenant test ever written. This block lives here,
+// beside the feature it unbroke, rather than in `tests/permissions/`, because
+// the arm exists for exactly one caller and the ordering above is what it buys.
+describe('project_user_membership_read (the user-context arm)', () => {
+  it('ADMITS a member reading a project of their own workspace with no workspace bound', async () => {
+    const { member, projectA, projectB } = await twoWorkspaceMember();
+
+    // Both workspaces, not just the default one — reaching the NON-default one
+    // is the resolver's whole job.
+    expect(await asAppRole({ userId: member.id }, (tx) => selectProject(tx, projectA.id))).toEqual([
+      { id: projectA.id },
+    ]);
+    expect(await asAppRole({ userId: member.id }, (tx) => selectProject(tx, projectB.id))).toEqual([
+      { id: projectB.id },
+    ]);
+    // …and through the repository the resolver actually calls, not only raw SQL.
+    expect((await readProjectAsUser(member.id, projectB.id))?.id).toBe(projectB.id);
+  });
+
+  it('REFUSES a user who is not a member of the project’s workspace', async () => {
+    const { projectB } = await twoWorkspaceMember();
+    const stranger = await createTestUser();
+    await workspacesService.createWorkspace({ name: 'Stranger', ownerUserId: stranger.id });
+
+    expect(
+      await asAppRole({ userId: stranger.id }, (tx) => selectProject(tx, projectB.id)),
+    ).toEqual([]);
+  });
+
+  it('grants a TENANT-bound request nothing about the user’s other workspaces', async () => {
+    const { member, wsA, projectA, projectB } = await twoWorkspaceMember();
+    const bound = { userId: member.id, workspaceId: wsA.id };
+
+    // Bound to wsA the member sees wsA's project and NOT wsB's — even though
+    // they are a member of both. The arm is gated on the workspace GUC being
+    // UNBOUND precisely so it cannot widen an ordinary tenant request; drop that
+    // gate and this is the assertion that goes red.
+    expect(await asAppRole(bound, (tx) => selectProject(tx, projectA.id))).toEqual([
+      { id: projectA.id },
+    ]);
+    expect(await asAppRole(bound, (tx) => selectProject(tx, projectB.id))).toEqual([]);
+  });
+
+  it('leaves WITH CHECK untouched — the arm is SELECT-only', async () => {
+    const { member, wsA, wsB } = await twoWorkspaceMember();
+
+    // The member belongs to BOTH workspaces, so if the arm were `FOR ALL` the
+    // insert below would find a permissive policy to pass. 42501 is the
+    // row-security violation (`tests/permissions/publicProjectAccess.test.ts`
+    // pins the same code for the public arm).
+    await expect(
+      asAppRole(
+        { userId: member.id, workspaceId: wsA.id },
+        (tx) => tx.$executeRaw`
+          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "accessLevel", "createdAt", "updatedAt")
+          VALUES (${'smuggled-' + wsB.id}, ${wsB.id}, 'Smuggled', 'smuggled', 'SMG', 'private', now(), now())
+        `,
+      ),
+    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+  });
+});
+
+/**
+ * Run `fn` as the non-bypass `motir_app` role, binding only the GUCs `ctx`
+ * names — so `asAppRole({ userId })` is exactly the half-context
+ * `withUserContext` opens. A local copy of the helper in
+ * `tests/permissions/publicProjectAccess.test.ts` / `tests/project-rls.test.ts`,
+ * for the reason those files give.
+ *
+ * The role switch is what makes this block independent of `TEST_DB_APP_ROLE`:
+ * under the flag `db` is already `motir_app` and this is a no-op; without it
+ * `db` is the BYPASSRLS owner and the switch is the only thing that puts the
+ * policies in the path. Every assertion above holds identically in both modes —
+ * a mode-split expectation here would leave the arm unproved in the mode CI
+ * actually runs.
+ */
+async function asAppRole<T>(
+  ctx: { userId?: string; workspaceId?: string },
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    if (ctx.userId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+    }
+    if (ctx.workspaceId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+    }
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
+    return fn(tx);
+  });
+}
+
+function selectProject(tx: Prisma.TransactionClient, id: string) {
+  return tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "project" WHERE "id" = ${id}`;
+}
 
 describe('resolveActiveWorkspace precedence (cookie → last-active → first)', () => {
   it('lands on the last-active project’s workspace, NOT the first-by-createdAt one', async () => {
@@ -167,9 +312,18 @@ describe('resolveActiveWorkspace precedence (cookie → last-active → first)',
   });
 
   it('falls back to first-by-createdAt when there is no last-active pointer', async () => {
-    const { member, wsA } = await twoWorkspaceMember();
+    const { member, wsA, wsB, projectB } = await twoWorkspaceMember();
 
+    // The intermediate: there really is no pointer, so the fallback is the only
+    // branch left to take…
+    expect(await pointerOf(member.id)).toBeNull();
     expect(await workspacesService.resolveActiveWorkspace(member.id, null)).toBe(wsA.id);
+
+    // …and the branch it falls back FROM is live. Without this the assertion
+    // above passes just as happily when the last-active branch is dead, which is
+    // exactly what MOTIR-2886 was: the fallback was taken unconditionally.
+    await workspacesService.recordLastActiveProject(member.id, projectB.id);
+    expect(await workspacesService.resolveActiveWorkspace(member.id, null)).toBe(wsB.id);
   });
 
   it('a valid cookie still wins over the last-active project', async () => {

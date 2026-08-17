@@ -2356,3 +2356,167 @@ fix so the asset stays the reference. Two exceptions, both deliberate:
    asset and that table disagree, the table wins and this asset is wrong.
 2. **On chrome, chip grammar and the rail**, `settings-area.mock.html` and the `design/shell` assets
    win — this one composes them.
+
+---
+
+# Status automation — the four-rung ladder and the both-ways rollup promise (Story MOTIR-2888 · Subtask MOTIR-2890 output)
+
+The STATUS AUTOMATION card on the project **Workflow** settings page
+(`/settings/project/workflow`). Originally drawn by MOTIR-1617 for Story MOTIR-1615 and shipped by
+MOTIR-1622; **re-drawn 2026-08-17** because the behaviour it describes changed under it.
+
+## Files
+
+- `design/projects/status-automation.mock.html` — the source (four panels).
+- `design/projects/status-automation.png` — the full-page export. Playwright chromium, full page,
+  light theme, `deviceScaleFactor: 2`, viewport width 1200 (the repo convention). Re-render after
+  ANY edit to the mock, with the throwaway script reproduced below.
+- This section.
+
+The renderer is reproduced INLINE rather than committed, because a design PR ships only `design/**`
+and a committed generator would be a path this asset cites that never reaches `main`:
+
+```js
+// node this from a worktree that has node_modules; it writes the PNG in place.
+import { chromium } from '@playwright/test';
+import { pathToFileURL } from 'node:url';
+
+const MOCK = 'design/projects/status-automation.mock.html';
+const OUT = 'design/projects/status-automation.png';
+
+const browser = await chromium.launch({ args: ['--disable-dev-shm-usage', '--no-sandbox'] });
+const page = await browser.newPage({
+  viewport: { width: 1200, height: 900 },
+  deviceScaleFactor: 2,
+  colorScheme: 'light',
+});
+await page.goto(pathToFileURL(MOCK).href, { waitUntil: 'load' });
+await page.emulateMedia({ colorScheme: 'light' });
+
+// The guard this pass is about: every ladder read-out has FOUR rungs, and no
+// panel still promises the retired forward-only behaviour.
+const report = await page.evaluate(() => ({
+  ladders: [...document.querySelectorAll('dl.ladder')].map((dl) =>
+    [...dl.querySelectorAll('dt')].map((dt) => dt.textContent.trim()),
+  ),
+  forwardOnly: /only ever moves|never moves a parent back/i.test(document.body.innerText),
+}));
+if (report.forwardOnly || report.ladders.some((l) => l.length !== 4)) {
+  console.log('FAILED the asset guard', JSON.stringify(report));
+  process.exitCode = 1;
+}
+
+await page.screenshot({ path: OUT, fullPage: true });
+await browser.close();
+```
+
+Last run: `ladder rungs per read-out: [["In Progress","In Review","Done","To Do"]]` ·
+`forward-only wording present: false`.
+
+## Why it was re-drawn — the asset was asserting the opposite of the product
+
+Status derivation became a **RECOMPUTE** (`docs/decisions/status-derivation.md` as amended by
+MOTIR-2889, settling MOTIR-2885): a parent's status is a function of its children's CURRENT
+statuses, applied whether the result is ahead of or behind where the parent stands. A parent now
+comes BACK — when a child reopens, and when a new unstarted child is added to a finished parent.
+
+The shipped asset promised the reverse, in writing, in three separate panels, and drew a
+**three**-row ladder that had no way to express _"there is open, unstarted work down here"_. The
+retired sentence was:
+
+> "A parent follows its children's progress. It only ever moves a parent forward, along moves your
+> workflow already allows — reopening a child never moves a parent back."
+
+It is quoted here, and **only** here, on purpose: `git grep -in "only ever moves a parent forward"
+design/` must return nothing, so the wording cannot be picked up again as a copy source from inside
+the asset. The card's third clause is the one that had actually become false in the product; the
+first was still true and survives, reworded.
+
+**The cascade switch did not change** — not its copy, not its
+_"This includes children nobody has started yet"_ warning, not its off-state. Only the upward
+direction moved, so only the upward row moved.
+
+## The copy, as it now reads
+
+| Slot                                           | String                                                                                                                                                                 |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Card title                                     | **Status automation**                                                                                                                                                  |
+| Card sub                                       | Keep a parent and its children in step. Motir derives status in both directions by default; each switch turns its own direction off.                                   |
+| Rollup label                                   | **Roll up parent status from children**                                                                                                                                |
+| Rollup hint (panel 1, the full form)           | A parent follows its children's progress, both ways — it moves forward as they progress, and comes back when one reopens or when a new unstarted child is added to it. |
+| Rollup hint (panels 0 / 2 / 3, the short form) | A parent follows its children's progress, both ways — forward as they progress, and back when one reopens or a new unstarted child is added.                           |
+| Cascade label                                  | **Complete children when a parent is done** _(unchanged)_                                                                                                              |
+| Cascade hint                                   | _(unchanged — see the shipped `settings.statusAutomation.cascade.*` keys)_                                                                                             |
+| Lock banner                                    | Only a project admin can change status automation. _(unchanged)_                                                                                                       |
+
+**Every panel state carries the corrected hint** — the in-context card in panel 0, the default in
+panel 1, the cascade-off in panel 2, and the disabled non-admin in panel 3. A behaviour promise that
+is true on one panel and false on three is worse than one that is uniformly wrong, because a reader
+takes the first one they see.
+
+## The ladder read-out — FOUR rows
+
+Still a plain `<dl class="ladder">`: a definition list, **not a new component**. The new row is a
+row and a sentence.
+
+| `dt`        | `dd`                                                       |
+| ----------- | ---------------------------------------------------------- |
+| In Progress | as soon as any child starts                                |
+| In Review   | when every unfinished child is in review                   |
+| Done        | when every child is finished or cancelled                  |
+| **To Do**   | **when a child is added or reopened and none has started** |
+
+Two decisions inside that table:
+
+- **To Do is LAST, after Done** — not first, where an ascending ladder would put it. The list is
+  read as a sequence of things that happen to a parent, and the To Do rung is the RETURN TRIP; it is
+  also the only row that can fire on a parent the admin already considers finished, which is the
+  behaviour they will be surprised by. Placing it first would re-order the three existing rows to
+  make room for it, i.e. invent a second ordering of the same ladder for no gain.
+- **In Review's wording changed** from _"when the last open child reaches review"_ to _"when every
+  unfinished child is in review"_. Same rung, same condition — the shipped phrasing implied a single
+  final child and the rule is a predicate over the whole set.
+
+## Tokens — the new row adds none
+
+The row inherits the `.ladder` rules exactly; the table below is the whole token surface of the
+read-out, unchanged by this pass.
+
+| Element                        | Colour                                                                          | Shape / size                                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.ladder` container            | left rule `2px solid var(--el-border)`                                          | `padding: 10px 12px`, `gap: 4px 10px`, `grid-template-columns: auto 1fr` — layout spacing between siblings, not a control's own box, so raw values are correct here |
+| `.ladder dt` (the status name) | `--el-text-secondary`                                                           | `12px`, `font-weight: 600`, `white-space: nowrap`                                                                                                                   |
+| `.ladder dd` (the when)        | `--el-text-helper`                                                              | `12px`, `line-height: 1.5`                                                                                                                                          |
+| the hint paragraph above it    | `--el-text-helper`                                                              | `12px`, `max-width: 54ch`                                                                                                                                           |
+| the card it sits in            | `--el-card` on `--el-border`                                                    | `--radius-card`, `--spacing-card-padding`                                                                                                                           |
+| the switch                     | `--el-switch-on` / `--el-border-strong` + `--el-muted`; knob `--el-switch-knob` | `h-5 w-9 rounded-full`, knob `size-3.5`, `--shadow-subtle`                                                                                                          |
+| an OFF row                     | text drops to `--el-text-faint`                                                 | layout unchanged                                                                                                                                                    |
+
+**No new `--el-*` token, no new shape token, and no invented hue** — the asset's whole Tier-0 →
+Tier-3 block is copied from `packages/design-system/theme.css` and this pass added nothing to it.
+`--el-text-faint` appears only on **disabled / off** rows, which is what WCAG 1.4.3 exempts and what
+the repo's contrast table permits; every live string is `--el-text-secondary` or `--el-text-helper`
+on `--el-card` (white), where both clear AA.
+
+## Access path
+
+Unchanged, and still drawn: **panel 0** shows the settings rail with **Work › Workflow** selected and
+the card landing on that page above the transition editor — the door, not just the room. No registry
+entry, no route, and no rail row was added, for the reason the mock's header records.
+
+## Who builds what
+
+- **MOTIR-2893** implements this: the `settings.statusAutomation.rollup.hint` rewrite and the fourth
+  `settings.statusAutomation.rollup.ladder.*` pair, in `en` **and** `zh` (the catalog parity gate).
+  It renders the fourth row through the existing `.ladder` markup — the component gains a row, not a
+  redesign.
+- **MOTIR-2891 / MOTIR-2892** are the behaviour this copy is now telling the truth about. The copy
+  card is `blocked_by` both, deliberately: a settings page that promises a recompute the service
+  does not yet perform is the same defect as this asset was, pointed the other way.
+
+## Source of truth
+
+`docs/decisions/status-derivation.md` §3 (the four rungs and the direction-decides-the-authority
+split) and §3a (the trigger surface) own the BEHAVIOUR. When this asset and the ADR disagree, the ADR
+wins and this asset is wrong. On chrome, the settings rail and the card grammar,
+`settings-area.mock.html` and `design/shell` win — this asset composes them.
