@@ -38,7 +38,7 @@
 // specs into it.)
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { getBoard, columnByStatus } from './_helpers/board';
 import { resetBillingFixture } from './_helpers/billing';
@@ -56,7 +56,7 @@ test.beforeEach(async () => {
 });
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Seed {
@@ -74,15 +74,20 @@ interface Seed {
 async function seedFreeTierActiveProject(page: Page, email: string, identifier: string) {
   await signUp(page, email);
   const local = email.split('@')[0]!;
-  const user = await db.user.findFirstOrThrow({ where: { email } });
-  const ws = await db.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
+  // SEEDING runs as the OWNER (`adminDb`), never through `@/lib/db` — MOTIR-2939.
+  // The read of `workspace` and the write to `workspace_membership` are both
+  // against policy-gated tables with no workspace context bound, so under
+  // `motir_app` the read returns `[]` and the update matches no row, neither
+  // raising: the spec would drive the board against an unpopulated database.
+  const user = await adminDb.user.findFirstOrThrow({ where: { email } });
+  const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   const project = await projectsService.createProject({
     workspaceId: ws.id,
     actorUserId: user.id,
     name: 'Cloud Board',
     identifier,
   });
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user.id, workspaceId: ws.id } },
     data: { activeProjectId: project.id },
   });
@@ -107,7 +112,7 @@ async function seedCards(seed: Seed, status: string, count: number, startKey: nu
     position = keyForAppend(position);
     return row;
   });
-  await db.workItem.createMany({ data: rows });
+  await adminDb.workItem.createMany({ data: rows });
 }
 
 test('a FREE-TIER org renders its board cloud-on — not the server-error page', async ({ page }) => {
