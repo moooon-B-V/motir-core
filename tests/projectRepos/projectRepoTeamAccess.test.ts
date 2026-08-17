@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
+import type { Prisma } from '@/generated/prisma/client';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
@@ -715,5 +716,134 @@ describe('who may hand out access — `repository:manage_access` vs SELF-connect
     expect((await projectRepoSetService.listByProject(fx.projectId, actorCtx)).length).toBe(1);
     const matrix = await projectRepoAccessService.listTeamAccess(fx.projectId, actorCtx);
     expect(matrix.rows.length).toBe(1);
+  });
+});
+
+/**
+ * THE ARM'S OWN BOUNDARY (MOTIR-2910).
+ *
+ * `github_identity_workspace_member_read` is what makes the grid above show a
+ * teammate's login at all. It is also the widening this card was most likely to
+ * overshoot on, because the row it admits carries `access_token_encrypted` — a
+ * live OAuth credential — and RLS admits a ROW, never a column list. So the
+ * boundary is pinned from three sides rather than asserted once:
+ *
+ *   1. the shipped read path selects the two PUBLIC columns and nothing else —
+ *      this is where the column split actually lives, since no `FOR SELECT`
+ *      policy in Postgres can express one;
+ *   2. the arm carries NO write verb, so a member cannot overwrite, re-attribute
+ *      or delete a co-member's binding — and above all cannot UPDATE the token
+ *      column to a value they control;
+ *   3. it is scoped to the BOUND tenant, so a reader in another workspace is
+ *      refused the row outright.
+ *
+ * All three run under a real `SET LOCAL ROLE motir_app`, not under the suite's
+ * default connection: with `TEST_DB_APP_ROLE` unset the suite connects as the
+ * BYPASS OWNER, and a denial assertion made there is green for the wrong reason
+ * (`notes.html` #249 — a green assertion that proves nothing). The role drop is
+ * what makes these cases mean the same thing in both modes.
+ */
+async function asAppRole<T>(
+  ctx: { userId?: string; workspaceId?: string },
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    if (ctx.userId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+    }
+    if (ctx.workspaceId !== undefined) {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+    }
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
+    return fn(tx);
+  });
+}
+
+describe('the `github_identity` member read arm — what it widens, and what it must not', () => {
+  it('the shipped read path returns the two PUBLIC columns and never the token', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
+    const teammate = await addMember(fx, {
+      email: 'columns@example.com',
+      projectRole: null,
+      login: 'columns-gh',
+    });
+
+    const rows = await withWorkspaceContext(
+      { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId },
+      (tx) => githubIdentityRepository.findLoginsByUserIds([teammate], tx),
+    );
+
+    // The arm did its job: the CALLER is the owner, the row belongs to someone
+    // else, and it is visible. Before this card that list was empty and the grid
+    // rendered a connected teammate as `no_github_identity`.
+    expect(rows).toHaveLength(1);
+    // And the column split — pinned as an exact key set, so WIDENING the
+    // repository's `select` fails here rather than shipping. This assertion is
+    // the column guard; the policy cannot be.
+    expect(Object.keys(rows[0]!).sort()).toEqual(['githubLogin', 'userId']);
+  });
+
+  it('admits NO write verb — a member cannot update or delete a co-member`s binding', async () => {
+    const fx = await makeWorkItemFixture();
+    const teammate = await addMember(fx, {
+      email: 'no-write@example.com',
+      projectRole: null,
+      login: 'no-write-gh',
+    });
+
+    const [updated, deleted] = await asAppRole(
+      { userId: fx.ownerId, workspaceId: fx.workspaceId },
+      async (tx) => [
+        (
+          await tx.githubIdentity.updateMany({
+            where: { userId: teammate },
+            data: { githubLogin: 'hijacked', accessTokenEncrypted: 'attacker-controlled' },
+          })
+        ).count,
+        (await tx.githubIdentity.deleteMany({ where: { userId: teammate } })).count,
+      ],
+    );
+
+    // `github_identity_owner_or_system` still governs UPDATE and DELETE alone —
+    // the new policy is FOR SELECT, so it contributes no arm to either verb and
+    // the reader matches neither of the two that remain.
+    expect(updated).toBe(0);
+    expect(deleted).toBe(0);
+
+    // Read back as the owner of the table, not through the policy that just
+    // refused: the row is untouched, which is the claim worth making. A count of
+    // 0 alone would also be satisfied by a row that never existed.
+    const after = await adminDb.githubIdentity.findUnique({ where: { userId: teammate } });
+    expect(after).toMatchObject({
+      githubLogin: 'no-write-gh',
+      accessTokenEncrypted: 'encrypted-not-read-here',
+    });
+  });
+
+  it('is scoped to the BOUND workspace — another tenant`s reader is refused the row', async () => {
+    const fx = await makeWorkItemFixture();
+    const teammate = await addMember(fx, {
+      email: 'tenant-scope@example.com',
+      projectRole: null,
+      login: 'tenant-scope-gh',
+    });
+    // A second, unrelated tenant. `other.ownerId` is a member of NEITHER
+    // `fx.workspaceId` nor anything that reaches it.
+    const other = await makeWorkItemFixture();
+
+    const seen = await asAppRole({ userId: other.ownerId, workspaceId: other.workspaceId }, (tx) =>
+      tx.githubIdentity.findMany({ where: { userId: teammate } }),
+    );
+    expect(seen).toEqual([]);
+
+    // And the unbound direction: with no `app.workspace_id` at all the EXISTS
+    // compares against NULL, so the arm contributes nothing and the row stays
+    // refused. This is what keeps the webhook's system-context path running
+    // entirely through the system arm rather than falling into this one.
+    const unbound = await asAppRole({ userId: other.ownerId }, (tx) =>
+      tx.githubIdentity.findMany({ where: { userId: teammate } }),
+    );
+    expect(unbound).toEqual([]);
   });
 });

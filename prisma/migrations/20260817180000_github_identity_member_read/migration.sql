@@ -1,0 +1,167 @@
+-- ===========================================================================
+-- RLS: give `github_identity` a WORKSPACE-MEMBER read arm (MOTIR-2910).
+--
+-- The same shape MOTIR-2864 gave `public_request_vote` (20260815234500), on the
+-- one table in that family where the widening is a PRODUCT decision rather than
+-- a mechanical one — so the reasoning below is longer than the DDL by an order
+-- of magnitude, deliberately.
+--
+-- ---------------------------------------------------------------------------
+-- THE STATE BEFORE, READ FROM `pg_policies` AND NOT FROM 20260703100000
+-- ---------------------------------------------------------------------------
+-- One policy, both verbs' worth:
+--
+--   github_identity_owner_or_system | ALL | PERMISSIVE
+--     ((current_setting('app.system_admin', true) = 'true')
+--      OR (user_id = current_setting('app.user_id', true)))
+--
+-- Two arms: the row's own OWNER, or a SYSTEM context. There is no workspace
+-- arm, so under `motir_app` a request sees its OWN GitHub identity and nobody
+-- else's — and every surface that exists to show OTHER people's GitHub logins
+-- reads empty, silently, raising nothing.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT BROKE
+-- ---------------------------------------------------------------------------
+-- `projectRepoAccessService.listTeamAccess` — the repo-access TEAM GRID, whose
+-- entire job is to answer "which of this project's members has a GitHub account
+-- Motir can invite to the repo?". Its read runs inside
+--
+--   withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+--     (tx) => githubIdentityRepository.findLoginsByUserIds(userIds, tx))
+--
+-- and `withWorkspaceContext` binds `app.user_id` to the CALLER. So the owner arm
+-- admits exactly one row — the caller's own — and every TEAMMATE came back with
+-- `login: null`. The grid does not error; it renders each of them as
+-- `reason: 'no_github_identity'`, `state: 'not_invited'`, which is the honest
+-- rendering of a member who genuinely has not connected an account. A connected
+-- teammate and an unconnected one became indistinguishable, and the eight
+-- assertions downstream of the login map (the per-invitee permission, the
+-- private-project scoping, the per-cell resend, both concurrency cases) all
+-- failed on it, because `invitedPermissions()` is keyed by login.
+--
+-- Measured on this tree, `TEST_DB_APP_ROLE=1 pnpm vitest run
+-- tests/projectRepos/projectRepoTeamAccess.test.ts`: 8 failed / 12 passed
+-- before, 20 passed after.
+--
+-- ---------------------------------------------------------------------------
+-- WHY THIS ONE CANNOT BE BOUND, WHICH IS THE WHOLE REASON IT NEEDS AN ARM
+-- ---------------------------------------------------------------------------
+-- Every other site the `motir_app` cutover has found was a read that could
+-- simply be BOUND: the tenant was knowable at the call site, binding it admitted
+-- the rows, and nothing about who may see what changed. Binding is the default
+-- disposition precisely because it widens nothing — the sibling half of THIS
+-- card's fix, `githubWebhookService.resolveGithubChangeRequestContext`, is
+-- exactly that and needed no policy at all.
+--
+-- Here the caller is ALREADY correctly bound to its own tenant, and the rows it
+-- wants belong to OTHER USERS INSIDE that tenant. No binding reaches them,
+-- because the policy is keyed on user identity rather than on workspace. And
+-- that keying is not an oversight: a `github_identity` row holds
+-- `access_token_encrypted`, and "only its owner may read it" is a defensible
+-- thing for that table to say. So the fix has to widen a policy, and the
+-- widening has to be argued.
+--
+-- ---------------------------------------------------------------------------
+-- FOR SELECT ONLY — and on this table that is the load-bearing word
+-- ---------------------------------------------------------------------------
+-- Postgres combines policies per COMMAND — (permissive_1 OR permissive_2 OR …)
+-- AND (restrictive_1 AND …) — so a policy declared FOR SELECT widens reads and
+-- ONLY reads. `github_identity_owner_or_system` keeps governing INSERT / UPDATE
+-- / DELETE alone, its `WITH CHECK` is untouched, and no `WITH CHECK` is added
+-- here (a FOR SELECT policy has none to add).
+--
+-- Stated plainly because it is the thing a FOR ALL arm would have destroyed: a
+-- workspace member must not be able to overwrite, re-attribute or DELETE a
+-- co-member's OAuth binding, and above all must not be able to UPDATE the
+-- token column to a value they control. A write arm on this table would have
+-- been strictly worse than the bug it fixed. MOTIR-2865 established the same
+-- point from the other side — the ABSENCE of a system arm on the tenant-root
+-- write policies is doing useful work, and a service that reached for one was
+-- red for exactly that reason.
+--
+-- ---------------------------------------------------------------------------
+-- WHAT IT WIDENS, STATED — INCLUDING THE PART IT DOES NOT FIX
+-- ---------------------------------------------------------------------------
+-- A reader with `app.workspace_id` bound can now SELECT the `github_identity`
+-- ROW of any user who is a member of that workspace. RLS admits a ROW and not a
+-- COLUMN LIST, and no `FOR SELECT` policy in Postgres can express a column
+-- split — so this arm cannot, by itself, hold `access_token_encrypted` back.
+-- That is the honest statement, and it is why the card required this paragraph
+-- rather than a claim.
+--
+-- The column split is therefore enforced ONE LAYER UP, in the only place that
+-- can express it: `githubIdentityRepository.findLoginsByUserIds` — the sole
+-- read this arm exists to serve — selects `{ user_id, github_login }` and
+-- nothing else. That narrowing predates this migration (MOTIR-1910 wrote it,
+-- with "never the encrypted token, which nothing outside `githubIdentityService`
+-- may read" in its own docstring); what this card adds is a TEST that pins it,
+-- so a future widening of that `select` fails a check instead of shipping.
+-- `tests/projectRepos/projectRepoTeamAccess.test.ts` asserts three things
+-- against a live `motir_app` connection: the two-column shape of the read path,
+-- that the arm admits NO write verb, and that a reader bound to another
+-- workspace is refused the row outright.
+--
+-- The residual, named so nobody has to rediscover it: server code that opens a
+-- workspace-bound transaction and asks `github_identity` for all columns would
+-- receive a co-member's ciphertext. Nothing in the tree does — this arm has one
+-- consumer — and the value is AES ciphertext under a server-side key the reader
+-- does not have, so it is not a credential in the reader's hands. The
+-- construction that would make the guarantee structural rather than
+-- conventional is a table split (`github_identity` keeping the public columns,
+-- the credential moving to an owner-only sibling table), which is a schema
+-- change across the OAuth write path, `getLiveToken` and the mappers — a
+-- different card, and a much larger one than this defect warrants.
+--
+-- What it does NOT widen, in both directions, asserted rather than assumed:
+-- an UNBOUND reader gains nothing (the GUC coalesces to NULL, the equality is
+-- NULL, the row is refused — so the webhook's own system-context path keeps
+-- running entirely through the system arm), and a reader bound to workspace A
+-- gains nothing about a user who is only in workspace B.
+--
+-- ---------------------------------------------------------------------------
+-- THE PREDICATE — CORRELATED, AND WHY IT IS FREE
+-- ---------------------------------------------------------------------------
+-- Modelled on `public_request_vote_active_workspace_read` (20260815234500): a
+-- CORRELATED `EXISTS` resolving the row's tenant, never an uncorrelated
+-- `user_id IN (SELECT …)` that Postgres HASHES — the hashed form must
+-- materialise the whole qualifying set before returning a row, measured ~8x
+-- slower on MOTIR-2856.
+--
+-- It keys on the TENANT, with no `app.user_id` term, for the same reason that
+-- arm did: the member reading the grid is not the identity's owner — that is
+-- the entire defect — so the predicate cannot key on the actor. A bound
+-- `app.workspace_id` is itself the assertion that the caller was gated into
+-- that workspace; `withWorkspaceContext` is the only thing that sets it, and it
+-- is never fed a workspace the request has not been authorised for.
+--
+-- The `EXISTS` runs under the querying role, so it resolves through
+-- `workspace_membership`'s own policies and bottoms out in
+-- `membership_visible_active_or_own`'s first arm
+-- (`"workspaceId" = current_setting('app.workspace_id', true)`) — a bare column
+-- test, no recursion, no second policy hop.
+--
+-- And it is an INDEX-ONLY probe, not a scan: `workspace_membership` carries
+-- `workspace_membership_userId_workspaceId_key`, a UNIQUE btree on
+-- `("userId", "workspaceId")` — exactly the two columns this predicate
+-- constrains, in that order. One probe per identity row the query is asked
+-- about.
+--
+-- The alternative this rejects is the one 20260614225729 contemplated for a
+-- structurally identical cross-account read: routing it through
+-- `withSystemContext`. That would hand a member's team grid sight of EVERY
+-- workspace's GitHub identities to fix one workspace's grid. 20260811230000
+-- argues that trade at length and rejects it; a tenant-scoped arm is the honest
+-- form, and on this table the difference is a table of live credentials.
+-- ===========================================================================
+
+CREATE POLICY "github_identity_workspace_member_read" ON "github_identity"
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM "workspace_membership" m
+      WHERE m."userId" = "github_identity"."user_id"
+        AND m."workspaceId" = current_setting('app.workspace_id', true)
+    )
+  );
