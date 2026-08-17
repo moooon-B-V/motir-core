@@ -1318,6 +1318,16 @@ chosen per site". In practice the choice was decided by the FILE's subject, and 
   `integration/work-items/link-repository`, `automation/automation-rules-service` and
   `ai/planChangeSessionsService` now open `withWorkspaceServiceContext` around the assertion read.
 
+**And the move has a coverage consequence, paid in the file that owns it.** Routing these reads onto a
+client removed the last unbound caller from eight more repositories — every production caller already
+threads a `tx` — so their `tx ?? db` fallback arms went uncovered, on files gated at the ≥90% branch
+floor. Measured per method with `scanTestCallSites`, then re-measured as coverage: `commentRepository`
+15/23 → 10/23 branches, `componentRepository` 15/18 → 10/18, `watcherRepository` 10/14 → 7/14, and five
+more. This is the third time that sweep has happened (MOTIR-2815, MOTIR-2830, now), and the answer is the
+same one those two settled: the orphaned arms are exercised deliberately, per role, in
+`tests/rls/tx-fallback-arm.test.ts` — rows under the owner, EMPTY under `motir_app`. With that block
+added, every affected file is back at or above its baseline branch count.
+
 **Where a cross-workspace gate is the subject, bind the OWN workspace and pass the FOREIGN id as the
 argument.** `boards/repositories` is the fixture: its four failures were all positive-half reads bound to
 tenant `b` while reading tenant `a`'s board, so the policy hid the row the assertion wanted. Its negative
