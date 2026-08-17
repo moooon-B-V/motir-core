@@ -26,10 +26,12 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 //
 // THE DIRECTION DECIDES THE AUTHORITY (ADR §3). The rank comparison still
 // happens — it just picks the CALL instead of vetoing the move:
-//   * FORWARD  — the ordinary `applyStatusTransition`, legality-gated, with the
-//                highest-legal-rung fallback. "You configure your workflow, the
-//                derivation respects it" is a promise about ADVANCEMENT and is
-//                kept intact.
+//   * FORWARD  — the ordinary `applyStatusTransition`, legality-gated, WALKING
+//                the ladder one legal edge at a time (MOTIR-2901). "You configure
+//                your workflow, the derivation respects it" is a promise about
+//                ADVANCEMENT and is kept intact: every hop is a real edge of the
+//                team's own graph, and every status stood on is a LADDER RUNG the
+//                derivation could have chosen outright for some child set.
 //   * BACKWARD — a privileged `{ system: true }` set (the shipped MOTIR-941
 //                bypass the downward cascade already uses), with no
 //                `canTransition` probe and no fallback: `done → todo` and
@@ -44,7 +46,10 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // level that does not change emits nothing (`already_there`). That no-op is now
 // the whole of the termination argument, which no longer appeals to forward-only:
 // a pass over an unchanged child set computes the same target and finds the
-// parent already in it. The downward mirror is `childStatusCascadeService`
+// parent already in it. The forward WALK is inside one pass and cannot disturb
+// that: it only ever steps to a STRICTLY higher rung on a four-point scale, so it
+// takes at most three hops and lands on the target it computed before it started.
+// The downward mirror is `childStatusCascadeService`
 // (MOTIR-1647), which fires only on ENTRY into a done-category status — which is
 // what stops a parent that has just come back to `todo` from force-closing the
 // child that brought it there.
@@ -78,8 +83,13 @@ const LADDER: ReadonlyArray<{
  *  behind a status change the user already made successfully and must not turn
  *  that into a failed job. */
 export type RollupOutcome =
-  /** The parent ADVANCED — a forward move, through the legality-gated path. */
-  | { outcome: 'rolled_up'; parentId: string; toStatus: string }
+  /** The parent ADVANCED — a forward move, through the legality-gated path.
+   *  `via` lists the INTERMEDIATE rungs a multi-hop walk stood on, and is present
+   *  only when there were any (MOTIR-2901). A run log that cannot say "this
+   *  derivation passed through In Review on its way to Done" cannot answer the
+   *  question an operator actually has when a status appears in the feed that
+   *  nobody set — the same reason `rolled_back` is its own variant. */
+  | { outcome: 'rolled_up'; parentId: string; toStatus: string; via?: string[] }
   /** The parent CAME BACK — a backward move, through the privileged system set.
    *  A distinct variant rather than a flag on `rolled_up`, because the two took
    *  different authority to perform and a run log that cannot tell them apart
@@ -120,8 +130,8 @@ export const parentStatusRollupService = {
    *     parent back with it. (This REPLACED the forward-only filter — MOTIR-2891.)
    *   * **The direction decides the authority.** Forward goes through the
    *     ordinary `applyStatusTransition` — NO system bypass — so an advance only
-   *     ever walks the team's real workflow, and a graph that cannot take the move
-   *     gets a logged no-op after falling to the next legal rung. Backward is a
+   *     ever walks the team's real workflow, hop by hop, and a graph with no path
+   *     to the target at all gets a logged no-op. Backward is a
    *     `{ system: true }` set with no `canTransition` probe and no fallback,
    *     because the backward edges it needs (`done → todo`, `in_review → todo`)
    *     are absent from the default workflow and must not be added as
@@ -240,17 +250,39 @@ export const parentStatusRollupService = {
       // fall through to the todo rung either: there is nothing to derive FROM.
       if (rungs.length === 0) return { outcome: { outcome: 'no_rung', parentId }, emit: null };
 
-      // Resolve every matching rung ONCE, highest first, dropping the ones this
-      // project's workflow has no status for and de-duplicating (two rungs can
-      // resolve to the same key when a project has renamed a status away).
-      const candidates: Array<{ key: string; rank: number }> = [];
-      for (const rung of rungs) {
-        const key = await workflowsService.resolveStatusKey(projectId, workspaceId, rung.target);
-        if (!key || candidates.some((c) => c.key === key)) continue;
-        candidates.push({
+      // Resolve EVERY ladder rung against this project's workflow ONCE, dropping
+      // the ones it has no status for and de-duplicating by KEY (two rungs can
+      // resolve to the same key when a project has renamed a status away). The
+      // resolution serves two different readers:
+      //
+      //   * `candidates` — the MATCHING rungs, highest first. These say what the
+      //     recompute claims the parent IS.
+      //   * `stones` — ALL of them, highest rank first. These are the statuses a
+      //     forward walk may stand on. The distinction is the whole of MOTIR-2901:
+      //     a stepping stone need not be a rung the current child set matches, but
+      //     it is always a rung the ladder itself can produce — so the walk can
+      //     never park the parent in a status the derivation was not entitled to
+      //     choose in the first place.
+      const resolved = new Map<(typeof LADDER)[number]['rung'], { key: string; rank: number }>();
+      const stones: Array<{ key: string; rank: number }> = [];
+      for (const entry of LADDER) {
+        const key = await workflowsService.resolveStatusKey(projectId, workspaceId, entry.target);
+        if (!key) continue;
+        const known = stones.find((s) => s.key === key);
+        const stone = known ?? {
           key,
           rank: await rankOfStatus(projectId, workspaceId, key, reviewKey),
-        });
+        };
+        if (!known) stones.push(stone);
+        resolved.set(entry.rung, stone);
+      }
+      stones.sort((a, b) => b.rank - a.rank);
+
+      const candidates: Array<{ key: string; rank: number }> = [];
+      for (const rung of rungs) {
+        const stone = resolved.get(rung.rung);
+        if (!stone || candidates.some((c) => c.key === stone.key)) continue;
+        candidates.push(stone);
       }
       const wanted = candidates[0];
       if (!wanted) return { outcome: { outcome: 'no_matching_status', parentId }, emit: null };
@@ -269,14 +301,18 @@ export const parentStatusRollupService = {
         };
       }
 
-      let toStatusKey: string;
+      /** The status keys to set, in order — one for a backward system set, one or
+       *  more for a forward walk. The last one is where the parent ends up. */
+      let steps: string[];
       let system = false;
       if (wanted.rank < currentRank) {
-        // BACKWARD — a privileged system set. ONE call: no `canTransition` probe
-        // and no rung fallback, because a backward derivation must not depend on
-        // a board edge existing (`done → todo` is not one in the default
-        // workflow, and must NOT be added — those rows are user-draggable).
-        toStatusKey = wanted.key;
+        // BACKWARD — a privileged system set. ONE call: no `canTransition` probe,
+        // no walk and no fallback, because a backward derivation must not depend
+        // on a board edge existing (`done → todo` is not one in the default
+        // workflow, and must NOT be added — those rows are user-draggable). There
+        // is nothing for a walk to buy here either: a system set reaches any
+        // status in one hop.
+        steps = [wanted.key];
         system = true;
       } else if (wanted.rank === currentRank) {
         // Same rung, different key — the parent already sits at the level the
@@ -288,85 +324,137 @@ export const parentStatusRollupService = {
         // backward: leave it alone.
         return { outcome: { outcome: 'same_rung', parentId, toStatus: wanted.key }, emit: null };
       } else {
-        // FORWARD — unchanged: legality-gated, with the fallback to the next
-        // matching rung that this project's graph can actually reach.
+        // FORWARD — legality-gated, and a WALK rather than a single hop
+        // (MOTIR-2901). From where the parent stands, repeatedly take the HIGHEST
+        // stepping stone at or below the target that this project's graph can
+        // legally reach, until the target is reached or nothing above the cursor
+        // is legal.
         //
-        // The fallback matters (MOTIR-1623 surfaced it). Taking only the highest
-        // rung strands a parent whose workflow cannot make that particular jump:
-        // a `todo` parent whose single child goes straight to review matches the
-        // in-review rung, `todo → in_review` is not an edge, and the parent then
-        // sits in `todo` forever — no later event changes the aggregate, so it
-        // never gets another chance. Falling to the next rung keeps the derivation
-        // CONVERGENT while still only ever walking real workflow edges: the parent
-        // advances as far as the team's graph actually permits, rather than not at
-        // all. The fallback never walks BACKWARDS — a lower rung that is not
-        // itself forward ends the search rather than becoming a system set, since
-        // the recompute already decided the direction from the highest rung.
-        let attempted: string | null = null;
-        for (const candidate of candidates) {
-          if (candidate.rank <= currentRank) {
-            if (parent.status === candidate.key) {
-              return {
-                outcome: { outcome: 'already_there', parentId, toStatus: candidate.key },
-                emit: null,
-              };
+        // Why a walk and not one hop. MOTIR-1623 already found that taking only
+        // the top rung STRANDS a parent whose workflow cannot make that jump, and
+        // the answer then was to fall to the next MATCHING rung. That answer has
+        // a hole, and MOTIR-2901 fell into it: when every child finishes before
+        // the first derivation pass runs, the aggregate is all-done, `done` is
+        // the ONLY matching rung, and there is nothing below it to fall to. A
+        // `todo` parent then has no legal single edge to `done` (`todo → done` is
+        // not one, deliberately — MOTIR-1625 added `in_progress → done` and
+        // stopped there), so it sat in `todo` forever: the aggregate never
+        // changes again, so no later event gives it another chance. Exactly the
+        // stranding the fallback was added to fix, in the one shape the fallback
+        // could not reach.
+        //
+        // Why this still RESPECTS the workflow, which is the promise at stake:
+        //   * every hop is a real `workflow_transition` edge — no `system` bypass,
+        //     no new row, and a graph with no path simply gets a logged no-op;
+        //   * every status stood on is a LADDER RUNG, i.e. one the derivation
+        //     could have set outright for some other child set. The walk can
+        //     never invent a resting place, only reach one sooner.
+        // The parent therefore ends where the recompute says it is, having taken
+        // precisely the moves a person would have had to make by hand.
+        //
+        // Termination: each hop moves to a STRICTLY higher rank on a four-point
+        // scale bounded above by the target, so the loop runs at most
+        // `stones.length` times and cannot revisit a stone. It never walks
+        // BACKWARDS either — a stone at or below the cursor is skipped rather
+        // than becoming a system set, since the recompute already decided the
+        // direction from the highest matching rung.
+        const path: string[] = [];
+        let cursor = parent.status;
+        let cursorRank = currentRank;
+        for (let hop = 0; hop < stones.length && cursorRank < wanted.rank; hop += 1) {
+          let next: { key: string; rank: number } | null = null;
+          for (const stone of stones) {
+            if (stone.rank <= cursorRank || stone.rank > wanted.rank) continue;
+            if (await workflowsService.canTransition(projectId, cursor, stone.key, workspaceId)) {
+              next = stone;
+              break;
             }
-            break;
           }
-          attempted = candidate.key;
-          if (
-            await workflowsService.canTransition(
-              projectId,
-              parent.status,
-              candidate.key,
-              workspaceId,
-            )
-          ) {
-            break;
-          }
-          attempted = null;
+          if (!next) break;
+          path.push(next.key);
+          cursor = next.key;
+          cursorRank = next.rank;
         }
-        if (!attempted) {
-          // None of the forward rungs is legal from where the parent stands. A
-          // logged no-op naming the one it WANTED, never a throw — see the catch
-          // below.
+
+        if (path.length === 0) {
+          // Nothing above the parent is legal from where it stands. If the parent
+          // is ALREADY sitting on one of the MATCHING rungs, that is a no-op and
+          // not a refusal — reporting it as `illegal_transition` would put a false
+          // negative in the run log. Otherwise a logged no-op naming the rung it
+          // WANTED, never a throw — see the catch below.
+          const here = candidates.find((c) => c.key === parent.status);
+          if (here) {
+            return {
+              outcome: { outcome: 'already_there', parentId, toStatus: here.key },
+              emit: null,
+            };
+          }
           return {
             outcome: { outcome: 'illegal_transition', parentId, toStatus: wanted.key },
             emit: null,
           };
         }
-        toStatusKey = attempted;
+        steps = path;
       }
 
+      const toStatusKey = steps[steps.length - 1]!;
       try {
         // `system: true` ONLY on the backward arm — it skips `canTransition` and
         // nothing else, keeping the row lock, the tenant gate, the project-access
         // gate, the target-exists check, the `done ⇒ sessionBranch = null`
         // invariant and the revision (MOTIR-941's shipped bypass, the same one
         // the downward cascade uses).
-        const { transition } = await workItemsService.applyStatusTransition(
-          parentId,
-          toStatusKey,
-          ctx,
-          tx,
-          system ? { system: true } : {},
-        );
-        // A null transition here would mean the status matched after all; the
-        // equality check above already returned, so this is belt-and-braces.
+        //
+        // A forward WALK applies its hops in order, in THIS transaction, so the
+        // whole path commits or none of it does. Each hop writes its own revision
+        // — that is the honest record of the edges walked, and the activity feed
+        // should show a status the item genuinely held — but the walk emits ONE
+        // event for the NET move (below), because an event is a notification and
+        // a watcher must not be told three times about one derivation.
+        let first: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null = null;
+        let last: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null = null;
+        for (const step of steps) {
+          const { transition } = await workItemsService.applyStatusTransition(
+            parentId,
+            step,
+            ctx,
+            tx,
+            system ? { system: true } : {},
+          );
+          /* istanbul ignore next -- unreachable: every step strictly changes the status */
+          if (!transition) continue;
+          first ??= transition;
+          last = transition;
+        }
+        // A null transition on every step would mean the status matched after all;
+        // the equality check above already returned, so this is belt-and-braces.
         /* istanbul ignore next -- unreachable: the already-there check above returns first */
-        if (!transition) {
+        if (!first || !last) {
           return {
             outcome: { outcome: 'already_there', parentId, toStatus: toStatusKey },
             emit: null,
           };
         }
+        // The intermediate rungs, for the run log — present only when the walk
+        // actually passed through one. The backward arm is always a single hop,
+        // so `rolled_back` never carries them.
+        const via = steps.slice(0, -1);
+        const emit = {
+          fromStatusKey: first.fromStatusKey,
+          toStatusKey: last.toStatusKey,
+          revisionId: last.revisionId,
+        };
+        if (system) {
+          return { outcome: { outcome: 'rolled_back', parentId, toStatus: toStatusKey }, emit };
+        }
         return {
           outcome: {
-            outcome: system ? 'rolled_back' : 'rolled_up',
+            outcome: 'rolled_up',
             parentId,
             toStatus: toStatusKey,
+            ...(via.length > 0 ? { via } : {}),
           },
-          emit: transition,
+          emit,
         };
       } catch (err) {
         // A workflow that cannot take the move, or a project the owner somehow

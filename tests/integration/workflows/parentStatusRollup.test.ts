@@ -362,14 +362,20 @@ describe('gates and no-ops', () => {
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'in_progress');
     // Remove the very edge MOTIR-1625 added, leaving the done rung unreachable
-    // from in_progress — the shape a team with a custom graph can produce.
+    // from in_progress — the shape a team with a custom graph can produce. ⚠️ The
+    // review edge goes with it (MOTIR-2901): the forward arm now WALKS the ladder,
+    // so leaving `in_progress → in_review` in place would give it the path
+    // `in_progress → in_review → done` and this would no longer be an illegal
+    // move at all. What the test asserts is unchanged — a graph with no PATH to
+    // the wanted rung is a logged no-op — only the fixture has to cut every path
+    // rather than one edge.
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
     await adminDb.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('in_progress'),
-        toStatusId: idOf('done'),
+        toStatusId: { in: [idOf('done'), idOf('in_review')] },
       },
     });
 
@@ -380,17 +386,130 @@ describe('gates and no-ops', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('falls to a LOWER rung when the highest one is not legal from here', async () => {
+  it('WALKS to the highest rung when the direct edge is missing', async () => {
     const fx = await makeWorkItemFixture();
     // A todo parent whose only child jumps straight to review. The in-review rung
-    // matches, but `todo → in_review` is not an edge. Without the fallback the
+    // matches, but `todo → in_review` is not an edge. Without a forward walk the
     // parent would sit in todo FOREVER — no later event changes this aggregate,
-    // so it never gets another chance. (MOTIR-1623 surfaced this.)
+    // so it never gets another chance. (MOTIR-1623 surfaced this; it used to land
+    // one rung short, at `in_progress`, and wait for a later event that in this
+    // shape never comes.)
     const { story, children } = await storyWithChildren(fx, ['in_review']);
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
-    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'in_progress' });
+    // `todo → in_progress → in_review`: both hops are real edges of the project's
+    // own graph, and `in_progress` is a rung the ladder could have chosen outright.
+    expect(res).toMatchObject({
+      outcome: 'rolled_up',
+      toStatus: 'in_review',
+      via: ['in_progress'],
+    });
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+
+  it('a todo parent whose children are ALL DONE reaches done — the MOTIR-2901 stranding', async () => {
+    // The defect this card exists for. The aggregate is all-done, so `done` is
+    // the ONLY matching rung and there is no lower one to fall to; `todo → done`
+    // is not an edge and must not become one. The walk crosses the two edges the
+    // project already has.
+    //
+    // And it takes the SHORTEST path, because each hop tries the highest stone
+    // first: `todo → in_progress` (in_review is illegal from todo), then straight
+    // to `done` over MOTIR-1625's edge. In_review is never stood on — a rung is a
+    // stepping stone only when the graph makes it one.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done', 'done']);
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({
+      outcome: 'rolled_up',
+      toStatus: 'done',
+      via: ['in_progress'],
+    });
+    expect(await statusOf(story.id)).toBe('done');
+    // ONE event for the NET move — a watcher is told once about one derivation.
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.data).toMatchObject({ fromStatusKey: 'todo', toStatusKey: 'done' });
+  });
+
+  it('a BLOCKED parent reaches done the same way — blocked is a todo-category start', async () => {
+    // The mirror shape: `blocked` ranks with `todo`, so the same all-done
+    // aggregate is a forward move from there too, and `blocked → done` is no more
+    // an edge than `todo → done` is.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    await setStatus(story.id, 'blocked');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'done' });
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('the walk stands ONLY on ladder rungs — a custom status is never a stepping stone', async () => {
+    // The containment property that makes the walk safe: every status it stands
+    // on is one the derivation could have set outright for some child set. A
+    // project's own extra status is not, so it is never used as a bridge — even
+    // when it is the only way through.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
+    // Cut every ladder path out of `todo`, and offer a custom one instead.
+    await adminDb.workflowTransition.deleteMany({
+      where: { projectId: fx.projectId, fromStatusId: idOf('todo') },
+    });
+    const bridge = await adminDb.workflowStatus.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'bridge',
+        label: 'Bridge',
+        category: 'in_progress',
+        position: 'z3',
+      },
+    });
+    await adminDb.workflowTransition.createMany({
+      data: [
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          fromStatusId: idOf('todo'),
+          toStatusId: bridge.id,
+        },
+        {
+          workspaceId: fx.workspaceId,
+          projectId: fx.projectId,
+          fromStatusId: bridge.id,
+          toStatusId: idOf('done'),
+        },
+      ],
+    });
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'done' });
+    expect(await statusOf(story.id)).toBe('todo');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('the walk stops where the graph does — a partial advance, not a refusal', async () => {
+    // `todo → in_progress` is legal and nothing above it is. The parent advances
+    // as far as the graph allows rather than not at all, which is the same
+    // conservative reading the single-hop fallback had.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
+    await adminDb.workflowTransition.deleteMany({
+      where: { projectId: fx.projectId, fromStatusId: idOf('in_progress') },
+    });
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'rolled_up', parentId: story.id, toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
   });
 
