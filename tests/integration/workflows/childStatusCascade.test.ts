@@ -173,7 +173,10 @@ describe('the cascade — a done parent completes its children', () => {
   });
 });
 
-describe('forward-only, gates, and no-ops', () => {
+// The cascade's trigger is unchanged by MOTIR-2888: it fires only on ENTRY into a
+// done-category status, never on exit. That is what keeps a parent which has just
+// come BACK to todo from force-closing the child that brought it there.
+describe('entry-triggered only, gates, and no-ops', () => {
   it('a NON-done transition is a clean no-op (the trigger is entry into done)', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);

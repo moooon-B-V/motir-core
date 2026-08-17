@@ -156,14 +156,17 @@ describe('the upward ladder, end to end through the real transition path', () =>
     expect(await statusOf(story.id)).toBe('done');
   });
 
-  it('forward-only: reopening a done child does not roll the parent back', async () => {
+  it('the recompute comes BACK: reopening a done child reopens the parent with it', async () => {
+    // Replaced the forward-only assertion (MOTIR-2888 / MOTIR-2891). Driven
+    // through the real event path, so this also proves the backward move EMITS —
+    // without that emit the grandparent would never hear about it.
     const fx = await makeWorkItemFixture();
     const { story, children } = await tree(fx, ['done', 'done']);
     await setStatus(story.id, 'done');
 
     await transitionAndDrain(fx, children[0]!.id, 'in_progress');
 
-    expect(await statusOf(story.id)).toBe('done');
+    expect(await statusOf(story.id)).toBe('in_progress');
   });
 
   it('the rollup toggle OFF suppresses it; ON it fires', async () => {
@@ -252,7 +255,7 @@ describe('the downward cascade, end to end through the real transition path', ()
     expect(await statusOf(children[0]!.id)).toBe('todo');
   });
 
-  it('forward-only: an already-done child is untouched', async () => {
+  it('the cascade leaves an already-finished child untouched', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story' });
     await setStatus(story.id, 'in_review');
