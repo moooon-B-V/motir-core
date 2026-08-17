@@ -14,8 +14,17 @@ import { db } from '@/lib/db';
 // aggregate runs inside a `withSystemContext` tx (it spans every voter) — the
 // service binds the right context and threads its `tx` here. The anonymous
 // public READ (6.12.4 Overview "Upvotes" stat) rides the app connection's
-// RLS-secondary posture + the app-layer `projectId` gate, the same way 6.12.6's
-// triage vote-tally read does (finding #26).
+// RLS-secondary posture + the app-layer `projectId` gate, and is admitted under
+// `motir_app` by MOTIR-2811's `public_request_vote_public_project_read` — which
+// fires ONLY when `app.workspace_id` is unset, so it must stay UNBOUND (`db`, no
+// `tx`); passing one here would disable the arm.
+//
+// The table carries a THIRD arm since MOTIR-2864:
+// `public_request_vote_active_workspace_read`, a workspace-bound SELECT for the
+// member-facing triage inbox, whose vote tally matched none of the above and so
+// silently read 0 for every request. It governs
+// `workItemRepository.findTriageQueue`'s aggregate; nothing in THIS file reads
+// under a bound workspace, so nothing here changed.
 
 export const publicRequestVoteRepository = {
   /**
