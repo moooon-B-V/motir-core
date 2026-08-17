@@ -50,7 +50,7 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testSingletonSt
  *
  * `tests/e2e/**` is a spec seeding through the singleton before it drives the
  * browser. The fix is a seeding HELPER on `adminDb`, applied once per helper —
- * not 454 per-line client swaps. It is latent today because the E2E lane still
+ * not 452 per-line client swaps. It is latent today because the E2E lane still
  * runs as the owner, and it becomes a hard failure the moment MOTIR-2734 makes
  * `motir_app` the only connection.
  *
@@ -65,9 +65,47 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testSingletonSt
  * descent visible. When a population reaches zero, replace ITS ceiling with an
  * absolute assertion, exactly as `test-call-site-guard.test.ts` did.
  *
- * Measured on `origin/main` @ `bd0584c5`.
+ * Measured on `origin/main` @ `bd0584c5`; the e2e half RE-MEASURED on
+ * `origin/main` @ `d024d863` and lowered by this card's conversion — see below.
  */
-const UNCONVERTED_E2E_CEILING = 454;
+
+/**
+ * ⚠️ WHY THIS NUMBER MOVED, AND WHY IT IS A FALL AND NOT A RAISE (MOTIR-2939).
+ *
+ * It arrived here as 454 and `main` was RED on the merge commit that introduced
+ * it. Nothing had ROSE. 454 was measured on this guard's own branch at
+ * `bd0584c5`, and `22316a62` — `cloud-board-load.spec.ts`, MOTIR-2912 — merged
+ * SEVEN MINUTES before it, adding three undispositioned statements nobody's
+ * branch could see. The true count at the merge was 457, so the guard failed on
+ * its own arrival, accusing the next person of the seeding it describes below.
+ *
+ * Measured per commit rather than inferred (`d024d863` = `origin/main` at the
+ * time of writing):
+ *
+ *   a39bd115  454   MOTIR-2763 · cloud-orb-clearance.spec.ts lands
+ *   bd0584c5  454   ← the measurement this ceiling shipped as 454
+ *   22316a62  457   MOTIR-2912 · cloud-board-load.spec.ts lands  (+3)
+ *   05ac5337  457   ← MOTIR-2918 merges carrying the stale 454. RED.
+ *   d024d863  457
+ *
+ * `cloud-orb-clearance` is NOT part of the rise — it landed BEFORE the 454
+ * reading and its two statements are inside that baseline. Recorded because the
+ * card that filed this named both specs, and a wrong attribution left standing
+ * costs the next reader the same measurement.
+ *
+ * 452 = 457 − 5: BOTH cloud specs converted to `adminDb` (the three that caused
+ * the rise, plus orb-clearance's two, which are the same shape and the same
+ * hazard). So this is a real descent past the number that was stale, not a
+ * ceiling raised to cover debt — which is the one move this ratchet exists to
+ * refuse, and the reason the arithmetic above is written out rather than
+ * asserted.
+ *
+ * THE HAZARD IS STRUCTURAL AND SURVIVES THIS FIX: any ceiling measured on a
+ * BRANCH is stale the moment a sibling merges beneath it, and only a ceiling of
+ * 0 is immune. Deciding whether these guards should derive their ceiling from
+ * `origin/main` at run time, or re-measure in a merge queue, is MOTIR-2941.
+ */
+const UNCONVERTED_E2E_CEILING = 452;
 const UNCONVERTED_VITEST_CEILING = 4;
 
 /**
@@ -182,12 +220,19 @@ describe('the ratchets over the real test suite', () => {
       e2e.length,
       `${e2e.length} direct singleton statements under \`tests/e2e/**\` still have to change ` +
         `(ceiling ${UNCONVERTED_E2E_CEILING}).\n\n` +
-        `If this ROSE, a spec was written that seeds through \`@/lib/db\`. Under ` +
+        `⚠️ FIRST, CHECK WHETHER IT ROSE AT ALL (MOTIR-2939). This ceiling is a constant ` +
+        `measured on somebody's BRANCH, so a sibling merging beneath it makes the number ` +
+        `stale with no spec of yours involved — which is how this guard failed on its own ` +
+        `merge commit the day it landed. Re-measure on a clean worktree at \`origin/main\`: ` +
+        `if it is already over there, the ceiling is stale and the fix is to RE-MEASURE it ` +
+        `(citing the commits, as the constant above does), not to hunt for a culprit.\n\n` +
+        `If it genuinely ROSE against \`origin/main\`, a spec was written that seeds through ` +
+        `\`@/lib/db\`. Under ` +
         `\`motir_app\` that write is REFUSED and that read returns [] — neither raises — so ` +
         `the spec drives a browser against a database it believes it populated. Seed through ` +
         `\`adminDb\` (\`tests/helpers/adminDb.ts\`), ideally via a helper under ` +
         `\`tests/e2e/_helpers/\`, rather than raising this number.\n\n` +
-        `This population is a SEEDING-HELPER problem, not 454 per-line swaps, which is why ` +
+        `This population is a SEEDING-HELPER problem, not ${UNCONVERTED_E2E_CEILING} per-line swaps, which is why ` +
         `it ratchets apart from the vitest half.`,
     ).toBeLessThanOrEqual(UNCONVERTED_E2E_CEILING);
   });
@@ -356,14 +401,21 @@ describe('the ratchets over the real test suite', () => {
     // that reddens for that trains people to edit the guard. What must not rise
     // is the WORK, and that is what the three ceilings above hold.
     //
-    // The measured shape on `origin/main` @ `bd0584c5`, for the PR body and for
-    // whoever sizes the conversion cards:
+    // The measured shape on `origin/main` @ `d024d863` PLUS this card's
+    // conversion (MOTIR-2939), for the PR body and for whoever sizes the
+    // conversion cards. Re-measured rather than adjusted: the previous reading
+    // here was taken at `bd0584c5`, and reasoning forward from a stale reading
+    // is the exact mistake that made this file's ceiling wrong.
     //
-    //   575 statements across 130 files  ·  30 raw (28 vitest + 2 e2e)
+    //   572 statements across 129 files  ·  30 raw (28 vitest + 2 e2e)
     //   ────────────────────────────────────────────────────────────────
     //             not-gated  no-policy  subject  fixture  assertion  undisp.
-    //   e2e              68          1        0        0          0      454
+    //   e2e              67          1        0        0          0      452
     //   vitest            6         41        1        0          4        0
+    //
+    // (was 579 / 131 at `d024d863`; the seven statements the two cloud specs
+    //  seeded through `@/lib/db` now run on `adminDb`, so both files leave the
+    //  population entirely — five of the seven were the undispositioned work.)
     //
     const areas = byArea(scan.statements);
     const e2e = countByVerdict(areas.e2e);
