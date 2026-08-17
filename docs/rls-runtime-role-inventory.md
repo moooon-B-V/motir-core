@@ -1855,3 +1855,78 @@ which is the case for the cutover, stated in the one form that is hard to argue 
 `MAX_HELPER_HOPS`, a resolution shape `reachableHelpers` does not follow, or a `binds-tenant` verdict
 off a bind on another branch is MOTIR-2910's to establish — but the instrument built to find exactly
 this class did not find this instance, and that is the more durable finding of the two.
+
+## The INSTRUMENT for the direct-singleton statement (MOTIR-2918, 2026-08-17)
+
+Not a class closed — a class **enumerated for the first time**. MOTIR-2911's fourth acceptance
+criterion asked which instrument was supposed to have found its three files, and for
+`tests/cli/cliDeviceService.test.ts` the answer was _none_. A statement written straight onto the
+`@/lib/db` singleton inside a test — `expect(await db.apiToken.count()).toBe(0)` — matches no pattern
+in any of the five scanners this document tracks, and never has. `testCallSiteScan` is the near miss:
+it reads the same directory and asks about a `<x>Repository.<method>(…)` CALL, which a test that
+addresses Prisma directly does not have anywhere on the line.
+
+`tests/rls/testSingletonStatementScan.ts` + `tests/rls/test-singleton-statement-guard.test.ts` are
+that instrument. It walks `tests/` for `db.<model>.<ANY-op>(…)` — no whitelist of operation names —
+reusing `testCallSiteScan`'s `isClientExpression` over a NARROWER name set (`SINGLETON_ONLY = {db}`)
+so `adminDb` and a bare `tx`, the two already-correct forms, are not reported, while the inline
+`(tx ?? db)` fallback is.
+
+### The population, measured on `origin/main` @ `bd0584c5`
+
+**575 statements across 130 files**, plus **30** `$queryRaw*` / `$executeRaw*` whose target table a
+parser cannot name (28 outside `tests/e2e/**`, 2 within). **0 unclassifiable.**
+
+|                 | not-gated | no-policy | subject | fixture | assertion | undispositioned | **has to change** |
+| --------------- | --------: | --------: | ------: | ------: | --------: | --------------: | ----------------: |
+| `tests/e2e/**`  |        68 |         1 |       0 |       0 |         0 |         **454** |           **454** |
+| everywhere else |         6 |        41 |       1 |       0 |         4 |               0 |             **4** |
+
+Two ceilings, not one, because the two halves have different remediations: the E2E half is a spec
+seeding through the singleton before it drives the browser, and its fix is a seeding HELPER on
+`adminDb` rather than 454 per-line swaps. It is latent today only because the E2E lane still runs as
+the owner, and it becomes a hard failure the moment **MOTIR-2734** makes `motir_app` the only
+connection. The vitest half is a per-line decision and is four statements in one file.
+
+### Two verdicts that are NOT work, and how each was established
+
+- **`no-policy` — `device_code`, 42 statements (41 of them the CLI suites).** `policyGatedModels`
+  over-approximates on purpose: a model carrying a `workspaceId` column is in scope whether or not
+  its table was ever put under RLS. Measured on a cluster built by `prisma migrate deploy` from
+  empty: `device_code` is `relrowsecurity=f, 0 rows in pg_policies`. The same query settles the
+  other direction, which an exemption list normally cannot show — of every model addressed anywhere
+  under `tests/`, exactly six tables have RLS off, and the other five (`user`, `account`, `session`,
+  `idea_draft`, `user_appearance_preference`) already come out `not-gated` on their own. So the
+  exemption list is COMPLETE against that measurement, not merely populated with what someone
+  noticed. The guard additionally refuses any entry that a migration contradicts.
+- **`subject` — `tests/tenant-root-creation-rls.test.ts`, 1 statement.** The file asserts that an
+  INSERT into a tenant root outside a bootstrap context is REFUSED, which only happens on the unbound
+  singleton. `adminDb` is the owner and would be allowed; a bound context supplies the very GUC the
+  test withholds. Either "fix" deletes the assertion and leaves it green.
+
+### What the first run found that two hand sweeps did not
+
+Four `expect(await db.apiToken.count()).toBe(N)` assertion reads in
+**`tests/cli/cli-device-routes.test.ts`** — MOTIR-2911's exact founding shape, against the same table
+(`api_token`: `relrowsecurity=t`, 1 policy), in the sibling file its hand-built list never named.
+Three of the four assert `toBe(0)`, which under `motir_app` passes because the policy hides the rows.
+They are recorded as `assertion` in `DISPOSITIONED_FILES` and **not converted here** — this card
+changes no test's behaviour by design, so the ruling is inherited rather than re-derived.
+
+### ⚠️ What this does NOT close
+
+**Nothing is converted.** 458 statements still have to change, and the numbers above are what the
+conversion cards are sized off — the whole point of measuring with nobody holding the instrument.
+
+**The 30 raw statements have no per-site adjudication.** Their target tables are not nameable from
+the syntax; they are ratcheted so the count cannot grow, and reading them is the next card's.
+
+**A file-level ruling is coarse, deliberately.** A statement of a different kind added to a
+dispositioned file later inherits that file's ruling in silence. What bounds it is the ceiling, which
+counts `fixture` + `assertion` + `undispositioned` together, so a new statement in an `assertion` file
+still raises the number it must not raise.
+
+**And the scanner's own blind spots, stated because the absence of this sentence is what let the
+class survive five scanners:** it reads `tests/` only, never `lib/` / `app/` / `scripts/`; it does not
+follow a client passed into a helper as a parameter; and it does not resolve `db` re-exported under
+another name.

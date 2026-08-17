@@ -1,0 +1,20 @@
+// Fixture schema for the TEST direct-statement scanner (MOTIR-2918).
+//
+// `policyGatedModels` reads the SCHEMA half here — a fixture root carries no
+// `prisma/migrations`, so the migration sweep short-circuits and gatedness comes
+// from the `workspaceId` column alone. That is exactly the axis this fixture
+// needs to exercise in both directions.
+//
+// `Ghost` exists in NEITHER direction on purpose: the fixture's call file
+// addresses `db.ghost`, which is not declared below, so the scanner must report
+// it as `unclassifiable` rather than filing it as ungated.
+
+model Widget {
+  id          String @id
+  workspaceId String
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}
