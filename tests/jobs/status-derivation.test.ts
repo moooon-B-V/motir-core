@@ -151,10 +151,22 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     expect(rollUp).toHaveBeenCalledTimes(1);
     expect(rollUp).toHaveBeenCalledWith('wi-1', 'ws-1');
     expect(cascade).toHaveBeenCalledTimes(1);
-    expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1');
+    // ⚠️ AND THE CASCADE'S THIRD ARGUMENT IS THE TRANSITION, THREADED OFF THE
+    // ENVELOPE (MOTIR-2957). ADR §4's trigger is *"an item transitions INTO a
+    // done-category status"* — a property of the MOVE — and the service used to
+    // re-derive it by reading the item's current status instead. That is a
+    // different predicate the moment a concurrent derivation has moved the row,
+    // which rung 4 does routinely; the cascade then declined, and a user's Done
+    // was discarded with nothing left to re-fire it. This assertion is the seam
+    // where the transition is either carried across or dropped, so it pins the
+    // VALUES off the event and not merely the arity.
+    expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1', {
+      fromStatusKey: 'in_progress',
+      toStatusKey: 'done',
+    });
     // The payload carries no parentId, so each service resolves its own
-    // neighbours WITHIN that workspace — the handler passes the item id and the
-    // tenant, and nothing else.
+    // neighbours WITHIN that workspace — the handler passes the item id, the
+    // tenant, and the transition, and nothing else.
     expect(result).toEqual({
       rollup: { outcome: 'no_parent' },
       cascade: { outcome: 'not_done' },
