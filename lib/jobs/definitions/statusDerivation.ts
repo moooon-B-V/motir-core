@@ -51,10 +51,10 @@ export const statusDerivationOnTransitioned = defineJob(
     const payload = ctx.event.data as WorkItemTransitionedData;
 
     const rollup = await ctx.step.run('roll-up-parent', () =>
-      services.parentStatusRollup.rollUpForChild(payload.workItemId),
+      services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
     const cascade = await ctx.step.run('cascade-to-children', () =>
-      services.childStatusCascade.cascadeToChildren(payload.workItemId),
+      services.childStatusCascade.cascadeToChildren(payload.workItemId, payload.workspaceId),
     );
 
     // Returned for the run log — which direction acted, and on what. Both
@@ -97,7 +97,7 @@ export const statusDerivationOnCreated = defineJob(
     // which is the cheap no-op this event needs — it fires on EVERY item
     // creation in the workspace.
     return ctx.step.run('recompute-parent', () =>
-      services.parentStatusRollup.rollUpForChild(payload.workItemId),
+      services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
   },
 );
@@ -125,7 +125,7 @@ export const statusDerivationOnChildSetChanged = defineJob(
     for (const [i, parentId] of payload.parentIds.entries()) {
       outcomes.push(
         await ctx.step.run(`recompute-parent-${i}`, () =>
-          services.parentStatusRollup.recomputeParent(parentId),
+          services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId),
         ),
       );
     }

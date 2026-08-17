@@ -2,6 +2,7 @@ import type { Prisma, ProjectRepoTakeoverState } from '@/generated/prisma/client
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  bindWorkspaceContext,
   withSystemContext,
   withWorkspaceContext,
   withWorkspaceServiceContext,
@@ -221,9 +222,25 @@ export const projectRepoTakeoverService = {
   }): Promise<{ outcome: 'applied' | 'already_applied' | 'unknown_repo' | 'owner_mismatch' }> {
     // System context: a webhook has no active workspace, and the row it belongs to
     // is exactly what this read is trying to discover.
-    const found = await withSystemContext(async (tx) =>
-      projectRepoRepository.findByRealizedProviderRepoId(input.providerRepoId, tx),
-    );
+    //
+    // ⚠️ THE DISCOVERY IS TWO STEPS, NOT ONE (MOTIR-2880). `project_repository` (and
+    // `project_repository_collaborator`, which the read `include`s) carry ONE policy
+    // each, keyed purely on `app.workspace_id` — no `system_admin` arm — so a
+    // single system-context read of them returned NULL under `motir_app` and every
+    // `repository.transferred` delivery answered `unknown_repo` for a repo Motir had
+    // itself asked to be transferred. `github_repo` DOES read the flag, and it
+    // carries the tenancy, so it is the bootstrap: resolve it, bind its workspace,
+    // then read the row the delivery is actually about.
+    const found = await withSystemContext(async (tx) => {
+      const repo = await githubRepoRepository.findByRepoIdAndProvider(
+        input.providerRepoId,
+        'github',
+        tx,
+      );
+      if (!repo) return null;
+      await bindWorkspaceContext(tx, repo.workspaceId);
+      return projectRepoRepository.findByRealizedProviderRepoId(input.providerRepoId, tx);
+    });
     if (!found) return { outcome: 'unknown_repo' };
 
     // A transfer Motir did not ask for (an operator moving a repo by hand) still

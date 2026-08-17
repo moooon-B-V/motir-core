@@ -12,6 +12,7 @@ import {
   type WorkItemFixture,
 } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // `parentStatusRollupService.rollUpForChild` — the UPWARD half of bidirectional
 // status derivation (Story MOTIR-1615 · Subtask MOTIR-1620, AMENDED by Story
@@ -77,7 +78,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_progress', 'todo']);
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'rolled_up', parentId: story.id, toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
@@ -88,7 +89,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const { story, children } = await storyWithChildren(fx, ['in_review', 'done']);
     await setStatus(story.id, 'in_progress'); // where the previous rung left it
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'in_review' });
     expect(await statusOf(story.id)).toBe('in_review');
@@ -99,7 +100,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const { story, children } = await storyWithChildren(fx, ['in_review', 'todo']);
     await setStatus(story.id, 'in_progress');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     // The in-progress rung is the only match, and the parent is already there.
     expect(res).toMatchObject({ outcome: 'already_there' });
@@ -111,7 +112,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'in_progress');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     // This is the move MOTIR-1625's in_progress → done edge exists for.
     expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'done' });
@@ -123,7 +124,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const { story, children } = await storyWithChildren(fx, ['done', 'cancelled']);
     await setStatus(story.id, 'in_progress');
 
-    await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(await statusOf(story.id)).toBe('done');
   });
 
@@ -132,7 +133,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'in_review');
 
-    await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(await statusOf(story.id)).toBe('done');
   });
 
@@ -147,7 +148,7 @@ describe('the ladder — each rung moves the parent to the right status', () => 
     });
     await setStatus(story.id, 'in_progress');
 
-    const res = await parentStatusRollupService.rollUpForChild(story.id);
+    const res = await parentStatusRollupService.rollUpForChild(story.id, fx.workspaceId);
     expect(res).toMatchObject({ outcome: 'rolled_up', parentId: epic.id });
     expect(await statusOf(epic.id)).toBe('in_progress');
   });
@@ -162,7 +163,7 @@ describe('the fourth (todo) rung — the ladder can say "open work, none started
     const { story, children } = await storyWithChildren(fx, ['done', 'done', 'todo']);
     await setStatus(story.id, 'done');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[2]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[2]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_back', parentId: story.id, toStatus: 'todo' });
     expect(await statusOf(story.id)).toBe('todo');
@@ -172,7 +173,7 @@ describe('the fourth (todo) rung — the ladder can say "open work, none started
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['todo', 'blocked']);
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'todo' });
     expect(await statusOf(story.id)).toBe('todo');
@@ -200,7 +201,7 @@ describe('the fourth (todo) rung — the ladder can say "open work, none started
     await setStatus(child.id, 'todo');
     await adminDb.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
 
-    const res = await parentStatusRollupService.rollUpForChild(child.id);
+    const res = await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'no_rung', parentId: story.id });
     expect(await statusOf(story.id)).toBe('done');
@@ -216,7 +217,7 @@ describe('the fourth (todo) rung — the ladder can say "open work, none started
     const { story, children } = await storyWithChildren(fx, ['todo', 'todo']);
     await setStatus(story.id, 'blocked');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'same_rung', parentId: story.id, toStatus: 'todo' });
     expect(await statusOf(story.id)).toBe('blocked');
@@ -230,7 +231,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
     const { story, children } = await storyWithChildren(fx, ['in_progress', 'done']);
     await setStatus(story.id, 'done'); // the parent had already completed
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
@@ -242,7 +243,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
     const { story, children } = await storyWithChildren(fx, ['done', 'in_review']);
     await setStatus(story.id, 'done');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[1]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_review' });
     expect(await statusOf(story.id)).toBe('in_review');
@@ -253,7 +254,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
     const { story, children } = await storyWithChildren(fx, ['in_progress', 'in_review']);
     await setStatus(story.id, 'in_review');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
   });
@@ -263,7 +264,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
     const { story, children } = await storyWithChildren(fx, ['done', 'done']);
     await setStatus(story.id, 'done');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'done' });
     expect(sent).toHaveLength(0);
@@ -282,7 +283,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
       false,
     );
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'todo' });
     expect(await statusOf(story.id)).toBe('todo');
@@ -308,7 +309,7 @@ describe('the recompute comes BACK — every rung, from a done parent', () => {
     const { story, children } = await storyWithChildren(fx, ['in_progress']);
     await setStatus(story.id, 'in_progress');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(res).toMatchObject({ outcome: 'already_there', parentId: story.id });
     expect(sent).toHaveLength(0);
   });
@@ -320,7 +321,7 @@ describe('gates and no-ops', () => {
     const orphan = await createTestWorkItem(fx, { kind: 'story', title: 'Top level' });
     await setStatus(orphan.id, 'in_progress');
 
-    expect(await parentStatusRollupService.rollUpForChild(orphan.id)).toEqual({
+    expect(await parentStatusRollupService.rollUpForChild(orphan.id, fx.workspaceId)).toEqual({
       outcome: 'no_parent',
     });
     expect(sent).toHaveLength(0);
@@ -335,7 +336,7 @@ describe('gates and no-ops', () => {
       data: { autoRollupParentStatus: false },
     });
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(res).toEqual({ outcome: 'toggle_off', parentId: story.id });
     expect(await statusOf(story.id)).toBe('in_progress');
   });
@@ -349,7 +350,9 @@ describe('gates and no-ops', () => {
       data: { autoCompleteChildrenOnParentDone: false },
     });
 
-    expect(await parentStatusRollupService.rollUpForChild(children[0]!.id)).toMatchObject({
+    expect(
+      await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId),
+    ).toMatchObject({
       outcome: 'rolled_up',
     });
   });
@@ -370,7 +373,7 @@ describe('gates and no-ops', () => {
       },
     });
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'done' });
     expect(await statusOf(story.id)).toBe('in_progress'); // untouched
@@ -385,7 +388,7 @@ describe('gates and no-ops', () => {
     // so it never gets another chance. (MOTIR-1623 surfaced this.)
     const { story, children } = await storyWithChildren(fx, ['in_review']);
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
@@ -408,7 +411,7 @@ describe('gates and no-ops', () => {
       },
     });
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'in_progress' });
     expect(await statusOf(story.id)).toBe('in_progress');
@@ -434,7 +437,7 @@ describe('gates and no-ops', () => {
     });
     await setStatus(story.id, parked.key);
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'in_review' });
     expect(await statusOf(story.id)).toBe('parked');
@@ -457,7 +460,7 @@ describe('gates and no-ops', () => {
     });
     await setStatus(story.id, frozen.key);
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     // Named, so the log says which move the workflow refused.
     expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'done' });
@@ -478,10 +481,12 @@ describe('gates and no-ops', () => {
       data: { triagedAt: new Date() },
     });
 
-    expect(await parentStatusRollupService.rollUpForChild(children[0]!.id)).toEqual({
-      outcome: 'no_rung',
-      parentId: story.id,
-    });
+    expect(await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId)).toEqual(
+      {
+        outcome: 'no_rung',
+        parentId: story.id,
+      },
+    );
     expect(await statusOf(story.id)).toBe('done');
     expect(sent).toHaveLength(0);
   });
@@ -492,7 +497,7 @@ describe('the emitted event — what carries derivation to the next level', () =
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_progress']);
 
-    await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     expect(sent).toHaveLength(1);
     expect(sent[0]!.name).toBe('work-item/transitioned');
@@ -510,7 +515,7 @@ describe('the emitted event — what carries derivation to the next level', () =
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_progress']);
 
-    await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
     const revs = await adminDb.workItemRevision.findMany({
       where: { workItemId: story.id },
@@ -545,7 +550,7 @@ describe('a RENAMED workflow still derives', () => {
       }),
     ).toBe('doing');
 
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'doing' });
     expect(await statusOf(story.id)).toBe('doing');
   });
@@ -562,7 +567,7 @@ describe('defensive error routing — the job must never fail behind a user tran
     const fx = await makeWorkItemFixture();
     const { children } = await storyWithChildren(fx, ['in_progress']);
     vi.spyOn(workItemsService, 'applyStatusTransition').mockRejectedValue(err);
-    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id);
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     vi.restoreAllMocks();
     return res;
   }
@@ -596,5 +601,60 @@ describe('defensive error routing — the job must never fail behind a user tran
 
   it('an UNEXPECTED error still propagates — a real fault is not swallowed', async () => {
     await expect(forceWriteError(new Error('disk on fire'))).rejects.toThrow('disk on fire');
+  });
+});
+
+describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => {
+  // ⚠️ REPRODUCE-BEFORE-FIX, and the reproduction needs the non-bypass role.
+  //
+  // Phase 1 used to run under `withSystemContext`, which binds `app.system_admin`
+  // and nothing else. `work_item` carries ONE permissive policy,
+  // `work_item_active_workspace`, keyed purely on `app.workspace_id` — no arm reads
+  // the system flag — so under `motir_app` the very first statement
+  // (`findById(childId)`) returned NULL, `resolved` was null, and EVERY rollup
+  // answered `{ outcome: 'no_parent' }`. RLS does not refuse a SELECT, it empties
+  // it, so nothing raised and nothing was logged: a parent whose children all
+  // finished simply never moved.
+  //
+  // ⚠️ DELIBERATELY NOT `describe.runIf(isAppRoleTestMode())`, the same choice
+  // `tests/app-role-bound-context-reads.test.ts` documents: CI does not set the
+  // flag, so a gated case would never run there. Under the bypass role these pass
+  // trivially (RLS is inert); under `TEST_DB_APP_ROLE=1` the first one is red on
+  // `main` and green here, and the second is the one that PINS the binding —
+  // a system context would have returned the parent whatever workspace was named.
+
+  // The preceding block's last case leaves a `vi.spyOn` throwing `disk on fire`
+  // in place; these cases exercise the REAL write path.
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rolls the parent up under the non-bypass role — the read is workspace-bound', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    await setStatus(story.id, 'in_progress'); // the done rung's legal starting point
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    // On `main` under TEST_DB_APP_ROLE=1 this is `{ outcome: 'no_parent' }`.
+    expect(res).toMatchObject({ outcome: 'rolled_up', parentId: story.id, toStatus: 'done' });
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('a FOREIGN workspaceId resolves nothing — the binding is real, not decorative', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ identifier: 'OTHR' });
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    await setStatus(story.id, 'in_progress');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, other.workspaceId);
+
+    // Under the bypass role RLS is inert, so this case only BITES under
+    // `TEST_DB_APP_ROLE=1` — where it is the difference between a bound read and a
+    // system context that would have crossed the tenant boundary silently.
+    if (isAppRoleTestMode()) {
+      expect(res).toEqual({ outcome: 'no_parent' });
+      expect(await statusOf(story.id)).not.toBe('done');
+    }
   });
 });

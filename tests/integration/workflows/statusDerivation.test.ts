@@ -34,7 +34,12 @@ import { truncateAuthTables } from '../../helpers/db';
 
 interface Emitted {
   name: string;
-  data: { workItemId: string; toStatusKey?: string; parentIds?: string[] };
+  // `workspaceId` is carried because the derivation services BIND it
+  // (MOTIR-2880) — every `work-item/*` envelope has always had it, and the pump
+  // reads it off the event rather than inventing one, so the drain drives the
+  // production path. `toStatusKey` / `parentIds` are per-event (MOTIR-2892 added
+  // the child-set envelope), hence optional.
+  data: { workItemId: string; workspaceId: string; toStatusKey?: string; parentIds?: string[] };
 }
 
 const queue: Emitted[] = [];
@@ -75,18 +80,26 @@ async function drain(): Promise<number> {
     // has three consumers since MOTIR-2892, because a recompute is a function of
     // the child SET and `work-item/transitioned` fires on none of the edits that
     // change that set.
+    //
+    // ⚠️ The workspace comes off the EVENT in every branch, exactly as each job
+    // step takes it from `payload.workspaceId` (MOTIR-2880). Both phases of the
+    // rollup bind a workspace context, so a drain that invented one would not be
+    // driving the production path.
     if (event.name === 'work-item/transitioned') {
       // The job's order, deliberately: rollup first — it is the direction that
       // can CREATE work for the other.
-      await parentStatusRollupService.rollUpForChild(event.data.workItemId);
-      await childStatusCascadeService.cascadeToChildren(event.data.workItemId);
+      await parentStatusRollupService.rollUpForChild(event.data.workItemId, event.data.workspaceId);
+      await childStatusCascadeService.cascadeToChildren(
+        event.data.workItemId,
+        event.data.workspaceId,
+      );
     } else if (event.name === 'work-item/created') {
       // No cascade: a create transitions nothing, so nothing ENTERED a
       // done-category status.
-      await parentStatusRollupService.rollUpForChild(event.data.workItemId);
+      await parentStatusRollupService.rollUpForChild(event.data.workItemId, event.data.workspaceId);
     } else if (event.name === 'work-item/child-set.changed') {
       for (const parentId of event.data.parentIds ?? []) {
-        await parentStatusRollupService.recomputeParent(parentId);
+        await parentStatusRollupService.recomputeParent(parentId, event.data.workspaceId);
       }
     }
     // Every other `work-item/*` event (embeddings, mentions) has no derivation
@@ -426,8 +439,8 @@ describe('recursion, termination, and up↔down non-interference', () => {
     const revsBefore = await adminDb.workItemRevision.count({ where: { workItemId: story.id } });
 
     // Redeliver the last event: same dispatch, same item, already-settled tree.
-    await parentStatusRollupService.rollUpForChild(children[1]!.id);
-    await childStatusCascadeService.cascadeToChildren(children[1]!.id);
+    await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
+    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId);
     const extra = await drain();
 
     expect(extra).toBe(0); // nothing moved ⇒ nothing emitted
@@ -764,7 +777,7 @@ describe('the recompute, assembled — a parent that comes back', () => {
     // the aggregate's JOIN drops the row entirely. Pin the status, as every
     // other test in this file does.
     await setStatus(late.id, 'todo');
-    await parentStatusRollupService.rollUpForChild(late.id);
+    await parentStatusRollupService.rollUpForChild(late.id, fx.workspaceId);
     await drain();
     expect(await statusOf(story.id)).toBe('in_progress');
 
@@ -798,7 +811,7 @@ describe('the recompute, assembled — a parent that comes back', () => {
     // the aggregate's JOIN drops the row entirely. Pin the status, as every
     // other test in this file does.
     await setStatus(late.id, 'todo');
-    await parentStatusRollupService.rollUpForChild(late.id);
+    await parentStatusRollupService.rollUpForChild(late.id, fx.workspaceId);
     await drain();
     expect(await statusOf(story.id)).toBe('todo');
 
@@ -827,7 +840,7 @@ describe('the recompute, assembled — a parent that comes back', () => {
       false,
     );
 
-    await parentStatusRollupService.rollUpForChild(child.id);
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
     await drain();
 
     expect(await statusOf(story.id)).toBe('todo');

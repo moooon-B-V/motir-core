@@ -580,6 +580,130 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       expect(derivation).not.toMatch(/'(login|link|doctor)'/);
     });
   });
+
+  // ── The RECORD, not a claim (MOTIR-2699) ─────────────────────────────────
+  // Everything above checks something about the published artifact. This job
+  // writes the artifact's record — § Published images — which was retyped from a
+  // job summary for four releases and skipped in one of them. These assertions
+  // guard the properties that make an automated table worth as much as the hand
+  // one: that it reads the registry rather than the summary, that it can FAIL,
+  // and that it cannot commit nothing.
+  describe('and then RECORDS what it published, in the README', () => {
+    /** The `readme:` job window — its own key to the next top-level job key (or
+     *  EOF), comments stripped. Same cut as `sandboxJob`, for the same reason. */
+    const readmeJob = (() => {
+      const lines = release.split('\n').filter((line) => !line.trim().startsWith('#'));
+      const start = lines.findIndex((line) => line === '  readme:');
+      if (start === -1) {
+        throw new Error('release-sandbox.yml has no `readme:` job — MOTIR-2699 regressed');
+      }
+      const after = lines.slice(start + 1);
+      const end = after.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:$/.test(line));
+      return [lines[start], ...(end === -1 ? after : after.slice(0, end))].join('\n');
+    })();
+
+    it('runs on a real TAG only, after every image has been published and proven', () => {
+      // A dry-run dispatch publishes nothing, so there is no release to record and
+      // no digest artifact to read. `needs: images` covers the whole called
+      // workflow, which includes the anonymous-pull and command checks — the
+      // record is written only about images that passed them.
+      expect(readmeJob).toContain('needs: images');
+      expect(readmeJob).toContain("if: ${{ github.event_name == 'push' }}");
+    });
+
+    it('edits MAIN, not the tag it was triggered by', () => {
+      // A tag-triggered run checks out the tag's tree. Writing that copy would
+      // revert whatever main has learned since the tag was cut, so the checkout is
+      // pinned to the branch the record belongs on.
+      expect(readmeJob).toContain('ref: main');
+      expect(readmeJob).toContain('git push origin HEAD:main');
+    });
+
+    it('holds contents: write and NO registry scope — it reads GHCR anonymously', () => {
+      expect(readmeJob).toContain('contents: write');
+      expect(readmeJob).not.toContain('packages:');
+      expect(readmeJob).not.toContain('docker/login-action');
+    });
+
+    it('introduces no new secret — the job token is the whole credential', () => {
+      // Same posture as the publish half: nothing to provision, nothing to rotate.
+      expect([...readmeJob.matchAll(/secrets\.(\w+)/g)].map((m) => m[1])).toEqual([]);
+    });
+
+    it('names the SAME image repository the publish matrix pushes to', () => {
+      // Two files name it now. This is the drift guard that keeps them one value —
+      // a record written about a different repository than the one published to
+      // would be wrong in the least visible way possible.
+      const imageOf = (yaml: string) => /^\s*IMAGE: (\S+)$/m.exec(yaml)?.[1];
+      expect(imageOf(release)).toBe(imageOf(images));
+      expect(imageOf(release)).toBe('ghcr.io/moooon-b-v/motir-sandbox');
+    });
+
+    it('calls the script rather than reimplementing the table in YAML', () => {
+      // The invariants, the anonymous read and the no-op detection are unit-tested
+      // in `sandboxDigestTable.test.ts`. A `run:` block that rendered rows itself
+      // would be none of that, and this lane's commit starts no CI run.
+      expect(readmeJob).toContain('node packages/cli/sandbox/smoke/render-digest-table.mjs');
+      expect(readmeJob).toContain('--write');
+      // Reads the version from the TAG, which the guard job has already pinned to
+      // packages/cli/package.json — not from a second lookup that could disagree.
+      expect(readmeJob).toContain('${TAG#cli-v}');
+      expect(readmeJob).not.toMatch(/sha256:/);
+      expect(existsSync(join(SMOKE_DIR, 'render-digest-table.mjs'))).toBe(true);
+      expect(existsSync(join(SMOKE_DIR, 'render-digest-table.d.mts'))).toBe(true);
+    });
+
+    it('cross-checks the registry against what the push jobs recorded', () => {
+      // The digests the push uploaded are handed over precisely so the two
+      // readings can disagree and fail the release.
+      expect(readmeJob).toContain('pattern: sandbox-digest-*');
+      expect(readmeJob).toContain('--digests digests');
+    });
+
+    it('commits ONLY the README, authored as the CLA signatory, with no trailer', () => {
+      expect(readmeJob).toContain('-- packages/cli/sandbox/README.md');
+      expect(readmeJob).toContain("--author='Zhu Yue <zhuyue11@gmail.com>'");
+      expect(readmeJob).not.toContain('Co-Authored-By');
+      expect(readmeJob).not.toMatch(/git add -A|git commit -a/);
+    });
+
+    it('commits nothing at all when the release changed nothing', () => {
+      // Criterion 5 of MOTIR-2699, as the workflow sees it: the commit step is
+      // gated on the script's own verdict, so a re-run of an already-recorded tag
+      // produces no commit rather than an empty one.
+      expect(readmeJob).toContain("if: ${{ steps.render.outputs.changed == 'true' }}");
+    });
+
+    it('rebases onto a concurrent merge rather than forcing over it', () => {
+      expect(readmeJob).toContain('git pull --rebase origin main');
+      expect(readmeJob).not.toMatch(/push[^\n]*--force/);
+    });
+
+    it('leaves the README carrying the frame the next demotion needs', () => {
+      // The section that is CURRENT is the one the next release demotes, and the
+      // demotion is a bounded replacement rather than a regex over English. Losing
+      // this frame does not corrupt anything — the lane refuses and says so — but
+      // it stops the record cold, so it is guarded here rather than discovered on
+      // a release.
+      expect(readme).toContain('<!-- sandbox-digests:currency start -->');
+      expect(readme).toContain('<!-- sandbox-digests:currency end -->');
+      expect(readme).toMatch(/<!-- sandbox-digests:release cli-v\d+\.\d+\.\d+ -->/);
+      // Exactly one section may claim to be the current release.
+      expect(readme.match(/this is the current release/g)).toHaveLength(1);
+    });
+
+    it('no longer tells a human to paste the digest table anywhere', () => {
+      // The sentence this whole card exists to delete, in all three places that
+      // carried it: the summary the lane prints, the release procedure, and the
+      // README's own account of where the digests come from.
+      expect(images).not.toContain('Paste the table above');
+      // Where the old wording survives in the procedure it is quoted as history,
+      // not given as an instruction.
+      expect(release).toMatch(/used to read "copy its digest table/);
+      expect(release).toMatch(/RECORDS the digest table/);
+      expect(readme).not.toMatch(/they are\s*\na transcription/);
+    });
+  });
 });
 
 // ── The tripwire for the gap BETWEEN releases (MOTIR-2131) ─────────────────

@@ -128,13 +128,20 @@ be](#public-and-asserted-to-be-motir-2010) tells a story that reads on the
 `cli-v0.1.0` rows in particular. Overwriting a release's digests in place would
 quietly change what an earlier paragraph is talking about.
 
-The digests are filled in from the release run's job summary at each `cli-v*`
-tag (see [Publishing](#publishing)) — these tables are the record, but they are
-a transcription, so the registry is always the authority:
+**The release lane writes these tables itself** (MOTIR-2699). At each `cli-v*` tag
+[`render-digest-table.mjs`](smoke/render-digest-table.mjs) resolves every
+published tag from the registry over an **anonymous** pull, checks the two
+invariants each section claims, prepends the new section, demotes the outgoing one
+to history, and commits the result on `main` (see [Publishing](#publishing)).
+Nobody retypes a digest, and a digest that disagrees with what the push recorded
+fails the release rather than being written. The registry is still the authority,
+and still one command away:
 
 ```sh
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
+
+<!-- sandbox-digests:release cli-v0.3.0 -->
 
 ### Release `cli-v0.3.0`
 
@@ -142,9 +149,14 @@ docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 The release whose 403 hint names a PERMISSION rather than one of the six retired
 scopes (MOTIR-2572) — the `motir` inside each image is
 [`@motir/cli@0.3.0`](https://www.npmjs.com/package/@motir/cli/v/0.3.0), the same
-build npm serves. Each row's immutable twin — `:<profile>-0.3.0` — points at the
-same manifest, and the moving `:<profile>` tags point here too: this is the
-current release.
+build npm serves.
+
+<!-- sandbox-digests:currency start -->
+
+Each row's immutable twin — `:<profile>-0.3.0` — points at the same manifest, and
+the moving `:<profile>` tags point here too: this is the current release.
+
+<!-- sandbox-digests:currency end -->
 
 It also carries the MOTIR-2532 rename, which `cli-v0.2.1` was meant to ship and
 never did — that tag was prepared but never cut, so `0.2.0` is the version this
@@ -834,13 +846,43 @@ post-deploy verification jobs, because there are two different claims to check:
 
 1. **`sandbox-published`** pulls every image back **by digest** and runs `motir
 --version` in it — "the push exited 0" and "the bytes are in the registry and
-   they run" are not the same claim. Its summary prints the digest table; paste
-   it into [Published images](#published-images).
+   they run" are not the same claim. Its summary prints the digest table, which is
+   now a convenience rather than a handoff: the `readme` job below writes the
+   table into [Published images](#published-images) itself.
 2. **`sandbox-public`** asks whether a **stranger** can pull them, which the
    first job structurally cannot: it logs in, and a private package is pullable
    by its publisher. See [Public, and asserted to
    be](#public-and-asserted-to-be-motir-2010) for why that gap shipped nine
    unobtainable images green, and what closed it.
+
+…and then a third job, which writes the record rather than checking a claim:
+
+3. **`readme`** runs
+   [`render-digest-table.mjs`](smoke/render-digest-table.mjs) against the
+   registry, renders the [Published images](#published-images) section for this
+   version, demotes the outgoing one to history, and commits the result on `main`
+   (MOTIR-2699). It is the step that used to read _"copy its digest table into the
+   sandbox README"_ and be done by hand — four releases running, one of which
+   lapsed. Three things about it are load-bearing:
+   - **It reads the digests from the registry ANONYMOUSLY**, never the values the
+     push carried forward, and it cross-checks them against what the push
+     recorded. A disagreement fails the release; nothing is written.
+   - **The two invariants the section claims are asserted, not repeated.** A
+     moving tag that has drifted from its immutable twin, or a digest unchanged
+     since the previous release, is a red release rather than a green table.
+   - **A release with nothing to change writes nothing.** Re-running a tag whose
+     section is already exact produces no commit, rather than an empty one.
+
+   It edits `main`, not the tag — a tag-triggered run checks out the tag's tree,
+   and the file the record belongs in is the one on the branch.
+
+   A pull request would fit this repository's manual-merge convention better, and
+   is not available: the repository's Actions permissions have _"Allow GitHub
+   Actions to create and approve pull requests"_ **off**, so `gh pr create` under
+   the job's own `GITHUB_TOKEN` is a 403. The content is machine-derived and
+   machine-checked — there is nothing in it for a reviewer to judge — so it is
+   committed. Turn that setting on and this becomes a branch push plus one
+   `gh pr create`.
 
 Auth is the workflow's own `GITHUB_TOKEN` under a `packages: write` permission
 block, granted on the release lane only. **No repository secret, no registry
@@ -912,6 +954,7 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 | `smoke/assert-run.mjs`           | Asserts the recorded request SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                                                                              |
 | `smoke/assert-public.mjs`        | Asks whether a STRANGER can pull what the release just pushed — a manifest probe that sends no `Authorization` header and checks a known-public control first. Three-valued: public / private-or-absent / could not tell.                                                                                                    |
 | `smoke/assert-current.mjs`       | Asks whether the published image is still what `main` says it is — compares the newest `cli-v*` tag against a checkout and fails once unreleased work has SAT past its window. Needs no Docker, network or credential.                                                                                                       |
+| `smoke/render-digest-table.mjs`  | Writes § Published images. Resolves every published tag anonymously, asserts the two invariants the section claims, renders the release section and demotes the outgoing one — so the digest table is produced by the release rather than retyped from its job summary.                                                      |
 | `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                                                                          |
 
 Three workflow files sit outside this directory: the build/smoke/publish matrix

@@ -155,6 +155,14 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // and a client can fix only one of those.
   ILLEGAL_TRANSITION: 422,
   UNKNOWN_STATUS: 422,
+  // MOTIR-2709 — the close-out artifact-evidence gate: a `type: deploy` item
+  // moved to a done-category status with no comment recording what it published.
+  // A THIRD distinct code for the same sub-resource, for the same reason the two
+  // above are distinct: the caller's fix is neither a different status nor a
+  // different spelling, it is to record the artifact (or declare there is none),
+  // and only its own code can say that. No new STATUS, so no ADR §4 row — 422
+  // already covers a request refused on the resource's own rules.
+  MISSING_ARTIFACT_EVIDENCE: 422,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,
