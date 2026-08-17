@@ -230,9 +230,9 @@ describe('project_user_membership_read (the user-context arm)', () => {
     const stranger = await createTestUser();
     await workspacesService.createWorkspace({ name: 'Stranger', ownerUserId: stranger.id });
 
-    expect(await asAppRole({ userId: stranger.id }, (tx) => selectProject(tx, projectB.id))).toEqual(
-      [],
-    );
+    expect(
+      await asAppRole({ userId: stranger.id }, (tx) => selectProject(tx, projectB.id)),
+    ).toEqual([]);
   });
 
   it('grants a TENANT-bound request nothing about the user’s other workspaces', async () => {
