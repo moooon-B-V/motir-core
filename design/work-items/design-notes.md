@@ -4085,7 +4085,8 @@ h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg
 
 28rem is the **shipped roadmap view's own `min-h-[28rem]` floor**
 (`components/planning/RoadmapView.tsx`), reused rather than invented. The roadmap
-page's `h-[calc(100dvh-13rem)]` is deliberately NOT reused: a section card in a
+page's own viewport-relative height (`h-[calc(100dvh - 11.5rem -
+var(--shell-bottom-clearance, 1.5rem))]` since MOTIR-2763) is deliberately NOT reused: a section card in a
 scrolling content column must not be measured against the viewport. Why not
 shorter: at 24rem the fitted level and the canvas's bottom-left legend + zoom
 cluster collide (measured); at 28rem the fitted content clears them. Why not
