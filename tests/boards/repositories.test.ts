@@ -159,7 +159,10 @@ describe('boardRepository — reads + workspace gate', () => {
   it('findDefaultForProject returns the board, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
-    const own = await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+    // Bound to `a` — the workspace the POSITIVE assertion is about. Bound to `b`
+    // (as this read was until MOTIR-2881) the policy hides a's board and the row
+    // never arrives: `expected undefined to be <board>`.
+    const own = await withWorkspaceServiceContext(a.workspaceId, (tx) =>
       boardRepository.findDefaultForProject(a.projectId, a.workspaceId, tx),
     );
     expect(own?.id).toBe(a.boardId);
@@ -172,9 +175,10 @@ describe('boardRepository — reads + workspace gate', () => {
   it('findById returns the board, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
+    // Bound to `a` for the positive half (MOTIR-2881) — see findDefaultForProject.
     expect(
       (
-        await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+        await withWorkspaceServiceContext(a.workspaceId, (tx) =>
           boardRepository.findById(a.boardId, a.workspaceId, tx),
         )
       )?.id,
@@ -211,7 +215,11 @@ describe('boardColumnRepository — reads, batched read + workspace gate', () =>
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
     // Ask for BOTH boards but under workspace A → only A's columns come back.
-    const cols = await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+    // Bound to `a` (MOTIR-2881): the read has to be able to SEE a's columns for the
+    // batching claim to mean anything, and b's are then excluded twice over — by the
+    // explicit `workspaceId` argument and by the policy. The WHERE-clause gate on its
+    // own is what the foreign-argument tests above and below isolate.
+    const cols = await withWorkspaceServiceContext(a.workspaceId, (tx) =>
       boardColumnRepository.findByBoards([a.boardId, b.boardId], a.workspaceId, tx),
     );
     expect(cols.map((c) => c.id).sort()).toEqual([a.column1Id, a.column2Id].sort());
@@ -230,9 +238,10 @@ describe('boardColumnRepository — reads, batched read + workspace gate', () =>
   it('findById returns the column, null cross-workspace', async () => {
     const a = await makeBoardTenant('a');
     const b = await makeBoardTenant('b');
+    // Bound to `a` for the positive half (MOTIR-2881) — see findDefaultForProject.
     expect(
       (
-        await withWorkspaceServiceContext(b.workspaceId, (tx) =>
+        await withWorkspaceServiceContext(a.workspaceId, (tx) =>
           boardColumnRepository.findById(a.column1Id, a.workspaceId, tx),
         )
       )?.id,
