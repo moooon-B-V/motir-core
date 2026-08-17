@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Notification, User, WorkItem } from '@/generated/prisma/client';
+import type { Notification, Prisma, User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
@@ -28,6 +28,14 @@ import { truncateAuthTables } from '../helpers/db';
 // the constraint. So the admin client is what PRESERVES these claims rather than
 // weakening them. The policies' own behaviour is proved separately, under the role,
 // in the *-rls suites this header already points at.
+//
+// ⚠️ AND SO DO THIS FILE'S READS (MOTIR-2881). MOTIR-2751 migrated the WRITES and
+// left the assertion-side READS on the `@/lib/db` singleton — which under the role
+// is `motir_app`, binds no workspace GUC, and returns NOTHING. A refused write says
+// so (`42501`); a refused read just returns `null` / `[]` / `0`, so seven assertions
+// here went red while `countUnreadByRecipient` → 0 and `findById('does-not-exist')`
+// → null passed for the wrong reason. `readAsOwner` routes them through the SAME
+// owner client the writes use, keeping RLS inert as the header says.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` + `user` RESTART IDENTITY CASCADE,
@@ -40,6 +48,16 @@ afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
 });
+
+/**
+ * Run a repository READ through the OWNER client, exactly as this file's writes run.
+ * The repository method under test is still what is exercised — only the connection
+ * changes, so RLS stays inert (see the header) and an empty answer is the query's own
+ * recipient/category scoping rather than a policy.
+ */
+function readAsOwner<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return adminDb.$transaction(fn);
+}
 
 interface NotificationFixture {
   fx: WorkItemFixture;
@@ -203,12 +221,20 @@ describe('notificationRepository.countUnreadByRecipient', () => {
       { dedupeKey: 'comment:c2' },
       { dedupeKey: 'comment:c3', readAt: new Date() },
     ]);
-    expect(await notificationRepository.countUnreadByRecipient(c.recipient.id)).toBe(2);
+    expect(
+      await readAsOwner((tx) =>
+        notificationRepository.countUnreadByRecipient(c.recipient.id, {}, tx),
+      ),
+    ).toBe(2);
   });
 
   it('returns 0 for a recipient with no notifications', async () => {
     const c = await makeNotificationFixture();
-    expect(await notificationRepository.countUnreadByRecipient(c.recipient.id)).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        notificationRepository.countUnreadByRecipient(c.recipient.id, {}, tx),
+      ),
+    ).toBe(0);
   });
 });
 
@@ -219,19 +245,27 @@ describe('notificationRepository.listByRecipient', () => {
     for (let i = 1; i <= 5; i++) {
       await addNotifications(c, [{ dedupeKey: `comment:c${i}` }]);
     }
-    const page1 = await notificationRepository.listByRecipient(c.recipient.id, { take: 2 });
+    const page1 = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(c.recipient.id, { take: 2 }, tx),
+    );
     expect(page1.map((r) => r.dedupeKey)).toEqual(['comment:c5', 'comment:c4']);
 
-    const page2 = await notificationRepository.listByRecipient(c.recipient.id, {
-      take: 2,
-      cursor: page1[page1.length - 1]!.id,
-    });
+    const page2 = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(
+        c.recipient.id,
+        { take: 2, cursor: page1[page1.length - 1]!.id },
+        tx,
+      ),
+    );
     expect(page2.map((r) => r.dedupeKey)).toEqual(['comment:c3', 'comment:c2']);
 
-    const page3 = await notificationRepository.listByRecipient(c.recipient.id, {
-      take: 2,
-      cursor: page2[page2.length - 1]!.id,
-    });
+    const page3 = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(
+        c.recipient.id,
+        { take: 2, cursor: page2[page2.length - 1]!.id },
+        tx,
+      ),
+    );
     expect(page3.map((r) => r.dedupeKey)).toEqual(['comment:c1']);
   });
 
@@ -241,21 +275,23 @@ describe('notificationRepository.listByRecipient', () => {
       { dedupeKey: 'comment:c1', category: 'direct' },
       { dedupeKey: 'tr:1', category: 'watching', type: 'transitioned' },
     ]);
-    const direct = await notificationRepository.listByRecipient(c.recipient.id, {
-      category: 'direct',
-    });
+    const direct = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(c.recipient.id, { category: 'direct' }, tx),
+    );
     expect(direct.map((r) => r.dedupeKey)).toEqual(['comment:c1']);
 
-    const watching = await notificationRepository.listByRecipient(c.recipient.id, {
-      category: 'watching',
-    });
+    const watching = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(c.recipient.id, { category: 'watching' }, tx),
+    );
     expect(watching.map((r) => r.dedupeKey)).toEqual(['tr:1']);
   });
 
   it('walks oldest-first when order is asc', async () => {
     const c = await makeNotificationFixture();
     for (let i = 1; i <= 3; i++) await addNotifications(c, [{ dedupeKey: `comment:c${i}` }]);
-    const rows = await notificationRepository.listByRecipient(c.recipient.id, { order: 'asc' });
+    const rows = await readAsOwner((tx) =>
+      notificationRepository.listByRecipient(c.recipient.id, { order: 'asc' }, tx),
+    );
     expect(rows.map((r) => r.dedupeKey)).toEqual(['comment:c1', 'comment:c2', 'comment:c3']);
   });
 });
@@ -265,8 +301,12 @@ describe('notificationRepository.findById', () => {
     const c = await makeNotificationFixture();
     await addNotifications(c, [{ dedupeKey: 'comment:c1' }]);
     const [row] = await allRows(c.recipient.id);
-    expect((await notificationRepository.findById(row!.id))?.id).toBe(row!.id);
-    expect(await notificationRepository.findById('does-not-exist')).toBeNull();
+    expect((await readAsOwner((tx) => notificationRepository.findById(row!.id, tx)))?.id).toBe(
+      row!.id,
+    );
+    expect(
+      await readAsOwner((tx) => notificationRepository.findById('does-not-exist', tx)),
+    ).toBeNull();
   });
 });
 
@@ -281,8 +321,14 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
       notificationRepository.markRead(a!.id, readAt, tx),
     );
     expect(updated.readAt).toEqual(readAt);
-    expect((await notificationRepository.findById(b!.id))?.readAt).toBeNull();
-    expect(await notificationRepository.countUnreadByRecipient(c.recipient.id)).toBe(1);
+    expect(
+      (await readAsOwner((tx) => notificationRepository.findById(b!.id, tx)))?.readAt,
+    ).toBeNull();
+    expect(
+      await readAsOwner((tx) =>
+        notificationRepository.countUnreadByRecipient(c.recipient.id, {}, tx),
+      ),
+    ).toBe(1);
   });
 
   it('markAllReadByRecipient flips only the unread rows and returns the count', async () => {
@@ -299,7 +345,11 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
     );
     // Only the two UNREAD rows were touched — not the already-read one.
     expect(flipped).toBe(2);
-    expect(await notificationRepository.countUnreadByRecipient(c.recipient.id)).toBe(0);
+    expect(
+      await readAsOwner((tx) =>
+        notificationRepository.countUnreadByRecipient(c.recipient.id, {}, tx),
+      ),
+    ).toBe(0);
 
     // The already-read row keeps its ORIGINAL timestamp (not re-stamped).
     const rows = await allRows(c.recipient.id);
@@ -344,6 +394,8 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
       notificationRepository.markAllReadByRecipient(c.recipient.id, new Date(), tx),
     );
     // The other recipient's notification is still unread.
-    expect(await notificationRepository.countUnreadByRecipient(other.id)).toBe(1);
+    expect(
+      await readAsOwner((tx) => notificationRepository.countUnreadByRecipient(other.id, {}, tx)),
+    ).toBe(1);
   });
 });

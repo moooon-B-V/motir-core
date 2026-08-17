@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Comment, WorkItem } from '@/generated/prisma/client';
+import type { Comment, Prisma, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';
@@ -28,6 +28,17 @@ import { truncateAuthTables } from '../helpers/db';
 // the constraint. So the admin client is what PRESERVES these claims rather than
 // weakening them. The policies' own behaviour is proved separately, under the role,
 // in the *-rls suites this header already points at.
+//
+// ⚠️ AND SO DO THIS FILE'S READS (MOTIR-2881). MOTIR-2751 migrated the WRITES and
+// left the assertion-side READS on the `@/lib/db` singleton — which under the role
+// is `motir_app`, binds no workspace GUC, and returns NOTHING. A refused write says
+// so (`42501`); a refused read just returns `undefined` / `[]`, so nine assertions
+// here failed with `expected undefined to be 'untouched'` and the ones asserting
+// emptiness passed for the wrong reason. `readAsOwner` routes them through the SAME
+// owner client the writes use, which is the only choice consistent with the
+// paragraph above: binding a workspace context instead would make the
+// cross-workspace and cascade assertions vacuous, which is precisely what the
+// adjudication in `tests/rls/testCallSiteScan.ts` records for this file.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -50,6 +61,16 @@ async function makeCommentFixture(): Promise<CommentFixture> {
   const fx = await makeWorkItemFixture();
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Commented task' });
   return { fx, issue };
+}
+
+/**
+ * Run a repository READ through the OWNER client, exactly as this file's writes
+ * run. The repository method under test is still what is exercised — only the
+ * connection changes, which is the point: RLS stays inert (see the header) and the
+ * assertion observes the ROW rather than the policy.
+ */
+function readAsOwner<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return adminDb.$transaction(fn);
 }
 
 /** Insert one comment through the repository's required-`tx` write path. */
@@ -94,7 +115,7 @@ describe('commentRepository', () => {
     expect(updated.bodyMd).toBe('edited');
     expect(updated.editedAt).toEqual(editedAt);
 
-    const other = await commentRepository.findById(b.id);
+    const other = await readAsOwner((tx) => commentRepository.findById(b.id, tx));
     expect(other?.bodyMd).toBe('untouched');
     expect(other?.editedAt).toBeNull();
   });
@@ -102,8 +123,8 @@ describe('commentRepository', () => {
   it('findById returns the row, and null for an unknown id', async () => {
     const c = await makeCommentFixture();
     const row = await addComment(c);
-    expect((await commentRepository.findById(row.id))?.id).toBe(row.id);
-    expect(await commentRepository.findById('nope')).toBeNull();
+    expect((await readAsOwner((tx) => commentRepository.findById(row.id, tx)))?.id).toBe(row.id);
+    expect(await readAsOwner((tx) => commentRepository.findById('nope', tx))).toBeNull();
   });
 
   it('delete hard-deletes a root and cascades its replies + mention rows', async () => {
@@ -123,8 +144,10 @@ describe('commentRepository', () => {
 
     await adminDb.$transaction(async (tx) => commentRepository.delete(root.id, tx));
 
-    expect(await commentRepository.findById(root.id)).toBeNull();
-    expect(await commentRepository.findById(reply.id)).toBeNull();
+    // Owner-side: a `null` here is the CASCADE having removed the row, not a policy
+    // hiding it — the distinction the singleton read could not make.
+    expect(await readAsOwner((tx) => commentRepository.findById(root.id, tx))).toBeNull();
+    expect(await readAsOwner((tx) => commentRepository.findById(reply.id, tx))).toBeNull();
     const commentMentionCount = await adminDb.commentMention.count();
     expect(commentMentionCount).toBe(0);
   });
@@ -133,7 +156,7 @@ describe('commentRepository', () => {
     const c = await makeCommentFixture();
     const root = await addComment(c);
     await addComment(c, { parentCommentId: root.id });
-    expect(await commentRepository.countByWorkItem(c.issue.id)).toBe(2);
+    expect(await readAsOwner((tx) => commentRepository.countByWorkItem(c.issue.id, tx))).toBe(2);
 
     await adminDb.workItem.delete({ where: { id: c.issue.id } });
     const commentCount = await adminDb.comment.count();
@@ -147,7 +170,9 @@ describe('commentRepository', () => {
       const r1 = await addComment(c, { bodyMd: 'reply 1', parentCommentId: root.id });
       const r2 = await addComment(c, { bodyMd: 'reply 2', parentCommentId: root.id });
 
-      const page = await commentRepository.listThreadsByWorkItem(c.issue.id, { order: 'asc' });
+      const page = await readAsOwner((tx) =>
+        commentRepository.listThreadsByWorkItem(c.issue.id, { order: 'asc' }, tx),
+      );
       expect(page).toHaveLength(1);
       expect(page[0]?.id).toBe(root.id);
       expect(page[0]?.replies.map((r) => r.id)).toEqual([r1.id, r2.id]);
@@ -164,11 +189,17 @@ describe('commentRepository', () => {
       const walk: string[] = [];
       let cursor: string | undefined;
       for (;;) {
-        const page = await commentRepository.listThreadsByWorkItem(c.issue.id, {
-          take: 2,
-          order: 'desc',
-          ...(cursor ? { cursor } : {}),
-        });
+        const page = await readAsOwner((tx) =>
+          commentRepository.listThreadsByWorkItem(
+            c.issue.id,
+            {
+              take: 2,
+              order: 'desc',
+              ...(cursor ? { cursor } : {}),
+            },
+            tx,
+          ),
+        );
         if (page.length === 0) break;
         walk.push(...page.map((r) => r.id));
         cursor = page[page.length - 1]?.id;
@@ -176,10 +207,9 @@ describe('commentRepository', () => {
       expect(walk).toEqual([...roots].reverse().map((r) => r.id));
 
       // asc (the Jira default): same walk, oldest-first.
-      const ascPage = await commentRepository.listThreadsByWorkItem(c.issue.id, {
-        take: 3,
-        order: 'asc',
-      });
+      const ascPage = await readAsOwner((tx) =>
+        commentRepository.listThreadsByWorkItem(c.issue.id, { take: 3, order: 'asc' }, tx),
+      );
       expect(ascPage.map((r) => r.id)).toEqual(roots.slice(0, 3).map((r) => r.id));
     });
 
@@ -187,22 +217,30 @@ describe('commentRepository', () => {
       const c = await makeCommentFixture();
       const otherIssue = await createTestWorkItem(c.fx, { kind: 'task', title: 'Other' });
       await addComment(c);
-      const listed = await commentRepository.listThreadsByWorkItem(otherIssue.id);
+      // Owner-side, so the empty page is the work-item SCOPE at work rather than a
+      // policy that could not see either issue.
+      const listed = await readAsOwner((tx) =>
+        commentRepository.listThreadsByWorkItem(otherIssue.id, {}, tx),
+      );
       expect(listed).toEqual([]);
     });
   });
 
   it('countByWorkItem counts replies in; countRootsByWorkItem counts threads', async () => {
     const c = await makeCommentFixture();
-    expect(await commentRepository.countByWorkItem(c.issue.id)).toBe(0);
-    expect(await commentRepository.countRootsByWorkItem(c.issue.id)).toBe(0);
+    expect(await readAsOwner((tx) => commentRepository.countByWorkItem(c.issue.id, tx))).toBe(0);
+    expect(await readAsOwner((tx) => commentRepository.countRootsByWorkItem(c.issue.id, tx))).toBe(
+      0,
+    );
 
     const root = await addComment(c);
     await addComment(c, { parentCommentId: root.id });
     await addComment(c);
 
-    expect(await commentRepository.countByWorkItem(c.issue.id)).toBe(3);
-    expect(await commentRepository.countRootsByWorkItem(c.issue.id)).toBe(2);
+    expect(await readAsOwner((tx) => commentRepository.countByWorkItem(c.issue.id, tx))).toBe(3);
+    expect(await readAsOwner((tx) => commentRepository.countRootsByWorkItem(c.issue.id, tx))).toBe(
+      2,
+    );
   });
 
   it('countByParent counts a root’s replies (0 for a childless comment), inside and outside a tx', async () => {
@@ -212,8 +250,8 @@ describe('commentRepository', () => {
     await addComment(c, { bodyMd: 'r1', parentCommentId: root.id });
     await addComment(c, { bodyMd: 'r2', parentCommentId: root.id });
 
-    expect(await commentRepository.countByParent(root.id)).toBe(2);
-    expect(await commentRepository.countByParent(lone.id)).toBe(0);
+    expect(await readAsOwner((tx) => commentRepository.countByParent(root.id, tx))).toBe(2);
+    expect(await readAsOwner((tx) => commentRepository.countByParent(lone.id, tx))).toBe(0);
     expect(
       await adminDb.$transaction(async (tx) => commentRepository.countByParent(root.id, tx)),
     ).toBe(2);
@@ -237,7 +275,9 @@ describe('commentMentionRepository', () => {
       ),
     );
     expect(count).toBe(2);
-    const rows = await commentMentionRepository.findByCommentIds([comment.id]);
+    const rows = await readAsOwner((tx) =>
+      commentMentionRepository.findByCommentIds([comment.id], tx),
+    );
     expect(rows.map((r) => r.mentionedUserId).sort()).toEqual([bo.id, odie.id].sort());
   });
 
@@ -285,8 +325,12 @@ describe('commentMentionRepository', () => {
       commentMentionRepository.deleteByCommentId(a.id, tx),
     );
     expect(removed).toBe(1);
-    expect(await commentMentionRepository.findByCommentIds([a.id])).toEqual([]);
-    expect(await commentMentionRepository.findByCommentIds([b.id])).toHaveLength(1);
+    expect(
+      await readAsOwner((tx) => commentMentionRepository.findByCommentIds([a.id], tx)),
+    ).toEqual([]);
+    expect(
+      await readAsOwner((tx) => commentMentionRepository.findByCommentIds([b.id], tx)),
+    ).toHaveLength(1);
   });
 
   it('findByCommentIds short-circuits on empty input (the empty-input guard)', async () => {
