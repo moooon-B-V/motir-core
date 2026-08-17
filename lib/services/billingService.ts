@@ -15,10 +15,17 @@ import {
   type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
-import { BILLING_CATALOG, isKnownCheckoutPrice, type BillingCadence } from '@/lib/billing/catalog';
+import {
+  BILLING_CATALOG,
+  DEFAULT_CHECKOUT_QUANTITY,
+  isAllowedCheckoutQuantity,
+  isKnownCheckoutPrice,
+  type BillingCadence,
+} from '@/lib/billing/catalog';
 import {
   BillingForbiddenError,
   BillingNotAvailableError,
+  InvalidBillingQuantityError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -260,10 +267,20 @@ export const billingService = {
   /**
    * Start a Stripe Checkout Session for a selected catalog price, returning the
    * hosted URL to redirect to. Cloud-only; OWNER-ONLY (ADR §7). Validates the
-   * price against the catalog allow-list before touching the boundary.
+   * price AND the unit count against the catalog allow-list before touching the
+   * boundary.
+   *
+   * `quantity` is the credit top-up's bundle multiplier (1× / 5× / 10×), absent
+   * for every other line and defaulted to 1 here — so what reaches Stripe is
+   * always an explicit number rather than a boundary default two services away
+   * (MOTIR-2949). The guard is deliberately stricter than the route's shape
+   * check: the route proves the field is a positive integer, this proves the
+   * catalog actually SELLS that many of that price. A recurring plan can never
+   * be multiplied from the client, because a subscription's quantity is the seat
+   * sync's to own and a one-time payment has no reconciler at all.
    */
   async startCheckout(
-    input: OrgActorInput & { priceLookupKey: string },
+    input: OrgActorInput & { priceLookupKey: string; quantity?: number },
   ): Promise<BillingSessionDTO> {
     await this.assertOwnerForMutation(input);
 
@@ -271,11 +288,17 @@ export const billingService = {
       throw new UnknownBillingPriceError(input.priceLookupKey);
     }
 
+    const quantity = input.quantity ?? DEFAULT_CHECKOUT_QUANTITY;
+    if (!isAllowedCheckoutQuantity(input.priceLookupKey, quantity)) {
+      throw new InvalidBillingQuantityError(input.priceLookupKey, quantity);
+    }
+
     // NOTE the catalog seam (lib/billing/catalog.ts): the boundary's `priceId` is
     // the Stripe price lookup key; motir-ai resolves it to the concrete Price.
     return createCheckoutSession({
       coreOrganizationId: input.organizationId,
       priceId: input.priceLookupKey,
+      quantity,
       successUrl: billingPageUrl('?checkout=success'),
       cancelUrl: billingPageUrl('?checkout=cancel'),
     });
