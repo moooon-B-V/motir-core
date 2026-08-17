@@ -8,7 +8,7 @@ import {
   ReporterNotInWorkspaceError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
-import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
@@ -350,14 +350,26 @@ describe('linkWorkItems / unlinkWorkItems — guards', () => {
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 
-  it('rejects a cross-workspace link at the service guard (CrossWorkspaceLinkError)', async () => {
+  // The service guard refuses a cross-workspace link as NOT FOUND, never as a
+  // distinguishable `CrossWorkspaceLinkError` — decided 2026-08-17 (MOTIR-2919);
+  // the reasoning lives on the error class in `lib/workItems/linkErrors.ts` and
+  // beside the 404-not-403 clause in `docs/decisions/public-api-conventions.md`.
+  // Naming the reason confirms that `b.id` exists in another tenant.
+  //
+  // ⚠️ This assertion is mode-independent BY CONSTRUCTION, which is the point:
+  // under `motir_app` the `findById` above returns nothing (RLS), and under a
+  // bypassing role the workspace comparison raises the same error. The two arms
+  // exist so the answer cannot depend on which connection ran the query.
+  // `CrossWorkspaceLinkError` is still reachable — from the DB trigger, asserted
+  // in `tests/integration/work-items/link-repository.test.ts`.
+  it('refuses a cross-workspace link as NOT FOUND, not as a named cross-workspace error', async () => {
     const fx1 = await makeWorkItemFixture({ name: 'WS One', identifier: 'WONE' });
     const fx2 = await makeWorkItemFixture({ name: 'WS Two', identifier: 'WTWO' });
     const a = await workItemsService.createWorkItem(createInput(fx1, { title: 'A' }), fx1.ctx);
     const b = await workItemsService.createWorkItem(createInput(fx2, { title: 'B' }), fx2.ctx);
     await expect(
       workItemsService.linkWorkItems({ fromId: a.id, toId: b.id, kind: 'relates_to' }, fx1.ctx),
-    ).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 
   it('unlink of a missing link throws WorkItemLinkNotFoundError', async () => {

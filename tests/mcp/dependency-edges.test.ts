@@ -10,7 +10,7 @@ import { runListReady } from '@/lib/mcp/tools/listReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
 import { attachEdges, edgeMarker } from '@/lib/mcp/dependencyEdges';
-import { CrossWorkspaceLinkError } from '@/lib/workItems/linkErrors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -308,7 +308,15 @@ describe('workItemsService.getDependencyEdgesForItems — the page projection', 
     const here = await mk(fx, 'Ours');
     const theirs = await mk(other, 'Theirs');
 
-    await expect(block(fx, here.id, theirs.id)).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
+    // The boundary owes a plain NOT FOUND here, never `CrossWorkspaceLinkError`
+    // — decided 2026-08-17 (MOTIR-2919), reasoning on the error class in
+    // `lib/workItems/linkErrors.ts` and in `docs/decisions/public-api-conventions.md`
+    // § Errors. Naming the reason would confirm that `theirs.id` resolves in
+    // another tenant, which is the existence oracle the 404-not-403 contract
+    // refuses. This holds in BOTH connection modes: under `motir_app` RLS hides
+    // the row so the resolve fails, and under a bypassing role the service's
+    // workspace comparison raises the same error. Do not "fix" this back.
+    await expect(block(fx, here.id, theirs.id)).rejects.toBeInstanceOf(WorkItemNotFoundError);
     // …and reading the other tenant's item through OUR context yields nothing.
     const edges = await workItemsService.getDependencyEdgesForItems([here.id, theirs.id], fx.ctx);
     expect(edges[here.id]).toEqual({ blockedBy: [], blocks: [] });
