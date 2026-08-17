@@ -1425,6 +1425,244 @@ belongs to. Both directions are asserted in `tests/last-active-project.test.ts`.
 
 ---
 
+## CLOSED — the SYSTEM-CONTEXT class (MOTIR-2880, 2026-08-17)
+
+Class 1 of MOTIR-2872's 2026-08-16 partition: **219 failures across 44 test files**, and the only
+class in that partition that was a **production defect** rather than a test-harness artifact.
+
+`withSystemContext` (`lib/workspaces/context.ts`) binds ONE GUC, `app.system_admin`, and that GUC is
+read by a policy ARM that was added PER TABLE for the jobs runtime and operator tooling. Read back
+from the migrated schema at this card's base commit: of the **69** tables with RLS enabled, **24
+carried such an arm** on a permissive SELECT/ALL policy and **45 did not** — `work_item`,
+`workspace`, `organization`, `workspace_membership`, `sprint`, `comment`, `notification`, `watcher`
+among them. A read of one of the 45 inside a system context returns **zero rows and raises nothing**.
+
+### The adjudication — 88 sites, by the tables each QUERY touches
+
+Every `withSystemContext` call site in `lib/` + `app/` was adjudicated against **every table its
+query touches — FROM _and_ JOIN**, resolved through the repository method it calls, the relation keys
+that method's `include` / `select` / relation-filter literals name, and the FROM / JOIN targets of its
+raw SQL. The walk follows a `tx` up to three hops.
+
+|                                                        |  sites |
+| ------------------------------------------------------ | -----: |
+| touch only tables that carry a `system_admin` read arm | **78** |
+| reach a table with **no arm** — the finding            | **10** |
+| **total**                                              | **88** |
+
+`notes.html` #269 decided the shape of that count and was not a formality: **two of the ten were
+found through the JOIN and would have been cleared by an arm inventory.**
+`projectRepository#findLivePairs` reads the armed `project` and dies on its `workspace: { is: {} }`
+relation filter; `ciContainerPeriodCostRepository#sumForPeriodByMetaSplit` reads the armed
+`ci_container_period_cost` and dies on `JOIN "organization"`. An eleventh was found only after the
+scanner's helper walk was made recursive — `historicalPullRequestBackfillService#sweepRepo` reaches
+`work_item` two hops down, through `applyOne` into the imported `resolveChangeRequestWorkItem`, and a
+one-hop walk reported it fully armed while six of its tests were red.
+
+### The disposition — BIND is the default; ARM is for the cross-tenant read
+
+The card owned a decision between binding the workspace and arming the 45 tables. **Neither, as a
+uniform answer.** The discriminator is whether a tenant is KNOWABLE at the read:
+
+**Bound (9 of 11)** — `bindWorkspaceContext(tx, id)` / `bindOrganizationContext(tx, id)` the moment
+the id is known, or the whole block moved to `withWorkspaceServiceContext`. Binding is ADDITIVE: the
+system flag stays set, so the connection-tier reads in the same transaction keep their own arm, and
+nothing is widened.
+
+| site                                              | tenant came from                      | how                                                              |
+| ------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------- |
+| `parentStatusRollupService#rollUpForChild`        | the `work-item/transitioned` envelope | `withWorkspaceServiceContext` (new `workspaceId` parameter)      |
+| `childStatusCascadeService#cascadeToChildren`     | the same envelope                     | `withWorkspaceServiceContext` (new `workspaceId` parameter)      |
+| `firstAuditTriggerService#deriveFirstAudit` (×2)  | its own argument                      | `withWorkspaceServiceContext`                                    |
+| `codeGraphIndexService#resolveIndexTarget`        | its own argument                      | `bindWorkspaceContext`, after the armed installation read        |
+| `changeRequestStatusSync#syncChangeRequestStatus` | `repo.workspaceId` (MOTIR-1931)       | `bindWorkspaceContext`, after `resolveContext`                   |
+| `changeRequestCiFeedback#applyCiStatusFeedback`   | `repo.workspaceId`                    | `bindWorkspaceContext`, after `resolveContext`                   |
+| `historicalPullRequestBackfillService#sweepRepo`  | `repo.workspaceId`                    | `bindWorkspaceContext`, at the top of the per-PR block           |
+| `projectRepoTakeoverService#applyTransferred`     | a `github_repo` read (armed)          | two-step: resolve the repo, bind, then read `project_repository` |
+| `billingService#syncScaledTrackerSeatQuantity`    | its own argument                      | `bindOrganizationContext`                                        |
+
+**Armed (2 of 11)** — `20260817120000_system_admin_read_arms_workspace_organization`, `FOR SELECT`
+only:
+
+| site                                       | table          | why it cannot bind                                                                                                |
+| ------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `liveProjectsService#resolve`              | `workspace`    | answers a BATCH of (workspaceId, projectId) pairs from motir-ai in one call — spanning workspaces is the endpoint |
+| `ciFleetCostMeterService` (the meta split) | `organization` | groups EVERY org's container cost by `organization."isMeta"`                                                      |
+
+**The arms are READ-only, deliberately.** MOTIR-2865 established that the ABSENCE of a system arm on
+the tenant-root WRITE policies does useful work — a caller reaching for `withSystemContext` on a
+membership INSERT is REFUSED rather than over-permitted. Postgres combines policies per COMMAND, so a
+`FOR SELECT` policy widens reads and only reads; the six write policies on those two tables are
+untouched, and `system-context-arm-guard.test.ts` asserts against a system arm ever appearing on one.
+
+### Three production defects this was, not three test failures
+
+- **Parent status rollup and child cascade stop.** Both resolve their neighbourhood with
+  `workItemRepository.findById` as the FIRST statement inside the system context. `resolved` was
+  `null`, so every rollup answered `{ outcome: 'no_parent' }` and every cascade `unresolvable`. A
+  parent whose children all finished would simply never have moved, with nothing logged.
+- **The change-request sync stops driving status, and CI feedback stops arriving.** Both resolve the
+  connection tier (armed), then the linked work item (not armed). Every PR event resolved to
+  `no_work_item` — no In Review on open, no Done on merge, no verification comment.
+- **The historical PR backfill mirrors a null link for every PR**, because its work-item resolve was
+  two hops below a system context. `unresolvable` is a legitimate outcome the report counts, so the
+  sweep would have completed and reported success.
+
+Plus: first-audit derivation reporting `no_owner` for every repo, code-graph indexing reporting
+`workspace_missing` for a workspace that exists, seat billing reporting
+`no_active_tracker_subscription` for every org, the repo-transfer saga reporting `unknown_repo` for a
+transfer Motir itself requested, the live-project resolver answering `absent` for every pair (the
+caller DELETES on that), and the fleet cost meter reporting zero.
+
+### The guard — per (table, context), against `pg_policies`
+
+`tests/rls/systemContextScan.ts` + `tests/rls/system-context-arm-guard.test.ts`. **This is the
+instrument MOTIR-2864's entry asked for and MOTIR-2881's closing section names again** — _"an
+assertion per (table, context) pair"_ — built here because this class is the one that cannot be
+found any other way. It is the FOURTH scanner, and the first that asks a question about the
+database:
+
+```
+singleton-read-guard   — can this read be bound?          (a `tx` parameter)
+call-site-guard        — do its callers bind it?          (a `tx` argument)
+bare-transaction-guard — what did the transaction bind?   (a `set_config`)
+system-context-arm     — does any POLICY read what it bound?
+```
+
+Every site in this class answered YES to the first three and was dead anyway. The guard reads the
+arm inventory from **`pg_policies`**, not from the migrations — the arm is a property of the deployed
+policy set, and the migration files are a claim about it (`notes.html` #248) — and adjudicates each
+statement by its POSITION relative to the binding, because the fix for nine of eleven sites is a bind
+placed MID-BLOCK and a whole-site boolean would clear their surviving pre-bind reads.
+
+Shown RED in both directions before it was trusted: dropping `workspace_system_read` from the
+migrated base turns it red naming `liveProjectsService#resolve`; removing the
+`bindWorkspaceContext` from `changeRequestStatusSync` turns it red naming `work_item` and
+`workspace_membership`. `DELIBERATELY_SYSTEM_ONLY` is **empty**, and the second assertion fails a
+verdict left behind for a pair the scan no longer reports.
+
+### The evidence, as run
+
+Reproduce-before-fix, the two named services, with phase 1 mutated back to `withSystemContext`:
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run tests/integration/workflows/{parentStatusRollup,childStatusCascade,statusDerivation}.test.ts
+  BEFORE (phase 1 on withSystemContext)   Tests  56 failed | 8 passed (64)
+  AFTER                                   Tests  64 passed (64)
+```
+
+The class, over the 23 named files of MOTIR-2872's class-1 list:
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run <the 23 named files>
+  BEFORE (MOTIR-2872's measurement)  219 failed across 44 files
+  AFTER                              Tests  26 failed | 401 passed (427)
+```
+
+And the default connection, which is what CI runs today — the 23 files plus every other file this
+card touches, plus `tests/rls`:
+
+```
+pnpm vitest run <the 23 files> tests/ciFleet/ciFleetCostMeterService.test.ts \
+  tests/api/live-projects-route.test.ts tests/billing-seat-sync.test.ts tests/rls
+  Test Files  33 passed (33)        Tests  562 passed (562)
+```
+
+### ⚠️ What this does NOT close, and what the 26 are
+
+**The suite total is not expected to fall by 219, and this entry does not claim it did.** The 44-file
+attribution in MOTIR-2872 was explicitly BY ASSOCIATION — a test exercises a service that calls
+`withSystemContext` — and part of the tail belongs to other classes. Measured per file: fifteen of
+the 23 named files went to zero, and **26 failures survive in seven of them, none of them this
+class.** The scan reports no system context reaching an unarmed table, and the mechanism behind the
+survivors was read by hand for ten of the 26:
+
+| file                                              | left | mechanism                                                                                                                                                        |
+| ------------------------------------------------- | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectRepos/projectRepoTeamAccess`              |    8 | not a system context — `projectRepoAccessService` uses none                                                                                                      |
+| `mcp/dependency-edges`                            |    5 | a test-side repository read with no `tx`, plus MOTIR-2884's inert trigger                                                                                        |
+| `cli/cliDeviceService`                            |    5 | test-side `await db.apiToken.findMany()` assertions — MOTIR-2881's class 2, in a file its list does not name                                                     |
+| `integration/work-items/provenance-backfill-gate` |    3 | test-side, undiagnosed                                                                                                                                           |
+| `github/githubWebhookCustomWorkflow`              |    2 | `dropStatusCategory` is a **fixture written on `withSystemContext`** — `workflow_status` has no arm, so the deletion is a silent no-op and the workflow survives |
+| `gitlab/gitlabWebhookCustomWorkflow`              |    2 | the same fixture helper                                                                                                                                          |
+| `github/githubWebhookService`                     |    1 | a test-side `withSystemContext` fixture                                                                                                                          |
+
+The last three are a class of their own and worth naming: **a test FIXTURE written on
+`withSystemContext` fails the same silent way the application code did** — the memory rule is that a
+fixture uses `adminDb`, the OWNER, never a wider GUC on the runtime client. This scanner does not
+walk `tests/`, deliberately: extending it there is the natural next card and would collide with
+MOTIR-2881 / MOTIR-2882, which own the test side today.
+
+## CLOSED — the seven fixture files outside MOTIR-2871's scope (MOTIR-2882, 2026-08-17)
+
+Class 3 of MOTIR-2872's 2026-08-16 re-measurement: **49 refused writes across 7 test files**, every
+one a fixture helper issuing a repository write through `db.$transaction` — the `@/lib/db` singleton,
+which under `motir_app` binds no workspace GUC, so the policy's `WITH CHECK` refuses it.
+
+**These seven were never an incomplete migration of MOTIR-2871.** That card changed 42 files and none
+of these; its named class reached zero inside its own scope. The file set was drawn from a
+measurement, and a measurement taken at one moment names the files failing at that moment — these
+seven were not on that list, so they were not in that card.
+
+### Before / after, by name
+
+Measured on this branch off `origin/main` @ `50dba13b`, `TEST_DB_APP_ROLE=1 pnpm vitest run` over
+exactly the seven files:
+
+| file                                               | table(s) refused                                 | before | after |
+| -------------------------------------------------- | ------------------------------------------------ | -----: | ----: |
+| `tests/notifications/notificationsService.test.ts` | `notification`                                   |     12 |     0 |
+| `tests/embeddings/workItemEmbeddingRls.test.ts`    | `work_item_embedding`                            |     10 |     0 |
+| `tests/integration/import/importSeam.test.ts`      | `import`                                         |     10 |     0 |
+| `tests/custom-fields/definitionsService.test.ts`   | `custom_field_value` / `custom_field_definition` |      7 |     0 |
+| `tests/integration/home/personal-reads.test.ts`    | `watcher`                                        |      6 |     0 |
+| `tests/integration/home/story-seams.test.ts`       | `watcher`                                        |      3 |     0 |
+| `tests/jobs/watcher-notify.test.ts`                | `watcher`                                        |      1 |     0 |
+| **total**                                          |                                                  | **49** | **0** |
+
+```
+# BEFORE (origin/main content, same worktree, same database)
+TEST_DB_APP_ROLE=1 pnpm vitest run <the seven files>
+  Test Files  7 failed (7)          Tests  49 failed | 79 passed (128)
+
+# AFTER
+TEST_DB_APP_ROLE=1 pnpm vitest run <the seven files>
+  Test Files  7 passed (7)          Tests  128 passed (128)
+```
+
+The before-run's refusals, counted by table, are exactly the distribution the partition predicted:
+`work_item_embedding` 10, and one apiece for `custom_field_definition`, `custom_field_value`,
+`import`, `notification`, `watcher` (the per-table count is of distinct error sites; the per-file
+count above is of failing tests).
+
+### The READS were done in the same pass — deliberately
+
+Class 2 of the same partition exists because an earlier migration converted the half that RAISES an
+error and left the half that returns an empty result. An RLS-denied `SELECT` removes rows and raises
+nothing, so a fixture converted by error message leaves its assertions to fail silently later, under
+a different class name. Two files carried assertion-side singleton reads and both were converted:
+
+- **`tests/integration/import/importSeam.test.ts`** — 16 direct-DB assertion reads
+  (`workItemCount`, `mappingRowCount`, and the per-test `findUniqueOrThrow` / `findMany` / `count`
+  read-backs) plus one mid-test `workItem.update`. All now on `adminDb`, which is what the file's own
+  two-client model already used for its `TRUNCATE`.
+- **`tests/embeddings/workItemEmbeddingRls.test.ts`** — the ADR §4/§5 cascade block. `db.workItem.delete`
+  followed by `expect(...findUnique(...)).toBeNull()` is the vacuous-pass shape in miniature: under
+  `motir_app` with no GUC the delete is refused AND the read is denied, so the assertion passes while
+  proving nothing about the cascade. Both halves are now `adminDb`.
+
+**`asAppRole` in the embeddings file keeps its `db.$transaction` — it is the code under test.** That
+helper deliberately `SET LOCAL ROLE motir_app` inside a singleton transaction; converting it would
+delete the suite's entire point. This is the one site in the seven where the singleton is correct.
+
+### No `lib/` file was modified, and no application-side writer was found
+
+Every one of the 49 sites is a test fixture. The sweep found no application-side writer to hand to
+MOTIR-2880 — the `lib/` write surface closed under MOTIR-2865, and the bare-`db.$transaction` axis
+in `lib/` is MOTIR-2876's scanner. Nothing to file.
+
+---
+
 ## The parent-chain triggers were leaning on the SERVICE (MOTIR-2895, 2026-08-17)
 
 Not a dead read, and not a refused write — the first entry in this document about a **check that ran,

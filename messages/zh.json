@@ -538,7 +538,8 @@
       "UNKNOWN_STATUS": "状态“{statusKey}”不属于该项目的工作流。",
       "ILLEGAL_TRANSITION": "非法的状态流转：“{from}” → “{to}”。",
       "STALE_WORK_ITEM": "此工作项已被他人编辑。请刷新后重试。",
-      "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，史诗和故事不可设置。"
+      "TYPE_NOT_ALLOWED_ON_KIND": "只能为任务、子任务或缺陷设置类型和执行者，史诗和故事不可设置。",
+      "MISSING_ARTIFACT_EVIDENCE": "“部署”类型的工作项必须先有评论记录已发布的产物，才能关闭——版本号（1.4.0）、镜像摘要（sha256:…）或完整性哈希（sha512-…）均可。如果该交付确实没有可记录的标识，请添加以“NO ARTIFACT:”开头并写明原因的评论。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",

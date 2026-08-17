@@ -29,7 +29,8 @@ export type WorkItemErrorTag =
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
-  | 'ARCHIVED_TARGET_REPO';
+  | 'ARCHIVED_TARGET_REPO'
+  | 'MISSING_ARTIFACT_EVIDENCE';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -327,6 +328,34 @@ export class ArchivedTargetRepoError extends WorkItemError {
         "at a different repository in the project's set.",
     );
     this.name = 'ArchivedTargetRepoError';
+  }
+}
+
+/**
+ * A `type: 'deploy'` work item was moved into a `done`-category status while no
+ * comment on it records what got published (MOTIR-2709;
+ * `lib/workItems/artifactEvidence.ts` carries the rule and its evidence).
+ *
+ * A client error → 422. The message TEACHES rather than merely refusing: it
+ * names the three accepted forms and the declared exemption, so the person who
+ * hits it can satisfy it in one hop instead of guessing what "evidence" means.
+ * That matters more here than on most refusals — this is the one gate that fires
+ * at the moment somebody has decided they are finished.
+ */
+export class MissingArtifactEvidenceError extends WorkItemError {
+  readonly tag = 'MISSING_ARTIFACT_EVIDENCE' as const;
+  readonly code = 'MISSING_ARTIFACT_EVIDENCE' as const;
+  readonly statusKey: string;
+  constructor(statusKey: string) {
+    super(
+      `A "deploy" work item cannot reach "${statusKey}" until a comment on it records the ` +
+        'artifact it published — a version (1.4.0), a registry digest (sha256:…) or an ' +
+        'integrity hash (sha512-…). If this deliverable genuinely has no identifier (a DNS ' +
+        'cutover, a console toggle), say so in a comment beginning "NO ARTIFACT:" followed by ' +
+        'the reason.',
+    );
+    this.name = 'MissingArtifactEvidenceError';
+    this.statusKey = statusKey;
   }
 }
 

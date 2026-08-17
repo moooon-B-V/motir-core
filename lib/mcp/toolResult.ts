@@ -5,6 +5,7 @@ import {
   DepthLimitExceededError,
   IllegalParentTypeError,
   IllegalTransitionError,
+  MissingArtifactEvidenceError,
   ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
@@ -209,6 +210,12 @@ export function toToolError(err: unknown): CallToolResult {
   if (
     err instanceof UnknownStatusError ||
     err instanceof IllegalTransitionError ||
+    // The close-out artifact-evidence gate (MOTIR-2709). This is the surface it
+    // most needs to reach: `transition_status` is how an agent closes a card,
+    // and the message names the three accepted forms + the declared exemption,
+    // so the agent records the digest it already holds instead of seeing an
+    // opaque internal error at the last step of a release.
+    err instanceof MissingArtifactEvidenceError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's

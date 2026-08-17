@@ -1,4 +1,4 @@
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { aiConventionService } from '@/lib/services/aiConventionService';
@@ -106,13 +106,20 @@ export const firstAuditTriggerService = {
     let owner: { userId: string } | null;
     let projects: { id: string; identifier: string }[];
     try {
-      // System context: the index job has no active workspace, exactly like the
-      // ledger read in `codeGraphIndexService.enqueueFirstIndexForRepos`.
-      owner = await withSystemContext((tx) =>
+      // The WORKSPACE tier, not the system flag: the index job has no acting USER,
+      // but the workspace is an argument, and both reads are admitted by
+      // `app.workspace_id` (`membership_visible_active_or_own` /
+      // `project_workspace_or_system_read`).
+      //
+      // ⚠️ THIS USED TO BE `withSystemContext` (MOTIR-2880). `workspace_membership`
+      // carries no arm reading `app.system_admin`, so under `motir_app` the owner
+      // read returned null and EVERY repo was reported `no_owner` — un-audited,
+      // silently, with the `/planning` nudge as the only trace.
+      owner = await withWorkspaceServiceContext(workspaceId, (tx) =>
         workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx),
       );
       if (!owner) return { repoRef, submitted: 0, outcomes: [], skipped: 'no_owner' };
-      projects = await withSystemContext((tx) =>
+      projects = await withWorkspaceServiceContext(workspaceId, (tx) =>
         projectRepository.findByWorkspace(workspaceId, tx),
       );
     } catch (err) {

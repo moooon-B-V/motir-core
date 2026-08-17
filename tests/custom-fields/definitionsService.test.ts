@@ -73,7 +73,7 @@ async function createField(
 
 /** Insert a value row directly through the 5.3.1 repo (the 5.3.3 write path). */
 async function setTextValue(fx: WorkItemFixture, workItemId: string, fieldId: string) {
-  await db.$transaction(async (tx) =>
+  await adminDb.$transaction(async (tx) =>
     customFieldValueRepository.upsert(
       workItemId,
       fieldId,
@@ -97,7 +97,7 @@ async function setOptionValue(
   fieldId: string,
   optionId: string,
 ) {
-  await db.$transaction(async (tx) =>
+  await adminDb.$transaction(async (tx) =>
     customFieldValueRepository.upsert(
       workItemId,
       fieldId,
@@ -221,7 +221,7 @@ describe('createField', () => {
     const fx = await makeWorkItemFixture();
     // Bulk-insert 49 definitions through the repo (one tx), then the 50th
     // lands through the service and the 51st trips the cap.
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       let position: string | null = null;
       for (let i = 0; i < MAX_FIELDS_PER_PROJECT - 1; i++) {
         position = keyForAppend(position);
@@ -538,7 +538,7 @@ describe('option lifecycle', () => {
     expect((err as OptionInUseError).valueCount).toBe(1);
 
     // …and deletes once the value is cleared (the no-tombstones row delete).
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       customFieldValueRepository.deleteByWorkItemAndField(issue.id, field.id, tx),
     );
     await customFieldsService.deleteOption({ ...base, optionId: low!.id });

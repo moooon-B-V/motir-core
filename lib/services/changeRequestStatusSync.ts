@@ -1,5 +1,5 @@
 import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import type {
   ChangeRequestLifecycle,
   GitProviderId,
@@ -131,6 +131,19 @@ export async function syncChangeRequestStatus(
     if (ctx.kind === 'unknown_installation') return { kind: 'unknown_installation' as const };
     if (ctx.kind === 'unknown_repo') return { kind: 'unknown_repo' as const };
     const { installation, repo, authorBoundUserId } = ctx;
+
+    // ⚠️ BIND THE TENANT NOW — every statement below this line reads a table with
+    // no `system_admin` arm (MOTIR-2880). `resolveContext` reached the CONNECTION
+    // tier (`github_installation` / `github_repo`, whose policies read the system
+    // flag) and that is what the system context is for; `work_item` and
+    // `workspace_membership` are not in that set, so before this call the work-item
+    // resolve returned NULL under `motir_app` and the sync silently stopped driving
+    // any status. The binding is additive — the flag stays set, so the
+    // `github_pull_request` lock/upsert below keeps its own arm.
+    //
+    // `repo.workspaceId`, never `installation.workspaceId` — the same tenancy rule
+    // MOTIR-1931 pinned for the resolve itself, applied one layer down.
+    await bindWorkspaceContext(tx, repo.workspaceId);
 
     // Resolve the change request's linked work item. A MANUAL link (MOTIR-1596,
     // the explicit item→PR affordance) is the STICKY override of this branch/title

@@ -72,7 +72,9 @@
 -- axis does not, because `work_item_project_narrow` is FOR SELECT only, so a
 -- caller bound to project P may legally write a row into project Q of the same
 -- workspace and an invoker walk would then truncate at the first ancestor. That
--- is not hypothetical — 39 shipped call sites bind a non-empty app.project_id.
+-- is not hypothetical — 39 call sites bind a non-empty app.project_id, 26 of them
+-- in lib/, and two of those (plansService, migrateOnboardingService) write
+-- work-item trees with parents.
 -- Leaving these three INVOKER would have re-seated their completeness on an
 -- application-layer convention (callers binding the row's own project), which
 -- is the same circularity one step out.

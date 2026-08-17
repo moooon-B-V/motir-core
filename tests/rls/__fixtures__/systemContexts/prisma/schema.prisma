@@ -1,0 +1,27 @@
+// Fixture schema for the SYSTEM-CONTEXT scanner (MOTIR-2880).
+//
+// Three models, and the RELATION between two of them is the point: this scanner's
+// whole reason to exist beyond the sibling three is that it adjudicates the JOIN,
+// not only the FROM clause (`notes.html` #269). `Widget.owner` is what lets the
+// fixture prove a read of an admitted table can still be blind on the table it
+// joins.
+
+model Widget {
+  id          String  @id
+  workspaceId String
+  ownerId     String
+  owner       Gadget  @relation(fields: [ownerId], references: [id])
+}
+
+model Gadget {
+  id          String   @id
+  workspaceId String
+  widgets     Widget[]
+
+  @@map("gadget_row")
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}

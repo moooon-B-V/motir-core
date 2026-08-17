@@ -78,13 +78,14 @@
 --
 --     Nor is that a shape kept alive for symmetry. A scan of
 --     `withWorkspaceContext(` call sites passing a NON-EMPTY `projectId` returns
---     **39** — `plansService` (6), `migrateOnboardingService` (5), the
---     `projectRepo*` services (11), `projectAccessService` (2),
---     `planChangeSessionsService` (2), `autoPlanCadenceService` (1), plus test and
---     script callers. `plansService` and `migrateOnboardingService` are precisely
---     the paths that WRITE work-item trees with parents. They happen to write into
---     the project they bind — which is exactly the convention an INVOKER verdict
---     would have to depend on.
+--     **39**, of which **26 are in `lib/`**: `plansService` (6),
+--     `migrateOnboardingService` (5), the `projectRepo*` services (10),
+--     `projectAccessService` (2), `planChangeSessionsService` (2),
+--     `autoPlanCadenceService` (1) — plus one `scripts/` caller and 12 in
+--     `tests/`. `plansService` and `migrateOnboardingService` are precisely the
+--     paths that WRITE work-item trees with parents. They happen to write into the
+--     project they bind — which is exactly the convention an INVOKER verdict would
+--     have to depend on.
 --
 -- MEASURED, rather than argued. A writer bound to (W1, P1), a legal 4-deep chain
 -- sitting in W1/P1b, the three functions as SECURITY INVOKER:

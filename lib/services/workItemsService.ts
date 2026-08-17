@@ -30,6 +30,8 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
+import { commentRepository } from '@/lib/repositories/commentRepository';
+import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -67,6 +69,7 @@ import {
   AssigneeNotInWorkspaceError,
   CrossProjectParentError,
   IllegalTransitionError,
+  MissingArtifactEvidenceError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -1817,6 +1820,46 @@ export const workItemsService = {
         ctx.workspaceId,
       );
       if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    }
+
+    // THE CLOSE-OUT ARTIFACT-EVIDENCE GATE (MOTIR-2709). A `type: 'deploy'`
+    // card's deliverable lives outside this repository, so "done" is a claim
+    // rather than a diff — and it has been a false claim three times. The rule
+    // and the reasoning are in `lib/workItems/artifactEvidence.ts`; the gate is
+    // HERE because this is the one place every close-out passes through (the
+    // detail page, the board drag, the v1 route and the MCP `transition_status`
+    // all land on this method), and because the failure is specifically that
+    // nobody looked AT THE MOMENT OF CLOSING.
+    //
+    // It BLOCKS rather than advises, deliberately. The `advisories` channel is
+    // computed at authoring/dispatch time and is non-blocking, and a notice
+    // delivered to somebody who has by construction just stopped checking is not
+    // a safeguard — it is a record of the thing happening again.
+    //
+    // Scoped the same three ways the manual-provenance stamp below is:
+    //   • `cancelled` is EXEMPT — a `done`-CATEGORY status meaning ABANDONED
+    //     (MOTIR-2221). A release card that published nothing ON PURPOSE is
+    //     exactly what cancelling says, so refusing it would be backwards.
+    //   • `opts.system` is EXEMPT — the issue importer (MOTIR-941) brings closed
+    //     source issues in as closed, and the downward cascade
+    //     (`childStatusCascadeService`) completes children behind a status change
+    //     the user already made successfully. Neither is a person deciding this
+    //     release is finished, and a background job must not fail on a business
+    //     rule. ⚠️ The cascade therefore remains a path by which an
+    //     evidence-less `deploy` child can reach done; it is narrower than the
+    //     gap this card closes (it needs a human to close the PARENT), and
+    //     tightening it belongs with the derivation service, not here.
+    //   • The firing set is the named predicate, not an inline `type ===`.
+    if (
+      target.category === 'done' &&
+      toStatusKey !== ROADMAP_CANCELLED_KEY &&
+      !opts.system &&
+      requiresArtifactEvidence(current.type)
+    ) {
+      const bodies = await commentRepository.listBodiesByWorkItem(workItemId, tx);
+      if (assessArtifactEvidence(bodies).outcome === 'missing') {
+        throw new MissingArtifactEvidenceError(toStatusKey);
+      }
     }
 
     // Build the row write. Reaching a `done`-category status CLEARS the
