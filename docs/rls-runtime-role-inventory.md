@@ -1051,3 +1051,71 @@ the WRITE surface is bound"_ (MOTIR-2865), which bound `importService.createDraf
 very `tests/import` denials cited here while this card was in review. What remains between here and
 the flag is the assertion residue MOTIR-2872 re-measures and the fixture population MOTIR-2871 owns;
 neither is a read returning empty.
+
+## CLOSED — the seven fixture files outside MOTIR-2871's scope (MOTIR-2882, 2026-08-17)
+
+Class 3 of MOTIR-2872's 2026-08-16 re-measurement: **49 refused writes across 7 test files**, every
+one a fixture helper issuing a repository write through `db.$transaction` — the `@/lib/db` singleton,
+which under `motir_app` binds no workspace GUC, so the policy's `WITH CHECK` refuses it.
+
+**These seven were never an incomplete migration of MOTIR-2871.** That card changed 42 files and none
+of these; its named class reached zero inside its own scope. The file set was drawn from a
+measurement, and a measurement taken at one moment names the files failing at that moment — these
+seven were not on that list, so they were not in that card.
+
+### Before / after, by name
+
+Measured on this branch off `origin/main` @ `50dba13b`, `TEST_DB_APP_ROLE=1 pnpm vitest run` over
+exactly the seven files:
+
+| file                                               | table(s) refused                                 | before | after |
+| -------------------------------------------------- | ------------------------------------------------ | -----: | ----: |
+| `tests/notifications/notificationsService.test.ts` | `notification`                                   |     12 |     0 |
+| `tests/embeddings/workItemEmbeddingRls.test.ts`    | `work_item_embedding`                            |     10 |     0 |
+| `tests/integration/import/importSeam.test.ts`      | `import`                                         |     10 |     0 |
+| `tests/custom-fields/definitionsService.test.ts`   | `custom_field_value` / `custom_field_definition` |      7 |     0 |
+| `tests/integration/home/personal-reads.test.ts`    | `watcher`                                        |      6 |     0 |
+| `tests/integration/home/story-seams.test.ts`       | `watcher`                                        |      3 |     0 |
+| `tests/jobs/watcher-notify.test.ts`                | `watcher`                                        |      1 |     0 |
+| **total**                                          |                                                  | **49** | **0** |
+
+```
+# BEFORE (origin/main content, same worktree, same database)
+TEST_DB_APP_ROLE=1 pnpm vitest run <the seven files>
+  Test Files  7 failed (7)          Tests  49 failed | 79 passed (128)
+
+# AFTER
+TEST_DB_APP_ROLE=1 pnpm vitest run <the seven files>
+  Test Files  7 passed (7)          Tests  128 passed (128)
+```
+
+The before-run's refusals, counted by table, are exactly the distribution the partition predicted:
+`work_item_embedding` 10, and one apiece for `custom_field_definition`, `custom_field_value`,
+`import`, `notification`, `watcher` (the per-table count is of distinct error sites; the per-file
+count above is of failing tests).
+
+### The READS were done in the same pass — deliberately
+
+Class 2 of the same partition exists because an earlier migration converted the half that RAISES an
+error and left the half that returns an empty result. An RLS-denied `SELECT` removes rows and raises
+nothing, so a fixture converted by error message leaves its assertions to fail silently later, under
+a different class name. Two files carried assertion-side singleton reads and both were converted:
+
+- **`tests/integration/import/importSeam.test.ts`** — 16 direct-DB assertion reads
+  (`workItemCount`, `mappingRowCount`, and the per-test `findUniqueOrThrow` / `findMany` / `count`
+  read-backs) plus one mid-test `workItem.update`. All now on `adminDb`, which is what the file's own
+  two-client model already used for its `TRUNCATE`.
+- **`tests/embeddings/workItemEmbeddingRls.test.ts`** — the ADR §4/§5 cascade block. `db.workItem.delete`
+  followed by `expect(...findUnique(...)).toBeNull()` is the vacuous-pass shape in miniature: under
+  `motir_app` with no GUC the delete is refused AND the read is denied, so the assertion passes while
+  proving nothing about the cascade. Both halves are now `adminDb`.
+
+**`asAppRole` in the embeddings file keeps its `db.$transaction` — it is the code under test.** That
+helper deliberately `SET LOCAL ROLE motir_app` inside a singleton transaction; converting it would
+delete the suite's entire point. This is the one site in the seven where the singleton is correct.
+
+### No `lib/` file was modified, and no application-side writer was found
+
+Every one of the 49 sites is a test fixture. The sweep found no application-side writer to hand to
+MOTIR-2880 — the `lib/` write surface closed under MOTIR-2865, and the bare-`db.$transaction` axis
+in `lib/` is MOTIR-2876's scanner. Nothing to file.
