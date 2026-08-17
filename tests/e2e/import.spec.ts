@@ -183,7 +183,20 @@ test.describe('issue importer — CSV path (7.16.9)', () => {
     // kind ← type; status ← workflow status (QA → the mapped In Review); priority;
     // assignee ← matched member email; labels; parent ← the parent column.
     expect(epic!.kind).toBe('story');
-    expect(epic!.status).toBe('todo');
+    // ⚠️ The CSV says `todo` for this row, and the imported item IS created at
+    // `todo` — but it is a PARENT, and a parent's status is DERIVED from its
+    // children (Story MOTIR-2888). "Payment subtask" imports as its
+    // `in_progress` child, so the recompute lifts the parent to `in_progress`
+    // and the imported tree ends up internally consistent rather than claiming
+    // unstarted work above started work. Polled, because derivation is
+    // asynchronous — the import's own response is not the last write the tree
+    // receives.
+    await expect
+      .poll(async () => (await itemByTitle(seed.projectId, 'Checkout epic'))!.status, {
+        timeout: 15_000,
+        message: 'awaiting the parent status derived from the imported children',
+      })
+      .toBe('in_progress');
     expect(epic!.priority).toBe('high');
     expect(epic!.assigneeId).toBe(seed.memberId);
     expect(await labelNames(epic!.id)).toEqual(['auth', 'ux']);
