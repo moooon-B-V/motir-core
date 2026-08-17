@@ -18,18 +18,33 @@ import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
 // repositories, owns the ACCESS decision, and maps to DTOs; the repositories
 // stay leaves (CLAUDE.md § the 4-layer architecture).
 //
-// ⚠️ WORKSPACE-SCOPED, AND THAT IS THE POINT. Every other list surface in the
-// product (`/items`, `/ready`, `/boards`) resolves an ACTIVE PROJECT first.
-// Home does not, and takes no `projectId`: "related to me" stops meaning much
-// if it hides the projects you are not currently switched into. Switching the
-// active project does not change what these reads return. The precedent for the
-// shape is `notificationsService.listNotifications`, already `ctx.userId`-scoped
-// inside a workspace.
+// ⚠️ ACTIVE-PROJECT-SCOPED, like every other list surface (MOTIR-2761). This
+// read was workspace-scoped until 2026-08-17 and argued for it from external
+// precedent — Jira "Your work", Linear Inbox, Plane Home. In all three that
+// surface sits ABOVE the project selector; Motir imported the scope without the
+// placement and then put `/home` FIRST in the PROJECT tier of the rail, under a
+// project switcher the shell renders on every authed page. A switcher that
+// changes nothing on the first screen after sign-in teaches the reader that the
+// context path is decoration, so the scope moved to match the placement.
+//
+// The cross-project question — "what is on me across this whole WORKSPACE" — is
+// retained rather than dropped: it becomes a workspace-tier surface, MOTIR-2920
+// (`docs/decisions/home-scope.md` §3). It is not this read.
 
 /** The page size a Home tab reads when the caller names none. */
 export const HOME_PAGE_SIZE = 25;
 /** The ceiling a caller-supplied page size is clamped to. */
 const HOME_MAX_PAGE_SIZE = 100;
+
+/**
+ * Who is reading, and WHICH PROJECT they are reading. The project id is the
+ * caller's ACTIVE project — `getActiveProject()` on the page, the same resolver
+ * `/items`, `/ready` and `/boards` use — and it is REQUIRED rather than
+ * optional, so there is no call shape that quietly reverts to the workspace.
+ */
+export interface HomeActorContext extends AccessActorContext {
+  projectId: string;
+}
 
 export interface HomeListOptions {
   /** The opaque token from a previous page's `nextCursor`; omit for page one. */
@@ -44,33 +59,44 @@ function clampLimit(limit: number | undefined): number {
 }
 
 /**
- * The projects the actor may BROWSE in this workspace, each paired with ITS OWN
- * done-category status keys — the two axes Home's reads scope on.
+ * The ACTIVE project — if the actor may browse it — paired with ITS OWN
+ * done-category status keys. The two axes Home's reads scope on, now over a set
+ * of at most one.
  *
- * ⚠️ This is the load-bearing line of the whole card, and it is resolved through
- * the shipped `projectAccessService` rather than left to RLS. RLS is
- * WORKSPACE-rooted; the thing Home can leak is a PRIVATE PROJECT INSIDE the
- * actor's own workspace, which RLS admits and `canBrowse` does not. A workspace
- * owner/admin keeps every project; a non-member of the workspace resolves to
- * NONE, so a stranger's read is empty rather than an error — the no-existence-
- * leak convention every other project gate follows.
+ * ⚠️ THE ACCESS DECISION IS STILL THE SERVICE'S, and narrowing the project axis
+ * did not retire it. RLS is WORKSPACE-rooted; the thing Home can leak is a
+ * PRIVATE PROJECT INSIDE the actor's own workspace, which RLS admits and
+ * `canBrowse` does not — and an actor's ACTIVE project can be one they may not
+ * browse (the pointer is a stored member preference, and project membership can
+ * be revoked under it). Such a reader gets an EMPTY scope set, so the read is
+ * empty rather than an error — the no-existence-leak convention every other
+ * project gate follows.
  *
- * The result is passed INTO the query as `projectScopes`, never applied to its
- * output. Filtering after the read would shorten pages instead of failing, and
- * "the list sometimes ends early" is a bug nobody traces back to an access rule.
- * The lifecycle half rides the same rule, for the same reason.
+ * ⚠️ AND THE SHAPE STAYS A `HomeProjectScope[]`, not a bare `projectId`. The
+ * lifecycle axis MOTIR-2758 added travels inside it precisely so no call shape
+ * can scope the projects without also deciding what counts as finished in each
+ * of them; collapsing to an id here would be the narrowing quietly dropping it.
+ *
+ * The result is passed INTO the query, never applied to its output. Filtering
+ * after the read would shorten pages instead of failing, and "the list sometimes
+ * ends early" is a bug nobody traces back to an access rule.
  */
-async function browsableProjectScopes(
-  ctx: AccessActorContext,
+async function activeProjectScope(
+  ctx: HomeActorContext,
   tx: Prisma.TransactionClient,
 ): Promise<HomeProjectScope[]> {
-  const projects = await projectRepository.findByWorkspace(ctx.workspaceId, tx);
-  const browsable = await projectAccessService.filterBrowsable(projects, ctx, tx);
-  const projectIds = browsable.map((project) => project.id);
+  const project = await projectRepository.findById(ctx.projectId, tx);
+  // The workspace check is belt AND braces: RLS already bounds the read to
+  // `ctx.workspaceId`, but a stale active-project pointer is exactly the input
+  // that would otherwise cross a tenant on the day RLS is relaxed.
+  if (!project || project.workspaceId !== ctx.workspaceId) return [];
+  const browsable = await projectAccessService.filterBrowsable([project], ctx, tx);
+  if (browsable.length === 0) return [];
+
   // The LIFECYCLE axis, resolved beside the access one and passed into the query
-  // with it (MOTIR-2758). One batched read for every project — the same resolver
-  // `workItemsService.isReady`, `sprintsService` and `planValidityService`
-  // already ask "is this terminal, in ITS OWN project" with.
+  // with it (MOTIR-2758). The same resolver `workItemsService.isReady`,
+  // `sprintsService` and `planValidityService` already ask "is this terminal, in
+  // ITS OWN project" with.
   //
   // ⚠️ Threaded `tx`, not a second context. `workflow_status` is RLS-gated on
   // `app.workspace_id` (`…_add_workflow_status_and_transition_rls`), and that GUC
@@ -80,15 +106,17 @@ async function browsableProjectScopes(
   // silently no-ops in production, and a test suite that stays green because it
   // connects as the owner.
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-    projectIds,
+    [ctx.projectId],
     ctx.workspaceId,
     tx,
   );
-  return projectIds.map((projectId) => ({
-    projectId,
-    /* istanbul ignore next -- defensive: the resolver seeds an entry for every requested project id, so the `?? []` arm is unreachable */
-    doneStatusKeys: [...(terminalByProject.get(projectId) ?? [])],
-  }));
+  return [
+    {
+      projectId: ctx.projectId,
+      /* istanbul ignore next -- defensive: the resolver seeds an entry for every requested project id, so the `?? []` arm is unreachable */
+      doneStatusKeys: [...(terminalByProject.get(ctx.projectId) ?? [])],
+    },
+  ];
 }
 
 /**
@@ -113,9 +141,9 @@ function toPage(rows: HomeWorkItemRow[], limit: number, viewerId: string): HomeP
 
 export const homeService = {
   /**
-   * MY WORK — every item in the workspace where the actor is the assignee **OR**
-   * the reporter, across every project they may browse, **each item exactly
-   * once**, newest-touched first, cursor-paged.
+   * MY WORK — every item in the ACTIVE PROJECT where the actor is the assignee
+   * **OR** the reporter, **each item exactly once**, newest-touched first,
+   * cursor-paged.
    *
    * The two predicates are merged into one list rather than split into two tabs
    * because Motir is AI-native: an item created through the MCP carries the
@@ -125,11 +153,11 @@ export const homeService = {
    * database's job (a single `OR`), not the service's, so it holds across a page
    * boundary and not merely within one page.
    */
-  async listMyWork(ctx: AccessActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
+  async listMyWork(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const limit = clampLimit(options.limit);
     const cursor = decodeHomeCursor(options.cursor);
     const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await browsableProjectScopes(ctx, tx);
+      const projectScopes = await activeProjectScope(ctx, tx);
       return workItemRepository.findByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
@@ -146,12 +174,13 @@ export const homeService = {
    * The tab strip shows the size of the tab you are NOT looking at as well as
    * the one you are, so a reader can tell whether switching is worth it — which
    * means the numbers are the size of each SET, not of the current page.
-   * Resolved together because the browsable-project set is the expensive half
-   * and both counts need the same one.
+   * Resolved together because the project scope — the access check plus that
+   * project's done-status keys — is the expensive half and both counts need the
+   * same one.
    */
-  async tabCounts(ctx: AccessActorContext): Promise<HomeTabCountsDto> {
+  async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await browsableProjectScopes(ctx, tx);
+      const projectScopes = await activeProjectScope(ctx, tx);
       const [myWork, watching] = await Promise.all([
         workItemRepository.countByAssigneeOrReporterInWorkspace(
           ctx.userId,
@@ -166,19 +195,19 @@ export const homeService = {
   },
 
   /**
-   * WATCHING — the items the actor watches in this workspace, same order, same
-   * cursor type, same access rule.
+   * WATCHING — the items the actor watches IN THE ACTIVE PROJECT, same order,
+   * same cursor type, same access rule.
    *
    * A genuinely different audience from My work, not a partition of it: an item
    * the actor both owns and watches is returned by BOTH reads. That is not a
    * bug to fix at this layer — the two reads answer different questions, and
    * MOTIR-2655 asserts the overlap explicitly so nobody "corrects" it later.
    */
-  async listWatching(ctx: AccessActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
+  async listWatching(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
     const limit = clampLimit(options.limit);
     const cursor = decodeHomeCursor(options.cursor);
     const rows = await withWorkspaceContext(ctx, async (tx) => {
-      const projectScopes = await browsableProjectScopes(ctx, tx);
+      const projectScopes = await activeProjectScope(ctx, tx);
       return watcherRepository.listByUser(
         ctx.userId,
         ctx.workspaceId,

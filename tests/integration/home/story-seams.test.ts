@@ -78,6 +78,19 @@ function inProject(fx: WorkItemFixture, project: ProjectDTO): WorkItemFixture {
 }
 
 /**
+ * The reader's context AS HOME NOW TAKES IT — the workspace pair plus the ACTIVE
+ * project (MOTIR-2761). The access cases below point the reader AT the project
+ * under test: with the scope narrowed, a private project the reader is merely
+ * not switched into is excluded by the project axis alone, and an access
+ * assertion arranged that way would stay green with the browsable-set filter
+ * deleted — the vacuous pass this file exists to refuse.
+ */
+const hctx = (fx: WorkItemFixture, projectId: string = fx.projectId) => ({
+  ...fx.ctx,
+  projectId,
+});
+
+/**
  * THE POSITIVE CONTROL. Reads the personal query with EVERY project id in the
  * workspace — i.e. with the browsable-set guard's input widened to "everything"
  * — so a test can prove the row it expects to be hidden is in fact present and
@@ -137,7 +150,7 @@ describe('Home story seam — the dedupe, at the boundary that can break it', ()
     let pages = 0;
     do {
       const page: { items: { identifier: string }[]; nextCursor: string | null } =
-        await homeService.listMyWork(fx.ctx, { limit: 4, cursor });
+        await homeService.listMyWork(hctx(fx), { limit: 4, cursor });
       // Every page but the last is FULL — the has-more probe makes the boundary
       // exact, so a short page here would mean rows were dropped after the read.
       if (page.nextCursor !== null) expect(page.items).toHaveLength(4);
@@ -156,7 +169,7 @@ describe('Home story seam — the dedupe, at the boundary that can break it', ()
     const both = await createWorkItem(fx, { kind: 'task', title: 'Both' });
     await own(both.id, { assignee: fx.ownerId, reporter: fx.ownerId });
 
-    const rows = (await homeService.listMyWork(fx.ctx)).items;
+    const rows = (await homeService.listMyWork(hctx(fx))).items;
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ viewerIsAssignee: true, viewerIsReporter: true });
@@ -195,10 +208,16 @@ describe('Home story seam — the access matrix', () => {
     expect((await readWithoutAccessFilter(ctx)).sort()).toEqual(
       [open.identifier, hidden.identifier].sort(),
     );
-    // And through the service, it is not.
-    expect((await homeService.listMyWork(ctx)).items.map((r) => r.identifier)).toEqual([
-      open.identifier,
-    ]);
+    // And through the service, WITH THE PRIVATE PROJECT ACTIVE, it is not — the
+    // arrangement in which the access filter is the only thing that can be
+    // excluding it (MOTIR-2761: point the reader at it, not beside it).
+    expect((await homeService.listMyWork({ ...ctx, projectId: secret.id })).items).toEqual([]);
+    // …and the browsable one still reads, so "always empty" cannot pass this.
+    expect(
+      (await homeService.listMyWork({ ...ctx, projectId: fx.projectId })).items.map(
+        (r) => r.identifier,
+      ),
+    ).toEqual([open.identifier]);
   });
 
   it('SHOWS the same private project once the reader is a member of it', async () => {
@@ -230,10 +249,12 @@ describe('Home story seam — the access matrix', () => {
       role: 'viewer',
     });
 
-    const ctx = { userId: member.id, workspaceId: fx.workspaceId };
+    const ctx = { userId: member.id, workspaceId: fx.workspaceId, projectId: secret.id };
 
-    // The mirror of the case above: the filter is what decides, and it decides
-    // both ways. Without this, "always empty" would pass the previous test too.
+    // The mirror of the case above: the SAME project, the SAME active pointer,
+    // the only difference being project membership. The filter is what decides,
+    // and it decides both ways — without this, "always empty" would pass the
+    // previous test too.
     expect((await homeService.listMyWork(ctx)).items.map((r) => r.identifier)).toEqual([
       item.identifier,
     ]);
@@ -249,7 +270,7 @@ describe('Home story seam — the access matrix', () => {
     await own(theirs.id, { assignee: here.ownerId, reporter: here.ownerId });
 
     // Same person, same two items — only the workspace in the context differs.
-    expect((await homeService.listMyWork(here.ctx)).items.map((r) => r.identifier)).toEqual([
+    expect((await homeService.listMyWork(hctx(here))).items.map((r) => r.identifier)).toEqual([
       mine.identifier,
     ]);
 
@@ -257,10 +278,16 @@ describe('Home story seam — the access matrix', () => {
     // read is empty rather than an error (the no-existence-leak convention).
     const stranger = await createTestUser({ email: `aw-${Date.now()}@example.com` });
     await own(mine.id, { assignee: stranger.id });
-    const strangerCtx = { userId: stranger.id, workspaceId: here.workspaceId };
-    expect(await browsableFor(strangerCtx)).toEqual([]);
+    const strangerCtx = {
+      userId: stranger.id,
+      workspaceId: here.workspaceId,
+      projectId: here.projectId,
+    };
+    expect(await browsableFor({ userId: stranger.id, workspaceId: here.workspaceId })).toEqual([]);
     // THE CONTROL: the stranger IS the assignee — only membership excludes them.
-    expect(await readWithoutAccessFilter(strangerCtx)).toEqual([mine.identifier]);
+    expect(
+      await readWithoutAccessFilter({ userId: stranger.id, workspaceId: here.workspaceId }),
+    ).toEqual([mine.identifier]);
     expect((await homeService.listMyWork(strangerCtx)).items).toEqual([]);
   });
 
@@ -282,19 +309,27 @@ describe('Home story seam — the access matrix', () => {
     });
 
     // INTERLEAVED by updatedAt: visible, hidden, visible, hidden, … so a
-    // post-read filter would carve holes out of the middle of every page.
+    // post-read filter would carve holes out of the middle of every page. Since
+    // MOTIR-2761 the surviving hole-carver is the DONE-category exclusion, which
+    // is the other half of the same scope object — so the interleave is by
+    // lifecycle, inside the one project, and the private project stays as the
+    // control that the access half is still in the query too.
     const visible: string[] = [];
     for (let i = 0; i < 12; i += 1) {
-      const target = i % 2 === 0 ? fx : inProject(fx, secret);
-      const item = await createWorkItem(target, { kind: 'task', title: `I${i}` });
+      const item = await createWorkItem(fx, { kind: 'task', title: `I${i}` });
       await own(item.id, { assignee: member.id, reporter: fx.ownerId });
       await touch(item.id, `2026-08-11T${String(i).padStart(2, '0')}:00:00.000Z`);
       if (i % 2 === 0) visible.push(item.identifier);
+      else await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
     }
+    const hidden = await createWorkItem(inProject(fx, secret), { kind: 'task', title: 'Hidden' });
+    await own(hidden.id, { assignee: member.id, reporter: fx.ownerId });
 
-    const ctx = { userId: member.id, workspaceId: fx.workspaceId };
-    // The control: all twelve are the reader's; six are in the private project.
-    expect(await readWithoutAccessFilter(ctx)).toHaveLength(12);
+    const ctx = { userId: member.id, workspaceId: fx.workspaceId, projectId: fx.projectId };
+    // The control: all thirteen are the reader's, and one is in the private project.
+    expect(
+      await readWithoutAccessFilter({ userId: member.id, workspaceId: fx.workspaceId }),
+    ).toHaveLength(13);
 
     const first = await homeService.listMyWork(ctx, { limit: 3 });
     const second = await homeService.listMyWork(ctx, { limit: 3, cursor: first.nextCursor });
@@ -336,14 +371,25 @@ describe('Home story seam — the access matrix', () => {
 
     // THE CONTROL: both watches exist, so only the browsable set excludes one.
     expect(await adminDb.watcher.count({ where: { userId: member.id } })).toBe(2);
-    expect((await homeService.listWatching(ctx)).items.map((r) => r.identifier)).toEqual([
-      open.identifier,
-    ]);
+    // Pointed at the private project: empty. Pointed at the open one: the row.
+    // Same reader, same two watches — only the access rule differs.
+    expect((await homeService.listWatching({ ...ctx, projectId: secret.id })).items).toEqual([]);
+    expect(
+      (await homeService.listWatching({ ...ctx, projectId: fx.projectId })).items.map(
+        (r) => r.identifier,
+      ),
+    ).toEqual([open.identifier]);
   });
 });
 
-describe('Home story seam — the scope is the WORKSPACE, not the active project', () => {
-  it('returns the same rows however the reader s ACTIVE PROJECT is set', async () => {
+describe('Home story seam — the scope is the ACTIVE PROJECT (MOTIR-2761)', () => {
+  it('returns DIFFERENT rows as the reader s ACTIVE PROJECT is switched — through the shipped resolver', async () => {
+    // ⚠️ THE INVERSION. Until 2026-08-17 this block was headed "the scope is the
+    // WORKSPACE, not the active project" and asserted that switching changed
+    // nothing — a contract test for the defect itself. `/home` sits FIRST in the
+    // project tier of the rail, under the switcher the shell renders on every
+    // authed page, so "switching changes nothing" was a passing test asserting
+    // that a shipped control does nothing on the first screen after sign-in.
     const fx = await makeFixture({ identifier: 'SP' });
     const second = await createTestProject({
       workspaceId: fx.workspaceId,
@@ -354,13 +400,15 @@ describe('Home story seam — the scope is the WORKSPACE, not the active project
     const first = await createWorkItem(fx, { kind: 'task', title: 'In one' });
     const alsoMine = await createWorkItem(inProject(fx, second), { kind: 'task', title: 'In two' });
 
-    const read = async () =>
-      (await homeService.listMyWork(fx.ctx)).items.map((r) => r.identifier).sort();
+    // Read through the SHIPPED resolver the page uses — `projectsService`
+    // decides what "active" means, and a test that hand-passed an id would not
+    // notice the page and the service disagreeing about it.
+    const read = async () => {
+      const active = await projectsService.getActiveProject(fx.ownerId, fx.workspaceId);
+      const page = await homeService.listMyWork({ ...fx.ctx, projectId: active!.id });
+      return page.items.map((r) => r.identifier).sort();
+    };
 
-    const withNoActiveProject = await read();
-
-    // Switch the active project through the shipped service — the thing every
-    // OTHER list surface scopes by — and read again.
     await projectsService.setActiveProject({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
@@ -374,9 +422,12 @@ describe('Home story seam — the scope is the WORKSPACE, not the active project
     });
     const withSecondActive = await read();
 
-    expect(withNoActiveProject).toEqual([first.identifier, alsoMine.identifier].sort());
-    expect(withFirstActive).toEqual(withNoActiveProject);
-    expect(withSecondActive).toEqual(withNoActiveProject);
+    // The reader owns BOTH items, so the only thing separating them is which
+    // project is active. Each read holds exactly its own, and neither is a
+    // subset of the other — a scope that merely SHRANK would pass one of these.
+    expect(withFirstActive).toEqual([first.identifier]);
+    expect(withSecondActive).toEqual([alsoMine.identifier]);
+    expect(withFirstActive).not.toEqual(withSecondActive);
   });
 });
 
@@ -399,8 +450,8 @@ describe('Home story seam — the two tabs are different questions', () => {
       await watcherRepository.add(both.id, fx.ownerId, tx);
     });
 
-    const work = (await homeService.listMyWork(fx.ctx)).items.map((r) => r.id);
-    const watching = (await homeService.listWatching(fx.ctx)).items.map((r) => r.id);
+    const work = (await homeService.listMyWork(hctx(fx))).items.map((r) => r.id);
+    const watching = (await homeService.listWatching(hctx(fx))).items.map((r) => r.id);
 
     expect(work).toContain(ownedOnly.id);
     expect(work).toContain(both.id);
@@ -423,8 +474,8 @@ describe('Home story seam — an agent-executed item is not special', () => {
     });
     await adminDb.$transaction((tx) => watcherRepository.add(agentItem.id, fx.ownerId, tx));
 
-    const work = (await homeService.listMyWork(fx.ctx)).items;
-    const watching = (await homeService.listWatching(fx.ctx)).items;
+    const work = (await homeService.listMyWork(hctx(fx))).items;
+    const watching = (await homeService.listWatching(hctx(fx))).items;
 
     for (const rows of [work, watching]) {
       expect(rows).toHaveLength(1);

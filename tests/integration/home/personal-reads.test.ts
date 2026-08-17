@@ -26,6 +26,12 @@ import {
 //   * the DEDUPE holds ACROSS A PAGE BOUNDARY, not merely within one page;
 //   * the access filter is a QUERY INPUT, so a filtered-out row shortens
 //     nothing — request N, get N.
+//
+// ⚠️ THE READS TAKE AN ACTIVE PROJECT (MOTIR-2761). They were workspace-scoped
+// until 2026-08-17; `hctx()` below is the context they now take, and the access
+// cases point the reader AT the project under test rather than beside it —
+// otherwise the project axis alone excludes the row and the browsable-set filter
+// could be deleted with every assertion still green.
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
@@ -43,6 +49,16 @@ afterAll(async () => {
 });
 
 const keys = (rows: { identifier: string }[]) => rows.map((r) => r.identifier).sort();
+
+/**
+ * The reader's context AS HOME NOW TAKES IT — the workspace pair plus the ACTIVE
+ * project (MOTIR-2761). Required rather than optional, so there is no call shape
+ * that quietly reverts to the workspace scope this card removed.
+ */
+const hctx = (fx: WorkItemFixture, projectId: string = fx.projectId) => ({
+  ...fx.ctx,
+  projectId,
+});
 
 /** Force a row's `updatedAt` so the (updatedAt, id) order is deterministic. */
 async function touch(id: string, iso: string): Promise<void> {
@@ -90,7 +106,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     await own(both.id, { assignee: fx.ownerId, reporter: fx.ownerId });
     await own(neither.id, { assignee: other.id, reporter: other.id });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
 
     expect(keys(page.items)).toEqual(['HOM-1', 'HOM-2', 'HOM-3']);
     expect(page.items.map((r) => r.identifier)).not.toContain(neither.identifier);
@@ -101,7 +117,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     const both = await createWorkItem(fx, { kind: 'task', title: 'Assigned AND reported' });
     await own(both.id, { assignee: fx.ownerId, reporter: fx.ownerId });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
 
     // A count assertion, not a visibility one — visibility passes with duplicates.
     expect(page.items.filter((r) => r.id === both.id)).toHaveLength(1);
@@ -118,7 +134,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     await own(assigned.id, { assignee: fx.ownerId, reporter: other.id });
     await own(reported.id, { assignee: other.id, reporter: fx.ownerId });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
     const byId = new Map(page.items.map((r) => [r.id, r]));
 
     expect(byId.get(assigned.id)).toMatchObject({
@@ -131,7 +147,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     });
   });
 
-  it('spans EVERY project in the workspace from one call, with no projectId, and identifies each row s project', async () => {
+  it('reads ONE project — the ACTIVE one — and switching it changes the answer (MOTIR-2761)', async () => {
     const fx = await makeFixture({ identifier: 'PRJA' });
     const second = await createTestProject({
       workspaceId: fx.workspaceId,
@@ -149,12 +165,21 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     };
     const there = await createWorkItem(fxB, { kind: 'task', title: 'In project B' });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    // The INVERSION of what this asserted until MOTIR-2761 ("spans EVERY project
+    // in the workspace from one call, with no projectId"). The reader owns BOTH
+    // items — the only thing separating them is which project is active, which
+    // is what makes the pair of reads below evidence rather than a tautology.
+    const inA = await homeService.listMyWork(hctx(fx, fx.projectId));
+    const inB = await homeService.listMyWork(hctx(fx, second.id));
 
-    expect(keys(page.items)).toEqual(['PRJA-1', 'PRJB-1']);
-    const byId = new Map(page.items.map((r) => [r.id, r]));
-    expect(byId.get(here.id)?.project).toMatchObject({ identifier: 'PRJA', name: 'Motir' });
-    expect(byId.get(there.id)?.project).toMatchObject({ identifier: 'PRJB', name: 'Atlas' });
+    expect(keys(inA.items)).toEqual(['PRJA-1']);
+    expect(keys(inB.items)).toEqual(['PRJB-1']);
+    expect(inA.items.map((r) => r.id)).not.toContain(there.id);
+    // The row still knows its project — the DTO is unchanged; what went is the
+    // CELL that rendered it (a column repeating the page's own scope).
+    expect(inA.items[0]).toMatchObject({ id: here.id });
+    expect(inA.items[0]?.project).toMatchObject({ identifier: 'PRJA', name: 'Motir' });
+    expect(inB.items[0]?.project).toMatchObject({ identifier: 'PRJB', name: 'Atlas' });
   });
 
   it('never returns an item from a project the reader may not BROWSE — and the page is not merely shortened', async () => {
@@ -181,17 +206,29 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     await own(visible.id, { assignee: member.id, reporter: fx.ownerId });
     await own(hidden.id, { assignee: member.id, reporter: fx.ownerId });
 
-    const ctx = { userId: member.id, workspaceId: fx.workspaceId };
+    // ⚠️ THE PRIVATE PROJECT IS THE ACTIVE ONE. Since MOTIR-2761 narrowed the
+    // scope, an access test that leaves the readable project active proves
+    // nothing — the private rows are out on the project axis alone and the
+    // browsable filter could be deleted with every assertion still green. So the
+    // reader is pointed AT the project they may not browse, which is a real
+    // state: the active-project pointer is a stored preference and project
+    // membership can be revoked under it.
+    const ctx = { userId: member.id, workspaceId: fx.workspaceId, projectId: secret.id };
     const page = await homeService.listMyWork(ctx);
 
-    expect(keys(page.items)).toEqual(['OPEN-1']);
-    // The reader IS the assignee of the hidden item — the only thing keeping it
-    // out is the browsable-set filter. If that filter is deleted this fails.
+    // Empty, not an error, and not the OTHER project's rows either.
+    expect(page).toEqual({ items: [], nextCursor: null });
     expect(page.items.map((r) => r.id)).not.toContain(hidden.id);
+
+    // THE CONTROL: the reader IS the assignee of the hidden item, and the same
+    // read against the project they MAY browse returns theirs — so the empty
+    // above is the access filter, not an empty fixture.
+    const allowed = await homeService.listMyWork({ ...ctx, projectId: fx.projectId });
+    expect(keys(allowed.items)).toEqual(['OPEN-1']);
 
     // ⚠️ And the filter is a QUERY INPUT, not a post-read drop: asking for one
     // row returns a FULL page of one, with a cursor, rather than a short page.
-    const first = await homeService.listMyWork(ctx, { limit: 1 });
+    const first = await homeService.listMyWork({ ...ctx, projectId: fx.projectId }, { limit: 1 });
     expect(first.items).toHaveLength(1);
   });
 
@@ -204,6 +241,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     const page = await homeService.listMyWork({
       userId: stranger.id,
       workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
     });
 
     // Empty, not an error — the no-existence-leak convention every project gate follows.
@@ -218,7 +256,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     await own(there.id, { assignee: fx.ownerId, reporter: fx.ownerId });
     const here = await createWorkItem(fx, { kind: 'task', title: 'This workspace' });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
 
     expect(page.items.map((r) => r.id)).toEqual([here.id]);
   });
@@ -238,7 +276,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
       executor: 'human',
     });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
 
     expect(keys(page.items)).toEqual(['AGT-1', 'AGT-2']);
     expect(page.items.map((r) => r.executor).sort()).toEqual(['coding_agent', 'human']);
@@ -253,7 +291,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
       data: { storyPoints: 2.5, estimateMinutes: 45 },
     });
 
-    const page = await homeService.listMyWork(fx.ctx);
+    const page = await homeService.listMyWork(hctx(fx));
     const byId = new Map(page.items.map((r) => [r.id, r]));
 
     // `storyPoints` is a Prisma Decimal on the row — the mapper narrows it to a
@@ -269,11 +307,11 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     }
 
     // Zero / negative / non-finite fall back to the default; a huge one is capped.
-    expect((await homeService.listMyWork(fx.ctx, { limit: 0 })).items).toHaveLength(3);
-    expect((await homeService.listMyWork(fx.ctx, { limit: -5 })).items).toHaveLength(3);
-    expect((await homeService.listMyWork(fx.ctx, { limit: Number.NaN })).items).toHaveLength(3);
-    expect((await homeService.listMyWork(fx.ctx, { limit: 10_000 })).items).toHaveLength(3);
-    expect((await homeService.listMyWork(fx.ctx, { limit: 2 })).items).toHaveLength(2);
+    expect((await homeService.listMyWork(hctx(fx), { limit: 0 })).items).toHaveLength(3);
+    expect((await homeService.listMyWork(hctx(fx), { limit: -5 })).items).toHaveLength(3);
+    expect((await homeService.listMyWork(hctx(fx), { limit: Number.NaN })).items).toHaveLength(3);
+    expect((await homeService.listMyWork(hctx(fx), { limit: 10_000 })).items).toHaveLength(3);
+    expect((await homeService.listMyWork(hctx(fx), { limit: 2 })).items).toHaveLength(2);
   });
 
   it('orders by updatedAt DESC and pages by a keyset — the union of two pages repeats and drops nothing', async () => {
@@ -286,14 +324,14 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
       await touch(item.id, `2026-08-1${i}T00:00:00.000Z`);
     }
 
-    const first = await homeService.listMyWork(fx.ctx, { limit: 3 });
+    const first = await homeService.listMyWork(hctx(fx), { limit: 3 });
     expect(first.items).toHaveLength(3);
     expect(first.nextCursor).not.toBeNull();
     // Newest first: Item 6 (2026-08-16) down to Item 4.
     expect(first.items.map((r) => r.title)).toEqual(['Item 6', 'Item 5', 'Item 4']);
 
-    const second = await homeService.listMyWork(fx.ctx, { limit: 3, cursor: first.nextCursor });
-    const third = await homeService.listMyWork(fx.ctx, { limit: 3, cursor: second.nextCursor });
+    const second = await homeService.listMyWork(hctx(fx), { limit: 3, cursor: first.nextCursor });
+    const third = await homeService.listMyWork(hctx(fx), { limit: 3, cursor: second.nextCursor });
 
     const seen = [...first.items, ...second.items, ...third.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length); // no repeat across pages
@@ -306,7 +344,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     for (let i = 0; i < 2; i += 1) {
       await createWorkItem(fx, { kind: 'task', title: `Item ${i}` });
     }
-    const page = await homeService.listMyWork(fx.ctx, { limit: 2 });
+    const page = await homeService.listMyWork(hctx(fx), { limit: 2 });
     expect(page.items).toHaveLength(2);
     // The has-more PROBE row is what makes this exact — a "the page came back
     // full, so mint a cursor" rule would hand out a cursor to an empty page.
@@ -329,8 +367,8 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
       await watcherRepository.add(ownedAndWatched.id, fx.ownerId, tx);
     });
 
-    const watching = await homeService.listWatching(fx.ctx);
-    const myWork = await homeService.listMyWork(fx.ctx);
+    const watching = await homeService.listWatching(hctx(fx));
+    const myWork = await homeService.listMyWork(hctx(fx));
 
     expect(keys(watching.items)).toEqual(['WAT-1', 'WAT-2']);
     expect(keys(myWork.items)).toEqual(['WAT-2', 'WAT-3']);
@@ -348,7 +386,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     await own(item.id, { assignee: other.id, reporter: other.id });
     await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
 
-    const page = await homeService.listWatching(fx.ctx);
+    const page = await homeService.listWatching(hctx(fx));
 
     expect(page.items[0]).toMatchObject({ viewerIsAssignee: false, viewerIsReporter: false });
   });
@@ -370,8 +408,16 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     const member = await enrolMember(fx, 'watcher');
     await adminDb.$transaction((tx) => watcherRepository.add(hidden.id, member.id, tx));
 
-    const page = await homeService.listWatching({ userId: member.id, workspaceId: fx.workspaceId });
+    // Pointed AT the private project — the only arrangement in which the
+    // browsable filter is what excludes the row, rather than the project axis.
+    const page = await homeService.listWatching({
+      userId: member.id,
+      workspaceId: fx.workspaceId,
+      projectId: secret.id,
+    });
 
+    // THE CONTROL: the watch row exists, so only the access filter is keeping it out.
+    expect(await adminDb.watcher.count({ where: { userId: member.id } })).toBe(1);
     expect(page.items).toEqual([]);
   });
 
@@ -386,7 +432,11 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     // asking the database a question with no possible answer.
     expect(await adminDb.watcher.count({ where: { userId: stranger.id } })).toBe(1);
     expect(
-      await homeService.listWatching({ userId: stranger.id, workspaceId: fx.workspaceId }),
+      await homeService.listWatching({
+        userId: stranger.id,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+      }),
     ).toEqual({ items: [], nextCursor: null });
   });
 
@@ -400,9 +450,9 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
       await adminDb.$transaction((tx) => watcherRepository.add(item.id, fx.ownerId, tx));
     }
 
-    const first = await homeService.listWatching(fx.ctx, { limit: 2 });
-    const second = await homeService.listWatching(fx.ctx, { limit: 2, cursor: first.nextCursor });
-    const third = await homeService.listWatching(fx.ctx, { limit: 2, cursor: second.nextCursor });
+    const first = await homeService.listWatching(hctx(fx), { limit: 2 });
+    const second = await homeService.listWatching(hctx(fx), { limit: 2, cursor: first.nextCursor });
+    const third = await homeService.listWatching(hctx(fx), { limit: 2, cursor: second.nextCursor });
 
     const seen = [...first.items, ...second.items, ...third.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length);
@@ -434,7 +484,7 @@ describe('the Home page cursor', () => {
     const fx = await makeFixture({ identifier: 'BAD' });
     await createWorkItem(fx, { kind: 'task', title: 'Only item' });
 
-    const page = await homeService.listMyWork(fx.ctx, { cursor: 'garbage' });
+    const page = await homeService.listMyWork(hctx(fx), { cursor: 'garbage' });
 
     expect(page.items).toHaveLength(1);
   });
@@ -467,14 +517,21 @@ describe('homeService.tabCounts — the tab badges', () => {
     const member = await enrolMember(fx, 'counts');
     await own(hidden.id, { assignee: member.id, reporter: member.id });
 
-    // The owner is a workspace manager, so they browse the private project too:
-    // 5 owned (4 + the watched one they reported) and 2 watched.
-    expect(await homeService.tabCounts(fx.ctx)).toEqual({ myWork: 5, watching: 2 });
+    // The badges count the ACTIVE PROJECT's sets (MOTIR-2761): 5 owned there
+    // (4 + the watched one they reported) and 1 watched — the private project's
+    // item and its watch are on the other side of the project axis, so the
+    // owner's watching count drops from the workspace-wide 2 to 1.
+    expect(await homeService.tabCounts(hctx(fx))).toEqual({ myWork: 5, watching: 1 });
+
+    // …and the owner IS a workspace manager, so they may browse the private
+    // project: pointed at it, they see its one row. This is the positive control
+    // that keeps the line above from passing on the access rule by accident.
+    expect(await homeService.tabCounts(hctx(fx, secret.id))).toEqual({ myWork: 0, watching: 1 });
 
     // The plain member owns only the hidden one, which they cannot browse — so
-    // both counts are 0, and the number beside the tab agrees with what the tab
-    // will actually show.
-    const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
+    // both counts are 0 with that project active, and the number beside the tab
+    // agrees with what the tab will actually show.
+    const memberCtx = { userId: member.id, workspaceId: fx.workspaceId, projectId: secret.id };
     expect(await homeService.tabCounts(memberCtx)).toEqual({ myWork: 0, watching: 0 });
     expect((await homeService.listMyWork(memberCtx)).items).toEqual([]);
   });
@@ -487,15 +544,19 @@ describe('homeService.tabCounts — the tab badges', () => {
 
     // The badge is the SIZE OF THE SET — a reader deciding whether to switch
     // tabs is not asking how big the current page is.
-    expect((await homeService.listMyWork(fx.ctx, { limit: 2 })).items).toHaveLength(2);
-    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(6);
+    expect((await homeService.listMyWork(hctx(fx), { limit: 2 })).items).toHaveLength(2);
+    expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(6);
   });
 
   it('is zero for a reader with no browsable projects, without issuing a degenerate query', async () => {
     const fx = await makeFixture({ identifier: 'CNZ' });
     const stranger = await createTestUser({ email: `cnz-${Date.now()}@example.com` });
     expect(
-      await homeService.tabCounts({ userId: stranger.id, workspaceId: fx.workspaceId }),
+      await homeService.tabCounts({
+        userId: stranger.id,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+      }),
     ).toEqual({ myWork: 0, watching: 0 });
   });
 });
@@ -524,10 +585,10 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     await own(finished.id, { assignee: fx.ownerId, reporter: fx.ownerId });
     await setStatus(finished.id, 'done');
 
-    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['DON-1']);
+    expect(keys((await homeService.listMyWork(hctx(fx))).items)).toEqual(['DON-1']);
     // The badge moves with the list, in the same commit — a count that disagrees
     // with its tab is the shape this card was filed about.
-    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(1);
+    expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(1);
   });
 
   it('excludes by CATEGORY, not by the literal key `done` — a cancelled item is out too', async () => {
@@ -542,8 +603,8 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     // written against the KEY would let this one through. CAN-1 is the positive
     // control — the open row, which must survive.
     expect(open.identifier).toBe('CAN-1');
-    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['CAN-1']);
-    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(1);
+    expect(keys((await homeService.listMyWork(hctx(fx))).items)).toEqual(['CAN-1']);
+    expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(1);
   });
 
   it('drops a finished item from WATCHING too, and from its badge', async () => {
@@ -562,11 +623,11 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
 
     // An item you watch that has shipped is not waiting on you either, and its
     // notification already fired through the bell.
-    expect(keys((await homeService.listWatching(fx.ctx)).items)).toEqual(['WDN-1']);
-    expect((await homeService.tabCounts(fx.ctx)).watching).toBe(1);
+    expect(keys((await homeService.listWatching(hctx(fx))).items)).toEqual(['WDN-1']);
+    expect((await homeService.tabCounts(hctx(fx))).watching).toBe(1);
   });
 
-  it('resolves the exclusion from EACH ROW S OWN project workflow', async () => {
+  it('resolves the exclusion from THE ACTIVE project s OWN workflow — the axis survives the narrowing', async () => {
     const fx = await makeFixture({ identifier: 'PRA' });
     const other = await createTestProject({
       workspaceId: fx.workspaceId,
@@ -577,8 +638,8 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     const fxB = { ...fx, project: other, projectId: other.id, projectIdentifier: other.identifier };
 
     // The SAME status key, terminal in one project and open in the other —
-    // statuses are project-defined open vocabulary, and Home is the one surface
-    // that reads across projects at once.
+    // statuses are project-defined open vocabulary, so "what counts as finished"
+    // is a per-project answer even when only one project is read at a time.
     for (const [projectId, category] of [
       [fx.projectId, 'done'],
       [other.id, 'in_progress'],
@@ -599,11 +660,18 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     await setStatus(terminalInA.id, 'released');
     await setStatus(openInB.id, 'released');
 
-    // A FLAT `status: { notIn: [...] }` across the workspace passes every
-    // single-project test and fails exactly here.
-    expect(keys((await homeService.listMyWork(fx.ctx)).items)).toEqual(['PRA-2', 'PRB-1']);
-    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(2);
+    // ⚠️ THE LIFECYCLE AXIS MUST SURVIVE THE PROJECT NARROWING (MOTIR-2761 AC5).
+    // The single `HomeProjectScope` still carries ITS project's done keys, so
+    // `released` excludes in A and admits in B — read from the SAME status key,
+    // which is what makes this evidence rather than a restatement. Narrowing to
+    // a bare `projectId` would drop the exclusion silently and pass nothing here.
+    expect(keys((await homeService.listMyWork(hctx(fx))).items)).toEqual(['PRA-2']);
+    expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(1);
     expect(openInA.identifier).toBe('PRA-2');
+
+    expect(keys((await homeService.listMyWork(hctx(fx, other.id))).items)).toEqual(['PRB-1']);
+    expect((await homeService.tabCounts(hctx(fx, other.id))).myWork).toBe(1);
+    expect(openInB.identifier).toBe('PRB-1');
   });
 
   it('is a query PREDICATE — a full page still returns `limit` rows, and the cursor holds', async () => {
@@ -617,15 +685,15 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
       else open.push(item.identifier);
     }
 
-    const first = await homeService.listMyWork(fx.ctx, { limit: 2 });
-    const second = await homeService.listMyWork(fx.ctx, { limit: 2, cursor: first.nextCursor });
+    const first = await homeService.listMyWork(hctx(fx), { limit: 2 });
+    const second = await homeService.listMyWork(hctx(fx), { limit: 2, cursor: first.nextCursor });
 
     expect(first.items).toHaveLength(2); // asked for 2, got 2 — nothing dropped afterwards
     const seen = [...first.items, ...second.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length); // no repeats across the boundary
     expect(seen.sort()).toEqual(open.sort()); // and no drops: exactly the open set
     expect(second.nextCursor).toBeNull();
-    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(4);
+    expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(4);
   });
 
   it('lets a reader whose work is ALL finished reach the empty state', async () => {
@@ -638,8 +706,8 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
 
     // Before this card the empty state was unreachable for anyone with history:
     // a reader with 2 000 closed items and none open saw a full page of them.
-    expect(await homeService.listMyWork(fx.ctx)).toEqual({ items: [], nextCursor: null });
-    expect(await homeService.listWatching(fx.ctx)).toEqual({ items: [], nextCursor: null });
-    expect(await homeService.tabCounts(fx.ctx)).toEqual({ myWork: 0, watching: 0 });
+    expect(await homeService.listMyWork(hctx(fx))).toEqual({ items: [], nextCursor: null });
+    expect(await homeService.listWatching(hctx(fx))).toEqual({ items: [], nextCursor: null });
+    expect(await homeService.tabCounts(hctx(fx))).toEqual({ myWork: 0, watching: 0 });
   });
 });

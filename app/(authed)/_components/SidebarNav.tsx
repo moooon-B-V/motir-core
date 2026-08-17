@@ -224,11 +224,10 @@ export function SidebarNav({
         // reader goes to ask "what is waiting on me". `/dashboard` keeps its
         // route AND the row below: nothing is re-homed.
         //
-        // ⚠️ WORKSPACE-scoped, not project-scoped — which is why the same row
-        // is ALSO rendered in the no-project state further down. Every other
-        // entry in this list needs a project; Home does not, and a reader who
-        // has just signed in without one still has to be able to get back to
-        // the page they landed on.
+        // ⚠️ PROJECT-scoped, like every row under it (MOTIR-2761) — which is
+        // why this section is the ONLY place it is rendered. It used to be
+        // workspace-scoped and carried a duplicate row in the no-project block
+        // below; both are gone.
         icon: <House />,
         label: t('nav.home'),
         href: '/home',
@@ -344,25 +343,19 @@ export function SidebarNav({
     sections.push({ id: 'primary', items: offered });
   }
 
-  // NO ACTIVE PROJECT — Home is still reachable (Subtask MOTIR-2654). Every
-  // other primary entry is project-scoped and correctly absent here, but Home is
-  // workspace-scoped: it works with no project (it renders its empty state), and
-  // signing in lands here, so a reader in this state would otherwise have no nav
-  // row back to the page they arrived on. One row, no section label — the same
-  // shape the primary section takes when a project IS active.
-  if (!hasProject) {
-    sections.push({
-      id: 'primary',
-      items: [
-        {
-          icon: <House />,
-          label: t('nav.home'),
-          href: '/home',
-          active: isActive(pathname, '/home'),
-        },
-      ],
-    });
-  }
+  // NO ACTIVE PROJECT — and no primary section at all. There WAS a second,
+  // duplicate Home row here (Subtask MOTIR-2654), justified by "Home is
+  // workspace-scoped: it works with no project" — which is precisely the
+  // property MOTIR-2761 removed. Once `/home` needs a project, a row offering it
+  // to a reader who has none is a row promising a room the product cannot open,
+  // so Home joins every other primary entry in being correctly absent and the
+  // rail keeps only its bottom section. `/home` stays reachable by URL and
+  // renders the create-first door there; nothing redirects
+  // (`docs/decisions/home-scope.md` §2.1–2.2).
+  //
+  // The row was also the tell, not merely a consequence: a special case invented
+  // to make a new surface fit its slot is a signal about the slot
+  // (`notes.html` #263 / MOTIR-2762). Curing the mismatch retires it.
 
   // THE AREA DOOR (Subtask MOTIR-2468, design panel 1). With an active project
   // the Settings row deep-links into the project-settings area — so it renders

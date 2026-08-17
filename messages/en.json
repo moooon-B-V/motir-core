@@ -6082,7 +6082,7 @@
   },
   "home": {
     "heading": "Home",
-    "subtitle": "Everything across {workspace} that is waiting on you.",
+    "subtitle": "Everything in {project} that is waiting on you.",
     "tabs": {
       "label": "Home views",
       "myWork": "My work",
@@ -6090,7 +6090,6 @@
     },
     "columns": {
       "title": "Title",
-      "project": "Project",
       "role": "Your role",
       "assignee": "Assignee",
       "status": "Status"
