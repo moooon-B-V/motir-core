@@ -49,12 +49,20 @@ import { scanSingletonReads } from './singletonReadScan';
 // passes nothing) and carries its own two ratchets, both at their floor.
 //
 // `public` remains the one verdict that cannot be earned by reading code: it is the claim
-// that MOTIR-2684's public policy ARM admits the row, and only the public-projects suite
-// passing under the app role can settle it. The 8 `unreviewed` sites below are all of that
-// kind, and they belong to MOTIR-2789 — NOT to this story.
+// that MOTIR-2684's public policy ARM admits the row, and only a suite passing under the
+// app role can settle it. MOTIR-2833 earned the last eight of that kind, so the
+// `unreviewed` population is EMPTY and the verdict has been removed from the union.
 //
-// `UNREVIEWED_CEILING` may fall, never rise. Rewriting a ceiling upward to make a build
-// pass is the one edit this file exists to prevent.
+// ⚠️ AND EARNING THEM PROVED HALF OF THEM BROKEN — the argument for insisting on a run.
+// The plan predicted all eight would come back `public`, reasoning that they all target
+// `project` / `work_item`, the two armed tables. Four of them JOIN a table that had no arm
+// (`workflow_status`; and `workspace` -> `organization` for the project square), and under
+// RLS an unadmitted join returns zero rows and raises nothing — so the prediction was not
+// merely optimistic, it was pointing at the defect. A read is admitted only if EVERY table
+// it touches is admitted. See the note above VERDICTS, MOTIR-2856, and `notes.html` #269.
+//
+// `UNREVIEWED_CEILING` may fall, never rise, and is now at 0. Rewriting a ceiling upward
+// to make a build pass is the one edit this file exists to prevent.
 //
 // (It earned its keep before it shipped: the first run of this guard failed on four
 // sites its own author had missed while transcribing the list by hand, and on two
@@ -90,9 +98,13 @@ type Verdict =
    * policy admits the row with NO GUC bound, so it needs the policy to exist and
    * a test to have watched it work. Both halves are named in the reason.
    */
-  | 'public'
-  /** Enumerated, not yet adjudicated. Only ever to be REMOVED from this file. */
-  | 'unreviewed';
+  | 'public';
+// `unreviewed` — "enumerated, not yet adjudicated" — lived here and is GONE
+// (MOTIR-2833). It was always documented as "only ever to be REMOVED from this
+// file", and with the population empty the union is the stronger statement: there
+// is no longer a value an author can reach for to defer a judgement, so a new
+// unbound read must earn one of the five real verdicts or fail the build. The
+// ceiling below survives at 0 as the runtime half of the same guarantee.
 
 const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // ── pre-auth: the shared rate limiter ─────────────────────────────────────
@@ -152,59 +164,85 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public_request_vote_public_project_read (20260813210000) · publicProjectAccess.test',
   ],
 
-  // ── unreviewed (8) ────────────────────────────────────────────────────────
-  // The public-surface reads, and the ONE category the header's argument still binds:
-  // a `public` verdict is the claim that MOTIR-2684's public policy ARM admits the row,
-  // and only a green public-projects suite under the app role can settle it. That suite
-  // is at 23 failures (down from 33), so the verdict is not yet earnable — writing one
-  // today would be, in the header's words, a guess wearing a citation.
+  // ── public (8) — the last of the `unreviewed` population (MOTIR-2833) ──────
+  // These eight were the whole of the `unreviewed` set. Each verdict below names the
+  // policy ARM it rests on AND the suite run that watched the arm work, because a
+  // `public` verdict is a claim about the DATABASE's behaviour and nothing you can read
+  // off the repository settles it.
   //
-  // Two facts already narrow it. Against `pg_policies`, ONLY `project` and `work_item`
-  // carry public arms — `board`, `board_column`, `board_column_status`,
-  // `workflow_status`, `comment`, `public_request_vote` and `work_item_link` do not — and
-  // a direct probe as `motir_app` with NO GUC bound returns `projects_visible=1`,
-  // `items_visible=1`, so the two arms that exist do work. The reads below all target
-  // `project` or `work_item`, which is why they are plausibly `public` rather than
-  // plausibly broken; the suite has to say so before it is written down.
+  // ⚠️ THE PLAN-TIME PREDICTION WAS WRONG FOR HALF OF THEM, AND THE REASON IS WORTH
+  // KEEPING. The card carried this: "Against `pg_policies`, ONLY `project` and
+  // `work_item` carry public arms … The reads below all target `project` or `work_item`,
+  // which is why they are plausibly `public` rather than plausibly broken."
+  //
+  // They do TARGET those two tables. FOUR of them JOIN a third — and the sentence above
+  // names it. `workflow_status` had no arm, so the three roadmap/dedupe reads that join it
+  // returned zero rows and raised nothing; `listPublicDirectoryRanked` failed the same way
+  // through `workspace` -> `organization`, two tables the prediction did not mention at
+  // all. A read is admitted only if EVERY table it touches is admitted: the join is part
+  // of the predicate, and a policy-arm inventory describes the FROM clause, not the query.
+  // MOTIR-2856 added the three missing arms; `notes.html` #269 records the reasoning error.
+  //
+  // The control that makes the diagnosis a measurement rather than a story:
+  // `findPublicRoadmapByStatus` joins only armed tables and PASSED under `motir_app` in the
+  // same run in which its three neighbours failed — once its fixture project was actually
+  // public, which is the OTHER half of what was wrong (MOTIR-2857).
+
+  // -- reads admitted by a single-table arm ----------------------------------
+  // `project_public_read` is an UNGATED `"accessLevel" = 'public'` SELECT arm — no
+  // `app.workspace_id` test — so an unbound cross-tenant list of public projects is
+  // admitted, which is exactly what these two need and why neither ever needed a fix.
   'projectRepository.ts#findPublicByIdentifier': [
-    'unreviewed',
-    'public arm, needs the green suite',
+    'public',
+    'project_public_read (20260811230000) · publicProjects suite — every read service resolves through it (resolvePublicProject)',
   ],
-  'projectRepository.ts#listPublic': ['unreviewed', 'public arm, needs the green suite'],
-  'projectRepository.ts#listPublicDirectoryRanked': [
-    'unreviewed',
-    'public arm, needs the green suite',
+  'projectRepository.ts#listPublic': [
+    'public',
+    'project_public_read (20260811230000) · publicAccessAndProjection.test "listPublicForSitemap … CROSS-TENANT" (added by MOTIR-2833 — the read had NO test at all)',
   ],
-  'workItemRepository.ts#countPublicRoadmapSubmitted': [
-    'unreviewed',
-    'public arm, needs the green suite',
-  ],
-  'workItemRepository.ts#findPublicRequestMatches': [
-    'unreviewed',
-    'public arm, needs the green suite',
+  // The unbound `work_item` arm is GATED on there being no bound workspace, which is
+  // precisely the public path. Both of these touch `work_item` and nothing else.
+  'workItemRepository.ts#maxActivityByProjects': [
+    'public',
+    'work_item_public_project_read (20260811230000) · projectSquareDirectory.test "public demand stats"',
   ],
   'workItemRepository.ts#findPublicRoadmapByStatus': [
-    'unreviewed',
-    'public arm, needs the green suite',
+    'public',
+    'work_item_public_project_read + public_request_vote_public_project_read (20260811230000, 20260813210000) · publicRoadmap.test findPublicRoadmapByStatus (3 cases)',
   ],
+
+  // -- reads that needed MOTIR-2856's arms before the verdict was true --------
+  // Each of these was BROKEN under `motir_app` when this card opened. The verdict is
+  // `public` as of the arms landing, and the cited run is the one that proves it.
   'workItemRepository.ts#findPublicRoadmapSubmitted': [
-    'unreviewed',
-    'public arm, needs the green suite',
+    'public',
+    'work_item_public_project_read + workflow_status_public_project_read + public_request_vote_public_project_read (20260811230000, 20260815200000, 20260813210000) · publicRoadmap.test findPublicRoadmapSubmitted (3 cases)',
   ],
-  'workItemRepository.ts#maxActivityByProjects': [
-    'unreviewed',
-    'public arm, needs the green suite',
+  'workItemRepository.ts#countPublicRoadmapSubmitted': [
+    'public',
+    'work_item_public_project_read + workflow_status_public_project_read (20260811230000, 20260815200000) · publicRoadmap.test countPublicRoadmapSubmitted',
+  ],
+  'workItemRepository.ts#findPublicRequestMatches': [
+    'public',
+    'work_item_public_project_read + workflow_status_public_project_read + public_request_vote_public_project_read (20260811230000, 20260815200000, 20260813210000) · publicSubmit.test findDuplicateRequests',
+  ],
+  'projectRepository.ts#listPublicDirectoryRanked': [
+    'public',
+    'project_public_read + workspace_public_project_read + organization_public_project_read (20260811230000, 20260815200000) · projectSquare suite (directory, ranking, search, guarantees)',
   ],
 };
 
 /**
- * The ratchet. Pinned to the count measured when this guard shipped; MOTIR-2784
- * and the fixture batches drive it to zero.
+ * The ratchet, now AT ITS FLOOR. Every enumerated singleton read of a policy-gated
+ * table carries a real verdict; none is deferred.
  *
- * ⚠️ This number may only ever go DOWN. If a change makes this fail, the fix is to
- * adjudicate the site — never to raise the ceiling.
+ * ⚠️ This number may only ever go DOWN, and it cannot go down further. Since
+ * MOTIR-2833 the `Verdict` union has no `'unreviewed'` member either, so the state
+ * is unreachable by TYPE as well as by count — re-entering it takes an explicit
+ * type change, which is the point. If this assertion ever fails, someone has cast
+ * their way past the union; adjudicate the site, never raise the ceiling.
  */
-const UNREVIEWED_CEILING = 8;
+const UNREVIEWED_CEILING = 0;
 // 70 -> 69: MOTIR-2789 made `workspaceRepository.findById` bindable and bound the public
 // board/stats reads that were its callers.
 // 69 -> 8: MOTIR-2789 adjudicated the rest. NOT by fixing 61 reads — by locating every
@@ -216,6 +254,16 @@ const UNREVIEWED_CEILING = 8;
 // correctness — see the two-ratchets note in this file's header, which is the whole
 // reason a second ratchet existed. Reporting the unreviewed count alone would have
 // misrepresented that commit.
+//
+// 8 -> 0: MOTIR-2833 earned the last eight, and this drop is the OPPOSITE of the 69 -> 8
+// one above — it is correctness, not just knowledge, because half of it was paid for in
+// policy. FOUR of the eight were BROKEN when the card opened: three roadmap/dedupe reads
+// join `workflow_status` and `listPublicDirectoryRanked` joins `workspace` -> `organization`,
+// none of which carried a public arm, so each returned zero rows and raised nothing.
+// MOTIR-2856 added the three arms; MOTIR-2857 fixed the two test defects that had hidden
+// the whole class (app-role setup writes in `tests/projectSquare`, and a `publicRoadmap`
+// fixture that was never made public); MOTIR-2833 added the missing `listPublic` test and
+// wrote the verdicts. The other four were always correct and are now SAID to be, with a run.
 //
 // 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
 // (`organizationRepository.findById` / `findBySlug`,
@@ -265,18 +313,46 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     ).toEqual([]);
   });
 
-  it('the unreviewed count only ever falls', () => {
+  it('the unreviewed count only ever falls, and is now at its floor', () => {
+    // `'unreviewed'` is no longer a member of `Verdict` (MOTIR-2833), so this
+    // comparison is deliberately widened to `string`: the TYPE now refuses the
+    // value, and this is the runtime backstop for the one way past it — an
+    // author casting a verdict in. Without the widening TS rejects the compare
+    // as having no overlap, which would quietly delete the check.
     const unreviewed = Object.entries(VERDICTS)
-      .filter(([, [verdict]]) => verdict === 'unreviewed')
+      .filter(([, [verdict]]) => (verdict as string) === 'unreviewed')
       .map(([key]) => key);
 
     expect(
       unreviewed.length,
       `${unreviewed.length} sites are still unreviewed (ceiling ${UNREVIEWED_CEILING}). ` +
-        'If this failed because the count ROSE, adjudicate the site instead of raising ' +
-        'the ceiling. If it fell, lower UNREVIEWED_CEILING to the new count in the same ' +
-        'commit — that is what makes the progress durable.',
+        'The ceiling is at its floor and `unreviewed` is gone from the Verdict union, so ' +
+        'reaching this means a site was cast past the type. Adjudicate it — never raise ' +
+        'the ceiling.',
     ).toBeLessThanOrEqual(UNREVIEWED_CEILING);
+  });
+
+  it('every verdict cites the evidence its kind requires', () => {
+    // The reason string is the only place a verdict's grounds live, and a `public`
+    // verdict is a claim about the DATABASE — so it must name the policy ARM and the
+    // RUN that watched it work. This is the check that would have made MOTIR-2833's
+    // predicted-but-unearned verdicts impossible to write down: four of the eight were
+    // broken at the time, and no run existed to cite for any of them.
+    const publicVerdicts = Object.entries(VERDICTS).filter(([, [verdict]]) => verdict === 'public');
+
+    // A floor, so deleting the population cannot make this pass vacuously.
+    expect(publicVerdicts.length).toBeGreaterThanOrEqual(9);
+
+    for (const [key, [, reason]] of publicVerdicts) {
+      expect(reason, `${key}: a \`public\` verdict must name the policy arm it rests on`).toMatch(
+        /_(read|public_project_read)\b/,
+      );
+      expect(
+        reason,
+        `${key}: a \`public\` verdict must cite the run that settles it — a migration ` +
+          'number alone is the policy EXISTING, not the policy WORKING',
+      ).toMatch(/·/);
+    }
   });
 
   it('the scanner rules correctly on a fixture with all five shapes', () => {
