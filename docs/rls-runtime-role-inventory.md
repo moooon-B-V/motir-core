@@ -1267,11 +1267,119 @@ this class is already suppressed, with its own base database, and with the total
 
 ---
 
+## CLOSED — the test-side unbound READ (MOTIR-2881, 2026-08-17)
+
+MOTIR-2872's **class 2**: the fixture batches migrated the WRITES onto `adminDb` and left the
+assertion-side READS on the `@/lib/db` singleton, which under the role is `motir_app` and binds no
+workspace GUC. Measured at `50dba13b` with `TEST_DB_APP_ROLE=1`, the class reproduced exactly as
+partitioned — **67 failed / 138 passed across the 12 named files** — and it closes at **58 fixed in 9
+files**, with the other **9 reclassified to two application-side owners** (below).
+
+### Before / after, by file
+
+| file                                     | before |            after | how                        |
+| ---------------------------------------- | -----: | ---------------: | -------------------------- |
+| `integration/sprints/repository`         |     11 |            **0** | owner-side read            |
+| `custom-fields/repositories`             |     10 |            **0** | owner-side read            |
+| `labels-components-watch/repositories`   |     10 |            **0** | owner-side read            |
+| `comments/repositories`                  |      9 |            **0** | owner-side read            |
+| `notifications/repositories`             |      7 |            **0** | owner-side read            |
+| `boards/repositories`                    |      4 |            **0** | bound the OWN workspace    |
+| `integration/work-items/link-repository` |      4 |            **0** | bound + owner (MOTIR-2884) |
+| `automation/automation-rules-service`    |      2 |            **0** | bound the workspace        |
+| `ai/planChangeSessionsService`           |      1 |            **0** | bound the OWN workspace    |
+| **the nine this card owns**              | **58** |            **0** |                            |
+| `last-active-project-seam`               |      4 | → **MOTIR-2886** | application read           |
+| `last-active-project`                    |      3 | → **MOTIR-2886** | application read           |
+| `api/live-projects-route`                |      2 | → **MOTIR-2880** | application read           |
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run \
+  tests/integration/sprints/repository.test.ts tests/custom-fields/repositories.test.ts \
+  tests/labels-components-watch/repositories.test.ts tests/comments/repositories.test.ts \
+  tests/notifications/repositories.test.ts tests/boards/repositories.test.ts \
+  tests/integration/work-items/link-repository.test.ts \
+  tests/automation/automation-rules-service.test.ts tests/ai/planChangeSessionsService.test.ts
+  →  Test Files  9 passed (9)      Tests  166 passed (166)
+```
+
+### The two dispositions, and which site gets which
+
+The card's rule is "bind a context, or use `adminDb` where the assertion legitimately spans tenants —
+chosen per site". In practice the choice was decided by the FILE's subject, and it fell out cleanly:
+
+- **Five files are `ADJUDICATED_UNBOUND_FILES`** in `tests/rls/testCallSiteScan.ts` (MOTIR-2751 /
+  MOTIR-2739/2747): their subject is the repository contract, the migration-built constraints, and the
+  application's explicit `workspaceId` WHERE-clause gate, **with RLS deliberately inert**. Their reads
+  now go through the SAME owner client their writes already used — a local `readAsOwner` helper wrapping
+  `adminDb.$transaction`. Binding a workspace instead would have hidden every cross-workspace row twice
+  over and made the gate assertions vacuous, which is precisely what those adjudications record.
+- **Four files bind**, because their subject is the running system: `boards/repositories`,
+  `integration/work-items/link-repository`, `automation/automation-rules-service` and
+  `ai/planChangeSessionsService` now open `withWorkspaceServiceContext` around the assertion read.
+
+**And the move has a coverage consequence, paid in the file that owns it.** Routing these reads onto a
+client removed the last unbound caller from eight more repositories — every production caller already
+threads a `tx` — so their `tx ?? db` fallback arms went uncovered, on files gated at the ≥90% branch
+floor. Measured per method with `scanTestCallSites`, then re-measured as coverage: `commentRepository`
+15/23 → 10/23 branches, `componentRepository` 15/18 → 10/18, `watcherRepository` 10/14 → 7/14, and five
+more. This is the third time that sweep has happened (MOTIR-2815, MOTIR-2830, now), and the answer is the
+same one those two settled: the orphaned arms are exercised deliberately, per role, in
+`tests/rls/tx-fallback-arm.test.ts` — rows under the owner, EMPTY under `motir_app`. With that block
+added, every affected file is back at or above its baseline branch count.
+
+**Where a cross-workspace gate is the subject, bind the OWN workspace and pass the FOREIGN id as the
+argument.** `boards/repositories` is the fixture: its four failures were all positive-half reads bound to
+tenant `b` while reading tenant `a`'s board, so the policy hid the row the assertion wanted. Its negative
+halves were already right — bound to `a`, reading with `b`'s id — and that ordering is what keeps the
+WHERE-clause gate distinguishable from the policy.
+
+### What the vacuous passes cost, and why the fix is wider than the 58
+
+The 67 are the failures. The class is bigger: in the same files, **every assertion expecting `null` /
+`[]` / `0` was passing for the wrong reason** — the policy had hidden the row, so `findById` after a
+cascade delete, `existsFor` after an unwatch, and every foreign-workspace probe asserted nothing at all.
+Those sites are converted here too, which is why the diff touches more call sites than the failure count
+suggests. A read that has to be admitted before its emptiness means anything is the whole lesson of this
+class, stated once more in the direction that does not go red.
+
+### Two findings filed, not absorbed
+
+- **[MOTIR-2884] the cross-workspace link trigger is INERT under `motir_app`.** Two of the four failures
+  in `integration/work-items/link-repository` were not empty reads — they were a WRITE the trigger exists
+  to refuse SUCCEEDING. `enforce_work_item_link_workspace()` is SECURITY INVOKER, so its own
+  `SELECT … FROM work_item WHERE id = NEW."toId"` is RLS-filtered: the foreign item reads as missing, the
+  function takes its documented "defer to the FK" branch, and the cross-tenant row lands. The migration
+  predicted this question in 2026-05 and answered it for the group — _"within a single workspace every
+  row shares one workspaceId, so the GUC will match"_ — which is true of the five same-tenant triggers
+  and is the negation of what the sixth is for. Those two cases run as the owner here; the role-specific
+  hole is that card's, with its own regression case under the role.
+- **[MOTIR-2886] `resolveLastActiveContext` reads `project` under a USER-only context.** Seven failures
+  across the two `last-active-project*` files, and not a test defect: `withUserContext` binds only
+  `app.user_id`, `project` has arms only for `app.workspace_id` / `app.system_admin` / `accessLevel =
+'public'`, so the read returns null and every cold landing silently falls back to first-by-createdAt.
+
+`api/live-projects-route`'s two were handed to **MOTIR-2880** by comment with the `pg_policies` read-back:
+`liveProjectsService.resolve` is a `withSystemContext` read whose `workspace: { is: {} }` JOIN hits a
+table with no `system_admin` arm, so the offboarding backstop is told every live project is `absent`.
+
+### For the next re-measurement
+
+The suite total is **not** expected to fall by 58: as with every class before it, what sat behind an
+empty read is the next layer, not nothing. And the two scanners still cannot see this class —
+`testCallSiteScan` classifies these five files' reads as `adjudicated-unbound`, which is the correct
+verdict about BINDING and says nothing about the client the read runs on. The instrument that would have
+caught it is the one MOTIR-2864's entry already asked for: an assertion per (table, context) pair.
+
+---
+
 ## `project`'s THIRD arm — the `withUserContext` member read (MOTIR-2886, 2026-08-17)
 
-**The first entry in this document whose dead read is under `withUserContext` rather than a
-`workspace_id`-shaped context** — every arm above is keyed on a bound workspace, a bound org, or the
-system flag, and that is exactly why this one survived all of them.
+The carve MOTIR-2881's entry directly above hands off — seven failures across its two
+`last-active-project` files, and not a test defect — resolved here. **It is also the first entry in
+this document whose dead read is under `withUserContext` rather than a `workspace_id`-shaped
+context**: every arm above is keyed on a bound workspace, a bound org, or the system flag, and that is
+exactly why this one survived all of them.
 
 `workspacesService.resolveLastActiveContext` (Subtask 8.8.27) is a RESOLUTION read: it computes WHICH
 workspace the request acts within, so by construction no `app.workspace_id` exists yet. It runs inside
@@ -1305,7 +1413,7 @@ belongs to. Both directions are asserted in `tests/last-active-project.test.ts`.
 - **The vacuous passes outnumbered the failures, and were the more dangerous half.** Seven assertions
   across the two files went red; **three others kept passing while checking nothing**, because a
   function that returns `null` for the right reason and one that returns `null` two lines too early are
-  indistinguishable from outside. Dropping the arm against the fixed tree now fails **12** of 28, not
+  indistinguishable from outside. Dropping the arm against the fixed tree now fails **12** of 29, not
   7 — the gap is the measure of how much of this defect a green-chasing fix would have left behind. The
   rule that closes it: **assert the intermediate** (the resolved project, the gate's own verdict, the
   pointer) — never only the terminal `null`.

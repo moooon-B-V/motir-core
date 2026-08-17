@@ -174,6 +174,15 @@ describe('workItemLinkRepository.create — cycle trigger (is_blocked_by only)',
   });
 });
 
+// ⚠️ THESE TWO WRITES RUN AS THE OWNER, NOT THROUGH `createLink` (MOTIR-2881).
+// The subject is a TWO-TENANT claim — the trigger compares fromItem's workspace with
+// toItem's — and no single bound context can see both items, so there is no context
+// to write them under. Under `motir_app` the trigger's own lookups are RLS-filtered:
+// the foreign item reads as MISSING, the function takes its "defer to the FK" branch,
+// and the insert SUCCEEDS. That is a real defect in the backstop rather than a test
+// problem — a `lib/`+migration fix, out of this card's scope — and it is filed as
+// MOTIR-2884. Running these as the owner keeps the trigger's own claim under test
+// here; the role-specific hole belongs to that card, with its own regression case.
 describe('workItemLinkRepository.create — workspace consistency trigger', () => {
   it('rejects a link whose fromItem and toItem live in different workspaces (WI_LINK_CROSS_WORKSPACE)', async () => {
     const fxA = await makeFixture({ name: 'Acme A', identifier: 'AAA' });
@@ -182,15 +191,20 @@ describe('workItemLinkRepository.create — workspace consistency trigger', () =
     const b = await createWorkItem(fxB, { kind: 'task', title: 'B' });
 
     await expect(
-      createLink({
-        // workspaceId matches one side; the trigger compares the two items
-        // and rejects regardless because they disagree.
-        workspaceId: fxA.workspace.id,
-        fromId: a.id,
-        toId: b.id,
-        kind: 'relates_to',
-        createdById: fxA.owner.id,
-      }),
+      adminDb.$transaction((tx) =>
+        workItemLinkRepository.create(
+          {
+            // workspaceId matches one side; the trigger compares the two items
+            // and rejects regardless because they disagree.
+            workspaceId: fxA.workspace.id,
+            fromId: a.id,
+            toId: b.id,
+            kind: 'relates_to',
+            createdById: fxA.owner.id,
+          },
+          tx,
+        ),
+      ),
     ).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
   });
 
@@ -202,15 +216,21 @@ describe('workItemLinkRepository.create — workspace consistency trigger', () =
 
     // Same-workspace items, but the link row carries the WRONG workspaceId
     // (workspace B). The trigger's mismatch branch surfaces a distinct typed
-    // error so this service-layer bug shape is visible.
+    // error so this service-layer bug shape is visible. Owner-side for the reason
+    // in the block comment above this describe.
     await expect(
-      createLink({
-        workspaceId: fxB.workspace.id,
-        fromId: a.id,
-        toId: b.id,
-        kind: 'relates_to',
-        createdById: fxA.owner.id,
-      }),
+      adminDb.$transaction((tx) =>
+        workItemLinkRepository.create(
+          {
+            workspaceId: fxB.workspace.id,
+            fromId: a.id,
+            toId: b.id,
+            kind: 'relates_to',
+            createdById: fxA.owner.id,
+          },
+          tx,
+        ),
+      ),
     ).rejects.toBeInstanceOf(WorkspaceMismatchLinkError);
   });
 });
@@ -468,9 +488,12 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
     });
 
     expect(
-      await workItemLinkRepository.findBlockerSessionBranchesForItems(
-        [dependent.id],
-        fx.workspace.id,
+      await withWorkspaceServiceContext(fx.workspace.id, (tx) =>
+        workItemLinkRepository.findBlockerSessionBranchesForItems(
+          [dependent.id],
+          fx.workspace.id,
+          tx,
+        ),
       ),
     ).toEqual([{ fromId: dependent.id, sessionBranch: 'motir/auto-1' }]);
   });
@@ -491,11 +514,17 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
     });
 
     // An item whose blockers are all on `main` is simply ABSENT from the result
-    // — the caller reads that as "ready from the trunk".
+    // — the caller reads that as "ready from the trunk". BOUND (MOTIR-2881): the
+    // edge and its blocker have to be VISIBLE for the mapper's null-branch to be
+    // what empties the result; unbound, the policy empties it and the arm this
+    // test exists for never runs.
     expect(
-      await workItemLinkRepository.findBlockerSessionBranchesForItems(
-        [dependent.id],
-        fx.workspace.id,
+      await withWorkspaceServiceContext(fx.workspace.id, (tx) =>
+        workItemLinkRepository.findBlockerSessionBranchesForItems(
+          [dependent.id],
+          fx.workspace.id,
+          tx,
+        ),
       ),
     ).toEqual([]);
   });
@@ -526,15 +555,24 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
       createdById: mine.owner.id,
     });
 
-    // Unscoped: found.
-    expect(await workItemLinkRepository.findBlockerSessionBranchesForItems([dependent.id])).toEqual(
-      [{ fromId: dependent.id, sessionBranch: 'motir/auto-2' }],
-    );
-    // Scoped to ANOTHER tenant: nothing, without an existence leak.
+    // Unscoped ARGUMENT, bound CONTEXT (MOTIR-2881): the `workspaceId ? …` arm this
+    // half exists to cover is the one where the argument is absent, and the read
+    // still has to be admitted to return a row — under `motir_app` the operator path
+    // is bound by its caller, not unbound.
     expect(
-      await workItemLinkRepository.findBlockerSessionBranchesForItems(
-        [dependent.id],
-        theirs.workspace.id,
+      await withWorkspaceServiceContext(mine.workspace.id, (tx) =>
+        workItemLinkRepository.findBlockerSessionBranchesForItems([dependent.id], undefined, tx),
+      ),
+    ).toEqual([{ fromId: dependent.id, sessionBranch: 'motir/auto-2' }]);
+    // Scoped to ANOTHER tenant: nothing, without an existence leak. Bound to MINE, so
+    // the empty answer is the ARGUMENT's scoping and not the policy's.
+    expect(
+      await withWorkspaceServiceContext(mine.workspace.id, (tx) =>
+        workItemLinkRepository.findBlockerSessionBranchesForItems(
+          [dependent.id],
+          theirs.workspace.id,
+          tx,
+        ),
       ),
     ).toEqual([]);
   });

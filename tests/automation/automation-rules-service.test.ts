@@ -23,7 +23,7 @@ import {
   AUTOMATION_RULES_PER_PROJECT_CAP,
 } from '@/lib/automation/constants';
 import { encodeFilterParam, type FilterAst, type FilterCondition } from '@/lib/filters/ast';
-import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceServiceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -164,7 +164,13 @@ describe('create', () => {
     expect(rule.consecutiveFailureCount).toBe(0);
     expect(rule.autoDisableThreshold).toBe(10);
 
-    const persisted = await automationRuleRepository.findByIdInProject(rule.id, s.project.id);
+    // BOUND (MOTIR-2881): `automation_rule` is workspace-gated, so an unbound
+    // read-back returns null under `motir_app` and the assertion reads
+    // `expected undefined to be <owner>` — a persistence claim answered by the
+    // policy rather than by the row.
+    const persisted = await withWorkspaceServiceContext(s.workspace.id, (tx) =>
+      automationRuleRepository.findByIdInProject(rule.id, s.project.id, tx),
+    );
     expect(persisted?.ownerId).toBe(s.owner.id);
   });
 
@@ -340,8 +346,12 @@ describe('list + get', () => {
     const list = await automationRulesService.list(s.key, s.ownerCtx);
     expect(list.map((r) => r.id)).toEqual([b.id, a.id]);
 
-    // A direct repo read (no tx — the read-only `db` path) returns the same set.
-    const direct = await automationRuleRepository.listByProject(s.project.id);
+    // A direct repo read returns the same set. BOUND (MOTIR-2881): the read has to
+    // be admitted to answer at all; the repository's own `tx ?? db` fallback arm is
+    // exercised deliberately, per role, in `tests/rls/tx-fallback-arm.test.ts`.
+    const direct = await withWorkspaceServiceContext(s.workspace.id, (tx) =>
+      automationRuleRepository.listByProject(s.project.id, tx),
+    );
     expect(direct.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
 
     const got = await automationRulesService.get(s.key, a.id, s.ownerCtx);
