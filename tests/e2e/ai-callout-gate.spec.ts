@@ -86,4 +86,27 @@ test('with Motir AI not configured there is no orb and no callout', async ({ pag
   // The regex catches BOTH namings: the pill's exact `aria-label` and the menu
   // row's longer contents-derived name.
   await expect(page.getByRole('link', { name: /Plan with AI/ })).toHaveCount(0);
+
+  // ── AND THE GATE COSTS NOTHING (MOTIR-2763) ──
+  // The shell reserves clearance under the orb, because a `position: fixed`
+  // element takes viewport space from every page while participating in none of
+  // their layouts. That reservation rides the SAME `showPlanWithAi` gate, so a
+  // workspace with AI planning unconfigured must gain no dead space: the content
+  // column keeps its original 1.5rem bottom padding, not the orb's 6rem.
+  //
+  // This assertion belongs HERE, in this lane, for the reason the header gives —
+  // it is the only lane where the gate is genuinely closed, so it is the only
+  // place the "unconfigured pays nothing" half can be measured rather than
+  // mocked. Its twin (the reservation actually being made) is asserted in
+  // `cloud-orb-clearance.spec.ts`, on the lane where the orb ships.
+  const clearance = await page.evaluate(() => {
+    const column = document.querySelector('#main')!.firstElementChild as HTMLElement;
+    const style = getComputedStyle(column);
+    return {
+      variable: style.getPropertyValue('--shell-bottom-clearance').trim(),
+      paddingBottomPx: parseFloat(style.paddingBottom),
+    };
+  });
+  expect(clearance.variable).toBe('1.5rem');
+  expect(clearance.paddingBottomPx).toBe(24);
 });
