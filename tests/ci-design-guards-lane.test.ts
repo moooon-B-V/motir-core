@@ -219,8 +219,10 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
 
   it('publishes on `pull_request` ONLY — never again on the push to `main`', () => {
     // ci.yml runs on both. Re-publishing an identical result after merge is the
-    // behaviour acceptance-video.yml avoids by having no `push:` trigger at all;
-    // this lane shares its host workflow, so it needs the condition instead.
+    // behaviour acceptance-video.yml avoids too — and since MOTIR-2760 it avoids
+    // it the same way this lane does, by gating its publish step on the event
+    // (it now has a `push: main` baseline that tests without publishing). This
+    // comment previously said "by having no `push:` trigger at all".
     expect(ci).toMatch(/^on:\s*$/m);
     expect(ci).toMatch(/^\s{2}push:\s*$/m);
 

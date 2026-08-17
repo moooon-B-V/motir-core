@@ -1661,6 +1661,69 @@ Every one of the 49 sites is a test fixture. The sweep found no application-side
 MOTIR-2880 — the `lib/` write surface closed under MOTIR-2865, and the bare-`db.$transaction` axis
 in `lib/` is MOTIR-2876's scanner. Nothing to file.
 
+---
+
+## The parent-chain triggers were leaning on the SERVICE (MOTIR-2895, 2026-08-17)
+
+Not a dead read, and not a refused write — the first entry in this document about a **check that ran,
+passed, and proved nothing**. It is the other half of MOTIR-2884, and it was found by writing that
+card's per-function verdict rather than by any instrument.
+
+`enforce_work_item_kind_parent`, `enforce_work_item_depth_limit` and `enforce_work_item_no_cycle`
+(`prisma/sql/work_item_triggers.sql`) each RESOLVE the parent — by id for the kind matrix, by recursive
+CTE up the ancestor chain for depth and cycle — and each DEFERS to the foreign key when that lookup
+comes back NULL. Their premise, written down in 1.4.2 and re-affirmed as a group verdict by 1.4.5, is
+that every row they walk shares the writer's context. **That premise was true, and it was true because
+`workItemsService` refuses a cross-project parent (`CrossProjectParentError`, on create and on both
+re-parent paths). Nothing in the database compared `parent."workspaceId"` or `parent."projectId"` with
+the child's at all** — so the DB backstop's completeness rested on the application check it exists to
+backstop, which is the one thing a backstop may not do.
+
+`20260817160000_work_item_parent_tenancy` adds the missing check (`enforce_work_item_parent_tenancy`,
+markers `WI_PARENT_CROSS_WORKSPACE` / `WI_PARENT_CROSS_PROJECT`, translated at the repository edge to the
+same `CrossProjectParentError` the service throws) and re-decides the three on the evidence it creates.
+
+**What the re-decision measured**, with a writer bound to (W1, P1) and a legal 4-deep chain in W1/P1b:
+
+| write, as `motir_app`                                    | under SECURITY INVOKER                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------- |
+| ORM `create` (emits `RETURNING`) of a 5th level into P1b | rejected — **by RLS**, `work_item_project_narrow`, not by the trigger |
+| raw INSERT (no `RETURNING`) of a 5th level into P1b      | **ACCEPTED, row landed** — the depth walk under-counted               |
+| raw INSERT (no `RETURNING`) of a kind-illegal child      | **ACCEPTED, row landed** — the kind matrix never applied              |
+| raw UPDATE re-parent, `WHERE id = <a P1b row>`           | 0 rows — the restrictive SELECT policy hides the row from the UPDATE  |
+| raw UPDATE re-parent with NO `WHERE`                     | reached the P1b rows (the kind trigger fired on one)                  |
+
+Three things in that table are worth carrying forward:
+
+- **The WORKSPACE axis is now a database invariant; the PROJECT axis is not.** RLS's own `WITH CHECK`
+  pins the written row's `workspaceId` to `app.workspace_id`, and the new check pins the parent's to the
+  child's, so the whole ancestor chain shares the bound workspace by induction. But
+  `work_item_project_narrow` is RESTRICTIVE **FOR SELECT only**, so nothing pins the written row's
+  PROJECT to the bound one: a caller bound to P may legally insert into Q of the same workspace, and the
+  walk then truncates. **Chain tenancy is not chain visibility.** 39 shipped `withWorkspaceContext(`
+  call sites bind a non-empty `projectId`, and two of them (`plansService`,
+  `migrateOnboardingService`) are the paths that write work-item trees with parents.
+- **The ORM masked it, which is why a year of tests could not see it.** Prisma's `create` always emits
+  `RETURNING`, and the same restrictive policy rejects the RETURNED row — so through the ORM this shape
+  surfaces as an RLS error and the trigger's silent under-count is never observed. The masking is absent
+  for a direct SQL write, which is the first scenario the trigger file names as its own reason to exist.
+  **A guard proved only through the ORM is a guard unproved against the case it was built for.**
+- **The verdict is per function, including where it nearly went the other way.** `cycle` fires only on
+  `UPDATE OF "parentId"`, and an UPDATE that reads any existing column value has the restrictive SELECT
+  policy applied to its row lookup — so a row whose chain the invoker cannot walk is a row it cannot
+  update (row 4). Given parent tenancy that argument is sound, and it is the one the card predicted.
+  It is defeated only by row 5. All four functions are therefore SECURITY DEFINER with a pinned
+  `search_path`, but on a narrower reachability for `cycle` than for `kind` / `depth`, and the migration
+  records the difference rather than flattening it into a second group verdict.
+
+**What makes the widened reach safe is the FIRING ORDER, not the audit.** Postgres fires per-row BEFORE
+triggers in alphabetical order by trigger name, and the names sort `cotenancy` → `cycle` → `depth` →
+`kind`. A cross-tenant `parentId` aborts the statement before the other three read anything, so their
+definer lookups can only ever address rows sharing the writing row's workspace AND project. The
+ordering is load-bearing for the security argument; `trg_work_item_cotenancy`'s name is chosen for it.
+
+---
+
 ## CLOSED — the test-side FIXTURE on `withSystemContext` (MOTIR-2887, 2026-08-17)
 
 MOTIR-2880's entry closes with _"what this does NOT close"_: 26 failures surviving in seven of the 23

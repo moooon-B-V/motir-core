@@ -15,7 +15,14 @@ import { truncateAuthTables } from '../../helpers/db';
 import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // `parentStatusRollupService.rollUpForChild` — the UPWARD half of bidirectional
-// status derivation (Story MOTIR-1615 · Subtask MOTIR-1620). Real Postgres.
+// status derivation (Story MOTIR-1615 · Subtask MOTIR-1620, AMENDED by Story
+// MOTIR-2888 · Subtask MOTIR-2891). Real Postgres.
+//
+// It is a RECOMPUTE, not a ratchet: the parent's status is a function of its
+// children's current statuses over a FOUR-rung ladder, applied forward OR
+// backward. The `forward-only` describe block these tests used to carry asserted
+// the opposite of the third block below, and was replaced rather than extended —
+// two suites disagreeing about which way a parent may move is worse than either.
 //
 // The one mocked external is the event emitter: this service's post-commit
 // `work-item/transitioned` is what carries derivation to the NEXT level, and the
@@ -147,27 +154,154 @@ describe('the ladder — each rung moves the parent to the right status', () => 
   });
 });
 
-describe('forward-only', () => {
-  it('a child reopening done → in_progress does NOT roll the parent back', async () => {
+describe('the fourth (todo) rung — the ladder can say "open work, none started"', () => {
+  it('a DONE parent given a fresh todo child comes back to todo', async () => {
+    // The story's own case (MOTIR-2888), and the one the ratchet could not
+    // express: `done → todo` is not an edge in the default workflow, so this
+    // lands only via the backward arm's system set.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done', 'done', 'todo']);
+    await setStatus(story.id, 'done');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[2]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_back', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
+  it('an all-todo parent already in todo is the OTHER fixed point — no move, no emit', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo', 'blocked']);
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('todo');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('does NOT fire on an empty aggregate — a childless parent is untouched', async () => {
+    // The mirror of "every child is done must not be vacuously true": creating a
+    // story must not knock its epic back to todo.
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    await setStatus(epic.id, 'done');
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Story',
+      parentId: epic.id,
+    });
+    await setStatus(story.id, 'done');
+    // Every live child of the STORY is archived, so its own aggregate is empty.
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'archived child',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'todo');
+    await adminDb.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
+
+    const res = await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'no_rung', parentId: story.id });
+    expect(await statusOf(story.id)).toBe('done');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('leaves a BLOCKED parent alone — same rung, and blocked is a human marker', async () => {
+    // `blocked` and `todo` share the todo category, so the todo rung ranks level
+    // with where the parent stands. `blocked → todo` IS a legal edge, so treating
+    // the tie as a forward move would silently clear the marker on every child
+    // event. It is neither forward nor backward: nothing moves.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo', 'todo']);
+    await setStatus(story.id, 'blocked');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'same_rung', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('blocked');
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe('the recompute comes BACK — every rung, from a done parent', () => {
+  it('a child reopening done → in_progress DOES bring the parent back', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_progress', 'done']);
     await setStatus(story.id, 'done'); // the parent had already completed
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
-    expect(res).toMatchObject({ outcome: 'not_forward', toStatus: 'in_progress' });
-    expect(await statusOf(story.id)).toBe('done');
-    expect(sent).toHaveLength(0);
+    expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_progress' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+    expect(sent).toHaveLength(1);
   });
 
-  it('an in_review parent is not dragged back to in_progress', async () => {
+  it('a done parent whose last child moves to review comes back to in_review', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done', 'in_review']);
+    await setStatus(story.id, 'done');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_review' });
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+
+  it('an in_review parent IS dragged back to in_progress when a child restarts', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_progress', 'in_review']);
     await setStatus(story.id, 'in_review');
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
-    expect(res).toMatchObject({ outcome: 'not_forward' });
-    expect(await statusOf(story.id)).toBe('in_review');
+    expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'in_progress' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('an all-done parent already done stays put — no move, no emit', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done', 'done']);
+    await setStatus(story.id, 'done');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'done' });
+    expect(sent).toHaveLength(0);
+  });
+
+  it('a backward move lands WITHOUT a workflow edge, and still writes a revision + emits', async () => {
+    // The whole reason the backward arm is a `{ system: true }` set: the default
+    // workflow (restricted mode) has no `done → todo` row, and adding one would
+    // make it a user-draggable board edge. The emit is what carries the recompute
+    // to the grandparent, so a system set that emitted nothing would strand it.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'done');
+
+    expect(await workflowsService.canTransition(fx.projectId, 'done', 'todo', fx.workspaceId)).toBe(
+      false,
+    );
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_back', toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('todo');
+
+    const revs = await adminDb.workItemRevision.findMany({
+      where: { workItemId: story.id },
+      orderBy: { changedAt: 'desc' },
+    });
+    expect((revs[0]!.diff as Record<string, unknown>)['status']).toEqual({
+      from: 'done',
+      to: 'todo',
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.data).toMatchObject({
+      workItemId: story.id,
+      fromStatusKey: 'done',
+      toStatusKey: 'todo',
+    });
   });
 
   it('already in the target status is a no-op that emits nothing (recursion terminates)', async () => {
@@ -176,7 +310,7 @@ describe('forward-only', () => {
     await setStatus(story.id, 'in_progress');
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
-    expect(res).toMatchObject({ outcome: 'already_there' });
+    expect(res).toMatchObject({ outcome: 'already_there', parentId: story.id });
     expect(sent).toHaveLength(0);
   });
 });
@@ -260,6 +394,56 @@ describe('gates and no-ops', () => {
     expect(await statusOf(story.id)).toBe('in_progress');
   });
 
+  it('the forward FALLBACK stops at the parent itself — already_there, not illegal', async () => {
+    // The top rung is illegal and the next matching one is where the parent
+    // already stands. That is a no-op, not a refusal, and reporting it as
+    // `illegal_transition` would put a false negative in the run log.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['in_review', 'done']);
+    await setStatus(story.id, 'in_progress');
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
+    await adminDb.workflowTransition.deleteMany({
+      where: {
+        projectId: fx.projectId,
+        fromStatusId: idOf('in_progress'),
+        toStatusId: idOf('in_review'),
+      },
+    });
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toEqual({ outcome: 'already_there', parentId: story.id, toStatus: 'in_progress' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('the forward FALLBACK never turns into a backward move', async () => {
+    // A parent parked in a CUSTOM in-progress status: the in-review rung is
+    // illegal from there, and the next matching rung (`in_progress`) ranks LEVEL
+    // with where it stands. The fallback must end, not quietly become a system
+    // set — the recompute already decided the direction from the highest rung.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['in_review', 'done']);
+    const parked = await adminDb.workflowStatus.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'parked',
+        label: 'Parked',
+        category: 'in_progress',
+        position: 'z2',
+      },
+    });
+    await setStatus(story.id, parked.key);
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'illegal_transition', toStatus: 'in_review' });
+    expect(await statusOf(story.id)).toBe('parked');
+    expect(sent).toHaveLength(0);
+  });
+
   it('reports the rung it WANTED when no rung is legal from here', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['done']);
@@ -284,9 +468,18 @@ describe('gates and no-ops', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('a parent whose children are all still todo matches no rung', async () => {
+  it('a parent whose only child is TRIAGED matches no rung either', async () => {
+    // `no_rung` used to also cover "every child is still todo". The fourth rung
+    // claims that case now (see its own block above), so the EMPTY aggregate is
+    // the only shape left here — and a triaged child leaves the aggregate for the
+    // same reason an archived one does (`findChildren` excludes both).
     const fx = await makeWorkItemFixture();
-    const { story, children } = await storyWithChildren(fx, ['todo', 'blocked']);
+    const { story, children } = await storyWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'done');
+    await adminDb.workItem.update({
+      where: { id: children[0]!.id },
+      data: { triagedAt: new Date() },
+    });
 
     expect(await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId)).toEqual(
       {
@@ -294,6 +487,8 @@ describe('gates and no-ops', () => {
         parentId: story.id,
       },
     );
+    expect(await statusOf(story.id)).toBe('done');
+    expect(sent).toHaveLength(0);
   });
 });
 

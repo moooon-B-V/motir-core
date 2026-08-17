@@ -92,7 +92,7 @@ async function readWithoutAccessFilter(
     const rows = await workItemRepository.findByAssigneeOrReporterInWorkspace(
       ctx.userId,
       ctx.workspaceId,
-      { projectIds: all.map((p) => p.id), take },
+      { projectScopes: all.map((p) => ({ projectId: p.id, doneStatusKeys: [] })), take },
       tx,
     );
     return rows.map((r) => r.identifier);

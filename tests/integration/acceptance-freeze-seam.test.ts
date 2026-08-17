@@ -26,6 +26,8 @@ import { ALREADY_APPROVED_CODE } from '../../scripts/upload-acceptance-video.mjs
 //   · the NARROWING — the tempting over-fix freezes everything, which passes the
 //     headline test beautifully and silently breaks the review loop;
 //   · the RACE — an approval landing between a publish's read and its write.
+//     Closed on BOTH sides now: MOTIR-2764 gave the publish the lock, MOTIR-2851
+//     gave `decide` the same one, so the two serialise on one row.
 
 vi.mock('@/lib/blob/uploader', () => {
   let seq = 0;
@@ -204,61 +206,123 @@ describe('the freeze seam, end to end', () => {
   });
 
   it('a publish RACING an approval resolves ONE way, with the approved receipt intact', async () => {
-    // The lock-before-read-derived-update discipline: the publish reads the
-    // current receipt's status under `SELECT … FOR UPDATE`, so an approval that
-    // lands concurrently cannot slip between that read and the supersede.
-    const story = await inReviewStory();
-    await publish(story, 'first.webm', 'aaa');
+    // The lock-before-read-derived-update discipline, on BOTH sides of the seam:
+    // the publish reads the current receipt's status under `SELECT … FOR UPDATE`
+    // (MOTIR-2764) and so does `decide` (MOTIR-2851), so the two serialise on one
+    // row instead of interleaving between a read and its derived write.
+    //
+    // ⚠️ DRIVEN IN A LOOP, WITH A FRESH STORY PER ROUND. Which side wins is a
+    // timing outcome, so a race run ONCE tests whichever path happened to fire
+    // that morning — and this defect only ever appeared on the losing one.
+    const outcomes: string[] = [];
 
-    const [approveResult, publishResult] = await Promise.allSettled([
-      acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
-      publish(story, 'racing.webm', 'bbb'),
-    ]);
+    for (let round = 0; round < 5; round++) {
+      const story = await inReviewStory();
+      await publish(story, 'first.webm', `aaa-${round}`);
 
-    // Whichever order the two transactions serialise in, the invariant holds:
-    // exactly one current receipt, and if it is approved its bytes are linked.
-    expect(approveResult.status).toBe('fulfilled');
-    const currents = await adminDb.acceptanceEvidence.findMany({
-      where: { workItemId: story.id, isCurrent: true },
-    });
-    expect(currents).toHaveLength(1);
-    const row = currents[0]!;
+      const [approveResult, publishResult] = await Promise.allSettled([
+        acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx),
+        publish(story, 'racing.webm', `bbb-${round}`),
+      ]);
 
-    if (publishResult.status === 'fulfilled' && publishResult.value.status === 409) {
-      // The approval won the race: the receipt is frozen and untouched.
-      expect(row.status).toBe('approved');
+      // The approval is never the casualty — a "fix" that serialises by refusing
+      // it would pass every invariant below and break the review loop.
+      expect(approveResult.status, `round ${round}: the approval was refused`).toBe('fulfilled');
+      expect(publishResult.status).toBe('fulfilled');
+      const publishStatus = publishResult.status === 'fulfilled' ? publishResult.value.status : -1;
+      // 409 = the freeze refused it; 201 = it superseded a still-`pending`
+      // receipt. Anything else (a raw P2002, a 500) is a new defect, not a race.
+      expect([201, 409]).toContain(publishStatus);
+
+      const rows = await adminDb.acceptanceEvidence.findMany({ where: { workItemId: story.id } });
+      const currents = rows.filter((r) => r.isCurrent);
+      expect(currents).toHaveLength(1);
+      const row = currents[0]!;
+
+      // ⚠️ THE INVARIANT MOTIR-2851 RESTORES, AND THE REASON THIS CARD EXISTS.
+      // Before the fix this produced a row `approved` AND `isCurrent: false`
+      // whose attachments had been unlinked — an approval whose video the
+      // orphan-GC reclaims after the safety window. It is the same evidence loss
+      // MOTIR-2764 closed, reached by approving a few hundred ms earlier.
+      const stranded = rows.filter((r) => r.status === 'approved' && !r.isCurrent);
+      expect(stranded, `round ${round}: an approval landed on a superseded receipt`).toEqual([]);
+
+      // Exactly one approval, it IS the current receipt, and its bytes are still
+      // linked — the survival set, checked on whichever row the race elected.
+      const approvedRows = rows.filter((r) => r.status === 'approved');
+      expect(approvedRows).toHaveLength(1);
+      expect(approvedRows[0]!.id).toBe(row.id);
       expect(row.approvedById).not.toBeNull();
       const attachment = await adminDb.attachment.findUniqueOrThrow({
         where: { id: row.attachmentId! },
       });
       expect(attachment.workItemId).toBe(story.id);
-    } else {
-      // The publish won: it superseded a receipt that was still `pending` at the
-      // moment it held the lock, which is correct. The approval then applies to
-      // whichever row is current — never to a collected one.
-      expect(['pending', 'approved']).toContain(row.status);
+
+      if (publishStatus === 409) {
+        // The approval won: the receipt it signed is the one that is frozen.
+        expect(row.commitSha).toBe(`aaa-${round}`);
+        expect(rows).toHaveLength(1);
+        outcomes.push('approval-first');
+      } else {
+        // The publish won: it superseded a receipt that was still `pending` at
+        // the moment it held the lock, which is correct, and the approval then
+        // stamped the NEW current row — the recording the reviewer is looking at.
+        expect(row.commitSha).toBe(`bbb-${round}`);
+        outcomes.push('publish-first');
+      }
     }
-    // ⚠️ WHAT THIS DELIBERATELY DOES NOT ASSERT, AND WHY — MOTIR-2851.
-    //
-    // The natural assertion here is that NO row is ever left `approved` AND
-    // `isCurrent: false`. Against real Postgres this run produces exactly such a
-    // row, and it is a REAL defect rather than a flaw in this test: MOTIR-2764
-    // locks the current receipt on the PUBLISH path, but `decide` takes no lock,
-    // so an approval can stamp a row a concurrent publish is already superseding.
-    // That is the same receipt loss through the other door, it PRE-DATES this
-    // story, and per the repo's rule it is filed (MOTIR-2851) rather than
-    // absorbed into a card that did not cause it.
-    //
-    // So this asserts the invariant that DOES hold today — the freeze protects a
-    // receipt approved BEFORE a publish starts — and MOTIR-2851 restores the
-    // stronger one with its fix. Written this way round on purpose: a test
-    // quietly weakened to green is how the stronger property gets forgotten.
-    const approvedRows = await adminDb.acceptanceEvidence.findMany({
-      where: { workItemId: story.id, status: 'approved' },
+    // Both outcomes are legal and neither is guaranteed in any given round, so
+    // this records what fired rather than requiring it — the deterministic test
+    // below is what asserts BOTH interleavings without a timing dependency.
+    expect(outcomes).toHaveLength(5);
+  });
+
+  it('BOTH legal interleavings, driven deterministically — the approval survives either order', async () => {
+    // The race test above cannot assert both orders without a flaky expectation,
+    // and "the fix serialises by always refusing the approval" would satisfy one
+    // of them. So each order is forced here, and in each the approval SUCCEEDS.
+
+    // ORDER 1 — the approval commits first: the publish is refused, and the
+    // signed receipt is the one that stays. (Its full survival set — the stamps,
+    // the linked bytes, the unmoved story — is the first test in this file.)
+    const approvedFirst = await inReviewStory();
+    await publish(approvedFirst, 'first.webm', 'aaa');
+    const decidedFirst = await acceptanceEvidenceService.decide(
+      { workItemId: approvedFirst.id, decision: 'approve' },
+      fx.ctx,
+    );
+    expect(decidedFirst.evidence.status).toBe('approved');
+    expect((await publish(approvedFirst, 'later.webm', 'bbb')).status).toBe(409);
+    expect((await acceptanceEvidenceService.getCurrentForStory(approvedFirst.id, fx.ctx))!.id).toBe(
+      decidedFirst.evidence.id,
+    );
+
+    // ORDER 2 — the publish commits first: the approval is NOT refused, it moves
+    // to the new current row. This is the half the missing lock got wrong: it
+    // stamped the row the publish had just superseded and unlinked.
+    const publishedFirst = await inReviewStory();
+    await publish(publishedFirst, 'first.webm', 'ccc');
+    const superseded = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: publishedFirst.id, isCurrent: true },
     });
-    expect(approvedRows.length).toBeGreaterThan(0);
-    // Whatever the interleaving, the story never ends up with TWO approvals.
-    expect(approvedRows).toHaveLength(1);
+    expect((await publish(publishedFirst, 'second.webm', 'ddd')).status).toBe(201);
+
+    const decidedSecond = await acceptanceEvidenceService.decide(
+      { workItemId: publishedFirst.id, decision: 'approve' },
+      fx.ctx,
+    );
+    expect(decidedSecond.storyStatus).toBe('done');
+    expect(decidedSecond.evidence.status).toBe('approved');
+    expect(decidedSecond.evidence.commitSha).toBe('ddd');
+    expect(decidedSecond.evidence.id).not.toBe(superseded.id);
+    // …and the displaced receipt was never signed, so nothing approved is left
+    // pointing at bytes the orphan-GC will take.
+    const displaced = await adminDb.acceptanceEvidence.findUniqueOrThrow({
+      where: { id: superseded.id },
+    });
+    expect(displaced.isCurrent).toBe(false);
+    expect(displaced.status).toBe('pending');
+    expect(displaced.approvedById).toBeNull();
   });
 });
 

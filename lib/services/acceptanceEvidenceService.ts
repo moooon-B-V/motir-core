@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem } from '@/generated/prisma/client';
+import { Prisma, type AcceptanceEvidenceStatus, type WorkItem } from '@/generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
@@ -254,6 +254,62 @@ async function persistEvidence(
   });
 }
 
+/**
+ * Lock the story's CURRENT receipt for a DECISION (MOTIR-2851) — the approval
+ * side of the freeze seam, taking the very lock the publish path takes so the
+ * two serialise on one row instead of interleaving.
+ *
+ * ⚠️ WHY THE SECOND ATTEMPT, AND WHY EXACTLY ONE. Under READ COMMITTED a
+ * `SELECT … FOR UPDATE` that WAITS on a concurrent publish re-evaluates its
+ * `WHERE` against the row's new version once that publish commits: `is_current`
+ * is now false, so the row drops out and the statement returns NOTHING — while
+ * the story does have a current receipt, the freshly inserted one, invisible to
+ * this statement's snapshot. A second statement takes a NEW snapshot, sees it,
+ * and locks it. That is the "publish committed first" interleaving, and without
+ * the re-read it would surface as a spurious 404 on an approval that is legal.
+ * Bounded at two because one publish can displace the row once; an unbounded
+ * retry would spin against a republish loop rather than refuse.
+ *
+ * Returns null only when the story genuinely has no current receipt — and note
+ * that in THAT case nothing is locked at all (`FOR UPDATE` over zero rows locks
+ * nothing), which is sound here because a decision on a story with no receipt
+ * is refused rather than written.
+ */
+async function lockCurrentReceiptForDecision(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{ id: string; status: AcceptanceEvidenceStatus } | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const locked = await acceptanceEvidenceRepository.lockCurrentStatusByWorkItem(workItemId, tx);
+    if (locked) return locked;
+  }
+  return null;
+}
+
+/**
+ * The stamp itself: `approved` records the deciding actor + the moment; every
+ * other status clears both. Takes `tx` so a caller that must hold a row lock
+ * across the read and the write can do so in ONE transaction (`decide`), while
+ * the standalone `setStatus` opens its own.
+ */
+async function stampStatus(
+  evidenceId: string,
+  status: AcceptanceEvidenceStatusDTO,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+) {
+  const approved = status === 'approved';
+  return acceptanceEvidenceRepository.updateStatus(
+    evidenceId,
+    {
+      status,
+      approvedById: approved ? ctx.userId : null,
+      approvedAt: approved ? new Date() : null,
+    },
+    tx,
+  );
+}
+
 export const acceptanceEvidenceService = {
   /**
    * Mint scoped CLIENT upload tokens (MOTIR-1681) so a trusted CI job uploads the
@@ -492,16 +548,7 @@ export const acceptanceEvidenceService = {
       async (tx) => {
         const existing = await acceptanceEvidenceRepository.findById(evidenceId, tx);
         if (!existing) throw new AcceptanceEvidenceNotFoundError(evidenceId);
-        const approved = status === 'approved';
-        return acceptanceEvidenceRepository.updateStatus(
-          evidenceId,
-          {
-            status,
-            approvedById: approved ? ctx.userId : null,
-            approvedAt: approved ? new Date() : null,
-          },
-          tx,
-        );
+        return stampStatus(evidenceId, status, ctx, tx);
       },
     );
     return toAcceptanceEvidenceDto(row);
@@ -523,11 +570,36 @@ export const acceptanceEvidenceService = {
    * story is approved out of review, never out of `todo` or mid-implementation.
    * `request_changes` needs no such check — sending work back is only reachable
    * from review anyway, and the workflow still gates the move.
+   *
+   * **THE OTHER HALF OF THE FREEZE SEAM (MOTIR-2851).** MOTIR-2764 made a
+   * PUBLISH refuse an already-`approved` receipt by locking the current row and
+   * reading its status under that lock. This path took no lock at all, so an
+   * approval could resolve the current row, a publish could supersede that very
+   * row and unlink its attachments, and the stamp would land on a receipt with
+   * `isCurrent: false` and no bytes — the same evidence loss the freeze exists
+   * to prevent, reached by approving a few hundred milliseconds earlier. So the
+   * decision now takes `lockCurrentStatusByWorkItem` too, and derives WHICH row
+   * to stamp under the lock, in the same transaction as the write.
+   *
+   * The race then has exactly two outcomes, both safe:
+   *   · the approval commits first → the publish's own locked read sees
+   *     `approved` and is refused (MOTIR-2764's path);
+   *   · the publish commits first → the approval stamps the NEW current row,
+   *     which is the recording the reviewer is now looking at.
+   *
+   * Note what is deliberately NOT inside that transaction: the story's own
+   * status move. `workItemsService.updateStatus` owns its transaction and
+   * Prisma cannot nest one, and the ordering the gate promises — the evidence is
+   * stamped only once the transition succeeds — is unchanged.
    */
   async decide(
     input: { workItemId: string; decision: 'approve' | 'request_changes' },
     ctx: ServiceContext,
   ): Promise<{ evidence: AcceptanceEvidenceDTO; storyStatus: 'done' | 'in_progress' }> {
+    // A story with no receipt at all cannot be decided, and finding that out
+    // BEFORE the story moves keeps the refusal side-effect-free. This read is
+    // for EXISTENCE only — which row the decision lands on is re-derived under
+    // the lock below, never carried over from here.
     const current = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       (tx) => acceptanceEvidenceRepository.findCurrentByWorkItem(input.workItemId, tx),
@@ -544,11 +616,16 @@ export const acceptanceEvidenceService = {
     const storyStatus = input.decision === 'approve' ? 'done' : 'in_progress';
     await workItemsService.updateStatus(input.workItemId, storyStatus, ctx);
 
-    const evidence = await this.setStatus(
-      current.id,
-      input.decision === 'approve' ? 'approved' : 'changes_requested',
-      ctx,
+    const status: AcceptanceEvidenceStatusDTO =
+      input.decision === 'approve' ? 'approved' : 'changes_requested';
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const locked = await lockCurrentReceiptForDecision(input.workItemId, tx);
+        if (!locked) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
+        return stampStatus(locked.id, status, ctx, tx);
+      },
     );
-    return { evidence, storyStatus };
+    return { evidence: toAcceptanceEvidenceDto(row), storyStatus };
   },
 };

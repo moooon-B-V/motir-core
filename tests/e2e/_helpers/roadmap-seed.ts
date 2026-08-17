@@ -11,13 +11,23 @@
 // in_progress → in_review → done — there is no direct todo→done edge).
 //
 // The populated tree is shaped to exercise the roadmap markers (MOTIR-1013):
-//   • Epic "Platform foundation" is moved IN PROGRESS → it is the root level's
+//   • Epic "Platform foundation" is IN PROGRESS → it is the root level's
 //     in-progress frontier, so the canvas marks it "you are here".
-//   • It has two child stories (one DONE, one to-do) → it is drillable AND
+//   • It has two child stories (one DONE, one IN PROGRESS) → it is drillable AND
 //     renders a subtree progress meter; drilling it reveals those children.
 //   • A second epic "Growth experiments" gives the road a sibling at root, so
 //     "drill in then back" is observable (the sibling is hidden while drilled,
 //     visible again at root).
+//
+// ⚠️ A PARENT'S STATUS IS DERIVED, NOT SET (Story MOTIR-2888). Until the
+// recompute shipped, these fixtures made an epic in-progress by calling
+// `updateStatus` on the EPIC and then hanging `todo` children off it. That state
+// is no longer reachable: a parent's status is a function of its children, so
+// the recompute pulls such an epic straight back to `todo` (rung 4 — open work,
+// none of it started) and the "you are here" frontier vanishes. The fixtures
+// therefore create the state the way the product does — **start a CHILD** — and
+// then WAIT for the derived value, because derivation is asynchronous and the
+// seed must not hand the browser a tree that is still settling.
 
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -87,6 +97,28 @@ async function moveToDone(id: string, ctx: ServiceContext): Promise<void> {
   await workItemsService.updateStatus(id, 'done', ctx);
 }
 
+/**
+ * Wait for a DERIVED status to land (Story MOTIR-2888). A parent's status is
+ * recomputed from its children by a background job, so the last service call in
+ * a fixture is not the last WRITE the tree receives. Handing the browser a tree
+ * that is still settling would make every assertion downstream of it a race —
+ * so the seed blocks on the authoritative row, exactly as the specs' own
+ * `expectDerivedStatus` does. Never a fixed sleep.
+ */
+async function waitForDerivedStatus(id: string, status: string): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const row = await db.workItem.findUniqueOrThrow({ where: { id }, select: { status: true } });
+    if (row.status === status) return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `seed: derived status "${status}" never landed on ${id} (saw "${row.status}")`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
 /** The main fixture: a populated roadmap with an in-progress (drillable) epic
  *  carrying the "you are here" marker + a progress meter, and a sibling epic.
  *
@@ -104,17 +136,17 @@ export async function seedRoadmap(
   const { onboarded = true } = opts;
   const { ctx, projectId, projectKey } = await makeTenant(email, 'Roadmap E2E', 'Roadmap', 'ROAD');
 
-  // The active epic — created first so it is the root level's first item, and
-  // moved IN PROGRESS so it becomes the "you are here" frontier.
+  // The active epic — created first so it is the root level's first item. Its
+  // in-progress status is DERIVED from the children below, not set on the epic:
+  // see the header note.
   const activeEpicTitle = 'Platform foundation';
   const activeEpic = await workItemsService.createWorkItem(
     { projectId, kind: 'epic', title: activeEpicTitle },
     ctx,
   );
-  await workItemsService.updateStatus(activeEpic.id, 'in_progress', ctx);
 
   // Two children → the epic is drillable and shows a subtree progress meter
-  // (one done, one to-do = a partial bar).
+  // (one done, one still open = a partial bar).
   const doneChildTitle = 'Authentication';
   const doneChild = await workItemsService.createWorkItem(
     { projectId, kind: 'story', title: doneChildTitle, parentId: activeEpic.id },
@@ -122,11 +154,16 @@ export async function seedRoadmap(
   );
   await moveToDone(doneChild.id, ctx);
 
+  // STARTED, not left at to-do: this is what makes the epic in-progress, and so
+  // the root level's "you are here" frontier. Leaving it `todo` would put the
+  // epic on rung 4 (open work, none started) and there would be no frontier.
   const todoChildTitle = 'Billing';
-  await workItemsService.createWorkItem(
+  const openChild = await workItemsService.createWorkItem(
     { projectId, kind: 'story', title: todoChildTitle, parentId: activeEpic.id },
     ctx,
   );
+  await workItemsService.updateStatus(openChild.id, 'in_progress', ctx);
+  await waitForDerivedStatus(activeEpic.id, 'in_progress');
 
   // A second root epic (with a child so it is itself drillable) — the sibling
   // that disappears while drilled and returns on "Back".
@@ -204,18 +241,22 @@ export async function seedLocateRoadmap(email: string): Promise<LocateRoadmapSee
     'LOCT',
   );
 
-  // The in-progress epic — created first so it is the root's first item, and moved
-  // IN PROGRESS so it becomes the "you are here" frontier. A child makes it drillable.
+  // The in-progress epic — created first so it is the root's first item. Its one
+  // child makes it drillable AND, once STARTED, makes the epic in-progress: the
+  // status is derived from the child, never set on the epic (see the header
+  // note). A `todo` child would leave the epic on rung 4 and there would be no
+  // frontier for Locate to centre on — which is precisely what this spec asserts.
   const frontierTitle = 'Active stream';
   const frontier = await workItemsService.createWorkItem(
     { projectId, kind: 'epic', title: frontierTitle },
     ctx,
   );
-  await workItemsService.updateStatus(frontier.id, 'in_progress', ctx);
-  await workItemsService.createWorkItem(
+  const frontierChild = await workItemsService.createWorkItem(
     { projectId, kind: 'story', title: 'Active stream — build', parentId: frontier.id },
     ctx,
   );
+  await workItemsService.updateStatus(frontierChild.id, 'in_progress', ctx);
+  await waitForDerivedStatus(frontier.id, 'in_progress');
 
   // The to-do (ready) epic + three to-do children → the cycling case on drill.
   const readyEpicTitle = 'Up next';
@@ -359,13 +400,16 @@ export async function seedSingleStorySprintRoadmap(
   });
 
   // The epic above the member story — NOT a member, so sprint scope elides it and
-  // the story becomes the topmost in-sprint item.
+  // the story becomes the topmost in-sprint item. Its own status is left DERIVED
+  // (MOTIR-2888): this fixture never asserts it, and an explicit `in_progress`
+  // set here would be silently recomputed away the moment the children below are
+  // created — a fixture that reaches its intended state only via a background
+  // job it does not wait for.
   const epicTitle = 'Platform foundation';
   const epic = await workItemsService.createWorkItem(
     { projectId, kind: 'epic', title: epicTitle },
     ctx,
   );
-  await workItemsService.updateStatus(epic.id, 'in_progress', ctx);
 
   // THE member story — the sprint's single top-in-sprint root.
   const storyTitle = 'Terminal dispatch of the work loop';
@@ -479,12 +523,14 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
     },
   });
 
+  // Status left DERIVED (MOTIR-2888) — see the note on the sibling fixture above:
+  // this epic's status is not asserted, and setting it here would be recomputed
+  // away by its children.
   const epicTitle = 'Platform foundation';
   const epic = await workItemsService.createWorkItem(
     { projectId, kind: 'epic', title: epicTitle },
     ctx,
   );
-  await workItemsService.updateStatus(epic.id, 'in_progress', ctx);
 
   // A NON-member story with an IN-SPRINT subtask → the subtask is a top-in-sprint root.
   const nonMemberStoryTitle = 'Authentication';

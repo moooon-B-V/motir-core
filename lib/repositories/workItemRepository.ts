@@ -22,6 +22,7 @@ import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 import {
+  CrossProjectParentError,
   DepthLimitExceededError,
   IllegalParentTypeError,
   ParentCycleError,
@@ -35,9 +36,10 @@ import {
 // that run inside a transaction). No business logic, no transactions, no DTO
 // mapping here — those belong in workItemsService (Subtask 1.4.4).
 //
-// The DB-layer triggers (prisma/sql/work_item_triggers.sql) enforce the
-// kind-parent matrix, the depth limit, and cycle prevention. On INSERT /
-// UPDATE they reject with SQLSTATE 23514 + a message marker; create/update
+// The DB-layer triggers (prisma/sql/work_item_triggers.sql) enforce parent
+// TENANCY (MOTIR-2895), the kind-parent matrix, the depth limit, and cycle
+// prevention. On INSERT / UPDATE they reject with SQLSTATE 23514 + a message
+// marker; create/update
 // translate those markers into the typed errors from lib/workItems/errors.ts
 // at this edge, so the service layer never inspects Prisma/Postgres error
 // codes (the 4-layer rule). P2002 (unique key/identifier) and P2025 (record
@@ -180,6 +182,57 @@ export function homeKeysetWhere(cursor: HomeCursor | null | undefined): Prisma.W
       { updatedAt: { lt: cursor.updatedAt } },
       { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
     ],
+  };
+}
+
+/**
+ * ONE project a Home read may return rows from, WITH that project's own
+ * done-category status keys (MOTIR-2758).
+ *
+ * ⚠️ The two halves travel TOGETHER on purpose. Home's reads used to take a bare
+ * `projectIds: string[]`, and the lifecycle axis simply wasn't in the query — so
+ * the surface whose subtitle says *"waiting on you"* listed finished work, 87% of
+ * it for the reader who uses the product most. Pairing the ids with their
+ * exclusion set makes the axis un-droppable: there is no call shape that scopes
+ * the projects without also deciding what counts as finished IN each of them.
+ */
+export interface HomeProjectScope {
+  projectId: string;
+  /**
+   * The keys of THAT project's `category = 'done'` statuses (`done` +
+   * `cancelled` out of the box, plus any the workspace defined). Empty on a
+   * workflow with no terminal status — the degenerate case
+   * `savedFilters/builtins.ts` already handles the same way: nothing to exclude,
+   * so the project contributes an unfiltered clause rather than a
+   * never-matching one.
+   */
+  doneStatusKeys: readonly string[];
+}
+
+/**
+ * The `WHERE` half of Home's project scope — "in one of these projects, and not
+ * terminal ACCORDING TO THAT PROJECT'S OWN workflow".
+ *
+ * ⚠️ PER PROJECT, never one flat `status: { notIn: [...] }`. Statuses are
+ * project-defined open vocabulary and Home is the one surface in the product
+ * that reads ACROSS projects, so a flat exclusion would let project A's
+ * `released` hide project B's rows — where the same key may be perfectly open.
+ * A flat implementation passes every single-project test and is wrong the first
+ * time a workspace renames a status.
+ *
+ * Emitted as a `Prisma.WorkItemWhereInput` carrying an `OR`, so every caller
+ * must place it inside an explicit `AND` alongside {@link homeKeysetWhere} —
+ * spreading two `OR`-bearing fragments into one object silently drops the first.
+ */
+export function homeProjectScopeWhere(
+  scopes: readonly HomeProjectScope[],
+): Prisma.WorkItemWhereInput {
+  return {
+    OR: scopes.map(({ projectId, doneStatusKeys }) =>
+      doneStatusKeys.length > 0
+        ? { projectId, status: { notIn: [...doneStatusKeys] } }
+        : { projectId },
+    ),
   };
 }
 
@@ -794,11 +847,14 @@ export const workItemRepository = {
    * would dedupe AFTER the limit, so a page of ten could silently return nine),
    * and the **cursor**, which cannot mean two positions at once.
    *
-   * `projectIds` is the actor's BROWSABLE set, resolved by `homeService` through
-   * `projectAccessService` and passed IN. It is a query input, not a post-read
-   * filter, for the same paging reason: dropping rows afterwards shortens pages
-   * instead of erroring, which is the failure mode nobody notices. An EMPTY set
-   * short-circuits to `[]` rather than issuing a degenerate `IN ()`.
+   * `projectScopes` is the actor's BROWSABLE set, resolved by `homeService`
+   * through `projectAccessService` and passed IN, each project carrying its own
+   * done-category keys ({@link HomeProjectScope}). It is a query input, not a
+   * post-read filter, for the same paging reason: dropping rows afterwards
+   * shortens pages instead of erroring, which is the failure mode nobody
+   * notices — and that applies to the LIFECYCLE exclusion exactly as it does to
+   * the access one (MOTIR-2758). An EMPTY set short-circuits to `[]` rather than
+   * issuing a degenerate `IN ()`.
    *
    * Order is `(updatedAt DESC, id DESC)` — total and stable, so the keyset
    * cursor never repeats or drops a row. Workspace-gated explicitly
@@ -814,24 +870,27 @@ export const workItemRepository = {
     userId: string,
     workspaceId: string,
     options: {
-      projectIds: readonly string[];
+      projectScopes: readonly HomeProjectScope[];
       take: number;
       cursor?: HomeCursor | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectIds, take, cursor } = options;
-    if (projectIds.length === 0) return [];
+    const { projectScopes, take, cursor } = options;
+    if (projectScopes.length === 0) return [];
     return tx.workItem.findMany({
       where: {
         workspaceId,
-        projectId: { in: [...projectIds] },
         archivedAt: null,
         triagedAt: null, // read-exclusion (6.11.3)
-        // ⚠️ BOTH predicates are `OR`s, so they go in an explicit `AND` — a
-        // spread would have the keyset's `OR` overwrite the assignee/reporter
-        // one and return the whole workspace's items from page two onward.
-        AND: [{ OR: [{ assigneeId: userId }, { reporterId: userId }] }, homeKeysetWhere(cursor)],
+        // ⚠️ ALL THREE predicates are `OR`s, so they go in an explicit `AND` — a
+        // spread would have one `OR` overwrite the others and return the whole
+        // workspace's items from page two onward.
+        AND: [
+          { OR: [{ assigneeId: userId }, { reporterId: userId }] },
+          homeProjectScopeWhere(projectScopes),
+          homeKeysetWhere(cursor),
+        ],
       },
       select: HOME_WORK_ITEM_SELECT,
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -845,21 +904,27 @@ export const workItemRepository = {
    * {@link findByAssigneeOrReporterInWorkspace} MINUS the keyset, so the number
    * beside the tab is the number the tab will show rather than the number on
    * the current page. Empty browsable set short-circuits.
+   *
+   * ⚠️ "Same predicate" includes the done-category exclusion: a count that
+   * disagrees with its list is a badge that lies, which is the shape MOTIR-2758
+   * was filed about (the badge read ~2 019 where the answer was ~263).
    */
   async countByAssigneeOrReporterInWorkspace(
     userId: string,
     workspaceId: string,
-    projectIds: readonly string[],
+    projectScopes: readonly HomeProjectScope[],
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    if (projectIds.length === 0) return 0;
+    if (projectScopes.length === 0) return 0;
     return tx.workItem.count({
       where: {
         workspaceId,
-        projectId: { in: [...projectIds] },
         archivedAt: null,
         triagedAt: null,
-        OR: [{ assigneeId: userId }, { reporterId: userId }],
+        AND: [
+          { OR: [{ assigneeId: userId }, { reporterId: userId }] },
+          homeProjectScopeWhere(projectScopes),
+        ],
       },
     });
   },
@@ -4800,6 +4865,18 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
   const sqlState = extractSqlState(err);
 
   if (sqlState === '23514' || isTriggerMarker(message)) {
+    // Both tenancy markers (MOTIR-2895) land on the SAME typed error the service
+    // layer already throws for this rule on all three of its paths — the DB check
+    // backstops `workItemsService`'s `CrossProjectParentError`, it does not
+    // introduce a second vocabulary for the same mistake. The marker itself
+    // distinguishes the workspace case from the project case, and it rides along
+    // in the message.
+    if (
+      message.includes('WI_PARENT_CROSS_WORKSPACE') ||
+      message.includes('WI_PARENT_CROSS_PROJECT')
+    ) {
+      throw new CrossProjectParentError(message);
+    }
     if (message.includes('WI_ILLEGAL_PARENT_TYPE') || message.includes('WI_SUBTASK_NEEDS_PARENT')) {
       throw new IllegalParentTypeError(message);
     }
@@ -4823,6 +4900,8 @@ function translateWriteError(err: unknown, ctx?: { id?: string }): never {
 
 function isTriggerMarker(message: string): boolean {
   return (
+    message.includes('WI_PARENT_CROSS_WORKSPACE') ||
+    message.includes('WI_PARENT_CROSS_PROJECT') ||
     message.includes('WI_ILLEGAL_PARENT_TYPE') ||
     message.includes('WI_SUBTASK_NEEDS_PARENT') ||
     message.includes('WI_DEPTH_LIMIT_EXCEEDED') ||

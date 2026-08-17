@@ -3,7 +3,9 @@ import { db } from '@/lib/db';
 import {
   HOME_WORK_ITEM_SELECT,
   homeKeysetWhere,
+  homeProjectScopeWhere,
   type HomeCursor,
+  type HomeProjectScope,
   type HomeWorkItemRow,
 } from '@/lib/repositories/workItemRepository';
 
@@ -88,9 +90,14 @@ export const watcherRepository = {
    * workItem.id DESC)` keyset, so both tabs page by identical rules and one
    * cursor type serves both.
    *
-   * `projectIds` is the actor's BROWSABLE set, passed IN by `homeService` for
+   * `projectScopes` is the actor's BROWSABLE set, passed IN by `homeService` for
    * the same reason as the My work read: filtering after the query shortens
-   * pages instead of erroring. An empty set short-circuits.
+   * pages instead of erroring. An empty set short-circuits. Each scope carries
+   * its project's own done-category keys ({@link HomeProjectScope}) — Watching
+   * is in scope for that exclusion too (MOTIR-2758): an item you watch that has
+   * shipped is not waiting on you either, its notification already fired through
+   * the bell, and leaving it in would keep this tab's badge reading the
+   * graveyard.
    *
    * ⚠️ Watching is NOT a partition of My work. An item the reader owns AND
    * watches is returned by both reads, deliberately — they answer different
@@ -114,23 +121,26 @@ export const watcherRepository = {
     userId: string,
     workspaceId: string,
     options: {
-      projectIds: readonly string[];
+      projectScopes: readonly HomeProjectScope[];
       take: number;
       cursor?: HomeCursor | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectIds, take, cursor } = options;
-    if (projectIds.length === 0) return [];
+    const { projectScopes, take, cursor } = options;
+    if (projectScopes.length === 0) return [];
     const rows = await tx.watcher.findMany({
       where: {
         userId,
         workItem: {
           workspaceId,
-          projectId: { in: [...projectIds] },
           archivedAt: null,
           triagedAt: null, // read-exclusion (6.11.3), same as every list read
-          ...homeKeysetWhere(cursor),
+          // ⚠️ BOTH fragments carry an `OR`, so they go in an explicit `AND` —
+          // spreading them would have one overwrite the other. (The keyset used
+          // to be spread here; it was safe only for as long as it was the sole
+          // `OR` in this object, which MOTIR-2758's scope clause ends.)
+          AND: [homeProjectScopeWhere(projectScopes), homeKeysetWhere(cursor)],
         },
       },
       select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
@@ -149,18 +159,21 @@ export const watcherRepository = {
   async countByUser(
     userId: string,
     workspaceId: string,
-    projectIds: readonly string[],
+    projectScopes: readonly HomeProjectScope[],
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    if (projectIds.length === 0) return 0;
+    if (projectScopes.length === 0) return 0;
     return tx.watcher.count({
       where: {
         userId,
         workItem: {
           workspaceId,
-          projectId: { in: [...projectIds] },
           archivedAt: null,
           triagedAt: null,
+          // The `AND` form even though the keyset is absent here: the twin above
+          // needs it, and a count that is one refactor away from disagreeing
+          // with its list is the defect this card fixed.
+          AND: [homeProjectScopeWhere(projectScopes)],
         },
       },
     });

@@ -48,8 +48,16 @@
 -- SECURITY DEFINER as of migration
 -- 20260817120000_link_workspace_trigger_security_definer**, which carries the
 -- full reasoning and the per-function verdict for all six trigger functions
--- (including the three in work_item_triggers.sql). Read that migration before
--- changing any trigger's security label.
+-- (including the three in work_item_triggers.sql).
+--
+-- ⚠️ That verdict was AMENDED for the three work_item parent-chain functions by
+-- **20260817160000_work_item_parent_tenancy** (MOTIR-2895), which added the
+-- DB-level parent-TENANCY check 2884 filed rather than fixed, and re-decided
+-- those three as SECURITY DEFINER on the evidence it created. Read BOTH
+-- migrations before changing any trigger's security label. Nothing about (1) or
+-- (2) in this file changes: (1)'s walk stays complete because cross-workspace
+-- links cannot exist (which is (3)'s invariant, now genuinely enforced), and (2)
+-- reads no rows at all.
 
 -- 1. Cycle prevention (is_blocked_by only) -----------------------------------
 --    `is_blocked_by` defines a directed dependency graph (A is_blocked_by B

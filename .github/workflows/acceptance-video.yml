@@ -24,10 +24,14 @@ name: Acceptance video
 #     compiles `.next/` itself — in its OWN `build` job below (MOTIR-2600), whose
 #     artifact every shard then downloads. That costs a build, but only on the
 #     PRs that own a spec, and only ONE regardless of the shard count.
-#   • There is no `push:` trigger. `main` never runs the lane, which is already
-#     the decision: the PR published the receipt while its story was in review,
-#     and re-publishing post-merge would only supersede it with an identical clip
-#     (`docs/decisions/acceptance-video.md`, amendments MOTIR-1937 / MOTIR-1949).
+#   • It ALSO runs on `push: main`, but only while the lane actually holds a
+#     spec — the MAIN BASELINE, decided by MOTIR-2760 and described in its own
+#     section below. This REPLACES the older "there is deliberately no `push:`
+#     trigger" (`docs/decisions/acceptance-video.md`, amendments MOTIR-1937 /
+#     MOTIR-1949, superseded there by this card's amendment). The reason that
+#     clause gave — "re-publishing post-merge would only supersede the receipt
+#     with an identical clip" — was about PUBLISHING, and it still holds: the
+#     baseline never publishes. It only runs the tests.
 #   • ⚠️ A CHANGE TO A PAGE AN ACCEPTANCE SPEC READS DOES NOT RUN THIS LANE, and
 #     that is deliberate (MOTIR-2620). The specs here assert against real product
 #     surfaces, so the `paths:` filter cuts between a page and the only test that
@@ -38,18 +42,84 @@ name: Acceptance video
 #     set of sources these specs read is most of the app, so any honest widening
 #     runs a ~30-minute lane on nearly every PR, and covering one page
 #     (`lib/apiDocs/**`) would close one instance while leaving the class.
-#     ⚠️ THIS IS A KNOWN, OPEN GAP, NOT SETTLED COVERAGE — it is tracked as
-#     MOTIR-2760, which owns the trigger question. Do not read the paragraph
-#     below as "the trigger is correct"; read it as "the trigger is deliberate,
-#     and its cost is filed". MOTIR-2765 shrinks the problem rather than solving
-#     it: a lane holding only in-flight stories is a much smaller thing to decide
-#     a trigger policy for.
+#     That REMAINS the rule for the pull_request trigger, and MOTIR-2760 (which
+#     owned the trigger question) did not widen it — see "THE MAIN BASELINE"
+#     below for what it did instead, and why widening got even less attractive
+#     after MOTIR-2765 rather than more.
 #     THIS LANE IS THE RECEIPT LANE, NOT A REGRESSION GATE. Behaviour a page owes
 #     on every PR belongs in a bulk-shard spec, which `ci.yml` already runs
 #     unconditionally; an acceptance spec is what a REVIEWER WATCHES. So: if you
 #     change a surface an acceptance spec drives, run this lane yourself before
 #     merging (`pnpm test:e2e --config playwright.acceptance.config.ts <spec>`),
-#     or expect the next spec-touching PR to find it for you.
+#     or expect the MAIN BASELINE to find it on your merge.
+#
+# ── THE MAIN BASELINE — `push: main`, gated on the lane having a member ──────
+#   (MOTIR-2760; ADR amendment 2026-08-17 in `docs/decisions/acceptance-video.md`)
+#
+# WHAT RUNS WHEN, in full — this table is the whole trigger policy:
+#
+#   PR changing an `acceptance*.spec.ts`      lane runs (4 shards) · PUBLISHES
+#   PR changing one of the 4 lane-definition  lane runs (4 shards) · rehearses
+#     files below                               (no spec changed ⇒ nothing owned)
+#   PR changing anything else                 NO RUN, NO CHECK  (MOTIR-1949)
+#   push to `main`, lane HAS ≥1 spec          lane runs (4 shards) · NEVER publishes
+#   push to `main`, lane is EMPTY             gate job only (~10s), nothing else
+#
+# THE PROBLEM IT CLOSES. The `pull_request` filter is deliberately blind to the
+# app (the MOTIR-2620 bullet above), so an app change that breaks an acceptance
+# spec merged green and sat on `main` until some UNRELATED PR happened to touch a
+# spec — and that PR's author inherited the diagnosis. Measured instance:
+# MOTIR-2654 moved sign-in's `callbackURL`, broke `acceptance-ai-callout.spec.ts`
+# at c6b5d19d, and it surfaced on MOTIR-2664's PR (#2045), which does not own that
+# spec. The baseline puts the red on the merge that caused it instead.
+#
+# WHY THIS AND NOT THE OTHER THREE OPTIONS. MOTIR-2765 shipped between this card
+# being written and being run, and it moves the arithmetic decisively:
+#   · WIDEN `paths:` to `app/**` / `lib/**` — still rejected, and now more firmly.
+#     MOTIR-2620 rejected it on the grounds that the specs read most of the app;
+#     after the MOTIR-2769 triage the lane's steady-state membership is ZERO, so
+#     widening would run an 18-machine-minute lane on nearly every PR to execute
+#     nothing at all.
+#   · A NIGHTLY run — cheaper, but it cannot attribute. Its red names a commit
+#     RANGE; the baseline names one merge. And on an empty lane it is pure waste,
+#     which is most nights.
+#   · A CHEAP SMOKE SUBSET on every PR — there is no subset to take. The lane is
+#     usually empty, and when it is not it holds one or two specs.
+#
+# WHY THE GATE JOB IS THE LOAD-BEARING PART, not a nicety. MEASURED on run
+# 31740853229 (the MOTIR-2765 merge, an already-empty lane): `build` 6m + four
+# shards at 3m = 18 machine-minutes to run zero tests, because the cost is setup
+# and a `next build`, not the specs. `main` takes ~20 merges/day, so an
+# UNCONDITIONAL `push:` trigger would burn ~360 machine-minutes/day testing
+# nothing. Gated, an empty lane costs one ~10s checkout per merge, and the real
+# cost is paid only inside the receipt window a story is actually in review.
+#
+# ⚠️ MOTIR-1949's REQUIREMENT IS UNTOUCHED, and the reason is worth stating
+# because the gate LOOKS like the job-level `if:` that requirement forbids.
+# "Absent, not skipped" is a constraint about PULL REQUESTS — a greyed check on
+# someone's PR. A `push` event attaches its checks to the commit on `main`; it
+# adds nothing to any open PR. So the gate can skip freely on `push` and cost no
+# PR a check. On `pull_request` the gate is unconditionally `true` — the `paths:`
+# filter already decided, and a triggered PR run is never skipped.
+#
+# ⚠️ THE BASELINE TESTS; IT NEVER PUBLISHES. Two independent mechanisms, because
+# publishing SUPERSEDES a story's evidence and one guard is not enough for that:
+# the publish step is `if:`-gated to `pull_request`, AND the owned-specs step
+# emits an EMPTY list on `push` (there is no base ref to diff against), which the
+# uploader already fails closed on. A baseline run therefore rehearses — it
+# records and checks the clips and writes none of them anywhere.
+#
+# ⚠️ AND `cancel-in-progress` IS PR-ONLY. Cancelling superseded runs is right for
+# a PR (only the tip matters) and WRONG here: back-to-back merges would cancel
+# each other's baseline and destroy the per-merge attribution that is this
+# trigger's entire product.
+#
+# WHAT IS STILL DELIBERATELY NOT COVERED, said plainly so the next reader does
+# not have to re-derive it: the PR that BREAKS a spec still goes green. The
+# baseline catches the break one merge later, not before it lands. Closing that
+# would require the `paths:` widening rejected above, and the accepted cost is a
+# red `main` for the length of one fix — bounded, attributed, and paid by the
+# author who caused it rather than by the next passer-by.
 #
 # ── A SPEC IN THIS LANE HAS A LIFECYCLE — IT DOES NOT LIVE HERE FOREVER ──────
 #   (Story MOTIR-2765 · `docs/decisions/acceptance-receipt-lifecycle.md`)
@@ -150,15 +220,79 @@ on:
       - 'playwright.acceptance.config.ts'
       - 'tests/e2e/_helpers/acceptance-video.ts'
       - 'tests/e2e/_helpers/acceptance-diagnostics.ts'
+  # The MAIN BASELINE (MOTIR-2760). Deliberately NOT `paths:`-filtered: while the
+  # lane holds a spec, ANY merge could be the one that breaks it, and which
+  # sources it reads is precisely what the filter cannot know. The `membership`
+  # gate below is what keeps that affordable — see the header section.
+  push:
+    branches: [main]
 
 # Cancel older runs on the same ref when a new commit lands (saves CI minutes).
 # Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
 # validated git ref identifier (not user-controlled free-form input).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PR-ONLY (MOTIR-2760). On a PR only the tip matters, so cancelling a
+  # superseded run saves minutes. On `main` it would cancel a baseline whose job
+  # is to say WHICH merge broke the lane — back-to-back merges would each cancel
+  # the last and leave exactly the ambiguity the baseline exists to remove.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Is there anything in the lane to run? (MOTIR-2760.) A checkout and an `ls` —
+  # no Postgres, no install, no build — so an empty lane costs ~10 seconds per
+  # merge instead of the 18 machine-minutes the full fan-out costs to run zero
+  # tests (measured: run 31740853229).
+  #
+  # ⚠️ On `pull_request` this is unconditionally `true`, and that is not a
+  # shortcut. The `paths:` filter has ALREADY decided that a triggered PR run
+  # should happen, and MOTIR-2600 deliberately wants a PR that only restructures
+  # the lane to REHEARSE against an empty membership. Returning anything but
+  # `true` here would reintroduce the greyed skipping check MOTIR-1949 removed.
+  # The gate exists for `push`, where no filter has spoken and no PR is watching.
+  membership:
+    name: Does the lane hold a spec?
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      count: ${{ steps.gate.outputs.count }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # The lane's membership is whatever `playwright.acceptance.config.ts`
+          # would collect: testMatch '**/acceptance*.spec.ts', i.e. a BASENAME
+          # starting with `acceptance`. `epic2-acceptance.spec.ts` is therefore
+          # NOT a member (it rides the main lane) — match the glob, not the word.
+          COUNT=$(find tests/e2e -maxdepth 1 -name 'acceptance*.spec.ts' -type f | wc -l | tr -d ' ')
+          echo "acceptance specs in the lane: ${COUNT}"
+          if [ "${EVENT_NAME}" = 'pull_request' ]; then
+            # The paths filter already decided; a triggered PR run always runs.
+            RUN=true
+          elif [ "${COUNT}" -gt 0 ]; then
+            RUN=true
+          else
+            RUN=false
+          fi
+          echo "event=${EVENT_NAME} run=${RUN}"
+          echo "run=${RUN}" >> "$GITHUB_OUTPUT"
+          echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Acceptance lane membership"
+            echo ""
+            echo "- specs in the lane: **${COUNT}**"
+            echo "- event: \`${EVENT_NAME}\`"
+            echo "- running the lane: **${RUN}**"
+            if [ "${RUN}" = 'false' ]; then
+              echo ""
+              echo "The lane is empty, so this baseline stopped here rather than"
+              echo "spending ~18 machine-minutes to run zero tests (MOTIR-2760)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Compile `.next/` ONCE for the whole fan-out (MOTIR-2600). Mirrors ci.yml's
   # `build` job — same caches, same throwaway module-load env — plus the one thing
   # this lane's build needs and ci.yml's does not: the file email sink and the
@@ -168,6 +302,16 @@ jobs:
   build:
     name: Next.js build (acceptance)
     runs-on: ubuntu-latest
+    needs: membership
+    # ⚠️ THE GATE LIVES HERE, ON `build`, AND NOT ON `acceptance` — deliberately.
+    # `acceptance` already `needs: build`, so a skipped build skips the shards
+    # too, which means the whole fan-out is gated by this ONE expression. Putting
+    # a second `if:` on `acceptance` would add nothing and would weaken the
+    # MOTIR-1949 guard in `tests/ci-acceptance-lane.test.ts`, which asserts that
+    # the shard job carries no job-level `if:` at all. That assertion is worth
+    # keeping literally true: it is what stops a future edit from gating the
+    # SHARDS on something PR-visible.
+    if: needs.membership.outputs.run == 'true'
     env:
       DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
       BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
@@ -305,6 +449,19 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+          # THE MAIN BASELINE OWNS NOTHING (MOTIR-2760). A `push` event has no
+          # base ref to diff against — `BASE_SHA` is empty — and the baseline
+          # must not publish anyway: the receipt was published by the PR while
+          # the story was in review, and a merge is not a new moment to record.
+          # Emitting an EMPTY list is exactly what the uploader fails closed on,
+          # so the run REHEARSES. (The publish step is also `if:`-gated to
+          # pull_request — two mechanisms, because a wrong answer here would
+          # SUPERSEDE a story's evidence.)
+          if [ -z "${BASE_SHA}" ]; then
+            echo "no base ref (event: ${GITHUB_EVENT_NAME}) — the baseline owns no specs and publishes nothing"
+            echo "specs=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # A pull_request checkout is the MERGE commit at depth 1, which carries
           # both parents — so the base is normally already present. Fetch it if it
           # is not, rather than paying `fetch-depth: 0` on every run.
@@ -373,8 +530,16 @@ jobs:
       # The `::error::` ANNOTATION and the job SUMMARY (MOTIR-1905) stay — they
       # put the reason on the run page instead of 4,500 lines into the raw log.
       # They are now a second channel rather than the only one.
+      #
+      # ⚠️ `pull_request` ONLY (MOTIR-2760). The MAIN BASELINE runs the specs and
+      # publishes nothing: the receipt belongs to the moment the story was in
+      # review, not to whatever merge happened to run the lane afterwards. This
+      # is the first of the two mechanisms enforcing that — the second is the
+      # empty owned-spec list the step above emits on `push`. Belt and braces, in
+      # the same spirit as the owned-set filter itself, because the failure mode
+      # is SUPERSEDING a story's evidence rather than merely wasting a run.
       - name: Publish the acceptance video
-        if: success()
+        if: success() && github.event_name == 'pull_request'
         env:
           MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
           MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
