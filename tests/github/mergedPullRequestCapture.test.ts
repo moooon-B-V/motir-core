@@ -6,10 +6,14 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
-import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import {
+  captureMergedPullRequestFiles,
+  githubWebhookService,
+} from '@/lib/services/githubWebhookService';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
 import { MAX_CAPTURED_PR_PATHS } from '@/lib/github/pullRequestFiles';
+import type { NormalizedChangeRequest } from '@/lib/git/types';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
@@ -229,6 +233,136 @@ describe('the merge capture writes the row (MOTIR-2922)', () => {
     // instant and be the delivery instant, and a redelivery would move it.
     expect(row!.mergedAt).toBeNull();
     expect(row!.changedPaths).toEqual(['a.ts']);
+  });
+
+  it('a merge instant that does not PARSE is null too, not an Invalid Date', async () => {
+    const s = await makeScenario('bad-merged-at@example.com');
+    stubGithub({ files: ['a.ts'] });
+
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        state: 'closed',
+        merged: true,
+        mergedAt: 'the fifteenth of never',
+      }),
+    );
+
+    const row = await prRow(11);
+    // An `Invalid Date` written to the column would surface as a null-ish value a
+    // consumer cannot distinguish from "not merged", or as a Prisma error on the
+    // write — the parse guard is what keeps a malformed payload from becoming
+    // either. The paths are still captured: one bad field is not a bad delivery.
+    expect(row!.mergedAt).toBeNull();
+    expect(row!.changedPaths).toEqual(['a.ts']);
+  });
+
+  it('a delivery carrying NO installation id captures nothing, and asks the host nothing', async () => {
+    const s = await makeScenario('no-installation@example.com');
+    const { calls } = stubGithub({ files: ['a.ts'] });
+    const payload = prPayload({
+      action: 'closed',
+      identifier: s.item.identifier,
+      state: 'closed',
+      merged: true,
+    }) as Record<string, unknown>;
+    delete payload['installation'];
+
+    const result = await githubWebhookService.handleEvent('pull_request', payload);
+
+    // The sync already reports this cleanly; the capture must agree rather than
+    // reaching for a token it has no installation to mint against.
+    expect(result).toMatchObject({ outcome: 'unknown_installation' });
+    expect(calls).toEqual([]);
+  });
+
+  it('a delivery from an installation nobody connected captures nothing', async () => {
+    const s = await makeScenario('unknown-installation@example.com');
+    const { calls } = stubGithub({ files: ['a.ts'] });
+    const payload = prPayload({
+      action: 'closed',
+      identifier: s.item.identifier,
+      state: 'closed',
+      merged: true,
+    }) as Record<string, unknown>;
+    payload['installation'] = { id: 'inst-nobody-connected' };
+
+    const result = await githubWebhookService.handleEvent('pull_request', payload);
+
+    // DISTINCT from the payload carrying no installation at all: here there IS an
+    // id and it resolves to no mirror row, so the capture has to stop one step
+    // later — after asking the database, before asking GitHub.
+    expect(result).toMatchObject({ outcome: 'unknown_installation' });
+    expect(calls).toEqual([]);
+    expect(await prRow(11)).toBeNull();
+  });
+
+  it('a delivery for a repo this installation does not mirror captures nothing', async () => {
+    const s = await makeScenario('unknown-repo@example.com');
+    const { calls } = stubGithub({ files: ['a.ts'] });
+    const payload = prPayload({
+      action: 'closed',
+      identifier: s.item.identifier,
+      state: 'closed',
+      merged: true,
+    }) as Record<string, unknown>;
+    payload['repository'] = { id: 999999 };
+
+    const result = await githubWebhookService.handleEvent('pull_request', payload);
+
+    expect(result).toMatchObject({ outcome: 'unknown_repo' });
+    expect(calls).toEqual([]);
+    expect(await prRow(11)).toBeNull();
+  });
+});
+
+describe('the capture survives the races the handler cannot stage', () => {
+  /** The normalized change request the handler would hand the capture. */
+  function normalized(number: number, providerRepoId = REPO_PROVIDER_ID): NormalizedChangeRequest {
+    return {
+      providerRepoId,
+      number,
+      state: 'closed',
+      merged: true,
+      headRef: 'subtask/ACME-1-a-change',
+      baseRef: 'main',
+      title: 'Some change (ACME-1)',
+    };
+  }
+
+  function body() {
+    return {
+      installation: { id: INSTALLATION_ID },
+      repository: { id: Number(REPO_PROVIDER_ID) },
+      pull_request: { merged_at: MERGED_AT },
+    } as Record<string, unknown>;
+  }
+
+  it('a mirror row that is GONE by the time the capture writes is logged, never thrown', async () => {
+    // The race: a repo removal cascades away the PR row between the sync's commit
+    // and this write. Unstageable through a delivery — the sync upserts the row on
+    // the very payload that drives the capture — so the capture is called directly
+    // for a number no delivery ever wrote.
+    await makeScenario('capture-missing-row@example.com');
+    stubGithub({ files: ['a.ts'] });
+
+    await expect(captureMergedPullRequestFiles(body(), normalized(4242))).resolves.toBeUndefined();
+
+    expect(await prRow(4242)).toBeNull();
+  });
+
+  it('a failure escaping the inner fetch guard is swallowed by the outer one', async () => {
+    // A pull-request number Postgres cannot store: the fetch succeeds, and the
+    // WRITE is what fails — the path the inner try does not cover. It has to be as
+    // invisible as a failed fetch, because by now the status sync has committed.
+    await makeScenario('capture-write-throws@example.com');
+    stubGithub({ files: ['a.ts'] });
+
+    await expect(
+      captureMergedPullRequestFiles(body(), normalized(2 ** 40)),
+    ).resolves.toBeUndefined();
   });
 });
 

@@ -655,8 +655,17 @@ async function reconcileInstallation(
  * it is the only thing that ever repairs a capture the first delivery dropped. A
  * "skip if already captured" guard would trade one redundant request for a row
  * that is permanently empty precisely when the first attempt failed.
+ *
+ * EXPORTED for its own tests, not for a second caller — `handlePullRequest` is
+ * the only production entry, and it is the only one that should be. Two of the
+ * paths below exist for races the handler cannot stage: a mirror row that
+ * vanished between the sync's commit and this write, and a failure escaping the
+ * inner fetch guard. Reaching them through a webhook delivery is impossible by
+ * construction — the sync upserts the row on the same payload — so testing them
+ * at all means calling this directly. (Same reasoning `changeRequestStatusSync`
+ * records for exporting `resolveChangeRequestWorkItem`.)
  */
-async function captureMergedPullRequestFiles(
+export async function captureMergedPullRequestFiles(
   body: Record<string, unknown>,
   cr: NormalizedChangeRequest,
 ): Promise<void> {
