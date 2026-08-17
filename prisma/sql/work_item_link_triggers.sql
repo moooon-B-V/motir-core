@@ -33,15 +33,23 @@
 --   * A cross-workspace self-link is rejected by `self` (the cheapest check)
 --     before the `workspace` trigger walks the two FKs.
 --
--- NOTE for Subtask 1.4.5 (RLS): these functions SELECT sibling rows from
--- work_item / work_item_link by id. When FORCE ROW LEVEL SECURITY lands on
--- work_item_link, the trigger's internal lookups will be subject to the
--- same workspace GUC policy as the invoking statement. Within a single
--- workspace every link's referenced items share one workspaceId, so the
--- active app.workspace_id GUC will match — but 1.4.5 must verify this and,
--- if needed, mark these functions SECURITY DEFINER. Logged as a forward
--- note in PRODECT_FINDINGS.md (mirrors the equivalent note in
--- work_item_triggers.sql).
+-- RLS (Subtask 1.4.5, ANSWERED — then CORRECTED by MOTIR-2884): these
+-- functions SELECT sibling rows from work_item / work_item_link by id, and
+-- under FORCE ROW LEVEL SECURITY a SECURITY INVOKER function's internal
+-- lookups run under the invoking statement's policies. 1.4.5 verified the
+-- group and answered "no SECURITY DEFINER needed" on the premise that "within
+-- a single workspace every link's referenced items share one workspaceId".
+--
+-- That premise holds for (1) cycle and (2) self below. It is the NEGATION of
+-- what (3) does: a cross-workspace check's whole job is to look at a row in
+-- ANOTHER tenant, so under a bound `motir_app` writer the far endpoint read
+-- NULL, the deferral branch fired, and the cross-tenant insert SUCCEEDED —
+-- silently, for a year. **enforce_work_item_link_workspace() is therefore
+-- SECURITY DEFINER as of migration
+-- 20260817120000_link_workspace_trigger_security_definer**, which carries the
+-- full reasoning and the per-function verdict for all six trigger functions
+-- (including the three in work_item_triggers.sql). Read that migration before
+-- changing any trigger's security label.
 
 -- 1. Cycle prevention (is_blocked_by only) -----------------------------------
 --    `is_blocked_by` defines a directed dependency graph (A is_blocked_by B
@@ -130,8 +138,19 @@ $$ LANGUAGE plpgsql;
 --    workspaceId from the lookup short-circuits to RETURN NEW so the FK
 --    fires with a clearer message). Both checks are O(2 index lookups) on
 --    work_item.id (the PK), cheap on the hot path.
+--
+--    ⚠️ SECURITY DEFINER (MOTIR-2884): this is the ONE trigger whose lookups
+--    must be able to address a row OUTSIDE the invoking context — that is what
+--    check (a) tests. As SECURITY INVOKER under `motir_app` the far endpoint
+--    read NULL, the deferral above fired, and the FK passed (RI checks are
+--    exempt from RLS), so the write this function exists to refuse went
+--    through. See the migration named above for the full record.
 CREATE OR REPLACE FUNCTION enforce_work_item_link_workspace()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   from_workspace text;
   to_workspace   text;
@@ -156,7 +175,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Triggers -------------------------------------------------------------------
 -- Names sort cycle → self → workspace (see FIRING ORDER note above). All
