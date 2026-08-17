@@ -384,6 +384,8 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
   `./.github/actions/e2e-setup` composite takes a `next-build: build` input for
   exactly this). That is one extra build, paid only on the PRs that own a spec —
   where the 11-minute lane dwarfs it. There is deliberately no `push:` trigger.
+  **(Superseded 2026-08-17 by the MOTIR-2760 amendment below — there is now a
+  `push: main` baseline, gated on the lane holding a spec.)**
 - **What this costs, said out loud.** The watchability floor and story resolution
   (§2's amendment / MOTIR-1772, MOTIR-1905) now run **only on the owning run** — a
   spec that drifts below the floor is caught when its own PR next touches it, not
@@ -404,8 +406,85 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
   any surface the failing spec renders. The second consequence of the `paths:` filter
   compounds it — a PR adding ONE acceptance spec runs, and becomes answerable for,
   all of them. Budget for that when a story plans its acceptance E2E.
+  **(Amended 2026-08-17 by MOTIR-2760: there IS a `main` baseline now, whenever the
+  lane holds a spec — so the discriminator is available exactly when there is
+  something to discriminate. It is still unavailable on an EMPTY lane, where by
+  definition there is no red to diagnose.)**
 
 The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches it.
+
+#### Amendment 2026-08-17 (MOTIR-2760) — the MAIN BASELINE: `push: main`, gated on membership
+
+The amendment above bought its cost saving with a blind spot it named honestly and
+left open: the `paths:` filter cuts between an app change and the specs that read
+it, so **an app change could break every acceptance spec, merge green, and wait on
+`main` until an unrelated PR happened to touch a spec** — at which point that PR's
+author inherited the diagnosis. Measured instance: MOTIR-2654 moved sign-in's
+`callbackURL` to `/home`, `acceptance-ai-callout.spec.ts` broke at `c6b5d19d`, and
+it surfaced on MOTIR-2664's PR (#2045), which does not own that spec. MOTIR-2620
+had already declined to close it by widening the filter, and was right to.
+
+**The decision: the lane also runs on `push: main`, but only while it holds a spec,
+and a baseline run TESTS without ever PUBLISHING.**
+
+| Run                                             | Lane runs         | Publishes   |
+| ----------------------------------------------- | ----------------- | ----------- |
+| PR changing an `acceptance*.spec.ts`            | yes (4 shards)    | that story  |
+| PR changing a lane-definition file (MOTIR-2600) | yes (4 shards)    | nothing     |
+| PR changing anything else                       | **no lane**       | nothing     |
+| push to `main`, lane holds ≥ 1 spec             | yes (4 shards)    | **nothing** |
+| push to `main`, lane empty                      | **gate job only** | nothing     |
+
+**Why the gate is the load-bearing half, against this ADR's budget.** Measured on
+run `31740853229` (the MOTIR-2765 merge, against an already-empty lane): `build`
+6 min + four shards at 3 min = **18 machine-minutes to run zero tests**. The cost
+is setup and a `next build`, not the specs, so it does not shrink with the lane.
+`main` takes roughly 20 merges/day, so an ungated `push:` trigger would spend
+**~360 machine-minutes/day** — and after MOTIR-2769's triage an empty lane is the
+STEADY STATE, not an edge case. Gated, an empty lane costs one ~10-second checkout
+per merge (~3 min/day), and the fan-out is paid only inside the window a story is
+actually in review. That is the difference between this being affordable and not.
+
+**Why not the alternatives**, all of which MOTIR-2760 was written to weigh and all
+of which MOTIR-2765 re-priced:
+
+- **Widening `paths:` to `app/**`/`lib/**`** — still rejected. MOTIR-2620's
+  reason (the specs read most of the app) stands, and post-triage it is worse:
+  widening would run an 18-machine-minute lane on nearly every PR to execute
+  nothing at all.
+- **A nightly run** — cheaper, but its red names a commit RANGE where the baseline
+  names one merge, and attribution is the entire product here. On an empty lane it
+  is also pure waste, which is most nights.
+- **A cheap smoke subset on every PR** — there is no subset to take: the lane is
+  usually empty and otherwise holds one or two specs.
+
+**MOTIR-1949's requirement is untouched, and the reason is subtle enough to state.**
+"Absent, not skipped" is a constraint about **pull requests** — a greyed check on
+someone's PR. A `push` event attaches its checks to the commit on `main` and adds
+nothing to any open PR, so the gate may skip freely there at no cost to anyone. On
+`pull_request` the gate returns `true` unconditionally: the `paths:` filter has
+already decided, and MOTIR-2600 deliberately wants a lane-definition PR to rehearse
+against an empty membership. The gate also sits on `build` rather than on the shard
+job, so `tests/ci-acceptance-lane.test.ts`'s assertion that the shard job carries no
+job-level `if:` stays literally true.
+
+**The baseline never publishes, via two independent mechanisms** — because the
+failure mode is not a wasted run but a SUPERSEDED receipt (MOTIR-1937): the publish
+step is `if:`-gated to `pull_request`, and the owned-specs step emits an empty list
+on `push` (there is no base ref to diff), which the uploader already fails closed
+on. The §4 rule that only the owning PR may publish is therefore strengthened, not
+weakened: a merge is not a new moment to record.
+
+**And `cancel-in-progress` becomes PR-only.** Cancelling a superseded run is right
+for a PR and wrong for a baseline: back-to-back merges would cancel each other and
+hand back exactly the ambiguity about _which merge broke it_ that this trigger
+exists to remove.
+
+**What is still deliberately not covered.** The PR that BREAKS a spec still goes
+green; the baseline catches it one merge later. Closing that requires the widening
+rejected above, so the accepted cost is a red `main` for the length of one fix —
+bounded, attributed to the author who caused it, and no longer inherited by the
+next passer-by.
 
 #### Amendment 2026-08-10 (MOTIR-2600) — the lane is SHARDED, and it triggers on its own definition
 
@@ -498,6 +577,80 @@ as the verdict — and the fixture that feeds it is next door.
 ⚠️ **Read the idle gap's TAIL, not its centre.** Those same deliberate holds are
 stretches of nothing, so a healthy recording's median idle gap is a reading of the
 hold schedule. The long-task and probe-latency signals carry no such contamination.
+
+#### Amendment 2026-08-17 (MOTIR-2908) — the fan-out is SIZED to the lane, not fixed at four
+
+Clause 1 of the MOTIR-2600 amendment is superseded in its NUMBER, not in its shape.
+The lane still runs one `build` plus N sharded legs; N is no longer the literal `4`.
+
+**Why the number moved without anyone touching it.** `4` was sized against the lane
+as it stood on 2026-08-10: **26 specs, 25.7 minutes of test time**, lengthening with
+every story that added one. Six days later MOTIR-2765 made an acceptance spec a
+**receipt with a lifecycle** and MOTIR-2769 triaged every existing member out of the
+lane. The lane's steady-state membership is now **zero**, and its ceiling is "the
+stories currently in review" — realistically one or two. Nothing about that
+invalidated MOTIR-2600's engineering; it invalidated the input MOTIR-2600 was
+correct about.
+
+**Why the leftover legs are not free.** A leg's cost in this lane is almost entirely
+SETUP — a checkout, a Postgres container, a Playwright install, a build-artifact
+download — roughly **3 machine-minutes before it looks at a spec**. Measured on run
+`31740853229` (the MOTIR-2765 merge, an already-empty lane): `build` 6 min + four
+legs at 3 min = **18 machine-minutes to run zero tests**. Three of those legs drew
+no specs at all. `--pass-with-no-tests` (MOTIR-2769) is what made that state LEGAL,
+and therefore invisible: the lane was green, and fast in wall-clock terms, while
+being expensive in machine terms.
+
+It also stopped being a PR-only cost. MOTIR-2760's `push: main` baseline means the
+fan-out is paid **per merge** for as long as a receipt window is open. That card
+bounded _when_ the lane runs; this one bounds _what a run costs_.
+
+**The derivation**, computed by the `membership` gate that already counts the lane:
+
+```
+legs = min(specs, 4), floored at 1
+```
+
+| specs in the lane        | legs | machine-minutes (6 min build + 3 min/leg) |
+| ------------------------ | ---- | ----------------------------------------- |
+| 0 (a lane-definition PR) | 1    | 18 → **9**                                |
+| 1                        | 1    | 18 → **9**                                |
+| 2                        | 2    | 18 → **12**                               |
+| ≥ 4                      | 4    | 18 → **18** (unchanged)                   |
+
+Two bounds, each protecting something a plain "one leg per spec" would break:
+
+- **The CAP keeps MOTIR-2600 whole.** At ≥ 4 specs the matrix is exactly the
+  `[1, 2, 3, 4]` that amendment measured, so a lane that legitimately fills up
+  again gets the parallelism it was sized for and never regresses toward the serial
+  runtime it replaced.
+- **The FLOOR of 1 keeps the rehearsal.** A PR that only restructures the lane runs
+  no tests either way — what it still proves is that the harness BOOTS (the
+  Playwright config loads, the webServer comes up, `e2e-setup`'s download path
+  works). Zero legs would prove nothing, on precisely the PRs whose subject is this
+  lane.
+
+**Nothing about publishing moves, and the reason is that the exactly-once argument
+never mentioned four.** `--shard` partitions the suite at any N, and ownership is
+decided per RECORDING (`isOwnedRecording` against the changed-spec list) rather than
+per run — so each leg still holds a disjoint subset and the subsets still cover it.
+The distinct-artifact-name requirement survives for the same reason: `matrix.shard`
+is `1..N`, distinct within a run at every N.
+
+**Mechanically**, the gate re-exports two job outputs — `shards` (a JSON array the
+matrix reads through `fromJSON`) and `legs` (the same number as a scalar, used for
+the `--shard=i/N` denominator and the job name) — and the shard job gains a second
+`needs:` edge to `membership`, because a job can only read the outputs of a job it
+needs. That edge adds no gating: `membership` always runs, and the MOTIR-2760 skip
+still arrives through `build`. The shard job still carries no job-level `if:`, so
+MOTIR-1949's "absent, not skipped" requirement is untouched.
+
+**Asserted by EXECUTING the gate, not by describing it** — `tests/ci-acceptance-lane.test.ts`
+extracts the step's `run:` block from the workflow and runs it under `bash` against
+a fabricated lane of 0 / 1 / 2 / 3 / 4 / 9 / 26 specs, reading back what it writes to
+`$GITHUB_OUTPUT`. A text assertion is the right tool for a `needs:` edge and the
+wrong one for arithmetic: a regex that agrees with the derivation agrees just as
+happily with an off-by-one, and the floor and the cap are exactly where one would sit.
 
 ---
 

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { MOTIR_SEED_BURST_END } from '@/lib/workItems/provenanceBackfill';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
@@ -28,6 +29,23 @@ import { truncateAuthTables } from '../../helpers/db';
 // whole-table no-op (not just two spot reads), and tenant scoping against a
 // SECOND PROJECT IN THE SAME WORKSPACE — the sharper form, since a shared
 // workspace means only the `projectId` filter can hold the line.
+//
+// ── THE CLIENT EACH DIRECT LINE TAKES (MOTIR-2911) ──────────────────────────
+// Two clients, and which one a line gets is decided by whether the statement is
+// the SUBJECT of the test or its scaffolding:
+//
+//   * `workItemRepository.findProvenanceBackfillCandidates` and the two
+//     `backfill*SourceByIds` writes ARE the subject — MOTIR-2881's class 2 — so
+//     they stay on `@/lib/db` and get a BOUND transaction via
+//     `withWorkspaceContext(fx.ctx, …)`. `work_item` is workspace-keyed; called
+//     with no `tx` (or inside a bare `db.$transaction`, which binds no GUC at
+//     all) the sweep read returns `[]` under `motir_app` and the `updateMany`
+//     matches nothing — both silently. Moving them to `adminDb` would make every
+//     assertion here green by taking the code under test off the restricted role,
+//     which is the one way this work fails without saying so.
+//   * `adminDb` keeps the seeding, the mid-sweep clobber and the raw readbacks —
+//     fixtures that need OWNERSHIP (`TRUNCATE`, and writing values the backfill
+//     is not allowed to produce).
 
 const IN_BURST = new Date(MOTIR_SEED_BURST_END.getTime() - 60_000);
 const AFTER_BURST = new Date(MOTIR_SEED_BURST_END.getTime() + 60_000);
@@ -364,9 +382,8 @@ describe('the null-guard is what makes the sweep race-safe, not merely tidy', ()
     });
 
     // The sweep reads it as a candidate and decides `manual` / `manual`…
-    const candidates = await workItemRepository.findProvenanceBackfillCandidates(
-      fx.projectId,
-      fx.workspaceId,
+    const candidates = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemRepository.findProvenanceBackfillCandidates(fx.projectId, fx.workspaceId, tx),
     );
     expect(candidates.map((row) => row.id)).toEqual([raced.id]);
 
@@ -378,7 +395,10 @@ describe('the null-guard is what makes the sweep race-safe, not merely tidy', ()
       data: { planningSource: 'native', implementationSource: 'hosted' },
     });
 
-    const written = await db.$transaction(async (tx) => ({
+    // A BOUND transaction, not a bare `db.$transaction`: the guard under test is
+    // `<source>: null` in the WHERE, and an unbound `updateMany` writes 0 rows
+    // whatever the guard says — which is the number this asserts.
+    const written = await withWorkspaceContext(fx.ctx, async (tx) => ({
       planning: await workItemRepository.backfillPlanningSourceByIds([raced.id], 'manual', tx),
       implementation: await workItemRepository.backfillImplementationSourceByIds(
         [raced.id],
@@ -399,7 +419,7 @@ describe('the null-guard is what makes the sweep race-safe, not merely tidy', ()
     const fx = await makeWorkItemFixture();
     const untouched = await seedRow(fx, { title: 'bystander', createdAt: IN_BURST });
 
-    const written = await db.$transaction(async (tx) => ({
+    const written = await withWorkspaceContext(fx.ctx, async (tx) => ({
       planning: await workItemRepository.backfillPlanningSourceByIds([], 'manual', tx),
       implementation: await workItemRepository.backfillImplementationSourceByIds([], 'byok', tx),
     }));
@@ -454,24 +474,33 @@ describe('tenant scoping', () => {
 });
 
 describe('the candidate read', () => {
-  it('returns the same rows inside a transaction as outside it', async () => {
+  it('returns the same rows in a CALLER-supplied transaction as in the service’s own', async () => {
     // `findProvenanceBackfillCandidates` takes an optional `tx` so a caller can
-    // read and write in one context. The service does not use it today, which
-    // is exactly why it is asserted here — an untested overload is where a
-    // future "do the sweep inside the transaction" change silently breaks.
+    // read and write in one context. The comparison used to be tx-vs-no-tx, and
+    // that arm is now DEAD: under `motir_app` the `?? db` fallback binds no
+    // `app.workspace_id`, so it answers `[]` and the equality held over two empty
+    // arrays — a vacuous pass the `toBeGreaterThan(0)` below was the only guard
+    // against (MOTIR-2911; the fallback arm itself is
+    // `tests/rls/tx-fallback-arm.test.ts`'s adjudicated subject, not this file's).
+    //
+    // What is worth asserting instead is the claim the overload actually makes:
+    // the read returns the same rows through EITHER bound context — the
+    // workspace-only one the service opens (`withWorkspaceServiceContext`, the
+    // real caller at workItemsService.backfillProvenanceForProject) and a
+    // caller's own user+workspace transaction. Two different GUC sets, one
+    // admission decision.
     const fx = await makeWorkItemFixture();
     await seedTheDecisionTable(fx);
 
-    const outside = await workItemRepository.findProvenanceBackfillCandidates(
-      fx.projectId,
-      fx.workspaceId,
+    const asTheServiceReadsIt = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findProvenanceBackfillCandidates(fx.projectId, fx.workspaceId, tx),
     );
-    const inside = await db.$transaction((tx) =>
+    const inACallersTransaction = await withWorkspaceContext(fx.ctx, (tx) =>
       workItemRepository.findProvenanceBackfillCandidates(fx.projectId, fx.workspaceId, tx),
     );
 
-    expect(inside).toEqual(outside);
-    expect(outside.length).toBeGreaterThan(0);
+    expect(inACallersTransaction).toEqual(asTheServiceReadsIt);
+    expect(asTheServiceReadsIt.length).toBeGreaterThan(0);
   });
 
   it('excludes a row that already carries BOTH sources', async () => {
@@ -490,9 +519,8 @@ describe('the candidate read', () => {
       planningSource: 'mcp',
     });
 
-    const candidates = await workItemRepository.findProvenanceBackfillCandidates(
-      fx.projectId,
-      fx.workspaceId,
+    const candidates = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemRepository.findProvenanceBackfillCandidates(fx.projectId, fx.workspaceId, tx),
     );
 
     expect(candidates.map((row) => row.id)).toEqual([partial.id]);

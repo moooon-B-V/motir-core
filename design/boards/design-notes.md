@@ -58,8 +58,13 @@ Kanban board (Story 3.1 auto-seeds one per project).
   height** with an internal scroll on `.col-body`. Every column is the SAME height
   regardless of card count (3.2.8) — a sparse column shows empty space below its
   cards rather than hugging them, so the columns line up. In the app this is a
-  viewport-relative `h-[calc(100dvh-12rem)]` LAYOUT height (a raw `calc`, not a
-  `--height-*` token, since it is not a shaped-control size).
+  viewport-relative LAYOUT height (a raw `calc`, not a `--height-*` token, since
+  it is not a shaped-control size):
+  `h-[calc(100dvh - 10.5rem - var(--shell-bottom-clearance, 1.5rem))]` — the
+  chrome ABOVE the board as a constant, and the space the shell reserves BELOW as
+  the variable it sets (MOTIR-2763). The below-term is **not** a baked number: it
+  tracks the floating orb's footprint, which is present only when the orb mounts.
+  See `design/shell/design-notes.md`.
 - **Header**: column `name` (13px semibold, `--el-text-strong`) + a **card-count
   badge** (`.col-count`, the per-column total from the projection) + a spacer +
   a **WIP-limit slot** (`.wip-slot`, drawn as a placeholder e.g. `3/5` — **NOT

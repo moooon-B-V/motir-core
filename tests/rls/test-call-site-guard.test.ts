@@ -53,7 +53,7 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  *   458 measured → 375 after the adjudication sweep → 336 → 283 → 243 → 194
  *   → 152 → 105 → 25 → 0, each step a batch subtracting what it fixed.
  *
- * ── FOUR THINGS THE NEXT AUTHOR SHOULD INHERIT, not re-derive ─────────────
+ * ── FIVE THINGS THE NEXT AUTHOR SHOULD INHERIT, not re-derive ─────────────
  *
  * 1. THE `db.` PREFIX BLIND SPOT. A sweep keyed on the CLIENT's name cannot see
  *    a call that reaches the client through a named wrapper. That is why this
@@ -74,6 +74,21 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  *    because a sibling story bound many of these reads while the plan sat still.
  *    A number in a card is a claim about a moving world; the scanner is the only
  *    current answer. (MOTIR-2844.)
+ *
+ * 5. A SCANNER'S OWN BLIND SPOT IS REPORTED AS A CLEAN VERDICT, NOT AS AN ERROR
+ *    (MOTIR-2911). `addressedModels` matched a model only when the client was a
+ *    bare identifier, so the inline `(tx ?? db).workItem.findMany` that nearly
+ *    every BINDABLE method is written in addressed nothing it could see. The
+ *    consequence was not "unknown" — it was `gated: false`, which surfaces as
+ *    `not-gated`: a POSITIVE verdict meaning "no policy applies, leave it
+ *    alone". Eleven methods carried it and 24 of their call sites were filed as
+ *    correct-unbound while this file asserted the class was empty. Two rules
+ *    follow. First, a fixture only proves the classifier against the shapes its
+ *    author thought of — `fixtureRepository` hoisted `const client = tx ?? db`
+ *    in every case, a form the real repositories mostly do not use, so the
+ *    fixture agreed with the bug. Second, when a verdict says a table is
+ *    ungated, check the MIGRATIONS rather than the parse: `policyGatedModels`
+ *    knew `work_item_link` was gated the whole time; nothing ever asked it.
  *
  * ── WHAT THIS GUARD DOES NOT READ ────────────────────────────────────────
  *
@@ -115,8 +130,26 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  * `tx` already, because a write method requires one whether or not its model is
  * gated. The verdict alone cannot catch that: a `not-gated` call handed a `tx` is
  * still `not-gated`, which is why the scanner records `bound` separately.
+ *
+ * 73 -> 49 (MOTIR-2911): the SAME cause as the 149 -> 73 step above, one layer
+ * further in. `addressedModels` decided which models a repository method touches
+ * by requiring the head of the property access to be a bare identifier, so it saw
+ * `db.workItem.findMany` and `client.widget.findMany` but not the INLINE
+ * `(tx ?? db).workItem.findMany` — which is how eleven methods across
+ * `workItemLinkRepository`, `workItemRepository` and `automationRuleRepository`
+ * are written, and is precisely the form that makes a method BINDABLE. Those
+ * methods addressed no visible model, came out `gated: false`, and their 24 call
+ * sites were classified `not-gated`. Sixteen of them were unbound and counted
+ * toward this floor while being, in fact, the story's own work. Five were live
+ * reads that answered `[]` under `motir_app` (four in
+ * `tests/mcp/dependency-edges.test.ts`, three in
+ * `tests/integration/work-items/provenance-backfill-gate.test.ts`, one in the
+ * `tests/e2e/_helpers/ai-cadence-seed.ts` helper); the rest were empty-input
+ * short-circuits and vacuous `toBeNull()` assertions. As in the earlier step, not
+ * one line moved to make this number move — they were re-adjudicated by a
+ * corrected detector and then bound.
  */
-const UNTOUCHED_OUT_OF_SCOPE_FLOOR = 73;
+const UNTOUCHED_OUT_OF_SCOPE_FLOOR = 49;
 
 const outOfScope = (s: TestCallSite): boolean =>
   s.verdict === 'not-gated' || s.verdict === 'pre-auth';
@@ -135,6 +168,8 @@ describe('the test call-site classifier rules on every shape', () => {
         'findWidgets:already-bound',
         'findWidgets:in-scope',
         'findWidgets:in-scope',
+        'findWidgetsInlineFallback:already-bound',
+        'findWidgetsInlineFallback:in-scope',
         'findWidgetsUnbindable:needs-binding-first',
         'findWidgetsWrapped:already-bound',
         'findWidgetsWrapped:in-scope',
@@ -142,13 +177,35 @@ describe('the test call-site classifier rules on every shape', () => {
       ].sort(),
     );
     expect(countByVerdict(sites)).toEqual({
-      'in-scope': 4,
+      'in-scope': 5,
       'not-gated': 3,
       'pre-auth': 1,
       'needs-binding-first': 1,
-      'already-bound': 2,
+      'already-bound': 3,
       'adjudicated-unbound': 0,
     });
+  });
+
+  it('sees a model addressed through the INLINE `(tx ?? db)` fallback', () => {
+    // The blind spot MOTIR-2911 found, pinned as its own case because the count
+    // assertion above would go on passing if a future edit re-narrowed the head
+    // test and the fixture method happened to leave the population by another
+    // route. `findWidgetsInlineFallback` addresses `widget` — a gated model —
+    // ONLY through `(tx ?? db).widget`, so it is `gated` exactly when the
+    // classifier unwraps the fallback expression.
+    //
+    // What made this expensive is that the wrong answer is the REASSURING one:
+    // an undetected model yields `gated: false`, which the scanner reports as
+    // `not-gated` — a positive verdict meaning "no policy applies, leave it" —
+    // rather than as an error. Eleven real repository methods carried it, and
+    // the class the guard below calls CLOSED contained sixteen unbound reads.
+    const inline = repositoryIndex(FIXTURE).get('fixtureRepository.findWidgetsInlineFallback');
+    expect(inline?.gated).toBe(true);
+    expect(inline?.txIndex).toBe(1);
+
+    // And the two-step form it is the counterpart of still works, so the fix is
+    // additive rather than a replacement of one narrow rule with another.
+    expect(repositoryIndex(FIXTURE).get('fixtureRepository.findWidgets')?.gated).toBe(true);
   });
 
   it('DETECTS an out-of-scope call site that has been given a `tx`', () => {

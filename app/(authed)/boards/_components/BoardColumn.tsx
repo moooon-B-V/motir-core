@@ -139,7 +139,13 @@ export function BoardColumn({
       // columns occlude on the sides, making the board read as one backing slab).
       // The cards INSIDE still tilt individually. Inert under every other style.
       data-board-col-panel=""
-      className={`flex h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
+      // 10.5rem of chrome ABOVE (top nav + the shell's pt-6 + the board header),
+      // then whatever the shell reserves BELOW. That second term used to be baked
+      // into a flat 12rem, which silently encoded the shell's old 1.5rem bottom
+      // padding — so the orb clearance (MOTIR-2763) would have pushed the column
+      // past the fold by exactly the amount it added. Spending the variable keeps
+      // the column exactly as tall as it is today when no orb mounts.
+      className={`flex h-[calc(100dvh_-_10.5rem_-_var(--shell-bottom-clearance,1.5rem))] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
           ? 'border-(--el-board-column-accent) bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)'
           : 'border-(--el-border)'

@@ -10,7 +10,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { inngest } from '@/lib/jobs/client';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -491,9 +491,13 @@ describe('githubWebhookService — installation grant mirror', () => {
       installation: { id: 'inst-del' },
     });
     expect(first).toMatchObject({ event: 'installation', outcome: 'removed' });
-    const gone = await withSystemContext((tx) =>
-      tx.githubInstallation.findUnique({ where: { installationId: 'inst-del' } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). It expects `null`,
+    // which is exactly the assertion a policy-filtered read satisfies for the
+    // wrong reason if the table's arm ever goes away; `github_installation` has
+    // one today, so this held.
+    const gone = await adminDb.githubInstallation.findUnique({
+      where: { installationId: 'inst-del' },
+    });
     expect(gone).toBeNull();
 
     // Redelivery after the row is gone — still a clean no-crash.
@@ -574,9 +578,13 @@ describe('githubWebhookService — installation grant mirror', () => {
     });
     expect(res).toMatchObject({ event: 'installation_repositories', outcome: 'synced' });
 
-    const repos = await withSystemContext((tx) =>
-      tx.githubRepo.findMany({ where: { installation: { installationId: 'inst-recon' } } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). Note the relation
+    // filter: this query touches `github_repo` AND, through the join,
+    // `github_installation` — both armed here, but a query is only as visible as
+    // its least-visible table (`notes.html` #269).
+    const repos = await adminDb.githubRepo.findMany({
+      where: { installation: { installationId: 'inst-recon' } },
+    });
     expect(repos.map((r) => r.repoId)).toEqual(['555']); // reconciled to the authoritative set
   });
 });

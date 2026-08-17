@@ -16,6 +16,7 @@ declare const fixtureRepository: {
   findWidgetsWrapped(workspaceId: string, limit: number, tx?: unknown): Promise<unknown[]>;
   findGlobalSettingsBindable(tx?: unknown): Promise<unknown[]>;
   rawWidgetCount(workspaceId: string, tx?: unknown): Promise<unknown>;
+  findWidgetsInlineFallback(workspaceId: string, tx?: unknown): Promise<unknown[]>;
 };
 declare const ghostRepository: { vanished(id: string): Promise<unknown> };
 declare const tx: unknown;
@@ -59,6 +60,17 @@ export async function callSites(): Promise<void> {
   // not-gated, BOUND — the VIOLATION the guard exists to catch. Its verdict is
   // still `not-gated`, so only `bound` distinguishes it from the line above.
   await fixtureRepository.findGlobalSettingsBindable(tx);
+
+  // in-scope — the INLINE `(tx ?? db).widget` form (MOTIR-2911). Before the
+  // classifier unwrapped the fallback expression this read `not-gated`: the
+  // method appeared to address no model at all, so its table's policies were
+  // invisible and the site was reported as correct-unbound. It is the shape
+  // nearly every bindable repository method in `lib/repositories` is written in.
+  await fixtureRepository.findWidgetsInlineFallback(workspaceId);
+
+  // already-bound — the same inline-fallback method WITH its `tx`. Pinned so the
+  // fix cannot regress in the other direction (everything gated ⇒ everything red).
+  await fixtureRepository.findWidgetsInlineFallback(workspaceId, tx);
 
   // UNCLASSIFIABLE — no such method in the repository index. Must be reported as
   // unclassifiable and fail the build, never defaulted to `in-scope` (which would

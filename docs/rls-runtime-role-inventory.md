@@ -1721,3 +1721,212 @@ triggers in alphabetical order by trigger name, and the names sort `cotenancy` �
 `kind`. A cross-tenant `parentId` aborts the statement before the other three read anything, so their
 definer lookups can only ever address rows sharing the writing row's workspace AND project. The
 ordering is load-bearing for the security argument; `trg_work_item_cotenancy`'s name is chosen for it.
+
+---
+
+## CLOSED — the test-side FIXTURE on `withSystemContext` (MOTIR-2887, 2026-08-17)
+
+MOTIR-2880's entry closes with _"what this does NOT close"_: 26 failures surviving in seven of the 23
+files its class was attributed to, and a note that three of them were **a test FIXTURE written on
+`withSystemContext`**. This is that class, plus the honest partition of the rest.
+
+### The class, and why it is DIFFERENT from MOTIR-2880's by OWNER rather than by symptom
+
+The two are indistinguishable in a failure log and identical in mechanism — a read inside a system
+context touches a table with no `system_admin` arm, returns zero rows, and raises nothing. What
+separates them is **who issued it**, and that changes which direction the failure points:
+
+|                 | MOTIR-2880 (the RUNTIME class)      | MOTIR-2887 (the FIXTURE class)                            |
+| --------------- | ----------------------------------- | --------------------------------------------------------- |
+| issuer          | application code in `lib/`          | test setup / teardown / a direct-DB assertion             |
+| what goes wrong | the product cannot see its own data | the SETUP silently does nothing                           |
+| how it presents | a feature is visibly broken         | **the test passes, or fails pointing at the wrong thing** |
+| the fix         | BIND the tenant, or ARM the table   | neither — a fixture belongs on `adminDb`, the OWNER       |
+
+The fixture direction is the worse of the two. `dropStatusCategory` in
+`tests/github/githubWebhookCustomWorkflow.test.ts` (and its `gitlab` twin) deleted every `done`-category
+status to build a degenerate custom workflow. `workflow_status` carries one policy —
+`workflow_status_active_workspace`, keyed purely on `app.workspace_id`, **no `system_admin` arm** — so
+under `motir_app` the `findMany` returned `[]`, both `deleteMany`s matched nothing, and the custom
+workflow was never created. The test then measured the DEFAULT workflow while its name claimed it was
+measuring a custom one, and reported `outcome: 'transitioned'` against an expected
+`'no_matching_status'` — an assertion that reads as a regression in the status sync and is in fact a
+setup step that succeeded at doing nothing.
+
+**The rule is not new, and that is the point.** A fixture uses `adminDb` (the database OWNER), never a
+wider GUC on the runtime client — the same sentence `tests/helpers/adminDb.ts` has carried since
+MOTIR-2513. What was missing was an instrument pointed at the test tree.
+
+### The measured policy set — 2 of the 8 tables involved are unarmed
+
+Read from `pg_policies`, not from the migrations (`notes.html` #248):
+
+| table                    | policy                                          | `system_admin` arm |
+| ------------------------ | ----------------------------------------------- | :----------------: |
+| `workflow_status`        | `workflow_status_active_workspace` (ALL)        |       **no**       |
+| `workflow_transition`    | `workflow_transition_active_workspace` (ALL)    |       **no**       |
+| `code_graph_offboarding` | `code_graph_offboarding_system_only` (ALL)      |        yes         |
+| `github_identity`        | `github_identity_owner_or_system` (ALL)         |        yes         |
+| `github_installation`    | `github_installation_workspace_or_system` (ALL) |        yes         |
+| `github_pull_request`    | `github_pull_request_workspace_or_system` (ALL) |        yes         |
+| `github_repo`            | `github_repo_workspace_or_system` (ALL)         |        yes         |
+| `import_source_identity` | `import_source_identity_owner_or_system` (ALL)  |        yes         |
+
+**Only the `workflow_*` pair was actually blind**, which is worth stating plainly because the first
+draft of this entry claimed otherwise for five of the eight. The 24 sites converted here split into
+**4 failures fixed** and **20 sites moved for rule-conformance** — the arm is a property of the
+DEPLOYED policy set, and the `workflow_*` row above is this same sweep's proof that a table can simply
+not have one.
+
+### The sweep — 24 FIXTURE sites converted, 72 CODE-UNDER-TEST sites left alone
+
+`git grep -l withSystemContext -- tests/` returns **39 files**, far more than the three MOTIR-2880
+named — and the card's parenthetical _"there should be none [exercising the code under test] in
+`tests/`"_ is empirically false. `tests/ciFleet/fleetCeiling.test.ts` alone carries both kinds. The
+discriminator is the block's ROLE in the test, not its syntax:
+
+- **CONVERTED (24 sites, 15 files)** — the callback addresses `tx.<model>` directly. Setup, teardown, or
+  a direct-DB assertion. These are the fixture class.
+- **LEFT (72 sites)** — the callback hands `tx` to the service or repository under test.
+  `withSystemContext((tx) => fleetCeilingService.census(NOW, tx))` is the jobs runtime's own calling
+  context; `withSystemContext((tx) => replayDLQ(dlqId, tx))` is the operator route's. Moving these to
+  `adminDb` would make them pass by taking the code under test off the restricted role, which is the
+  one way this work fails silently (`tests/helpers/adminDb.ts`'s own ⚠️).
+
+The convention was already established in the tree and simply not applied uniformly: `tests/jobs/dlq.test.ts`
+keeps `replayDLQ` on `withSystemContext` and asserts through `adminDb.jobRunDlq.findUnique` in the same test.
+
+### The instrument — `systemContextScan` now walks `tests/`, and the guard adjudicates it
+
+`SCAN_ROOTS` gains `tests`, `walk()` skips `__fixtures__` (the scanner's own negative fixture is a
+separate root with its own cache key), and `enclosingName` gains a case for a test callback. That last
+one is not cosmetic: in `lib/` every site sits in a named function or const, and in `tests/` the
+commonest enclosing scope is an ANONYMOUS arrow handed to `it(…)` — every such site would key as
+`<module>` and collapse onto its neighbours. The key is now `it:<the test's title>`, which is
+line-independent in exactly the way the sibling guards' keys are.
+
+**156 sites total, 72 of them in `tests/`.** All 72 are green: every table they reach is either armed or
+has RLS disabled, which is the correct verdict — a system-context read of an ARMED table from a test
+that is reproducing the production caller is coverage, not a defect.
+
+Shown RED by re-introducing the `dropStatusCategory` fixture, which names both tables:
+
+```
+tests/github/githubWebhookCustomWorkflow.test.ts#dropStatusCategory :: workflowStatus
+  -> "workflow_status" has RLS and NO system_admin read arm (reached via tx.workflowStatus, tx.workflowTransition)
+tests/github/githubWebhookCustomWorkflow.test.ts#dropStatusCategory :: workflowTransition
+  -> "workflow_transition" has RLS and NO system_admin read arm (reached via tx.workflowStatus, tx.workflowTransition)
+```
+
+…then green on restore.
+
+### The measurement — 26 → 22, and the 22 re-attributed per site
+
+```
+TEST_DB_APP_ROLE=1 pnpm vitest run <the 7 files>
+  before:  Tests  26 failed | 100 passed (126)
+  after:   Tests  22 failed | 104 passed (126)
+```
+
+Both `customWorkflow` files went to **zero**. The remaining 22 are **not this class**, and none of them
+is left undiagnosed — MOTIR-2872's partition attributed all 26 to class 1 BY ASSOCIATION and said so;
+this is the per-site reading it deferred:
+
+| file                                              |   n | mechanism                                                                                                                                                                                                                                                      | owner                                                                                          |
+| ------------------------------------------------- | --: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `projectRepos/projectRepoTeamAccess`              |   8 | `github_identity`'s only arms are `system_admin` and `user_id = app.user_id`. `listTeamAccess` reads OTHER members' logins inside `withWorkspaceContext`, which binds `app.user_id` to the CALLER → `no_github_identity` for every teammate                    | **MOTIR-2910** (new; production)                                                               |
+| `github/githubWebhookService`                     |   1 | `membership_visible_active_or_own` has **no `system_admin` arm**, and `resolveGithubChangeRequestContext` passes `repo.workspaceId` as an argument without BINDING it → `resolveBoundMember` returns null → a member's PR is attributed to the workspace OWNER | **MOTIR-2910** (new; production)                                                               |
+| `mcp/dependency-edges`                            |   4 | `workItemLinkRepository.findBlockedEdgesForItems([…])` called with no `tx` — the unbound singleton                                                                                                                                                             | **MOTIR-2911** (MOTIR-2881's class 2)                                                          |
+| `cli/cliDeviceService`                            |   4 | `db.apiToken.findMany()` / `.count()` assertion reads on the unbound singleton                                                                                                                                                                                 | **MOTIR-2911** (MOTIR-2881's class 2)                                                          |
+| `cli/cliDeviceService`                            |   1 | `db.organizationMembership.deleteMany(…)` fixture write deletes nothing, so the "lost the workspace" precondition never happens                                                                                                                                | **MOTIR-2911** (MOTIR-2882's class 3)                                                          |
+| `integration/work-items/provenance-backfill-gate` |   3 | `findProvenanceBackfillCandidates(…)` with no `tx`; the comparison case's `db.$transaction` binds nothing either, so both arms read empty                                                                                                                      | **MOTIR-2911** (+ MOTIR-2876's bare-transaction class)                                         |
+| `mcp/dependency-edges`                            |   1 | the cross-workspace pre-check reads the foreign item through the caller's context, so it is MISSING before the cross-workspace rule is reached — `WorkItemNotFoundError`, not `CrossWorkspaceLinkError`                                                        | **undecided** — flagged NOT-in-scope on MOTIR-2911; arguably the new behaviour is more correct |
+
+### ⚠️ What this does NOT close
+
+**Nine of the 22 are a PRODUCTION defect this card surfaced and did not fix** (MOTIR-2910). A workspace
+member's GitHub login is invisible to every other member, so the repo-access team grid renders
+`not_invited` for the whole team, and the webhook attributes a member's PR to the workspace owner. Both
+are silent. Neither is a test problem, and neither was visible before the suite ran as `motir_app` —
+which is the case for the cutover, stated in the one form that is hard to argue with.
+
+**And MOTIR-2880's scanner reports the webhook site GREEN.** The read is two hops from its
+`withSystemContext`, through a function that receives `tx` as a parameter. Whether that is
+`MAX_HELPER_HOPS`, a resolution shape `reachableHelpers` does not follow, or a `binds-tenant` verdict
+off a bind on another branch is MOTIR-2910's to establish — but the instrument built to find exactly
+this class did not find this instance, and that is the more durable finding of the two.
+
+## The INSTRUMENT for the direct-singleton statement (MOTIR-2918, 2026-08-17)
+
+Not a class closed — a class **enumerated for the first time**. MOTIR-2911's fourth acceptance
+criterion asked which instrument was supposed to have found its three files, and for
+`tests/cli/cliDeviceService.test.ts` the answer was _none_. A statement written straight onto the
+`@/lib/db` singleton inside a test — `expect(await db.apiToken.count()).toBe(0)` — matches no pattern
+in any of the five scanners this document tracks, and never has. `testCallSiteScan` is the near miss:
+it reads the same directory and asks about a `<x>Repository.<method>(…)` CALL, which a test that
+addresses Prisma directly does not have anywhere on the line.
+
+`tests/rls/testSingletonStatementScan.ts` + `tests/rls/test-singleton-statement-guard.test.ts` are
+that instrument. It walks `tests/` for `db.<model>.<ANY-op>(…)` — no whitelist of operation names —
+reusing `testCallSiteScan`'s `isClientExpression` over a NARROWER name set (`SINGLETON_ONLY = {db}`)
+so `adminDb` and a bare `tx`, the two already-correct forms, are not reported, while the inline
+`(tx ?? db)` fallback is.
+
+### The population, measured on `origin/main` @ `bd0584c5`
+
+**575 statements across 130 files**, plus **30** `$queryRaw*` / `$executeRaw*` whose target table a
+parser cannot name (28 outside `tests/e2e/**`, 2 within). **0 unclassifiable.**
+
+|                 | not-gated | no-policy | subject | fixture | assertion | undispositioned | **has to change** |
+| --------------- | --------: | --------: | ------: | ------: | --------: | --------------: | ----------------: |
+| `tests/e2e/**`  |        68 |         1 |       0 |       0 |         0 |         **454** |           **454** |
+| everywhere else |         6 |        41 |       1 |       0 |         4 |               0 |             **4** |
+
+Two ceilings, not one, because the two halves have different remediations: the E2E half is a spec
+seeding through the singleton before it drives the browser, and its fix is a seeding HELPER on
+`adminDb` rather than 454 per-line swaps. It is latent today only because the E2E lane still runs as
+the owner, and it becomes a hard failure the moment **MOTIR-2734** makes `motir_app` the only
+connection. The vitest half is a per-line decision and is four statements in one file.
+
+### Two verdicts that are NOT work, and how each was established
+
+- **`no-policy` — `device_code`, 42 statements (41 of them the CLI suites).** `policyGatedModels`
+  over-approximates on purpose: a model carrying a `workspaceId` column is in scope whether or not
+  its table was ever put under RLS. Measured on a cluster built by `prisma migrate deploy` from
+  empty: `device_code` is `relrowsecurity=f, 0 rows in pg_policies`. The same query settles the
+  other direction, which an exemption list normally cannot show — of every model addressed anywhere
+  under `tests/`, exactly six tables have RLS off, and the other five (`user`, `account`, `session`,
+  `idea_draft`, `user_appearance_preference`) already come out `not-gated` on their own. So the
+  exemption list is COMPLETE against that measurement, not merely populated with what someone
+  noticed. The guard additionally refuses any entry that a migration contradicts.
+- **`subject` — `tests/tenant-root-creation-rls.test.ts`, 1 statement.** The file asserts that an
+  INSERT into a tenant root outside a bootstrap context is REFUSED, which only happens on the unbound
+  singleton. `adminDb` is the owner and would be allowed; a bound context supplies the very GUC the
+  test withholds. Either "fix" deletes the assertion and leaves it green.
+
+### What the first run found that two hand sweeps did not
+
+Four `expect(await db.apiToken.count()).toBe(N)` assertion reads in
+**`tests/cli/cli-device-routes.test.ts`** — MOTIR-2911's exact founding shape, against the same table
+(`api_token`: `relrowsecurity=t`, 1 policy), in the sibling file its hand-built list never named.
+Three of the four assert `toBe(0)`, which under `motir_app` passes because the policy hides the rows.
+They are recorded as `assertion` in `DISPOSITIONED_FILES` and **not converted here** — this card
+changes no test's behaviour by design, so the ruling is inherited rather than re-derived.
+
+### ⚠️ What this does NOT close
+
+**Nothing is converted.** 458 statements still have to change, and the numbers above are what the
+conversion cards are sized off — the whole point of measuring with nobody holding the instrument.
+
+**The 30 raw statements have no per-site adjudication.** Their target tables are not nameable from
+the syntax; they are ratcheted so the count cannot grow, and reading them is the next card's.
+
+**A file-level ruling is coarse, deliberately.** A statement of a different kind added to a
+dispositioned file later inherits that file's ruling in silence. What bounds it is the ceiling, which
+counts `fixture` + `assertion` + `undispositioned` together, so a new statement in an `assertion` file
+still raises the number it must not raise.
+
+**And the scanner's own blind spots, stated because the absence of this sentence is what let the
+class survive five scanners:** it reads `tests/` only, never `lib/` / `app/` / `scripts/`; it does not
+follow a client passed into a helper as a parameter; and it does not resolve `db` re-exported under
+another name.

@@ -1,5 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider } from '@/lib/git';
 import type {
   GitProviderId,
@@ -636,6 +636,24 @@ async function resolveGithubChangeRequestContext(
   if (!repo) return { kind: 'unknown_repo' };
   // The REPO row is the tenant (MOTIR-1931) — for the membership lookup here and
   // for everything the shared sync does downstream.
+  //
+  // ⚠️ BIND IT, don't just PASS it (MOTIR-2910). This comment said "the tenant"
+  // and the next line handed `repo.workspaceId` to `resolveBoundMember` as an
+  // ARGUMENT, which binds no GUC at all — so the membership read inside it ran
+  // under the system flag alone, and `membership_visible_active_or_own` has no
+  // `system_admin` arm (`app.workspace_id` OR `app.user_id`, neither set). The
+  // read returned null, `resolveBoundMember` returned null, and the documented
+  // owner-fallback fired: a member's own PR was attributed in the activity log
+  // to the workspace OWNER. Silent, because "this author is not a member" and
+  // "I cannot see memberships" are the same null.
+  //
+  // The bind is ADDITIVE — the system flag stays set, so the connection-tier
+  // reads ABOVE this line (`github_installation` / `github_repo`, which is what
+  // the enclosing `withSystemContext` is for) are unaffected, and it must come
+  // AFTER them: the repo row is where the tenant is learned. `syncChangeRequestStatus`
+  // binds the same value again once the resolver returns — same GUC, same value,
+  // idempotent — because that caller cannot bind before the resolver hands it a repo.
+  await bindWorkspaceContext(tx, repo.workspaceId);
   const authorBoundUserId = await resolveBoundMember(
     readAuthorGithubUserId(body),
     repo.workspaceId,

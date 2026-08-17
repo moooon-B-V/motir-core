@@ -451,7 +451,16 @@ describe('delete', () => {
 
     await automationRulesService.delete(s.key, rule.id, s.ownerCtx);
 
-    expect(await automationRuleRepository.findByIdInProject(rule.id, s.project.id)).toBeNull();
+    // BOUND (MOTIR-2911): `automation_rule` is workspace-gated, so unbound this
+    // read answers `null` whether or not the delete happened — the assertion's
+    // expected value, reached without testing anything. Proven by disabling the
+    // delete: unbound, this line still passes and only the `adminDb` cascade
+    // count below catches it; bound, this line is the one that goes red.
+    expect(
+      await withWorkspaceServiceContext(s.workspace.id, (tx) =>
+        automationRuleRepository.findByIdInProject(rule.id, s.project.id, tx),
+      ),
+    ).toBeNull();
     const automationRuleExecutionCount2 = await adminDb.automationRuleExecution.count({
       where: { ruleId: rule.id },
     });

@@ -145,6 +145,14 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
 /** Client identifiers a repository method may address a model through. */
 const CLIENTS = new Set(['db', 'tx', 'client', 'adminDb', 't']);
 
+/**
+ * The identifiers `testSingletonStatementScan` treats as a client. It is a
+ * SUBSET of `CLIENTS`, deliberately — see that module's header. Exported from
+ * here so both scanners share ONE unwrapping rule (the MOTIR-2911 fix) and
+ * differ only in the set of names, which is the part that legitimately differs.
+ */
+export const SINGLETON_ONLY = new Set(['db']);
+
 export type TestCallSiteVerdict =
   /** Gated, bindable today, and this call passes no `tx`. THE STORY'S WORK. */
   | 'in-scope'
@@ -200,20 +208,53 @@ function sourceFile(full: string): ts.SourceFile {
   return ts.createSourceFile(full, readFileSync(full, 'utf8'), ts.ScriptTarget.Latest, true);
 }
 
-/** The models a method body addresses, through ANY client — `db`, `tx`, `client`. */
+/**
+ * Is this expression a Prisma CLIENT — `db`, `tx`, or the `(tx ?? db)` the
+ * bindable repository methods are written in?
+ *
+ * ⚠️ THE FALLBACK FORM IS THE WHOLE POINT (MOTIR-2911). Requiring the head to be
+ * a bare identifier reads `db.workItem.findMany(…)` and misses
+ * `(tx ?? db).workItem.findMany(…)` — which is the shape EVERY bindable method
+ * has, because that is what makes it bindable. The method then addresses no
+ * model the scanner can see, `gated` comes out FALSE, and its call sites are
+ * classified `not-gated`: told, in the verdict's own words, that no policy
+ * applies to a table the migrations gate. Eleven methods across three
+ * repositories were mis-verdicted this way, and the sixteen unbound call sites
+ * under them sat inside the population the guard reports as CLOSED.
+ *
+ * Both arms count, not just the fallback: `tx` is a client in `CLIENTS` too, and
+ * a method could plausibly be written `(client ?? db)`. Recursing over the whole
+ * binary expression is cheaper than deciding which side is the interesting one.
+ *
+ * `names` is a parameter rather than a closed-over constant so the sibling
+ * `testSingletonStatementScan` can ask the SAME question over a NARROWER set
+ * (`SINGLETON_ONLY`) instead of re-deriving the unwrapping — which is how this
+ * blind spot got written the first time. The default keeps every existing caller
+ * unchanged.
+ */
+export function isClientExpression(
+  expr: ts.Expression,
+  names: ReadonlySet<string> = CLIENTS,
+): boolean {
+  let e: ts.Expression = expr;
+  while (ts.isParenthesizedExpression(e)) e = e.expression;
+  if (ts.isBinaryExpression(e)) {
+    return isClientExpression(e.left, names) || isClientExpression(e.right, names);
+  }
+  return ts.isIdentifier(e) && names.has(e.text);
+}
+
+/** The models a method body addresses, through ANY client — `db`, `tx`, `(tx ?? db)`. */
 function addressedModels(body: ts.Node): { models: Set<string>; raw: boolean } {
   const models = new Set<string>();
   let raw = false;
   const visit = (n: ts.Node): void => {
-    if (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression)) {
-      const head = n.expression.text;
+    if (ts.isPropertyAccessExpression(n) && isClientExpression(n.expression)) {
       const name = n.name.text;
-      if (CLIENTS.has(head)) {
-        if (name.startsWith('$')) {
-          if (name.startsWith('$queryRaw') || name.startsWith('$executeRaw')) raw = true;
-        } else {
-          models.add(name);
-        }
+      if (name.startsWith('$')) {
+        if (name.startsWith('$queryRaw') || name.startsWith('$executeRaw')) raw = true;
+      } else {
+        models.add(name);
       }
     }
     ts.forEachChild(n, visit);

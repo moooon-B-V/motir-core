@@ -66,4 +66,23 @@ export const fixtureRepository = {
     const client = tx ?? db;
     return client.$queryRaw`SELECT count(*) FROM "widget" WHERE "workspace_id" = ${workspaceId}`;
   },
+
+  // (8) GATED + BINDABLE, written as the INLINE FALLBACK — `(tx ?? db).widget`,
+  //     with no intermediate `const client` (MOTIR-2911). Every case above hoists
+  //     the client into a local first, so the head of the property access is a
+  //     bare identifier and the naive `ts.isIdentifier(n.expression)` test finds
+  //     it. THE REAL REPOSITORIES MOSTLY DO NOT: `workItemLinkRepository`,
+  //     `workItemRepository.findProvenanceBackfillCandidates` and
+  //     `automationRuleRepository` all inline it — so eleven methods addressed no
+  //     model the classifier could see, came out `gated: false`, and sixteen
+  //     unbound call sites under them were reported `not-gated`, i.e. "no policy
+  //     applies", about tables the migrations gate.
+  //
+  //     The fixture is why that survived: it modelled a shape the codebase does
+  //     not write. A fixture that only contains the forms you thought of proves
+  //     the classifier against your imagination, so this case is here as the
+  //     specific form, not as a general claim about expressions.
+  async findWidgetsInlineFallback(workspaceId: string, tx?: Client) {
+    return (tx ?? db).widget.findMany({ where: { workspaceId } });
+  },
 };

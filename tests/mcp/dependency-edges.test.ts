@@ -10,7 +10,8 @@ import { runListReady } from '@/lib/mcp/tools/listReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
 import { attachEdges, edgeMarker } from '@/lib/mcp/dependencyEdges';
-import { CrossWorkspaceLinkError } from '@/lib/workItems/linkErrors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -112,10 +113,23 @@ type Row = { id: string; dependencies: { blockedBy: unknown[]; blocks: unknown[]
 const rows = (r: CallToolResult) => (r.structuredContent as { items: Row[] }).items;
 const textOf = (r: CallToolResult) => JSON.stringify(r.content);
 
+/**
+ * The repository reads below are the SUBJECT of this block, so they stay on the
+ * code-under-test's client and get a BOUND transaction — MOTIR-2911's first
+ * disposition. They are `(tx ?? db).workItemLink.findMany`, and `work_item_link`
+ * is workspace-keyed: called with no `tx` under `motir_app` the policy sees no
+ * `app.workspace_id`, admits nothing, and every one of these reads answers `[]`
+ * without raising. Moving them to `adminDb` would also make them green — by
+ * taking the read off the restricted role, i.e. by deleting the only thing this
+ * block proves. So: bind, never re-client.
+ */
 describe('workItemLinkRepository.findBlockedEdgesForItems — the reverse edge read', () => {
   it('short-circuits on an empty id set WITHOUT issuing a query', async () => {
+    const fx = await makeWorkItemFixture();
     const { result, queries } = await countLinkQueries(() =>
-      workItemLinkRepository.findBlockedEdgesForItems([]),
+      withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.findBlockedEdgesForItems([], undefined, tx),
+      ),
     );
     expect(result).toEqual([]);
     expect(queries).toBe(0);
@@ -130,7 +144,9 @@ describe('workItemLinkRepository.findBlockedEdgesForItems — the reverse edge r
     await block(fx, dependentB.id, blocker.id);
 
     const { result, queries } = await countLinkQueries(() =>
-      workItemLinkRepository.findBlockedEdgesForItems([blocker.id]),
+      withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.findBlockedEdgesForItems([blocker.id], undefined, tx),
+      ),
     );
     expect(queries).toBe(1);
     expect(result).toHaveLength(2);
@@ -156,7 +172,9 @@ describe('workItemLinkRepository.findBlockedEdgesForItems — the reverse edge r
     await block(fx, gone.id, blocker.id);
     await archive(gone.id);
 
-    const edges = await workItemLinkRepository.findBlockedEdgesForItems([blocker.id]);
+    const edges = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.findBlockedEdgesForItems([blocker.id], undefined, tx),
+    );
     expect(edges.map((e) => e.blockedId)).toEqual([live.id]);
   });
 
@@ -167,11 +185,19 @@ describe('workItemLinkRepository.findBlockedEdgesForItems — the reverse edge r
     const dependent = await mk(fx, 'Wire the UI');
     await block(fx, dependent.id, blocker.id);
 
+    // BOTH reads bind OUR workspace, so the `workspaceId` ARGUMENT stays the only
+    // thing that separates them — bind the foreign tenant for the second and the
+    // policy hides the row as well, which is the same observation for a different
+    // reason and stops testing the parameter at all.
     expect(
-      await workItemLinkRepository.findBlockedEdgesForItems([blocker.id], fx.workspaceId),
+      await withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.findBlockedEdgesForItems([blocker.id], fx.workspaceId, tx),
+      ),
     ).toHaveLength(1);
     expect(
-      await workItemLinkRepository.findBlockedEdgesForItems([blocker.id], other.workspaceId),
+      await withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.findBlockedEdgesForItems([blocker.id], other.workspaceId, tx),
+      ),
     ).toEqual([]);
   });
 
@@ -181,9 +207,8 @@ describe('workItemLinkRepository.findBlockedEdgesForItems — the reverse edge r
     const dependent = await mk(fx, 'Wire the UI');
     await block(fx, dependent.id, blocker.id);
 
-    const edges = await workItemLinkRepository.findBlockerEdgesForItems(
-      [dependent.id],
-      fx.workspaceId,
+    const edges = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.findBlockerEdgesForItems([dependent.id], fx.workspaceId, tx),
     );
     expect(edges).toHaveLength(1);
     expect(edges[0]).toMatchObject({
@@ -283,7 +308,15 @@ describe('workItemsService.getDependencyEdgesForItems — the page projection', 
     const here = await mk(fx, 'Ours');
     const theirs = await mk(other, 'Theirs');
 
-    await expect(block(fx, here.id, theirs.id)).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
+    // The boundary owes a plain NOT FOUND here, never `CrossWorkspaceLinkError`
+    // — decided 2026-08-17 (MOTIR-2919), reasoning on the error class in
+    // `lib/workItems/linkErrors.ts` and in `docs/decisions/public-api-conventions.md`
+    // § Errors. Naming the reason would confirm that `theirs.id` resolves in
+    // another tenant, which is the existence oracle the 404-not-403 contract
+    // refuses. This holds in BOTH connection modes: under `motir_app` RLS hides
+    // the row so the resolve fails, and under a bypassing role the service's
+    // workspace comparison raises the same error. Do not "fix" this back.
+    await expect(block(fx, here.id, theirs.id)).rejects.toBeInstanceOf(WorkItemNotFoundError);
     // …and reading the other tenant's item through OUR context yields nothing.
     const edges = await workItemsService.getDependencyEdgesForItems([here.id, theirs.id], fx.ctx);
     expect(edges[here.id]).toEqual({ blockedBy: [], blocks: [] });

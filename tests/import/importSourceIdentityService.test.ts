@@ -6,7 +6,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { importSourceIdentityRepository } from '@/lib/repositories/importSourceIdentityRepository';
 import { createTokenCrypto } from '@/lib/crypto/tokenCrypto';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -40,16 +39,19 @@ async function makeMember(email: string): Promise<Member> {
   return { userId: user.id, workspaceId: workspace.id };
 }
 
-/** Count rows bypassing RLS (system context) — the app role would hide them. */
+/** Count rows as the OWNER (MOTIR-2887). The comment this replaces said a system
+ *  context "bypasses RLS"; it does not — it binds `app.system_admin`, which is
+ *  seen only where a policy arm reads it. `import_source_identity` has one
+ *  (`import_source_identity_owner_or_system`), so the count was correct; it should
+ *  not depend on that. */
 function countRows(): Promise<number> {
-  return withSystemContext((tx) => tx.importSourceIdentity.count());
+  return adminDb.importSourceIdentity.count();
 }
 
-/** Read one row bypassing RLS, for asserting the stored (encrypted) columns. */
+/** Read one row as the OWNER, for asserting the stored (encrypted) columns — a
+ *  direct-DB ASSERTION, not the code under test (MOTIR-2887). */
 function readRaw(m: Member, source: ImportSource) {
-  return withSystemContext((tx) =>
-    importSourceIdentityRepository.findByUserSource(m.userId, source, m.workspaceId, tx),
-  );
+  return importSourceIdentityRepository.findByUserSource(m.userId, source, m.workspaceId, adminDb);
 }
 
 /**
@@ -207,17 +209,18 @@ describe('importSourceIdentityService.upsertIdentity', () => {
       accessToken: 'first',
     });
 
+    // A FIXTURE write runs as the OWNER (MOTIR-2887). The case turns on the
+    // UNIQUE constraint refusing the second row, so the insert must reach the
+    // table on its own account and not via a policy arm that could be revoked.
     await expect(
-      withSystemContext((tx) =>
-        tx.importSourceIdentity.create({
-          data: {
-            userId: m.userId,
-            workspaceId: m.workspaceId,
-            source: 'jira',
-            accessTokenEncrypted: 'enc',
-          },
-        }),
-      ),
+      adminDb.importSourceIdentity.create({
+        data: {
+          userId: m.userId,
+          workspaceId: m.workspaceId,
+          source: 'jira',
+          accessTokenEncrypted: 'enc',
+        },
+      }),
     ).rejects.toMatchObject({ code: 'P2002' });
   });
 });
@@ -265,20 +268,19 @@ describe('importSourceIdentityService.getLiveToken', () => {
     const m = await makeMember('badmeta@example.com');
     // Insert a row whose metadata is a JSON array (not the object shape) —
     // the mapper's defensive guard must normalise it to null, not crash.
-    await withSystemContext((tx) =>
-      tx.importSourceIdentity.create({
-        data: {
-          userId: m.userId,
-          workspaceId: m.workspaceId,
-          source: 'jira',
-          accessTokenEncrypted: createTokenCrypto([
-            'IMPORT_TOKEN_ENCRYPTION_KEY',
-            'GITHUB_TOKEN_ENCRYPTION_KEY',
-          ]).encryptToken('at'),
-          metadata: ['not', 'an', 'object'],
-        },
-      }),
-    );
+    // A FIXTURE write runs as the OWNER (MOTIR-2887).
+    await adminDb.importSourceIdentity.create({
+      data: {
+        userId: m.userId,
+        workspaceId: m.workspaceId,
+        source: 'jira',
+        accessTokenEncrypted: createTokenCrypto([
+          'IMPORT_TOKEN_ENCRYPTION_KEY',
+          'GITHUB_TOKEN_ENCRYPTION_KEY',
+        ]).encryptToken('at'),
+        metadata: ['not', 'an', 'object'],
+      },
+    });
 
     const live = await importSourceIdentityService.getLiveToken({
       userId: m.userId,

@@ -223,10 +223,12 @@ describe('the upward ladder, end to end through the real transition path', () =>
       data: { autoRollupParentStatus: true },
     });
     await transitionAndDrain(fx, children[0]!.id, 'in_review');
-    // The in-review rung matches, but `todo → in_review` is not an edge, so the
-    // rung FALLBACK lands the parent on in_progress — as far forward as this
-    // workflow allows, rather than stranding it in todo.
-    expect(await statusOf(story.id)).toBe('in_progress');
+    // The in-review rung matches, but `todo → in_review` is not an edge — so the
+    // forward WALK crosses `todo → in_progress → in_review`, both real edges of
+    // this project's own graph, and the parent lands on the rung the recompute
+    // actually named. (Before MOTIR-2901 it stopped one rung short, at
+    // `in_progress`, and waited for an event that in this shape never comes.)
+    expect(await statusOf(story.id)).toBe('in_review');
   });
 });
 
@@ -879,5 +881,148 @@ describe('the recompute, assembled — a parent that comes back', () => {
       await adminDb.workItemRevision.findMany({ where: { workItemId: story.id } })
     ).filter((r) => (r.diff as Record<string, unknown>)['status']);
     expect(storyStatusRevs).toHaveLength(1);
+  });
+});
+
+describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
+  // Every other suite in this file — and every one in `parentStatusRollup.test.ts`
+  // — drains between transitions, so each derivation pass reads an INTERMEDIATE
+  // aggregate and walks one legal edge at a time. That is the shape that hides
+  // this defect. Here the transitions all COMMIT FIRST and derivation runs
+  // afterwards, which is what a user dragging a card twice produces, and what the
+  // agent loop produces every time (dispatch → In Progress, PR open → In Review,
+  // merge → Done, often seconds apart).
+  //
+  // The aggregate every pass then reads is the FINAL one, so the only matching
+  // rung is `done`, there is no lower rung to fall to, and `todo → done` is not
+  // an edge in the default workflow and must not become one. Before MOTIR-2901
+  // this stranded the parent at `todo` permanently — three `illegal_transition`
+  // outcomes and no further event, because the child set never changes again.
+
+  /** Commit N transitions on one child with NO derivation in between. */
+  async function raceAhead(fx: WorkItemFixture, id: string, keys: string[]): Promise<void> {
+    for (const key of keys) await workItemsService.updateStatus(id, key, fx.ctx);
+    // The point of the whole suite: nothing has derived yet.
+    expect(queue).toHaveLength(keys.length);
+  }
+
+  it('todo → in_progress → in_review → done, all committed first ⇒ the parent is done', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+
+    await raceAhead(fx, children[0]!.id, ['in_progress', 'in_review', 'done']);
+    const steps = await drain();
+
+    expect(await statusOf(story.id)).toBe('done');
+    expect(steps).toBeLessThan(MAX_STEPS);
+    expect(queue).toHaveLength(0);
+
+    // The walk wrote one revision per HOP — the honest record of the edges it
+    // crossed, each a status the item genuinely held — and took the SHORTEST
+    // path, trying the highest stone first at every step: `todo → in_progress`
+    // (in_review is illegal from todo), then straight over MOTIR-1625's
+    // `in_progress → done`. It never stands on In Review here.
+    const storyStatusRevs = (
+      await adminDb.workItemRevision.findMany({
+        where: { workItemId: story.id },
+        orderBy: { changedAt: 'asc' },
+      })
+    )
+      .map((r) => (r.diff as Record<string, { from: string; to: string }>)['status'])
+      .filter(Boolean);
+    expect(storyStatusRevs).toEqual([
+      { from: 'todo', to: 'in_progress' },
+      { from: 'in_progress', to: 'done' },
+    ]);
+    // ...and emitted ONCE, for the NET move. An event is a notification: a
+    // watcher must not be told twice about one derivation, and the epic above
+    // must not recompute twice either. Three child transitions + one parent = four.
+    expect(processed.filter((n) => n === 'work-item/transitioned')).toHaveLength(4);
+  });
+
+  it('the two-step shape todo → in_review lands on the top rung, not one short', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+
+    await raceAhead(fx, children[0]!.id, ['in_progress', 'in_review']);
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+
+  it('the two-step shape todo → done lands on the top rung too', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['in_progress']);
+
+    await raceAhead(fx, children[0]!.id, ['in_review', 'done']);
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('a parent TWO LEVELS up follows, through the same re-emission', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    await setStatus(epic.id, 'todo');
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'S', parentId: epic.id });
+    await setStatus(story.id, 'todo');
+    const child = await createTestWorkItem(fx, { kind: 'subtask', title: 'c', parentId: story.id });
+    await setStatus(child.id, 'todo');
+
+    await raceAhead(fx, child.id, ['in_progress', 'in_review', 'done']);
+    const steps = await drain();
+
+    expect(await statusOf(story.id)).toBe('done');
+    expect(await statusOf(epic.id)).toBe('done');
+    expect(steps).toBeLessThan(MAX_STEPS);
+  });
+
+  it('and NO new workflow_transition row was needed to do any of it', async () => {
+    // AC 3, asserted rather than asserted-about: transition rows are the board's
+    // user-draggable edges, so a fix that reached `done` by ADDING `todo → done`
+    // would let anyone skip the entire workflow by hand. The parent reaches done
+    // over the edges the project already had.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+    const edgesBefore = await adminDb.workflowTransition.count({
+      where: { projectId: fx.projectId },
+    });
+
+    await raceAhead(fx, children[0]!.id, ['in_progress', 'in_review', 'done']);
+    await drain();
+
+    expect(await statusOf(story.id)).toBe('done');
+    expect(await adminDb.workflowTransition.count({ where: { projectId: fx.projectId } })).toBe(
+      edgesBefore,
+    );
+    expect(await workflowsService.canTransition(fx.projectId, 'todo', 'done', fx.workspaceId)).toBe(
+      false,
+    );
+    expect(
+      await workflowsService.canTransition(fx.projectId, 'todo', 'in_review', fx.workspaceId),
+    ).toBe(false);
+  });
+
+  it('a graph with no PATH still strands nothing — it is a logged no-op', async () => {
+    // The conservative half of "the derivation respects your workflow". A walk is
+    // still only ever real edges: cut every ladder edge out of `todo` and the
+    // parent does not move at all, rather than acquiring a system bypass.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const todoId = statuses.find((s) => s.key === 'todo')!.id;
+
+    await workItemsService.updateStatus(children[0]!.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(children[0]!.id, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(children[0]!.id, 'done', fx.ctx);
+    await adminDb.workflowTransition.deleteMany({
+      where: { projectId: fx.projectId, fromStatusId: todoId },
+    });
+
+    const steps = await drain();
+
+    expect(await statusOf(story.id)).toBe('todo');
+    expect(steps).toBeLessThan(MAX_STEPS);
+    expect(queue).toHaveLength(0);
   });
 });

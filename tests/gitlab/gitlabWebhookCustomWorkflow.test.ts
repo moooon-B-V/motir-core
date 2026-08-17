@@ -78,14 +78,16 @@ async function makeScenario(email: string) {
 /** Remove EVERY status of `category` from the project's workflow — the degenerate
  *  custom workflow the admin surface forbids but the webhook must survive. */
 async function dropStatusCategory(projectId: string, category: StatusCategory): Promise<void> {
-  await withSystemContext(async (tx) => {
-    const doomed = await tx.workflowStatus.findMany({ where: { projectId, category } });
-    const ids = doomed.map((s) => s.id);
-    await tx.workflowTransition.deleteMany({
-      where: { OR: [{ fromStatusId: { in: ids } }, { toStatusId: { in: ids } }] },
-    });
-    await tx.workflowStatus.deleteMany({ where: { id: { in: ids } } });
+  // ⚠️ THE OWNER, not a system context (MOTIR-2887) — the twin of the helper in
+  // `githubWebhookCustomWorkflow.test.ts`. `workflow_status` has no `system_admin`
+  // read arm, so under `motir_app` this fixture deleted nothing, silently, and the
+  // test measured the DEFAULT workflow while claiming to measure a custom one.
+  const doomed = await adminDb.workflowStatus.findMany({ where: { projectId, category } });
+  const ids = doomed.map((s) => s.id);
+  await adminDb.workflowTransition.deleteMany({
+    where: { OR: [{ fromStatusId: { in: ids } }, { toStatusId: { in: ids } }] },
   });
+  await adminDb.workflowStatus.deleteMany({ where: { id: { in: ids } } });
 }
 
 function mrPayload(opts: {
@@ -160,9 +162,8 @@ describe('gitlabWebhookService — custom workflow with NO matching status (MOTI
       mrPayload({ action: 'open', identifier: 'ACME-1' }),
     );
 
-    const mr = await withSystemContext((tx) =>
-      tx.githubPullRequest.findFirst({ where: { number: 7 } }),
-    );
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887).
+    const mr = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
     expect(mr).not.toBeNull();
     expect(mr!.workItemId).toBe(item.id);
   });

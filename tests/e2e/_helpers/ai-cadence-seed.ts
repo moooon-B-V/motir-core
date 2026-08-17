@@ -232,7 +232,13 @@ export async function buildSprintPlanReview(
   );
   const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
 
-  const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+  // Bound for the same reason the read above it is (MOTIR-2911): `work_item_link`
+  // is workspace-keyed, so on the singleton this answers `[]` under `motir_app`
+  // and the seeded review would carry no `blockedBy` at all — silently, since an
+  // empty edge set is a legal shape.
+  const edges = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemLinkRepository.findBlockedByEdges([...idToKey.keys()], tx),
+  );
   const blockersByKey = new Map<string, string[]>();
   for (const edge of edges) {
     const blockedKey = idToKey.get(edge.blockedId);

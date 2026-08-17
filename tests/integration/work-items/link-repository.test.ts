@@ -531,8 +531,14 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
 
   it('answers an EMPTY id list without touching the database', async () => {
     const fx = await makeFixture();
+    // Bound like every other call in this block (MOTIR-2911). The short-circuit
+    // returns before any client is addressed, so it cannot fail unbound — which
+    // is exactly why it must not READ as unbound: a reader, and the call-site
+    // guard, cannot tell it apart from a live read that silently sees nothing.
     expect(
-      await workItemLinkRepository.findBlockerSessionBranchesForItems([], fx.workspace.id),
+      await withWorkspaceServiceContext(fx.workspace.id, (tx) =>
+        workItemLinkRepository.findBlockerSessionBranchesForItems([], fx.workspace.id, tx),
+      ),
     ).toEqual([]);
   });
 

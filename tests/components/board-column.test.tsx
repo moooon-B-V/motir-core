@@ -171,8 +171,20 @@ describe('BoardColumn', () => {
     );
     const section = screen.getByTestId('board-column-c1');
     // A uniform viewport-relative height, not the old content-hugging max-height.
-    expect(section.className).toContain('h-[calc(100dvh-12rem)]');
-    expect(section.className).not.toContain('max-h-[calc(100dvh-12rem)]');
+    //
+    // Asserted by SHAPE rather than by the exact string (MOTIR-2763). This used
+    // to pin the literal `h-[calc(100dvh-12rem)]`, which made it a referrer of a
+    // number that legitimately moves: the constant encodes how much chrome sits
+    // above and below the board, and the shell's bottom reservation changed. The
+    // three clauses below are the contract this test actually exists to hold —
+    // an explicit viewport-derived `h-`, never a `max-h-` (which would let a
+    // short column hug its content again) — plus the MOTIR-2763 rule that the
+    // BELOW-term is spent from the shell's variable rather than baked in, so a
+    // future change to the orb clearance cannot silently push the board past the
+    // fold. See `design/shell/design-notes.md`.
+    expect(section.className).toMatch(/(?:^|\s)h-\[calc\(100dvh[^\]]*\)\]/);
+    expect(section.className).toContain('var(--shell-bottom-clearance,1.5rem)');
+    expect(section.className).not.toMatch(/max-h-\[calc\(100dvh/);
   });
 });
 

@@ -90,9 +90,13 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
       </header>
 
       {/* The canvas+chat shell is `h-full`; give it a definite, viewport-relative
-          height so it fills the main area without a double scrollbar (topnav +
-          the shell's py-6 + this header ≈ 10rem of chrome above it). */}
-      <div className="h-[calc(100dvh-10rem)] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
+          height so it fills the main area without a double scrollbar: 8.5rem of
+          chrome ABOVE (top nav + the shell's pt-6 + this header), then whatever
+          the shell reserves BELOW. The second term was baked into a flat 10rem,
+          which encoded the shell's old 1.5rem bottom padding — reading the
+          variable instead keeps this exact when no orb mounts and absorbs the
+          orb clearance when one does (MOTIR-2763). */}
+      <div className="h-[calc(100dvh_-_8.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
         <PlanDetail
           initialReview={review}
           ariaLabel={t('canvasAria')}

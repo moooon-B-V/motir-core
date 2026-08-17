@@ -76,6 +76,35 @@ type Verdict =
  */
 const DELIBERATELY_SYSTEM_ONLY: Record<string, Verdict> = {};
 
+/**
+ * Sites whose walk hit a WALL — a `tx` handed to a callee the scan cannot resolve
+ * by name — with the hand-adjudication that stands in for the walk (MOTIR-2910).
+ *
+ * ⚠️ AN ENTRY HERE IS NOT A SUPPRESSION. `DELIBERATELY_SYSTEM_ONLY` records
+ * "this blind read is fine"; this records "the INSTRUMENT could not see, and a
+ * human went and looked." The value is what they found, so a reviewer can check
+ * the reading rather than trust the silence.
+ *
+ * Both entries are the shared change-request consumers, and the indirection is
+ * the same in both: the provider supplies its resolver as a `resolveContext`
+ * parameter, which is the seam that lets GitHub and GitLab share one state
+ * machine. That is good design and it is opaque to a name-resolving walk.
+ */
+const WALLED_SITES: Record<string, string> = {
+  'lib/services/changeRequestStatusSync.ts#syncChangeRequestStatus':
+    'resolveContext ∈ { resolveGithubChangeRequestContext, resolveGitlabChangeRequestContext }. ' +
+    'GitHub: github_installation + github_repo (both armed), THEN resolveBoundMember → ' +
+    'github_identity (armed) + workspace_membership (NOT armed) — THE DEFECT, and the ' +
+    'reason this map exists. Fixed by binding the tenant inside the resolver the moment ' +
+    'the repo row supplies it (MOTIR-2910), not by arming workspace_membership. ' +
+    'GitLab: github_repo + its installation relation only — no membership read, clean.',
+  'lib/services/changeRequestCiFeedback.ts#applyCiStatusFeedback':
+    'resolveContext ∈ { resolveGithubCiContext, resolveGitlabCiContext }. Read in full ' +
+    'for MOTIR-2910: both reach github_installation and github_repo and nothing else, ' +
+    'both armed, and neither resolves an author — the CI path attributes to no member. ' +
+    'CLEAN, and recorded so the next reader does not have to re-read them.',
+};
+
 let rlsTables: Set<string>;
 let armedTables: Set<string>;
 
@@ -188,6 +217,61 @@ describe('every system-context read touches a table whose policy set reads app.s
     ).toBe(true);
   });
 
+  it('MOTIR-2910 site 1 — `github_identity` carries a MEMBER read arm, and only a read arm', () => {
+    // Pinned BY NAME, the way `workspace` and `organization` are above, and for
+    // the same reason: the day someone reverts this the failure should name the
+    // read that goes blind rather than surface as an anonymous count.
+    //
+    // ⚠️ It is NOT in `armedTables` and must not be — that set is the
+    // `system_admin` arm, and this is a WORKSPACE-MEMBER arm. The team grid's
+    // caller is already correctly bound to its own tenant; what it cannot reach
+    // is other users' rows INSIDE that tenant, which no binding fixes and
+    // `app.system_admin` would fix far too widely (it would hand one workspace's
+    // grid sight of every workspace's GitHub identities).
+    return adminDb.$queryRaw<{ policyname: string; cmd: string; permissive: string }[]>`
+        SELECT policyname, cmd, permissive
+          FROM pg_policies
+         WHERE schemaname = 'public' AND tablename = 'github_identity'
+      `.then((rows) => {
+      const member = rows.filter((r) => r.policyname === 'github_identity_workspace_member_read');
+      expect(
+        member.map((r) => `${r.cmd}/${r.permissive}`),
+        'github_identity — projectRepoAccessService#listTeamAccess reads co-members` logins',
+      ).toEqual(['SELECT/PERMISSIVE']);
+
+      // ⚠️ THE OVERSHOOT THIS CARD WAS MOST LIKELY TO MAKE. The row carries
+      // `access_token_encrypted`, a live OAuth credential, and RLS admits a ROW
+      // rather than a column list — so the ONE thing that must never happen here
+      // is a write verb reaching it. `FOR ALL` on this table would let a member
+      // overwrite a co-member's stored token with a value they control. The
+      // column split itself lives in the repository (`findLoginsByUserIds`
+      // selects two columns) and is pinned in `projectRepoTeamAccess.test.ts`;
+      // this is the half `pg_policies` can answer.
+      expect(
+        rows
+          .filter((r) => r.policyname !== 'github_identity_owner_or_system')
+          .filter((r) => r.cmd !== 'SELECT')
+          .map((r) => `${r.policyname} (${r.cmd})`),
+        'a NON-owner policy on github_identity now covers a write verb — a member ' +
+          'must never be able to write a co-member`s OAuth binding',
+      ).toEqual([]);
+    });
+  });
+
+  it('MOTIR-2910 site 2 — `workspace_membership` is still UNARMED, so the bind is load-bearing', () => {
+    // The mirror pin. Site 2 was fixed by BINDING the tenant inside
+    // `resolveGithubChangeRequestContext`, which is the disposition that widens
+    // nothing — and the alternative someone will reach for when it next goes red
+    // is arming this table, which would hand every system context sight of every
+    // workspace's membership rows. Asserting the absence is what makes the bind
+    // the only answer that keeps this suite green.
+    expect(
+      armedTables.has('workspace_membership'),
+      'workspace_membership must NOT get a system_admin arm — githubWebhookService#' +
+        'resolveGithubChangeRequestContext binds repo.workspaceId instead (MOTIR-2910)',
+    ).toBe(false);
+  });
+
   it('the arms are READ-only — no system arm was added to a tenant-root WRITE policy', () => {
     // MOTIR-2865 found the ABSENCE of a system arm on the tenant-root write
     // policies doing useful work: a caller reaching for `withSystemContext` on a
@@ -287,6 +371,63 @@ describe('the scanner itself', () => {
     // visited set the bounded walk would be finite but would re-enter `ping` on
     // every level, which is the shape that turns a scan into a hang.
     expect(site('systemMutualRecursion')?.verdict, 'ping/pong terminates').toBe('system-only');
+
+    // THE WALL (MOTIR-2910). A `tx` handed to a function-typed PARAMETER is a
+    // callee the walk cannot resolve by name, so everything below it is unread.
+    // Both halves are pinned: the site NAMES the unresolved call, and its verdict
+    // is still `binds-tenant` — because the point is that a green verdict here is
+    // computed over a partial walk, which is exactly what made the real instance
+    // invisible. A future change that starts resolving these will fail this and
+    // should: the adjudication below would then be describing a solved problem.
+    expect(
+      site('systemUnresolvedCallback')?.unresolvedCalls,
+      'a tx passed to a callback parameter must be REPORTED, not stepped over',
+    ).toEqual(['resolveContext']);
+    expect(
+      site('systemUnresolvedCallback')?.verdict,
+      'and the partial walk still reads green — the reason the field exists',
+    ).toBe('binds-tenant');
+  });
+
+  it('every site whose walk hit a WALL is adjudicated', () => {
+    // The mirror of `DELIBERATELY_SYSTEM_ONLY`, for the axis the scan cannot
+    // decide at all (MOTIR-2910). A site that hands its `tx` to an unresolvable
+    // callee has a verdict computed over PART of its block, so the verdict is not
+    // evidence — someone has to have read the callee. Two exist, both the shared
+    // change-request consumers, both taking the provider's resolver as a
+    // parameter; every entry names what was read by hand and what it found.
+    const findings = scanSystemContexts()
+      .filter((s) => s.unresolvedCalls.length > 0)
+      .filter((s) => !WALLED_SITES[s.key])
+      .map((s) => `${s.key} — unresolved: ${s.unresolvedCalls.join(', ')}`);
+
+    expect(
+      findings,
+      'A `withSystemContext` block hands its transaction to a callee this scan ' +
+        'cannot resolve by name, so its verdict covers only the part of the block ' +
+        'the walk could read.\n\n' +
+        'This is NOT a finding to silence — it is the shape that hid MOTIR-2910 ' +
+        "(`resolveGithubChangeRequestContext`'s unbound `workspace_membership` read " +
+        'sat behind exactly this indirection while the site reported `binds-tenant`).\n\n' +
+        'To clear it: READ every implementation that can be passed for that ' +
+        'parameter, adjudicate each against the arm rules above, and record the ' +
+        'result in WALLED_SITES.',
+    ).toEqual([]);
+  });
+
+  it('has no WALLED_SITES adjudication for a site the scan no longer reports', () => {
+    // Same rot as the `DELIBERATELY_SYSTEM_ONLY` mirror: an entry whose
+    // indirection was refactored away keeps a permanent "someone read this" on
+    // record for a shape nobody can find.
+    const live = new Set(
+      scanSystemContexts()
+        .filter((s) => s.unresolvedCalls.length > 0)
+        .map((s) => s.key),
+    );
+    expect(
+      Object.keys(WALLED_SITES).filter((k) => !live.has(k)),
+      'a hand-read verdict for a wall the scan no longer hits — delete it',
+    ).toEqual([]);
   });
 
   it('actually finds the sites it is pointed at (a live negative)', () => {

@@ -58,7 +58,16 @@ import { policyGatedModels } from './singletonReadScan';
 // one entry per site, with the reason in the value, the division of labour
 // MOTIR-2784 established.
 
-const SCAN_ROOTS = ['lib', 'app'] as const;
+// ⚠️ `tests` JOINED THE ROOTS IN MOTIR-2887, and the reason is that the class this
+// module finds has a TEST-SIDE twin that is strictly worse. A `withSystemContext`
+// block in `lib/` that reads an unarmed table makes the PRODUCT visibly wrong; the
+// same block in a FIXTURE makes the TEST quietly wrong IN THE DIRECTION OF
+// PASSING — `dropStatusCategory` in `githubWebhookCustomWorkflow.test.ts` deleted
+// nothing, so the test measured the DEFAULT workflow while claiming to measure a
+// custom one. MOTIR-2880 scoped the scan to `lib/` + `app/` to stay off the test
+// tree while MOTIR-2881 / MOTIR-2882 were rewriting it; both have merged, and that
+// reason has expired.
+const SCAN_ROOTS = ['lib', 'app', 'tests'] as const;
 const REPO_DIR = 'lib/repositories';
 const SCHEMA = 'prisma/schema.prisma';
 const HELPER = 'withSystemContext';
@@ -107,6 +116,32 @@ export interface SystemContextSite {
   raw: boolean;
   /** How each model was reached — `repo.method`, `helper:name`, `tx.model`. */
   via: string[];
+  /**
+   * Calls that were HANDED THE TRANSACTION and whose body this scan could not
+   * read (MOTIR-2910) — sorted, `helper-trail -> name` where the wall sits below
+   * a helper hop.
+   *
+   * ⚠️ THIS IS THE FIELD THAT KEEPS A VERDICT HONEST, and it exists because the
+   * absence of it produced a silent false GREEN. `changeRequestStatusSync#
+   * syncChangeRequestStatus` calls `resolveContext(tx)` — a FUNCTION-TYPED
+   * PARAMETER, supplied by whichever provider is driving the delivery — and the
+   * walk resolves callees by NAME through `reachableHelpers`, which knows local
+   * declarations and imports and cannot know a parameter's runtime value. So the
+   * call was dropped, and the site was classified `binds-tenant` off the
+   * statements the walk COULD see (all of which do sit after the bind) while
+   * `resolveGithubChangeRequestContext` — which runs BEFORE it and read
+   * `workspace_membership` unbound — was invisible.
+   *
+   * A verdict computed over a walk that hit a wall is a verdict about part of
+   * the block. Recording the wall is what lets the guard REFUSE to read such a
+   * verdict as clearance (`notes.html` #268 — a partition inherits every
+   * distinction its instrument cannot draw, so the instrument must state what it
+   * cannot see). Resolving the callee properly would mean inverting the call
+   * graph to find what every caller passes for that parameter; that is a real
+   * feature and this is deliberately not it. Naming the blind spot is cheap,
+   * total, and cannot itself be wrong.
+   */
+  unresolvedCalls: string[];
 }
 
 // ─── prisma schema: model ⇄ table, and each model's relation fields ─────────
@@ -474,6 +509,22 @@ function enclosingName(node: ts.Node): string {
     ) {
       return n.name.text;
     }
+    // A TEST callback (MOTIR-2887). In `lib/` every site sits in a named function
+    // or a named const, so the four cases above are total; in `tests/` the
+    // commonest enclosing scope by far is an ANONYMOUS arrow handed to `it(…)` /
+    // `beforeEach(…)`, which none of them names — every such site would key as
+    // `<module>` and collapse onto one another. The test's own TITLE is the
+    // line-independent name the sibling guards' keys are built for.
+    if (
+      (ts.isArrowFunction(n) || ts.isFunctionExpression(n)) &&
+      n.parent &&
+      ts.isCallExpression(n.parent) &&
+      ts.isIdentifier(n.parent.expression)
+    ) {
+      const fn = n.parent.expression.text;
+      const [first] = n.parent.arguments;
+      return first && ts.isStringLiteralLike(first) ? `${fn}:${first.text}` : fn;
+    }
   }
   return '<module>';
 }
@@ -483,6 +534,10 @@ function* walk(dir: string): Generator<string> {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (entry === 'node_modules' || entry === '.next') continue;
+      // The scanner's OWN negative fixture is a separate root with its own cache
+      // key (see `scanSystemContexts`), so walking it from the repo root would
+      // report its deliberately-broken sites as real findings.
+      if (entry === '__fixtures__') continue;
       yield* walk(full);
     } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
       yield full;
@@ -498,7 +553,7 @@ function* walk(dir: string): Generator<string> {
  */
 const cache = new Map<string, SystemContextSite[]>();
 
-/** Every `withSystemContext` block in `lib/` + `app/`, classified by what it reaches. */
+/** Every `withSystemContext` block in `lib/` + `app/` + `tests/`, classified by what it reaches. */
 export function scanSystemContexts(root = process.cwd()): SystemContextSite[] {
   const cached = cache.get(root);
   if (cached) return cached;
@@ -565,6 +620,7 @@ function classify(
   const models = new Set<string>();
   const systemOnly = new Set<string>();
   const via = new Set<string>();
+  const unresolved = new Set<string>();
   let raw = false;
 
   const [arg] = node.arguments;
@@ -710,6 +766,18 @@ function classify(
           if (ts.isIdentifier(n.expression) && depth < MAX_HELPER_HOPS) {
             const name = n.expression.text;
             const helper = scope.get(name);
+            // The wall (MOTIR-2910). The transaction was handed to a callee this
+            // scan cannot resolve by name — a function-typed PARAMETER, or any
+            // other value-level indirection. Everything below it is unread, so
+            // record it instead of stepping over it silently.
+            //
+            // A BIND_CALLS member is never a wall: the scan models it explicitly
+            // (that is what moves `bindPos`), so an unresolved DECLARATION for it
+            // costs nothing. Reporting it would be noise that trains a reader to
+            // skim the one list that must stay worth reading.
+            if (!helper && !BIND_CALLS.has(name)) {
+              unresolved.add(trail ? `${trail} -> ${name}` : name);
+            }
             const mark = `${helper?.sf.fileName ?? file.fileName}#${name}`;
             if (helper && !seen.has(mark)) {
               seen.add(mark);
@@ -756,6 +824,7 @@ function classify(
     models: [...models].sort(),
     raw,
     via: [...via].sort(),
+    unresolvedCalls: [...unresolved].sort(),
   };
 }
 

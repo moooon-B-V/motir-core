@@ -6,7 +6,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScanningProxyService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
@@ -232,10 +231,13 @@ describe('githubCodeScanningProxyService — no cross-tenant leakage (AC1)', () 
       { userId: user.id, workspaceId: workspace.id },
       REPO_REF,
     );
-    const rows = await withSystemContext(async (tx) => ({
-      installations: await tx.githubInstallation.findMany(),
-      repos: await tx.githubRepo.findMany(),
-    }));
+    // A direct-DB ASSERTION runs as the OWNER (MOTIR-2887). This one is NEGATIVE
+    // — "no row contains the token" — and a negative assertion is satisfied by
+    // seeing nothing, so it must be taken by the client that sees everything.
+    const rows = {
+      installations: await adminDb.githubInstallation.findMany(),
+      repos: await adminDb.githubRepo.findMany(),
+    };
     expect(JSON.stringify(rows)).not.toContain('ghs_installtoken');
   });
 });

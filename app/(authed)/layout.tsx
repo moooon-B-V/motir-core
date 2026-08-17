@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
@@ -262,7 +262,41 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     />
                   }
                 >
-                  <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+                  {/* The content column RESERVES the floating orb's footprint
+                      (MOTIR-2763). `PlanWithAIFab` below is `fixed right-5
+                      bottom-5 h-14 w-14 z-40`, so it owns the bottom-right
+                      viewport rect `y ∈ [bottom−76, bottom−20]` on every screen
+                      it mounts on — while participating in NO page's flow. At
+                      the end of a scrolled page the last block used to land
+                      inside that band, and a bottom-anchored control there
+                      (the /items pager, /home's Next) stopped receiving its own
+                      clicks: still perfectly visible, but the orb won the hit
+                      test.
+
+                      The reservation is made ONCE, here, at the mount that
+                      creates the obstruction — not on each pager, which would
+                      be a growing list every future bottom-anchored control has
+                      to remember to join. It is conditional on the same
+                      `showPlanWithAi` that decides whether the orb ships at all,
+                      so a workspace with AI planning unconfigured pays nothing.
+
+                      It travels as a CUSTOM PROPERTY rather than a bare padding
+                      class because the surfaces that size themselves against the
+                      fold have to subtract the same amount, and one of them
+                      (`packages/design-system/theme.css`'s 3d-immersive board
+                      column) is a stylesheet that cannot read a React prop.
+                      6rem = the orb's 76px reach + a visible gap. See
+                      `design/shell/design-notes.md`. */}
+                  <div
+                    style={
+                      {
+                        '--shell-bottom-clearance': showPlanWithAi ? '6rem' : '1.5rem',
+                      } as CSSProperties
+                    }
+                    className="px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8"
+                  >
+                    {children}
+                  </div>
                 </AppLayout>
 
                 {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The

@@ -241,8 +241,11 @@ describe('GET /api/import/linear/oauth/callback', () => {
     );
     expect(res.headers.get('location')).toContain('import=linear_error');
 
-    // Nothing persisted on a failed exchange.
-    const count = await withSystemContext((tx) => tx.importSourceIdentity.count());
+    // Nothing persisted on a failed exchange. Asserted as the OWNER (MOTIR-2887).
+    // `import_source_identity` is armed, so this was not vacuous — but a
+    // `toBe(0)` is the shape that WOULD go vacuous the moment an arm is dropped,
+    // which is the case for putting it on a client that needs none.
+    const count = await adminDb.importSourceIdentity.count();
     expect(count).toBe(0);
   });
 });
