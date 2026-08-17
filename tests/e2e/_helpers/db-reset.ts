@@ -7,6 +7,7 @@
 // we extend here without touching the Vitest helper.
 import { rmSync } from 'node:fs';
 import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { truncateAuthTables } from '@/tests/helpers/db';
 
 const EMAIL_OUTBOX_PATH = process.env['EMAIL_OUTBOX_PATH'] ?? '/tmp/motir-test-emails.jsonl';
@@ -43,5 +44,27 @@ export async function resetDatabase(): Promise<void> {
  * Re-export the Prisma client so specs can assert post-conditions on
  * the database without importing @/lib/db directly. Keeps "what
  * Playwright touches in the DB layer" discoverable in one file.
+ *
+ * ⚠️ THIS IS THE CODE UNDER TEST'S CONNECTION, AND A SPEC ALMOST NEVER WANTS IT
+ * FOR SEEDING (MOTIR-2939). Under `motir_app` — which MOTIR-2734 makes the
+ * suite's only connection — an unbound statement against a policy-gated table
+ * neither raises nor works: the write matches nothing and the read returns `[]`.
+ * A spec that seeds through this client therefore drives a browser against a
+ * database it believes it populated. Reach for `adminDb` below instead; the
+ * `tests/rls/test-singleton-statement-guard.test.ts` ceiling counts every
+ * remaining site here and may only ever fall.
  */
 export { db };
+
+/**
+ * The database OWNER — the seeding / teardown / direct-DB-assertion client
+ * (`tests/helpers/adminDb.ts`, MOTIR-2513), re-exported here so a Playwright
+ * spec reaches it the same way it reaches `db` and the choice between the two is
+ * made in one import line.
+ *
+ * Safe under Playwright specifically: `currentWorkerAdminUrl()` appends the
+ * `…_test_wN` per-worker suffix ONLY inside a Vitest worker (it keys on
+ * `VITEST_DB_BASE_URL`), so outside one it returns `DATABASE_URL` unchanged —
+ * the base database, which is the database the E2E lane actually runs against.
+ */
+export { adminDb };

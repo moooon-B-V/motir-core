@@ -49,7 +49,7 @@
 // spec resting on it alone would have gone green against the broken layout.
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -62,7 +62,7 @@ test.beforeEach(async () => {
 });
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** `/items` List page size is 50 and `/home`'s cursor page size is 25
@@ -80,8 +80,13 @@ interface Seed {
 async function seedPaginatedProject(page: Page, email: string): Promise<Seed> {
   await signUp(page, email);
   const local = email.split('@')[0]!;
-  const user = await db.user.findFirst({ where: { email } });
-  const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
+  // SEEDING runs as the OWNER (`adminDb`), never through `@/lib/db` — MOTIR-2939.
+  // `workspace` and `workspace_membership` are policy-gated and nothing binds a
+  // workspace context here, so under `motir_app` this read returns `[]` and the
+  // update below matches no row — neither raising. The `expect(...).not.toBeNull()`
+  // guards would then fail confusingly, one layer away from the real cause.
+  const user = await adminDb.user.findFirst({ where: { email } });
+  const ws = await adminDb.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(user, 'user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
 
@@ -93,7 +98,7 @@ async function seedPaginatedProject(page: Page, email: string): Promise<Seed> {
   });
   // Pin it ACTIVE — `showPlanWithAi` needs an active project, so without this
   // the orb never mounts and every assertion below would be vacuous.
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: user!.id, workspaceId: ws!.id } },
     data: { activeProjectId: project.id },
   });
