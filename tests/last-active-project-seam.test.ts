@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { withUserContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces/middleware';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
@@ -200,13 +201,26 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
 
   describe('fallbacks remain intact', () => {
     it('no pointer → first-by-createdAt workspace, null last-active context', async () => {
-      const { user, wsA } = await twoOrgOwner();
+      const { user, wsA, wsC, projectP } = await twoOrgOwner();
+
+      // The intermediates: no pointer, and the project read the resolver makes
+      // is LIVE in the half-context it makes it from — so the null below is the
+      // unset-pointer branch and not the dead `project` read MOTIR-2886 fixed.
+      expect(await pointerOf(user.id)).toBeNull();
+      expect(
+        await withUserContext(user.id, (tx) => projectRepository.findById(projectP.id, tx)),
+      ).not.toBeNull();
 
       expect(await workspacesService.resolveActiveWorkspace(user.id, null)).toBe(wsA.id);
       const ctx = await withUserContext(user.id, (tx) =>
         workspacesService.resolveLastActiveContext(user.id, tx),
       );
       expect(ctx).toBeNull();
+
+      // And the branch being fallen back FROM works: set the pointer and the
+      // same cold resolve follows it to the non-default workspace.
+      await workspacesService.recordLastActiveProject(user.id, projectP.id);
+      expect(await workspacesService.resolveActiveWorkspace(user.id, null)).toBe(wsC.id);
     });
 
     it('a valid cookie still beats the last-active pointer', async () => {
