@@ -240,6 +240,10 @@ model User {
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   createdPlanChangeSessions   PlanChangeSession[]       @relation("PlanChangeSessionCreatedBy")
   authoredPlanChangeTurns     PlanChangeTurn[]          @relation("PlanChangeTurnAuthor")
+  // Planning-target leases this user's sessions hold (Story MOTIR-2786 ·
+  // MOTIR-2787). SetNull — a departed holder leaves the lease for the sweep to
+  // expire rather than stranding the item.
+  heldPlanTargetLocks         PlanTargetLock[]          @relation("PlanTargetLockHeldBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -706,6 +710,9 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   planChangeSessions          PlanChangeSession[]
   planChangeTurns             PlanChangeTurn[]
+  // The planning-target leases held in this workspace (Story MOTIR-2786 ·
+  // MOTIR-2787). Workspace-scoped tenant data — cascade with the workspace.
+  planTargetLocks             PlanTargetLock[]
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos                ProjectRepo[]
@@ -1050,6 +1057,9 @@ model Project {
   // `PlanChangeSession.@@unique([projectId, scopeKey])`, which is why this is a
   // list rather than the former `?` one-to-one. Cascade.
   planChangeSessions          PlanChangeSession[]
+  // The planning-target leases open in this project (Story MOTIR-2786 ·
+  // MOTIR-2787). Cascade with the project.
+  planTargetLocks             PlanTargetLock[]
   // The project's REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780) — one row per
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
@@ -1690,6 +1700,11 @@ model WorkItem {
   // the derivation dies with the row it describes. A MISSING row is the honest
   // representation of "not a candidate yet" — see WorkItemEmbedding's header.
   embedding            WorkItemEmbedding?
+  // The planning-target LEASE (Story MOTIR-2786 · MOTIR-2787) — at most ONE, the
+  // exclusion that stops two planning sessions expanding the same item. Cascade:
+  // a deleted item cannot be held. Modelled both sides per the FK-`@relation`
+  // rule so `migrate dev` reports no drift.
+  planTargetLock       PlanTargetLock?
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -4644,10 +4659,13 @@ model PlanChangeSession {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?            @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  turns     PlanChangeTurn[]
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?            @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  turns       PlanChangeTurn[]
+  /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
+  /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
+  targetLocks PlanTargetLock[]
 
   /// ONE plan-change conversation per project PER ANCHOR SET (7.12.3 · MOTIR-909
   /// widened the 7.30 `@@unique([projectId])`). `scope_key = ''` is the
@@ -4740,6 +4758,77 @@ enum PlanChangeTurnRole {
   assistant
 
   @@map("plan_change_turn_role")
+}
+
+/// ONE work item held EXCLUSIVELY by ONE planning session (Story MOTIR-2786 ·
+/// MOTIR-2787) — the lease behind the `planning` status lock.
+///
+/// WHY A ROW AND NOT JUST THE STATUS. `planning` is a workflow status a person
+/// can also set by hand, and MOTIR-2425 shipped it for a DIFFERENT purpose: an
+/// agent that cannot implement a card parks it there until a human acts, and
+/// `defaultWorkflow.ts` is emphatic that nothing may auto-return such a card to
+/// `todo`. A recovery sweep that released "everything sitting in `planning`"
+/// would undo exactly that. So the LEASE is the authority and the status is its
+/// visible face: release and recovery touch only items that have a row here, and
+/// an item parked at `planning` with no row is never disturbed.
+///
+/// `work_item_id` is UNIQUE — that is the exclusion, enforced by the database
+/// rather than by a check-then-act in the service. Acquire still locks the work
+/// item row first (`SELECT … FOR UPDATE`, a row that always exists, so the lock
+/// is real rather than a lock over an empty set), and the unique index is the
+/// backstop whose P2002 is translated to `PlanTargetLockedError`.
+///
+/// The lease (`expires_at`) is what makes a crashed planner recoverable WITHOUT a
+/// database edit — the failure mode the story calls worse than the race it
+/// prevents, and the one nothing else can reach: a plan whose job dies stays
+/// `generating` forever, so no product event ever fires to release it.
+///
+/// Workspace-scoped tenant data, so `workspace_id` is non-null and the RLS policy
+/// ships in the SAME migration (PRODECT_FINDINGS #20 — no unguarded window). It
+/// additionally carries a `FOR SELECT` arm for `app.system_admin`, because the
+/// expiry sweep is cross-tenant BY DESIGN; the per-row RELEASE then re-binds to
+/// that row's own workspace, so no write ever runs untenanted.
+model PlanTargetLock {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  /// The held item. UNIQUE — one holder per item, whatever scope named it. This
+  /// is the hole `scope_key` cannot close: `[MOTIR-9]` and `[MOTIR-9, MOTIR-4]`
+  /// are two different threads addressing one common item, and only a constraint
+  /// on the ITEM can tell them apart.
+  workItemId  String   @unique @map("work_item_id")
+  /// The holding plan-change conversation. Cascade — a deleted thread cannot keep
+  /// holding anything.
+  sessionId   String   @map("session_id")
+  /// WHO holds it, so a refusal can name a person rather than a session id.
+  /// SetNull: a departed holder leaves a lease the sweep still expires.
+  heldById    String?  @map("held_by_id")
+  /// The status the item held BEFORE the lock, restored on release. Stored rather
+  /// than assumed: the workflow allows `in_progress ↔ planning`, so a release that
+  /// hardcoded `todo` would silently discard real progress.
+  priorStatus String   @map("prior_status")
+  /// Whether acquire actually MOVED the status. False when the move was not a
+  /// legal edge for that item (only `todo` and `in_progress` reach `planning`) or
+  /// when the item was already at `planning`. The exclusion holds either way — it
+  /// is this row, not the status — and release then restores nothing.
+  statusHeld  Boolean  @default(false) @map("status_held")
+  acquiredAt  DateTime @default(now()) @map("acquired_at")
+  /// The LEASE. Extended on each turn of the holding session; past it, the sweep
+  /// (and a competing acquire) may take the item back.
+  expiresAt   DateTime @map("expires_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem  WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  session   PlanChangeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  heldBy    User?             @relation("PlanTargetLockHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
+
+  /// The release read — every lock one session holds, in one query.
+  @@index([sessionId])
+  /// The sweep's read: expired first, bounded.
+  @@index([expiresAt])
+  @@index([workspaceId])
+  @@map("plan_target_lock")
 }
 
 /// One INTENDED repository in a project's REPOSITORY SET (Story MOTIR-1775 ·

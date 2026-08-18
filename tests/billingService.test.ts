@@ -41,8 +41,12 @@ const { withSystemContext } = await import('@/lib/workspaces/context');
 const { periodStartFor, periodEndFor } = await import('@/lib/ciMetering/period');
 const { createTestUser } = await import('./fixtures/userFixtures');
 const { truncateAuthTables } = await import('./helpers/db');
-const { BillingNotAvailableError, BillingForbiddenError, UnknownBillingPriceError } =
-  await import('@/lib/billing/errors');
+const {
+  BillingNotAvailableError,
+  BillingForbiddenError,
+  InvalidBillingQuantityError,
+  UnknownBillingPriceError,
+} = await import('@/lib/billing/errors');
 const { OrganizationNotFoundError } = await import('@/lib/organizations/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 
@@ -416,9 +420,136 @@ describe('billingService.startCheckout', () => {
     expect(createCheckoutSessionMock).toHaveBeenCalledWith({
       coreOrganizationId: organizationId,
       priceId: 'pro_pool_annual',
+      // No `quantity` on the call → the explicit default reaches the boundary,
+      // so what Stripe charges is never decided by a default two services away.
+      quantity: 1,
       successUrl: `${APP_ORIGIN}/settings/organization/billing?checkout=success`,
       cancelUrl: `${APP_ORIGIN}/settings/organization/billing?checkout=cancel`,
     });
+  });
+
+  // ── The top-up bundle QUANTITY (MOTIR-2949) ──────────────────────────────
+  // The credit top-up is the only multi-unit line, and only at the catalog's
+  // bundle sizes. A subscription's quantity belongs to the seat sync; a one-time
+  // payment has no reconciler at all, so a client multiplier is refused here
+  // rather than corrected after the charge.
+
+  it('forwards the top-up bundle QUANTITY for credit_topup', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'credit_topup',
+      quantity: 10,
+    });
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ priceId: 'credit_topup', quantity: 10 }),
+    );
+  });
+
+  it('refuses a quantity > 1 on the AI pool subscription (pro_pool_monthly)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: owner.id,
+        priceLookupKey: 'pro_pool_monthly',
+        quantity: 10,
+      }),
+    ).rejects.toBeInstanceOf(InvalidBillingQuantityError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a quantity > 1 on the scaled-tracker seat plan (tracker_monthly)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: owner.id,
+        priceLookupKey: 'tracker_monthly',
+        quantity: 6,
+      }),
+    ).rejects.toBeInstanceOf(InvalidBillingQuantityError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a top-up quantity the catalog does not sell as a bundle', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: owner.id,
+        priceLookupKey: 'credit_topup',
+        quantity: 3,
+      }),
+    ).rejects.toBeInstanceOf(InvalidBillingQuantityError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a fractional / zero / negative quantity before the boundary', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    for (const quantity of [0, -1, 1.5]) {
+      await expect(
+        billingService.startCheckout({
+          organizationId,
+          actorUserId: owner.id,
+          priceLookupKey: 'credit_topup',
+          quantity,
+        }),
+      ).rejects.toBeInstanceOf(InvalidBillingQuantityError);
+    }
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('defaults to quantity 1 for a top-up with the field absent', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'credit_topup',
+    });
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ priceId: 'credit_topup', quantity: 1 }),
+    );
+  });
+
+  it('accepts an explicit quantity of 1 on a subscription price', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await billingService.startCheckout({
+      organizationId,
+      actorUserId: owner.id,
+      priceLookupKey: 'tracker_annual',
+      quantity: 1,
+    });
+    expect(createCheckoutSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ priceId: 'tracker_annual', quantity: 1 }),
+    );
+  });
+
+  it('checks the PRICE before the quantity — an unknown price with a bad quantity is UNKNOWN_PRICE', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: owner.id,
+        priceLookupKey: 'price_tampered',
+        quantity: 99,
+      }),
+    ).rejects.toBeInstanceOf(UnknownBillingPriceError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('runs the OWNER gate before the quantity guard — an admin is FORBIDDEN, not INVALID_QUANTITY', async () => {
+    const { organizationId, admin } = await makeOrgWithRoles();
+    await expect(
+      billingService.startCheckout({
+        organizationId,
+        actorUserId: admin.id,
+        priceLookupKey: 'tracker_monthly',
+        quantity: 10,
+      }),
+    ).rejects.toBeInstanceOf(BillingForbiddenError);
+    expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 });
 

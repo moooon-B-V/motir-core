@@ -260,6 +260,63 @@ async function treeSnapshot(): Promise<unknown> {
   return { items, links, revisions };
 }
 
+/** The work items currently held by a planning-target lease (MOTIR-2787). */
+async function lockedAnchors(): Promise<string[]> {
+  const rows = await adminDb.planTargetLock.findMany({
+    where: { projectId: fx.projectId },
+    orderBy: { workItemId: 'asc' },
+    select: { workItemId: true },
+  });
+  return rows.map((r) => r.workItemId);
+}
+
+/**
+ * A snapshot with ONE item's `status` and the revision COUNT projected out — the
+ * comparison that says "nothing changed except the anchor's lock".
+ *
+ * Both exclusions are the lock and only the lock: the status IS the lock's
+ * visible face, and the revision it records is the audit row for that same
+ * status change. Projecting anything else out would let a real write hide, which
+ * is why this takes the ONE id rather than dropping `status` wholesale.
+ */
+function snapshotExceptStatusOf(
+  snapshot: Awaited<ReturnType<typeof treeSnapshot>>,
+  workItemId: string,
+): unknown {
+  const { items, links } = snapshot as {
+    items: Array<Record<string, unknown>>;
+    links: unknown;
+  };
+  return {
+    links,
+    items: items.map((i) =>
+      i.id === workItemId ? { ...i, status: '<locked>', updatedAt: '<locked>' } : i,
+    ),
+  };
+}
+
+async function treeSnapshotExceptStatusOf(workItemId: string): Promise<unknown> {
+  return snapshotExceptStatusOf(await treeSnapshot(), workItemId);
+}
+
+/**
+ * The tree's CONTENT — every field, `status` included, with only the two things
+ * a lock-and-release legitimately moves projected out: the row's `updatedAt`
+ * timestamp and the revision COUNT.
+ *
+ * This is what "the tree is untouched" means once a reversible marker exists.
+ * Note what it does NOT drop: `status` is compared, so an item left sitting in
+ * `planning` fails here — which is the actual regression worth catching.
+ */
+function contentOf(snapshot: Awaited<ReturnType<typeof treeSnapshot>>): unknown {
+  const { items, links } = snapshot as { items: Array<Record<string, unknown>>; links: unknown };
+  return { links, items: items.map(({ updatedAt: _updatedAt, ...rest }) => rest) };
+}
+
+async function contentSnapshot(): Promise<unknown> {
+  return contentOf(await treeSnapshot());
+}
+
 // ───────── Seam · the anchored run's planId addresses what approve writes ─────────
 
 describe('seam · contextual submit → the run’s proposals → the rail’s read → the tree', () => {
@@ -404,11 +461,30 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
 
 // ───────────────── The confirm-before-write invariants ─────────────────
 
-describe('no approve ⇒ no write — a completed run leaves the tree byte-identical', () => {
+// ⚠️ REFINED BY MOTIR-2787, and the refinement is worth reading rather than
+// skimming, because it narrows an invariant this file exists to hold.
+//
+// "No approve ⇒ no write" is a claim about the PROPOSED DELTA: no work item is
+// created, renamed or archived by a run nobody approved. That is untouched, and
+// every assertion below still makes it.
+//
+// What is no longer literally true is "the tree is BYTE-IDENTICAL", because
+// opening an anchored planning thread now takes the planning-target LOCK: each
+// anchor moves to `planning` and records that status change as a revision. That
+// write is deliberate and visible by design — a board showing an epic as Planning
+// is how a second person learns not to start on it — and it is categorically not
+// a proposal: it is reversible, it is released when the plan is decided EITHER
+// WAY, and it says nothing about what the plan contains.
+//
+// So these cases now separate the two: the anchor carries the lock while the run
+// is open, NOTHING the proposal named exists, and a DECLINED run leaves the tree
+// byte-identical once more — which is a stronger statement about the reject path
+// than the original snapshot comparison made, not a weaker one.
+describe('no approve ⇒ no write — a completed run proposes everything and writes nothing', () => {
   it('a finished contextual run proposes everything and persists nothing', async () => {
     const story = await seedItem({ kind: 'story', title: 'Untouched' });
     const doomed = await seedItem({ kind: 'task', title: 'Never archived' });
-    const before = await treeSnapshot();
+    const beforeTheRun = await treeSnapshot();
 
     // All THREE ops in one run — a remove is the op a delta contract had no room
     // for (MOTIR-1746), and it is the one whose "no write" is easiest to get
@@ -426,20 +502,38 @@ describe('no approve ⇒ no write — a completed run leaves the tree byte-ident
     expect(pending!.items).toHaveLength(3);
     expect(pending!.status).toBe('planned');
 
-    expect(await treeSnapshot()).toEqual(before);
+    // NOTHING the proposal named exists, and nothing it targeted moved: the `add`
+    // was never built, the `modify`'s target keeps its title, the `remove`'s
+    // target is not archived. This is the invariant, stated field by field rather
+    // than through a whole-tree equality that a coordination marker can trip.
+    expect(await adminDb.workItem.count({ where: { title: 'Never built' } })).toBe(0);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).title).toBe(
+      'Untouched',
+    );
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: doomed.id } })).archivedAt,
+    ).toBeNull();
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
-    const workItemCount = await adminDb.workItem.count({ where: { title: 'Never built' } });
-    expect(workItemCount).toBe(0);
+
+    // The ONE difference from before the run is the anchor's lock — the anchor is
+    // in `planning`, and nothing else moved at all.
+    expect(await lockedAnchors()).toEqual([story.id]);
+    const duringTheRun = await treeSnapshot();
+    expect(await treeSnapshotExceptStatusOf(story.id)).toEqual(
+      snapshotExceptStatusOf(beforeTheRun, story.id),
+    );
 
     // …and it is the APPROVE, not the run, that writes.
     await approvePlanRequest(planId);
-    expect(await treeSnapshot()).not.toEqual(before);
+    expect(await treeSnapshot()).not.toEqual(duringTheRun);
   });
 
-  it('declining a contextual run decides it with the tree still untouched', async () => {
+  it('declining a contextual run decides it AND gives the anchor back', async () => {
     const story = await seedItem({ kind: 'story', title: 'Kept as-is' });
     const before = await treeSnapshot();
     const { planId } = await planFromItem(story.id, 'Try something');
+    // The run holds the anchor while it is open …
+    expect(await lockedAnchors()).toEqual([story.id]);
     await engineProposes(planId, [
       { op: 'add', proposedFields: { title: 'Discarded', kind: 'subtask' }, parentRef: story.id },
     ]);
@@ -450,7 +544,28 @@ describe('no approve ⇒ no write — a completed run leaves the tree byte-ident
     const declined = await declinePlanRequest(planId);
     expect(declined.status).toBe('declined');
 
-    expect(await treeSnapshot()).toEqual(before);
+    // … and gives it back on the decision. So the REJECT path is byte-identical
+    // end to end — every field, `status` included, and no lease left behind. A
+    // discarded run must leave nothing for a colleague to trip over, and a lock
+    // is the one thing that would outlive the plan it belonged to.
+    expect(await lockedAnchors()).toEqual([]);
+    expect(await contentSnapshot()).toEqual(contentOf(before));
+
+    // The ONLY residue is the audit trail, and it should be there: two revisions
+    // recording that the item went to `planning` and came back. Erasing them
+    // would make the lock invisible to the very feed whose job is to say what
+    // happened to this item — a status a colleague SAW on the board, with no
+    // record of it, is worse than the two rows.
+    const trail = await adminDb.workItemRevision.findMany({
+      where: { workItemId: story.id },
+      orderBy: { changedAt: 'asc' },
+      select: { diff: true },
+    });
+    expect(trail.map((r) => (r.diff as { status?: { from: string; to: string } }).status)).toEqual([
+      { from: null, to: 'todo' }, // the item's creation
+      { from: 'todo', to: 'planning' },
+      { from: 'planning', to: 'todo' },
+    ]);
     expect(await readPendingProposal(planId)).toBeNull();
     expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('declined');
 
@@ -617,8 +732,13 @@ describe('every rejection class leaves the database untouched — through the an
     expected: { status: number; code: string },
     anchorId: string,
   ): Promise<void> {
-    const before = await treeSnapshot();
     const { planId } = await planFromItem(anchorId, 'Do the thing');
+    // Snapshot AFTER the run has opened, not before. The subject of these cases
+    // is what a REFUSED APPROVE writes, and opening the anchored thread takes the
+    // planning-target lock (MOTIR-2787) — a coordination marker on the anchor,
+    // not a proposal. Anchoring `before` ahead of it would make every case here
+    // assert the lock instead of the refusal.
+    const before = await treeSnapshot();
     await engineProposes(planId, proposals);
 
     const err = await approvePlanRequest(planId).catch((e: unknown) => e);
@@ -701,8 +821,10 @@ describe('every rejection class leaves the database untouched — through the an
 
   it('a CYCLE among intra-plan parent refs — 400, nothing written', async () => {
     const anchor = await seedItem({ kind: 'story', title: 'Anchor' });
-    const before = await treeSnapshot();
     const { planId } = await planFromItem(anchor.id, 'Restructure');
+    // After the open, for the same reason `expectRefused` does it: the subject is
+    // the refused approve, not the run's lock on its anchor (MOTIR-2787).
+    const before = await treeSnapshot();
     const a = await plansService.addProposals(
       planId,
       [{ op: 'add', proposedFields: { title: 'A', kind: 'story' } }],

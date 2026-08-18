@@ -1690,3 +1690,132 @@ describe('assessWatchability (MOTIR-1772)', () => {
     expect(verdict.watchable).toBe(true);
   });
 });
+
+// ── The composite action's MANIFEST (MOTIR-2937) ────────────────────────────
+//
+// GitHub evaluates template expressions inside an action manifest's own
+// `description` scalars, at manifest-conversion time, where the `github`
+// context does not exist. A description that DOCUMENTS an input by showing the
+// expression a caller should pass therefore stops the action from LOADING —
+// `Unrecognized named-value: 'github'`, a `TemplateValidationException`, and a
+// step that fails before running any of its own logic.
+//
+// This is asserted here, in the file that travels with the manifest, for a
+// specific reason: NEITHER repo's CI can catch it. motir-core's own lane runs
+// `node scripts/upload-acceptance-video.mjs` directly and never `uses:` the
+// action, so this manifest is dead code here and is never parsed; the vendored
+// copy in `nextjs-prisma-vercel-starter` IS loaded, but that repo owns no
+// acceptance spec, so its `paths:`-filtered lane has never fired on a pull
+// request. The file passed review twice and was re-synced once under the
+// upstream-verbatim contract without a runner ever reading it (MOTIR-2937).
+//
+// Scoped to every manifest under `.github/actions/`, not just this one: the
+// defect is a property of the FILE FORMAT, and the vendored copy carries this
+// test into a repo whose action set is its own.
+
+describe('the action manifests carry no template expressions in their descriptions', () => {
+  const ACTIONS_DIR = '.github/actions';
+
+  /** An Actions expression opener, built so this file never contains one. */
+  const EXPRESSION_OPENER = '$' + '{{';
+
+  function manifestPaths(): string[] {
+    const root = path.join(process.cwd(), ACTIONS_DIR);
+    if (!fs.existsSync(root)) return [];
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(root, e.name, 'action.yml'))
+      .filter((p) => fs.existsSync(p));
+  }
+
+  /**
+   * Every line that is part of a `description:` value — the key's own line plus
+   * the more-indented continuation lines of its block scalar.
+   *
+   * Deliberately textual rather than YAML-parsed: the manifest is a VENDORED
+   * file (docs/acceptance-video.md), and a copy that drags a parser dependency
+   * into whichever repo it lands in is a copy that stops being re-copyable.
+   */
+  function descriptionLines(manifest: string): Array<{ line: number; text: string }> {
+    const out: Array<{ line: number; text: string }> = [];
+    let openIndent: number | null = null;
+    manifest.split('\n').forEach((raw, i) => {
+      const opener = /^(\s*)description:(.*)$/.exec(raw);
+      if (opener) {
+        openIndent = opener[1]!.length;
+        out.push({ line: i + 1, text: opener[2]! });
+        return;
+      }
+      if (openIndent === null) return;
+      if (raw.trim() === '') return; // a blank line does not close a block scalar
+      const indent = raw.length - raw.trimStart().length;
+      if (indent > openIndent) {
+        out.push({ line: i + 1, text: raw });
+        return;
+      }
+      openIndent = null;
+    });
+    return out;
+  }
+
+  it('finds the manifests it is meant to police', () => {
+    // A guard that silently scans nothing reads exactly like a guard that
+    // passes. `.github/actions` holds at least this action in either repo.
+    expect(manifestPaths().length).toBeGreaterThan(0);
+  });
+
+  it.each(manifestPaths().map((p) => [path.relative(process.cwd(), p), p]))(
+    '%s: no description scalar opens a template expression',
+    (rel, absolute) => {
+      const offenders = descriptionLines(fs.readFileSync(absolute, 'utf8')).filter((l) =>
+        l.text.includes(EXPRESSION_OPENER),
+      );
+      expect(
+        offenders.map((o) => `${rel}:${o.line}:${o.text.trim()}`),
+        'GitHub evaluates expressions in a manifest description — the action then fails ' +
+          'template validation and never loads (MOTIR-2937). Name the context value in prose.',
+      ).toEqual([]);
+    },
+  );
+
+  it('still tells a caller WHAT to pass for the two PR inputs', () => {
+    // The fix must not have been "delete the guidance". The descriptions name
+    // the same two context values, without the delimiters that break the load.
+    const manifest = fs.readFileSync(
+      path.join(process.cwd(), ACTIONS_DIR, 'upload-acceptance-video/action.yml'),
+      'utf8',
+    );
+    const described = descriptionLines(manifest)
+      .map((l) => l.text)
+      .join('\n');
+    expect(described).toContain('github.head_ref');
+    expect(described).toContain('github.event.pull_request.title');
+  });
+
+  it('reads a block scalar as part of its description, and stops at the next key', () => {
+    // The extractor is the load-bearing half — a version that only looked at
+    // the `description:` LINE would have passed the file this card was filed
+    // about, where both expressions sit on a continuation line.
+    const sample = [
+      'inputs:',
+      '  a:',
+      '    description: >',
+      '      first continuation',
+      '',
+      '      second continuation',
+      '    required: false',
+      '    default: not-a-description',
+      '  b:',
+      '    description: inline value',
+      'runs:',
+      '  using: composite',
+    ].join('\n');
+    expect(descriptionLines(sample).map((l) => l.text.trim())).toEqual([
+      '>',
+      'first continuation',
+      'second continuation',
+      'inline value',
+    ]);
+  });
+});

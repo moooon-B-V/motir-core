@@ -65,7 +65,7 @@ test('the organization settings page offers no address it cannot resolve, and no
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.getByPlaceholder('Create a password').fill(PASSWORD);
     await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-    await page.waitForURL('**/dashboard', { timeout: 30_000 });
+    await page.waitForURL('**/home', { timeout: 30_000 });
 
     await page.goto('/settings/organization');
     await expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible();

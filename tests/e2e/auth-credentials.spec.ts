@@ -63,7 +63,8 @@ test.afterAll(async () => {
 test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-password', async ({
   page,
 }) => {
-  // --- Step a/b/c: sign up → land on dashboard.
+  // --- Step a/b/c: sign up → land on /home (MOTIR-2921 moved sign-up onto the
+  // same landing sign-in already used).
   await page.goto('/sign-up');
 
   // Step 1 of sign-up: email → Continue.
@@ -76,7 +77,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByPlaceholder('Create a password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
 
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
   // Confirm the session bound by opening the top-nav Account menu and
   // checking the rendered email. The old assertion targeted a
   // `<strong>{email}</strong>` debug dump on the dashboard that
@@ -124,9 +125,9 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  // SIGN-IN lands on `/home` (MOTIR-2654); sign-UP still lands on `/dashboard`
-  // (see the wait after "Create account" above). The two are deliberately
-  // different destinations, so this file waits for each on its own.
+  // BOTH credential flows land on `/home` — sign-in since MOTIR-2654, sign-up
+  // since MOTIR-2921 (see the wait after "Create account" above), so this is
+  // the same destination the sign-up leg waited for.
   await page.waitForURL('**/home');
   // See assertSignedInAs docstring (Finding #17) — same re-anchor onto
   // the Account-menu popover as the post-sign-up assertion above.

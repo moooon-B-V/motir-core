@@ -39,11 +39,14 @@ import { toHomeRowViews } from './_components/homeRows';
 // This page touches nothing about notifications; do not add it back without
 // reopening that decision.
 
-// The post-auth settle target. `_helpers/shell-session.ts` waits on a RENDERED
-// Home rather than on a URL that merely reads right (MOTIR-2645's contract: an
-// authoritative signal, never an interval) — so BOTH branches carry it, the way
-// `/dashboard` carries its own across the same split. A fresh sign-up has no
-// project, and it still lands here.
+// The post-auth settle target — for BOTH credential flows. `_helpers/
+// shell-session.ts` waits on a RENDERED Home rather than on a URL that merely
+// reads right (MOTIR-2645's contract: an authoritative signal, never an
+// interval), so BOTH branches below carry it: a fresh sign-up has no project
+// and lands on the create-first branch, an existing account lands on the list.
+// There is no longer a second landing to keep in step — MOTIR-2921 moved
+// sign-up here behind MOTIR-2654's sign-in, and `/dashboard`'s own marker is no
+// longer a post-auth one (`docs/decisions/home-scope.md` §2.3).
 const HOME_TESTID = 'home-page';
 
 export default async function HomePage({

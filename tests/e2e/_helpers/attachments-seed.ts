@@ -2,7 +2,8 @@
 //
 // Mirrors the comments-seed shape: the PM signs up through the real browser
 // UI (shell-session signUp — the page needs a live session) and creates the
-// first project via the dashboard CTA (which pins it active); then,
+// first project via the projects-empty-state CTA on /home (which pins it
+// active); then,
 // server-side via the sanctioned test cross-layer reach, the issue under
 // test plus any extra cast members (a plain workspace member, a read-only
 // project viewer) are minted directly through the services.

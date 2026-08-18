@@ -313,6 +313,13 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 422: the anchor set exceeds `MAX_SCOPE_TARGETS`. Refused BEFORE the
   // resolution fan-out, because the cost of a huge set is that fan-out.
   PLAN_CHANGE_TOO_MANY_TARGETS: 422,
+  // ⚠️ 409, not 403. Another planning session holds one of this scope's targets
+  // (MOTIR-2787). The caller is permitted to plan it — a permission answer would
+  // be a lie, and would tell them to go get access they already have. It is a
+  // STATE conflict, and a self-clearing one: the message names the item, the
+  // holder, and the time the lease runs out, so "retry later" is actionable
+  // rather than a shrug.
+  PLAN_TARGET_LOCKED: 409,
 
   // 11.7.7 (MOTIR-2241) — the activity read. Its own failure modes are the
   // wrapper's (401/403/429), the shared cursor 422, and `WORK_ITEM_NOT_FOUND`

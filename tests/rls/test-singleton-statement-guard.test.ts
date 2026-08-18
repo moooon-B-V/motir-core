@@ -3,6 +3,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { policyGatedModels } from './singletonReadScan';
+import { remeasureFirst } from './remeasureFirst';
 import {
   DISPOSITIONED_FILES,
   NO_POLICY_MODELS,
@@ -102,8 +103,13 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testSingletonSt
  *
  * THE HAZARD IS STRUCTURAL AND SURVIVES THIS FIX: any ceiling measured on a
  * BRANCH is stale the moment a sibling merges beneath it, and only a ceiling of
- * 0 is immune. Deciding whether these guards should derive their ceiling from
- * `origin/main` at run time, or re-measure in a merge queue, is MOTIR-2941.
+ * 0 is immune. MOTIR-2941 DECIDED that in
+ * `docs/decisions/ratchet-constant-staleness.md`: the constants stay
+ * branch-measured (deriving them from `origin/main` at run time was rejected,
+ * with its price), and every non-zero one instead opens its failure message with
+ * `remeasureFirst(…)` so the reader is told to re-measure before hunting a
+ * culprit. `ratchet-staleness-guard.test.ts` enforces that on every ratchet,
+ * including any added after this one.
  */
 const UNCONVERTED_E2E_CEILING = 452;
 const UNCONVERTED_VITEST_CEILING = 4;
@@ -218,14 +224,9 @@ describe('the ratchets over the real test suite', () => {
 
     expect(
       e2e.length,
-      `${e2e.length} direct singleton statements under \`tests/e2e/**\` still have to change ` +
+      remeasureFirst('UNCONVERTED_E2E_CEILING') +
+        `${e2e.length} direct singleton statements under \`tests/e2e/**\` still have to change ` +
         `(ceiling ${UNCONVERTED_E2E_CEILING}).\n\n` +
-        `⚠️ FIRST, CHECK WHETHER IT ROSE AT ALL (MOTIR-2939). This ceiling is a constant ` +
-        `measured on somebody's BRANCH, so a sibling merging beneath it makes the number ` +
-        `stale with no spec of yours involved — which is how this guard failed on its own ` +
-        `merge commit the day it landed. Re-measure on a clean worktree at \`origin/main\`: ` +
-        `if it is already over there, the ceiling is stale and the fix is to RE-MEASURE it ` +
-        `(citing the commits, as the constant above does), not to hunt for a culprit.\n\n` +
         `If it genuinely ROSE against \`origin/main\`, a spec was written that seeds through ` +
         `\`@/lib/db\`. Under ` +
         `\`motir_app\` that write is REFUSED and that read returns [] — neither raises — so ` +
@@ -242,7 +243,8 @@ describe('the ratchets over the real test suite', () => {
 
     expect(
       vitest.length,
-      `${vitest.length} direct singleton statements outside \`tests/e2e/**\` still have to ` +
+      remeasureFirst('UNCONVERTED_VITEST_CEILING') +
+        `${vitest.length} direct singleton statements outside \`tests/e2e/**\` still have to ` +
         `change (ceiling ${UNCONVERTED_VITEST_CEILING}):\n` +
         vitest.map((s) => `  ${key(s)} [${s.verdict}]`).join('\n') +
         `\n\nUnder \`motir_app\` an unbound statement against a policy-gated table is not an ` +
@@ -257,7 +259,8 @@ describe('the ratchets over the real test suite', () => {
   it('the raw-statement ceiling only ever falls', () => {
     expect(
       scan.raw.length,
-      `${scan.raw.length} \`$queryRaw*\` / \`$executeRaw*\` statements run on the singleton ` +
+      remeasureFirst('RAW_CEILING') +
+        `${scan.raw.length} \`$queryRaw*\` / \`$executeRaw*\` statements run on the singleton ` +
         `under \`tests/\` (ceiling ${RAW_CEILING}). Their target table is not nameable from ` +
         `the syntax, so they are enumerated rather than verdicted — but they are enumerated, ` +
         `because the shape nobody counts is the shape that survives twenty sweeps.`,

@@ -275,6 +275,21 @@ describe('createCheckoutSession', () => {
     expect(JSON.parse(init.body)).toEqual(input);
   });
 
+  it('carries the top-up bundle `quantity` on the wire under that exact name (MOTIR-2949)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ url: 'https://checkout.stripe.com/c/pay/cs_test_2' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createCheckoutSession({ ...input, priceId: 'credit_topup', quantity: 10 });
+
+    // motir-ai reads `quantity` (an optional integer >= 1) off the body and hands
+    // it to `line_items[].quantity` — a rename on this side silently reverts the
+    // charge to one unit, which is the bug this field exists to close.
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(init.body)).toEqual({ ...input, priceId: 'credit_topup', quantity: 10 });
+  });
+
   it('maps a problem+json error to a typed error', async () => {
     vi.stubGlobal(
       'fetch',

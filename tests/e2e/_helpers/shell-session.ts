@@ -8,24 +8,27 @@ import { expect, type Page } from '@playwright/test';
 
 export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 
-// ⚠️ THE TWO CREDENTIAL FLOWS NO LONGER LAND IN THE SAME PLACE (Story
-// MOTIR-2649 · Subtask MOTIR-2654), and the helpers below settle accordingly.
+// ⚠️ ONE LANDING FOR BOTH CREDENTIAL FLOWS — sign-IN and sign-UP alike settle
+// here, so there is a single answer to "where does authenticating put me".
 //
-//   * SIGN-IN → `/home`, the signed-in landing surface. Signing in is the
-//     moment the reader asks "what should I do now?", and Home answers it.
-//   * SIGN-UP → `/dashboard`. A brand-new account has nothing waiting on it, so
-//     Home would greet its first visitor with an empty state whose next action
-//     needs a project they do not have; `/dashboard`'s projects-empty branch
-//     offers the one that IS next — create your first project.
+// Sign-in moved to `/home` first (Story MOTIR-2649 · Subtask MOTIR-2654) and
+// sign-up stayed on `/dashboard` for a season, because a brand-new account has
+// nothing waiting on it and Home's My-work empty state pointed at `/ready`,
+// which needs a project. MOTIR-2761 closed that: Home resolves the ACTIVE
+// PROJECT and renders the shipped create-first door when there is none, so the
+// project-less first screen is the same one `/dashboard` used to give. MOTIR-2921
+// then moved sign-up (`docs/decisions/home-scope.md` §2.3).
 //
-// This constant is sign-IN's landing, which is what the post-auth-landing spec
-// counts navigations to.
+// `tests/e2e/auth-post-auth-landing.spec.ts` pins BOTH flows against this
+// constant — that is what stops them diverging again unnoticed.
 export const POST_AUTH_LANDING = '/home';
-/** Where `signUp` lands — deliberately NOT the same route. */
-export const POST_SIGNUP_LANDING = '/dashboard';
 
 /**
- * ── Why the URL reading /dashboard did not mean sign-in had FINISHED ──
+ * ── Why the URL reading right did not mean sign-in had FINISHED ──
+ *
+ * (The route named below was `/dashboard` when this was measured; MOTIR-2654
+ * and MOTIR-2921 have since moved both flows to `/home`. The mechanism is the
+ * landing route's, not that route's, so the paths are left as observed.)
  *
  * Signing in used to start TWO navigations to the landing route. The page ran
  * its own `router.push(callbackURL)` soft navigation, and — because the request
@@ -62,28 +65,24 @@ export const POST_SIGNUP_LANDING = '/dashboard';
  * navigation cannot rewrite — `tests/e2e/appearance-sync.spec.ts` fails if a
  * returning user reaches the dashboard without a fresh document render.)
  *
- * What these helpers add is the second half: they return on a RENDERED
- * dashboard rather than on a URL that merely reads right — an authoritative
- * signal, never an interval (CLAUDE.md § E2E forbids a sleep as
- * synchronisation, and this race got worse under load, which is exactly where
- * a tuned sleep would fail).
- */
-async function settleOnDashboard(page: Page): Promise<void> {
-  await page.waitForURL(`**${POST_SIGNUP_LANDING}`, { timeout: 30_000 });
-  await expect(page.getByTestId('dashboard-page')).toBeVisible({ timeout: 30_000 });
-}
-
-/**
- * The sign-IN settle. Same contract as `settleOnDashboard` — return on a
- * RENDERED page, never on a URL that merely reads right — pointed at the route
- * MOTIR-2654 moved the landing to.
+ * What these helpers add is the second half: they return on a RENDERED landing
+ * page rather than on a URL that merely reads right — an authoritative signal,
+ * never an interval (CLAUDE.md § E2E forbids a sleep as synchronisation, and
+ * this race got worse under load, which is exactly where a tuned sleep would
+ * fail).
+ *
+ * ONE settle serves both flows, because both land on `/home`, and `home-page`
+ * is carried by BOTH of that page's branches — the create-first door a fresh
+ * sign-up sees and the list an existing account sees.
  */
 async function settleOnHome(page: Page): Promise<void> {
   await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
   await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
 }
 
-// Sign up a fresh user → auto-workspace, zero projects → lands on /dashboard.
+// Sign up a fresh user → auto-workspace, zero projects → lands on /home, whose
+// no-project branch is the shipped "create your first project" door
+// (MOTIR-2761); `createFirstProject` below drives it from there.
 //
 // SINGLE deterministic submit, not a click-wait-reclick retry loop: the E2E
 // dev server runs with E2E_DISABLE_RATE_LIMIT=1, so there is no 429 to retry
@@ -97,17 +96,17 @@ export async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(SHELL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await settleOnDashboard(page);
+  await settleOnHome(page);
 }
 
 // Sign IN an EXISTING user (vs. signUp's fresh account) through the real
 // sign-in UI — the two-step email→password flow, both steps submitted with the
 // "Continue" button (Subtask 3.5.1). Used by the at-scale board specs to sign in
 // as the server-seeded board-seed owner, who is created via usersService (not
-// signed up), then land on the project board. Lands on the default `/home`
-// (MOTIR-2654 moved it there from `/dashboard`); callers that need a different
-// surface `goto` it afterwards, which is safe because sign-in performs exactly
-// ONE navigation (MOTIR-2645).
+// signed up), then land on the project board. Lands on the default `/home` —
+// the same place `signUp` lands (MOTIR-2654, then MOTIR-2921); callers that
+// need a different surface `goto` it afterwards, which is safe because sign-in
+// performs exactly ONE navigation (MOTIR-2645).
 export async function signIn(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/sign-in');
   await page.getByPlaceholder('Email address').fill(email);
@@ -117,8 +116,11 @@ export async function signIn(page: Page, email: string, password: string): Promi
   await settleOnHome(page);
 }
 
-// Create the first project via the dashboard empty-state CTA, so the
+// Create the first project via the projects-empty-state CTA, so the
 // project-scoped sidebar nav (Dashboard / Issues / Boards / Reports) renders.
+// The CTA is the same `ProjectsEmptyState` component wherever it is reached —
+// `/home`'s no-project branch (where `signUp` now lands) and `/dashboard`'s
+// alike — so this works without knowing which page the caller is on.
 export async function createFirstProject(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();

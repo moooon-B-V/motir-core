@@ -2,11 +2,17 @@
 // the scanner can return, one function each, plus the two shapes it must NOT
 // report.
 //
-// Parsed, never executed. The context wrapper is declared locally for the same
-// reason the repository fixture declares its client: the scanner matches
-// identifiers and resolves no imports.
+// Parsed, never executed. The `db` client and the context WRAPPER are declared
+// locally for the same reason the repository fixture declares its client: the
+// scanner matches identifiers and never needs to resolve them.
+//
+// ⚠️ The BINDER below is imported, and that is deliberate (MOTIR-2945). The scan
+// resolves an imported callee to its declaration to ask whether it binds, so the
+// blessed mid-block binder — which is always reached across a module boundary —
+// has to arrive here the way it arrives in a real service.
 
 import { fixtureRepository } from '../repositories/fixtureRepository';
+import { bindWorkspaceContext, touchWorkspace } from '../workspaces/context';
 
 type Tx = Parameters<typeof fixtureRepository.findWidgetMandatoryTx>[1];
 declare const db: {
@@ -106,6 +112,41 @@ export const fixtureService = {
   //     changed.
   async bareTwoHops(id: string) {
     return db.$transaction((tx) => outer(id, tx));
+  },
+
+  // (K) binds-inline via the IMPORTED binder — the shape MOTIR-2945 was filed
+  //     for, and the one the codebase's own documentation tells you to write
+  //     when the workspace is only known partway through the transaction. The
+  //     binding is real; before the fix it read as unbound purely because the
+  //     callee lived in another module.
+  async bareBindingViaImportedBinder(id: string, workspaceId: string) {
+    return db.$transaction(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      return fixtureRepository.findWidgetMandatoryTx(id, tx);
+    });
+  },
+
+  // (L) ⚠️ gated-statement DESPITE the imported binder — because the read comes
+  //     FIRST. Case (D) one module over: following an imported callee must add a
+  //     POSITION, never a whole-site "this transaction binds" flag. If this ever
+  //     reports `binds-inline`, the positional half was lost in the fix and
+  //     `ensureDefaultWorkspace`'s defect can come back through the import.
+  async bareImportedBinderAfterRead(id: string, workspaceId: string) {
+    return db.$transaction(async (tx) => {
+      const existing = await fixtureRepository.countWidgets(workspaceId, tx);
+      await bindWorkspaceContext(tx, workspaceId);
+      return existing;
+    });
+  },
+
+  // (M) gated-statement — an IMPORTED callee that binds nothing. The control for
+  //     (K): what clears a statement is the `set_config` in the callee's body,
+  //     not the fact that a `tx` crossed a module boundary.
+  async bareWithImportedNonBinder(workspaceId: string) {
+    return db.$transaction(async (tx) => {
+      await touchWorkspace(tx, workspaceId);
+      return tx.widget.findMany({ where: { workspaceId } });
+    });
   },
 };
 

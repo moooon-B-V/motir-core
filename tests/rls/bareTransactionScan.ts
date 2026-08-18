@@ -99,8 +99,10 @@ export type BareTransactionVerdict =
   | 'gated-statement'
   /**
    * NOT a finding — the transaction binds its OWN GUCs inline, with a
-   * `set_config('app.…')` in the body or in a same-file helper it hands the `tx`
-   * to. This is the shape `withWorkspaceContext` and friends use internally, and
+   * `set_config('app.…')` in the body, or in a helper it hands the `tx` to:
+   * declared in the same file, or imported and resolved to its declaration
+   * (`bindWorkspaceContext` / `bindOrganizationContext` are the second kind —
+   * MOTIR-2945). This is the shape `withWorkspaceContext` and friends use internally, and
    * the shape `workspacesService.createWorkspace` (via `insertWorkspaceWithOwner`)
    * and `workspaceInvitesService`'s invite-accept (MOTIR-2777) use directly.
    *
@@ -244,6 +246,94 @@ function bindsGucInline(node: ts.Node): boolean {
   return found;
 }
 
+/**
+ * `@/lib/x` / `./x` -> an existing `.ts` file, or undefined. A path join, not
+ * type resolution — anything that does not land on a file is skipped. Same
+ * resolver `systemContextScan` uses, kept a copy for the reason the two scans
+ * are separate modules at all: they answer different questions and neither
+ * should be able to break the other by widening its walk.
+ */
+function resolveModule(spec: string, from: string, root: string): string | undefined {
+  const base = spec.startsWith('@/')
+    ? path.join(root, spec.slice(2))
+    : spec.startsWith('.')
+      ? path.join(path.dirname(from), spec)
+      : undefined;
+  if (!base) return undefined;
+  for (const candidate of [`${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
+    try {
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      /* not this one */
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The names this file IMPORTS that resolve to a function whose body BINDS a GUC
+ * inline — `bindWorkspaceContext` / `bindOrganizationContext` and anything else
+ * shaped like them.
+ *
+ * ⚠️ WHY THIS EXISTS (MOTIR-2945). `bindPos` used to come from two sources: a
+ * `set_config('app.…')` written in the body, and a call to a SAME-FILE helper
+ * that binds. `bindWorkspaceContext` is neither — `lib/workspaces/context.ts`
+ * ships it for the one case the `with*Context` wrappers cannot serve, *"because
+ * the workspace is not known until partway through the transaction"*, and a
+ * helper in another module is always reached through an import. So the ONE call
+ * a careful author is told to make was the one call this scan could not see, and
+ * a correctly-bound transaction was reported as a finding. The population was
+ * zero only because nothing on `main` had used the API inside a bare transaction
+ * yet; the first card to use it as documented would have hit this.
+ *
+ * ⚠️ RESOLVED, NOT NAME-MATCHED, and the difference is the whole safety of it.
+ * Keying on the identifier `bindWorkspaceContext` would clear any transaction
+ * that calls something SPELLED that way — the `notes.html` #231 shape, where a
+ * name-matching recogniser answers a proxy for the question actually asked. So
+ * the import is followed to the declaration and the declaration is read: what
+ * makes a callee a binder is its `set_config`, exactly as for a same-file
+ * helper, and a local declaration of the same name shadows the import and is
+ * judged on its own body. There is no list of blessed names to drift.
+ *
+ * ⚠️ WHAT THIS DOES NOT DO, stated because a partition inherits every
+ * distinction its instrument cannot draw (`notes.html` #268): it moves the BIND
+ * POSITION only. The statement-reaching hops still follow a repository method or
+ * a SAME-FILE helper and no further, so a gated statement issued inside an
+ * imported callee remains out of reach — the documented one-hop depth, unchanged
+ * and pinned by fixture case (J). Widening that is a different card.
+ */
+function importedBinders(
+  sf: ts.SourceFile,
+  root: string,
+  local: ReadonlyMap<string, { body: ts.Node; txParam?: string }>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    const named = st.importClause?.namedBindings;
+    if (!named || !ts.isNamedImports(named)) continue;
+    // A same-file declaration WINS: `bindWorkspaceContext` declared here is this
+    // file's `bindWorkspaceContext`, whatever it does or does not bind.
+    const wanted = named.elements.filter((e) => !local.has(e.name.text));
+    if (wanted.length === 0) continue;
+    const resolved = resolveModule(st.moduleSpecifier.text, sf.fileName, root);
+    if (!resolved) continue;
+    let declared: Map<string, { body: ts.Node; txParam?: string }>;
+    try {
+      declared = localHelpers(
+        ts.createSourceFile(resolved, readFileSync(resolved, 'utf8'), ts.ScriptTarget.Latest, true),
+      );
+    } catch {
+      continue; // unreadable module: not a binder we can vouch for
+    }
+    for (const el of wanted) {
+      const hit = declared.get((el.propertyName ?? el.name).text);
+      if (hit && bindsGucInline(hit.body)) out.add(el.name.text);
+    }
+  }
+  return out;
+}
+
 /** The module-local functions of a file, by name, with their `tx` parameter. */
 function localHelpers(sf: ts.SourceFile): Map<string, { body: ts.Node; txParam?: string }> {
   const out = new Map<string, { body: ts.Node; txParam?: string }>();
@@ -349,6 +439,9 @@ export function scanBareTransactions(root = process.cwd()): BareTransactionSite[
         true,
       );
       const helpers = localHelpers(sf);
+      // Computed once per FILE, next to the same-file helpers, because it reads
+      // and parses the imported modules — `classify` runs once per transaction.
+      const binders = importedBinders(sf, root, helpers);
 
       const visit = (node: ts.Node): void => {
         if (
@@ -358,7 +451,7 @@ export function scanBareTransactions(root = process.cwd()): BareTransactionSite[
           node.expression.expression.text === SINGLETON &&
           node.expression.name.text === '$transaction'
         ) {
-          out.push(classify(node, sf, rel, gated, repoModels, helpers));
+          out.push(classify(node, sf, rel, gated, repoModels, helpers, binders));
         }
         ts.forEachChild(node, visit);
       };
@@ -378,6 +471,7 @@ function classify(
   gated: Set<string>,
   repoModels: Map<string, { models: string[]; raw: boolean }>,
   helpers: Map<string, { body: ts.Node; txParam?: string }>,
+  binders: ReadonlySet<string>,
 ): BareTransactionSite {
   const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const enclosing = enclosingName(node);
@@ -412,8 +506,11 @@ function classify(
   // So the binding has a POSITION, and a gated statement is exempt only when it
   // sits after one. `bindPos` is the earliest of:
   //   * a `set_config('app.…')` written directly in the body, and
-  //   * the CALL to a same-file helper that binds inline — the binding takes
-  //     effect where the call is, not where the helper is declared.
+  //   * the CALL to a helper that binds inline — the binding takes effect where
+  //     the call is, not where the helper is declared. The helper may be
+  //     declared in this file or IMPORTED ({@link importedBinders}, MOTIR-2945);
+  //     `bindWorkspaceContext` is the second kind and is the shape the codebase
+  //     documents for a workspace that is only known mid-transaction.
   //
   // ⚠️ LEXICAL, not control-flow. A `set_config` inside one arm of an `if` reads
   // as binding everything below it. Tightening that needs a CFG, which is a
@@ -440,7 +537,10 @@ function classify(
     };
     visitBinds(body);
   }
-  // A helper that binds inline binds AT ITS CALL SITE.
+  // A helper that binds inline binds AT ITS CALL SITE — whether it is declared
+  // in this file or IMPORTED (MOTIR-2945). A same-file declaration wins over an
+  // import of the same name, so the two are asked in that order and both are
+  // judged the same way: by whether the body they resolve to binds.
   const visitHelperBinds = (n: ts.Node): void => {
     if (
       ts.isCallExpression(n) &&
@@ -448,7 +548,8 @@ function classify(
       n.arguments.some((a) => ts.isIdentifier(a) && aliases.includes(a.text))
     ) {
       const helper = helpers.get(n.expression.text);
-      if (helper && bindsGucInline(helper.body)) noteBind(n.getStart(sf));
+      const binds = helper ? bindsGucInline(helper.body) : binders.has(n.expression.text);
+      if (binds) noteBind(n.getStart(sf));
     }
     ts.forEachChild(n, visitHelperBinds);
   };

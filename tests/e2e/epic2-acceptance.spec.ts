@@ -28,7 +28,7 @@
 // type+parent filtering (2.3.4) → the gated transition path (2.2.4 /
 // changeStatusAction) → the List + Tree reads (2.4/2.5). Setup mirrors the
 // per-feature specs: sign up through the real UI (shell-session.signUp →
-// auto-workspace → /dashboard), then seed the project + the two parent
+// auto-workspace → /home), then seed the project + the two parent
 // candidates SERVER-SIDE through the shipped services (the one sanctioned
 // cross-layer reach for tests), so the seeded tree is exactly what Motir
 // itself renders. The journey item itself is created THROUGH the UI — that is
