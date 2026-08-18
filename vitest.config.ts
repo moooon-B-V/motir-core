@@ -494,6 +494,17 @@ export default defineConfig({
         // conversation stack they extend.
         'lib/planChange/scope.ts',
         'lib/services/contextualPlanningService.ts',
+        // Story MOTIR-2786 · MOTIR-2787 — the planning-target LOCK. It decides
+        // whether a second session may take an item another is expanding, and its
+        // release path decides whether an item ever becomes plannable again; a
+        // missed branch there is an epic nobody can plan, with no user-facing
+        // remedy. Measured before pinning, per the note at the head of this
+        // block: service 100/93.1/100, repository + lease module + sweep job all
+        // 100 across the board.
+        'lib/services/planTargetLockService.ts',
+        'lib/repositories/planTargetLockRepository.ts',
+        'lib/planChange/targetLock.ts',
+        'lib/jobs/definitions/planTargetLockSweep.ts',
         // Story 7.12 · Subtask 7.12.5 (MOTIR-911) — the CONFIRMATION GATE at the
         // persist boundary. This module decides whether an approved proposal set
         // may become rows at all (the kind-parent grammar, the intra-plan ref
@@ -1881,6 +1892,16 @@ export default defineConfig({
         // Subtask 7.12.3 (MOTIR-909) — the contextual-planning scope + orchestration.
         'lib/planChange/scope.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/contextualPlanningService.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-2787 — the planning-target lock, its lease module, its data leaf
+        // and its recovery sweep.
+        'lib/services/planTargetLockService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/planTargetLockRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/planChange/targetLock.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/planTargetLockSweep.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.6 (MOTIR-912) — the shared review/confirm seam.

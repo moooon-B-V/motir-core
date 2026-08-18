@@ -7,6 +7,23 @@ description: >
   GitHub App — the calling JOB must grant `permissions: id-token: write` (no
   secret needed); otherwise pass a `token` (the `integration`-scope PAT fallback).
 
+# ⚠️ NO ACTIONS EXPRESSION SYNTAX IN THIS FILE'S `description` SCALARS — GITHUB
+# EVALUATES THEM (MOTIR-2937). A dollar sign followed by a double brace inside
+# any `description:` here is parsed as a template expression at MANIFEST
+# CONVERSION time, where the `github` context does not exist. The action then
+# fails template validation and NEVER LOADS: the calling step errors with
+# `Unrecognized named-value: 'github'` and a `TemplateValidationException`
+# before one line of its own logic runs, at the end of a job whose test run was
+# green. Measured on the VENDORED copy in `nextjs-prisma-vercel-starter`, where
+# this manifest is the one that gets loaded (PR #17, job 95486108427); the
+# counterfactual with the two expressions stripped and nothing else changed ran
+# the publish step to completion (PR #19, job 95494641230). motir-core never saw
+# it because motir-core's own `.github/workflows/acceptance-video.yml` invokes
+# the script directly rather than `uses:`-ing this action, so the upstream
+# manifest is never parsed there — which is exactly why the guard belongs in the
+# shared test rather than in either repo's CI. NAME the context value in prose
+# instead; `pr-ref` and `pr-title` below are the shape to copy.
+# `tests/acceptance-video-uploader.test.ts` pins this.
 inputs:
   story-key:
     description: >
@@ -18,15 +35,20 @@ inputs:
     default: ''
   pr-ref:
     description: >
-      The PR head ref (branch) carrying the `MOTIR-<id>` — pass
-      `${{ github.head_ref }}`. Used only when `story-key` is empty and the
-      recording did not self-declare a story.
+      The PR head ref (branch) carrying the `MOTIR-<id>` — pass the
+      `github.head_ref` context value, wrapped in the caller's usual Actions
+      expression delimiters (they are spelled out in the calling workflow, never
+      here — see the note above `inputs:`). Used only when `story-key` is empty
+      and the recording did not self-declare a story.
     required: false
     default: ''
   pr-title:
     description: >
       The PR title carrying the `MOTIR-<id>` (the status-sync convention) — pass
-      `${{ github.event.pull_request.title }}`. Parsed when `pr-ref` has no key.
+      the `github.event.pull_request.title` context value, wrapped in the
+      caller's Actions expression delimiters (spelled out in the calling
+      workflow, never here — see the note above `inputs:`). Parsed when `pr-ref`
+      has no key.
     required: false
     default: ''
   fallback-story-key:

@@ -58,14 +58,15 @@ const customRow = (page: Page) =>
  * Sign in AND WAIT FOR THE SHELL TO LAND.
  *
  * ⚠️ `signIn` RESOLVES ON THE URL MATCH, WHICH IS NOT THE SAME AS SETTLED. It
- * waits for `**\/dashboard`, and the dashboard's own navigation can still be in
- * flight when it returns — so the very next `page.goto` races it and Playwright
- * fails the goto outright: *"Navigation to /settings/project is interrupted by
- * another navigation to /dashboard"*. Observed on the third consecutive run of
- * this spec; the first two happened to win the race.
+ * waits for the landing route (`**\/dashboard` when this was observed, `**\/home`
+ * since MOTIR-2654 / MOTIR-2921), and the landing page's own navigation can
+ * still be in flight when it returns — so the very next `page.goto` races it and
+ * Playwright fails the goto outright: *"Navigation to /settings/project is
+ * interrupted by another navigation to /dashboard"*. Observed on the third
+ * consecutive run of this spec; the first two happened to win the race.
  *
  * The account-menu trigger is the app shell's own landmark: it renders only for
- * a signed-in session, and only once the dashboard has actually rendered. Waiting
+ * a signed-in session, and only once the landing page has actually rendered. Waiting
  * on it is an authoritative signal, not a delay — remove it and the assertions
  * are unchanged, but the goto that follows has nothing to lose to.
  */

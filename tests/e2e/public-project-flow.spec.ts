@@ -26,7 +26,7 @@
 // rendered surfaces, with a second browser context for the second account.
 //
 // Setup mirrors triage-flow.spec.ts: the admin signs up through the real UI
-// (auto-workspace → /dashboard), then the project + its seed work items are
+// (auto-workspace → /home), then the project + its seed work items are
 // created SERVER-SIDE through the shipped services (the one sanctioned
 // cross-layer reach for tests); the make-public toggle, the anonymous read, and
 // every cross-org write go through the BROWSER — the surface under test.

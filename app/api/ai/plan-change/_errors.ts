@@ -5,6 +5,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanTargetLockedError,
 } from '@/lib/planChange/errors';
 import {
   PermissionDeniedError,
@@ -28,6 +29,22 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // the thread's current state, not malformed requests.
   if (err instanceof PlanChangeTurnConflictError || err instanceof EmptyPlanChangeIntentError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // Another session holds one of the scope's targets (MOTIR-2787). 409, not 403:
+  // the caller MAY plan this item, it is simply taken — and the body names which
+  // item, who has it, and when the lease runs out, so the client can say something
+  // more useful than "try again".
+  if (err instanceof PlanTargetLockedError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        target: err.targetIdentifier,
+        holder: err.holderName,
+        expiresAt: err.expiresAt.toISOString(),
+      },
+      { status: 409 },
+    );
   }
   // A project that does not resolve IN THIS WORKSPACE — the cross-tenant posture
   // is 404, never 403 (no existence leak, finding #26). Unreachable over HTTP,

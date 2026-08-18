@@ -397,6 +397,10 @@ export interface JobEventDataMap {
    *  code-graph index has since succeeded (MOTIR-2082). Cron triggered, so it
    *  carries no payload beyond the scheduled envelope. */
   'system.migrate-onboarding-sweep': SystemScheduledData;
+  /** The planning-target lease sweep (Story MOTIR-2786 · MOTIR-2787) — releases
+   *  every `plan_target_lock` whose window has run out, so a crashed planner can
+   *  never leave an item permanently unplannable. Cross-tenant by design. */
+  'system.plan-target-lock-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;

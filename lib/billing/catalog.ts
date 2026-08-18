@@ -60,6 +60,14 @@ export interface CreditTopupCatalogEntry {
   /** USD price per unit. */
   unitAmountUsd: number;
   priceLookupKey: string;
+  /**
+   * The bundle sizes the storefront offers, as unit MULTIPLIERS (1× / 5× / 10×).
+   * The ONE place this set is written: the top-up card renders a button per entry
+   * AND `startCheckout`'s quantity guard admits only these (MOTIR-2949). It used
+   * to be a `[1, 5, 10]` literal inside the component, which is how the label
+   * ("Buy 10,000 credits — $100") and the wire (`quantity: 1`) came to disagree.
+   */
+  bundleUnits: readonly number[];
 }
 
 export interface BillingCatalog {
@@ -124,7 +132,12 @@ export const BILLING_CATALOG: BillingCatalog = {
       annual: { amountUsd: 40, priceLookupKey: 'tracker_annual' },
     },
   },
-  creditTopup: { unitCredits: 1000, unitAmountUsd: 10, priceLookupKey: 'credit_topup' },
+  creditTopup: {
+    unitCredits: 1000,
+    unitAmountUsd: 10,
+    priceLookupKey: 'credit_topup',
+    bundleUnits: [1, 5, 10],
+  },
 };
 
 // Every lookup key a Checkout may legitimately start — the allow-list
@@ -142,4 +155,27 @@ export const CHECKOUT_PRICE_LOOKUP_KEYS: ReadonlySet<string> = new Set<string>([
 /** True when `key` is a price the catalog offers (the checkout allow-list). */
 export function isKnownCheckoutPrice(key: string): boolean {
   return CHECKOUT_PRICE_LOOKUP_KEYS.has(key);
+}
+
+/** The unit count a Checkout defaults to when the caller names none. */
+export const DEFAULT_CHECKOUT_QUANTITY = 1;
+
+/**
+ * True when `quantity` is a legitimate unit count for `key` — the quantity half
+ * of the allow-list above (MOTIR-2949).
+ *
+ * Only the credit TOP-UP is a multi-unit line, and only at the bundle sizes the
+ * storefront actually offers. Every recurring plan is exactly one unit: the AI
+ * pool is priced per org, and the scaled tracker's seat count is owned by the
+ * `system.billing-seat-sync` job (`billingService.syncScaledTrackerSeats`), which
+ * resets a subscription's quantity to the membership count. A one-time payment
+ * has NO such reconciler — the Session IS the charge — so a client-supplied
+ * multiplier on a recurring price is refused here rather than merely corrected
+ * later.
+ */
+export function isAllowedCheckoutQuantity(key: string, quantity: number): boolean {
+  if (!Number.isInteger(quantity) || quantity < 1) return false;
+  if (quantity === DEFAULT_CHECKOUT_QUANTITY) return true;
+  const topup = BILLING_CATALOG.creditTopup;
+  return key === topup.priceLookupKey && topup.bundleUnits.includes(quantity);
 }

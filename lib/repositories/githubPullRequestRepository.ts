@@ -53,6 +53,22 @@ export type GithubPullRequestCandidate = GithubPullRequest & {
   workItem: { identifier: string } | null;
 };
 
+/** A PR row with just its repo — what a path-intersection reader needs to name
+ *  the merge it found (`owner/name#number`) without dragging the check rows the
+ *  Development surface's own type carries (MOTIR-2922). */
+export type GithubPullRequestWithRepo = GithubPullRequest & { repo: GithubRepo };
+
+/** The merge facts captured best-effort AFTER the status sync commits
+ *  (MOTIR-2922): when the merge landed, and which repo-relative paths it touched.
+ *  `changedPathsTruncated` says the path list is a PREFIX rather than the whole,
+ *  and travels WITH the paths for exactly that reason — a consumer that reads one
+ *  without the other can read a capped list as a complete one. */
+export interface MergeCaptureInput {
+  mergedAt: Date | null;
+  changedPaths: string[];
+  changedPathsTruncated: boolean;
+}
+
 export const githubPullRequestRepository = {
   /** One PR by its `(repo, number)` identity, or null. */
   async findByRepoAndNumber(
@@ -182,6 +198,78 @@ export const githubPullRequestRepository = {
       where: { id },
       data: { workItemId, linkedManually: true },
       include: { repo: { include: { installation: true } }, checkRuns: true },
+    });
+  },
+
+  /** Stamp a merged PR's capture facts onto its row (MOTIR-2922). `updateMany`
+   *  rather than `update` deliberately: this runs POST-COMMIT and best-effort, so
+   *  the row it targets could have been deleted between the sync's commit and this
+   *  write (a repo removal cascades), and a `P2025` thrown from a fire-and-forget
+   *  side effect would be logged as a failure where the correct reading is "there
+   *  is nothing left to stamp". Returns how many rows it touched so the caller can
+   *  say which of the two happened. Write path → `tx`. */
+  async recordMergeCapture(
+    repoId: string,
+    number: number,
+    data: MergeCaptureInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { repoId, number },
+      data: {
+        mergedAt: data.mergedAt,
+        changedPaths: data.changedPaths,
+        changedPathsTruncated: data.changedPathsTruncated,
+      },
+    });
+    return result.count;
+  },
+
+  /** The workspace's MERGED pull requests whose captured paths intersect `paths`
+   *  and whose merge landed strictly after `since` (MOTIR-2922) — the single read
+   *  a subsumption check consumes, so that consumer adds no data access of its own.
+   *
+   *  `excludeWorkItemId` drops the card doing the asking: a card's own merged PR
+   *  touching its own paths is the ordinary case and is not evidence that someone
+   *  ELSE already shipped its deliverable. Rows linked to NO work item are KEPT —
+   *  an unlinked merge touched the paths just the same, and the link is a fact
+   *  about the tracker rather than about the repository.
+   *
+   *  `workspaceId` is the explicit tenant gate on the REPO row (MOTIR-1931, and
+   *  finding #26 — RLS is inert under the dev/CI superuser), never a join through
+   *  the installation, which names no workspace under Motir's shared provisioning
+   *  install. Read-only path → `db`, with `tx` accepted so a caller already inside
+   *  a bound transaction keeps its context. */
+  async findMergedTouchingPaths(
+    workspaceId: string,
+    paths: string[],
+    since: Date,
+    excludeWorkItemId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<GithubPullRequestWithRepo[]> {
+    if (paths.length === 0) return [];
+    const client = tx ?? db;
+    return client.githubPullRequest.findMany({
+      where: {
+        repo: { is: { workspaceId } },
+        merged: true,
+        // A merged PR is always closed, so this is redundant with `merged` for
+        // every row the webhook writes — and it is what makes "omits an OPEN row"
+        // hold for a row some other path leaves inconsistent, rather than merely
+        // usually hold.
+        state: 'closed',
+        mergedAt: { gt: since },
+        changedPaths: { hasSome: paths },
+        // Spelled as an explicit OR rather than `{ workItemId: { not: id } }`,
+        // because whether a Prisma `not` on a NULLABLE column keeps or drops the
+        // null rows is a version-dependent detail, and the answer here has to be
+        // KEEP. Stating it removes the dependency.
+        ...(excludeWorkItemId
+          ? { OR: [{ workItemId: null }, { workItemId: { not: excludeWorkItemId } }] }
+          : {}),
+      },
+      include: { repo: true },
+      orderBy: { mergedAt: 'desc' },
     });
   },
 

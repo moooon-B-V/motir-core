@@ -5,6 +5,7 @@ import {
   BillingForbiddenError,
   BillingNotAvailableError,
   EntitlementExceededError,
+  InvalidBillingQuantityError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 
@@ -29,6 +30,9 @@ export function mapBillingError(err: unknown): NextResponse | null {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
   }
   if (err instanceof UnknownBillingPriceError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof InvalidBillingQuantityError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
   }
   if (err instanceof EntitlementExceededError) {
