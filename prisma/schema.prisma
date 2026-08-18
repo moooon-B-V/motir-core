@@ -1575,6 +1575,47 @@ model WorkItem {
   // this table's camelCase, no-`@map` columns; unindexed (never a lookup key).
   // See docs/decisions/target-repo-attribution.md.
   targetRepo            String?
+  // The full repository SET (Story MOTIR-2725 · MOTIR-2727, ADR
+  // `docs/decisions/work-item-repository-set.md` §1) — EVERY repository this
+  // item's work ships in, ordered, de-duplicated, **element 0 being the PRIMARY**
+  // that `targetRepo` above mirrors and that dispatch resolves (§2). The pin
+  // above could only ever name ONE repo, so a card that legitimately spans two —
+  // a boundary contract's producer + mirror sides — had nowhere to record the
+  // second, and the completion gate had no EXPECTED side to check a merge
+  // against: `countOtherOpenByWorkItem` counts pull requests that EXIST, and a
+  // repository whose PR was never opened writes no row, so the item completed on
+  // half its work (MOTIR-2664). This column is that expected side.
+  //
+  // An ARRAY column and not a join table (ADR §1.1): measured on `origin/main`
+  // the pin has no FK, no index and is never a query key — only a projected
+  // value — so a join table would buy referential integrity against a domain
+  // that is deliberately NOT referentially bound (a pin must survive its repo
+  // being briefly disconnected), at the cost of a workspace-scoped table, its own
+  // RLS policies and a join on the hottest read in the product. A scalar array
+  // inherits `work_item`'s policies unchanged, which is most of why this shape is
+  // cheap; it is also already this schema's idiom for an ordered scalar set
+  // (`project.publicTags`, `api_token.scopes`, `code_audit.changedPaths`, …).
+  //
+  // `targetRepo` is NOT a second fact: it IS `targetRepos[0] ?? null`, maintained
+  // by the same service write and never independently writable. It survives
+  // because `/api/v1` publishes it and ADR `public-api-conventions.md` §8 forbids
+  // removing, renaming or retyping a published field without a new major — so the
+  // set is ADDITIVE on every exposed shape (§3).
+  //
+  // Validated element-by-element at the WRITE layer against the same
+  // project-scoped domain one pin is validated against (`lib/workItems/
+  // targetRepo.ts` · `lib/workItems/dispatchRepo.ts`); no DB constraint, for the
+  // same reason the scalar has none. `@default([])` so a row written by any path
+  // that predates the change gets the empty set rather than a null every reader
+  // would have to special-case; an empty set and the old null pin are ONE state.
+  // camelCase, no `@map`, matching this table's columns; unindexed (never a
+  // lookup key — the completion gate reads it off a row it already has).
+  //
+  // ⚠️ `targetRepoRole` below is deliberately NOT widened to a set (ADR §1.3) —
+  // two parallel Prisma scalar lists cannot represent an element whose name is
+  // known and whose role is not, the gate's expected side is NAMES, and nothing
+  // can author a multi-element role list until MOTIR-2732. Deferred as MOTIR-2978.
+  targetRepos           String[]                      @default([])
   // The PORTABLE half of the same pin (Story MOTIR-1775 · MOTIR-1912, ADR
   // `docs/decisions/project-repository-set.md` §5.2) — WHICH ROLE of the project's
   // repository set this item's work belongs to, or NULL when the planner pinned

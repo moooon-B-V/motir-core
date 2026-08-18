@@ -30,6 +30,7 @@ export type WorkItemErrorTag =
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
   | 'ARCHIVED_TARGET_REPO'
+  | 'CONFLICTING_TARGET_REPO_INPUT'
   | 'MISSING_ARTIFACT_EVIDENCE';
 
 /**
@@ -298,6 +299,36 @@ export class UnknownTargetRepoError extends WorkItemError {
         : `Unknown target repo "${repoName}". Connected repositories: ${connectedRefs.join(', ')}.`;
     super(connectedRefs.length === 0 ? empty : known);
     this.name = 'UnknownTargetRepoError';
+  }
+}
+
+/**
+ * A write supplied BOTH `targetRepo` and `targetRepos` (Story MOTIR-2725 ·
+ * MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md` §3.4).
+ *
+ * The scalar is the PRIMARY of the set — `targetRepos[0] ?? null` — and is
+ * derived, never independently writable. A caller that sends both is describing
+ * the same fact twice, and the two descriptions can disagree.
+ *
+ * A REFUSAL rather than a precedence rule, and that is the whole decision. "The
+ * array wins" is the obvious alternative and it is silent: the losing value is a
+ * repository the caller believed they had recorded, dropped with no signal on a
+ * field whose entire job is to say where work ships. There is also no case that
+ * needs both — a caller who wants a one-element set sends either field.
+ *
+ * A `WorkItemError`, so the route layer maps it to 422 and an MCP caller sees a
+ * self-correctable tool error naming both fields rather than an opaque 500.
+ */
+export class ConflictingTargetRepoInputError extends WorkItemError {
+  readonly tag = 'CONFLICTING_TARGET_REPO_INPUT' as const;
+  readonly code = 'CONFLICTING_TARGET_REPO_INPUT' as const;
+  constructor() {
+    super(
+      'Send either targetRepo or targetRepos, not both — targetRepo is the FIRST element of ' +
+        'targetRepos, so supplying both describes the same field twice. Use targetRepos for a ' +
+        'card that ships in more than one repository, and either field for one.',
+    );
+    this.name = 'ConflictingTargetRepoInputError';
   }
 }
 

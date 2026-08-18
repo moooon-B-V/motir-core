@@ -2,6 +2,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import {
   listConnectedRepoNames,
   matchAuthoredTargetRepo,
+  matchAuthoredTargetRepos,
   normalizeTargetRepo,
   resolveDispatchRepo,
   type ConnectedRepoName,
@@ -100,6 +101,35 @@ export async function resolveAuthoredTargetRepoInProject(
   if (normalizeTargetRepo(value) === null) return null;
   const { scope, pinnable } = await resolveDomains(projectId, ctx);
   return matchAuthoredTargetRepo(value, pinnable, scope);
+}
+
+/**
+ * Normalize + VALIDATE an authored repository SET for an item in this project,
+ * returning the ORDERED, de-duplicated list to store (Story MOTIR-2725 ·
+ * MOTIR-2727).
+ *
+ * The set counterpart of {@link resolveAuthoredTargetRepoInProject}, and — the
+ * point of it living here rather than at the write site — it resolves against the
+ * SAME domain ladder and the same PIN scope. A set validated against the
+ * workspace's connected repos while a single pin is validated against the
+ * project's own would let a two-element set name a sibling project's repository
+ * that the one-element form rejects.
+ *
+ * An EMPTY set (`[]`, `null`, `undefined`, or a list of only blanks) needs no
+ * domain at all, for the same reason an unpin does not: reading one would make
+ * clearing the set fail on a project whose repository set the actor may not
+ * browse.
+ *
+ * MUST be called OUTSIDE the caller's write transaction (see the module header).
+ */
+export async function resolveAuthoredTargetReposInProject(
+  values: readonly (string | null | undefined)[] | null | undefined,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<string[]> {
+  if (!values || values.every((v) => normalizeTargetRepo(v) === null)) return [];
+  const { scope, pinnable } = await resolveDomains(projectId, ctx);
+  return matchAuthoredTargetRepos(values, pinnable, scope);
 }
 
 /**

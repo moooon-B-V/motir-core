@@ -180,10 +180,45 @@ import type {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   resolveAuthoredTargetRepoInProject,
+  resolveAuthoredTargetReposInProject,
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
+import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+
+/**
+ * Reject a write that supplies BOTH the scalar pin and the repository SET
+ * (Story MOTIR-2725 · MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md`
+ * §3.4).
+ *
+ * `undefined` on either side is "not supplied" and is always fine; a `null`
+ * `targetRepo` beside a `targetRepos` is NOT — clearing the pin is still
+ * describing the field, and a caller who meant to clear the set says
+ * `targetRepos: []`.
+ */
+function assertSingleTargetRepoInput(
+  targetRepo: string | null | undefined,
+  targetRepos: readonly (string | null | undefined)[] | null | undefined,
+): void {
+  if (targetRepo !== undefined && targetRepos !== undefined) {
+    throw new ConflictingTargetRepoInputError();
+  }
+}
+
+/** A validated single pin, as the one-element set it means (`null` → `[]`). The
+ *  bridge that lets every existing caller — which sends only the scalar — write a
+ *  valid set without knowing the set exists. */
+function toRepoSet(pin: string | null): string[] {
+  return pin === null ? [] : [pin];
+}
+
+/** Ordered list equality — a REORDER counts as a change, because element 0 is the
+ *  primary dispatch routes to, so `[a, b]` and `[b, a]` are different decisions. */
+function sameRepoSet(next: readonly string[], current: readonly string[]): boolean {
+  return next.length === current.length && next.every((r, i) => r === current[i]);
+}
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -799,11 +834,20 @@ export const workItemsService = {
     // `github_repo` RLS policies are workspace-keyed), so it must not run nested
     // inside our transaction. Throws `UnknownTargetRepoError` (422);
     // omitted/null/blank → unpinned.
-    const targetRepo = await resolveAuthoredTargetRepoInProject(
-      input.targetRepo,
-      input.projectId,
-      ctx,
-    );
+    //
+    // The SET (Story MOTIR-2725 · MOTIR-2727, ADR §1 / §3.4) rides the same
+    // pre-transaction slot for the same three reasons. `targetRepo` is the set's
+    // PRIMARY — `targetRepos[0] ?? null` — so exactly ONE of the two fields may be
+    // supplied; both is `ConflictingTargetRepoInputError` (422), never a silent
+    // precedence rule that drops a repository the caller believed they recorded.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos);
+    const targetRepos =
+      input.targetRepos !== undefined
+        ? await resolveAuthoredTargetReposInProject(input.targetRepos, input.projectId, ctx)
+        : toRepoSet(
+            await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
+          );
+    const targetRepo = primaryTargetRepo(targetRepos);
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
@@ -994,6 +1038,7 @@ export const workItemsService = {
         // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
         // caller didn't pin one (the dispatch payload resolves the default).
         targetRepo,
+        targetRepos,
         sprintId: targetSprintId,
         position,
         backlogRank,
@@ -1206,6 +1251,7 @@ export const workItemsService = {
       'type',
       'executor',
       'targetRepo',
+      'targetRepos',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1235,16 +1281,25 @@ export const workItemsService = {
     // inside the lock; a concurrent re-parent cannot move an item across
     // projects (`CrossProjectParentError`), so the project this validates
     // against is the project the write lands in.
-    let nextTargetRepo: string | null | undefined;
-    if (patch.targetRepo !== undefined) {
+    //
+    // The SET patches through the SAME slot, and the two fields are mutually
+    // exclusive here exactly as they are on create (ADR §3.4). Whichever arrives,
+    // BOTH columns are written together — the scalar is the set's primary and is
+    // never left describing a different repository than element 0.
+    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos);
+    let nextTargetRepos: string[] | undefined;
+    if (patch.targetRepo !== undefined || patch.targetRepos !== undefined) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
-      nextTargetRepo = await resolveAuthoredTargetRepoInProject(
-        patch.targetRepo,
-        pre.projectId,
-        ctx,
-      );
+      nextTargetRepos =
+        patch.targetRepos !== undefined
+          ? await resolveAuthoredTargetReposInProject(patch.targetRepos, pre.projectId, ctx)
+          : toRepoSet(
+              await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
+            );
     }
+    const nextTargetRepo: string | null | undefined =
+      nextTargetRepos === undefined ? undefined : primaryTargetRepo(nextTargetRepos);
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -1374,6 +1429,15 @@ export const workItemsService = {
       // Target repo (Story 7.9 · MOTIR-1804): the normalized + validated value
       // from above (`undefined` = not supplied). Compare against the stored pin
       // so a re-save of the same repo stays a no-op and writes no revision.
+      //
+      // The SET (MOTIR-2727) is compared as an ORDERED list — a reorder is a real
+      // change, because element 0 is what dispatch routes to. The two columns move
+      // TOGETHER, always: the scalar is the set's primary, so writing one without
+      // the other is what would turn a derived field into a second fact.
+      if (nextTargetRepos !== undefined && !sameRepoSet(nextTargetRepos, current.targetRepos)) {
+        update.targetRepos = nextTargetRepos;
+        diff.targetRepos = { from: current.targetRepos, to: nextTargetRepos };
+      }
       if (nextTargetRepo !== undefined && nextTargetRepo !== current.targetRepo) {
         update.targetRepo = nextTargetRepo;
         diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
