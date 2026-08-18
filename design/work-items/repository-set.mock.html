@@ -1,0 +1,1827 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The repository SET on the work-item DETAIL page (MOTIR-2725 · MOTIR-2413)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE REPOSITORY SET ON THE WORK-ITEM DETAIL PAGE.
+      Story MOTIR-2725, subtask MOTIR-2413 (design). Gates MOTIR-2415 (detail) and,
+      through MOTIR-2414, MOTIR-2416 (quick view).
+
+      WHY IT EXISTS. `design/work-items/design-notes.md`'s surface table has NO
+      repository row: the pin is readable today only from the dispatch payload or
+      the database. MOTIR-2725 turns it into an ordered SET whose elements each
+      have a DELIVERY state the completion gate reads, so the surface has a second
+      job the pin never had.
+
+      COMPOSES, DOES NOT REDRAW — and the composition was RENDERED before it was
+      drawn. The rail card is `FieldCard.tsx` markup-for-markup; the pull-request
+      rows are `components/github/DevelopmentSection.tsx` markup-for-markup, both
+      captured from a headless render of the REAL components against the REAL
+      `app/globals.css`. Every token below is EXTRACTED from
+      `packages/design-system/theme.css` by script, and every icon from the
+      installed `lucide-react` — no hex and no path is hand-typed, so this asset
+      cannot drift from the shipped layer.
+
+      ONE element is genuinely new: the Development row for a repository that has
+      NO pull request yet (panel 1). Everything else is arrangement.
+
+      PANELS: (1) two repositories, one delivered one outstanding — the HELD state;
+      (2) two, fully delivered; (3) one; (4) none — the deliberate empty state;
+      (2b) a merge whose branch was never recorded; (5) a role with no repository, and the
+      `decision` card; (6) editing. Panel 0 draws the DOOR — the field's place in the rail.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .dsPillDanger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-folder-git-2"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 19a5 5 0 0 1-5-5v8" />
+        <circle cx="13" cy="12" r="2" />
+        <circle cx="20" cy="19" r="2" />
+      </symbol>
+      <symbol
+        id="i-git-pull-request-arrow"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="5" cy="6" r="3" />
+        <path d="M5 9v12" />
+        <circle cx="19" cy="18" r="3" />
+        <path d="m15 9-3-3 3-3" />
+        <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+      </symbol>
+      <symbol
+        id="i-git-merge"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="18" cy="18" r="3" />
+        <circle cx="6" cy="6" r="3" />
+        <path d="M6 21V9a9 9 0 0 0 9 9" />
+      </symbol>
+      <symbol
+        id="i-git-pull-request-closed"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="6" cy="6" r="3" />
+        <path d="M6 9v12" />
+        <path d="m21 3-6 6" />
+        <path d="m21 9-6-6" />
+        <path d="M18 11.5V15" />
+        <circle cx="18" cy="18" r="3" />
+      </symbol>
+      <symbol
+        id="i-circle-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-circle-ellipsis"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M17 12h.01" />
+        <path d="M12 12h.01" />
+        <path d="M7 12h.01" />
+      </symbol>
+      <symbol
+        id="i-circle-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m15 9-6 6" />
+        <path d="m9 9 6 6" />
+      </symbol>
+      <symbol
+        id="i-circle-dashed"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10.1 2.182a10 10 0 0 1 3.8 0" />
+        <path d="M13.9 21.818a10 10 0 0 1-3.8 0" />
+        <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7" />
+        <path d="M2.182 13.9a10 10 0 0 1 0-3.8" />
+        <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69" />
+        <path d="M21.818 10.1a10 10 0 0 1 0 3.8" />
+        <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" />
+        <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7" />
+      </symbol>
+      <symbol
+        id="i-circle-question-mark"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-external-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-file-text"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+        <path d="M10 9H8" />
+        <path d="M16 13H8" />
+        <path d="M16 17H8" />
+      </symbol>
+    </svg>
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>The repository SET on the work-item detail page</h1>
+        <p>
+          MOTIR-2725 · MOTIR-2413. A work item records an ORDERED SET of repositories; its first
+          element is the PRIMARY that a dispatch routes to, and the item is not complete until every
+          repository on the list has a pull request merged onto that repository's own default
+          branch. The rail answers
+          <em>where does this ship, and has it?</em>; the shipped Development section answers
+          <em>which pull request?</em> — and gains one row it never had, for a repository that has
+          none. Rail measured at the shipped <span class="font-mono">18rem</span> (<span
+            class="font-mono"
+            >app/(authed)/items/[key]/page.tsx</span
+          >).
+        </p>
+      </div>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">0</span>THE DOOR — where the field sits in the shipped rail.
+        </h2>
+        <p class="panelNote">
+          The field has no button and no menu item: its access path IS its position, so that is the
+          thing to draw. It lands
+          <strong>after Estimate and before the collapsed Provenance disclosure</strong> — last of
+          the always-visible fields. Reasoning: it is read at DISPATCH and REVIEW time, not at
+          triage time, so it must not push Status, Assignee or Priority down the rail; but it is
+          more actionable than provenance (it gates completion), so it stays expanded rather than
+          joining that disclosure. Neighbours dimmed; the shipped order is
+          <span class="font-mono">CoreFieldsPanel.tsx</span>'s.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)" style="opacity: 0.45">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">5</div>
+            </div>
+            <div style="height: 8px"></div>
+
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)" style="opacity: 0.45">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">1h 30m</div>
+            </div>
+            <div style="height: 8px"></div>
+
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Delivered" class="text-(--el-success) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-check" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-core</span
+                    >
+                    <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                  </li>
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-ai</span
+                    >
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  1 of 2 delivered. <span class="font-mono">motir-ai</span> is outstanding.
+                </p>
+              </div>
+            </div>
+            <div style="height: 8px"></div>
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)" style="opacity: 0.45">
+              <div class="flex items-center justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Provenance
+                </div>
+                <span class="text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <p class="font-sans text-xs text-(--el-text-muted)">
+              Rail order on <span class="font-mono">origin/main</span>: Status · (session branch) ·
+              Type · Work type · Executor · Priority · Assignee · Reporter · Parent · Labels ·
+              Components · Due date · Sprint · Story points · Estimate ·
+              <strong>Repositories</strong> · Provenance (collapsed).
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1</span>Two repositories — one delivered, one outstanding. The HELD
+          state.
+        </h2>
+        <p class="panelNote">
+          The state the completion gate exists for. <code>motir-core</code> has merged onto its
+          trunk; <code>motir-ai</code> has no pull request at all, so the card is still
+          <strong>In Review</strong>. The rail says WHERE and WHETHER; the Development section says
+          WHICH pull request — and grows a row for the repository that has none, because that is the
+          state the whole story is about and the shipped section has nothing to render for it today.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Delivered" class="text-(--el-success) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-check" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-core</span
+                    >
+                    <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                  </li>
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-ai</span
+                    >
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  1 of 2 delivered. <span class="font-mono">motir-ai</span> is outstanding.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <section>
+              <div
+                class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+              >
+                Development
+              </div>
+              <ul class="list-none">
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-git-merge" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                      feat(work-items): the repository SET and its completion gate
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-core · #2118
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillDone"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                    <span class="dsPill dsPillSuccess"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-check" /></svg
+                      >Checks passing</span
+                    >
+                  </span>
+                  <span class="shrink-0 p-1 text-(--el-icon-muted)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-external-link" /></svg
+                  ></span>
+                </li>
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-circle-dashed" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div
+                      class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                    >
+                      No pull request yet
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-ai
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillNeutral"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </span>
+                  <span class="w-6 shrink-0"></span>
+                </li>
+              </ul>
+              <p class="mt-3 font-sans text-xs text-(--el-text-muted)">
+                Linked automatically when a branch or PR mentions
+                <span class="font-mono">MOTIR-2725</span> — or linked by hand from here.
+              </p>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>Two repositories — fully delivered.
+        </h2>
+        <p class="panelNote">
+          Both trunks have a merge, so the gate completes the item. The rail's caption collapses to
+          a single line; no repository is singled out except the primary, which still says which
+          checkout a dispatch would use.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Delivered" class="text-(--el-success) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-check" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-core</span
+                    >
+                    <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                  </li>
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Delivered" class="text-(--el-success) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-check" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-ai</span
+                    >
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">Both delivered.</p>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <section>
+              <div
+                class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+              >
+                Development
+              </div>
+              <ul class="list-none">
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-git-merge" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                      feat(work-items): the repository SET and its completion gate
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-core · #2118
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillDone"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                    <span class="dsPill dsPillSuccess"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-check" /></svg
+                      >Checks passing</span
+                    >
+                  </span>
+                  <span class="shrink-0 p-1 text-(--el-icon-muted)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-external-link" /></svg
+                  ></span>
+                </li>
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-git-merge" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                      feat(llm): the planner proposes a repository set
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-ai · #604 · <span class="font-mono">linked manually</span>
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillDone"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                    <span class="dsPill dsPillSuccess"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-check" /></svg
+                      >Checks passing</span
+                    >
+                  </span>
+                  <span class="shrink-0 p-1 text-(--el-icon-muted)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-external-link" /></svg
+                  ></span>
+                </li>
+              </ul>
+              <p class="mt-3 font-sans text-xs text-(--el-text-muted)">
+                Linked automatically when a branch or PR mentions
+                <span class="font-mono">MOTIR-2725</span> — or linked by hand from here.
+              </p>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2b</span>A merge whose branch Motir never recorded — the third
+          state, and it HOLDS.
+        </h2>
+        <p class="panelNote">
+          Rows mirrored before the completion gate began recording base branches carry no branch at
+          all, and a null must read as UNKNOWN in BOTH directions: it does not prove the work
+          reached the trunk (that would complete a card on a stranded merge), and it does not prove
+          it did not. So the repository is neither delivered nor outstanding — it is
+          <em>unknown</em>, it holds the card, and the surface says which question a person has to
+          answer. This state is finite and shrinking: every merge from now on records its branch.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Delivered" class="text-(--el-success) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-check" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-core</span
+                    >
+                    <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                  </li>
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Unknown" class="text-(--el-warning) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-question-mark" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-ai</span
+                    >
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  <span class="font-mono">motir-ai</span> merged, but Motir has no record of which
+                  branch.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <section>
+              <div
+                class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+              >
+                Development
+              </div>
+              <ul class="list-none">
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-git-merge" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                      feat(work-items): the repository SET and its completion gate
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-core · #2118
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillDone"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                    <span class="dsPill dsPillSuccess"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-check" /></svg
+                      >Checks passing</span
+                    >
+                  </span>
+                  <span class="shrink-0 p-1 text-(--el-icon-muted)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-external-link" /></svg
+                  ></span>
+                </li>
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-circle-question-mark" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div
+                      class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                    >
+                      Merged — branch not recorded
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-ai · #604
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillWarning"
+                      ><svg class="h-3 w-3" aria-hidden="true">
+                        <use href="#i-circle-question-mark" /></svg
+                      >Unknown</span
+                    >
+                  </span>
+                  <span class="w-6 shrink-0"></span>
+                </li>
+              </ul>
+              <p class="mt-3 font-sans text-xs text-(--el-text-muted)">
+                Linked automatically when a branch or PR mentions
+                <span class="font-mono">MOTIR-2725</span> — or linked by hand from here.
+              </p>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span>One repository — the overwhelmingly common case, unchanged
+          in feel.
+        </h2>
+        <p class="panelNote">
+          A one-element set is still a set, and it still names its primary — but with nothing to
+          compare against, the <code>primary</code> chip would be noise. It is drawn only when the
+          card carries MORE THAN ONE repository. The count caption disappears too.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                      >motir-core</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <section>
+              <div
+                class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+              >
+                Development
+              </div>
+              <ul class="list-none">
+                <li
+                  class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                >
+                  <span class="shrink-0 text-(--el-icon-muted)"
+                    ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                      <use href="#i-git-pull-request-arrow" /></svg
+                  ></span>
+                  <div class="min-w-0 flex-1 py-1">
+                    <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                      fix(board): the column header keeps its count on drag
+                    </div>
+                    <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                      moooon/motir-core · #2131
+                    </div>
+                  </div>
+                  <span class="flex shrink-0 items-center gap-1.5">
+                    <span class="dsPill dsPillProgress"
+                      ><svg class="h-3 w-3" aria-hidden="true">
+                        <use href="#i-git-pull-request-arrow" /></svg
+                      >Open</span
+                    >
+                    <span class="dsPill dsPillWarning"
+                      ><svg class="h-3 w-3" aria-hidden="true">
+                        <use href="#i-circle-ellipsis" /></svg
+                      >Checks running</span
+                    >
+                  </span>
+                  <span class="shrink-0 p-1 text-(--el-icon-muted)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-external-link" /></svg
+                  ></span>
+                </li>
+              </ul>
+              <p class="mt-3 font-sans text-xs text-(--el-text-muted)">
+                Linked automatically when a branch or PR mentions
+                <span class="font-mono">MOTIR-2131</span> — or linked by hand from here.
+              </p>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">4</span>No repository — a deliberate state, not a hole.
+        </h2>
+        <p class="panelNote">
+          Most cards are here, and the field is optional by design. The value reads
+          <strong>None</strong> — the shipped word every unset rail field uses — and one muted line
+          says the absence was allowed rather than overlooked. No warning tint, no "+ Add
+          repository" call to action, no required marker; the chevron is the same affordance every
+          editable rail field carries.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <span class="text-(--el-text-muted)">None</span>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  Optional — not every card ships in a repository.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <section>
+              <div
+                class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+              >
+                Development
+              </div>
+
+              <div
+                class="mt-2 flex flex-col items-center rounded-(--radius-card) border border-(--el-border) px-6 py-10 text-center"
+              >
+                <span class="text-(--el-icon-muted)"
+                  ><svg class="h-12 w-12" aria-hidden="true">
+                    <use href="#i-git-pull-request-arrow" /></svg
+                ></span>
+                <div class="mt-3 font-serif text-lg text-(--el-text)">No linked pull request</div>
+                <p class="mt-1 max-w-md font-sans text-sm text-(--el-text-muted)">
+                  Open a PR from a branch that mentions
+                  <span class="font-mono">MOTIR-2418</span> and it'll show up here with live PR and
+                  CI status.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>A role with no repository yet — and the
+          <code>decision</code> card.
+        </h2>
+        <p class="panelNote">
+          LEFT: a card planned before its repositories existed carries a <em>role</em>, not a name
+          (<code>work_item.targetRepoRole</code>), and a role has no repository, therefore no
+          default branch and no pull request. It is drawn muted, with the reason, and it takes no
+          delivery state at all — "awaiting" would promise a pull request that cannot exist. RIGHT:
+          a <code>type: decision</code> card renders the field <strong>identically</strong>. See the
+          notes — this is a planning convention, not a display rule.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <ul class="list-none">
+                  <li class="flex items-center gap-2 py-1">
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                        <use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span
+                      class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text-muted)"
+                      >api</span
+                    >
+                    <span class="dsPill dsPillNeutral shrink-0">role</span>
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  No repository recorded yet — this card was planned for the
+                  <span class="font-mono">api</span> role, whose repository has not been created.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="main">
+            <div class="rail">
+              <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+                <div class="flex items-start justify-between gap-2">
+                  <div
+                    class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >
+                    Repositories
+                  </div>
+                  <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                    ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </div>
+                <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                  <ul class="list-none">
+                    <li class="flex items-center gap-2 py-1">
+                      <span title="Delivered" class="text-(--el-success) shrink-0"
+                        ><svg class="h-[15px] w-[15px]" aria-hidden="true">
+                          <use href="#i-circle-check" /></svg
+                      ></span>
+                      <span class="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)"
+                        >motir-core</span
+                      >
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                A <code>decision</code> card whose ADR ships to a repository —
+                <span class="font-mono">MOTIR-2400</span>,
+                <span class="font-mono">MOTIR-2726</span>. The field is true of it, so it is shown.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span>Editing — a bounded multi-select, and one radio for the
+          primary.
+        </h2>
+        <p class="panelNote">
+          The write layer validates every element against the project's repository domain, so this
+          is a bounded picker and never free text. The only ORDER decision a person makes is which
+          repository is primary — that is the only position the data acts on — so there is no drag
+          handle in a 288px rail. Opened by the same chevron every editable rail field carries; the
+          success response is the confirmation and the cell keeps its optimistic value.
+        </p>
+        <div class="panelBody">
+          <div class="rail">
+            <div class="dsCard px-3.5 py-2.5 shadow-(--shadow-card)">
+              <div class="flex items-start justify-between gap-2">
+                <div
+                  class="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories
+                </div>
+                <span class="-mt-0.5 rounded-(--radius-control) p-0.5 text-(--el-text-secondary)"
+                  ><svg class="h-4 w-4 rotate-180" aria-hidden="true">
+                    <use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+              <div class="text-(--el-text) mt-1.5 font-sans text-sm">
+                <div
+                  class="mb-1 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 font-sans text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  <span>On</span><span></span><span>Primary</span>
+                </div>
+                <ul class="list-none">
+                  <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-1">
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-accent) text-(--el-accent-text)"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-check" /></svg
+                    ></span>
+                    <span class="truncate font-mono text-[13px] text-(--el-text)">motir-core</span>
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-full border-[5px] border-(--el-accent) bg-(--el-surface)"
+                    ></span>
+                  </li>
+                  <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-1">
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-accent) text-(--el-accent-text)"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-check" /></svg
+                    ></span>
+                    <span class="truncate font-mono text-[13px] text-(--el-text)">motir-ai</span>
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-(--el-border-strong) bg-(--el-surface)"
+                    ></span>
+                  </li>
+                  <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-1">
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-surface)"
+                    ></span>
+                    <span class="truncate font-mono text-[13px] text-(--el-text-muted)"
+                      >motir-gateway</span
+                    >
+                    <span
+                      class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-(--el-border) bg-(--el-surface) opacity-40"
+                    ></span>
+                  </li>
+                </ul>
+                <p class="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  The primary is the repository a dispatch runs in.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="main"></div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

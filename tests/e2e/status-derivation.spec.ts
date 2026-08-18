@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { getBoard, columnByStatus } from './_helpers/board';
 import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
@@ -117,6 +117,43 @@ async function expectDerivedStatus(id: string, status: string, what: string): Pr
     .toBe(status);
 }
 
+/** The ARRANGE is quiescent — the create-derivation has RUN, not "has probably run".
+ *
+ *  `work-item/created` recomputes the new item's PARENT (rung 4, MOTIR-2888), and
+ *  that job lands ~350 ms after the 201 returns — i.e. inside the window a test then
+ *  uses to drive its first transitions. A recompute that commits in the middle of
+ *  that computes from the pre-transition child set and pulls the parent back to
+ *  `todo`, which breaks the ACT two different ways: the next user hop is refused
+ *  (`todo → done` is not an edge, so the driving `transition()` gets a 422), or an
+ *  already-derived ancestor is dragged back under a passing assertion.
+ *
+ *  That is a race in the SETUP, not in the behaviour under test, so the setup waits
+ *  it out — on the job's own ledger row, never a sleep.
+ *
+ *  MOTIR-2965 has since made a backward recompute stand down for a parent whose status
+ *  is NEWER than the child-set edit, which closes both of those at the source. This
+ *  stays anyway, and deliberately: an ARRANGE should not be correct only for as long as
+ *  a particular derivation rule wins a particular race. It is cheap — one indexed count,
+ *  returning the moment the job lands. `job_run` is truncated with
+ *  the workspace in `beforeEach`, so `n` succeeded `status-derivation/created` runs
+ *  means every create this test has made is derived and settled.
+ *
+ *  ⚠️ The DOWNWARD test deliberately does NOT call this — see the comment there. */
+async function settleCreates(n: number): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        // `adminDb`, not `db` — the ledger read is HARNESS bookkeeping, not the
+        // code under test, and a policy-gated read through the runtime role would
+        // answer `0` without raising (MOTIR-2939 / the `tests/e2e/**` ceiling).
+        adminDb.jobRun.count({
+          where: { functionId: 'status-derivation/created', status: 'succeeded' },
+        }),
+      { timeout: 20_000, message: `awaiting ${n} create-derivation run(s) to settle` },
+    )
+    .toBeGreaterThanOrEqual(n);
+}
+
 /** The negative: give the job the SAME window it would need to fire, then assert
  *  nothing moved. Without the wait a passing assertion would only prove the job
  *  had not run YET. */
@@ -232,6 +269,12 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     const story = await createItem(page, tenant.projectId, 'story', 'Story', epic.id);
     const a = await createItem(page, tenant.projectId, 'subtask', 'Child A', story.id);
     const b = await createItem(page, tenant.projectId, 'subtask', 'Child B', story.id);
+    // Four creates, four rung-4 recomputes — settled before the first transition.
+    // The EPIC is what this protects: its recompute reads `{ story: todo }`, so one
+    // landing after the epic has rolled up to `in_progress` would put it back at
+    // `todo` under the assertion below. MOTIR-2965's staleness arm now declines that
+    // too; the settle keeps the arrange quiescent either way.
+    await settleCreates(4);
 
     // Rung 1 — the first child starts.
     await transition(page, a.id, 'in_progress');
@@ -269,6 +312,7 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
 
     const story = await createItem(page, tenant.projectId, 'story', 'Finished Story');
     const child = await createItem(page, tenant.projectId, 'subtask', 'The only child', story.id);
+    await settleCreates(2);
 
     // ⚠️ Await the DERIVED status between transitions, exactly as the UPWARD
     // test above does — the wait-on-the-authoritative-signal rule, not politeness.
@@ -346,6 +390,16 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
 
     // The parent finishes while its children are untouched — `todo`, a status no
     // legal user path can move to `done` in one hop.
+    //
+    // ⚠️ THE ABSENCE OF A SETTLE HERE IS LOAD-BEARING — do NOT "fix" a flake by
+    // adding one (MOTIR-2957). The three creates above have just queued three
+    // `work-item/created` recomputes, and this transition lands inside their
+    // latency. That interleaving is what made this test red on `main` roughly a
+    // quarter of the time: the create-recompute pulled the story back to rung 4
+    // (`todo`) and the cascade, which used to re-READ the row, then declined —
+    // permanently, because the child set never changes again. The repair was the
+    // trigger (`CascadeTrigger`), not the poll budget below, which was never
+    // close to spent: the happy path measures 512–924 ms against a 30 s ceiling.
     await transition(page, story.id, 'in_progress');
     await transition(page, story.id, 'done');
 
@@ -384,6 +438,14 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
 
     const story = await createItem(page, tenant.projectId, 'story', 'Story');
     const child = await createItem(page, tenant.projectId, 'subtask', 'Child', story.id);
+    // Rollup is ON in this test, so the child's create-recompute really can put the
+    // story back to `todo` — and it used to do so BETWEEN the two hops below, which
+    // made `todo → done` illegal and 422'd the driving transition itself (1 run in
+    // 10). That interleaving is now refused at the source by MOTIR-2965's staleness
+    // arm, and the user-facing 422 it produced was that card's to fix rather than this
+    // spec's to assert. The settle stays because nothing about the cascade toggle —
+    // which IS what this test is about — should depend on that arm holding.
+    await settleCreates(2);
 
     await transition(page, story.id, 'in_progress');
     await transition(page, story.id, 'done');

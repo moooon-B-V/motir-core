@@ -128,13 +128,18 @@ async function planFrom(anchorId: string, targetKeys?: string[]): Promise<Respon
   );
 }
 
-async function planOk(anchorId: string, targetKeys?: string[]): Promise<{ planId: string }> {
+async function planOk(
+  anchorId: string,
+  targetKeys?: string[],
+): Promise<{ planId: string; sessionId: string }> {
   const res = await planFrom(anchorId, targetKeys);
   // Read the body ONCE — a `Response` body is a stream, so quoting it in the
   // failure message and then parsing it consumes it twice.
   const body = await res.text();
   expect(res.status, body).toBe(200);
-  return JSON.parse(body) as { planId: string };
+  // `sessionId` comes back too, and it is the only handle on WHICH thread won —
+  // the discriminator every all-or-nothing assertion below turns on.
+  return JSON.parse(body) as { planId: string; sessionId: string };
 }
 
 async function statusOf(id: string): Promise<string> {
@@ -148,6 +153,17 @@ async function heldItems(): Promise<string[]> {
     select: { workItemId: true },
   });
   return rows.map((r) => r.workItemId);
+}
+
+/** The leases WITH their holder's thread — what `heldItems` cannot tell you.
+ *  A row's `sessionId` is the only thing that separates "the winner holds its own
+ *  scope" from "the loser leaked a lease", and the two produce the same id list. */
+async function heldLeases(): Promise<Array<{ workItemId: string; sessionId: string }>> {
+  return adminDb.planTargetLock.findMany({
+    where: { projectId: fx.projectId },
+    orderBy: { workItemId: 'asc' },
+    select: { workItemId: true, sessionId: true },
+  });
 }
 
 /** What the engine does with an accepted job, so the plan can be decided. */
@@ -182,6 +198,23 @@ async function ageAllLeases(): Promise<void> {
 }
 
 describe('1 · the race, with genuine concurrency', () => {
+  // ⚠️ WHICH SESSION WINS IS TIMING, AND THE HELD SET IS DERIVED FROM IT — NEVER
+  // ASSUMED (MOTIR-2971). The two racers do not reach the lock with equal effort:
+  // `resolveScope` view-gates every anchor, so the `{epic, other}` opener makes one
+  // extra `getWorkItemByIdentifier` round trip before it asks for the epic's row
+  // lock. That handicap is why the `{epic}` opener wins essentially always on an
+  // idle machine — and it is a handicap, not a rule. On a loaded runner the
+  // ordering flips, the multi-anchor session wins, and it then holds BOTH of its
+  // own anchors, which is the all-or-nothing contract working rather than failing.
+  //
+  // Asserting `heldItems() === [epic.id]` encoded the usual winner as the only
+  // legal outcome, and CI duly failed once on run 32084804058 with the second
+  // anchor present. The replacement below is STRICTLY STRONGER, not relaxed: it
+  // reads the winner off the responses, requires the held set to be exactly that
+  // winner's scope, and — the check the old one could not make at all — requires
+  // every lease row to carry the WINNER's `sessionId`. A leaked lease from the
+  // refused session produces the same id list and a different holder, so only this
+  // form can tell the two apart.
   it('gives exactly one of two overlapping sessions the epic, and tells the other who has it', async () => {
     for (let round = 0; round < 5; round += 1) {
       await truncateAuthTables();
@@ -204,7 +237,9 @@ describe('1 · the race, with genuine concurrency', () => {
       const statuses = [a.status, b.status].sort();
       expect(statuses, `round ${round}: one accepted, one refused`).toEqual([200, 409]);
 
-      const refused = a.status === 409 ? a : b;
+      const multiAnchorWon = b.status === 200;
+      const [accepted, refused] = multiAnchorWon ? [b, a] : [a, b];
+      const won = (await accepted.json()) as { sessionId: string };
       const body = (await refused.json()) as {
         code: string;
         error: string;
@@ -213,17 +248,107 @@ describe('1 · the race, with genuine concurrency', () => {
       };
       // A refusal a user cannot act on is not a refusal, it is a dead end: with a
       // multi-anchor scope they would not know WHICH target is taken, and with no
-      // holder they would not know whom to ask or whether to wait.
+      // holder they would not know whom to ask or whether to wait. The epic is the
+      // contended anchor either way — `other` is uncontended, so it can never be
+      // what a refusal names.
       expect(body.code).toBe('PLAN_TARGET_LOCKED');
       expect(body.target).toBe(epic.identifier);
       expect(body.holder).toBe('Owner');
       expect(body.error).toContain(epic.identifier);
 
-      // Exactly one lease, and exactly one thread — the refused open wrote nothing.
-      expect(await heldItems()).toEqual([epic.id]);
+      // Exactly the WINNER's scope is held, by the WINNER's thread, and there is
+      // exactly one thread — the refused open wrote nothing, whichever it was.
+      const expectedHeld = multiAnchorWon ? [epic.id, other.id].sort() : [epic.id];
+      const leases = await heldLeases();
+      expect(
+        leases.map((l) => l.workItemId),
+        `round ${round}: held set is the winner's scope (multi-anchor won: ${multiAnchorWon})`,
+      ).toEqual(expectedHeld);
+      expect(
+        leases.map((l) => l.sessionId),
+        `round ${round}: every lease belongs to the winning thread`,
+      ).toEqual(expectedHeld.map(() => won.sessionId));
       expect(await adminDb.planChangeSession.count()).toBe(1);
       expect(await statusOf(epic.id)).toBe(PLANNING_STATUS_KEY);
     }
+  });
+});
+
+describe('1b · all-or-nothing, forced rather than raced (MOTIR-2971)', () => {
+  // The race above is real concurrency and therefore proves whichever interleaving
+  // fired. These three drive the SAME two openers through the entrance in a fixed
+  // order, so each interleaving is asserted every run — including the one that
+  // matters most and that no amount of racing reliably reaches: an acquire refused
+  // PART-WAY through a multi-anchor scope.
+
+  it('reproduces the CI reading — the multi-anchor session first holds BOTH its anchors', async () => {
+    // `{epic, other}` opens first, so it wins the epic and legitimately takes the
+    // second anchor too. This is byte-for-byte the state CI reported on run
+    // 32084804058 (two lease rows where the assertion allowed one), and it is
+    // CORRECT: both rows belong to the winning thread, and the refused session
+    // holds nothing.
+    const epic = await seedItem('epic', 'Billing');
+    const other = await seedItem('story', 'Invoices');
+
+    const winner = await planOk(epic.id, [other.identifier]);
+    const refused = await planFrom(epic.id);
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { target: string }).target).toBe(epic.identifier);
+
+    const leases = await heldLeases();
+    expect(leases.map((l) => l.workItemId)).toEqual([epic.id, other.id].sort());
+    // The discriminator the id list cannot carry: ONE thread holds both, and it
+    // is the WINNER's. A leaked lease from the refused open names the other one.
+    expect(leases.map((l) => l.sessionId)).toEqual([winner.sessionId, winner.sessionId]);
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+    expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
+  });
+
+  it('a refused multi-anchor open leaves NO lease and NO thread behind', async () => {
+    // The mirror order: `{epic}` opens first, so `{epic, other}` is refused. The
+    // uncontended second anchor must come out of it untouched — asserted on the
+    // table directly rather than inferred from a round loop.
+    const epic = await seedItem('epic', 'Billing');
+    const other = await seedItem('story', 'Invoices');
+
+    const winner = await planOk(epic.id);
+    const refused = await planFrom(epic.id, [other.identifier]);
+    expect(refused.status).toBe(409);
+
+    const leases = await heldLeases();
+    expect(leases).toEqual([{ workItemId: epic.id, sessionId: winner.sessionId }]);
+    expect(await adminDb.planTargetLock.count({ where: { workItemId: other.id } })).toBe(0);
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+    expect(await statusOf(other.id)).toBe('todo');
+  });
+
+  it('an acquire refused on its SECOND anchor gives back the FIRST', async () => {
+    // The actual all-or-nothing case, and the one the race can never produce: the
+    // refusal has to land AFTER a lease has already been taken. Targets are locked
+    // in ascending id order and `epic` was created first, so `{epic, other}` takes
+    // the epic and is only then refused on `other` — and the epic's lease and its
+    // `planning` status must both roll back with the transaction.
+    //
+    // A partial acquire here is the failure MOTIR-2786 called worse than the race
+    // it prevents: the refused user is told about `other` and is silently holding
+    // the epic, which nothing in the refusal names.
+    const epic = await seedItem('epic', 'Billing');
+    const other = await seedItem('story', 'Invoices');
+    expect(epic.id < other.id, 'the epic must sort first for this to be the SECOND anchor').toBe(
+      true,
+    );
+
+    const holder = await planOk(other.id);
+    expect(await statusOf(other.id)).toBe(PLANNING_STATUS_KEY);
+
+    const refused = await planFrom(epic.id, [other.identifier]);
+    expect(refused.status).toBe(409);
+    expect(((await refused.json()) as { target: string }).target).toBe(other.identifier);
+
+    expect(await heldLeases()).toEqual([{ workItemId: other.id, sessionId: holder.sessionId }]);
+    expect(await adminDb.planTargetLock.count({ where: { workItemId: epic.id } })).toBe(0);
+    expect(await statusOf(epic.id)).toBe('todo');
+    expect(await adminDb.planChangeSession.count()).toBe(1);
   });
 });
 

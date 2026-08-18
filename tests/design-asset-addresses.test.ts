@@ -305,11 +305,9 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'The repo folder design/workspaces/, cited as a precedent for a two-state PNG export — a path in this repo, not an address.',
   },
   // ── Forward-looking: the asset is drawn before the surface exists ─────────
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin',
-    why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both the address and its route group.',
-  },
+  // (`design/platform-admin/design-notes.md` cited `/admin` as forward-looking.
+  //  MOTIR-2896 built the route group, so the row expired and is gone — the
+  //  mechanism working exactly as its sibling comment below describes.)
   {
     file: 'design/roadmap/design-notes.md',
     address: '/projects/[key]/direction/[tier]',
@@ -883,11 +881,9 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'components/ui/Progress',
     why: 'Forward-looking, and the asset says so inline — "if reused elsewhere it becomes a `components/ui/Progress` primitive (per-component growth)".',
   },
-  {
-    file: 'design/platform-admin/design-notes.md',
-    path: 'app/(admin)/admin',
-    why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both its route group and its directory. The address half is allowlisted above as `/admin`.',
-  },
+  // (`design/platform-admin/design-notes.md` cited `app/(admin)/admin` as
+  //  forward-looking. MOTIR-2896 created the route group and its directory, so
+  //  this row expired too, together with its address half above.)
   // (`design/cli-guide/`'s two assets cited `packages/cli/src/commandCatalog.ts`
   //  as forward-looking. MOTIR-2324 built it, so both rows expired and are
   //  gone — the same mechanism, one sweep down, as the address table above.)
@@ -925,6 +921,18 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  guarded like any other. An exemption cannot outlive its reason — and the
   //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
   //  what made sure nobody had to remember.)
+  // ── A path this design STOPPER cites AHEAD of the code branch that creates it ──
+  // The same shape the `lib/permissions/limits.ts` rows had (MOTIR-2472): a
+  // `design/*` PR merges FIRST, by design, and names a file its story's own
+  // parent PR ships. Both rows below are FORWARD-LOOKING and carry a delete-me:
+  // when MOTIR-2725's `motir-core` parent PR merges, the ADR exists and the
+  // `carries no KNOWN_PATHS entry that has stopped applying` test above turns
+  // red until they are removed — which is the mechanism working, not a chore.
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'docs/decisions/work-item-repository-set.md',
+    why: 'MOTIR-2413 is the DESIGN STOPPER of MOTIR-2725 and merges ahead of the story. The ADR it corrects itself against (§1.3, why `targetRepoRole` stays singular) is committed on `parent/MOTIR-2725-repo-set` and lands with MOTIR-2726. DELETE this row when that parent PR merges.',
+  },
   // MOTIR-2653 CREATED `app/(authed)/home/page.tsx`, so its forward-looking row
   // is gone — deleted by the card that built the file, in the same commit.
 ];
