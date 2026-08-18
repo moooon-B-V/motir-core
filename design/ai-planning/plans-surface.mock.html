@@ -381,6 +381,110 @@
         background: var(--warning-surface);
         color: #8a3d00;
       }
+      /* --- MOTIR-2985: the authorship attribution (amends A + B) ---------
+         An entry in the row's EXISTING meta line, not new chrome: same
+         `--el-text-secondary` ink, same 11.5px, same 12px gap. The GLYPH is what
+         makes it a different KIND of fact from the count and the timestamp
+         beside it (a bare "by X" reads as one more timestamp at a glance), and
+         it is decorative — the words carry the meaning, so meaning is never
+         colour- or icon-only. */
+      .attrib {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+      .attrib svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--faint);
+      }
+      .attrib b {
+        color: var(--secondary);
+        font-weight: 600;
+      }
+      /* ONLY the harness truncates — the title above keeps its own ellipsis and
+         is never shortened by this line. */
+      .attrib .harness {
+        max-width: 12rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .attrib .model {
+        color: var(--muted);
+      }
+      /* WHO ASKED — the person. The shipped initial-letter `Avatar`
+         (app/(authed)/items/_components/issueCellPrimitives.tsx), at the 18px
+         meta-line size rather than its 22px row size. */
+      .who-av {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--text);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 600;
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+      }
+      .attrib .person {
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The hairline that separates WHO ASKED from WHO WROTE inside one entry —
+         they are one sentence about provenance, not two facts to scan apart. */
+      .attrib .sep {
+        color: var(--faint);
+      }
+      /* WHY the plan started — `Plan.origin = cadence`. A separate entry, never
+         merged into the WHO one. */
+      .attrib.origin {
+        color: var(--muted);
+      }
+
+      /* The plan-detail header, as PlanReviewRail renders it. */
+      .hdrcard {
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        padding: 14px 16px;
+        box-shadow: var(--sh-subtle);
+      }
+      .hdrtop {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .hdrcard h4 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .hdrcard .sum {
+        margin: 6px 0 0;
+        font-size: 12.5px;
+        color: var(--secondary);
+      }
+      .hdrmeta {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .hdrmeta b {
+        color: var(--secondary);
+        font-weight: 600;
+      }
+
       .pill.count {
         background: var(--hub);
         color: var(--secondary);
@@ -924,6 +1028,29 @@
         color: var(--muted);
       }
 
+      /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
+         treatment and would read as one. */
+      .note-box {
+        margin: 14px 18px 4px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        border-radius: var(--r-card);
+        padding: 11px 13px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .note-box b {
+        color: var(--strong);
+      }
+      .note-box code {
+        font: 600 11.5px var(--mono);
+        background: var(--hub);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+
       .callout {
         border: 1px solid #f3c9a0;
         background: var(--warning-surface);
@@ -1422,6 +1549,523 @@
                     >
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL A2 — WHO ASKED, WHO WROTE (MOTIR-2985, amends A + B)     -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">A2</span>
+          <h2>Who asked for this plan, and who wrote it</h2>
+          <span class="note"
+            >AMENDS panels A and B — one meta entry carrying TWO parties; the row, its pills, the
+            staleness flag and the approve / decline bar are UNCHANGED</span
+          >
+        </div>
+
+        <div class="note-box" style="margin: 0 0 16px">
+          <b>A plan has THREE parties, and they are commonly three different people.</b> A teammate
+          <b>asks</b> for it, an agent or Motir <b>writes</b> it, a lead <b>approves</b> it. Only
+          the third was ever recorded (<code>decidedById</code>, drawn in panel A as “approved
+          yesterday by Mara”). The first is the one a reviewer wants first —
+          <i>somebody's credential produced this; whose?</i> — and an agent-authored plan makes that
+          question sharper, not softer: <b>the MCP token belongs to a person</b>, and a Motir
+          generation was <b>clicked</b> by one. So the attribution names the PERSON first and the
+          agent second.
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>Plans</h3>
+                <span class="sub"
+                  >· the list row's meta line, in every state the data can be in</span
+                >
+              </div>
+              <div class="list">
+                <!-- generating -->
+                <div class="row">
+                  <span class="ic" style="background: var(--sky)"><span class="spin"></span></span>
+                  <div class="idea">
+                    <div class="t">Add recurring invoices &amp; payment reminders</div>
+                    <div class="m">
+                      <span>generating…</span><span><b>building</b> the tree</span
+                      ><span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill generating"><span class="spin"></span> Generating</span>
+                  </div>
+                </div>
+                <!-- planned, awaiting review, stale -->
+                <div
+                  class="row"
+                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                >
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M9 11l3 3 8-8" />
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Stripe Connect payouts for marketplace sellers</div>
+                    <div class="m">
+                      <span><b>14</b> items</span><span>+9 add · 4 modify · 1 remove</span
+                      ><span>planned <b>2h ago</b></span
+                      ><span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b>
+                        <span class="sep">·</span
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via <b class="harness">Claude Code</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill stale"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                        /></svg
+                      >3 may be out of date</span
+                    >
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+                <!-- approved -->
+                <div class="row">
+                  <span class="ic" style="background: var(--mint)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#0f5e29"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m20 6-11 11-5-5" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Email digest &amp; weekly summaries</div>
+                    <div class="m">
+                      <span><b>8</b> items</span><span>all added to backlog</span
+                      ><span>approved <b>yesterday</b> by Mara</span
+                      ><span class="attrib"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
+                          />
+                          <path
+                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                          /></svg
+                        >via <b>Motir AI</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill approved"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m20 6-11 11-5-5" /></svg
+                      >Approved</span
+                    >
+                  </div>
+                </div>
+                <!-- declined -->
+                <div class="row" style="opacity: 0.78">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Crypto wallet checkout</div>
+                    <div class="m">
+                      <span><b>11</b> items</span><span>dropped — nothing changed</span
+                      ><span>declined <b>3 days ago</b> by Mara</span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
+
+                <!-- 5 — NOBODY asked: the cadence watcher fired it. A state panel A
+                     has no row for, so it is added rather than substituted. -->
+                <div class="row">
+                  <span class="ic" style="background: var(--sky)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#0a4fa0"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Fill the ready set — expansion of “Marketplace payouts”</div>
+                    <div class="m">
+                      <span><b>6</b> items</span><span>+6 add</span
+                      ><span>planned <b>20m ago</b></span>
+                      <span class="attrib"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-3-6.7" />
+                          <path d="M21 3v6h-6" /></svg
+                        >auto-planned <span class="sep">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
+                          />
+                          <path
+                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                          /></svg
+                        >via <b>Motir AI</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+
+                <!-- 6 — a REQUESTER with no agent: what a plan authored some other
+                     way looks like. The person half stands alone. -->
+                <div class="row">
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Refund flow for partially-captured payments</div>
+                    <div class="m">
+                      <span><b>9</b> items</span><span>+7 add · 2 modify</span
+                      ><span>planned <b>1h ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">P</span><b class="person">Priya</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+
+                <!-- 7 — LONG values in a NARROW row: what truncates, and in what order -->
+                <div class="row" style="width: 430px">
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">
+                      Migrate the invoicing pipeline off the legacy scheduler and onto the queue
+                    </div>
+                    <div class="m">
+                      <span><b>23</b> items</span><span>planned <b>5m ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">A</span
+                        ><b class="person" title="Alexandra Buchholz-Nakamura"
+                          >Alexandra Buchholz-Nakamura</b
+                        >
+                        <span class="sep">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via
+                        <b class="harness" title="acme-internal-planning-harness v4 (nightly build)"
+                          >acme-internal-planning-harness v4 (nightly build)</b
+                        ></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned">Planned</span>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>The rows are panel A's rows.</b> This panel amends A rather than replacing it, so
+                rows 1–4 are the SAME four plans, in the same order, with the same counts, op
+                summaries and timestamps — read the two side by side and the only difference is the
+                new entry. Rows 5–7 are ADDED, for three states panel A has no row for. <br /><br />
+                <b>A DECIDED row shows the decider, not the requester.</b> Rows 3 and 4 already end
+                <code>approved yesterday by Mara</code> / <code>declined 3 days ago by Mara</code>
+                — the THIRD party, drawn in panel A since 843. While a plan is undecided, “who
+                asked” is what you weigh; once it is decided, “who decided” is the operative fact
+                and the requester is history, so the row drops it and the detail header keeps it.
+                That rule is also what stops two bare names landing in one line, where a reader
+                cannot tell which one holds which role.
+                <br /><br />
+                <b>What truncates, in order.</b> The plan TITLE keeps its own single-line ellipsis
+                and is never shortened by the attribution — the meta line sits below it and wraps.
+                Inside the attribution, the PERSON truncates at <code>10rem</code> and the HARNESS
+                at <code>12rem</code>, each with its full value on <code>title</code>; the avatar,
+                the “via”, the item count and the timestamp always stay legible. The meta line is
+                <code>flex-wrap</code>, so a narrow row moves the whole attribution to its own line
+                rather than pushing anything out.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- the DETAIL header — the same two parties where the reader lands -->
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>Plan detail — the review rail's header</h3>
+                <span class="sub">· the same fact, on the surface where Approve is pressed</span>
+              </div>
+              <div class="list" style="display: grid; gap: 14px">
+                <div class="hdrcard">
+                  <div class="hdrtop">
+                    <h4>Stripe Connect payouts</h4>
+                    <span class="pill planned">Planned</span>
+                  </div>
+                  <p class="sum">Marketplace sellers get paid out through Stripe Connect.</p>
+                  <div class="hdrmeta">
+                    <span><b>14</b> items</span>
+                    <span class="attrib"
+                      ><span class="who-av">M</span>Requested by <b class="person">Mara</b>
+                      <span class="sep">·</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="11" width="18" height="10" rx="2" />
+                        <circle cx="12" cy="5" r="2" />
+                        <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                      >written by <b class="harness">Claude Code</b>
+                      <span class="sep">·</span>
+                      <span class="model">claude-opus-5</span></span
+                    >
+                  </div>
+                </div>
+
+                <div class="hdrcard">
+                  <div class="hdrtop">
+                    <h4>Email digest &amp; weekly summaries</h4>
+                    <span class="pill approved">Approved</span>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>8</b> items</span>
+                    <span class="attrib"
+                      ><span class="who-av">J</span>Requested by <b class="person">Jonas</b>
+                      <span class="sep">·</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+                        <path
+                          d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                        /></svg
+                      >written by <b>Motir AI</b></span
+                    >
+                  </div>
+                </div>
+
+                <div class="hdrcard">
+                  <div class="hdrtop">
+                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
+                    <span class="pill planned">Planned</span>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>6</b> items</span>
+                    <span class="attrib"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M21 12a9 9 0 1 1-3-6.7" />
+                        <path d="M21 3v6h-6" /></svg
+                      >Auto-planned — nobody requested this <span class="sep">·</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+                        <path
+                          d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                        /></svg
+                      >written by <b>Motir AI</b></span
+                    >
+                  </div>
+                </div>
+
+                <div class="hdrcard">
+                  <div class="hdrtop">
+                    <h4>Crypto wallet checkout</h4>
+                    <span class="pill declined">Declined</span>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>11</b> items</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="note-box">
+                <b>The header SPELLS the roles; the row does not.</b> The row is scanned, and an
+                avatar in front of a name already reads as “this person's” — so it says
+                <code>Mara · via Claude Code</code>. The header is read once, by the person about to
+                press Approve, and there the words <b>Requested by</b> / <b>written by</b> are what
+                stop the two names being taken for one party. The header also carries the
+                <b>model</b>, which the row omits: it is the difference between two agent plans, and
+                nobody scans a list on it.
               </div>
             </div>
           </div>
