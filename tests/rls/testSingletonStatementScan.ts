@@ -221,12 +221,19 @@ export const DISPOSITIONED_FILES: Record<string, readonly [Disposition, string]>
   // table measured `relrowsecurity=t, 1 policy`, so under `motir_app` the count
   // is 0 whatever the rows say — and three of the four assert `toBe(0)`, which
   // passes for the wrong reason. Its twin `cliDeviceService.test.ts` had exactly
-  // these moved to `adminDb` by hand; this file was not on that card's list. The
-  // conversion is NOT done here (this card changes no test's behaviour) — it is
-  // recorded so the next card inherits the ruling rather than re-deriving it.
+  // these moved to `adminDb` by hand; this file was not on that card's list.
+  //
+  // ✅ DISCHARGED by MOTIR-2952 — all four are on `adminDb` and the file's
+  // `apiToken` statement count is now 0, ratcheted in the guard. The RULING
+  // stays, and deliberately: it is what the remaining twelve `device_code`
+  // statements are ordered against (`no-policy` is checked BEFORE a file ruling,
+  // and this file is the only real-data fixture that pins that), and a NEW gated
+  // statement added here inherits `assertion` — which still counts toward the
+  // ceiling, so it raises the number it must not raise rather than hiding.
   'tests/cli/cli-device-routes.test.ts': [
     'assertion',
-    'MOTIR-2911/2918: direct-DB `apiToken` assertion reads; they belong on `adminDb`.',
+    'MOTIR-2911/2918: direct-DB `apiToken` assertion reads; they belong on `adminDb` — ' +
+      'converted by MOTIR-2952, ruling retained for anything added next.',
   ],
 
   // MOTIR-2896: the subject IS the unbound read returning nothing. One

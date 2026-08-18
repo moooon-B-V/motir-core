@@ -348,6 +348,7 @@ describe('the ratchets over the real test suite', () => {
     // otherwise. So the set is pinned, and a new entry fails here until somebody
     // adds it on purpose — an entry silently converts real work into "leave it".
     expect(Object.keys(ADJUDICATED_UNBOUND_FILES).sort()).toEqual([
+      'tests/app-role-bound-context-reads.test.ts',
       'tests/comments/repositories.test.ts',
       'tests/custom-fields/repositories.test.ts',
       'tests/integration/sprints/repository.test.ts',

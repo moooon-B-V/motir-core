@@ -4,16 +4,11 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import {
-  NotProjectAdminError,
-  ProjectNotFoundError,
-  ProjectWorkspaceMismatchError,
-} from '@/lib/projects/errors';
+import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
-import { isAppRoleTestMode } from './helpers/parallelDb';
 
 // Comprehensive service-layer tests for projectsService + the per-project
 // work-item counter on projectRepository (Subtask 1.3.5).
@@ -551,25 +546,25 @@ describe('setActiveProject — per-member, persisted, cross-workspace guarded', 
       name: 'BProject',
     });
 
-    // ROLE-DEPENDENT TAXONOMY (MOTIR-2776), asserted by mode rather than widened to
-    // accept either. Under BYPASSRLS the foreign project row is readable, so the
-    // service's explicit `workspaceId` comparison refuses it and raises
-    // `ProjectWorkspaceMismatchError`. Under `motir_app` the policy hides the row first,
-    // `!project` fires, and the refusal is `ProjectNotFoundError` — the comparison is
-    // unreachable BY DESIGN, and that is the better answer: a mismatch error confirms the
-    // id exists somewhere else, which tenant isolation should not disclose.
+    // THE TAXONOMY UNDER `motir_app` (MOTIR-2776), asserted flat rather than widened
+    // to accept either error. The policy hides the foreign project row first, so
+    // `!project` fires and the refusal is `ProjectNotFoundError` — the service's
+    // explicit `workspaceId` comparison (which would raise
+    // `ProjectWorkspaceMismatchError`) is unreachable BY DESIGN, and that is the
+    // better answer: a mismatch error confirms the id exists somewhere else, which
+    // tenant isolation should not disclose.
     //
-    // Accepting either error unconditionally would make this test agree with the code
-    // forever and stop it saying anything, which is why the mode is named explicitly.
+    // This was a `isAppRoleTestMode() ? … : …` branch until MOTIR-2734 retired the
+    // flag; only the app-role arm is reachable now. Accepting either error
+    // unconditionally would make the test agree with the code forever and stop it
+    // saying anything, which is why exactly one is named.
     await expect(
       projectsService.setActiveProject({
         userId: a.owner.id,
         workspaceId: a.workspace.id,
         projectId: projectInB.id,
       }),
-    ).rejects.toBeInstanceOf(
-      isAppRoleTestMode() ? ProjectNotFoundError : ProjectWorkspaceMismatchError,
-    );
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
   it('rejects setting a missing project id', async () => {
@@ -633,8 +628,8 @@ describe('renameProject', () => {
         name: 'Pwned',
       }),
     ).rejects.toBeInstanceOf(
-      // Same role-dependent taxonomy as `setActiveProject` above (MOTIR-2776).
-      isAppRoleTestMode() ? ProjectNotFoundError : ProjectWorkspaceMismatchError,
+      // Same taxonomy as `setActiveProject` above (MOTIR-2776).
+      ProjectNotFoundError,
     );
   });
 });

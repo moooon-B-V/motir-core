@@ -234,6 +234,35 @@ Three of those rows are decisions, not defaults:
     never change which error a boundary owes. This is what the service's
     surviving `workspaceId` comparison is for — it is not dead code, it is the
     bypassing-role arm of one invariant.
+  - **And when two not-founds compete, the ADDRESSED RESOURCE wins — the answer
+    is fixed by RESOLVE ORDER, not by which check the role happened to reach
+    first** (decided 2026-08-17, MOTIR-2952). `boardsService.moveCard(boardId,
+workItemId, …)` locked the card before it resolved the board, so a move made
+    from another tenant answered `BoardNotFoundError` under the owner (RLS inert
+    → the lock succeeded → the board gate fired) and `WorkItemNotFoundError`
+    under `motir_app` (the foreign card is hidden → the lock 404s a line
+    earlier). Neither error is an existence oracle — both are plain not-founds —
+    so the clause above does not pick between them, which is precisely why the
+    split could sit unnoticed behind two green suites. **The verdict is
+    `BoardNotFoundError`**, and the reason generalises: the board is the resource
+    the operation addresses, and `boardRepository.findById(boardId,
+ctx.workspaceId, tx)` is its tenant gate — a workspace-filtered read that
+    answers the same in every mode. `workItemRepository.lockById` is a
+    concurrency primitive that takes no workspace at all, so leaving it in front
+    put the boundary's error identity under the control of a statement whose
+    answer is decided by the connection. The fix is the resolve ORDER (board,
+    then lock), not the expectation.
+    **Rejected: `WorkItemNotFoundError`** — today's behaviour under the role, and
+    adoptable by editing one test line. It was rejected on the same ground:
+    "the caller named a card it cannot see" is true, but it is true _because of
+    RLS_, and under a bypassing role the identical request would still answer
+    `BoardNotFoundError` unless a second explicit check were added. One order
+    change buys mode-independence; the alternative buys a second check and a
+    boundary whose error is chosen by the lock.
+    **The generalisation for a new operation:** when an operation addresses more
+    than one resource, resolve them in the order the PATH names them, gate each
+    on the workspace as you go, and never let a lock, a join, or a policy decide
+    which not-found the caller sees.
 - **A 500 leaks nothing.** No `code` (there is no stable contract for an
   unexpected fault), no stack, no Prisma or driver message. An unrecognised error
   reaching the wrapper becomes a bare 500 — asserted by throwing a raw error

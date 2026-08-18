@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentsService } from '@/lib/services/commentsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -117,11 +118,32 @@ describe('commentRepository.countByWorkItemIds — the batched leaf', () => {
     await say(fx, discussed.id, 'a reply', root.id);
     await say(fx, quiet.id, 'one word');
 
+    // TWO reads of the SAME method, because the two claims need opposite
+    // connections and MOTIR-2952 stopped them sharing one:
+    //
+    //  * the QUERY-COUNT claim (one `groupBy` for any number of ids) has to stay
+    //    UNBOUND — that is this file's `ADJUDICATED_UNBOUND_FILES` entry, and the
+    //    reason is mechanical: a bound `tx` relocates the query onto the
+    //    transaction client, which `countDelegateCalls`'s spy on `db.comment`
+    //    cannot see, so every count would silently read 0. Unbound under
+    //    `motir_app` the answer is `[]`, and that is CORRECT
+    //    (`tests/rls/tx-fallback-arm.test.ts`: "an UNBOUND read comes back EMPTY").
+    //  * the BUCKETING claim needs the rows, so it is read through the binding
+    //    the method's real caller supplies.
+    //
+    // Asserting the buckets off the spied call was the pairing that broke, and
+    // collapsing it to `expect([])` alone would have deleted the bucketing claim
+    // outright rather than moving it.
     const { result, queries } = await countCommentQueries(() =>
       commentRepository.countByWorkItemIds([discussed.id, quiet.id], fx.workspaceId),
     );
     expect(queries).toBe(1);
-    expect([...result].sort((a, b) => a.count - b.count)).toEqual([
+    expect(result).toEqual([]);
+
+    const bucketed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      commentRepository.countByWorkItemIds([discussed.id, quiet.id], fx.workspaceId, tx),
+    );
+    expect([...bucketed].sort((a, b) => a.count - b.count)).toEqual([
       { workItemId: quiet.id, count: 1 },
       { workItemId: discussed.id, count: 2 },
     ]);
@@ -131,7 +153,14 @@ describe('commentRepository.countByWorkItemIds — the batched leaf', () => {
     const fx = await makeWorkItemFixture();
     const silent = await mk(fx, 'Silent');
 
-    expect(await commentRepository.countByWorkItemIds([silent.id], fx.workspaceId)).toEqual([]);
+    // BOUND (MOTIR-2952): no spy here, so nothing forces the unbound arm — and
+    // unbound this `[]` would be the policy's answer rather than the method's,
+    // i.e. the assertion would pass with the sparseness claim untested.
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        commentRepository.countByWorkItemIds([silent.id], fx.workspaceId, tx),
+      ),
+    ).toEqual([]);
   });
 
   it('is workspace-scoped — another tenant’s comments are never counted', async () => {
@@ -140,11 +169,20 @@ describe('commentRepository.countByWorkItemIds — the batched leaf', () => {
     const theirs = await mk(b, 'Their card');
     await say(b, theirs.id, 'their discussion');
 
-    // The far tenant's own read sees it; a caller scoped to workspace A does not.
-    expect(await commentRepository.countByWorkItemIds([theirs.id], b.workspaceId)).toEqual([
-      { workItemId: theirs.id, count: 1 },
-    ]);
-    expect(await commentRepository.countByWorkItemIds([theirs.id], a.workspaceId)).toEqual([]);
+    // BOTH reads bound to the FAR tenant (MOTIR-2952) — deliberately, and it
+    // makes the case STRONGER than it was. The claim is about the method's own
+    // `workspaceId` WHERE clause, so the binding is held constant at the one
+    // that ADMITS the row: the empty answer below can then only come from the
+    // filter. Bound to A instead, RLS would hide the row and `[]` would prove
+    // nothing about the method at all.
+    await withWorkspaceServiceContext(b.workspaceId, async (tx) => {
+      expect(await commentRepository.countByWorkItemIds([theirs.id], b.workspaceId, tx)).toEqual([
+        { workItemId: theirs.id, count: 1 },
+      ]);
+      expect(await commentRepository.countByWorkItemIds([theirs.id], a.workspaceId, tx)).toEqual(
+        [],
+      );
+    });
   });
 });
 

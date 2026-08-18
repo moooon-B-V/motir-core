@@ -28,7 +28,6 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from './helpers/adminDb';
-import { isAppRoleTestMode } from './helpers/parallelDb';
 import { truncateAuthTables } from './helpers/db';
 
 // A tenant read reached from inside a BOUND context must run ON that context
@@ -42,15 +41,13 @@ import { truncateAuthTables } from './helpers/db';
 // answer, so the caller reports "missing" for something that is merely unbound.
 //
 // That is the third occurrence of this class (MOTIR-2569, MOTIR-2685), and the
-// first two were each found the same way — by running the suite under
-// TEST_DB_APP_ROLE=1. These tests are the regression net.
+// first two were each found the same way — by running the suite as the app role.
+// These tests are the regression net.
 //
-// ⚠️ DELIBERATELY NOT `describe.runIf(isAppRoleTestMode())`. CI does not set the
-// flag, so a gated test would never run there. Written unconditionally, each case
-// passes trivially under the bypass role (the read succeeds either way) and passes
-// under the app role ONLY once the `tx` is threaded — so the same test is a live
-// CI path in the default mode and the discriminator in flag mode. Every one of
-// them fails under the flag on the commit before this card.
+// ⚠️ These were written UNGATED while `TEST_DB_APP_ROLE` still existed, precisely
+// so CI (which never set the flag) would run them. Since MOTIR-2734 the flag is
+// gone and every run is the app role, so each case is now a discriminator on
+// every run rather than only under an opt-in.
 
 /** A trivially-valid stored filter — the criteria are not what these cases test. */
 const KIND_TASK_FILTER_PARAM = encodeFilterParam({
@@ -717,14 +714,15 @@ describe('workItemRepository.findByIds — one read, five consuming surfaces', (
     );
     expect(bound.map((r) => r.title)).toEqual(['Must land first']);
 
-    const unbound = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      workItemRepository.findByIds([blocker.id], tx),
+    // ⚠️ No `tx` — that is what makes this arm the unbound one. It read
+    // `findByIds([blocker.id], tx)` until MOTIR-2734, i.e. it was a second copy
+    // of the BOUND call, and the two arms of the mode branch hid it: the arm
+    // that ran in CI asserted rows, which a bound read of course returns. The
+    // `[]` arm — the one that would have caught it — only ran under the flag.
+    const unbound = await withWorkspaceServiceContext(fx.workspaceId, () =>
+      workItemRepository.findByIds([blocker.id]),
     );
-    if (isAppRoleTestMode()) {
-      expect(unbound).toEqual([]);
-    } else {
-      expect(unbound.map((r) => r.title)).toEqual(['Must land first']);
-    }
+    expect(unbound).toEqual([]);
   });
 
   // ⚠️ NOT ASSERTED HERE, and the reason is ownership rather than difficulty.

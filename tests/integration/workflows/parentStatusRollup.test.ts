@@ -12,7 +12,6 @@ import {
   type WorkItemFixture,
 } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // `parentStatusRollupService.rollUpForChild` — the UPWARD half of bidirectional
 // status derivation (Story MOTIR-1615 · Subtask MOTIR-1620, AMENDED by Story
@@ -735,12 +734,11 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
   // it, so nothing raised and nothing was logged: a parent whose children all
   // finished simply never moved.
   //
-  // ⚠️ DELIBERATELY NOT `describe.runIf(isAppRoleTestMode())`, the same choice
-  // `tests/app-role-bound-context-reads.test.ts` documents: CI does not set the
-  // flag, so a gated case would never run there. Under the bypass role these pass
-  // trivially (RLS is inert); under `TEST_DB_APP_ROLE=1` the first one is red on
-  // `main` and green here, and the second is the one that PINS the binding —
-  // a system context would have returned the parent whatever workspace was named.
+  // Since MOTIR-2734 retired `TEST_DB_APP_ROLE`, `@/lib/db` is always `motir_app`,
+  // so both cases bite on every run. Under the old bypass-role default they passed
+  // trivially (RLS is inert); the first was red on `main` before MOTIR-2880, and the
+  // second is the one that PINS the binding — a system context would have returned
+  // the parent whatever workspace was named.
 
   // The preceding block's last case leaves a `vi.spyOn` throwing `disk on fire`
   // in place; these cases exercise the REAL write path.
@@ -755,7 +753,7 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
 
-    // On `main` under TEST_DB_APP_ROLE=1 this is `{ outcome: 'no_parent' }`.
+    // On `main` before MOTIR-2880 this was `{ outcome: 'no_parent' }`.
     expect(res).toMatchObject({ outcome: 'rolled_up', parentId: story.id, toStatus: 'done' });
     expect(await statusOf(story.id)).toBe('done');
   });
@@ -768,13 +766,10 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
 
     const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, other.workspaceId);
 
-    // Under the bypass role RLS is inert, so this case only BITES under
-    // `TEST_DB_APP_ROLE=1` — where it is the difference between a bound read and a
-    // system context that would have crossed the tenant boundary silently.
-    if (isAppRoleTestMode()) {
-      expect(res).toEqual({ outcome: 'no_parent' });
-      expect(await statusOf(story.id)).not.toBe('done');
-    }
+    // This is the difference between a bound read and a system context that would
+    // have crossed the tenant boundary silently.
+    expect(res).toEqual({ outcome: 'no_parent' });
+    expect(await statusOf(story.id)).not.toBe('done');
   });
 });
 

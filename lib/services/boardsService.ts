@@ -481,6 +481,17 @@ export const boardsService = {
    *    done column with no artifact evidence recorded on it (MOTIR-2709). Both
    *    leave status + rank unchanged — the snapback contract the 3.2 UI branches
    *    on — and the error's `reason` says which.
+   *
+   * ⚠️ THE BOARD IS RESOLVED BEFORE THE CARD IS LOCKED, AND THE ORDER IS THE
+   * DECISION (2026-08-17, MOTIR-2952). A move whose CALLER can see neither the
+   * board nor the card owes `BoardNotFoundError`, in every connection mode. The
+   * rejected alternative was `WorkItemNotFoundError` — what the lock-first order
+   * happened to produce under `motir_app`, and cheap to adopt by editing the
+   * expectation. It was rejected because the board is the resource this
+   * operation addresses and the board resolve is its only workspace-filtered
+   * gate, so making the card's answer win would put the boundary's error under
+   * the control of a lock that takes no tenant argument. See the body comment
+   * at the resolve, and docs/decisions/public-api-conventions.md §4.
    */
   async moveCard(
     boardId: string,
@@ -490,15 +501,35 @@ export const boardsService = {
   ): Promise<MoveCardResultDto> {
     const { row, appliedStatus, transition, columnName, swimlaneGroupBy } =
       await withWorkspaceContext(ctx, async (tx) => {
-        // Lock the card up front — serialize the status + rank writes against a
+        // Resolve + tenant-gate the board FIRST — before the card lock, and
+        // deliberately (MOTIR-2952; the rule is docs/decisions/public-api-
+        // conventions.md §4, the error-identity clause MOTIR-2919 added).
+        //
+        // A move addresses a BOARD, and `findById` is the tenant gate for it:
+        // it filters on `ctx.workspaceId`, so it answers not-found in EVERY
+        // connection mode. `lockById` is not a tenant gate and was never meant
+        // to be one — it takes no workspace and relies on RLS under `motir_app`
+        // and on the explicit `item.workspaceId` check below under a bypassing
+        // role. With the lock first, a foreign-tenant move answered
+        // `BoardNotFoundError` as the owner (RLS inert → the lock succeeded →
+        // the board gate fired) and `WorkItemNotFoundError` as `motir_app` (the
+        // card is hidden → the lock 404s a line earlier). Same request, same
+        // caller, two different errors decided by which role the query ran as —
+        // exactly what "the mode a query happens to run in must never change
+        // which error a boundary owes" forbids. Resolving the board first makes
+        // the board gate the first thing either mode can fail.
+        //
+        // The lost-update guard is untouched: the lock is still taken inside
+        // this same transaction and still precedes every write, and nothing
+        // above it takes a row lock (the board resolve is a plain SELECT), so no
+        // lock ORDER is introduced that another path could invert.
+        const board = await boardRepository.findById(boardId, ctx.workspaceId, tx);
+        if (!board) throw new BoardNotFoundError(boardId);
+
+        // Lock the card — serialize the status + rank writes against a
         // concurrent move of the same card (lost-update guard, like updateStatus).
         const locked = await workItemRepository.lockById(workItemId, tx);
         if (!locked) throw new WorkItemNotFoundError(workItemId);
-
-        // Resolve + tenant-gate the board and the target column. The column must
-        // belong to THIS board (a column id from another board is a 404).
-        const board = await boardRepository.findById(boardId, ctx.workspaceId, tx);
-        if (!board) throw new BoardNotFoundError(boardId);
 
         // Project access gate (6.4.3): moving a card is an edit of the board's
         // project. (The cross-column status change routes through
