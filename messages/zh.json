@@ -814,7 +814,10 @@
       "account": "账户菜单",
       "workspaceSettings": "工作区设置",
       "accountSettings": "账户设置",
-      "signingOut": "正在退出登录…"
+      "signingOut": "正在退出登录…",
+      "platformAdmin": "平台管理",
+      "platformAdminHint": "运维控制台·全部租户",
+      "staffOnly": "仅限员工"
     },
     "account": {
       "signOut": "退出登录",
@@ -6115,6 +6118,39 @@
       "next": "下一页",
       "startOver": "回到顶部",
       "end": "已经到底了。"
+    }
+  },
+  "platformAdmin": {
+    "shell": {
+      "brand": "Motir",
+      "area": "平台管理",
+      "groupPlatform": "平台",
+      "groupOperations": "运维",
+      "footerStaff": "平台员工",
+      "exitToApp": "返回应用"
+    },
+    "nav": {
+      "overview": "总览",
+      "usage": "用量与成本",
+      "tenants": "租户",
+      "monitoring": "监控",
+      "governance": "治理",
+      "soonUsage": "10.1",
+      "soonTenants": "10.1",
+      "soonMonitoring": "10.2",
+      "soonGovernance": "10.3"
+    },
+    "topBar": {
+      "staffMark": "平台员工",
+      "allReadsAudited": "所有读取均记入审计",
+      "searchPlaceholder": "搜索组织、工作区、项目、用户…"
+    },
+    "overview": {
+      "breadcrumb": "平台·总览",
+      "title": "平台总览",
+      "subtitle": "一眼看清全部租户——Motir托管了多少组织、工作区、项目和用户，以及各租户最近发生了什么。只读；租户治理在治理工具中。",
+      "pendingTitle": "租户数据尚未接入",
+      "pendingDescription": "这些统计和动态需要跨租户读取，属于带审计的跨租户读取层，由另一张卡片交付。控制台的准入、审计记录和外壳已就绪，数据会随之而来。"
     }
   }
 }

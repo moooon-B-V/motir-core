@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PlatformRole } from '@/generated/prisma/client';
 import {
   meSchema,
   presentMe,
@@ -32,6 +33,12 @@ function userRow(extra: Record<string, unknown> = {}) {
     emailVerified: true,
     image: 'https://example.com/ada.png' as string | null,
     lastActiveProjectId: null as string | null,
+    // PLATFORM STANDING, at its widest value on purpose (MOTIR-2896). This is
+    // the column that says a user may read across every tenant, and the v1
+    // identity contract is `user.{id,name,email}` — so the assertions below
+    // double as the proof that it does not reach the wire. `null` would have
+    // satisfied the type and proved nothing.
+    platformRole: 'superadmin' as PlatformRole | null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     ...extra,
