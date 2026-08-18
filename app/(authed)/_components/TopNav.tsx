@@ -98,6 +98,18 @@ export interface TopNavProps {
    *  project with AI" door, the same gate the launcher uses. */
   aiConfigured: boolean;
   user: { name: string; email: string };
+  /**
+   * The acting user is platform staff — surfaces the staff-only "Platform
+   * admin" row in the account menu (design `platform-admin/` Panel 1). Resolved
+   * server-side in the layout; absent (not disabled) for everyone else.
+   *
+   * OPTIONAL, defaulting to `false`, deliberately: the default is the one that
+   * renders NO door. A required prop would have made every existing call site a
+   * compile error to be fixed by typing a boolean — and the failure mode of
+   * getting that wrong is a staff-only route named in a tenant's markup.
+   * Omission fails closed.
+   */
+  platformStaff?: boolean;
   /** The session user's unread notification count for the active workspace —
    * the bell's initial badge value (resolved once in the layout, then polled by
    * the client). Null when there's no active workspace (the bell is hidden). */
@@ -136,6 +148,7 @@ export async function TopNav({
   projects,
   aiConfigured,
   user,
+  platformStaff = false,
   initialUnreadCount,
   buildInPublicProjectKey,
   buildingInPublic,
@@ -266,7 +279,7 @@ export async function TopNav({
           {initialUnreadCount !== null ? (
             <NotificationBell initialUnreadCount={initialUnreadCount} />
           ) : null}
-          <UserMenu name={user.name} email={user.email} />
+          <UserMenu name={user.name} email={user.email} platformStaff={platformStaff} />
         </div>
       </nav>
     </header>

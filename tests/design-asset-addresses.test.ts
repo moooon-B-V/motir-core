@@ -305,11 +305,9 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'The repo folder design/workspaces/, cited as a precedent for a two-state PNG export — a path in this repo, not an address.',
   },
   // ── Forward-looking: the asset is drawn before the surface exists ─────────
-  {
-    file: 'design/platform-admin/design-notes.md',
-    address: '/admin',
-    why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both the address and its route group.',
-  },
+  // (`design/platform-admin/design-notes.md` cited `/admin` as forward-looking.
+  //  MOTIR-2896 built the route group, so the row expired and is gone — the
+  //  mechanism working exactly as its sibling comment below describes.)
   {
     file: 'design/roadmap/design-notes.md',
     address: '/projects/[key]/direction/[tier]',
@@ -883,11 +881,9 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'components/ui/Progress',
     why: 'Forward-looking, and the asset says so inline — "if reused elsewhere it becomes a `components/ui/Progress` primitive (per-component growth)".',
   },
-  {
-    file: 'design/platform-admin/design-notes.md',
-    path: 'app/(admin)/admin',
-    why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both its route group and its directory. The address half is allowlisted above as `/admin`.',
-  },
+  // (`design/platform-admin/design-notes.md` cited `app/(admin)/admin` as
+  //  forward-looking. MOTIR-2896 created the route group and its directory, so
+  //  this row expired too, together with its address half above.)
   // (`design/cli-guide/`'s two assets cited `packages/cli/src/commandCatalog.ts`
   //  as forward-looking. MOTIR-2324 built it, so both rows expired and are
   //  gone — the same mechanism, one sweep down, as the address table above.)

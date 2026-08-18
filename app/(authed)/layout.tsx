@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { projectsService } from '@/lib/services/projectsService';
@@ -61,6 +62,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const ctx = await getWorkspaceContext();
   const workspaceModels = await workspacesService.listUserWorkspaces(session.user.id);
+
+  // Platform standing — the ONLY thing that surfaces the account menu's
+  // staff-only "Platform admin" door (design `platform-admin/` Panel 1,
+  // MOTIR-2896). Read fresh per request off the `platformRole` column rather
+  // than carried in the session, so a revoked operator loses the door on their
+  // next request, not their next sign-in (`docs/decisions/platform-staff-auth.md`
+  // §1). A boolean crosses into the client: the ROLE is a server-side identity
+  // assertion and nothing in the tenant shell renders it.
+  const platformStanding = await platformStaffRepository.findStandingByUserId(session.user.id);
+  const isPlatformStaff = platformStanding?.platformRole != null;
 
   // The active ORGANIZATION (Story 6.10.5 — the shell org control). It must
   // agree with the active WORKSPACE: a user who belongs to workspaces across
@@ -246,6 +257,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       projects={projects}
                       aiConfigured={aiPlanningConfigured}
                       user={{ name: session.user.name, email: session.user.email }}
+                      platformStaff={isPlatformStaff}
                       initialUnreadCount={initialUnreadCount}
                       buildInPublicProjectKey={buildInPublicProjectKey}
                       buildingInPublic={buildingInPublic}

@@ -228,6 +228,21 @@ export const DISPOSITIONED_FILES: Record<string, readonly [Disposition, string]>
     'assertion',
     'MOTIR-2911/2918: direct-DB `apiToken` assertion reads; they belong on `adminDb`.',
   ],
+
+  // MOTIR-2896: the subject IS the unbound read returning nothing. One
+  // `expect(await db.platformAuditLog.count()).toBe(0)`, guarded by
+  // `it.runIf(isAppRoleTestMode())` and paired with an `adminDb` count of 1 on
+  // the line above — so the assertion is the DIFFERENCE between the two clients,
+  // not a count. `platform_audit_log`'s only policy arm is `app.platform_staff`,
+  // which nothing outside `withPlatformRead` binds; moving this read to
+  // `adminDb` would make it pass as the owner and prove the opposite of what it
+  // claims, and binding a context would supply the very GUC it withholds. This
+  // is the shape the guard's own message calls out, and the reason the
+  // repository requires `tx` on its reads rather than allowing the singleton.
+  'tests/platform/platformAuditLog.test.ts': [
+    'subject',
+    'MOTIR-2896: the subject IS the unbound read of `platform_audit_log` seeing zero rows.',
+  ],
 };
 
 export interface TestSingletonStatement {
