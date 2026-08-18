@@ -147,6 +147,23 @@ runs:
     # step runs under `bash -e`, and `if cmd; then …; fi` yields 0 when no
     # branch is taken, so `$?` after the `fi` cannot tell a timeout (124/137)
     # from a plain failure.
+    #
+    # ⚠️ AND A TIMED-OUT ATTEMPT MUST CLEAR THE APT IT ORPHANED, or attempts 2
+    # and 3 are reached and immediately useless. `timeout` signals `pnpm`, but
+    # `playwright install(-deps)` shells out to `sudo apt-get`, and that child
+    # is ROOT-owned: it survives, keeps its flock on /var/lib/apt/lists/lock,
+    # and the next attempt dies in under a second with
+    # `E: Could not get lock /var/lib/apt/lists/lock. It is held by process N`.
+    # This is not hypothetical — it is what THIS fix's own first CI run did
+    # (run 32128513614, leg `a11y-2`): attempt 1 correctly reported `TIMED OUT
+    # after 300s`, then attempts 2 and 3 failed on the orphan's lock, so the
+    # step still could not self-heal. It merely failed in 6 minutes instead of
+    # 6 hours. Killing the orphan is what makes the retry real. The lock itself
+    # needs no surgery — apt uses flock, which the kernel releases when the
+    # holder dies — and `-x` matches the process NAME, so `sudo pkill` cannot
+    # match its own command line and kill itself. `dpkg --configure -a` repairs
+    # the one case a SIGKILL can leave behind (a wedge during install rather
+    # than during `apt-get update`).
     - name: Install Playwright browser + OS deps (cache miss)
       shell: bash
       if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -158,7 +175,10 @@ runs:
           timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install --with-deps chromium || status=$?
           if [ "$status" -eq 0 ]; then exit 0; fi
           if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-            echo "::warning::playwright install --with-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; retrying in 15s"
+            echo "::warning::playwright install --with-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; clearing the apt it orphaned, retrying in 15s"
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x apt || true
+            sudo dpkg --configure -a >/dev/null 2>&1 || true
           else
             echo "::warning::playwright install --with-deps attempt $attempt failed (exit $status); retrying in 15s"
           fi
@@ -177,7 +197,10 @@ runs:
           timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install-deps chromium || status=$?
           if [ "$status" -eq 0 ]; then exit 0; fi
           if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-            echo "::warning::playwright install-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; retrying in 15s"
+            echo "::warning::playwright install-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; clearing the apt it orphaned, retrying in 15s"
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x apt || true
+            sudo dpkg --configure -a >/dev/null 2>&1 || true
           else
             echo "::warning::playwright install-deps attempt $attempt failed (exit $status); retrying in 15s"
           fi

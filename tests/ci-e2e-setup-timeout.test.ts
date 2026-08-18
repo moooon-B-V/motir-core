@@ -116,14 +116,17 @@ function fakeBin(pnpmScript: string): string {
   writeFileSync(join(dir, 'pnpm'), `#!/usr/bin/env bash\n${pnpmScript}\n`);
   // Instant backoff. `timeout` is unaffected — it counts wall-clock itself.
   writeFileSync(join(dir, 'sleep'), '#!/usr/bin/env bash\nexit 0\n');
-  chmodSync(join(dir, 'pnpm'), 0o755);
-  chmodSync(join(dir, 'sleep'), 0o755);
+  // Record what the step asks root to do, rather than letting the case depend
+  // on whether THIS machine happens to have sudo (it is the runner that does).
+  writeFileSync(join(dir, 'sudo'), `#!/usr/bin/env bash\necho "$@" >> "$SUDO_LOG"\nexit 0\n`);
+  for (const bin of ['pnpm', 'sleep', 'sudo']) chmodSync(join(dir, bin), 0o755);
   return dir;
 }
 
 /** Run a shipped step body under the same shell flags GitHub Actions uses. */
 function runStep(step: Step, pnpmScript: string, timeoutOverride: string) {
   const dir = fakeBin(pnpmScript);
+  const sudoLog = join(dir, 'sudo.log');
   const result = spawnSync(
     'bash',
     ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', step.run],
@@ -134,10 +137,15 @@ function runStep(step: Step, pnpmScript: string, timeoutOverride: string) {
         PATH: `${dir}:${process.env['PATH'] ?? ''}`,
         PLAYWRIGHT_INSTALL_TIMEOUT: timeoutOverride,
         FAKE_STATE: join(dir, 'attempts'),
+        SUDO_LOG: sudoLog,
       },
     },
   );
-  return { status: result.status, out: `${result.stdout}${result.stderr}` };
+  return {
+    status: result.status,
+    out: `${result.stdout}${result.stderr}`,
+    sudo: existsSync(sudoLog) ? readFileSync(sudoLog, 'utf8') : '',
+  };
 }
 
 describe('e2e-setup install retry bounds each attempt (MOTIR-2970)', () => {
@@ -225,6 +233,33 @@ describe('e2e-setup install retry, executed (MOTIR-2970)', () => {
       expect(status).toBe(0);
       expect(out).toContain('attempt 1 TIMED OUT after 1s');
       expect(out).not.toContain('attempt 2');
+    },
+    15_000,
+  );
+
+  it.each(installSteps.map((s) => [s.name, s] as const))(
+    '%s: a TIMED-OUT attempt kills the apt it orphaned before retrying',
+    (_name, step) => {
+      // `timeout` signals `pnpm`; the `sudo apt-get` underneath is root-owned
+      // and outlives it, holding the apt flock — so without this kill the next
+      // attempt dies on `Could not get lock`, which is what run 32128513614's
+      // `a11y-2` leg did to the first version of this very fix.
+      const { sudo } = runStep(step, `exec ${REAL_SLEEP} 120`, '1s');
+      expect(sudo).toContain('pkill -9 -x apt-get');
+      // `-x` matches the process NAME. `pkill -f apt-get` would match the
+      // `sudo pkill …` command line itself and kill the cleanup mid-run.
+      expect(sudo).not.toMatch(/pkill\s+(-\S+\s+)*-f\b/);
+    },
+    15_000,
+  );
+
+  it.each(installSteps.map((s) => [s.name, s] as const))(
+    '%s: a plain non-zero exit does NOT kill apt',
+    (_name, step) => {
+      // A command that RETURNED left nothing behind; killing a healthy apt a
+      // sibling step started would be a new bug, not a cleanup.
+      const { sudo } = runStep(step, 'exit 100', '30s');
+      expect(sudo).toBe('');
     },
     15_000,
   );
