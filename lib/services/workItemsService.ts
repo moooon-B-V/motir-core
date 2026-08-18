@@ -1581,6 +1581,12 @@ export const workItemsService = {
         addedDescMentionIds,
         changedFieldIds,
         embeddingChanged,
+        // The re-parent ends, for the post-commit child-set emit (MOTIR-2902).
+        // Null when the patch did not move the item — a `parentId` absent from
+        // the patch, or present and equal, changes no child set.
+        movedBetween: parentChanged
+          ? { previousParentId: current.parentId, newParentId: patch.parentId ?? null }
+          : null,
       };
     });
 
@@ -1627,6 +1633,45 @@ export const workItemsService = {
         workspaceId: ctx.workspaceId,
         workItemId: result.dto.id,
       });
+    }
+
+    // ── Status derivation, child-set trigger (Bug MOTIR-2902) ──────────────
+    //
+    // `updateWorkItem` is the SECOND re-parent ingress, and it was missed.
+    // MOTIR-2892 wired `moveWorkItem` — which had emitted nothing at all — and
+    // the identical gap here went unnoticed because the two paths look unrelated
+    // from the outside: one is `move_to_parent`, the other is a field patch that
+    // happens to accept `parentId`.
+    //
+    // The CSV importer is the caller that makes it bite. It is a two-pass
+    // design: pass 1 creates each row WITHOUT a parent (a child whose parent is
+    // imported later cannot be parented yet) and pins its mapped status; pass 2
+    // wires the parent through THIS function. So every derivation trigger an
+    // import produced fired while the tree was still flat — the create-recompute
+    // saw a childless root, and the moment the children were actually attached,
+    // nothing fired at all. The parent kept whatever the CSV said, forever.
+    //
+    // Both ends are recomputed for the same reason `moveWorkItem` does it: one
+    // move changes two child sets in opposite directions — the previous parent
+    // may now be finished, the new one may need to come back. Either end may be
+    // null (moved to or from the top level); a move with no parent on either
+    // side cannot occur, since `parentChanged` means the two differ.
+    if (result.movedBetween) {
+      const parentIds = [
+        result.movedBetween.previousParentId,
+        result.movedBetween.newParentId,
+      ].filter((parentId): parentId is string => parentId !== null);
+      if (parentIds.length > 0) {
+        await sendEvent('work-item/child-set.changed', {
+          workspaceId: ctx.workspaceId,
+          parentIds,
+          workItemId: result.dto.id,
+          reason: 'reparented',
+          // The edit's own instant: a row LEAVING an aggregate leaves nothing
+          // behind to date the change (MOTIR-2965).
+          occurredAt: new Date().toISOString(),
+        });
+      }
     }
 
     return result.dto;

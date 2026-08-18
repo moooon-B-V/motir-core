@@ -1233,6 +1233,56 @@ describe('the IMPORT interleaving — the pin carries its own trigger (MOTIR-290
     expect(await drain()).toBe(0);
   });
 
+  it('the REAL import shape — create parentless, pin, THEN wire the parent in pass 2', async () => {
+    // This is what the CSV importer actually does, and what the previous two
+    // attempts at this card both missed. `importPersistService` is a two-pass
+    // design: a row whose parent is imported LATER cannot be parented on create,
+    // so pass 1 creates it flat and pins its mapped status, and pass 2 wires the
+    // parent through `updateWorkItem`. Every derivation trigger therefore fired
+    // while the tree was still flat, and the moment the children were actually
+    // attached, `updateWorkItem` emitted nothing at all.
+    const fx = await makeWorkItemFixture();
+
+    // ── pass 1: both rows, flat, each pinned to its CSV status ──────────────
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Checkout epic' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, { kind: 'task', title: 'Payment subtask' });
+    await setStatus(child.id, 'todo');
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    // Nothing so far can have derived anything: the child has no parent, so the
+    // pin's own trigger is correctly skipped and the parent has no children.
+    await drain();
+    expect(await statusOf(parent.id)).toBe('todo');
+
+    // ── pass 2: the edge ───────────────────────────────────────────────────
+    await workItemsService.updateWorkItem(child.id, { parentId: parent.id }, fx.ctx);
+
+    // THE ASSERTION. Wiring the parent changes its child set, so derivation must
+    // run — and it must read the child's PINNED status, which pass 1 already
+    // committed.
+    await drain();
+    expect(processed).toContain('work-item/child-set.changed');
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('a plain field patch emits NO child-set event — only a parent MOVE changes a set', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+    await drain();
+    const from = processed.length;
+
+    await workItemsService.updateWorkItem(children[0]!.id, { title: 'Renamed' }, fx.ctx);
+    await drain();
+
+    // The emit is gated on the parent actually CHANGING. A patch that does not
+    // name `parentId`, or names the one it already has, moves no item between
+    // sets and must stay silent — otherwise every edit in the product enqueues a
+    // recompute of its parent.
+    expect(processed.slice(from)).not.toContain('work-item/child-set.changed');
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
   it('a NO-OP pin still settles the parent — the import re-run case', async () => {
     const fx = await makeWorkItemFixture();
     const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
