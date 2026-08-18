@@ -277,6 +277,67 @@ describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
     );
     expect(createdConsumers.length).toBeGreaterThanOrEqual(3);
   });
+
+  // ── The import race (Bug MOTIR-2902) ───────────────────────────────────────
+  //
+  // A bulk import writes each row as `createWorkItem` (which emits this event)
+  // then `setImportedStatus` (which deliberately emits NOTHING, so an import
+  // cannot fan out a notification per row). So this consumer is the ONLY
+  // derivation trigger an import produces, and undebounced it reads the child's
+  // status at whatever instant it runs — BEFORE the pin it sees `todo`, settles
+  // the parent at `todo`, and nothing re-fires because the child set never
+  // changes again. The debounce moves the run to `period` after the LAST create
+  // under that parent, by which time the pin has committed.
+  it('DEBOUNCES on the parent — so the recompute reads the child set after the burst, not during it', () => {
+    const opts = (statusDerivationOnCreated as { opts?: { debounce?: unknown } }).opts;
+    expect(opts?.debounce).toEqual({
+      key: 'event.data.parentId',
+      period: '2s',
+      timeout: '30s',
+    });
+  });
+
+  it('keys the debounce on the PARENT — a wider key would DROP a recompute, not merely delay it', () => {
+    const { key } = (statusDerivationOnCreated as { opts: { debounce: { key: string } } }).opts
+      .debounce;
+
+    // The load-bearing assertion of this card. A debounce COALESCES same-key
+    // events and runs once with the LAST one, while the handler recomputes the
+    // parent of THAT event's `workItemId`. Keyed on the parent every coalesced
+    // event names the same parent, so the survivor recomputes it correctly.
+    // Keyed on the workspace or the project, creates under DIFFERENT parents
+    // collapse into one run and every other parent's recompute is silently lost
+    // — the same latency win bought with a correctness regression.
+    expect(key).toBe('event.data.parentId');
+    expect(key).not.toBe('event.data.workspaceId');
+    expect(key).not.toBe('event.data.projectId');
+    // …and keyed on the ITEM nothing would ever coalesce, so the debounce would
+    // be inert and the race would survive it.
+    expect(key).not.toBe('event.data.workItemId');
+  });
+
+  it('forwards the debounce to Inngest — an option the wrapper drops is a no-op that reads as a fix', () => {
+    const spy = vi.spyOn(inngest, 'createFunction');
+    try {
+      defineJob(
+        {
+          id: 'status-derivation/created',
+          trigger: 'work-item/created',
+          retryPolicy: 'idempotent',
+          debounce: { key: 'event.data.parentId', period: '2s', timeout: '30s' },
+        },
+        () => undefined,
+      );
+      const config = spy.mock.calls.at(-1)?.[0] as { debounce?: unknown } | undefined;
+      expect(config?.debounce).toEqual({
+        key: 'event.data.parentId',
+        period: '2s',
+        timeout: '30s',
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {

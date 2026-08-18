@@ -1073,3 +1073,70 @@ describe("a user's own write vs a derived backward set", () => {
     expect(await statusOf(story.id)).toBe('done');
   });
 });
+
+describe('the IMPORT interleaving — why the debounce is load-bearing (MOTIR-2902)', () => {
+  // A bulk import writes each row in TWO phases:
+  //
+  //   createWorkItem(child)            → emits `work-item/created`
+  //   setImportedStatus(child, status) → emits NOTHING, deliberately, so an
+  //                                      import cannot fan out one notification
+  //                                      per imported row
+  //
+  // So `work-item/created` is the ONLY derivation trigger an import produces,
+  // and which state it observes is decided purely by WHEN the job runs. The two
+  // cases below are the same code taking the two orders, and they show the
+  // asymmetry that makes this worth a debounce rather than a retry: the good
+  // order self-corrects, and the bad order is TERMINAL.
+
+  it('the WINNING order — the recompute runs after the pin and the parent follows', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'todo');
+
+    // The import pins the mapped status FIRST, then the recompute runs.
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('the LOSING order is TERMINAL — the parent keeps the stale answer and nothing re-fires', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'todo');
+
+    // The recompute wins the race and reads the child BEFORE the import pins it.
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    // ⚠️ THIS IS THE DEFECT, asserted deliberately. The parent is wrong, and it
+    // is wrong FOREVER: the child set never changes again, `setImportedStatus`
+    // emits nothing, and no later event can re-open the question. Draining the
+    // queue proves it — there is nothing left in it to drain.
+    expect(await statusOf(parent.id)).toBe('todo');
+    expect(await drain()).toBe(0);
+    expect(await statusOf(parent.id)).toBe('todo');
+
+    // …and re-running the recompute does NOT rescue it either: the aggregate now
+    // reads `in_progress`, so this is a FORWARD move the ladder would take — the
+    // only reason production never gets here is that nothing schedules it.
+    // Which is exactly why the fix has to guarantee the ORDER (the parent-keyed
+    // debounce on `status-derivation/created`) rather than rely on a retry: this
+    // recompute is not retried, because from Inngest's point of view it
+    // succeeded.
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+});

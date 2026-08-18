@@ -158,6 +158,23 @@ export interface WorkItemCreatedData {
   workspaceId: string;
   projectId: string;
   workItemId: string;
+  /**
+   * The new item's parent, or null for a root item — the DEBOUNCE KEY of
+   * `status-derivation/created` (Bug MOTIR-2902).
+   *
+   * ⚠️ It must be the PARENT and not the item, the project or the workspace.
+   * A debounce COALESCES same-key events and runs once with the LAST one, and
+   * that consumer recomputes the parent of `workItemId`. Keyed on the parent,
+   * every coalesced event names the same parent and the survivor recomputes it
+   * correctly. Keyed on anything WIDER, creates under different parents collapse
+   * into one run and the others' recomputes are silently DROPPED — a correctness
+   * regression bought with the same latency win. Keyed on anything NARROWER
+   * (the item) nothing ever coalesces and the debounce is inert.
+   *
+   * Null groups every root create into one bucket. That is safe because those
+   * runs are `no_parent` no-ops: coalescing no-ops loses nothing.
+   */
+  parentId: string | null;
   /** The actor who created the item (a rule run is attributed to the rule
    * owner, not this actor — the recorded 6.6 deviation). */
   actorId: string;

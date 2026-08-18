@@ -89,6 +89,38 @@ export const statusDerivationOnCreated = defineJob(
     id: 'status-derivation/created',
     trigger: 'work-item/created',
     retryPolicy: 'idempotent',
+    // ── DEBOUNCED ON THE PARENT (Bug MOTIR-2902) ───────────────────────────
+    //
+    // THE DEFECT. A bulk import writes each row in TWO phases: `createWorkItem`
+    // (which emits this event) and then `setImportedStatus`, which is documented
+    // as deliberately emitting NOTHING so an import cannot fan out one
+    // notification per row. So this event is the ONLY derivation trigger an
+    // import produces, and undebounced this consumer reads the child's status
+    // at whatever instant it happens to run:
+    //
+    //   run AFTER the pin   → sees `in_progress` → parent `in_progress`   ✅
+    //   run BEFORE the pin  → sees `todo`        → parent `todo`          ❌
+    //
+    // and the losing arm is TERMINAL, not late: the child set never changes
+    // again, so nothing re-fires. `tests/e2e/import.spec.ts` caught it as a
+    // ~1-in-3 red on PRs touching neither the importer nor derivation.
+    //
+    // WHY A DEBOUNCE FIXES IT. The window RESETS on each same-key event, so the
+    // recompute runs once, `period` after the LAST create under that parent —
+    // by which time that row's pin (microseconds later, same call stack) has
+    // long committed. The margin is ~3 orders of magnitude, not a coin flip.
+    // It also collapses the redundant recomputes an import generates: a
+    // 5 000-row import recomputed one parent 5 000 times, each taking a row
+    // lock and reading an aggregate.
+    //
+    // `key` — the PARENT. See `WorkItemCreatedData.parentId` for why anything
+    // wider silently drops recomputes and anything narrower is inert.
+    // `period` — long enough to clear a create→pin gap by orders of magnitude,
+    // short enough to stay well inside the 15 s the e2e poll allows.
+    // `timeout` — caps the total deferral so a continuously streaming import
+    // cannot postpone derivation indefinitely; the stream's own tail still
+    // produces a final run after its last event.
+    debounce: { key: 'event.data.parentId', period: '2s', timeout: '30s' },
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemCreatedData;

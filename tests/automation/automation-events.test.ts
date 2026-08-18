@@ -110,6 +110,45 @@ describe('work-item/created emit', () => {
     const data = eventsSince(from, 'work-item/created')[0]!.data as WorkItemCreatedData;
     expect(data.viaAutomationRuleId).toBe('rule-xyz');
   });
+
+  // ── The debounce key (Bug MOTIR-2902) ──────────────────────────────────────
+  //
+  // `status-derivation/created` debounces on `event.data.parentId`, so this
+  // field is not decoration — it decides which events COALESCE. A null here
+  // for an item that has a parent would drop that create into the shared root
+  // bucket, where it coalesces with every unrelated root create and its
+  // parent's recompute is silently lost. Nothing else would go red: the
+  // debounce would still be configured, still forwarded, and still wrong.
+  it('carries the PARENT id — the derivation debounce key, and null would collapse the bucket', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent' },
+      fx.ctx,
+    );
+    const from = cap.events.length;
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Child', parentId: parent.id },
+      fx.ctx,
+    );
+
+    const data = eventsSince(from, 'work-item/created')[0]!.data as WorkItemCreatedData;
+    expect(data.workItemId).toBe(child.id);
+    expect(data.parentId).toBe(parent.id);
+  });
+
+  it('carries null for a ROOT create — the one bucket where coalescing is safe', async () => {
+    const fx = await makeWorkItemFixture();
+    const from = cap.events.length;
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Root' },
+      fx.ctx,
+    );
+
+    const data = eventsSince(from, 'work-item/created')[0]!.data as WorkItemCreatedData;
+    // Safe precisely because these runs are `no_parent` no-ops: coalescing a
+    // batch of no-ops loses nothing. It is NOT a fallback for a missing parent.
+    expect(data.parentId).toBeNull();
+  });
 });
 
 describe('work-item/field.changed emit', () => {
