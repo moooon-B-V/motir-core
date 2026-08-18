@@ -109,38 +109,22 @@ export const statusDerivationOnCreated = defineJob(
     id: 'status-derivation/created',
     trigger: 'work-item/created',
     retryPolicy: 'idempotent',
-    // ── DEBOUNCED ON THE PARENT (Bug MOTIR-2902) ───────────────────────────
+    // ⚠️ NOT DEBOUNCED, and that is a decision with evidence behind it
+    // (Bug MOTIR-2902). A parent-keyed debounce looks ideal here: a bulk import
+    // recomputes one parent once per row. It was implemented, and the Inngest
+    // DEV SERVER — what CI's E2E lane and every self-hosted run use — does not
+    // merely ignore it, it DROPS RUNS:
     //
-    // THE DEFECT. A bulk import writes each row in TWO phases: `createWorkItem`
-    // (which emits this event) and then `setImportedStatus`, which is documented
-    // as deliberately emitting NOTHING so an import cannot fan out one
-    // notification per row. So this event is the ONLY derivation trigger an
-    // import produces, and undebounced this consumer reads the child's status
-    // at whatever instant it happens to run:
+    //   ERROR "error scheduling function"  error: "error enqueueing debounce
+    //         job: queue item already exists"
+    //   ERROR "error initializing fn"      function: "status-derivation/created"
     //
-    //   run AFTER the pin   → sees `in_progress` → parent `in_progress`   ✅
-    //   run BEFORE the pin  → sees `todo`        → parent `todo`          ❌
-    //
-    // and the losing arm is TERMINAL, not late: the child set never changes
-    // again, so nothing re-fires. `tests/e2e/import.spec.ts` caught it as a
-    // ~1-in-3 red on PRs touching neither the importer nor derivation.
-    //
-    // WHY A DEBOUNCE FIXES IT. The window RESETS on each same-key event, so the
-    // recompute runs once, `period` after the LAST create under that parent —
-    // by which time that row's pin (microseconds later, same call stack) has
-    // long committed. The margin is ~3 orders of magnitude, not a coin flip.
-    // It also collapses the redundant recomputes an import generates: a
-    // 5 000-row import recomputed one parent 5 000 times, each taking a row
-    // lock and reading an aggregate.
-    //
-    // `key` — the PARENT. See `WorkItemCreatedData.parentId` for why anything
-    // wider silently drops recomputes and anything narrower is inert.
-    // `period` — long enough to clear a create→pin gap by orders of magnitude,
-    // short enough to stay well inside the 15 s the e2e poll allows.
-    // `timeout` — caps the total deferral so a continuously streaming import
-    // cannot postpone derivation indefinitely; the stream's own tail still
-    // produces a final run after its last event.
-    debounce: { key: 'event.data.parentId', period: '2s', timeout: '30s' },
+    // Two same-key events close together make the second fail to schedule at
+    // all, so the recompute never happens — silently, from the caller's side.
+    // Measured on #2114: `tests/e2e/status-derivation.spec.ts` saw 3 succeeded
+    // derivation runs where it required 4. The fan-out is a real cost and worth
+    // solving, but not with an instrument that loses work in the environment
+    // most people run.
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemCreatedData;
@@ -213,26 +197,22 @@ export const statusDerivationOnChildSetChanged = defineJob(
 // on — derivation is its ONLY consumer, so nothing here can reintroduce the
 // notification storm the import avoids.
 //
-// ⚠️ AND WHY NOT RELY ON THE DEBOUNCE. `status-derivation/created` is debounced
-// on the parent, which would usually move its run past the pin. Measured on this
-// card's own PR (#2114), the Inngest DEV SERVER — what the E2E lane and every
-// self-hosted run use — ignores `debounce` entirely: 126 `work-item/created`
-// events produced 126 function initializations, 4.7 ms after the event, against
-// a configured 2 s period. A fix that depends on the scheduler honouring an
-// option is untestable where the scheduler does not. This one depends only on an
-// event being emitted, so it holds everywhere.
+// ⚠️ AND WHY NOT A DEBOUNCE. Delaying the create-recompute past the pin was the
+// first two attempts at this bug, and both failed. It does not even address the
+// initial-import case — the importer creates every parented row FLAT and wires
+// the edge in a second pass, so there is no pin-adjacent window to slide past —
+// and on the Inngest dev server the debounce actively DROPS runs (see the note
+// on `status-derivation/created`). A trigger that depends only on an event being
+// emitted holds in every environment; one that depends on the scheduler honouring
+// an option holds in none that can be tested here.
 
 export const statusDerivationOnRequested = defineJob(
   {
     id: 'status-derivation/requested',
     trigger: 'work-item/derivation.requested',
     retryPolicy: 'idempotent',
-    // Same key and reasoning as `status-derivation/created`: a bulk import pins
-    // many children of one parent, and only the last recompute's answer differs
-    // from the one before it. Where the scheduler honours it this collapses the
-    // fan-out; where it does not, correctness is unaffected — that is the whole
-    // point of putting the guarantee in the event rather than the window.
-    debounce: { key: 'event.data.parentId', period: '2s', timeout: '30s' },
+    // Not debounced, for the reason recorded on `status-derivation/created`
+    // above: the dev server's debounce drops runs rather than coalescing them.
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemDerivationRequestedData;

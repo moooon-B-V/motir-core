@@ -1157,10 +1157,6 @@ export const workItemsService = {
       workspaceId,
       projectId: input.projectId,
       workItemId: dto.id,
-      // The derivation consumer's debounce key (MOTIR-2902). Read off the DTO
-      // rather than the input: a create that resolves its parent server-side
-      // must not key on `undefined` and fall into the root bucket.
-      parentId: dto.parentId ?? null,
       actorId: ctx.userId,
       ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
     });
