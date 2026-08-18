@@ -151,6 +151,25 @@ export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
    * with the LATEST event (rapid same-key events coalesce). `key` is an event
    * expression (e.g. `"event.data.installationId"`); `timeout` optionally caps
    * the total delay so a steady event stream can't defer the run forever.
+   *
+   * ⚠️ TWO THINGS THE OPTION DOES NOT GUARANTEE, both measured against the real
+   * scheduler rather than read off the docs (MOTIR-2994; the table, the harness
+   * and the Cloud caveat are in the "Debounce" section of `docs/jobs.md`):
+   *
+   *   1. **`key` MUST name fields the event payload type makes REQUIRED.** It is
+   *      a CEL string, so nothing type-checks it — and an expression that does
+   *      not resolve does NOT disable the debounce, it MERGES: every such event
+   *      lands in ONE bucket, so N unrelated events produce one run and N−1 are
+   *      lost silently. `'event.data.parentId'` on an event whose item may be a
+   *      root is the shape that bit MOTIR-2902.
+   *   2. **`timeout` is not a latency guarantee.** On the dev server a stream
+   *      arriving faster than ~1 event/second defeats it entirely — the run
+   *      lands only once the stream stops. Fine for a human-paced producer,
+   *      wrong for a machine-generated one.
+   *
+   * A job that grows a `debounce` belongs in `tests/jobs/debounce-burst.test.ts`,
+   * which drives the pinned `inngest-cli` and counts the runs a burst produces.
+   * Asserting the option off `fn.opts` proves only that it was forwarded.
    */
   debounce?: { key: string; period: string; timeout?: string };
   /**

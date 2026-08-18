@@ -45,12 +45,30 @@ import type { CodeGraphRefreshData } from '../types';
 // DEBOUNCED per repo, and THAT is now the whole difference between this job and
 // `system.code-graph-index`: rapid pushes to the same repo coalesce — Inngest
 // holds the run until `period` passes with no further same-key event, then runs
-// ONCE with the latest event; `timeout` caps the total deferral so a steady push
-// stream still refreshes at least every 15m. The run indexes the repo AT ITS
-// DEFAULT BRANCH (not a pinned SHA), so the one coalesced run builds the newest
-// head — exactly the semantics a debounce wants. The initial index must run
-// promptly on install and so must never sit out a debounce window, which is why
-// the two stay separate events rather than becoming one job with a flag.
+// ONCE with the latest event. The run indexes the repo AT ITS DEFAULT BRANCH
+// (not a pinned SHA), so the one coalesced run builds the newest head — exactly
+// the semantics a debounce wants. The initial index must run promptly on install
+// and so must never sit out a debounce window, which is why the two stay separate
+// events rather than becoming one job with a flag.
+//
+// ⚠️ THE COALESCING IS MEASURED, THE `timeout` CAP IS NOT WHAT THIS COMMENT USED
+// TO CLAIM (MOTIR-2994). Coalescing was asserted here only at the config level —
+// which passes whatever the executor does — until it was driven against the real
+// scheduler: a same-key burst does produce exactly ONE run carrying the latest
+// event, and distinct repos stay independent, so the fleet cost model in
+// `docs/decisions/code-graph-index-fleet.md` §7.3/§7.4 holds. But this comment
+// also said `timeout` "caps the total deferral so a steady push stream still
+// refreshes at least every 15m", and on the dev server that is FALSE for a stream
+// faster than ~1 event/second — the cap never fires and the run lands only once
+// the stream stops. **This job is not exposed**: its producer is default-branch
+// pushes to one repo, which do not arrive at that rate. The debounce is KEPT
+// unchanged and the limit recorded; see `docs/jobs.md` § Debounce for the table.
+//
+// ⚠️ AND THE KEY BELOW MUST KEEP NAMING ONLY REQUIRED FIELDS. A `key` expression
+// that does not resolve merges every such event into ONE debounce bucket instead
+// of skipping the debounce, so making any of `installationId` / `repoOwner` /
+// `repoName` optional on `CodeGraphRefreshData` would silently coalesce unrelated
+// repos. `tests/jobs/debounce-burst.test.ts` pins that.
 //
 // SYSTEM-scoped (enqueued via `inngest.send`, not `sendEvent`) and
 // `retryPolicy: 'idempotent'` for the reason the index job carries it: a
