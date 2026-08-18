@@ -241,11 +241,13 @@ interface AddPlanItemsArgs {
 // Summaries
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** ` · authored by <harness> (<model>)` — the attribution, when self-reported. */
+/** ` · written by <harness> · <model>` — the agent half, when self-reported.
+ *  The requester half is an id here and a NAME on the surfaces; a tool result
+ *  hands back the id its caller can act on, not a display string. */
 function attribution(plan: PlanDto): string {
   if (!plan.authorHarness && !plan.authorModel) return '';
   const parts = [plan.authorHarness, plan.authorModel].filter(Boolean);
-  return ` · authored by ${parts.join(' · ')}`;
+  return ` · written by ${parts.join(' · ')}`;
 }
 
 /** The PROPOSAL GATE, in the words its siblings already use. */
@@ -310,6 +312,12 @@ export async function runCreatePlan(
     {
       title: args.title ?? null,
       summary: args.summary ?? null,
+      // WHO ASKED (MOTIR-2986) — the TOKEN OWNER. An agent has no standing of
+      // its own here: it acts on a credential a person minted and pointed at
+      // this project, so that person is the requester, exactly as the person who
+      // clicks Generate is on the browser path. Recording it is what stops an
+      // agent-authored plan from reading as though nobody is accountable for it.
+      createdById: ctx.userId,
       // SERVER-SET. Not an argument, not read from any caller field — the
       // property `materialize` now leans on (ADR Q4).
       authorSource: 'mcp',

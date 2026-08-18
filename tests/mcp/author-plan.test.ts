@@ -109,7 +109,11 @@ describe('create_plan', () => {
     expect(row.authorHarness).toBe('Claude Code');
     expect(row.authorModel).toBe('claude-opus-5');
 
-    expect(text(result)).toContain('authored by Claude Code');
+    // WHO ASKED — the token owner, recorded without an argument for it. An
+    // agent acts on a person's credential, and that person is the requester.
+    expect(row.createdById).toBe(fx.ownerId);
+
+    expect(text(result)).toContain('written by Claude Code');
     await client.close();
   });
 
