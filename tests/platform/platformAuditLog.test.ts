@@ -14,7 +14,6 @@ import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogR
 import { assertReasonSatisfied, platformAuditService } from '@/lib/services/platformAuditService';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
-import { isAppRoleTestMode } from '../helpers/parallelDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `PlatformAuditLog` — the record, its write path, and the two properties that
@@ -219,7 +218,9 @@ describe('row-level security', () => {
     }
   });
 
-  it.runIf(isAppRoleTestMode())('refuses an UNBOUND reader under the non-bypass role', async () => {
+  // Unconditional since MOTIR-2734 retired `TEST_DB_APP_ROLE`: `@/lib/db` is
+  // always `motir_app`, so this is the only arm there is.
+  it('refuses an UNBOUND reader under the non-bypass role', async () => {
     const principal = await seedStaff();
     await platformAuditService.record(principal, {
       action: 'console.open',

@@ -1,7 +1,9 @@
 import type { ComponentType, ReactNode } from 'react';
 import {
   CircleCheck,
+  CircleDashed,
   CircleEllipsis,
+  CircleQuestionMark,
   CircleX,
   ExternalLink,
   GitMerge,
@@ -13,6 +15,7 @@ import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -113,6 +116,56 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
   );
 }
 
+/**
+ * A repository the item CARRIES that has no pull request to show (Story
+ * MOTIR-2725 · MOTIR-2415, design `repository-set.mock.html` panel 1) — the ONE
+ * element that design adds, and the state the completion gate holds an item for.
+ *
+ * The shipped section has nothing to render for it today: it lists the pull
+ * requests that exist, and the whole point of the repository SET is that a
+ * repository whose PR was never opened is invisible to anything that counts
+ * rows. So the row is drawn from the EXPECTED side instead.
+ *
+ * Deliberately the same row grammar as a real pull request — same height, same
+ * columns, same pill slot — with a DASHED border and a soft fill, so it reads as
+ * a placeholder in the list rather than as a different kind of thing. It carries
+ * no link-out, because there is nothing to link to; the spacer keeps the pill
+ * column aligned with the rows above it.
+ */
+function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
+  const t = useTranslations('github');
+  const unknown = delivery.state === 'unknown';
+  const Glyph = unknown ? CircleQuestionMark : CircleDashed;
+  return (
+    <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
+      <Glyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
+      <div className="min-w-0 flex-1 py-1">
+        {/* `--el-text-secondary`, NOT `--el-text-muted`: this row's fill is
+            `--el-surface-soft`, where muted measures 4.34:1 and fails AA — it
+            clears only on the white page/card, by 0.04 (`CLAUDE.md`'s contrast
+            table; `tests/theme/inkContrastLint.test.ts` enforces the pair).
+            Secondary is 6.51:1 on the same fill and still reads as quieter than
+            a real pull-request title beside it. */}
+        <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text-secondary)">
+          {t(unknown ? 'development.mergedBranchUnknown' : 'development.noPullRequestYet')}
+        </div>
+        <div className="truncate font-sans text-xs text-(--el-text-identifier)">
+          {delivery.repo}
+        </div>
+      </div>
+      <span className="flex shrink-0 items-center gap-1.5">
+        <Pill {...(unknown ? { severity: 'warning' as const } : { tone: 'neutral' as const })}>
+          <Glyph className="h-3 w-3" aria-hidden />
+          {t(unknown ? 'development.repoState.unknown' : 'development.repoState.awaiting')}
+        </Pill>
+      </span>
+      {/* Keeps the pill column aligned with the linked rows, which end in a
+          link-out button. An awaiting repository has nothing to link to. */}
+      <span className="w-6 shrink-0" aria-hidden />
+    </li>
+  );
+}
+
 /** The section's BODY — rows or EmptyState + the auto-link caption. Shared by
  *  both hosts; the host supplies its own header (SectionLabel on the peek, the
  *  ContentSectionCard title on the detail page). */
@@ -120,6 +173,7 @@ export function DevelopmentSectionBody({
   pullRequests,
   itemIdentifier,
   manualLinkable = false,
+  awaitingRepos = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -128,10 +182,23 @@ export function DevelopmentSectionBody({
    *  lives — the caption then adds "— or linked by hand from here" (design Panel
    *  5a). The read-only peek leaves it false (its caption names only auto-link). */
   manualLinkable?: boolean;
+  /**
+   * Repositories the item CARRIES whose work has not landed (Story MOTIR-2725 ·
+   * MOTIR-2415) — rendered as placeholder rows after the real pull requests.
+   *
+   * ⚠️ A PROP with an empty default, not a new behaviour, and that is
+   * deliberate: this component is mounted on the detail page AND in the
+   * quick-view peek, and MOTIR-2415's scope is the detail page only. The peek
+   * passes nothing and its output is byte-identical until MOTIR-2416 turns it
+   * on — so the two surfaces never disagree by accident, only by decision.
+   */
+  awaitingRepos?: RepoDelivery[];
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
-  if (pullRequests.length === 0) {
+  // The big EmptyState is for an item with NOTHING to show. An item that carries
+  // repositories always has rows — the awaiting ones — so it never lands here.
+  if (pullRequests.length === 0 && awaitingRepos.length === 0) {
     return (
       <EmptyState
         className="mt-2"
@@ -146,6 +213,12 @@ export function DevelopmentSectionBody({
       <ul className="list-none">
         {pullRequests.map((pr) => (
           <PullRequestRow key={`${pr.repo}#${pr.number}`} pr={pr} />
+        ))}
+        {/* After the real rows: a placeholder per repository still owed one.
+            Ordered by the item's own repository order, so the list reads in the
+            same sequence the rail does. */}
+        {awaitingRepos.map((d) => (
+          <AwaitingRepoRow key={d.repo} delivery={d} />
         ))}
       </ul>
       <p className="mt-3 font-sans text-xs text-(--el-text-muted)">
@@ -166,16 +239,25 @@ export function DevelopmentSection({
   pullRequests,
   itemIdentifier,
   className,
+  awaitingRepos = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
   className?: string;
+  /** Repositories the item carries whose work has not landed (MOTIR-2416) —
+   *  passed straight through to the shared body, so the peek shows the same
+   *  placeholder rows the detail page does rather than a reduced second form. */
+  awaitingRepos?: RepoDelivery[];
 }) {
   const t = useTranslations('github');
   return (
     <section className={className} data-testid="development-section">
       <SectionLabel label={t('development.title')} />
-      <DevelopmentSectionBody pullRequests={pullRequests} itemIdentifier={itemIdentifier} />
+      <DevelopmentSectionBody
+        pullRequests={pullRequests}
+        itemIdentifier={itemIdentifier}
+        awaitingRepos={awaitingRepos}
+      />
     </section>
   );
 }

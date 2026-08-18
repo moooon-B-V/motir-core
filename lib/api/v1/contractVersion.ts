@@ -63,10 +63,20 @@
  *   not record provenance at all without also asserting a lineage that does not
  *   exist. Additive: one new endpoint, on the existing `integration` scope, with
  *   `POST …/integration` unchanged in shape and behaviour.
- * - `1.9.0` — MOTIR-2903 adds the SUBSUMPTION member to the dispatch prompt's
+ * - `1.9.0` — MOTIR-2728 adds `targetRepos` to the work-item detail response and
+ *   to both work-item write bodies: the ordered SET of repositories an item ships
+ *   in, of which `targetRepo` is the first element. Additive on all three, and
+ *   deliberately so — §8 forbids removing, renaming or retyping a published
+ *   field, and turning `targetRepo` into an array is all three at once. A client
+ *   written against `targetRepo` keeps reading the repository dispatch routes to;
+ *   one that never learns about the set under-reports rather than mis-reports.
+ *   The two write fields are MUTUALLY EXCLUSIVE (`CONFLICTING_TARGET_REPO_INPUT`,
+ *   422) — a new CONDITION getting a status, which §8 permits, on an existing
+ *   code family. See `docs/decisions/work-item-repository-set.md` §3.
+ * - `1.10.0` — MOTIR-2903 adds the SUBSUMPTION member to the dispatch prompt's
  *   `advisories` union: a card whose body names a path a later merge already
  *   changed, so its deliverable may already be in the repository. Additive — a
  *   new member of a union on a field clients are required to tolerate unknown
  *   members of, with every existing member byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.9.0';
+export const V1_CONTRACT_VERSION = '1.10.0';

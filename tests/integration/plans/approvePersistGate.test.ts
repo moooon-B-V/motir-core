@@ -377,6 +377,17 @@ describe('the confirmation gate — done-work immutability', () => {
 
     const transition = db.$transaction(
       async (tx) => {
+        // BOUND (MOTIR-2952). This is a concurrent APPLICATION transaction, not a
+        // fixture write, so it stays on the code-under-test's connection — and on
+        // `motir_app` a bare `db.$transaction` binds no `app.workspace_id`, so
+        // the raw UPDATE matched ZERO rows and raised nothing. The card under
+        // test then approved cleanly, because the race it is meant to lose
+        // against never happened: the gate was not failing to block, there was
+        // simply nothing to block. `withWorkspaceContext` is not used here only
+        // because this transaction needs its own timeout window (below).
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${fx.ownerId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${fx.workspaceId}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.project_id', ${''}, true)`;
         await tx.$executeRaw`UPDATE "work_item" SET "status" = 'done' WHERE "id" = ${targetId}`;
         lockTaken();
         // Hold the lock long enough for the approve to pass its pre-transaction

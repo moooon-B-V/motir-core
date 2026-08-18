@@ -164,6 +164,71 @@ export function matchAuthoredTargetRepo(
 }
 
 /**
+ * Normalize + VALIDATE an authored repository SET against a repo DOMAIN,
+ * returning the ORDERED, de-duplicated list to store (Story MOTIR-2725 ·
+ * MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md` §1). PURE, for the
+ * same reason {@link matchAuthoredTargetRepo} is: the caller supplies the domain,
+ * which is what lets the project-scoped ladder (`lib/workItems/dispatchRepo.ts`)
+ * reuse this policy verbatim.
+ *
+ * ⚠️ It is a THIN LIST WRAPPER over {@link matchAuthoredTargetRepo}, deliberately.
+ * The set path and the single path must normalize, match and case-fold
+ * identically or a card's repository means one thing when it was pinned and
+ * another when it was listed — so the per-element rule is not re-implemented
+ * here, it is CALLED. Everything this function adds is list semantics:
+ *
+ *   * **Order is preserved and MEANINGFUL** — element 0 is the PRIMARY, the
+ *     repository `resolveDispatchRepo` routes to (ADR §2). Order comes from the
+ *     author; nothing here sorts.
+ *   * **Duplicates COLLAPSE, first occurrence wins**, compared on the MATCHED
+ *     name so that `motir-core`, `MOTIR-CORE` and `moooon/motir-core` are one
+ *     element, not three.
+ *   * **A blank / whitespace-only element is DROPPED**, matching
+ *     {@link normalizeTargetRepo}'s reading of a blank single value as "no pin"
+ *     rather than as a name. A list is not the place to discover that "" is a
+ *     repository.
+ *   * **An unknown element throws `UnknownTargetRepoError` on the FIRST one**,
+ *     naming the known set — the same error, the same message, the same 422, as
+ *     a single unknown pin. Validation is all-or-nothing: a partially-accepted
+ *     set would store a repository list the author never wrote.
+ *
+ * `[]` and `null`/`undefined` are the SAME answer — the empty set, which is the
+ * same state the null pin has always meant.
+ */
+export function matchAuthoredTargetRepos(
+  values: readonly (string | null | undefined)[] | null | undefined,
+  domain: ConnectedRepoName[],
+  scope: UnknownTargetRepoScope = 'workspace',
+): string[] {
+  if (values === undefined || values === null) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const matched = matchAuthoredTargetRepo(value, domain, scope);
+    if (matched === null) continue;
+    const key = matched.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(matched);
+  }
+  return out;
+}
+
+/**
+ * The PRIMARY of a repository set — element 0, or `null` for the empty set.
+ *
+ * The one place the scalar `work_item.targetRepo` is derived, so that ADR §3.1's
+ * rule ("`targetRepo` IS `targetRepos[0] ?? null`, never independently writable
+ * state") has a single implementation rather than a convention repeated at each
+ * write. A separate export rather than an inline `?? null` because it is the
+ * definition of a term three surfaces publish, and a term with two definitions is
+ * how the scalar becomes a second fact.
+ */
+export function primaryTargetRepo(repos: readonly string[]): string | null {
+  return repos[0] ?? null;
+}
+
+/**
  * The resolved dispatch REPO: which repo to run an item in, and — new in
  * MOTIR-1783 — how to obtain it. `null` when Motir cannot say which repo, which
  * is a real answer the CLI acts on (it falls back to its link-root rule).

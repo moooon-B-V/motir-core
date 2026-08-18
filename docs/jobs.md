@@ -322,6 +322,121 @@ silently take the default and the harness will talk to the wrong one), then
 `LAB_MODE=keyed|global INNGEST_DEV=1 INNGEST_BASE_URL=http://localhost:8388 node
 scripts/experiments/inngest-concurrency-fairness.mjs`.
 
+## Debounce — coalescing is REAL; the `timeout` cap and an unresolvable KEY are not
+
+`debounce` delays a run until `period` has passed with no further same-`key`
+event, then runs ONCE with the LATEST event. `timeout` is meant to cap the total
+deferral so a continuous stream still runs.
+
+```ts
+debounce: { key: "event.data.installationId + '/' + event.data.repoOwner", period: '2m', timeout: '15m' }
+```
+
+**`key` is a CEL expression, not a typed reference**, and that is the sharp edge
+below. The documented limits: `period` is at least 1 second and at most 7 days,
+and debounce does not combine with batching.
+
+### What the SCHEDULER actually does — MEASURED, not assumed
+
+A config-level assertion (`expect(fn.opts.debounce).toEqual(…)`, which
+`tests/jobs/code-graph-index.test.ts` makes for `system.code-graph-refresh`)
+proves the option was FORWARDED. It passes whatever the runtime then does with
+it — including dropping the runs it declines to enqueue, which is what
+MOTIR-2994 was filed to look for. So the behaviour was measured against the real
+scheduler: `scripts/experiments/inngest-debounce-coalescing.mjs` registers a
+probe function, sends a burst, and counts the runs that execute.
+
+`inngest-cli` **1.27.0** dev server, SDK 4.5.0. Re-check these on a CLI upgrade —
+the version is the measurement's scope, not a footnote.
+
+| Burst                                                         | Debounce           | Runs                              | Contract |
+| ------------------------------------------------------------- | ------------------ | --------------------------------- | -------- |
+| 4 events, no debounce (the CONTROL)                           | —                  | 4                                 | 4 ✓      |
+| 4–8 same-key events, sent SERIALLY                            | `2s` (± `30s` cap) | **1**, carrying the LAST event    | 1 ✓      |
+| the same 4–8, sent concurrently or as ONE batched `send`      | `2s` (± `30s` cap) | **1**, carrying an ARBITRARY one  | 1 ✓ ⚠️   |
+| 30 DISTINCT keys in one `send`                                | `2s` + `30s` cap   | **30**                            | 30 ✓     |
+| 24 events, 18 across 3 keys + **6 whose key field is ABSENT** | `2s` + `30s` cap   | **4** — 3 keyed + **1 for all 6** | 9 ✗      |
+| same key, one event every **1.0 s** for 20 s                  | `30s` + `5s` cap   | **5**, at ~5 s intervals          | ✓        |
+| same key, one event every **0.9 s** for 20 s                  | `30s` + `5s` cap   | 4                                 | ✓        |
+| same key, one event every **0.7 s** for 14 s                  | `2s` + `4s`/`10s`  | **1**, only after the stream ends | ✗        |
+| same key, one event every **0.5 s** for 20 s                  | `30s` + `5s` cap   | **1**, only after the stream ends | ✗        |
+
+**Coalescing is real, and — for a serially-sent stream — the last event wins.** The property
+`docs/decisions/code-graph-index-fleet.md` §7.3 leans on — a push storm to one
+repo produces one refresh of the newest head — holds on the dev server in every
+burst shape tried, including the one a bulk producer actually emits (the whole
+array in a single `send`). No run was dropped, and
+`error enqueueing debounce job: queue item already exists` appeared **zero**
+times across ~20 trials. **Distinct keys stay independent**: one key's burst
+never swallowed another's run.
+
+**⚠️ But WHICH event survives is only defined for a serially-sent stream.** A
+batched `send` does not preserve the array's order server-side, so the debounce
+keeps the last event RECEIVED — event 4 of 6, when measured. For
+`system.code-graph-refresh` this is immaterial: the run re-reads the repo's
+default-branch head rather than reading anything off the event. That is exactly
+the property to check before relying on "the latest event wins" — a job that
+takes a SHA from the event and is fed by a batched producer can coalesce onto a
+stale one.
+
+**⚠️ An UNRESOLVABLE key does not disable the debounce — it MERGES.** When the
+`key` expression names a field the event does not carry, the scheduler does not
+fall back to "not debounced": every such event lands in ONE shared bucket, so N
+unrelated events produce ONE run and N−1 units of work vanish with nothing raised
+to the sender. Inngest documents no behaviour here, so this is measured. **The
+rule that follows: a debounce `key` may only name fields the event's payload type
+makes REQUIRED.** `key` is a string, so TypeScript cannot check it and a field
+turned optional later breaks it silently. MOTIR-2902 is the instance —
+`key: 'event.data.parentId'` on `work-item/created`, where a ROOT item has no
+parent, so every root creation in a bulk import debounced against every other
+one; its E2E saw 3 derivation runs where it required 4.
+
+**⚠️ `timeout` does NOT cap the deferral for a stream faster than ~1 event/second.**
+At a 1.0 s inter-event gap the cap fires on schedule; at 0.7 s and below it never
+fires at all and the run lands only after the stream stops — the exact scenario
+`timeout` exists for. Treat the cap as a best-effort bound on a slow stream, and
+never as a latency guarantee. (Whether a job is EXPOSED depends on its producer:
+`system.code-graph-refresh` is driven by default-branch pushes to one repo, which
+do not arrive faster than one a second, so its `15m` cap is unexercised rather
+than wrong.)
+
+### What this does NOT say
+
+- **This was the dev server — the one CI's E2E lane and every self-hosted
+  deployment runs — not Inngest Cloud.** Production uses Cloud, whose scheduler
+  is a different implementation and was NOT measured: a controlled probe needs
+  the production account's `INNGEST_EVENT_KEY`, which is a Fly secret, and firing
+  probe events into the production environment is human-gated (see "Cloud
+  wiring"). Inngest's own documentation states the coalescing contract without
+  distinguishing environments, and documents nothing about an unresolvable key —
+  so for Cloud the first row of the table is a documented promise and the two ✗
+  rows are UNKNOWN, not known-good.
+- **A dev-only defect is still a defect.** Two of the three findings above bite
+  exactly where nobody is watching: self-hosted runs on this scheduler, and CI's
+  E2E lane is the only place any test can observe a debounce at all.
+
+### The guard
+
+`tests/jobs/debounce-burst.test.ts` boots the pinned `inngest-cli` and asserts
+the first three rows of that table against the real scheduler — one run for a
+same-key burst, one run PER distinct key, and the keyless collapse pinned as a
+characterization so a change upstream surfaces here. **Any job that grows a
+`debounce` belongs in it**: a scheduler that drops runs then fails the build
+instead of a story. It also asserts that `system.code-graph-refresh`'s key names
+only fields `CodeGraphRefreshData` makes required, which is the compile-time half
+of the unresolvable-key rule.
+
+To re-run the standalone probe: start `node_modules/inngest-cli/bin/inngest dev
+-u http://localhost:3988/api/inngest --no-discovery --port 8488
+--connect-gateway-port 8489 --connect-gateway-grpc-port 50252
+--connect-executor-grpc-port 50253` (any free ports — a sibling dev server on
+8288 will silently take the default and the harness will talk to the wrong one),
+then `LAB_MODE=same-key|distinct-keys|absent-key|no-debounce INNGEST_DEV=1
+INNGEST_BASE_URL=http://localhost:8488 node
+scripts/experiments/inngest-debounce-coalescing.mjs`. `LAB_SEND=serial|parallel|batch`
+selects how the burst is delivered and `LAB_GAP_MS` spaces it out — the two knobs
+the last four rows of the table turn.
+
 ## Wall clock — the step is the unit, and every I/O call needs a deadline
 
 **A retry budget does not help a job that runs out of TIME**, and this is the

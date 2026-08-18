@@ -151,6 +151,23 @@ export interface WorkItemDto {
    */
   targetRepo: string | null;
   /**
+   * EVERY repository this item's work ships in (Story MOTIR-2725 · MOTIR-2728,
+   * ADR `docs/decisions/work-item-repository-set.md` §3) — ordered, with
+   * **element 0 the PRIMARY**, which is exactly what `targetRepo` above holds.
+   *
+   * The two are not two facts: `targetRepo === targetRepos[0] ?? null`, always.
+   * The scalar survives because `/api/v1` publishes it and §8 of
+   * `public-api-conventions.md` forbids removing, renaming or retyping a
+   * published field without a new major — so the set is ADDITIVE here and on
+   * every exposed shape, and a consumer that reads only the scalar keeps getting
+   * the repository dispatch routes to.
+   *
+   * `[]` is the empty set — the same state the null pin has always meant, and the
+   * state most cards are in. It is legitimate and optional by design; nothing
+   * anywhere may present the field as required.
+   */
+  targetRepos: string[];
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — how the item was PLANNED and how it
    * was IMPLEMENTED, each a `source · harness · model` triple. All six nullable:
    * a null triple is the "unknown / —" state (pre-feature rows; items never
@@ -899,6 +916,23 @@ export interface CreateWorkItemInput {
    */
   targetRepo?: string | null;
   /**
+   * The full repository SET this item's work ships in (Story MOTIR-2725 ·
+   * MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md` §1) — ordered,
+   * with **element 0 the PRIMARY** that {@link CreateWorkItemInput.targetRepo}
+   * mirrors and that dispatch resolves. Each element is a bare repo NAME or the
+   * `owner/name` ref form, validated against the same project-scoped domain one
+   * pin is validated against; duplicates collapse (first occurrence wins), blank
+   * elements are dropped, and the FIRST unknown element is rejected with
+   * `UnknownTargetRepoError` (422) — validation is all-or-nothing.
+   *
+   * ⚠️ MUTUALLY EXCLUSIVE with `targetRepo` (§3.4): the scalar IS this list's
+   * first element, so supplying both describes one field twice and raises
+   * `ConflictingTargetRepoInputError` (422). Omitted → the set comes from
+   * `targetRepo` (a one-element set, or empty); `[]` → the empty set, which is
+   * the same state an unpinned card has always been in.
+   */
+  targetRepos?: string[];
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — stamp how the item was planned
    * and/or implemented at create time. The stamper subtasks (MOTIR-1689/1691)
    * supply `planning` with a server-set `source`; omitting it leaves all six
@@ -1040,6 +1074,21 @@ export interface UpdateWorkItemInput {
    * revision with any other field in the patch.
    */
   targetRepo?: string | null;
+  /**
+   * Patch the repository SET (Story MOTIR-2725 · MOTIR-2727): replace it
+   * wholesale with this ordered list, or clear it with `[]`. Same validation,
+   * same de-duplication, same all-or-nothing rule as the create shape, and the
+   * same mutual exclusion with `targetRepo` — the patch surface is never looser
+   * than the create one.
+   *
+   * A REORDER is a real change and is recorded as one: element 0 is the
+   * repository dispatch routes to, so `[a, b]` → `[b, a]` moves where an agent
+   * runs. Recorded in the revision diff as `{ targetRepos: { from, to } }`
+   * alongside `{ targetRepo: { from, to } }` when the primary moved too — the
+   * two columns always move together, because the scalar is derived from the
+   * list and must never describe a different repository than its first element.
+   */
+  targetRepos?: string[];
 }
 
 /**

@@ -256,8 +256,17 @@ describe('deleteWorkItem — races translate to typed errors', () => {
     await expect(workItemsService.deleteWorkItem(item.id, fx.ctx)).rejects.toBeInstanceOf(
       WorkItemNotFoundError,
     );
-    // The item in the other workspace is untouched.
-    expect(await exists(item.id, fx.workspaceId)).toBe(true);
+    // The item in the other workspace is untouched. Read through `adminDb`, the
+    // OWNER — MOTIR-2881's class 2, an assertion doing direct DB work rather
+    // than the subject of the test. What it needs OWNERSHIP for is precisely
+    // what `exists()` cannot give it: that helper binds `app.workspace_id` to
+    // the workspace it is handed (MOTIR-2835), so asking it about a row in the
+    // OTHER tenant answers `false` under `motir_app` whether the delete leaked
+    // or not — the policy hides the row from `fx`, which is a different fact
+    // from the one asserted here. Binding to `other.workspaceId` instead would
+    // read as the other tenant, which is also not the claim: the claim is that
+    // the ROW still exists at all.
+    expect(await adminDb.workItem.findUnique({ where: { id: item.id } })).not.toBeNull();
   });
 });
 

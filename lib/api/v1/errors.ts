@@ -143,6 +143,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   REPORTER_NOT_IN_WORKSPACE: 422,
   UNKNOWN_TARGET_REPO: 422,
   ARCHIVED_TARGET_REPO: 422,
+  // MOTIR-2728 — a write supplying BOTH `targetRepo` and `targetRepos`. The
+  // scalar IS the set's first element, so the two can disagree; a refusal beats a
+  // precedence rule that drops a repository the caller believed they recorded.
+  CONFLICTING_TARGET_REPO_INPUT: 422,
   INVALID_ESTIMATE: 422,
   // ⚠️ 412, a status ADR §4's table does not yet list. A new CONDITION getting a
   // status is additive under §8 (unlike an existing condition changing one), so

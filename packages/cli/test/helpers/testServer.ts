@@ -342,6 +342,7 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     commentCount: 0,
     sprintId: null,
     targetRepo: null,
+    targetRepos: [],
     executor: 'coding_agent',
     planningSource: null,
     planningHarness: null,

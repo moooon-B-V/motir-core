@@ -41,6 +41,7 @@ function makeItem(overrides: Partial<WorkItemDto> = {}): WorkItemDto {
     publicChildrenHidden: false,
     sessionBranch: null,
     targetRepo: null,
+    targetRepos: [],
     planningSource: null,
     planningHarness: null,
     planningModel: null,

@@ -70,6 +70,11 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     // only connected repo" and "not pinned" are different states here, and only
     // the DISPATCH mapper collapses them (a dispatching agent needs an answer).
     targetRepo: row.targetRepo,
+    // The repository SET (Story MOTIR-2725 · MOTIR-2728) — the whole ordered list,
+    // passed through beside the scalar it derives. Same reasoning as the pin: no
+    // default and no collapsing here, because the empty set and a one-element set
+    // are different states on a detail surface.
+    targetRepos: row.targetRepos,
     // Work-item provenance (Story MOTIR-1685) — the planning + implementation
     // triples; nullable enums + free-text. A null triple is the "unknown / —"
     // state the detail (MOTIR-1693) renders.

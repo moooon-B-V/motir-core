@@ -948,6 +948,7 @@ export interface components {
             commentCount: number;
             sprintId: string | null;
             targetRepo: string | null;
+            targetRepos: string[];
             executor: ("coding_agent" | "human") | null;
             planningSource: ("native" | "mcp" | "manual" | "api") | null;
             planningHarness: string | null;
@@ -1689,6 +1690,7 @@ export interface operations {
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
+                    targetRepos?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };
@@ -2138,6 +2140,7 @@ export interface operations {
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
+                    targetRepos?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };

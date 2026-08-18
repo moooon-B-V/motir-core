@@ -56,6 +56,7 @@ const WORK_ITEM_DETAIL = {
   commentCount: 0,
   sprintId: null,
   targetRepo: 'motir-core',
+  targetRepos: ['motir-core'],
   executor: 'coding_agent',
   planningSource: 'mcp',
   planningHarness: null,

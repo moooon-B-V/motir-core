@@ -464,7 +464,7 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       "`motir-ai/src/services/codeRepoService.ts`'s header block points at the decision.",
       '`motir-ai/tests/codeRepoService.test.ts` covers the new branch.',
     );
-    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toEqual({
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toEqual({
       path: 'motir-ai/src/services/codeRepoService.ts',
       repo: 'motir-ai',
       criterionIndex: 2,
@@ -478,12 +478,12 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       '`motir-core/tests/workItems/proseVsGraph.test.ts` covers both forms',
       'the docs at `docs/decisions/x.md` are untouched',
     );
-    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toBeNull();
   });
 
   it('compares the pin case-insensitively', () => {
     const md = withCriteria('`MOTIR-CORE/lib/x.ts` changes');
-    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toBeNull();
   });
 
   it('UNPINNED with two or more distinct repos fires with the `unpinnable` reason', () => {
@@ -495,7 +495,7 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       '`motir-core/tests/x.test.ts` covers it',
       '`motir-ai/src/jobs/x.ts` executes it',
     );
-    expect(firstRepoStraddleCriterion(md, null, REPOS)).toEqual({
+    expect(firstRepoStraddleCriterion(md, [], REPOS)).toEqual({
       path: 'motir-ai/src/jobs/x.ts',
       repo: 'motir-ai',
       criterionIndex: 3,
@@ -508,7 +508,7 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       '`motir-core/lib/services/x.ts` changes',
       '`motir-core/tests/x.test.ts` covers it',
     );
-    expect(firstRepoStraddleCriterion(md, null, REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(md, [], REPOS)).toBeNull();
   });
 
   it('a BOUNDARY-CONTRACT card DOES fire — an ACCEPTED false positive, recorded here', () => {
@@ -526,7 +526,7 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       'the consumer mirror in `motir-ai/src/contracts/planning.ts` reads it defensively, so ' +
         'either merge order is safe',
     );
-    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toEqual({
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toEqual({
       path: 'motir-ai/src/contracts/planning.ts',
       repo: 'motir-ai',
       criterionIndex: 2,
@@ -543,15 +543,15 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
       "a repeat-defect trigger is added to `plan-rules.md`'s per-card gate checklist " +
         '(and mirrored into `SHARED_PLANNING_RULES` — a planning RULE has two homes)',
     );
-    expect(firstRepoStraddleCriterion(md, 'motir-core', REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toBeNull();
   });
 
   it('emits nothing with no candidates, no AC heading, or an empty body', () => {
     const md = withCriteria('`motir-ai/src/x.ts` changes');
-    expect(firstRepoStraddleCriterion(md, 'motir-core', [])).toBeNull();
-    expect(firstRepoStraddleCriterion('Prose only.', 'motir-core', REPOS)).toBeNull();
-    expect(firstRepoStraddleCriterion(null, 'motir-core', REPOS)).toBeNull();
-    expect(firstRepoStraddleCriterion('', null, REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(md, ['motir-core'], [])).toBeNull();
+    expect(firstRepoStraddleCriterion('Prose only.', ['motir-core'], REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion(null, ['motir-core'], REPOS)).toBeNull();
+    expect(firstRepoStraddleCriterion('', [], REPOS)).toBeNull();
   });
 });
 

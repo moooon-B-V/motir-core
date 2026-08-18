@@ -94,6 +94,19 @@ const inputSchema = {
         'repositories. Routes the CLI to the right checkout at dispatch (one ' +
         'subtask = one repo = one PR). null clears the pin.',
     ),
+  targetRepos: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Replace the repository SET wholesale — EVERY repository this item ships ' +
+        'in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched ' +
+        'into. The item does not complete until every repository on the list has a ' +
+        "pull request merged onto that repository's own default branch, so use it " +
+        'for a card that legitimately spans repositories (a story or a task — ONE ' +
+        'SUBTASK is still ONE REPO). Same validation as create; `[]` clears the ' +
+        "set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first " +
+        'element: supplying both is rejected rather than silently resolved.',
+    ),
   assigneeId: z
     .string()
     .nullable()
@@ -117,6 +130,7 @@ interface UpdateWorkItemArgs {
   estimateMinutes?: number | null;
   storyPoints?: number | null;
   targetRepo?: string | null;
+  targetRepos?: string[];
   assigneeId?: string | null;
   dueDate?: string | null;
 }
@@ -133,6 +147,7 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.estimateMinutes !== undefined) patch.estimateMinutes = args.estimateMinutes;
   if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
   if (args.targetRepo !== undefined) patch.targetRepo = args.targetRepo;
+  if (args.targetRepos !== undefined) patch.targetRepos = args.targetRepos;
   if (args.assigneeId !== undefined) patch.assigneeId = args.assigneeId;
   if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
   return patch;

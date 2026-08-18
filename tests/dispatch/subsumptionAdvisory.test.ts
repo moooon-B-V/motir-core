@@ -340,7 +340,7 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
     subjects: Array<{
       item: string;
       descriptionMd: string | null;
-      targetRepo?: string | null;
+      targetRepos?: readonly string[];
       id?: string | null;
       createdAt?: Date | null;
     }>,
@@ -352,9 +352,9 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
         exemptIds: new Set<string>(),
         type: null,
         executor: null,
-        // `?? 'motir-core'` would be wrong: an UNPINNED subject passes `null`
-        // deliberately, and a nullish default would silently pin it.
-        targetRepo: 'targetRepo' in s ? (s.targetRepo ?? null) : 'motir-core',
+        // `?? ['motir-core']` would be wrong: an UNPINNED subject passes `[]`
+        // deliberately, and a nullish default would silently give it a repo.
+        targetRepos: s.targetRepos ?? ['motir-core'],
         id: s.id ?? null,
         createdAt: s.createdAt ?? null,
       })),
@@ -462,7 +462,7 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
           {
             item: card.identifier,
             descriptionMd: MOTIR_2757_BODY,
-            targetRepo: null,
+            targetRepos: [],
             id: card.id,
             createdAt: FILED,
           },

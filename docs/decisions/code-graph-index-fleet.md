@@ -325,6 +325,50 @@ the next push. Serializing the runs removes the only way two writers for one (re
 exist, so no motir-ai card is owed. If a later decision ever tolerates overlap again, that guard
 comes back with it.
 
+### §7.4 — CONFIRMATION: the debounce this section reasons from is REAL, and its `timeout` is not — MOTIR-2994
+
+§7.3 above, the job's own comment, and §11's _"one container per (repo × project) per debounced
+push"_ all reason from `system.code-graph-refresh`'s debounce COALESCING. Nothing had ever tested
+that. The only assertion on it read the option off `fn.opts` — which proves it was FORWARDED and
+passes whatever the executor does with it, including declining to enqueue the second run. MOTIR-2902
+then read a dev-server log as saying exactly that (_"error enqueueing debounce job: queue item
+already exists"_, and 3 derivation runs where its E2E required 4) and MOTIR-2994 was filed to find
+out whether this section's premise was false.
+
+**It is not.** Measured against the real scheduler — `inngest-cli` 1.27.0, the binary CI's E2E lane
+and every self-hosted deployment run, via `scripts/experiments/inngest-debounce-coalescing.mjs`; the
+full table is in `docs/jobs.md` § Debounce:
+
+- **A same-key burst coalesces into exactly ONE run carrying the LAST event**, in every delivery
+  shape a real producer uses (serial, concurrent, and the whole array in one `send`). No run was
+  dropped, and the error string above appeared **zero** times in ~20 trials. So §7.3's _"that
+  coalesces merges INSIDE one window"_ stands, and so does the §7.2/§11 cost model built on it.
+- **Distinct keys stay independent** — 30 keys in one `send` produced 30 runs — so one repo's push
+  storm cannot suppress another repo's refresh. That is the property the per-(repo × project)
+  container accounting needs, and it is now asserted in `tests/jobs/debounce-burst.test.ts`.
+
+**Two things this section should NOT keep claiming, both now measured false on the dev server:**
+
+- **`timeout: '15m'` is not a deferral cap.** The job's comment says _"`timeout` caps the total
+  deferral so a steady push stream still refreshes at least every 15m."_ At an inter-event gap of
+  1.0 s the cap fires on schedule; at 0.7 s and below it never fires at all and the run lands only
+  once the stream STOPS. **This job is not exposed** — its producer is default-branch pushes to one
+  repo, which do not arrive faster than one a second — so the disposition is to KEEP the debounce
+  unchanged and record the limit, not to replace the mechanism. But the guarantee is weaker than the
+  comment claimed, and a future job with a machine-generated producer would be exposed.
+- **An unresolvable `key` MERGES rather than disabling the debounce.** Events whose key expression
+  names a field they do not carry all land in ONE bucket, so N unrelated events yield ONE run and
+  N−1 vanish silently. `key` is a CEL string, so nothing type-checks it. This job is safe —
+  `CodeGraphRefreshData` makes all three key fields required, now asserted — and MOTIR-2902 is what
+  the trap looks like when it is not.
+
+**Cloud is UNMEASURED.** Production runs Inngest Cloud, a different scheduler implementation;
+probing it needs the production `INNGEST_EVENT_KEY` (a Fly secret) and is human-gated per
+`docs/jobs.md` § Cloud wiring. Inngest documents the coalescing contract without distinguishing
+environments and documents nothing about an unresolvable key — so on Cloud the first two findings
+are a documented promise and the last two are unknown, not known-good. Same shape as the concurrency
+fairness numbers in `docs/jobs.md`, which are also dev-server-only and say so.
+
 ## §8 — Decision 7
 
 **The META org runs indexing ON the fleet, by the same path a customer takes.**

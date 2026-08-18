@@ -306,24 +306,27 @@ describe('the ratchets over the real test suite', () => {
     // because the fixture would only prove the shapes its author thought of.
     //
     // `tests/cli/cli-device-routes.test.ts` is dispositioned `assertion` and
-    // holds statements against TWO tables: `api_token` (relrowsecurity=t, 1
-    // policy) and `device_code` (relrowsecurity=f, 0 policies). If the file
-    // ruling won first, all sixteen would read as work and the twelve
-    // `device_code` ones would be converted for no reason at all.
+    // holds twelve statements against `device_code` (relrowsecurity=f, 0
+    // policies). If the file ruling won first, all twelve would read as work and
+    // be converted for no reason at all.
+    //
+    // It used to hold four `api_token` statements as well, and the pairing was
+    // the point. MOTIR-2952 converted those to `adminDb`, which does not weaken
+    // this case: the ordering claim always rested on the `device_code` twelve —
+    // they are `no-policy` DESPITE a file ruling that says `assertion`, and that
+    // is exactly what "checked AFTER `no-policy`" means. The ruling is retained
+    // (see `DISPOSITIONED_FILES`) so this fixture keeps existing on real data.
     const routes = scan.statements.filter((s) => s.file === 'tests/cli/cli-device-routes.test.ts');
     expect(countByVerdict(routes)).toEqual({
       'not-gated': 0,
       'no-policy': 12,
       subject: 0,
       fixture: 0,
-      assertion: 4,
+      assertion: 0,
       undispositioned: 0,
     });
     expect(new Set(routes.filter((s) => s.verdict === 'no-policy').map((s) => s.model))).toEqual(
       new Set(['deviceCode']),
-    );
-    expect(new Set(routes.filter((s) => s.verdict === 'assertion').map((s) => s.model))).toEqual(
-      new Set(['apiToken']),
     );
   });
 
@@ -368,7 +371,7 @@ describe('the ratchets over the real test suite', () => {
     ).toEqual([]);
   });
 
-  it('the founding instance is fully dispositioned — and the instrument finds its unfixed twin', () => {
+  it('the founding instance is fully dispositioned — and so, now, is the twin it found', () => {
     // MOTIR-2918's own acceptance criterion: a scanner that cannot see its own
     // founding instance is not the instrument.
     //
@@ -385,18 +388,24 @@ describe('the ratchets over the real test suite', () => {
     // MOTIR-2911 fixed were `expect(await db.apiToken.count()).toBe(0)` — an
     // assertion that passes for the wrong reason under `motir_app`, because the
     // policy hides the rows rather than the count being real. The SAME shape,
-    // against the SAME table, sits UNFIXED four times in the sibling file that
-    // card's hand-built list never named. Two grep sweeps walked this population
-    // and neither reached it; the first run of this scanner did.
+    // against the SAME table, sat UNFIXED four times in the sibling file that
+    // card's hand-built list never named — at lines 211, 253, 597 and 626. Two
+    // grep sweeps walked this population and neither reached it; the first run of
+    // this scanner did, and MOTIR-2952 converted all four to `adminDb`.
+    //
+    // So the assertion INVERTS, and becomes a ratchet rather than a report: the
+    // file must hold NO direct statement against `api_token` at all. Only line
+    // 253 was ever red (`toBe(1)`); the other three asserted `toBe(0)` and passed
+    // for the wrong reason, which is why "the suite is green" was never evidence
+    // here and why the number that has to stay pinned is zero, not one.
     const twin = scan.statements.filter(
       (s) => s.file === 'tests/cli/cli-device-routes.test.ts' && s.model === 'apiToken',
     );
-    expect(twin.map(key)).toEqual([
-      'tests/cli/cli-device-routes.test.ts:211 db.apiToken.count',
-      'tests/cli/cli-device-routes.test.ts:253 db.apiToken.count',
-      'tests/cli/cli-device-routes.test.ts:597 db.apiToken.count',
-      'tests/cli/cli-device-routes.test.ts:626 db.apiToken.count',
-    ]);
+    expect(
+      twin.map(key),
+      'a direct `db.apiToken.*` statement is back in the route test. Under `motir_app` it ' +
+        'reads 0 rows whatever the route minted — MOTIR-2952 moved all four to `adminDb`.',
+    ).toEqual([]);
   });
 
   it('REPORTS the per-area split the next card is sized off', () => {

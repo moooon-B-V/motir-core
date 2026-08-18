@@ -439,6 +439,13 @@ export default defineConfig({
         // reference/severity extractor and the service that resolves + gates it.
         'lib/workItems/proseVsGraph.ts',
         'lib/services/proseGraphAdvisoryService.ts',
+        // The repository SET's per-repo DELIVERY classifier and its one shared
+        // field component (Story MOTIR-2725 · MOTIR-2417). Gated on their own
+        // because they are the seam the completion gate and BOTH surfaces read:
+        // a regression here makes the panel disagree with the gate, and blended
+        // into workItemsService's number it would be invisible.
+        'lib/workItems/repoDelivery.ts',
+        'components/workItems/RepositorySetField.tsx',
         'lib/mcp/tools/createSprint.ts',
         'lib/mcp/tools/updateSprint.ts',
         'lib/mcp/tools/deleteSprint.ts',
@@ -1585,6 +1592,8 @@ export default defineConfig({
         // inside workItemsService's blended number.
         'lib/workItems/proseVsGraph.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/proseGraphAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workItems/repoDelivery.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/workItems/RepositorySetField.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemLinkRepository.ts': { branches: 90, functions: 90, lines: 90 },

@@ -70,18 +70,22 @@ export interface ProseAdvisorySubject {
   type: string | null;
   executor: string | null;
   /**
-   * The card's `targetRepo` pin — read ONLY by the REPO-STRADDLE check
-   * (MOTIR-2177), which compares it against the repos its criteria name.
+   * The repositories the card CARRIES — read ONLY by the REPO-STRADDLE check
+   * (MOTIR-2177), which compares them against the repos its criteria name.
    *
-   * `null` is a real answer with its own arm ("unpinnable"), not a missing
-   * value, which is why it is required rather than optional: a caller that has
-   * not decided what it knows would otherwise silently take the unpinned branch.
-   * On the PROJECTED plan path a not-yet-materialized `add` genuinely has no
-   * repo NAME — a proposal carries a `targetRepoRole`, resolved to a name only
-   * at materialize — so `null` there is the truth, and the unpinnable arm is
-   * exactly the right question to ask of it.
+   * **A SET since MOTIR-2728**, because a work item can legitimately ship in more
+   * than one repository. The check is unchanged in intent: a criterion naming a
+   * path in a repo the card does NOT carry is still the defect, and the empty
+   * set still has its own arm ("unpinnable").
+   *
+   * EMPTY is a real answer, not a missing value, which is why it is required
+   * rather than optional: a caller that has not decided what it knows would
+   * otherwise silently take the unpinned branch. On the PROJECTED plan path a
+   * not-yet-materialized `add` genuinely has no repo NAME — a proposal carries a
+   * `targetRepoRole`, resolved to a name only at materialize — so `[]` there is
+   * the truth, and the unpinnable arm is exactly the right question to ask of it.
    */
-  targetRepo: string | null;
+  targetRepos: readonly string[];
   /**
    * The card's real work-item id and filing instant — read ONLY by the
    * SUBSUMPTION check (MOTIR-2903), which needs both: the id to exclude the
@@ -296,7 +300,7 @@ function repoStraddleAdvisory(
   subject: ProseAdvisorySubject,
   candidates: readonly RepoCandidate[],
 ): WorkItemProseAdvisoryDto | null {
-  const found = firstRepoStraddleCriterion(subject.descriptionMd, subject.targetRepo, candidates);
+  const found = firstRepoStraddleCriterion(subject.descriptionMd, subject.targetRepos, candidates);
   if (!found) return null;
   return {
     kind: 'shape',
@@ -313,7 +317,7 @@ function repoStraddleAdvisory(
 interface CoveringMerge {
   /** `owner/name#number` — where a reader goes to read the diff. */
   reference: string;
-  /** The bare repo NAME, for the `targetRepo` narrowing. */
+  /** The bare repo NAME, for the carried-repository-set narrowing. */
   repoName: string;
   title: string | null;
   mergedAt: Date;
@@ -413,11 +417,16 @@ async function buildSubsumptionIndex(
  *    opposite finding.
  *
  * And one narrowing that is precision rather than correctness: when the card
- * PINS a `targetRepo`, only merges in that repo count. A card is one repo and
- * one pull request, so a same-named path in another repo (`lib/db.ts` exists in
- * three of them) is a coincidence, not a covering merge. An unpinned card takes
- * every repo in the workspace, which is the honest reading of a card that has
- * not said where it ships.
+ * CARRIES a repository set, only merges in one of those repos count. A same-named
+ * path in a repo the card does not ship in (`lib/db.ts` exists in three of them)
+ * is a coincidence, not a covering merge. A card carrying an EMPTY set takes every
+ * repo in the workspace, which is the honest reading of a card that has not said
+ * where it ships — the same arm the repo-straddle check calls "unpinnable".
+ *
+ * ⚠️ The set, not `targetRepos[0]` (MOTIR-2728). A multi-repo card ships in every
+ * member, so a merge in its SECOND repo covers its work exactly as one in its
+ * first; reading only the head would make the finding depend on an ordering that
+ * means "which repo dispatch routes to", not "which repos this card touches".
  */
 function subsumptionAdvisory(
   subject: ProseAdvisorySubject,
@@ -428,12 +437,12 @@ function subsumptionAdvisory(
   if (id == null || createdAt == null) return null;
   if (isSubsumptionCheckExempt(subject.descriptionMd)) return null;
 
-  const pin = subject.targetRepo?.toLowerCase() ?? null;
+  const carried = new Set(subject.targetRepos.map((r) => r.toLowerCase()));
   const candidates = merges.filter(
     (m) =>
       m.workItemId !== id &&
       m.mergedAt > createdAt &&
-      (pin === null || m.repoName.toLowerCase() === pin),
+      (carried.size === 0 || carried.has(m.repoName.toLowerCase())),
   );
   if (candidates.length === 0) return null;
 
@@ -497,6 +506,7 @@ export async function buildDispatchProseAdvisories(
     type?: string | null;
     executor?: string | null;
     targetRepo?: string | null;
+    targetRepos?: readonly string[];
     /**
      * The card's filing instant — the SUBSUMPTION check's `since` (MOTIR-2903).
      *
@@ -514,7 +524,11 @@ export async function buildDispatchProseAdvisories(
 ): Promise<WorkItemProseAdvisoryDto[]> {
   const type = item.type ?? null;
   const executor = item.executor ?? null;
-  const targetRepo = item.targetRepo ?? null;
+  // The SET when the caller has one, else the scalar as the one-element set it
+  // means (MOTIR-2728) — so a caller that predates the set is never silently
+  // treated as unpinned, which would swap the check's arm rather than skip it.
+  const targetRepos: readonly string[] =
+    item.targetRepos ?? (item.targetRepo ? [item.targetRepo] : []);
   // Cheap short-circuit on the common shape: a body with no reference, no
   // ordering phrase and no path-like token in its criteria needs neither the
   // ancestor walk nor the edge read. ALL THREE scans are pure, and all three
@@ -566,7 +580,7 @@ export async function buildDispatchProseAdvisories(
         exemptIds,
         type,
         executor,
-        targetRepo,
+        targetRepos,
         id: item.id,
         createdAt,
       },
