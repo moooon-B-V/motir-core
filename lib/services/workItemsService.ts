@@ -1577,6 +1577,12 @@ export const workItemsService = {
         addedDescMentionIds,
         changedFieldIds,
         embeddingChanged,
+        // The re-parent ends, for the post-commit child-set emit (MOTIR-2902).
+        // Null when the patch did not move the item — a `parentId` absent from
+        // the patch, or present and equal, changes no child set.
+        movedBetween: parentChanged
+          ? { previousParentId: current.parentId, newParentId: patch.parentId ?? null }
+          : null,
       };
     });
 
@@ -1623,6 +1629,45 @@ export const workItemsService = {
         workspaceId: ctx.workspaceId,
         workItemId: result.dto.id,
       });
+    }
+
+    // ── Status derivation, child-set trigger (Bug MOTIR-2902) ──────────────
+    //
+    // `updateWorkItem` is the SECOND re-parent ingress, and it was missed.
+    // MOTIR-2892 wired `moveWorkItem` — which had emitted nothing at all — and
+    // the identical gap here went unnoticed because the two paths look unrelated
+    // from the outside: one is `move_to_parent`, the other is a field patch that
+    // happens to accept `parentId`.
+    //
+    // The CSV importer is the caller that makes it bite. It is a two-pass
+    // design: pass 1 creates each row WITHOUT a parent (a child whose parent is
+    // imported later cannot be parented yet) and pins its mapped status; pass 2
+    // wires the parent through THIS function. So every derivation trigger an
+    // import produced fired while the tree was still flat — the create-recompute
+    // saw a childless root, and the moment the children were actually attached,
+    // nothing fired at all. The parent kept whatever the CSV said, forever.
+    //
+    // Both ends are recomputed for the same reason `moveWorkItem` does it: one
+    // move changes two child sets in opposite directions — the previous parent
+    // may now be finished, the new one may need to come back. Either end may be
+    // null (moved to or from the top level); a move with no parent on either
+    // side cannot occur, since `parentChanged` means the two differ.
+    if (result.movedBetween) {
+      const parentIds = [
+        result.movedBetween.previousParentId,
+        result.movedBetween.newParentId,
+      ].filter((parentId): parentId is string => parentId !== null);
+      if (parentIds.length > 0) {
+        await sendEvent('work-item/child-set.changed', {
+          workspaceId: ctx.workspaceId,
+          parentIds,
+          workItemId: result.dto.id,
+          reason: 'reparented',
+          // The edit's own instant: a row LEAVING an aggregate leaves nothing
+          // behind to date the change (MOTIR-2965).
+          occurredAt: new Date().toISOString(),
+        });
+      }
     }
 
     return result.dto;
@@ -1700,6 +1745,34 @@ export const workItemsService = {
     const { dto } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
     );
+
+    // ── The pin's OWN derivation trigger (Bug MOTIR-2902) ──────────────────
+    //
+    // Post-commit, like every other emit in this service. This does NOT reopen
+    // the no-`work-item/transitioned` contract above: `work-item/derivation.requested`
+    // has exactly ONE consumer, `status-derivation/requested`, and no
+    // notification path subscribes to it — so the storm an import avoids stays
+    // avoided while the parent still gets recomputed.
+    //
+    // WHY IT IS NEEDED. Before this, the only derivation trigger an import
+    // produced was the `work-item/created` emitted by the create that PRECEDES
+    // this call. That recompute could run before the pin, read the child as
+    // `todo`, settle the parent at `todo` — and never re-fire, because the child
+    // set never changes again. The wrong answer was terminal, not late, which is
+    // why the ordering has to be guaranteed by an event rather than by a
+    // debounce window the runtime may not honour (the Inngest dev server does
+    // not; measured on #2114).
+    //
+    // Skipped for a ROOT item: with no parent there is nothing to derive, so an
+    // emit would be a guaranteed no-op run per imported top-level row.
+    if (dto.parentId) {
+      await sendEvent('work-item/derivation.requested', {
+        workspaceId: ctx.workspaceId,
+        parentId: dto.parentId,
+        workItemId: dto.id,
+        reason: 'imported-status-pinned',
+      });
+    }
     return dto;
   },
 

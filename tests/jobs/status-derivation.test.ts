@@ -13,6 +13,7 @@ import { childStatusCascadeService } from '@/lib/services/childStatusCascadeServ
 import {
   statusDerivationOnChildSetChanged,
   statusDerivationOnCreated,
+  statusDerivationOnRequested,
   statusDerivationOnTransitioned,
 } from '@/lib/jobs/definitions/statusDerivation';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
@@ -288,6 +289,29 @@ describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
       ),
     );
     expect(createdConsumers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // ── The silent-edit consumer (Bug MOTIR-2902) ────────────────────────────
+  it('status-derivation/requested is REGISTERED and triggers on the derivation-only event', () => {
+    expect(jobFunctions).toContain(statusDerivationOnRequested);
+    const opts = (
+      statusDerivationOnRequested as { opts?: { triggers?: Array<{ event?: string }> } }
+    ).opts;
+    expect(opts?.triggers).toEqual([{ event: 'work-item/derivation.requested' }]);
+  });
+
+  it('is the ONLY consumer of that event — which is what keeps the import storm-free', () => {
+    // `setImportedStatus` deliberately emits no `work-item/transitioned` so a
+    // bulk import cannot fan out one notification per row. This event exists to
+    // trigger derivation WITHOUT reopening that. The moment a second consumer
+    // subscribes — a watcher, the bell fan-in, the automation engine — that
+    // property is gone and the import is storming again, silently.
+    const consumers = jobFunctions.filter((f) =>
+      ((f as { opts?: { triggers?: Array<{ event?: string }> } }).opts?.triggers ?? []).some(
+        (t) => t.event === 'work-item/derivation.requested',
+      ),
+    );
+    expect(consumers).toEqual([statusDerivationOnRequested]);
   });
 });
 
