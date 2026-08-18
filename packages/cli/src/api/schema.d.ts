@@ -1173,6 +1173,15 @@ export interface components {
                 reason?: string;
             } | {
                 /** @constant */
+                kind: "subsumption";
+                item: string;
+                severity: string;
+                path: string;
+                pullRequest: string;
+                pullRequestTitle: string | null;
+                mergedAt: string;
+            } | {
+                /** @constant */
                 kind?: "reference";
                 item: string;
                 referenced: string;
