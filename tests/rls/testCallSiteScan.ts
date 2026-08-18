@@ -110,6 +110,15 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   // it DELETES it -- and drops the branch's coverage with it. The durable fix is
   // to retire the fallback, as MOTIR-2755 did for projectRoleDefinitionRepository
   // once every caller bound; that is a lib/ change and belongs to MOTIR-2796.
+  //
+  // ⚠️ MOTIR-2952: this adjudication was right about the SCANNER and silent about
+  // the ASSERTION, and the assertion was the half that was wrong. The read stayed
+  // unbound (as ruled) while still expecting `['PROD']` — the answer only a
+  // BYPASSRLS owner gives — so it went red the moment `motir_app` became the
+  // default. Fixed by correcting the EXPECTED VALUE to `[]`, which is what
+  // `tests/rls/tx-fallback-arm.test.ts` says an unbound read owes; the subject,
+  // and the branch coverage this entry protects, are untouched. An exemption
+  // from binding is not an exemption from being true.
   'tests/project-details-service.test.ts':
     "MOTIR-2843/2796: the test's subject IS the `?? db` branch; binding deletes it. Retire the fallback instead.",
 
@@ -154,6 +163,16 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   // `db.comment.groupBy`. Binding relocates the query onto the tx client, which
   // the spy cannot see, so every count reads 0 and the guard silently stops
   // guarding. Its cross-workspace pair (a/b) is the WHERE-clause shape as well.
+  //
+  // ⚠️ MOTIR-2952: the same correction as `project-details-service.test.ts` above.
+  // The ruling was right about the SPIED call and was silently extended to the
+  // ASSERTIONS riding on it — the buckets, the sparseness, the cross-workspace
+  // pair — none of which the spy needs and all of which expected rows an unbound
+  // read cannot return. The spied call keeps its unbound arm and now asserts `[]`;
+  // each answer-shaped claim moved to its own BOUND read of the same method.
+  // The cross-workspace pair came out STRONGER: both sides are now bound to the
+  // FAR tenant, so the empty answer can only come from the `workspaceId` filter
+  // rather than from the policy hiding the row.
   'tests/mcp/comment-counts.test.ts':
     'MOTIR-2755/2840: subject is the QUERY COUNT; a bound read leaves the client the spy watches.',
 

@@ -457,9 +457,24 @@ describe('getDetails', () => {
     expect(details.createdAt).toEqual(expect.any(String));
     expect(Number.isNaN(Date.parse(details.createdAt!))).toBe(false);
 
-    // The repo's no-tx read path (the `?? db` branch) also resolves the aliases.
+    // The repo's no-tx read path (the `?? db` branch) answers NOTHING — and that
+    // is the CORRECT answer, not a gap to bind around (MOTIR-2952). The claim
+    // this line used to make ("the `?? db` branch also resolves the aliases")
+    // was only ever true because `@/lib/db` was the BYPASSRLS owner; under
+    // `motir_app` the fallback binds no `app.workspace_id`, so `project_key_alias`
+    // admits no row. `tests/rls/tx-fallback-arm.test.ts` is the adjudicated home
+    // of that contract and states it in one sentence: "an UNBOUND read comes back
+    // EMPTY, and that is CORRECT. Asserting rows here would be asserting that a
+    // path with no binding somehow works." So this asserts the empty answer
+    // rather than a bound read — a bound read would delete the case, since the
+    // bound path is already proved by `details.previousKeys` three lines up.
+    //
+    // And the fixture is load-bearing for the same reason it is there: `[]` also
+    // passes when nothing was ever seeded, so the assertion above — which reads
+    // the SAME alias row through the service's bound path — is what makes this
+    // emptiness evidence.
     const direct = await projectKeyAliasRepository.findManyByProject(details.id);
-    expect(direct.map((a) => a.identifier)).toEqual(['PROD']);
+    expect(direct).toEqual([]);
   });
 });
 

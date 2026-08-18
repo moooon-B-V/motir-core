@@ -22,10 +22,25 @@
  * mirrors. The 6.7.3 specs compare the report's SQL-aggregated output against
  * these, so a drift between the JS axis and the SQL grouping (or a regression in
  * the aggregate read) fails the suite.
+ *
+ * ⚠️ EVERY DIRECT READ IN THIS FILE IS `adminDb`, THE OWNER (MOTIR-2952). Class:
+ * MOTIR-2881's class 2 — an ASSERTION doing direct DB work, never the subject of
+ * the test. What it needs OWNERSHIP for is the word "INDEPENDENTLY" three
+ * paragraphs up: this recompute is the ORACLE the report's SQL aggregate is
+ * checked against, and an oracle that shares the admission mechanism it is
+ * checking cannot detect that mechanism hiding rows. On the `@/lib/db` singleton
+ * these reads bind no `app.workspace_id`, so under `motir_app` they answered `{}`
+ * against a bound aggregate's real numbers — which is how the two epic6-at-scale
+ * cases went red. Binding them instead of owning them would have made both series
+ * pass through the same gate, and a policy that hid the whole corpus would then
+ * read as `{} === {}`: green, and meaningless.
+ *
+ * (`currentWorkerAdminUrl()` answers the bare `DATABASE_URL` outside a Vitest
+ * worker, so this is the same connection Playwright already had here.)
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { bucketAxis, bucketKey, reportWindow, type ReportPeriod } from '@/lib/reports/buckets';
 import {
   resolveReportingSeedSizes,
@@ -95,11 +110,13 @@ export interface ReportingFixture {
  * collection counts the bounded-read census asserts against.
  */
 export async function getReportingFixture(): Promise<ReportingFixture> {
-  const owner = await db.user.findUniqueOrThrow({ where: { email: SEED_REPORTING_OWNER_EMAIL } });
-  const workspace = await db.workspace.findFirstOrThrow({
+  const owner = await adminDb.user.findUniqueOrThrow({
+    where: { email: SEED_REPORTING_OWNER_EMAIL },
+  });
+  const workspace = await adminDb.workspace.findFirstOrThrow({
     where: { name: SEED_REPORTING_WORKSPACE_NAME, memberships: { some: { userId: owner.id } } },
   });
-  const project = await db.project.findFirstOrThrow({
+  const project = await adminDb.project.findFirstOrThrow({
     where: { workspaceId: workspace.id, identifier: SEED_REPORTING_PROJECT_IDENTIFIER },
   });
   const doneKeys = await doneCategoryStatusKeys(project.id, workspace.id);
@@ -116,16 +133,16 @@ export async function getReportingFixture(): Promise<ReportingFixture> {
     rules,
     enabledRules,
   ] = await Promise.all([
-    db.workItem.count({ where: { projectId: project.id } }),
-    db.workItem.count({ where: { projectId: project.id, status: { in: doneKeys } } }),
-    db.customFieldValue.count({ where: { workItem: { projectId: project.id } } }),
-    db.workItemLabel.count({ where: { workItem: { projectId: project.id } } }),
-    db.workItemComponent.count({ where: { workItem: { projectId: project.id } } }),
-    db.savedFilter.count({ where: { projectId: project.id } }),
-    db.dashboard.count({ where: { workspaceId: workspace.id } }),
-    db.dashboardWidget.count({ where: { dashboard: { workspaceId: workspace.id } } }),
-    db.automationRule.count({ where: { projectId: project.id } }),
-    db.automationRule.count({ where: { projectId: project.id, enabled: true } }),
+    adminDb.workItem.count({ where: { projectId: project.id } }),
+    adminDb.workItem.count({ where: { projectId: project.id, status: { in: doneKeys } } }),
+    adminDb.customFieldValue.count({ where: { workItem: { projectId: project.id } } }),
+    adminDb.workItemLabel.count({ where: { workItem: { projectId: project.id } } }),
+    adminDb.workItemComponent.count({ where: { workItem: { projectId: project.id } } }),
+    adminDb.savedFilter.count({ where: { projectId: project.id } }),
+    adminDb.dashboard.count({ where: { workspaceId: workspace.id } }),
+    adminDb.dashboardWidget.count({ where: { dashboard: { workspaceId: workspace.id } } }),
+    adminDb.automationRule.count({ where: { projectId: project.id } }),
+    adminDb.automationRule.count({ where: { projectId: project.id, enabled: true } }),
   ]);
 
   return {
@@ -154,7 +171,7 @@ export async function doneCategoryStatusKeys(
   projectId: string,
   workspaceId: string,
 ): Promise<string[]> {
-  const rows = await db.workflowStatus.findMany({
+  const rows = await adminDb.workflowStatus.findMany({
     where: { projectId, workspaceId, category: 'done' },
     select: { key: true },
   });
@@ -200,7 +217,7 @@ export async function expectedCreatedVsResolved(
     resolved[k] = 0;
   }
 
-  const items = await db.workItem.findMany({
+  const items = await adminDb.workItem.findMany({
     where: { projectId },
     select: { createdAt: true },
   });
@@ -209,7 +226,7 @@ export async function expectedCreatedVsResolved(
   }
 
   const doneKeys = await doneCategoryStatusKeys(projectId, workspaceId);
-  const resolvedAgg = await db.workItemRevision.groupBy({
+  const resolvedAgg = await adminDb.workItemRevision.groupBy({
     by: ['workItemId'],
     where: { workItem: { projectId, status: { in: doneKeys } } },
     _max: { changedAt: true },
@@ -238,7 +255,7 @@ export async function expectedCreatedVsResolved(
 export async function expectedStatusDistribution(
   projectId: string,
 ): Promise<Array<{ status: string; count: number }>> {
-  const grouped = await db.workItem.groupBy({
+  const grouped = await adminDb.workItem.groupBy({
     by: ['status'],
     where: { projectId },
     _count: { _all: true },
