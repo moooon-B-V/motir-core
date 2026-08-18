@@ -460,11 +460,29 @@ export const planChangeSessionsService = {
     // `[KEY](motir:<id>)` token is what makes them render as the shipped
     // `WorkItemRefChip` rather than as plain text — the same write-side
     // normalization every stored body gets (MOTIR-1440), reused, not reinvented.
-    const [normalized] = await normalizeBodyRefs({
-      projectId: pctx.projectId,
-      projectIdentifier: pctx.project.identifier,
-      fields: [utterance.message],
-    });
+    //
+    // BOUND, and the binding is opened HERE rather than threaded (MOTIR-2960).
+    // `normalizeBodyRefs` resolves key → id through `findByIdentifiers`, whose
+    // `tx ?? db` falls back to the singleton; `work_item` is workspace-keyed, so
+    // an unbound resolve under `motir_app` matches no row and returns `[]` —
+    // with no error and no log. The failure is therefore SILENT and total: every
+    // key stays plain text and `workItemRefs` comes back empty, which reads as
+    // "the planner linked nothing" rather than as a fault. The other four
+    // `normalizeBodyRefs` callers sit inside a write transaction and pass its
+    // `tx`; this one normalizes BEFORE `appendLocked` opens its short lock
+    // (side-effects-outside-tx, above), so there is no `tx` to thread and the
+    // correct fix is its own read-only binding — the same shape `toDto` uses a
+    // few hundred lines up for exactly this reason (MOTIR-2846).
+    const [normalized] = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      normalizeBodyRefs(
+        {
+          projectId: pctx.projectId,
+          projectIdentifier: pctx.project.identifier,
+          fields: [utterance.message],
+        },
+        tx,
+      ),
+    );
 
     return appendLocked(
       session,
