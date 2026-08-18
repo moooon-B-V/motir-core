@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  awaitingRepoRows,
   classifyRepoDelivery,
   hasRepoSetShortfall,
   repoSetShortfall,
+  type RepoDelivery,
+  type RepoDeliveryState,
 } from '@/lib/workItems/repoDelivery';
 import type { LinkedChangeRequestCompletionFact } from '@/lib/repositories/githubPullRequestRepository';
 
@@ -20,6 +23,12 @@ const fact = (
   baseRef: string | null,
   repoDefaultBranch = 'main',
 ): LinkedChangeRequestCompletionFact => ({ repoName, merged, baseRef, repoDefaultBranch });
+
+const delivery = (repo: string, state: RepoDeliveryState): RepoDelivery => ({
+  repo,
+  state,
+  primary: false,
+});
 
 describe('classifyRepoDelivery', () => {
   it('marks a merge onto the repository’s OWN default branch as delivered', () => {
@@ -136,5 +145,88 @@ describe('the gate’s shortfall is DERIVED from what the panel renders', () => 
 
   it('ABSTAINS on the empty set — no rows to render, nothing to hold', () => {
     expect(hasRepoSetShortfall(repoSetShortfall(classifyRepoDelivery([], [])))).toBe(false);
+  });
+});
+
+// MOTIR-3036 — the PLACEHOLDER derivation, which asks a different question from
+// the classifier above. `awaiting` means "not merged"; the row means "no pull
+// request". They diverge for the whole life of every open pull request, and the
+// Development section asserted the second one off the first.
+describe('awaitingRepoRows', () => {
+  const pr = (repo: string) => ({ repo });
+
+  it('drops a repository whose pull request is already listed', () => {
+    expect(
+      awaitingRepoRows([delivery('motir-core', 'awaiting')], [pr('moooon/motir-core')]),
+    ).toEqual([]);
+  });
+
+  it('COMPARES the bare name against the DTO’s owner/name — the forms differ by construction', () => {
+    // `work_item.targetRepos` stores `motir-core`; `LinkedPullRequestDto.repo` is
+    // `owner/name`. A raw-string cross-reference matches nothing at all, which is
+    // the defect wearing a fix's clothes — so this case is the one that decides
+    // whether the derivation works on real data.
+    expect(
+      awaitingRepoRows([delivery('motir-core', 'awaiting')], [pr('moooon-B-V/MOTIR-CORE')]),
+    ).toEqual([]);
+  });
+
+  it('keeps a repository that has no pull request of its own', () => {
+    expect(
+      awaitingRepoRows(
+        [delivery('motir-core', 'awaiting'), delivery('motir-ai', 'awaiting')],
+        [pr('moooon/motir-core')],
+      ),
+    ).toEqual([delivery('motir-ai', 'awaiting')]);
+  });
+
+  it('keys on the pull request EXISTING, not on its delivery state', () => {
+    // `unknown` is the state a merged PR with an unrecorded base lands in — the
+    // repository HAS a row on the surface, so it is not owed a placeholder too.
+    expect(awaitingRepoRows([delivery('motir-ai', 'unknown')], [pr('moooon/motir-ai')])).toEqual(
+      [],
+    );
+  });
+
+  it('still drops a DELIVERED repository, pull request listed or not', () => {
+    // The drop the two hosts used to do themselves. It moved in here WITH the
+    // cross-reference so that a host passes its set and decides nothing.
+    expect(awaitingRepoRows([delivery('motir-core', 'delivered')], [])).toEqual([]);
+  });
+
+  it('leaves an unmatched pull request alone — it is not a repository the item carries', () => {
+    // A PR linked by hand can name a repository outside the item's set. It gets
+    // its own row from `pullRequests`; it must not add or remove a placeholder.
+    expect(awaitingRepoRows([delivery('motir-ai', 'awaiting')], [pr('moooon/motir-core')])).toEqual(
+      [delivery('motir-ai', 'awaiting')],
+    );
+  });
+
+  it('preserves the item’s repository ORDER', () => {
+    expect(
+      awaitingRepoRows(
+        [delivery('motir-core', 'awaiting'), delivery('motir-ai', 'awaiting')],
+        [],
+      ).map((d) => d.repo),
+    ).toEqual(['motir-core', 'motir-ai']);
+  });
+
+  it('returns the empty set for an item that carries no repositories', () => {
+    expect(awaitingRepoRows([], [pr('moooon/motir-core')])).toEqual([]);
+  });
+
+  it('ignores a pull request that names no repository — it suppresses nothing', () => {
+    expect(awaitingRepoRows([delivery('motir-core', 'awaiting')], [pr('')])).toEqual([
+      delivery('motir-core', 'awaiting'),
+    ]);
+  });
+
+  it('KEEPS a set entry that names no repository — nothing can match it', () => {
+    // The pin path rejects a blank name, so this should not exist; if one ever
+    // does, it must stay visible rather than be silently swallowed by a pull
+    // request it has no relationship to.
+    expect(awaitingRepoRows([delivery('', 'awaiting')], [pr('moooon/motir-core')])).toEqual([
+      delivery('', 'awaiting'),
+    ]);
   });
 });
