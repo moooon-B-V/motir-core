@@ -374,8 +374,16 @@ MOTIR-2990's tests so it is a decision on the record rather than a side effect n
   is a client reporting work it never created.
 - **It does not retrofit the generator path's attribution** (Q3) — a separate change with its
   own backfill question, carded as **MOTIR-2996** and `blocked_by` MOTIR-2982.
-- **It does not change how Motir's own planner runbook works.** That is MOTIR-2983,
-  `blocked_by` MOTIR-2982.
+- **It does not itself change how Motir's own planner runbook works** — but that adoption is
+  **inside** this story, not after it: **MOTIR-3047** (`motir-meta`), `blocked_by` MOTIR-2988.
+  Moved in on 2026-08-18 (Yue), superseding the deferred stub MOTIR-2983, because a door nobody
+  walks through is not shipped (Principle #10) and this runbook is the most demanding planner
+  Motir has — deep trees, sibling edges between proposals that do not exist yet — so it is where
+  an awkward append-order or temp-ref contract surfaces first, on us.
+  **⚠️ Not a total conversion, and the split is the card's first deliverable:** the passes that
+  produce a tree propose it; the corrections that happen INSIDE a run (THE REPLAN ACTION, bug
+  filing, status flips, the dispatch claim) stay DIRECT, because `run.md`'s never-ask contract
+  forbids a run that stops to wait for an approval.
 
 ---
 
@@ -396,13 +404,18 @@ at the same time as this document:
 
 **Nothing this ADR names as follow-up work is left unfiled.** `notes.html` #181: a decision's
 ANSWERS are deliverables, and an un-owned one is invisible — nothing downstream goes red when
-an answer has no home. The two pieces of work this ADR declines to do both have one:
+an answer has no home. The two pieces of work this ADR does not do itself both have one:
 
 - **Retrofitting the generator path's attribution** (Q3) → **MOTIR-2996**, filed with this
   ADR, `blocked_by` MOTIR-2982. It was named here as a scope boundary and would otherwise have
   been exactly the orphan #181 describes: the inference it removes lives in two files, is
   correct today, and goes wrong silently the first time a non-job producer writes a `Plan`.
-- **The runbook adoption** → already carded as **MOTIR-2983**, `blocked_by` MOTIR-2982.
+- **The runbook adoption** → **MOTIR-3047**, a `motir-meta` child of MOTIR-2982 itself. It began
+  as the deferred stub MOTIR-2983 and was pulled INTO the story on 2026-08-18; that stub is
+  archived as a duplicate. Its hedge about a second `motir-ai` half is measurably empty —
+  `src/llm/planningRulePacks.ts` names the direct-write tools **zero** times, because the mirrored
+  corpus governs how to SHAPE a plan, not which tool writes it — so ONE SUBTASK = ONE REPO = ONE
+  PR holds for the single motir-meta card.
 
 Neither is a deliverable this decision produces and leaves homeless.
 
