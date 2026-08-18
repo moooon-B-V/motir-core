@@ -489,22 +489,49 @@ settled, which reading the `.tsx` would not have:
 3. The meta entries are visually identical to each other. A bare `Mara · via Claude Code` in that
    line reads as more timestamps — hence the **avatar** and the **glyph** (§4).
 4. The shipped row does **not** render the decider, though panel A's mock draws _"approved yesterday
-   by Mara"_. That gap is pre-existing and is **not** closed here; it is noted so a reader does not
-   take the mock's older panel for shipped behaviour.
+   by Mara"_. That drove a design rule rather than a shrug — see §3's _A DECIDED row shows the
+   DECIDER_ — and the gap itself is pre-existing and **not** closed here.
 
-## 3. What it draws — six list-row states, and the FIELD each reads
+## 3. What it draws — seven rows, and the FIELD each reads
 
 The attribution is **one more entry in the row's existing meta line**, after the timestamp:
 `<avatar> Mara · 🤖 via Claude Code`.
 
-| #   | state                         | the row shows                               | read from                                                         |
-| --- | ----------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
-| 1   | **Person asked, AGENT wrote** | `M` `Mara` · 🤖 `via ` **`Claude Code`**    | `createdById` → name · `authorSource === 'mcp'` → `authorHarness` |
-| 2   | **Person asked, MOTIR wrote** | `J` `Jonas` · ✨ `via ` **`Motir AI`**      | `createdById` → name · `sourceJobId !== null`                     |
-| 3   | **NOBODY asked** (cadence)    | ↻ `auto-planned` · ✨ `via ` **`Motir AI`** | `createdById === null` **and** `origin === 'cadence'`             |
-| 4   | **Unattributed**              | **nothing — the entry is absent**           | neither party known                                               |
-| 5   | **Requester only**            | `P` `Priya`                                 | `createdById` set, no author and no job                           |
-| 6   | **Long values**               | both names ellipsize; nothing else moves    | §5                                                                |
+**Rows 1–4 ARE panel A's rows** — the same four plans, in the same order, with the same item counts,
+op summaries, timestamps, staleness flag and accent border. This panel AMENDS A, so it must be
+diffable against it: read the two side by side and the only difference is the new entry.
+Substituting different plans would have forced the reader to re-read both panels to work out what
+changed, which is the one thing an amendment panel exists to prevent. **Rows 5–7 are ADDED**, for
+three states panel A has no row for.
+
+| #   | row                             | the attribution shows                       | read from                                                         |
+| --- | ------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| 1   | **generating** (A's row 1)      | `M` `Mara`                                  | `createdById` → name; no author yet                               |
+| 2   | **planned + stale** (A's row 2) | `M` `Mara` · 🤖 `via ` **`Claude Code`**    | `createdById` → name · `authorSource === 'mcp'` → `authorHarness` |
+| 3   | **approved** (A's row 3)        | ✨ `via ` **`Motir AI`** — NO requester     | `sourceJobId !== null`; decided, see below                        |
+| 4   | **declined** (A's row 4)        | **nothing — the entry is absent**           | neither party known (a plan older than both columns)              |
+| 5   | **NOBODY asked** (cadence)      | ↻ `auto-planned` · ✨ `via ` **`Motir AI`** | `createdById === null` **and** `origin === 'cadence'`             |
+| 6   | **requester, no agent**         | `P` `Priya`                                 | `createdById` set, no author and no job                           |
+| 7   | **long values**                 | both names ellipsize; nothing else moves    | §5                                                                |
+
+### A DECIDED row shows the DECIDER, not the requester
+
+Panel A's rows 3 and 4 already end **`approved yesterday by Mara`** / **`declined 3 days ago by
+Mara`** — the THIRD party, drawn since 843. A decided row that also gained a requester would
+therefore carry **two bare person names in one line**, and a reader cannot tell which one holds which
+role; it is the two-chips-read-as-one hazard applied to people.
+
+The rule that resolves it is also the one that matches how the list is read: **while a plan is
+UNDECIDED, _who asked_ is what you weigh — you are about to approve their request. Once it is
+decided, _who decided_ is the operative fact and the requester is history.** So the row drops the
+requester on `approved` / `declined`, keeps the agent (which still answers _what wrote the tree I
+accepted?_), and the **detail header keeps both** (§6). It also caps the meta line at three entries
+in every state.
+
+⚠️ **`by Mara` is drawn in panel A and is NOT shipped.** `PlanRow` renders
+`t(view.whenKey, { when })` — _"approved yesterday"_, with no name. That gap is pre-existing, is
+**not** closed by this amendment, and is named here so nobody reads panel A as shipped behaviour or
+reads this panel as having deleted something.
 
 ### ⚠️ State 3 is the one the DATA had to be shaped for, and it is not cosmetic
 
@@ -589,9 +616,16 @@ The attribution joins the **`N items` line**, with **two differences** from the 
    plans and nobody scans a list on it. **Absent model ⇒ the separator and the model both
    disappear**; absent everything ⇒ the entry is absent, as in the row.
 
-State 3 is spelled out most explicitly of all here — **"Auto-planned — nobody requested this"** —
-because this is the surface where somebody is about to accept the work, and _no requester_ is a fact
-they should read rather than infer from a missing name.
+The cadence state is spelled out most explicitly of all here — **"Auto-planned — nobody requested
+this"** — because this is the surface where somebody is about to accept the work, and _no requester_
+is a fact they should read rather than infer from a missing name.
+
+**And unlike the row, the header keeps the requester on a DECIDED plan.** The row drops it because a
+second bare name competes with the decider in a scanned line (§3); the header has neither problem —
+it names the roles in words, and the decider already lives in its own **history timeline** below
+(`created → planned → approved by …`), not in the same line. So an approved plan's header reads
+_"Requested by Jonas · written by Motir AI"_, with the decider a row further down where it always
+was.
 
 ## 7. What this amendment ASSIGNS to its sibling cards
 

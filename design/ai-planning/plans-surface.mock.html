@@ -1589,7 +1589,23 @@
                 >
               </div>
               <div class="list">
-                <!-- 1 — a PERSON asked, an AGENT wrote: the state this exists for -->
+                <!-- generating -->
+                <div class="row">
+                  <span class="ic" style="background: var(--sky)"><span class="spin"></span></span>
+                  <div class="idea">
+                    <div class="t">Add recurring invoices &amp; payment reminders</div>
+                    <div class="m">
+                      <span>generating…</span><span><b>building</b> the tree</span
+                      ><span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill generating"><span class="spin"></span> Generating</span>
+                  </div>
+                </div>
+                <!-- planned, awaiting review, stale -->
                 <div
                   class="row"
                   style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
@@ -1599,21 +1615,22 @@
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="#3a2d8a"
-                      stroke-width="2.2"
+                      stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
-                      <path d="M12 6v6l4 2" />
-                      <circle cx="12" cy="12" r="9" /></svg
+                      <path d="M9 11l3 3 8-8" />
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
                   ></span>
                   <div class="idea">
-                    <div class="t">Author a plan over the MCP — the agent proposes the tree</div>
+                    <div class="t">Stripe Connect payouts for marketplace sellers</div>
                     <div class="m">
-                      <span><b>14</b> items</span><span>planned <b>2h ago</b></span>
-                      <span class="attrib"
+                      <span><b>14</b> items</span><span>+9 add · 4 modify · 1 remove</span
+                      ><span>planned <b>2h ago</b></span
+                      ><span class="attrib"
                         ><span class="who-av">M</span><b class="person">Mara</b>
-                        <span class="sep">·</span>
-                        <svg
+                        <span class="sep">·</span
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1629,6 +1646,20 @@
                     </div>
                   </div>
                   <div class="meta">
+                    <span class="pill stale"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                        /></svg
+                      >3 may be out of date</span
+                    >
                     <span class="pill planned"
                       ><svg
                         viewBox="0 0 24 24"
@@ -1644,8 +1675,7 @@
                     >
                   </div>
                 </div>
-
-                <!-- 2 — a PERSON asked, MOTIR wrote: every plan in the product today -->
+                <!-- approved -->
                 <div class="row">
                   <span class="ic" style="background: var(--mint)"
                     ><svg
@@ -1661,11 +1691,10 @@
                   <div class="idea">
                     <div class="t">Email digest &amp; weekly summaries</div>
                     <div class="m">
-                      <span><b>8</b> items</span><span>approved <b>yesterday</b></span>
-                      <span class="attrib"
-                        ><span class="who-av">J</span><b class="person">Jonas</b>
-                        <span class="sep">·</span>
-                        <svg
+                      <span><b>8</b> items</span><span>all added to backlog</span
+                      ><span>approved <b>yesterday</b> by Mara</span
+                      ><span class="attrib"
+                        ><svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1698,8 +1727,44 @@
                     >
                   </div>
                 </div>
+                <!-- declined -->
+                <div class="row" style="opacity: 0.78">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Crypto wallet checkout</div>
+                    <div class="m">
+                      <span><b>11</b> items</span><span>dropped — nothing changed</span
+                      ><span>declined <b>3 days ago</b> by Mara</span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
 
-                <!-- 3 — NOBODY asked: the cadence watcher fired it -->
+                <!-- 5 — NOBODY asked: the cadence watcher fired it. A state panel A
+                     has no row for, so it is added rather than substituted. -->
                 <div class="row">
                   <span class="ic" style="background: var(--sky)"
                     ><svg
@@ -1714,9 +1779,10 @@
                       <circle cx="12" cy="12" r="9" /></svg
                   ></span>
                   <div class="idea">
-                    <div class="t">Fill the ready set — expansion of “Payments”</div>
+                    <div class="t">Fill the ready set — expansion of “Marketplace payouts”</div>
                     <div class="m">
-                      <span><b>6</b> items</span><span>planned <b>20m ago</b></span>
+                      <span><b>6</b> items</span><span>+6 add</span
+                      ><span>planned <b>20m ago</b></span>
                       <span class="attrib"
                         ><svg
                           viewBox="0 0 24 24"
@@ -1764,42 +1830,8 @@
                   </div>
                 </div>
 
-                <!-- 4 — UNATTRIBUTED: the entry is ABSENT. No dash, no placeholder. -->
-                <div class="row">
-                  <span class="ic" style="background: var(--mutedfill)"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#787671"
-                      stroke-width="2.2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" /></svg
-                  ></span>
-                  <div class="idea">
-                    <div class="t">Crypto wallet checkout</div>
-                    <div class="m">
-                      <span><b>11</b> items</span><span>declined <b>3 days ago</b></span>
-                    </div>
-                  </div>
-                  <div class="meta">
-                    <span class="pill declined"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M18 6 6 18M6 6l12 12" /></svg
-                      >Declined</span
-                    >
-                  </div>
-                </div>
-
-                <!-- 5 — the REQUESTER SURVIVES the agent going unnamed -->
+                <!-- 6 — a REQUESTER with no agent: what a plan authored some other
+                     way looks like. The person half stands alone. -->
                 <div class="row">
                   <span class="ic" style="background: var(--lavender)"
                     ><svg
@@ -1816,18 +1848,31 @@
                   <div class="idea">
                     <div class="t">Refund flow for partially-captured payments</div>
                     <div class="m">
-                      <span><b>9</b> items</span><span>planned <b>1h ago</b></span>
+                      <span><b>9</b> items</span><span>+7 add · 2 modify</span
+                      ><span>planned <b>1h ago</b></span>
                       <span class="attrib"
                         ><span class="who-av">P</span><b class="person">Priya</b></span
                       >
                     </div>
                   </div>
                   <div class="meta">
-                    <span class="pill planned">Planned</span>
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
                   </div>
                 </div>
 
-                <!-- 6 — LONG values in a NARROW row: what truncates, and in what order -->
+                <!-- 7 — LONG values in a NARROW row: what truncates, and in what order -->
                 <div class="row" style="width: 430px">
                   <span class="ic" style="background: var(--lavender)"
                     ><svg
@@ -1876,8 +1921,19 @@
                   </div>
                 </div>
               </div>
-
               <div class="note-box">
+                <b>The rows are panel A's rows.</b> This panel amends A rather than replacing it, so
+                rows 1–4 are the SAME four plans, in the same order, with the same counts, op
+                summaries and timestamps — read the two side by side and the only difference is the
+                new entry. Rows 5–7 are ADDED, for three states panel A has no row for. <br /><br />
+                <b>A DECIDED row shows the decider, not the requester.</b> Rows 3 and 4 already end
+                <code>approved yesterday by Mara</code> / <code>declined 3 days ago by Mara</code>
+                — the THIRD party, drawn in panel A since 843. While a plan is undecided, “who
+                asked” is what you weigh; once it is decided, “who decided” is the operative fact
+                and the requester is history, so the row drops it and the detail header keeps it.
+                That rule is also what stops two bare names landing in one line, where a reader
+                cannot tell which one holds which role.
+                <br /><br />
                 <b>What truncates, in order.</b> The plan TITLE keeps its own single-line ellipsis
                 and is never shortened by the attribution — the meta line sits below it and wraps.
                 Inside the attribution, the PERSON truncates at <code>10rem</code> and the HARNESS
@@ -1901,10 +1957,10 @@
               <div class="list" style="display: grid; gap: 14px">
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Author a plan over the MCP</h4>
+                    <h4>Stripe Connect payouts</h4>
                     <span class="pill planned">Planned</span>
                   </div>
-                  <p class="sum">An agent proposes a tree of PlanItems the user reviews.</p>
+                  <p class="sum">Marketplace sellers get paid out through Stripe Connect.</p>
                   <div class="hdrmeta">
                     <span><b>14</b> items</span>
                     <span class="attrib"
@@ -1957,7 +2013,7 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Fill the ready set — expansion of “Payments”</h4>
+                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
                     <span class="pill planned">Planned</span>
                   </div>
                   <div class="hdrmeta">
