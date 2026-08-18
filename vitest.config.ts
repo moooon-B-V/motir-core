@@ -452,6 +452,11 @@ export default defineConfig({
         // written, so a regression here moves where an agent is dispatched, and
         // blended into `workItemsService`'s number it would be invisible.
         'lib/repositories/workItemRepoRepository.ts',
+        // The PROJECT repository set on the planning-job envelope (MOTIR-3044).
+        // Gated on its own because it is a CROSS-REPO contract: the consumer is in
+        // motir-ai, so a regression here is invisible from this side until a plan
+        // comes back unpinned.
+        'lib/ai/projectRepoContext.ts',
         'lib/mcp/tools/createSprint.ts',
         'lib/mcp/tools/updateSprint.ts',
         'lib/mcp/tools/deleteSprint.ts',
@@ -1611,6 +1616,7 @@ export default defineConfig({
         'lib/services/proseGraphAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workItems/repoDelivery.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepoRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ai/projectRepoContext.ts': { branches: 90, functions: 90, lines: 90 },
         'components/workItems/RepositorySetField.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },

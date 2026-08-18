@@ -1,6 +1,7 @@
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -134,6 +135,17 @@ async function submitPlanEditJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // The PROJECT's repository SET (MOTIR-3044), on THIS shared submit rather than
+  // per operation — for the same reason `generateExplanations` is set here: the
+  // anchor set makes the submitted kind only a FALLBACK, so a per-kind site would
+  // still drop the field on the contextual path. One site therefore covers
+  // `augment`, `expand_item`, `replan` and every contextual turn, which is what
+  // makes "every planning operation carries it" a property of the code rather
+  // than of the test that happened to drive one.
+  const repositories = await resolveProjectRepoContext(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   const tenant = buildTenant(ctx, organizationId, isMeta);
   const { jobId } = await submitJob(
     kind,
@@ -159,6 +171,7 @@ async function submitPlanEditJob(
       // exactly as the `generate_tree` submit sends it.
       generateExplanations: ctx.project.aiGenerateExplanations,
       ...(code ? { code } : {}),
+      ...(repositories ? { repositories } : {}),
     },
     { userId: ctx.userId },
   );

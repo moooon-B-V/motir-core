@@ -1,6 +1,7 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -75,6 +76,16 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The PROJECT's repository SET (MOTIR-3044) — beside the workspace grant list
+    // above, never merged into it. Resolved on the same pre-submit slot and for
+    // the same reason: the set read opens its own workspace context, so it cannot
+    // run inside a transaction. `undefined` (a project with no rows) OMITS
+    // `context.repositories` entirely, so such a project's envelope is
+    // byte-identical to one built before this field existed.
+    const repositories = await resolveProjectRepoContext(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -94,6 +105,7 @@ export const aiGenerationService = {
         // reads motir-core config directly; the flag rides the envelope.
         generateExplanations: ctx.project.aiGenerateExplanations,
         ...(code ? { code } : {}),
+        ...(repositories ? { repositories } : {}),
       },
       { userId: ctx.userId },
     );
