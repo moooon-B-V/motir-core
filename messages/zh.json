@@ -225,7 +225,11 @@
     "editLabelDescription": "描述",
     "editTitleRequired": "请输入标题。",
     "editSave": "保存更改",
-    "editCancel": "取消"
+    "editCancel": "取消",
+    "requestedBy": "由 {name} 发起",
+    "writtenByHarness": "由 {harness} 撰写",
+    "writtenByMotir": "由 Motir AI 撰写",
+    "autoPlannedNobodyAsked": "自动规划 — 无人发起"
   },
   "planEdits": {
     "submitting": "提交中…",
@@ -5243,7 +5247,10 @@
       "replan": "重新规划",
       "planAria": "规划 {item}",
       "replanAria": "重新规划 {item}"
-    }
+    },
+    "viaHarness": "由 {harness} 撰写",
+    "viaMotir": "由 Motir AI 撰写",
+    "autoPlanned": "自动规划"
   },
   "planningWorkspace": {
     "noProjectTitle": "未选择项目",

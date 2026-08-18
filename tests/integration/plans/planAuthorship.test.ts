@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
+import { planReviewService } from '@/lib/services/planReviewService';
 import { createTestUser, makeWorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -211,5 +212,79 @@ describe('Plan authorship — the `source · harness · model` triple on a Plan'
       const read = await plansService.getPlan(plan.id, fx.ctx);
       expect(read.authorSource).toBe(source);
     }
+  });
+});
+
+describe('Plan attribution reaches BOTH surface reads (MOTIR-2991)', () => {
+  it('the review DTO carries the requester NAME, the author triple, origin and sourceJobId', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      {
+        title: 'An agent-authored plan',
+        createdById: fx.ownerId,
+        authorSource: 'mcp',
+        authorHarness: 'Claude Code',
+        authorModel: 'claude-opus-5',
+      },
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // The DETAIL is fed by `PlanReviewDto`, NOT by `PlanDto` — two shapes,
+    // maintained separately, which is exactly why one can be right while the
+    // other is empty. This asserts the one the header actually reads.
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.createdByName).toBe(fx.owner.name);
+    expect(review.authorSource).toBe('mcp');
+    expect(review.authorHarness).toBe('Claude Code');
+    expect(review.authorModel).toBe('claude-opus-5');
+    expect(review.origin).toBe('user');
+    expect(review.sourceJobId).toBeNull();
+  });
+
+  it('carries `sourceJobId` so the header can tell Motir-generated from unattributed', async () => {
+    const fx = await makeWorkItemFixture();
+    // The two states are identical in the authorship columns — both are all-null
+    // — and are told apart ONLY by the job. Without this field on the DTO the
+    // header cannot distinguish them however complete the carrier is.
+    const generated = await plansService.createPlan(
+      fx.projectId,
+      { sourceJobId: 'job_1', createdById: fx.ownerId },
+      fx.ctx,
+    );
+    const legacy = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+
+    const a = await planReviewService.getPlanReview(generated.id, fx.ctx);
+    const b = await planReviewService.getPlanReview(legacy.id, fx.ctx);
+    expect(a.authorSource).toBeNull();
+    expect(b.authorSource).toBeNull();
+    expect(a.sourceJobId).toBe('job_1');
+    expect(b.sourceJobId).toBeNull();
+  });
+
+  it('reports a cadence plan as origin=cadence with no requester name', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { sourceJobId: 'job_2', origin: 'cadence' },
+      fx.ctx,
+    );
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.origin).toBe('cadence');
+    expect(review.createdByName).toBeNull();
+  });
+
+  it('leaves the requester name NULL when the person has been deleted', async () => {
+    const fx = await makeWorkItemFixture();
+    const requester = await createTestUser({ email: 'gone@example.com' });
+    const plan = await plansService.createPlan(fx.projectId, { createdById: requester.id }, fx.ctx);
+    await adminDb.user.delete({ where: { id: requester.id } });
+
+    // `ON DELETE SET NULL` empties the column, so the read degrades to the
+    // unattributed treatment rather than throwing or rendering a dangling id.
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.createdByName).toBeNull();
   });
 });

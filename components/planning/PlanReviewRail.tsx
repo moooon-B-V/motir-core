@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, Check, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Bot, Check, RotateCw, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
@@ -110,8 +110,9 @@ export function PlanReviewRail({
         {review.summary ? (
           <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
         ) : null}
-        <p className="text-xs text-(--el-text-secondary)">
-          {t('itemCount', { n: review.itemCount })}
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
+          <span>{t('itemCount', { n: review.itemCount })}</span>
+          <ReviewAttribution review={review} t={t} />
         </p>
       </header>
 
@@ -197,6 +198,90 @@ export function PlanReviewRail({
         )}
       </div>
     </aside>
+  );
+}
+
+/**
+ * WHO ASKED for this plan and WHO WROTE it (MOTIR-2991,
+ * `design/ai-planning/design-notes.md` Part III §6).
+ *
+ * Two differences from the LIST row, both deliberate:
+ *
+ *  1. The ROLES ARE NAMED IN WORDS — `Requested by X · written by Y`. The row is
+ *     scanned, and an avatar in front of a name already reads as *this person's*;
+ *     this header is read ONCE, by the person about to press Approve, and there
+ *     the words are what stop two names being taken for one party.
+ *  2. It KEEPS the requester on a DECIDED plan, which the row drops. The row's
+ *     reason does not apply here: the decider is not in this line at all — it is
+ *     in the history timeline below — so no two bare names compete.
+ *
+ * It also carries the MODEL, which the row omits: it is the difference between
+ * two agent-written plans, and nobody scans a list on it.
+ *
+ * The glyphs are DECORATIVE (`aria-hidden`, `--el-text-faint`) — the words carry
+ * the meaning, so neither party is conveyed by icon or colour alone.
+ */
+function ReviewAttribution({
+  review,
+  t,
+}: {
+  review: PlanReviewDto;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  // Motir is read off `sourceJobId`, NOT off `authorSource === 'native'` — the
+  // generator records no author (MOTIR-2996), so no shipped writer produces it.
+  const agent =
+    review.authorSource === 'mcp' && review.authorHarness
+      ? { Icon: Bot, label: t('writtenByHarness', { harness: review.authorHarness }) }
+      : review.sourceJobId != null
+        ? { Icon: Sparkles, label: t('writtenByMotir') }
+        : null;
+  const cadence = review.origin === 'cadence';
+  const requester = review.createdByName;
+  if (!agent && !requester && !cadence) return null;
+
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
+      {requester ? (
+        <>
+          <span
+            className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-(--el-text) text-[9px] font-semibold text-(--el-text-inverted)"
+            aria-hidden
+          >
+            {requester.charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 truncate" title={requester}>
+            {t('requestedBy', { name: requester })}
+          </span>
+        </>
+      ) : cadence ? (
+        <>
+          <RotateCw className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
+          {t('autoPlannedNobodyAsked')}
+        </>
+      ) : null}
+      {(requester || cadence) && agent ? (
+        <span className="text-(--el-text-faint)" aria-hidden>
+          ·
+        </span>
+      ) : null}
+      {agent ? (
+        <>
+          <agent.Icon className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
+          <span className="min-w-0 truncate" title={review.authorHarness ?? undefined}>
+            {agent.label}
+          </span>
+          {review.authorModel ? (
+            <>
+              <span className="text-(--el-text-faint)" aria-hidden>
+                ·
+              </span>
+              <span className="min-w-0 truncate text-(--el-text-muted)">{review.authorModel}</span>
+            </>
+          ) : null}
+        </>
+      ) : null}
+    </span>
   );
 }
 

@@ -40,6 +40,15 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     plannedAt: '2026-06-26T00:00:00.000Z',
     decidedAt: null,
     decidedByName: null,
+    // The three-party attribution (MOTIR-2991). The default is the UNATTRIBUTED
+    // state, so every pre-existing case keeps asserting a header without one and
+    // each attribution state opts in explicitly.
+    origin: 'user',
+    sourceJobId: null,
+    createdByName: null,
+    authorSource: null,
+    authorHarness: null,
+    authorModel: null,
     history: [],
     items: [],
     stale: false,

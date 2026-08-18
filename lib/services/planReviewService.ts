@@ -172,6 +172,13 @@ export const planReviewService = {
     const decidedByName = plan.decidedById
       ? ((await userRepository.findById(plan.decidedById))?.name ?? null)
       : null;
+    // WHO ASKED (MOTIR-2991) — resolved exactly as the decider is, one plan and
+    // one lookup. (The LIST does this batched, across a page; here there is a
+    // single row, so a second `findById` is the right shape and matches the
+    // pattern immediately above rather than inventing one.)
+    const createdByName = plan.createdById
+      ? ((await userRepository.findById(plan.createdById))?.name ?? null)
+      : null;
 
     const history: PlanHistoryEventDto[] = [{ kind: 'created', at: plan.createdAt }];
     if (plan.plannedAt) history.push({ kind: 'planned', at: plan.plannedAt });
@@ -192,6 +199,16 @@ export const planReviewService = {
       plannedAt: plan.plannedAt,
       decidedAt: plan.decidedAt,
       decidedByName,
+      // The three-party attribution the header renders (`design-notes.md`
+      // Part III §6). `origin` + `sourceJobId` are carried because they are what
+      // separate *Motir generated it* from *nobody asked* from *unattributed* —
+      // the authorship columns alone cannot tell those apart.
+      origin: plan.origin,
+      sourceJobId: plan.sourceJobId,
+      createdByName,
+      authorSource: plan.authorSource,
+      authorHarness: plan.authorHarness,
+      authorModel: plan.authorModel,
       history,
       items,
       stale: staleCount > 0,
