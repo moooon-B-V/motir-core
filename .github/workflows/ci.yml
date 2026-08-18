@@ -518,6 +518,16 @@ jobs:
     # at-scale cap or it would skew the ordinary board specs.
     name: Playwright E2E (${{ matrix.id }})
     runs-on: ubuntu-latest
+    # Defence in depth for MOTIR-2970. GitHub's default per-job budget is 360
+    # minutes, and a leg that wedges in setup burns every one of them while
+    # holding `CI complete` red — three times in ~6 hours on 2026-08-18, each on
+    # a diff the leg never exercised. The per-attempt `timeout` in
+    # `.github/actions/e2e-setup` is the fix for that specific wedge; this is the
+    # backstop for the next one, wherever in the leg it happens to sit. 45min is
+    # ~2.6x the slowest leg observed across six green runs (66 legs, 4–17min,
+    # median 8) — wide enough that a slow-but-healthy leg is never cut off, and
+    # far below a budget no legitimate leg could ever need.
+    timeout-minutes: 45
     # Read-only: these legs check out, run specs and upload a report. The
     # `id-token: write` this job used to carry belonged to the acceptance-video
     # publish, which now lives in its own `acceptance-video.yml` workflow
