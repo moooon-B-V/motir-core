@@ -1704,6 +1704,34 @@ export const workItemsService = {
     const { dto } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
     );
+
+    // ── The pin's OWN derivation trigger (Bug MOTIR-2902) ──────────────────
+    //
+    // Post-commit, like every other emit in this service. This does NOT reopen
+    // the no-`work-item/transitioned` contract above: `work-item/derivation.requested`
+    // has exactly ONE consumer, `status-derivation/requested`, and no
+    // notification path subscribes to it — so the storm an import avoids stays
+    // avoided while the parent still gets recomputed.
+    //
+    // WHY IT IS NEEDED. Before this, the only derivation trigger an import
+    // produced was the `work-item/created` emitted by the create that PRECEDES
+    // this call. That recompute could run before the pin, read the child as
+    // `todo`, settle the parent at `todo` — and never re-fire, because the child
+    // set never changes again. The wrong answer was terminal, not late, which is
+    // why the ordering has to be guaranteed by an event rather than by a
+    // debounce window the runtime may not honour (the Inngest dev server does
+    // not; measured on #2114).
+    //
+    // Skipped for a ROOT item: with no parent there is nothing to derive, so an
+    // emit would be a guaranteed no-op run per imported top-level row.
+    if (dto.parentId) {
+      await sendEvent('work-item/derivation.requested', {
+        workspaceId: ctx.workspaceId,
+        parentId: dto.parentId,
+        workItemId: dto.id,
+        reason: 'imported-status-pinned',
+      });
+    }
     return dto;
   },
 

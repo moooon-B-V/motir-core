@@ -36,6 +36,7 @@ import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definition
 import {
   statusDerivationOnChildSetChanged,
   statusDerivationOnCreated,
+  statusDerivationOnRequested,
   statusDerivationOnTransitioned,
 } from './definitions/statusDerivation';
 import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
@@ -79,6 +80,7 @@ export const jobFunctions = [
   statusDerivationOnTransitioned,
   statusDerivationOnCreated,
   statusDerivationOnChildSetChanged,
+  statusDerivationOnRequested,
   migrateOnboardingSweep,
   workItemEmbeddingRequested,
   planTargetLockSweep,

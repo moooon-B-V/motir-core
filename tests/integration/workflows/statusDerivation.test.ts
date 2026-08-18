@@ -38,8 +38,15 @@ interface Emitted {
   // (MOTIR-2880) — every `work-item/*` envelope has always had it, and the pump
   // reads it off the event rather than inventing one, so the drain drives the
   // production path. `toStatusKey` / `parentIds` are per-event (MOTIR-2892 added
-  // the child-set envelope), hence optional.
-  data: { workItemId: string; workspaceId: string; toStatusKey?: string; parentIds?: string[] };
+  // the child-set envelope; MOTIR-2902 the singular `parentId` of the
+  // derivation-only trigger), hence optional.
+  data: {
+    workItemId: string;
+    workspaceId: string;
+    toStatusKey?: string;
+    parentIds?: string[];
+    parentId?: string;
+  };
 }
 
 const queue: Emitted[] = [];
@@ -101,6 +108,13 @@ async function drain(): Promise<number> {
       for (const parentId of event.data.parentIds ?? []) {
         await parentStatusRollupService.recomputeParent(parentId, event.data.workspaceId);
       }
+    } else if (event.name === 'work-item/derivation.requested') {
+      // The silent-edit trigger (MOTIR-2902): the parent is named on the event,
+      // so there is nothing to re-read. No cascade — a status pin under an
+      // import transitions nothing into a done-category status through this path.
+      // Non-null by the emit site's contract: `setImportedStatus` skips the emit
+      // entirely for a root item, so an event with no parent cannot exist.
+      await parentStatusRollupService.recomputeParent(event.data.parentId!, event.data.workspaceId);
     }
     // Every other `work-item/*` event (embeddings, mentions) has no derivation
     // consumer and is simply drained.
@@ -1074,7 +1088,7 @@ describe("a user's own write vs a derived backward set", () => {
   });
 });
 
-describe('the IMPORT interleaving — why the debounce is load-bearing (MOTIR-2902)', () => {
+describe('the IMPORT interleaving — the pin carries its own trigger (MOTIR-2902)', () => {
   // A bulk import writes each row in TWO phases:
   //
   //   createWorkItem(child)            → emits `work-item/created`
@@ -1106,7 +1120,7 @@ describe('the IMPORT interleaving — why the debounce is load-bearing (MOTIR-29
     expect(await statusOf(parent.id)).toBe('in_progress');
   });
 
-  it('the LOSING order is TERMINAL — the parent keeps the stale answer and nothing re-fires', async () => {
+  it('the LOSING order RECOVERS — the pin re-opens the question the create-recompute closed', async () => {
     const fx = await makeWorkItemFixture();
     const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
     await setStatus(parent.id, 'todo');
@@ -1121,22 +1135,55 @@ describe('the IMPORT interleaving — why the debounce is load-bearing (MOTIR-29
     await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
     await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
 
-    // ⚠️ THIS IS THE DEFECT, asserted deliberately. The parent is wrong, and it
-    // is wrong FOREVER: the child set never changes again, `setImportedStatus`
-    // emits nothing, and no later event can re-open the question. Draining the
-    // queue proves it — there is nothing left in it to drain.
-    expect(await statusOf(parent.id)).toBe('todo');
-    expect(await drain()).toBe(0);
+    // At this instant the parent IS wrong — the recompute read a state the pin
+    // then replaced. That much is unavoidable and harmless.
     expect(await statusOf(parent.id)).toBe('todo');
 
-    // …and re-running the recompute does NOT rescue it either: the aggregate now
-    // reads `in_progress`, so this is a FORWARD move the ladder would take — the
-    // only reason production never gets here is that nothing schedules it.
-    // Which is exactly why the fix has to guarantee the ORDER (the parent-keyed
-    // debounce on `status-derivation/created`) rather than rely on a retry: this
-    // recompute is not retried, because from Inngest's point of view it
-    // succeeded.
-    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+    // What makes it a defect rather than a lag is whether anything re-opens the
+    // question. Before MOTIR-2902 nothing did: the child set never changes
+    // again and `setImportedStatus` emitted nothing, so `drain()` returned 0 and
+    // the parent kept the stale answer forever. The pin now emits its OWN
+    // derivation trigger, so there is exactly one event waiting.
+    // TWO steps, and the second is the point of the first. The pin's trigger
+    // recomputes the parent; moving the parent emits `work-item/transitioned`,
+    // which is how derivation carries to the NEXT level up (a no-op here, since
+    // the story has no parent). A run that produced only the trigger would mean
+    // the recompute had decided not to move anything.
+    expect(await drain()).toBe(2);
+    expect(processed).toEqual(['work-item/derivation.requested', 'work-item/transitioned']);
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('the pin emits NOTHING for a root item — there is no parent to derive', async () => {
+    const fx = await makeWorkItemFixture();
+    const root = await createTestWorkItem(fx, { kind: 'epic', title: 'Imported root' });
+    await setStatus(root.id, 'todo');
+
+    await workItemsService.setImportedStatus(root.id, 'in_progress', fx.ctx);
+
+    // A guaranteed no-op run per imported top-level row is exactly the fan-out
+    // an import cannot afford, so the emit site skips it rather than sending one.
+    expect(processed).not.toContain('work-item/derivation.requested');
+    expect(await drain()).toBe(0);
+  });
+
+  it('a NO-OP pin still settles the parent — the import re-run case', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'in_progress');
+
+    // The mapped status is already the child's status — the common case on a
+    // re-sync. The parent is still stale from whenever it was last computed, so
+    // the trigger must fire on the pin's INTENT, not on whether a row moved.
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    await drain();
     expect(await statusOf(parent.id)).toBe('in_progress');
   });
 });
