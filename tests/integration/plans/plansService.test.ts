@@ -553,27 +553,77 @@ describe('plansService.approvePlan — native planning provenance', () => {
     expect(dto.planningModel).toBeNull();
   });
 
-  it('PINS source AND harness to native/Motir — a forged source/harness on the proposal is ignored', async () => {
+  // ⚠️ THIS TEST ASSERTED THE OPPOSITE UNTIL 2026-08-18, AND THE REVERSAL IS
+  // DELIBERATE (MOTIR-2990). It read:
+  //
+  //   'PINS source AND harness to native/Motir — a forged source/harness on the
+  //    proposal is ignored'
+  //   … expect(created.planningSource).toBe('native')   // proposal said 'manual'
+  //   … expect(created.planningHarness).toBe('Motir')   // proposal said 'evil'
+  //
+  // `docs/decisions/work-item-provenance.md` Decision 5's pin was lifted because
+  // its PREMISE — "every item materialized from an approved plan was planned
+  // NATIVELY by Motir" — stopped being true when an agent could author a plan
+  // over the MCP (Story MOTIR-2982). The PROPERTY the pin protected did not
+  // change and is asserted below: a proposal still cannot CLAIM a source. It is
+  // now held by the write seams (every one sets `source` server-side) plus a
+  // closed-set guard at the proposal boundary, rather than by refusing to read
+  // the field — see `docs/decisions/agent-authored-plans.md` Q4 and
+  // `tests/integration/plans/materializeProvenance.test.ts`, which owns the
+  // amended contract in full.
+  it('materialize READS the proposal’s source/harness, defaulting to native/Motir', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       {
         op: 'add',
         proposedFields: {
-          title: 'Forged source card',
+          title: 'Agent-authored card',
           kind: 'task',
-          planningProvenance: { source: 'manual', harness: 'evil', model: 'the-model' },
+          planningProvenance: { source: 'mcp', harness: 'Claude Code', model: 'the-model' },
         },
+      },
+      {
+        op: 'add',
+        proposedFields: { title: 'Provenance-less card', kind: 'task' },
       },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await adminDb.workItem.findFirstOrThrow({
-      where: { title: 'Forged source card' },
+
+    const authored = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Agent-authored card' },
     });
-    // source + harness are pinned (native / Motir); only the model is carried
-    // through from the trusted internal seam (recorded for analysis).
-    expect(created.planningSource).toBe('native');
-    expect(created.planningHarness).toBe('Motir');
-    expect(created.planningModel).toBe('the-model');
+    expect(authored.planningSource).toBe('mcp');
+    expect(authored.planningHarness).toBe('Claude Code');
+    expect(authored.planningModel).toBe('the-model');
+
+    // The default is what keeps every shipped native producer byte-identical.
+    const defaulted = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Provenance-less card' },
+    });
+    expect(defaulted.planningSource).toBe('native');
+    expect(defaulted.planningHarness).toBe('Motir');
+    expect(defaulted.planningModel).toBeNull();
+  });
+
+  it('a source outside the closed set is still refused — the property the pin protected', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [
+          {
+            op: 'add',
+            proposedFields: {
+              title: 'Forged source card',
+              kind: 'task',
+              planningProvenance: { source: 'trustworthy', harness: 'evil' },
+            },
+          },
+        ],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
   });
 });
 

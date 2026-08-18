@@ -34,6 +34,7 @@ import {
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
+import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
   InvalidProposalError,
   PlanItemNotFoundError,
@@ -133,12 +134,41 @@ function normalizeSelfReported(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * The planning SOURCE materialize will stamp from an `add` proposal
+ * (MOTIR-2990) — validated as a member of the closed `WorkItemPlanningSource`
+ * set, or rejected.
+ *
+ * This is the narrow guard that lets `docs/decisions/work-item-provenance.md`
+ * Decision 5's PIN be lifted without weakening the property it protected. The
+ * pin held "a proposal cannot CLAIM a source" by never reading the value; the
+ * property is now held by the WRITE SEAMS (every one of which sets the source
+ * server-side — ADR Q4), and this is the backstop that keeps the COLUMN total:
+ * an unrecognised value fails at the proposal boundary rather than reaching a
+ * column whose display switch is closed over four members.
+ *
+ * Absent / null passes — that is the default case, and by far the common one.
+ */
+function assertKnownPlanningSource(pf: PlanItemProposedFields, label: string): void {
+  const source = pf.planningProvenance?.source;
+  if (source == null) return;
+  if (!(PLANNING_SOURCES as readonly string[]).includes(source)) {
+    throw new InvalidProposalError(
+      `${label}: unknown planning source \`${source}\` — expected one of ${PLANNING_SOURCES.join(', ')}.`,
+    );
+  }
+}
+
 function validateProposal(p: ProposalInput): void {
   if (p.op === 'add') {
     if (!p.proposedFields || !p.proposedFields.title?.trim()) {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
     validateProposedSizing(p.proposedFields);
+    assertKnownPlanningSource(
+      p.proposedFields,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
     // is pure (a closed vocabulary, no repository need exist) and the producer is
     // a machine: telling motir-ai its role is unknown while it is still writing
@@ -565,6 +595,19 @@ async function materialize(
   if (statusKey == null) throw new NoInitialStatusError(plan.projectId);
 
   const adds = items.filter((i) => i.op === 'add');
+  // The provenance guard, RE-RUN here (MOTIR-2990). `addProposals` already
+  // rejects an unknown `planningProvenance.source` at the append, and this is the
+  // same check at the persist boundary — the "core re-checks, defense in depth"
+  // doctrine `lib/plans/validateProposals.ts` states for the whole approve path,
+  // applied to the one field materialize now READS rather than pins. It is what
+  // makes "never written through to the column" a property of the write rather
+  // than a property of every writer having behaved, and it fails the approve
+  // ATOMICALLY: before the first row is created, so a rejection leaves the tree
+  // byte-identical.
+  for (const item of adds) {
+    const pf = (item.proposedFields as PlanItemProposedFields | null) ?? null;
+    if (pf) assertKnownPlanningSource(pf, proposalLabel({ op: 'add', title: pf.title }));
+  }
   const planItemToWorkItem = new Map<string, string>();
   // The created adds, collected for the post-creation body pass (Pass 3) — the
   // intra-plan item-link tokens in a body can reference a sibling created LATER
@@ -649,17 +692,40 @@ async function materialize(
         ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
         : {}),
       reporterId: ctx.userId,
-      // Native PLANNING provenance (Story MOTIR-1685, docs/decisions/work-item-provenance.md
-      // Decision 5): every item materialized from an approved plan was planned
-      // NATIVELY by Motir → `source: native` (PINNED — never read from the
-      // proposal), `harness: Motir`. The underlying LLM IS RECORDED here (from the
-      // motir-ai producer, MOTIR-1690 — core doesn't otherwise know it) so it is
-      // available for internal ANALYSIS; but the read DTO STRIPS it for native
-      // (`toWorkItemDto`), so it is never EXPOSED to the frontend/API — Motir
-      // abstracts its own model. MCP/BYOK keep + expose their model (the user
-      // reported their OWN).
-      planningSource: 'native',
-      planningHarness: 'Motir',
+      // PLANNING provenance (Story MOTIR-1685; the PIN LIFTED by MOTIR-2990,
+      // docs/decisions/work-item-provenance.md Decision 5 as amended 2026-08-18
+      // and argued in docs/decisions/agent-authored-plans.md Q4).
+      //
+      // This block used to read: "`source: native` (PINNED — never read from the
+      // proposal), `harness: Motir`", on the premise that "every item materialized
+      // from an approved plan was planned NATIVELY by Motir". That premise was
+      // true while motir-ai's generator was the only writer of a `Plan`, and
+      // MOTIR-2982 falsifies it: an agent authors a plan over the MCP, a person
+      // approves it, and these rows are what it creates. Left pinned, every one of
+      // them would claim Motir planned it — a false statement written into the
+      // exact record this ADR exists to keep honest.
+      //
+      // Reading the field does NOT weaken what the pin was protecting — that a
+      // proposal cannot CLAIM to have been planned natively — because no caller
+      // can reach it on any of the three write paths: `add_plan_items` stamps it
+      // server-side and does not accept it as an argument (the discipline
+      // `create_work_item` applies to `source: 'mcp'`); the internal
+      // `/api/internal/ai/plan-proposals` route is a §4 job-token seam a PAT
+      // cannot reach; and the proposal-EDIT path cannot touch it at all
+      // (`UpdateProposalInput` has no such member and `mergeProposedFields` is an
+      // explicit key-by-key merge). `assertKnownPlanningSource` at the append is
+      // the backstop that keeps the column total.
+      //
+      // The DEFAULT is what keeps every shipped native path byte-identical: an
+      // older proposal carries no provenance and takes `native`/`Motir`; MOTIR-1690's
+      // producer sends exactly that pair. `planningModel` is unchanged — RECORDED
+      // for internal analysis, and STRIPPED for `native` by `toWorkItemDto`, so
+      // Motir still never exposes its own model. An `mcp` item is not stripped and
+      // therefore shows the model the agent self-reported, which is what Decision 5
+      // already prescribed ("MCP/BYOK keep + expose their model").
+      planningSource: (pf.planningProvenance?.source ??
+        'native') as Prisma.WorkItemUncheckedCreateInput['planningSource'],
+      planningHarness: pf.planningProvenance?.harness ?? 'Motir',
       planningModel: pf.planningProvenance?.model ?? null,
       type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
       executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,
