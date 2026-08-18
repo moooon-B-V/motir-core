@@ -1,0 +1,2499 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The repository SET compressed into the quick view (MOTIR-2725 · MOTIR-2414)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE REPOSITORY SET IN THE QUICK-VIEW MODAL.
+      Story MOTIR-2725, subtask MOTIR-2414 (design). Gates MOTIR-2416.
+
+      A COMPRESSION of design/work-items/repository-set.mock.html (MOTIR-2413),
+      not a second design of the same field. Every decision that asset settled —
+      the label, the primary's treatment, the three delivery glyphs and their
+      words, the empty-set word, the decision-card rule — is INHERITED verbatim.
+      What this asset owns is the space budget: what survives at one, two and four
+      repositories, what is dropped, and WHERE the field sits against a measured
+      fold.
+
+      COMPOSES, does not redraw: the rail rows are IssueQuickViewPanel.tsx's
+      RailField / EditableRailField markup (a dl of dt/dd pairs, denser than the
+      detail page's FieldCard, which is the whole reason this card exists); the
+      Development rows are components/github/DevelopmentSection.tsx. The modal is
+      h-[680px] max-h-[82vh] w-[90vw] with a 300px rail — read off
+      IssueQuickView.tsx and IssueQuickViewPanel.tsx, not guessed.
+
+      Tokens EXTRACTED from packages/design-system/theme.css by script, icons from
+      the installed lucide-react. No hex, no path, no drawn glyph.
+
+      PANELS: (1) two repositories at the measured fold; (2) four — the overflow
+      rule; (3) one; (4) none; (5) the editor, deliberately UNcompressed.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .leading-relaxed {
+        line-height: 1.625;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-3\.5 {
+        height: 0.875rem;
+      }
+      .w-3\.5 {
+        width: 0.875rem;
+      }
+      .h-\[13px\] {
+        height: 13px;
+      }
+      .w-\[13px\] {
+        width: 13px;
+      }
+      .h-\[14px\] {
+        height: 14px;
+      }
+      .w-\[14px\] {
+        width: 14px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .m-0 {
+        margin: 0;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-6 {
+        margin-top: 1.5rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .py-\[3px\] {
+        padding-top: 3px;
+        padding-bottom: 3px;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      /* the modal, at its SHIPPED dimensions */
+      .mockModal {
+        width: 1000px;
+        height: 680px;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        position: relative;
+      }
+      .modalHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .openFull {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm, 28px);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .modalBody {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        min-height: 0;
+        flex: 1;
+      }
+      .modalMain {
+        padding: 20px 24px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .modalRail {
+        margin: 0;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-left: 1px solid var(--el-border-soft, var(--el-border));
+        overflow: hidden;
+      }
+      .foldNote {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 6px 12px;
+        background: color-mix(in srgb, var(--el-surface) 92%, transparent);
+        border-top: 1px dashed var(--el-border-strong);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .sheet {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol
+        id="i-folder-git-2"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 19a5 5 0 0 1-5-5v8" />
+        <circle cx="13" cy="12" r="2" />
+        <circle cx="20" cy="19" r="2" />
+      </symbol>
+      <symbol
+        id="i-git-pull-request-arrow"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="5" cy="6" r="3" />
+        <path d="M5 9v12" />
+        <circle cx="19" cy="18" r="3" />
+        <path d="m15 9-3-3 3-3" />
+        <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+      </symbol>
+      <symbol
+        id="i-git-merge"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="18" cy="18" r="3" />
+        <circle cx="6" cy="6" r="3" />
+        <path d="M6 21V9a9 9 0 0 0 9 9" />
+      </symbol>
+      <symbol
+        id="i-circle-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-circle-ellipsis"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M17 12h.01" />
+        <path d="M12 12h.01" />
+        <path d="M7 12h.01" />
+      </symbol>
+      <symbol
+        id="i-circle-dashed"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10.1 2.182a10 10 0 0 1 3.8 0" />
+        <path d="M13.9 21.818a10 10 0 0 1-3.8 0" />
+        <path d="M17.609 3.721a10 10 0 0 1 2.69 2.7" />
+        <path d="M2.182 13.9a10 10 0 0 1 0-3.8" />
+        <path d="M20.279 17.609a10 10 0 0 1-2.7 2.69" />
+        <path d="M21.818 10.1a10 10 0 0 1 0 3.8" />
+        <path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" />
+        <path d="M6.391 20.279a10 10 0 0 1-2.69-2.7" />
+      </symbol>
+      <symbol
+        id="i-circle-question-mark"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol
+        id="i-external-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol
+        id="i-chevron-down"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-arrow-right"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="m12 5 7 7-7 7" />
+      </symbol>
+      <symbol
+        id="i-x"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+    </svg>
+    <div class="sheet">
+      <div class="sheetHead">
+        <h1>The repository SET, compressed into the quick view</h1>
+        <p>
+          MOTIR-2725 · MOTIR-2414. A COMPRESSION of MOTIR-2413's detail-page treatment — not a
+          second design of the same field. Label, primary chip, the three delivery glyphs and their
+          words, the empty-set word and the <span class="font-mono">decision</span> rule are all
+          INHERITED. What this card owns is the space budget: the modal is
+          <span class="font-mono">h-[680px] max-h-[82vh] w-[90vw]</span> with a
+          <span class="font-mono">300px</span> rail, and the rail rows are denser than the detail
+          page's <span class="font-mono">FieldCard</span>.
+        </p>
+      </div>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">1</span>Two repositories, at the MEASURED fold.
+        </h2>
+        <p class="panelNote">
+          The common multi-repo card. Same glyphs, same words, same order, same
+          <span class="font-mono">primary</span> chip as the detail page — the compression is in the
+          CHROME (a dt/dd pair rather than a Card) and in the caption, which loses the outstanding
+          repository's name and keeps the count.
+        </p>
+
+        <div class="mockModal" id="m1">
+          <div class="modalHead">
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-folder-git-2" /></svg
+            ></span>
+            <span class="font-mono text-xs text-(--el-text-identifier)">MOTIR-2725</span>
+            <span class="min-w-0 flex-1 truncate font-sans text-sm font-medium text-(--el-text)"
+              >A work item that ships in MORE THAN ONE repository</span
+            >
+            <span class="openFull"
+              >Open full page
+              <svg class="h-[13px] w-[13px]" aria-hidden="true"><use href="#i-arrow-right" /></svg
+            ></span>
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-x" /></svg
+            ></span>
+          </div>
+          <div class="modalBody">
+            <div class="modalMain">
+              <div class="font-sans text-[13px] leading-relaxed text-(--el-text-secondary)">
+                A work item can only say it ships in ONE repository, and it completes on the first
+                merged pull request it can see. Both halves are the same assumption written twice…
+              </div>
+              <div class="mt-6">
+                <div
+                  class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Development
+                </div>
+                <ul class="list-none">
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-git-merge" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                        feat(work-items): the repository SET
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-core · #2118
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillDone shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                  </li>
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div
+                        class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                      >
+                        No pull request yet
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-ai
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillNeutral shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <dl class="modalRail">
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Status<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillProgress">In Review</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 1">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <div class="min-w-0 flex-1">
+                    <ul class="list-none">
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Delivered" class="text-(--el-success) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-check" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-core</span
+                        >
+                        <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                      </li>
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-dashed" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-ai</span
+                        >
+                      </li>
+                    </ul>
+                    <p class="mt-1 font-sans text-xs text-(--el-text-muted)">1 of 2 delivered.</p>
+                  </div>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Type<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Story
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Priority<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillNeutral">High</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Assignee<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Reporter
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Parent<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  MOTIR-2200
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Due date<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Sprint<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Backlog
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  5
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  1h 30m
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Labels<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Components<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="foldNote">
+            MEASURED at <strong>1280×900</strong>: the modal is <strong>680px</strong> (its
+            <span class="font-mono">h-[680px]</span> wins —
+            <span class="font-mono">max-h-[82vh]</span> would be 738px), the rail's visible height
+            is <strong>621px</strong>, and the Repositories row occupies <strong>y 137–246</strong>.
+            Above the fold with 375px to spare. Rail content is 827px, so the rail DOES scroll —
+            which is exactly why the row is second and not last: measured LAST, it sat at
+            <strong>y 642–751</strong> and needed a scroll.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span>FOUR repositories — the overflow rule.
+        </h2>
+        <p class="panelNote">
+          Three rows, then <span class="font-mono">+N more</span>. The rule is a ROW CAP, not a
+          truncation of the fact: the caption still reads <em>2 of 4 delivered</em>, so the reader
+          always knows how many there are even when they cannot see them all.
+        </p>
+
+        <div class="mockModal" id="m2">
+          <div class="modalHead">
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-folder-git-2" /></svg
+            ></span>
+            <span class="font-mono text-xs text-(--el-text-identifier)">MOTIR-2725</span>
+            <span class="min-w-0 flex-1 truncate font-sans text-sm font-medium text-(--el-text)"
+              >A work item that ships in MORE THAN ONE repository</span
+            >
+            <span class="openFull"
+              >Open full page
+              <svg class="h-[13px] w-[13px]" aria-hidden="true"><use href="#i-arrow-right" /></svg
+            ></span>
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-x" /></svg
+            ></span>
+          </div>
+          <div class="modalBody">
+            <div class="modalMain">
+              <div class="font-sans text-[13px] leading-relaxed text-(--el-text-secondary)">
+                A work item can only say it ships in ONE repository, and it completes on the first
+                merged pull request it can see. Both halves are the same assumption written twice…
+              </div>
+              <div class="mt-6">
+                <div
+                  class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Development
+                </div>
+                <ul class="list-none">
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-git-merge" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                        feat(work-items): the repository SET
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-core · #2118
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillDone shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                  </li>
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div
+                        class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                      >
+                        No pull request yet
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-ai
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillNeutral shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <dl class="modalRail">
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Status<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillProgress">In Review</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 1">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <div class="min-w-0 flex-1">
+                    <ul class="list-none">
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Delivered" class="text-(--el-success) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-check" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-core</span
+                        >
+                        <span class="dsPill dsPillNeutral shrink-0">primary</span>
+                      </li>
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Delivered" class="text-(--el-success) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-check" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-ai</span
+                        >
+                      </li>
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-dashed" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-gateway</span
+                        >
+                      </li>
+                      <li class="py-[3px] font-sans text-xs text-(--el-text-muted)">+1 more</li>
+                    </ul>
+                    <p class="mt-1 font-sans text-xs text-(--el-text-muted)">2 of 4 delivered.</p>
+                  </div>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Type<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Story
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Priority<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillNeutral">High</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Assignee<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Reporter
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Parent<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  MOTIR-2200
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Due date<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Sprint<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Backlog
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  5
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  1h 30m
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Labels<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Components<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="foldNote">
+            FOUR repositories. Three rows, then <span class="font-mono">+1 more</span> — and the
+            caption still names the total, so no size renders as if the card carried fewer. Measured
+            y 137–294: the largest READ state still clears the fold.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">3</span>One repository.</h2>
+        <p class="panelNote">
+          No <span class="font-mono">primary</span> chip and no caption — the same two suppressions
+          the detail page makes at size one, for the same reason.
+        </p>
+
+        <div class="mockModal" id="m3">
+          <div class="modalHead">
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-folder-git-2" /></svg
+            ></span>
+            <span class="font-mono text-xs text-(--el-text-identifier)">MOTIR-2725</span>
+            <span class="min-w-0 flex-1 truncate font-sans text-sm font-medium text-(--el-text)"
+              >A work item that ships in MORE THAN ONE repository</span
+            >
+            <span class="openFull"
+              >Open full page
+              <svg class="h-[13px] w-[13px]" aria-hidden="true"><use href="#i-arrow-right" /></svg
+            ></span>
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-x" /></svg
+            ></span>
+          </div>
+          <div class="modalBody">
+            <div class="modalMain">
+              <div class="font-sans text-[13px] leading-relaxed text-(--el-text-secondary)">
+                A work item can only say it ships in ONE repository, and it completes on the first
+                merged pull request it can see. Both halves are the same assumption written twice…
+              </div>
+              <div class="mt-6">
+                <div
+                  class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Development
+                </div>
+                <ul class="list-none">
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-git-merge" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                        feat(work-items): the repository SET
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-core · #2118
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillDone shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                  </li>
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div
+                        class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                      >
+                        No pull request yet
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-ai
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillNeutral shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <dl class="modalRail">
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Status<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillProgress">In Review</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 1">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <div class="min-w-0 flex-1">
+                    <ul class="list-none">
+                      <li class="flex items-center gap-1.5 py-[3px]">
+                        <span title="Awaiting" class="text-(--el-icon-muted) shrink-0"
+                          ><svg class="h-[14px] w-[14px]" aria-hidden="true">
+                            <use href="#i-circle-dashed" /></svg
+                        ></span>
+                        <span
+                          class="min-w-0 flex-1 truncate font-mono text-[12.5px] text-(--el-text)"
+                          >motir-core</span
+                        >
+                      </li>
+                    </ul>
+                  </div>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Type<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Story
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Priority<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillNeutral">High</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Assignee<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Reporter
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Parent<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  MOTIR-2200
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Due date<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Sprint<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Backlog
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  5
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  1h 30m
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Labels<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Components<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="foldNote">
+            One repository: no <span class="font-mono">primary</span> chip, no count caption —
+            identical to the detail page's rule.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle"><span class="panelNum">4</span>No repository.</h2>
+        <p class="panelNote">
+          The word is <span class="font-mono">None</span>, exactly as on the detail page. The
+          explanatory caption is the one thing dropped; the notes say why and where it went.
+        </p>
+
+        <div class="mockModal" id="m4">
+          <div class="modalHead">
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-folder-git-2" /></svg
+            ></span>
+            <span class="font-mono text-xs text-(--el-text-identifier)">MOTIR-2725</span>
+            <span class="min-w-0 flex-1 truncate font-sans text-sm font-medium text-(--el-text)"
+              >A work item that ships in MORE THAN ONE repository</span
+            >
+            <span class="openFull"
+              >Open full page
+              <svg class="h-[13px] w-[13px]" aria-hidden="true"><use href="#i-arrow-right" /></svg
+            ></span>
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-x" /></svg
+            ></span>
+          </div>
+          <div class="modalBody">
+            <div class="modalMain">
+              <div class="font-sans text-[13px] leading-relaxed text-(--el-text-secondary)">
+                A work item can only say it ships in ONE repository, and it completes on the first
+                merged pull request it can see. Both halves are the same assumption written twice…
+              </div>
+              <div class="mt-6">
+                <div
+                  class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Development
+                </div>
+                <ul class="list-none">
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-git-merge" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                        feat(work-items): the repository SET
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-core · #2118
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillDone shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                  </li>
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div
+                        class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                      >
+                        No pull request yet
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-ai
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillNeutral shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <dl class="modalRail">
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Status<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillProgress">In Review</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 1">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="text-(--el-text-muted)">None</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Type<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Story
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Priority<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillNeutral">High</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Assignee<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Reporter
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Parent<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  MOTIR-2200
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Due date<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Sprint<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Backlog
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  5
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  1h 30m
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Labels<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Components<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="foldNote">
+            The empty set. Same word the detail page uses. ⚠️ The detail page's explanatory caption
+            (<em>"Optional — not every card ships in a repository"</em>) is the ONE thing this
+            compression DROPS — see the notes for why, and where it went instead.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span>The editor — deliberately NOT compressed.
+        </h2>
+        <p class="panelNote">
+          The peek rail is a write surface (MOTIR-2561), so this field is editable here too, through
+          the SAME control the detail page uses. But the compression stops at the read: an editor
+          that hid options behind <span class="font-mono">+N more</span> would be a picker you
+          cannot pick from.
+        </p>
+
+        <div class="mockModal" id="m5">
+          <div class="modalHead">
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-folder-git-2" /></svg
+            ></span>
+            <span class="font-mono text-xs text-(--el-text-identifier)">MOTIR-2725</span>
+            <span class="min-w-0 flex-1 truncate font-sans text-sm font-medium text-(--el-text)"
+              >A work item that ships in MORE THAN ONE repository</span
+            >
+            <span class="openFull"
+              >Open full page
+              <svg class="h-[13px] w-[13px]" aria-hidden="true"><use href="#i-arrow-right" /></svg
+            ></span>
+            <span class="text-(--el-icon-muted)"
+              ><svg class="h-4 w-4" aria-hidden="true"><use href="#i-x" /></svg
+            ></span>
+          </div>
+          <div class="modalBody">
+            <div class="modalMain">
+              <div class="font-sans text-[13px] leading-relaxed text-(--el-text-secondary)">
+                A work item can only say it ships in ONE repository, and it completes on the first
+                merged pull request it can see. Both halves are the same assumption written twice…
+              </div>
+              <div class="mt-6">
+                <div
+                  class="mb-1 font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Development
+                </div>
+                <ul class="list-none">
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-git-merge" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div class="truncate font-sans text-[13.5px] font-medium text-(--el-text)">
+                        feat(work-items): the repository SET
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-core · #2118
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillDone shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-git-merge" /></svg
+                      >Merged</span
+                    >
+                  </li>
+                  <li
+                    class="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)"
+                  >
+                    <span class="shrink-0 text-(--el-icon-muted)"
+                      ><svg class="h-[17px] w-[17px]" aria-hidden="true">
+                        <use href="#i-circle-dashed" /></svg
+                    ></span>
+                    <div class="min-w-0 flex-1 py-1">
+                      <div
+                        class="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)"
+                      >
+                        No pull request yet
+                      </div>
+                      <div class="truncate font-sans text-xs text-(--el-text-identifier)">
+                        moooon/motir-ai
+                      </div>
+                    </div>
+                    <span class="dsPill dsPillNeutral shrink-0"
+                      ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-circle-dashed" /></svg
+                      >Awaiting</span
+                    >
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <dl class="modalRail">
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Status<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillProgress">In Review</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Repositories<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5 rotate-180" aria-hidden="true">
+                      <use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd class="m-0 min-w-0 text-sm text-(--el-text-secondary)">
+                  <div
+                    class="mb-1 grid grid-cols-[auto_1fr_auto] items-center gap-x-2 font-sans text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >
+                    <span>On</span><span></span><span>Primary</span>
+                  </div>
+                  <ul class="list-none">
+                    <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-[3px]">
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-accent) text-(--el-accent-text)"
+                        ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-check" /></svg
+                      ></span>
+                      <span class="truncate font-mono text-[12.5px] text-(--el-text)"
+                        >motir-core</span
+                      >
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-full border-[5px] border-(--el-accent) bg-(--el-surface)"
+                      ></span>
+                    </li>
+                    <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-[3px]">
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-accent) text-(--el-accent-text)"
+                        ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-check" /></svg
+                      ></span>
+                      <span class="truncate font-mono text-[12.5px] text-(--el-text)"
+                        >motir-ai</span
+                      >
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-(--el-border-strong) bg-(--el-surface)"
+                      ></span>
+                    </li>
+                    <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-[3px]">
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-accent) text-(--el-accent-text)"
+                        ><svg class="h-3 w-3" aria-hidden="true"><use href="#i-check" /></svg
+                      ></span>
+                      <span class="truncate font-mono text-[12.5px] text-(--el-text)"
+                        >motir-gateway</span
+                      >
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-(--el-border-strong) bg-(--el-surface)"
+                      ></span>
+                    </li>
+                    <li class="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 py-[3px]">
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-surface)"
+                      ></span>
+                      <span class="truncate font-mono text-[12.5px] text-(--el-text-muted)"
+                        >platform-starter</span
+                      >
+                      <span
+                        class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-(--el-border) bg-(--el-surface) opacity-40"
+                      ></span>
+                    </li>
+                  </ul>
+                  <p class="mt-1 font-sans text-xs text-(--el-text-muted)">
+                    The primary is the repository a dispatch runs in.
+                  </p>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Type<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Story
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Priority<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  <span class="dsPill dsPillNeutral">High</span>
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Assignee<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Reporter
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Zhu Yue
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Parent<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  MOTIR-2200
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Due date<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Sprint<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  Backlog
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Story points
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  5
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Estimate<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  1h 30m
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Labels<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5" style="opacity: 0.4">
+                <dt
+                  class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                >
+                  Components<span class="text-(--el-text-secondary)"
+                    ><svg class="h-3.5 w-3.5" aria-hidden="true"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </dt>
+                <dd
+                  class="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)"
+                >
+                  None
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="foldNote">
+            ⚠️ <strong>The editor is NOT compressed.</strong> It lists the project's WHOLE domain,
+            four rows, no <span class="font-mono">+N more</span> — a picker that hides options is
+            broken. Compression governs the READ, never the WRITE.
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
