@@ -180,10 +180,46 @@ import type {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   resolveAuthoredTargetRepoInProject,
+  resolveAuthoredTargetReposInProject,
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
+import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
+import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+
+/**
+ * Reject a write that supplies BOTH the scalar pin and the repository SET
+ * (Story MOTIR-2725 · MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md`
+ * §3.4).
+ *
+ * `undefined` on either side is "not supplied" and is always fine; a `null`
+ * `targetRepo` beside a `targetRepos` is NOT — clearing the pin is still
+ * describing the field, and a caller who meant to clear the set says
+ * `targetRepos: []`.
+ */
+function assertSingleTargetRepoInput(
+  targetRepo: string | null | undefined,
+  targetRepos: readonly (string | null | undefined)[] | null | undefined,
+): void {
+  if (targetRepo !== undefined && targetRepos !== undefined) {
+    throw new ConflictingTargetRepoInputError();
+  }
+}
+
+/** A validated single pin, as the one-element set it means (`null` → `[]`). The
+ *  bridge that lets every existing caller — which sends only the scalar — write a
+ *  valid set without knowing the set exists. */
+function toRepoSet(pin: string | null): string[] {
+  return pin === null ? [] : [pin];
+}
+
+/** Ordered list equality — a REORDER counts as a change, because element 0 is the
+ *  primary dispatch routes to, so `[a, b]` and `[b, a]` are different decisions. */
+function sameRepoSet(next: readonly string[], current: readonly string[]): boolean {
+  return next.length === current.length && next.every((r, i) => r === current[i]);
+}
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -799,11 +835,20 @@ export const workItemsService = {
     // `github_repo` RLS policies are workspace-keyed), so it must not run nested
     // inside our transaction. Throws `UnknownTargetRepoError` (422);
     // omitted/null/blank → unpinned.
-    const targetRepo = await resolveAuthoredTargetRepoInProject(
-      input.targetRepo,
-      input.projectId,
-      ctx,
-    );
+    //
+    // The SET (Story MOTIR-2725 · MOTIR-2727, ADR §1 / §3.4) rides the same
+    // pre-transaction slot for the same three reasons. `targetRepo` is the set's
+    // PRIMARY — `targetRepos[0] ?? null` — so exactly ONE of the two fields may be
+    // supplied; both is `ConflictingTargetRepoInputError` (422), never a silent
+    // precedence rule that drops a repository the caller believed they recorded.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos);
+    const targetRepos =
+      input.targetRepos !== undefined
+        ? await resolveAuthoredTargetReposInProject(input.targetRepos, input.projectId, ctx)
+        : toRepoSet(
+            await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
+          );
+    const targetRepo = primaryTargetRepo(targetRepos);
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
@@ -994,6 +1039,7 @@ export const workItemsService = {
         // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
         // caller didn't pin one (the dispatch payload resolves the default).
         targetRepo,
+        targetRepos,
         sprintId: targetSprintId,
         position,
         backlogRank,
@@ -1206,6 +1252,7 @@ export const workItemsService = {
       'type',
       'executor',
       'targetRepo',
+      'targetRepos',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1235,16 +1282,25 @@ export const workItemsService = {
     // inside the lock; a concurrent re-parent cannot move an item across
     // projects (`CrossProjectParentError`), so the project this validates
     // against is the project the write lands in.
-    let nextTargetRepo: string | null | undefined;
-    if (patch.targetRepo !== undefined) {
+    //
+    // The SET patches through the SAME slot, and the two fields are mutually
+    // exclusive here exactly as they are on create (ADR §3.4). Whichever arrives,
+    // BOTH columns are written together — the scalar is the set's primary and is
+    // never left describing a different repository than element 0.
+    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos);
+    let nextTargetRepos: string[] | undefined;
+    if (patch.targetRepo !== undefined || patch.targetRepos !== undefined) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
-      nextTargetRepo = await resolveAuthoredTargetRepoInProject(
-        patch.targetRepo,
-        pre.projectId,
-        ctx,
-      );
+      nextTargetRepos =
+        patch.targetRepos !== undefined
+          ? await resolveAuthoredTargetReposInProject(patch.targetRepos, pre.projectId, ctx)
+          : toRepoSet(
+              await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
+            );
     }
+    const nextTargetRepo: string | null | undefined =
+      nextTargetRepos === undefined ? undefined : primaryTargetRepo(nextTargetRepos);
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -1374,6 +1430,15 @@ export const workItemsService = {
       // Target repo (Story 7.9 · MOTIR-1804): the normalized + validated value
       // from above (`undefined` = not supplied). Compare against the stored pin
       // so a re-save of the same repo stays a no-op and writes no revision.
+      //
+      // The SET (MOTIR-2727) is compared as an ORDERED list — a reorder is a real
+      // change, because element 0 is what dispatch routes to. The two columns move
+      // TOGETHER, always: the scalar is the set's primary, so writing one without
+      // the other is what would turn a derived field into a second fact.
+      if (nextTargetRepos !== undefined && !sameRepoSet(nextTargetRepos, current.targetRepos)) {
+        update.targetRepos = nextTargetRepos;
+        diff.targetRepos = { from: current.targetRepos, to: nextTargetRepos };
+      }
       if (nextTargetRepo !== undefined && nextTargetRepo !== current.targetRepo) {
         update.targetRepo = nextTargetRepo;
         diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
@@ -4183,6 +4248,12 @@ export const workItemsService = {
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
     const pullRequests = await this.listLinkedPullRequests(detail.item.id, ctx);
+    // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2416) — the SAME resolved
+    // value the detail page reads, from the same service method calling the same
+    // classifier. The peek showing a different delivery state from the detail
+    // page is the drift this story exists to remove, so the two surfaces do not
+    // each compute it.
+    const repoDelivery = await this.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx);
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -4200,6 +4271,7 @@ export const workItemsService = {
       sprints,
       projectComponents,
       estimationConfig,
+      repoDelivery,
     );
   },
 
@@ -4224,6 +4296,36 @@ export const workItemsService = {
       githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
     );
     return rows.map(toLinkedPullRequestDto);
+  },
+
+  /**
+   * PER-REPOSITORY DELIVERY for one item (Story MOTIR-2725 · MOTIR-2415) — every
+   * repository the item CARRIES, in order, each with the state the completion
+   * gate reads: `delivered` · `awaiting` · `unknown`.
+   *
+   * A RESOLVED value, so it is computed here, server-side, in the detail page's
+   * existing data path — never a client round trip on a server-rendered page.
+   *
+   * ⚠️ It calls the SAME `classifyRepoDelivery` the completion gate calls
+   * (`lib/workItems/repoDelivery.ts`). That is the point of the shared module: a
+   * second implementation would let the panel say `delivered` while the gate
+   * holds the card In Review, and a ledger that disagrees with the rule it
+   * displays is worse than no ledger.
+   *
+   * Same workspace-context requirement as the linked-PR read above — the
+   * `github_pull_request` policy is workspace-keyed, so an unbound read returns
+   * no rows for an item that has them.
+   */
+  async listRepoDelivery(
+    workItemId: string,
+    targetRepos: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<RepoDelivery[]> {
+    if (targetRepos.length === 0) return [];
+    const facts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+    );
+    return classifyRepoDelivery(targetRepos, facts);
   },
 
   /**
@@ -5310,10 +5412,11 @@ async function computeSubtreeProseAdvisories(
       descriptionMd: row?.descriptionMd ?? null,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE
-      // check's pin (MOTIR-2177), from the same batched read.
+      // check's repository SET (MOTIR-2177, widened in MOTIR-2728), from the same
+      // batched read.
       type: row?.type ?? null,
       executor: row?.executor ?? null,
-      targetRepo: row?.targetRepo ?? null,
+      targetRepos: row?.targetRepos ?? [],
     };
   });
 

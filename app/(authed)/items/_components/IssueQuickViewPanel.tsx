@@ -19,6 +19,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
 import { DevelopmentSection } from '@/components/github/DevelopmentSection';
+import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
@@ -505,6 +506,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             className="mt-6"
             pullRequests={data.pullRequests}
             itemIdentifier={data.identifier}
+            // MOTIR-2415 added this row behind a prop and left the peek's
+            // default empty so its output could not move by accident. This is
+            // the card that turns it on — by DECISION, and the design (2414 Q2)
+            // keeps the same treatment here rather than a reduced second one.
+            awaitingRepos={(data.repoDelivery ?? []).filter((d) => d.state !== 'delivered')}
           />
           <p className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-muted)">
             {t.rich('quickViewMore', {
@@ -563,6 +569,32 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           >
             <StatusValue category={view.statusCategory} label={view.statusLabel} />
           </EditableRailField>
+
+          {/* Repositories (Story MOTIR-2725 · MOTIR-2416) — SECOND in the rail,
+              immediately after Status, per design/work-items/
+              repository-set-quick-view.mock.html.
+
+              ⚠️ This is a DELIBERATE divergence from the detail rail, which puts
+              the field last. It is a MEASUREMENT, not a preference: the peek's
+              rail is a bounded scroller (827px of content in a 621px viewport at
+              1280×900), and measured last the row sat at y 642–751 in a 680px
+              modal — below the fold, failing the card's own "visible without
+              scrolling" criterion. Second, it sits at y 137–246. The set is also
+              a COMPLETION fact — the reason a card is In Review rather than Done
+              — which is what this surface is opened from a list to ask.
+
+              READ-ONLY here, exactly as on the detail rail: the design chose an
+              editable bounded picker for BOTH surfaces, and it ships once, as
+              the shared control, rather than twice. */}
+          <RailField label={t('repositories')}>
+            {/* `?? []` at the DESERIALIZATION boundary, not as blanket
+                defensiveness: this payload arrives over HTTP from
+                `/api/work-items/peek`, and a server that predates MOTIR-2416
+                does not send the field. A client rendering against an older
+                deploy — or a mid-deploy window — must show the empty set, which
+                is a real state, rather than throw. */}
+            <RepositorySetField delivery={view.repoDelivery ?? []} compact />
+          </RailField>
 
           {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph
               follows the Estimate/Due grammar (NOT the coloured type chip — the

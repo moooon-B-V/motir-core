@@ -102,6 +102,10 @@ interface TargetRow {
   state: string;
   merged: boolean;
   headRef: string;
+  /** The branch the change request targeted (MOTIR-2729) — the completion gate's
+   *  satisfied side reads it off the row, so a backfilled row that omitted it
+   *  would be indistinguishable from a pre-column row and read as UNKNOWN. */
+  baseRef: string;
   title: string | null;
   workItemId: string | null;
   linkedManually: boolean;
@@ -277,6 +281,7 @@ async function applyOne(
     state: cr.state,
     merged: cr.merged,
     headRef: cr.headRef,
+    baseRef: cr.baseRef,
     title: cr.title,
     workItemId: workItem?.id ?? null,
     linkedManually: false,
@@ -308,6 +313,7 @@ function rowMatches(
     state: string;
     merged: boolean;
     headRef: string;
+    baseRef: string | null;
     title: string | null;
     workItemId: string | null;
     linkedManually: boolean;
@@ -319,6 +325,11 @@ function rowMatches(
     existing.state === target.state &&
     existing.merged === target.merged &&
     existing.headRef === target.headRef &&
+    // A row mirrored BEFORE `base_ref` existed carries null and does not match —
+    // which is correct: the sweep should rewrite it precisely to fill that hole,
+    // and counting it `unchanged` would leave the completion gate reading UNKNOWN
+    // for a merge this sweep can prove landed on the trunk.
+    existing.baseRef === target.baseRef &&
     existing.title === target.title &&
     existing.workItemId === target.workItemId &&
     existing.linkedManually === target.linkedManually

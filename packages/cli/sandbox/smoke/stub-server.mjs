@@ -311,6 +311,7 @@ function workItemDetail(key) {
     commentCount: 0,
     sprintId: null,
     targetRepo: 'demo-repo',
+    targetRepos: ['demo-repo'],
     executor: item?.executor ?? 'coding_agent',
     planningSource: null,
     planningHarness: null,

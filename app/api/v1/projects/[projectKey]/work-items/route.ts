@@ -129,6 +129,7 @@ export const POST = withV1Route<{ projectKey: string }>(
           'storyPoints',
           'estimateMinutes',
           'targetRepo',
+          'targetRepos',
           'assigneeId',
           'dueDate',
         ]),

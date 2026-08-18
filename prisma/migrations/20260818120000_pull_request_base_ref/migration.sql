@@ -1,0 +1,32 @@
+-- MOTIR-2729 (Story MOTIR-2725): the pull-request mirror records WHICH BRANCH a
+-- change request targets.
+--
+-- `changeRequestStatusSync` has compared the base against the repository's
+-- default branch since MOTIR-1873 — a merge onto anything else never reached the
+-- trunk — but it read the base off the LIVE delivery payload
+-- (`NormalizedChangeRequest.baseRef`) and this row dropped it. That is everything
+-- a per-delivery gate needs. The repository-SET gate this story adds is the first
+-- consumer that asks about merges which ALREADY HAPPENED, in other repositories,
+-- and their only record is this row.
+--
+-- NULLABLE, and deliberately NOT backfilled. There is nothing to backfill it
+-- FROM: the base is not derivable from any other column, and defaulting it to
+-- 'main' would manufacture the guess this story exists to remove — the
+-- repositories Motir mirrors do not all default to `main`, which is why the
+-- comparison reads `github_repo.default_branch` rather than a literal. A null
+-- therefore means UNKNOWN, and every consumer must read it as unknown in BOTH
+-- directions: it does not prove a merge reached the trunk, and it does not prove
+-- it did not. The same rule `merged_at` (MOTIR-2922) states, for the same reason.
+--
+-- Every LIVE path supplies it from here on: `baseRef` is a REQUIRED field of
+-- `NormalizedChangeRequest`, produced by the GitHub parser, the GitLab parser and
+-- the historical-PR backfill alike, so only rows written before this migration
+-- are ever null and that set never grows.
+--
+-- No index and no constraint: the gate reads it off rows it already has by work
+-- item, never as a lookup key. RLS is unchanged — the shipped
+-- `github_pull_request` policies cover the new column exactly as they cover
+-- `head_ref` beside it.
+
+-- AlterTable
+ALTER TABLE "github_pull_request" ADD COLUMN     "base_ref" TEXT;

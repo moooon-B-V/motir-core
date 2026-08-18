@@ -44,6 +44,8 @@ import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '..
 import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
 import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
+import { RepositorySetField } from '@/components/workItems/RepositorySetField';
+import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
@@ -71,6 +73,17 @@ export interface CoreFieldsPanelProps {
    * created/updated. With no definitions the rail renders exactly as before.
    */
   customFields?: CustomFieldWithValueDto[];
+  /**
+   * Every repository this item ships in, with each one's DELIVERY state (Story
+   * MOTIR-2725 · MOTIR-2415) — RESOLVED server-side by
+   * `workItemsService.listRepoDelivery`, which calls the same classifier the
+   * completion gate calls, so the panel can never say `delivered` about a
+   * repository the gate is holding the card for.
+   *
+   * Defaults to `[]` — the empty set, which is the state most cards are in and a
+   * deliberate one, not a missing value.
+   */
+  repoDelivery?: RepoDelivery[];
   /**
    * Labels + components (Story 5.4 · Subtask 5.4.8) — the two cards slot
    * between Parent and Due date (the relational group, ahead of the
@@ -142,6 +155,7 @@ export function CoreFieldsPanel({
   parent,
   reporterIsSelf,
   customFields = [],
+  repoDelivery = [],
   labelsComponents,
   sprints = [],
 }: CoreFieldsPanelProps) {
@@ -602,6 +616,31 @@ export function CoreFieldsPanel({
         ) : (
           muted(t('noEstimate'))
         )}
+      </FieldCard>
+
+      {/* Repositories (Story MOTIR-2725 · MOTIR-2415) — EVERY repository this
+          item ships in, with each one's delivery state, per
+          design/work-items/repository-set.mock.html.
+
+          PLACEMENT is the design's panel 0: after Estimate, before the collapsed
+          Provenance disclosure — last of the always-visible fields. It is read at
+          DISPATCH and REVIEW time rather than at triage time, so it must not push
+          Status / Assignee / Priority down the rail; and it gates completion, so
+          it outranks provenance and stays expanded. It sits BEFORE the
+          custom-field block so the built-in FieldCard run stays contiguous (the
+          comment below), which the design's panel 0 does not contradict — it drew
+          no custom fields.
+
+          READ-ONLY for now: the design chose an editable bounded picker, and the
+          editor lands with the quick view's shared control in MOTIR-2416, so both
+          surfaces get one editor rather than two. `editable={false}` drops the
+          chevron, exactly as Story points does — no affordance that does nothing.
+
+          The set renders NOTHING when the item carries no repositories AND the
+          page could not resolve delivery... except it must: the empty set is a
+          DELIBERATE state with its own copy, so the card always renders. */}
+      <FieldCard label={t('repositories')} editable={false}>
+        <RepositorySetField delivery={repoDelivery} />
       </FieldCard>
 
       {/* Custom fields (5.3.7) — a contiguous block after the last built-in

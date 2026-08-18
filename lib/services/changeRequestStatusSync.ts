@@ -7,6 +7,13 @@ import type {
 } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import {
+  classifyRepoDelivery,
+  hasRepoSetShortfall,
+  repoSetShortfall,
+  EMPTY_SHORTFALL,
+  type RepoSetShortfall,
+} from '@/lib/workItems/repoDelivery';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -44,9 +51,16 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 //     else a change request STACKED on a sibling's branch completes while its code
 //     sits on a dead branch with no path to the trunk. GitHub reports MERGED for
 //     that merge, truthfully; the trunk is the only witness that matters.
-// Both HOLD the item at In Review rather than transitioning, and both report a
-// distinct outcome — never a silent no-op, because invisibility was the whole cost
-// of MOTIR-1873's incident.
+//   * MOTIR-2729 — every repository the item CARRIES (`work_item.targetRepos`, the
+//     repository SET) must have a merged linked change request on that repository's
+//     own default branch. This is the gate the other two structurally cannot be:
+//     both of them reason about change requests that EXIST, and a repository whose
+//     pull request was never opened writes no row at all, so a two-repo card
+//     completed on half its work (MOTIR-2664). The SET is the expected side; without
+//     it "has everything merged?" is a question with no data behind it.
+// All three HOLD the item at In Review rather than transitioning, and all three
+// report a distinct outcome — never a silent no-op, because invisibility was the
+// whole cost of MOTIR-1873's incident.
 
 /** The concrete workflow target a canonical change-request lifecycle maps to.
  *  `key` is the CANONICAL status key we prefer; `category` is the fallback bucket
@@ -76,6 +90,7 @@ export type ChangeRequestSyncResult = {
     | 'noop'
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
     | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
+    | 'deferred_incomplete_repo_set' // a repository the item CARRIES has no merge on its default branch — item stays In Review (MOTIR-2729)
     | 'no_work_item'
     | 'no_matching_status'
     | 'illegal_transition'
@@ -158,13 +173,18 @@ export async function syncChangeRequestStatus(
       cr.number,
       tx,
     );
-    let workItem: { id: string; projectId: string; status: string } | null;
+    let workItem: ResolvedChangeRequestWorkItem | null;
     let linkedManually: boolean;
     if (existingPr?.linkedManually && existingPr.workItemId) {
       const manual = await workItemRepository.findById(existingPr.workItemId, tx);
       // A manual link whose target was hard-deleted falls back to unlinked.
       workItem = manual
-        ? { id: manual.id, projectId: manual.projectId, status: manual.status }
+        ? {
+            id: manual.id,
+            projectId: manual.projectId,
+            status: manual.status,
+            targetRepos: manual.targetRepos,
+          }
         : null;
       linkedManually = manual !== null;
     } else {
@@ -189,6 +209,11 @@ export async function syncChangeRequestStatus(
       state: cr.state,
       merged: cr.merged,
       headRef: cr.headRef,
+      // The branch this change request TARGETS (MOTIR-2729). Read from the live
+      // payload one screen below to decide THIS delivery; persisted here because
+      // the repository-SET gate asks the same question about merges that already
+      // happened in other repositories, whose only record is this row.
+      baseRef: cr.baseRef,
       title: cr.title,
       workItemId: workItem?.id ?? null,
       linkedManually,
@@ -224,6 +249,27 @@ export async function syncChangeRequestStatus(
         ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
         : false;
 
+    // MOTIR-2729 — the item completes only when EVERY repository it CARRIES has a
+    // merged change request on that repository's own default branch. The two gates
+    // above reason about change requests that EXIST; a repository whose pull
+    // request was never opened writes no row, so neither can see it. The expected
+    // side is the item's own repository SET (MOTIR-2727).
+    //
+    // Read inside THIS transaction, after `bindWorkspaceContext` and under the row
+    // lock taken above, so concurrent redeliveries serialize on it exactly as the
+    // other two do. Skipped for any delivery the gates above already hold or that
+    // cannot complete at all — the read costs nothing to skip and the outcome
+    // would be discarded.
+    const shortfall =
+      lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
+        ? repoSetShortfall(
+            classifyRepoDelivery(
+              workItem.targetRepos,
+              await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
+            ),
+          )
+        : EMPTY_SHORTFALL;
+
     const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
     return {
       kind: 'resolved' as const,
@@ -240,6 +286,7 @@ export async function syncChangeRequestStatus(
       // merge event, and GitHub redelivers events freely.
       mergeAlreadyRecorded: existingPr?.state === 'closed' && existingPr.merged === true,
       hasOtherOpenLinkedPr,
+      shortfall,
       actorUserId: authorBoundUserId ?? owner?.userId ?? null,
       ownerUserId: owner?.userId ?? null,
     };
@@ -308,6 +355,46 @@ export async function syncChangeRequestStatus(
     return { event: 'pull_request', outcome: 'deferred_open_pr', workItemId: resolved.workItemId };
   }
 
+  // A merge that leaves any repository the item CARRIES without a merge of its own
+  // holds the item In Review (MOTIR-2729). THIRD, not a replacement for the gate
+  // above: that one works with no expected set at all and is therefore the only
+  // protection every unpinned card in the product has. Where both hold, the one
+  // above wins on purpose — "a sibling change request is still open" names an
+  // artifact the reader can go and look at.
+  if (lifecycle === 'done' && hasRepoSetShortfall(resolved.shortfall)) {
+    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
+    // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
+    // row lock) and best-effort — a failed note must not turn a correct hold into
+    // a 500 the host retries forever.
+    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
+      try {
+        await commentsService.addComment(
+          resolved.workItemId,
+          {
+            bodyMd: incompleteRepoSetCommentBody({
+              noun: changeRequestNoun(resolved.provider),
+              number: cr.number,
+              shortfall: resolved.shortfall,
+            }),
+          },
+          { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+        );
+      } catch (err) {
+        console.error('[changeRequestStatusSync] repo-set note failed; item still held', {
+          workItemId: resolved.workItemId,
+          number: cr.number,
+          outstanding: resolved.shortfall.outstanding,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+    return {
+      event: 'pull_request',
+      outcome: 'deferred_incomplete_repo_set',
+      workItemId: resolved.workItemId,
+    };
+  }
+
   // Phase 2 — the status transition through the SHIPPED authority. Resolve the
   // concrete target status key by category against the project's live workflow.
   const targetKey = await workflowsService.resolveStatusKey(
@@ -374,6 +461,50 @@ export async function syncChangeRequestStatus(
   };
 }
 
+/** The incomplete-repository-set note (MOTIR-2729) — posted on the linked item
+ *  when a merge leaves some repository the item carries without one of its own.
+ *
+ *  It names the repositories, because that single fact is what turns "why isn't
+ *  this Done?" into a one-minute answer, and it states the condition that WILL
+ *  complete the item so the hold never reads as a stuck integration — the same
+ *  two obligations the stranded-merge note below carries.
+ *
+ *  Like that one, it describes what did NOT happen rather than asserting a
+ *  status: the sync leaves the item exactly where it was. */
+function incompleteRepoSetCommentBody(args: {
+  noun: string;
+  number: number;
+  shortfall: RepoSetShortfall;
+}): string {
+  const list = (names: string[]) => names.map((n) => `\`${n}\``).join(', ');
+  const lines: string[] = [
+    `⚠️ **Merged, but this item ships in more than one repository** — ${args.noun} ` +
+      `#${args.number} merged, and the item is not complete yet, so its status is left unchanged.`,
+  ];
+  if (args.shortfall.outstanding.length > 0) {
+    lines.push(
+      `Still outstanding: ${list(args.shortfall.outstanding)} — no ${args.noun} merged onto ` +
+        `${args.shortfall.outstanding.length === 1 ? 'its' : 'their'} default ` +
+        `branch${args.shortfall.outstanding.length === 1 ? '' : 'es'} yet.`,
+    );
+  }
+  if (args.shortfall.unknownBase.length > 0) {
+    lines.push(
+      `No record of which branch the merge landed on for ${list(args.shortfall.unknownBase)} — ` +
+        `${args.shortfall.unknownBase.length === 1 ? 'that repository has' : 'those repositories have'} ` +
+        `a merged ${args.noun} that Motir mirrored before it began recording base branches, so it ` +
+        `cannot tell whether the work reached the trunk. Open it and check, or re-merge onto the ` +
+        `default branch.`,
+    );
+  }
+  lines.push(
+    `The item completes when every repository it carries has a ${args.noun} merged onto that ` +
+      `repository's own default branch. If one of them is not where this work ships, remove it ` +
+      `from the item's repositories.`,
+  );
+  return lines.join('\n\n');
+}
+
 /** The stranded-merge note (MOTIR-1873) — posted on the linked item when a merge
  *  landed on a base other than the repository's default branch. It names the base
  *  that swallowed the merge, because that single fact is what turns "why isn't this
@@ -405,6 +536,10 @@ export interface ResolvedChangeRequestWorkItem {
   id: string;
   projectId: string;
   status: string;
+  /** The repositories this item ships in — the EXPECTED side of MOTIR-2729's
+   *  completion gate. Empty for every card that names none, which is the common
+   *  case and the one the gate abstains on. */
+  targetRepos: string[];
 }
 
 /** Resolve the change request's linked work item from its head ref + title (the
@@ -433,7 +568,12 @@ export async function resolveChangeRequestWorkItem(
     if (!project) continue;
     const workItem = await workItemRepository.findByIdentifier(project.id, dedupeKey, tx);
     if (workItem)
-      return { id: workItem.id, projectId: workItem.projectId, status: workItem.status };
+      return {
+        id: workItem.id,
+        projectId: workItem.projectId,
+        status: workItem.status,
+        targetRepos: workItem.targetRepos,
+      };
   }
   return null;
 }

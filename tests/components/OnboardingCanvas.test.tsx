@@ -32,6 +32,7 @@ const PEEK = {
   parent: null,
   readiness: null,
   pullRequests: [],
+  repoDelivery: [],
   hasChildren: false,
   canPlan: true,
   // MOTIR-2562 widened the payload with the editor inputs. They ride the same

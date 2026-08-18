@@ -177,6 +177,11 @@ const workItemDtoExtras = {
   publicChildrenHidden: z.boolean(),
   sessionBranch: z.string().nullable(),
   targetRepo: z.string().nullable(),
+  /** EVERY repository the item ships in (MOTIR-2728) — ordered, element 0 the
+   *  primary, which is what `targetRepo` above holds. The ITEM shape gains the
+   *  set; the DISPATCH shape below stays single-valued, because a dispatch routes
+   *  an agent into ONE checkout (ADR §2). */
+  targetRepos: z.array(z.string()),
   planningSource: z.string().nullable(),
   planningHarness: z.string().nullable(),
   planningModel: z.string().nullable(),
@@ -231,6 +236,7 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     publicChildrenHidden: dto.publicChildrenHidden,
     sessionBranch: dto.sessionBranch,
     targetRepo: dto.targetRepo,
+    targetRepos: dto.targetRepos,
     planningSource: dto.planningSource,
     planningHarness: dto.planningHarness,
     planningModel: dto.planningModel,
