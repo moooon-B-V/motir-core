@@ -21,6 +21,12 @@ import { truncateAuthTables } from '../helpers/db';
 // PR-number list AND the head-branch fallback; and the Story-level "N of M
 // verified" roll-up computed via the EXISTING `getProjectRoadmap` progress
 // aggregation (not a parallel path).
+//
+// MOTIR-2946 moved the COMMENT's identity one level coarser — ONE comment per
+// `(change request, head sha)` carrying the aggregate over the whole check set,
+// interim while any check still runs — while leaving the INGESTION key (and so
+// the Development surface) at `(pr, headSha, checkName)`. Its cases are the last
+// block below.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-ci';
@@ -109,6 +115,7 @@ function checkSuitePayload(opts: {
 function checkRunPayload(opts: {
   conclusion: string | null;
   name?: string;
+  status?: string;
   headSha: string;
   headBranch?: string | null;
   prNumbers?: number[];
@@ -119,7 +126,7 @@ function checkRunPayload(opts: {
     repository: { id: Number(REPO_PROVIDER_ID) },
     check_run: {
       head_sha: opts.headSha,
-      status: 'completed',
+      status: opts.status ?? 'completed',
       conclusion: opts.conclusion,
       name: opts.name ?? 'build',
       check_suite: { head_branch: opts.headBranch ?? null },
@@ -409,6 +416,199 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ checkName: 'lint' });
+  });
+
+  // ── MOTIR-2946 — ONE feedback comment per (change request, head sha) ──────────
+  //
+  // The comment used to be keyed per CHECK NAME, so motir-core's ~34-check PR set
+  // put ~34 comments on one work item, each generalizing a single check's
+  // conclusion to "this work is verified" — including, mid-run, a red verdict and
+  // a green verdict about the same commit minutes apart. These cover the new
+  // identity: N conclusions → 1 comment, updated in place, interim while any check
+  // is still running, and still naming every failure.
+
+  it('N terminal conclusions at one head sha produce exactly ONE comment (motir-core scale: 34 checks)', async () => {
+    const s = await makeScenario('one-comment@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    // motir-core's real check set: 17 Playwright shards, 8 sandbox profiles,
+    // CodeQL, the aggregate `CI complete`, license/cla, … — 34 names, one head sha.
+    const names = Array.from({ length: 34 }, (_, i) => `check ${i + 1}`);
+    expect(await commentsOn(item.id)).toHaveLength(0); // before: 0
+    for (const name of names) {
+      await githubWebhookService.handleEvent(
+        'check_run',
+        checkRunPayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7], name }),
+      );
+    }
+
+    const comments = await commentsOn(item.id);
+    expect(comments).toHaveLength(1); // after: 1 — NOT 34
+    expect(comments[0]!.bodyMd).toBe(
+      '✅ **CI passing** — all 34 checks succeeded on the linked pull request. This work is verified.',
+    );
+    // Ingestion is UNCHANGED: still one row per check name, and every row at the
+    // sha points at the one comment.
+    const rows = await adminDb.githubCheckRun.findMany();
+    expect(rows).toHaveLength(34);
+    expect(new Set(rows.map((r) => r.feedbackCommentId))).toEqual(new Set([comments[0]!.id]));
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a check still PENDING keeps the comment INTERIM — no terminal verdict is asserted', async () => {
+    const s = await makeScenario('interim@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    // Three checks announce themselves, as GitHub does before any concludes.
+    for (const name of ['lint', 'e2e shard 1', 'e2e shard 2']) {
+      await githubWebhookService.handleEvent(
+        'check_run',
+        checkRunPayload({
+          conclusion: null,
+          status: 'in_progress',
+          headSha: 'sha1',
+          prNumbers: [7],
+          name,
+        }),
+      );
+    }
+    // One concludes. Two are still running, so the comment must NOT claim a verdict.
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7], name: 'lint' }),
+    );
+
+    const interim = await commentsOn(item.id);
+    expect(interim).toHaveLength(1);
+    expect(interim[0]!.bodyMd).toContain('CI running');
+    expect(interim[0]!.bodyMd).toContain('1 of 3 checks complete');
+    expect(interim[0]!.bodyMd).toContain('No verdict yet');
+    expect(interim[0]!.bodyMd).not.toContain('This work is verified');
+    expect(interim[0]!.bodyMd).not.toContain('CI failed');
+
+    // The remaining two conclude — one of them red. NOW the set is terminal, and
+    // the SAME comment carries the aggregate, naming what failed.
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({
+        conclusion: 'failure',
+        headSha: 'sha1',
+        prNumbers: [7],
+        name: 'e2e shard 1',
+      }),
+    );
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({
+        conclusion: 'success',
+        headSha: 'sha1',
+        prNumbers: [7],
+        name: 'e2e shard 2',
+      }),
+    );
+
+    const final = await commentsOn(item.id);
+    expect(final).toHaveLength(1);
+    expect(final[0]!.id).toBe(interim[0]!.id); // updated in place
+    expect(final[0]!.bodyMd).toContain('CI failed');
+    expect(final[0]!.bodyMd).toContain('1 of 3 checks did not pass');
+    expect(final[0]!.bodyMd).toContain('`e2e shard 1`'); // the roll-up names it
+    expect(final[0]!.bodyMd).toContain('needs another pass');
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('a DIFFERENT check flipping on re-run rewrites the SAME comment, never a second one', async () => {
+    const s = await makeScenario('flip@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7], name: 'lint' }),
+    );
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'failure', headSha: 'sha1', prNumbers: [7], name: 'build' }),
+    );
+    const afterFailure = await commentsOn(item.id);
+    expect(afterFailure).toHaveLength(1);
+    expect(afterFailure[0]!.bodyMd).toContain('`build`');
+
+    // `build` is re-run and now passes: same comment id, new body, green aggregate.
+    const res = await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7], name: 'build' }),
+    );
+    expect(res).toMatchObject({ outcome: 'verified', ciState: 'passing' });
+
+    const afterRerun = await commentsOn(item.id);
+    expect(afterRerun).toHaveLength(1);
+    expect(afterRerun[0]!.id).toBe(afterFailure[0]!.id);
+    expect(afterRerun[0]!.bodyMd).toContain('all 2 checks succeeded');
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a NEW head sha starts its OWN comment — the identity is (change request, head sha)', async () => {
+    const s = await makeScenario('newsha@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'failure', headSha: 'sha1', prNumbers: [7], name: 'lint' }),
+    );
+    await githubWebhookService.handleEvent(
+      'check_run',
+      checkRunPayload({ conclusion: 'success', headSha: 'sha2', prNumbers: [7], name: 'lint' }),
+    );
+
+    const bodies = (await commentsOn(item.id)).map((c) => c.bodyMd);
+    expect(bodies).toHaveLength(2); // one per pushed commit, not one per check
+    expect(bodies.filter((b) => b.includes('CI failed'))).toHaveLength(1);
+    expect(bodies.filter((b) => b.includes('CI passing'))).toHaveLength(1);
+  });
+
+  it('CONCURRENT terminal deliveries at one head sha still produce ONE comment (real concurrency)', async () => {
+    const s = await makeScenario('concurrent@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    // The shape the row lock exists for: N deliveries land together, each reads
+    // "no comment yet" and each wants to write one. Without the lock the first
+    // two both create one and the work item carries two contradicting verdicts.
+    const results = await Promise.all(
+      ['a', 'b', 'c', 'd', 'e', 'f'].map((name) =>
+        githubWebhookService.handleEvent(
+          'check_run',
+          checkRunPayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7], name }),
+        ),
+      ),
+    );
+    expect(results.every((r) => (r as { outcome: string }).outcome === 'verified')).toBe(true);
+
+    const comments = await commentsOn(item.id);
+    expect(comments).toHaveLength(1);
+    const rows = await adminDb.githubCheckRun.findMany();
+    expect(rows).toHaveLength(6);
+    expect(new Set(rows.map((r) => r.feedbackCommentId))).toEqual(new Set([comments[0]!.id]));
+    expect(await ciStateOf(item.id)).toBe('passing');
   });
 
   it('the Story shows "N of M verified" via the EXISTING roadmap roll-up', async () => {

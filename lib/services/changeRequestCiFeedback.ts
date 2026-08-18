@@ -22,15 +22,29 @@ import { workItemsService } from './workItemsService';
 // deliberately no second, divergent feedback path (the MOTIR-1475 rule that shaped
 // `changeRequestStatusSync`).
 //
-// On a TERMINAL conclusion the consumer posts (or, on a re-run, UPDATES in place) a
-// single feedback comment and flips the item's `ciState` verification signal — both
-// through the shipped services (`commentsService`, `workItemsService.setCiState`),
-// never a raw write, under `withSystemContext` (a webhook has no active workspace).
-// The feedback is IDEMPOTENT on `(pr, headSha, checkName)`: a redelivery of an
-// already-recorded conclusion is a no-op. A pending conclusion is RECORDED as a
-// row (so the Development surface can derive "Checks running", MOTIR-1579) with
-// NONE of the terminal side-effects; a neutral conclusion, a check for a change
-// request we don't track, or one with no linked work item are all clean no-ops.
+// On a TERMINAL conclusion the consumer posts (or, on a later conclusion at the
+// same head commit, UPDATES in place) THE feedback comment and flips the item's
+// `ciState` verification signal — both through the shipped services
+// (`commentsService`, `workItemsService.setCiState`), never a raw write, under
+// `withSystemContext` (a webhook has no active workspace).
+//
+// ⚠️ ONE COMMENT PER `(changeRequest, headSha)` — not per check (MOTIR-2946). The
+// INGESTION key is still `(pr, headSha, checkName)`: one `githubCheckRun` row per
+// check, which is what the Development surface derives "Checks running" and the
+// `ciState` pill from, and what makes a redelivery of an already-recorded
+// conclusion a no-op. The COMMENT key is one level coarser, and that is the whole
+// point of the card: keyed per check, a motir-core PR (~34 checks) put ~34
+// comments on one work item, each asserting "this work is verified" on the
+// authority of a single check that has no view of the whole — so a run in flight
+// could carry a red verdict and a green verdict about the same commit, minutes
+// apart. The comment now carries the AGGREGATE over every check row at the head
+// sha, is UPDATED in place as conclusions land, and reads as INTERIM while any
+// check is still pending — a verdict is asserted only once the set is terminal.
+//
+// A pending conclusion is RECORDED as a row (so the Development surface can derive
+// "Checks running", MOTIR-1579) with NONE of the terminal side-effects; a neutral
+// conclusion, a check for a change request we don't track, or one with no linked
+// work item are all clean no-ops.
 
 /** The CI-feedback result — the canonical outcome shared by both providers. The
  *  `event: 'ci'` tag is for logging / test assertions, not a wire contract. */
@@ -169,7 +183,8 @@ export async function applyCiStatusFeedback(
     return { event: 'ci', outcome: 'no_work_item', workItemId: resolved.workItemId };
 
   // Idempotent: a redelivery of the SAME conclusion we already recorded (and
-  // commented) is a no-op — never a duplicate comment.
+  // commented) is a no-op — never a duplicate comment. The check set at this sha
+  // is unchanged by a redelivery, so the aggregate the comment carries is too.
   if (
     resolved.existing &&
     resolved.existing.conclusion === event.conclusion &&
@@ -186,40 +201,70 @@ export async function applyCiStatusFeedback(
   const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
   const noun = changeRequestNoun(resolved.provider);
 
-  // Post the feedback (a NEW conclusion), or UPDATE the existing comment in place
-  // (a re-run whose conclusion changed) — through the shipped comment service,
-  // never a raw insert.
-  const bodyMd =
-    event.conclusion === 'success'
-      ? passingCommentBody(event.context, noun)
-      : failingCommentBody(event.context, resolved.checksUrl, noun);
-  let feedbackCommentId: string;
-  if (resolved.existing?.feedbackCommentId) {
-    const edited = await commentsService.editComment(
-      resolved.existing.feedbackCommentId,
-      { bodyMd },
-      actorCtx,
-    );
-    feedbackCommentId = edited.id;
-  } else {
-    const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
-    feedbackCommentId = created.id;
-  }
-
-  // Record the check row (idempotency key) + derive the item's aggregate `ciState`
-  // from ALL its terminal checks at this commit (any failure → failing).
+  // Record this check's row and write THE ONE feedback comment for
+  // `(changeRequest, headSha)` — under a row lock on the change request, because
+  // the comment body is DERIVED from every check row at this sha and the comment
+  // itself is the write. Without the lock, two of the N deliveries that land
+  // together both read "no comment yet" and both create one, which is the very
+  // duplication this card removes (the lock-before-read-derived-update rule).
+  // `commentsService` runs its own transaction on its own connection and touches
+  // neither `github_pull_request` nor `github_check_run`, so no cycle can form.
   const ciState = await withSystemContext(async (tx) => {
-    await githubCheckRunRepository.upsert(
+    // The tenant is known here (phase 1 resolved it), so bind it up front: the
+    // lock below reads `github_pull_request` and the comment path reads tenant
+    // tables that carry no system arm (MOTIR-2880).
+    await bindWorkspaceContext(tx, resolved.workspaceId);
+    await githubPullRequestRepository.lockById(resolved.prId, tx);
+
+    // Read the sha's rows UNDER THE LOCK — every sibling that landed while we
+    // waited is in here, and any one of them already carrying the link tells us
+    // THE comment for this head commit. Every row at the sha points at the same
+    // one, so a new check joins the existing comment instead of opening its own.
+    const siblings = await githubCheckRunRepository.listByPrAndSha(
+      resolved.prId,
+      event.commitSha,
+      tx,
+    );
+    const existingCommentId =
+      siblings.find((r) => r.feedbackCommentId)?.feedbackCommentId ??
+      resolved.existing?.feedbackCommentId ??
+      null;
+
+    const recorded = await githubCheckRunRepository.upsert(
       {
         pullRequestId: resolved.prId,
         commitSha: event.commitSha,
         checkName: event.context,
         conclusion: event.conclusion,
-        feedbackCommentId,
+        feedbackCommentId: existingCommentId,
       },
       tx,
     );
-    const rows = await githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
+
+    // The authoritative check set at this head commit: the siblings plus this
+    // delivery's own row, which the upsert either created or just refreshed.
+    const rows = [...siblings.filter((r) => r.id !== recorded.id), recorded];
+    const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
+
+    // The first terminal conclusion CREATES the comment; every later one EDITS it
+    // in place. (An edit whose body is unchanged is a no-op in `commentsService` —
+    // no "Edited" tag, no event — so a delivery that moves nothing stays silent.)
+    if (existingCommentId) {
+      await commentsService.editComment(existingCommentId, { bodyMd }, actorCtx);
+    } else {
+      const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
+      await githubCheckRunRepository.upsert(
+        {
+          pullRequestId: resolved.prId,
+          commitSha: event.commitSha,
+          checkName: event.context,
+          conclusion: event.conclusion,
+          feedbackCommentId: created.id,
+        },
+        tx,
+      );
+    }
+
     return deriveCiState(rows.map((r) => r.conclusion));
     // (deriveCiState ignores non-terminal conclusions — pending rows at this sha,
     // recorded for the Development surface, never gate the verdict.)
@@ -265,12 +310,59 @@ function deriveCiState(conclusions: string[]): 'passing' | 'failing' | null {
   return null;
 }
 
-/** The passing-note body — a linked change request's checks succeeded (verified). */
-function passingCommentBody(checkName: string, noun: string): string {
-  return `✅ **CI passing** — checks (\`${checkName}\`) succeeded on the linked ${noun}. This work is verified.`;
+/** The check set at one head commit, folded to what the ONE feedback comment says
+ *  about it: how many checks there are, which ones FAILED (by name — the roll-up
+ *  must lose nothing a per-check comment carried), and how many are still
+ *  RUNNING, which is what makes the verdict interim rather than terminal. */
+export interface CheckSetSummary {
+  total: number;
+  failed: string[];
+  pending: number;
 }
 
-/** The failure-summary body — which check failed + a link, and the not-ready flag. */
-function failingCommentBody(checkName: string, checksUrl: string, noun: string): string {
-  return `❌ **CI failed** — \`${checkName}\` did not pass on the linked ${noun} ([view checks](${checksUrl})). This work item is marked **not-ready**; it needs another pass.`;
+/** Fold the head commit's check rows into the summary the comment renders. */
+export function summarizeChecks(
+  rows: { checkName: string; conclusion: string }[],
+): CheckSetSummary {
+  return {
+    total: rows.length,
+    failed: rows.filter((r) => r.conclusion === 'failure').map((r) => r.checkName),
+    pending: rows.filter((r) => r.conclusion === 'pending').length,
+  };
+}
+
+/**
+ * THE feedback comment's body for a change request at one head commit — the
+ * aggregate over its whole check set, never one check's conclusion generalized to
+ * "this work" (MOTIR-2946).
+ *
+ * Three readings, and the first is the one the per-check body could not express:
+ * while ANY check is still running the comment reads as INTERIM and asserts no
+ * verdict — a red-then-green pair of contradicting comments minutes apart is what
+ * a system of record must not do. Once the set is terminal it says passing or
+ * failing ONCE, naming every failed check so nothing a reader had before is lost.
+ */
+export function feedbackCommentBody(
+  summary: CheckSetSummary,
+  checksUrl: string,
+  noun: string,
+): string {
+  const { total, failed, pending } = summary;
+  const failedList = failed.map((name) => `\`${name}\``).join(', ');
+
+  if (pending > 0) {
+    const done = total - pending;
+    const soFar = failed.length > 0 ? ` **${failed.length} failed so far:** ${failedList}.` : '';
+    return `⏳ **CI running** — ${done} of ${total} ${plural(total, 'check')} complete on the linked ${noun} ([view checks](${checksUrl})).${soFar} No verdict yet.`;
+  }
+
+  if (failed.length > 0) {
+    return `❌ **CI failed** — ${failed.length} of ${total} ${plural(total, 'check')} did not pass on the linked ${noun} ([view checks](${checksUrl})): ${failedList}. This work item is marked **not-ready**; it needs another pass.`;
+  }
+
+  return `✅ **CI passing** — all ${total} ${plural(total, 'check')} succeeded on the linked ${noun}. This work is verified.`;
+}
+
+function plural(n: number, word: string): string {
+  return n === 1 ? word : `${word}s`;
 }
