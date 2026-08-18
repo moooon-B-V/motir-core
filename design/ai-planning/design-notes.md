@@ -2,13 +2,16 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                | Files                                | Card                 | Section |
-| ---------------------- | ------------------------------------ | -------------------- | ------- |
-| The Plans surface      | `plans-surface.mock.html` + `.png`   | MOTIR-843 (7.4.1)    | Part I  |
-| AI **sprint** planning | `sprint-planning.mock.html` + `.png` | MOTIR-1749 (7.13.11) | Part II |
+| Surface                 | Files                                         | Card                 | Section  |
+| ----------------------- | --------------------------------------------- | -------------------- | -------- |
+| The Plans surface       | `plans-surface.mock.html` + `.png`            | MOTIR-843 (7.4.1)    | Part I   |
+| AI **sprint** planning  | `sprint-planning.mock.html` + `.png`          | MOTIR-1749 (7.13.11) | Part II  |
+| **Who authored a plan** | `plans-surface.mock.html` (panel A2) + `.png` | MOTIR-2985           | Part III |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
+Part III **amends Part I's asset in place** — it adds one meta entry to a shipped row and to a
+shipped header, and redraws nothing.
 
 ---
 
@@ -433,3 +436,137 @@ dock unmounts on success — it must not linger showing a proposal that has beco
   is surfaced is that card’s question, not this surface’s. This asset covers the **person-initiated**
   run. (Both land on the same approve gate, so a later card can mount this same dock.)
 - **The settings pane** — MOTIR-914 / MOTIR-1739 own it (`design/ai-settings/`).
+
+---
+
+# Part III — Who authored this plan (MOTIR-2985 / Story MOTIR-2982)
+
+**Amends Parts I and II's asset in place**: the same three files
+(`design-notes.md` · `plans-surface.mock.html` · `plans-surface.png`), one new panel — **A2**.
+
+## 0. What is UNCHANGED — composed, not redrawn
+
+Nothing on the Plans surface is re-decided here. Explicitly unchanged, and composed from the
+shipped asset rather than redrawn:
+
+- **The access path.** Plans is reached from the left-nav _Plans_ entry (Part I §5), and a row is a
+  single `<Link>` into `/plans/[id]` — `PlanRow.tsx` says so in its own header ("the whole row is a
+  single `<Link>` into the plan detail — the access path"). This amendment adds **no new door**.
+- **The row's shape**: the 22px status icon-square, the title line, the meta line, the right-hand
+  pill cluster, the accent border on a `planned` row awaiting review.
+- **The status pills** and their tones (`generating`→info/sky, `planned`→lavender,
+  `approved`→success/mint, `declined`→archived), and the rule that status is carried by TEXT in the
+  pill, not colour alone.
+- **The staleness flag** (`N may be out of date`, warning tone).
+- **The plan-detail canvas, the history timeline, and the approve / decline bar.**
+
+## 1. Drawn against SHIPPED reality — what was RENDERED first
+
+The list row is already implemented, so this was drawn against pixels rather than against source.
+The **real `PlanRow` component** was bundled (esbuild) with the **real `messages/en.json`** through
+a `NextIntlClientProvider`, styled with the **real `app/globals.css` + `@motir/design-system`
+theme**, and screenshotted headlessly in both themes before a line of this panel was written. Three
+things that render settled, which reading the `.tsx` would not have:
+
+1. The meta line has **room**: at a normal list width, `14 items   planned 2 hours ago` occupies
+   under a third of it. The attribution does not need its own row, its own chrome, or a pill.
+2. The right-hand cluster is where the eye lands for STATUS. Putting attribution there would give
+   the row **two chips that read as one** — a `Planned` pill beside a `Claude Code` pill is a
+   status the reader will try to interpret.
+3. The meta entries are visually identical to each other (same size, same ink, same gap). A bare
+   `by Claude Code` in that line reads as a fourth timestamp. **That is why the attribution carries
+   a glyph** — see §3.
+
+## 2. WHAT IT DRAWS — the five list-row states, and which FIELD each reads
+
+The attribution is **one more entry in the row's existing meta line**, after the timestamp. The
+per-state contents, and the data behind them (the fields
+[the contract decision](motir:cmsympvcb017mi4philjyjccs) Q3 pins):
+
+| #   | state               | what the row shows                         | read from                                  |
+| --- | ------------------- | ------------------------------------------ | ------------------------------------------ |
+| 1   | **Agent-authored**  | 🤖 `by ` **`<harness>`**                   | `authorSource === 'mcp'` → `authorHarness` |
+| 2   | **Motir-generated** | ✨ `by ` **`Motir AI`**                    | `sourceJobId !== null` (see the ⚠️ below)  |
+| 3   | **Auto-planned**    | a SECOND entry: ↻ `auto-planned`           | `origin === 'cadence'`                     |
+| 4   | **Unattributed**    | **nothing — the entry is absent**          | neither an author nor a `sourceJobId`      |
+| 5   | **Long harness**    | the harness ellipsizes; nothing else moves | §4                                         |
+
+**⚠️ State 2 is read from `sourceJobId`, NOT from `authorSource === 'native'`.** The contract
+decision deliberately does not retrofit Motir's own generator — `aiGenerationService` and
+`aiPlanEditsService` keep calling `createPlan` without the triple — so **every plan the product
+generates carries `authorSource === null`**. Drawing state 2 off a `'native'` value would specify a
+row the surface can never render. Retiring that inference (and backfilling the column) is
+**MOTIR-2996**, and when it lands this table's state-2 row becomes `authorSource === 'native'` with
+no other change to the drawing.
+
+**State 3 is a different FACT and is never merged into state 2.** `origin` answers WHY the plan was
+started; the triple answers WHO wrote it. A cadence-fired Motir generation shows **both** entries,
+in that order — the panel's third row draws exactly that.
+
+**State 4 renders NOTHING.** No em-dash, no `Unknown`, no greyed placeholder. Every plan that
+predates the authorship column is in this state, and a placeholder in a scanned list is a value the
+reader has to learn to ignore.
+
+## 3. Per element — the primitive, the tokens, the copy
+
+| element                        | primitive / markup                                                                               | colour token                                                                                   | shape / size                            |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------- |
+| the attribution entry          | a `<span>` **inside the existing meta line** — no new container, no `Pill`                       | `--el-text-secondary` (the meta line's own ink)                                                | inherits the line: `text-xs`, `gap-x-3` |
+| the harness / `Motir AI` value | `<b>` within it                                                                                  | `--el-text-secondary` at `font-semibold` — the same emphasis the meta line already gives `<b>` | —                                       |
+| the glyph                      | lucide **`Bot`** (agent) · **`Sparkles`** (Motir) · **`RotateCw`** (auto-planned), `aria-hidden` | `--el-text-faint`                                                                              | `h-3 w-3`, `shrink-0`                   |
+| the model (DETAIL header only) | a `<span>` after a `·` separator                                                                 | `--el-text-muted`                                                                              | —                                       |
+
+- **No new colour, and no Tier-0 value.** Every ink above is an `--el-*` token this surface already
+  uses; the entry has no background, no border and no fill, so it introduces no tint at all.
+- **`--el-text-faint` on the glyph is legal precisely because the glyph is decorative.** `CLAUDE.md`'s
+  measured table puts faint at 2.39–2.61 against every surface here — below AA — and permits it only
+  for decorative glyphs whose meaning is carried elsewhere. It is: the words `by <harness>` say the
+  whole thing, and the icon is `aria-hidden`. **The attribution is never conveyed by icon or colour
+  alone.**
+- **`--el-text-secondary` for the words** (6.24 on `--el-surface`, AA in both themes) rather than
+  `--el-text-muted`, which clears AA only on the white page and the row sits on `--el-surface`.
+- **Copy** (i18n namespace `aiPlanning`, both catalogs — the parity gate):
+  - `authoredBy` → `by {harness}`
+  - `authoredByMotir` → `by Motir AI`
+  - `autoPlanned` → `auto-planned`
+  - `authoredByWithModel` (detail header) → `by {harness} · {model}`
+
+## 4. The long-harness state — what truncates, stated so the code card need not improvise
+
+`authorHarness` is caller-supplied free text of any length. Panel A2's fifth row draws a long
+harness AND a long title in a narrow row at once:
+
+- **The TITLE keeps its own single-line ellipsis** (`truncate` on the title line) and is **never
+  shortened by the attribution** — the meta line is a separate line below it.
+- **Inside the attribution, only the HARNESS truncates**, at **`max-w-[12rem]`**, with the full
+  value on the element's `title` attribute. The glyph, the word `by`, the item count and the
+  timestamp always stay legible.
+- **The meta line stays `flex-wrap`.** On a row too narrow for all three entries the attribution
+  moves to its own line, as the panel draws — it never pushes anything out of the row and never
+  breaks the text column's `min-w-0 flex-1`.
+
+## 5. The DETAIL header — the same fact where Approve is pressed
+
+The plan-detail header is `PlanReviewRail`'s `<header>` (title + status pill + summary +
+`N items`). The attribution joins the **`N items` line** as a second entry, same treatment as the
+row, with **one difference**: the detail also shows the **model**, after a `·`.
+
+**Why the model is on the detail and not on the row.** The row is SCANNED — the harness alone
+answers _whose plan is this?_, and a model string beside it would roughly double the line for a fact
+nobody scans on. The header is READ, once, by the person about to press Approve, and there the model
+is exactly what separates two agent-written plans. **Absent model ⇒ the separator and the model both
+disappear** and the harness stands alone; **absent everything ⇒ the entry is absent**, as in the row.
+
+## 6. What this amendment ASSIGNS to its sibling cards
+
+Written into those cards in the same pass (the sweep-the-referrers rule):
+
+- **[The Plans surface shows who authored a plan](motir:cmsymy41w01fri4phh1ur2b2v)** builds every
+  state above, in BOTH reads — `PlanRowView` (from `PlanDto`) for the row and `PlanReviewDto` (from
+  `lib/planning/planReview.ts`) for the header. **It also owes `sourceJobId` on `PlanReviewDto`**,
+  which does not carry it today: without it the header cannot tell state 2 from state 4 however
+  complete the authorship fields are.
+- **[MOTIR-2996](motir:cmsyo0t8100dpi3ph16o9k6bm)** retires the `sourceJobId` inference once the
+  generator records its own attribution, at which point state 2 reads `authorSource === 'native'`.
+
+Nothing else moves: no sibling loses an element to this amendment.
