@@ -1151,7 +1151,20 @@
     "quickViewFieldSaved": "已保存",
     "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
     "sprintUpdateFailed": "无法更新冲刺，请重试。",
-    "quickViewMoreFields": "另有 {count} 个字段"
+    "quickViewMoreFields": "另有 {count} 个字段",
+    "repositories": "代码仓库",
+    "repositoriesOptional": "可选 —— 并非每张卡片都会落在某个仓库里。",
+    "repositoryPrimary": "主仓库",
+    "repositoriesMore": "还有 {count} 个",
+    "repositoriesAllDelivered": "全部已交付。",
+    "repositoriesDeliveredCount": "{total} 个中已交付 {delivered} 个。",
+    "repositoriesOutstanding": "{total} 个中已交付 {delivered} 个，{repo} 仍未完成。",
+    "repositoriesUnknownBranch": "{repo} 已合并，但 Motir 没有记录合并到了哪个分支。",
+    "repositoryDelivery": {
+      "delivered": "已交付",
+      "awaiting": "待交付",
+      "unknown": "未知"
+    }
   },
   "comments": {
     "title": "动态",
@@ -5172,7 +5185,13 @@
       "linkAction": "关联",
       "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",
       "prNotFound": "找不到该拉取请求。",
-      "autoLinkCaptionManual": "当分支或 PR 提及 <mono>{key}</mono> 时会自动关联，也可在此手动关联。"
+      "autoLinkCaptionManual": "当分支或 PR 提及 <mono>{key}</mono> 时会自动关联，也可在此手动关联。",
+      "noPullRequestYet": "尚无拉取请求",
+      "mergedBranchUnknown": "已合并 —— 未记录分支",
+      "repoState": {
+        "awaiting": "待交付",
+        "unknown": "未知"
+      }
     }
   },
   "aiPlanning": {

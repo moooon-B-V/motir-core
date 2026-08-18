@@ -184,6 +184,7 @@ import {
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
@@ -4215,6 +4216,36 @@ export const workItemsService = {
       githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
     );
     return rows.map(toLinkedPullRequestDto);
+  },
+
+  /**
+   * PER-REPOSITORY DELIVERY for one item (Story MOTIR-2725 · MOTIR-2415) — every
+   * repository the item CARRIES, in order, each with the state the completion
+   * gate reads: `delivered` · `awaiting` · `unknown`.
+   *
+   * A RESOLVED value, so it is computed here, server-side, in the detail page's
+   * existing data path — never a client round trip on a server-rendered page.
+   *
+   * ⚠️ It calls the SAME `classifyRepoDelivery` the completion gate calls
+   * (`lib/workItems/repoDelivery.ts`). That is the point of the shared module: a
+   * second implementation would let the panel say `delivered` while the gate
+   * holds the card In Review, and a ledger that disagrees with the rule it
+   * displays is worse than no ledger.
+   *
+   * Same workspace-context requirement as the linked-PR read above — the
+   * `github_pull_request` policy is workspace-keyed, so an unbound read returns
+   * no rows for an item that has them.
+   */
+  async listRepoDelivery(
+    workItemId: string,
+    targetRepos: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<RepoDelivery[]> {
+    if (targetRepos.length === 0) return [];
+    const facts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+    );
+    return classifyRepoDelivery(targetRepos, facts);
   },
 
   /**

@@ -6,10 +6,14 @@ import type {
   NormalizedChangeRequest,
 } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import {
-  githubPullRequestRepository,
-  type LinkedChangeRequestCompletionFact,
-} from '@/lib/repositories/githubPullRequestRepository';
+  classifyRepoDelivery,
+  hasRepoSetShortfall,
+  repoSetShortfall,
+  EMPTY_SHORTFALL,
+  type RepoSetShortfall,
+} from '@/lib/workItems/repoDelivery';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -256,11 +260,13 @@ export async function syncChangeRequestStatus(
     // other two do. Skipped for any delivery the gates above already hold or that
     // cannot complete at all — the read costs nothing to skip and the outcome
     // would be discarded.
-    const repoSetShortfall =
+    const shortfall =
       lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
-        ? classifyRepoSetShortfall(
-            workItem.targetRepos,
-            await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
+        ? repoSetShortfall(
+            classifyRepoDelivery(
+              workItem.targetRepos,
+              await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
+            ),
           )
         : EMPTY_SHORTFALL;
 
@@ -280,7 +286,7 @@ export async function syncChangeRequestStatus(
       // merge event, and GitHub redelivers events freely.
       mergeAlreadyRecorded: existingPr?.state === 'closed' && existingPr.merged === true,
       hasOtherOpenLinkedPr,
-      repoSetShortfall,
+      shortfall,
       actorUserId: authorBoundUserId ?? owner?.userId ?? null,
       ownerUserId: owner?.userId ?? null,
     };
@@ -355,7 +361,7 @@ export async function syncChangeRequestStatus(
   // protection every unpinned card in the product has. Where both hold, the one
   // above wins on purpose — "a sibling change request is still open" names an
   // artifact the reader can go and look at.
-  if (lifecycle === 'done' && hasRepoSetShortfall(resolved.repoSetShortfall)) {
+  if (lifecycle === 'done' && hasRepoSetShortfall(resolved.shortfall)) {
     // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
     // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
     // row lock) and best-effort — a failed note must not turn a correct hold into
@@ -368,7 +374,7 @@ export async function syncChangeRequestStatus(
             bodyMd: incompleteRepoSetCommentBody({
               noun: changeRequestNoun(resolved.provider),
               number: cr.number,
-              shortfall: resolved.repoSetShortfall,
+              shortfall: resolved.shortfall,
             }),
           },
           { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
@@ -377,7 +383,7 @@ export async function syncChangeRequestStatus(
         console.error('[changeRequestStatusSync] repo-set note failed; item still held', {
           workItemId: resolved.workItemId,
           number: cr.number,
-          outstanding: resolved.repoSetShortfall.outstanding,
+          outstanding: resolved.shortfall.outstanding,
           error: err instanceof Error ? err.message : 'unknown',
         });
       }
@@ -453,74 +459,6 @@ export async function syncChangeRequestStatus(
     workItemId: resolved.workItemId,
     toStatus: targetKey,
   };
-}
-
-/**
- * What a work item's repository SET is still missing (MOTIR-2729) — split into
- * the two states a reader has to act on DIFFERENTLY, which is the whole reason it
- * is not one list:
- *
- *   * `outstanding` — the repository has no merge on its default branch that
- *     Motir can see. Usually its change request has not been opened yet, which is
- *     exactly the state `deferred_open_pr` cannot detect.
- *   * `unknownBase` — the repository HAS a merged linked change request, and the
- *     mirror does not know which branch it merged into. Only rows written before
- *     `github_pull_request.base_ref` existed are in this state, and it must be
- *     read as UNKNOWN in BOTH directions: treating it as satisfied would complete
- *     a card on a possibly-stranded merge (MOTIR-1873's exact case), and telling
- *     the reader the repository is outstanding would assert something false about
- *     a merge that may well have landed on the trunk.
- *
- * Both HOLD. They differ only in what the note says, and that difference is the
- * point — a person can open the pull request and read its base in ten seconds, but
- * only if they are told that is the question.
- */
-export interface RepoSetShortfall {
-  outstanding: string[];
-  unknownBase: string[];
-}
-
-const EMPTY_SHORTFALL: RepoSetShortfall = { outstanding: [], unknownBase: [] };
-
-/** Whether a shortfall holds the item — either list being non-empty. */
-function hasRepoSetShortfall(shortfall: RepoSetShortfall): boolean {
-  return shortfall.outstanding.length > 0 || shortfall.unknownBase.length > 0;
-}
-
-/**
- * Classify every repository the item CARRIES against the change requests linked
- * to it (MOTIR-2729).
- *
- * A repository is SATISFIED when some linked change request in it is `merged` AND
- * its recorded base equals that repository's own `defaultBranch` — the same
- * comparison `mergedIntoNonDefaultBase` makes for the delivery in hand, against
- * the mirrored branch and never a hard-coded `'main'` (a self-hoster's trunk is
- * `master` as often as not).
- *
- * ⚠️ An EMPTY set yields an empty shortfall, so the gate ABSTAINS. That is the
- * common case — every card in the product that names no repository — and it must
- * keep completing on exactly the rules it completes on today.
- *
- * Names are compared case-INSENSITIVELY. The expected side comes from the PIN
- * domain (a project's own repository set, which may name repositories that are
- * still plans) and the satisfied side from the installation mirror; the two are
- * different tables, and a host treats repository names case-insensitively.
- */
-function classifyRepoSetShortfall(
-  expected: readonly string[],
-  linked: readonly LinkedChangeRequestCompletionFact[],
-): RepoSetShortfall {
-  if (expected.length === 0) return EMPTY_SHORTFALL;
-  const outstanding: string[] = [];
-  const unknownBase: string[] = [];
-  for (const name of expected) {
-    const key = name.toLowerCase();
-    const inRepo = linked.filter((f) => f.repoName.toLowerCase() === key && f.merged);
-    if (inRepo.some((f) => f.baseRef !== null && f.baseRef === f.repoDefaultBranch)) continue;
-    if (inRepo.some((f) => f.baseRef === null)) unknownBase.push(name);
-    else outstanding.push(name);
-  }
-  return { outstanding, unknownBase };
 }
 
 /** The incomplete-repository-set note (MOTIR-2729) — posted on the linked item
