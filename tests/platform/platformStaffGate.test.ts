@@ -188,7 +188,9 @@ describe('requirePlatformStaff — the three DENIAL cases', () => {
     // the minimum" could probe the admin area's existence. So the assertion is
     // about SAMENESS: same class, same code, same message, and a message that
     // names neither the route nor which case it was.
-    const errors: Error & { code?: string }[] = [];
+    // ⚠️ The parentheses are load-bearing: `Error & { code?: string }[]` binds as
+    // an INTERSECTION of `Error` with an array, not an array of the intersection.
+    const errors: (Error & { code?: string })[] = [];
 
     currentSession = null;
     const anon = await freshGate();
