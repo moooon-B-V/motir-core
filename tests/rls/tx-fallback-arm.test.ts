@@ -507,8 +507,7 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     // this guard exists to prevent.
     await workItemsService.updateStatus(itemId, 'in_progress', fx.ctx);
     const changedAt = await workItemRevisionRepository.findLatestStatusChangeAt(itemId);
-    if (isAppRoleTestMode()) expect(changedAt).toBeNull();
-    else expect(changedAt).toBeInstanceOf(Date);
+    expect(changedAt).toBeNull();
   });
 
   it('customFieldOptionRepository — the option lookups, unbound', async () => {
