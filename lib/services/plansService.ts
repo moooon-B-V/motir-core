@@ -1173,6 +1173,14 @@ export const plansService = {
             // without passing anything; only the cadence watcher passes
             // `cadence`.
             origin: input.origin ?? 'user',
+            // WHO ASKED for it (MOTIR-2986). EXPLICIT — deliberately NOT
+            // `ctx.userId`, which is always present and is the project OWNER's on
+            // the cadence path (`autoPlanCadenceService` substitutes it so the
+            // job has a credential). Defaulting from the context would attribute
+            // a request to somebody who never made one, on the single plan whose
+            // whole point is that no person asked. Absent ⇒ null ⇒ `origin`
+            // answers who set it going.
+            createdById: input.createdById ?? null,
             // WHO authored it (MOTIR-2986) — the orthogonal fact, written in the
             // SAME insert rather than by an update-after-insert, because these
             // are write-once values on a row nobody else holds yet. No lock and

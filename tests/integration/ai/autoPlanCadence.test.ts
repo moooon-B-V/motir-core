@@ -467,6 +467,25 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
     expect(summary.outcomes[0]).toMatchObject({ planId: plans[0]!.id });
   });
 
+  it('records NO requester on a cadence plan — the owner’s credential is not a request (MOTIR-2986)', async () => {
+    const { fx } = await makeDrainedProject();
+
+    await autoPlanCadenceService.runCadenceSweep();
+
+    const plan = await adminDb.plan.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    // The sweep runs under the PROJECT OWNER's credential — `runCadenceSweep`
+    // builds `{ userId: owner.userId }` so the job HAS one — and nobody clicked
+    // anything. `createdById` must therefore stay null: a value here would
+    // attribute to that owner a request they never made, on the one plan whose
+    // whole point is that no person asked.
+    expect(plan.createdById).toBeNull();
+    // …and the abstention is real rather than a fixture with nobody to record:
+    // the owner exists, and is exactly who a naive `ctx.userId` default would
+    // have written.
+    expect(fx.ownerId).toBeTruthy();
+    expect(plan.origin).toBe('cadence');
+  });
+
   it('a request-path submit stays origin=user — the default, so no existing caller changed behaviour', async () => {
     const fx = await makeWorkItemFixture();
     const stub = await makeItem(fx, { kind: 'epic', title: 'Unexpanded epic' });
@@ -480,6 +499,9 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
 
     const plan = await adminDb.plan.findFirstOrThrow({ where: { projectId: fx.projectId } });
     expect(plan.origin).toBe('user');
+    // The other arm of the same decision (MOTIR-2986): a request path DOES have
+    // a requester — somebody clicked Expand — so the acting user is recorded.
+    expect(plan.createdById).toBe(fx.ownerId);
   });
 
   it('createPlan defaults origin to user, and the DTO/mapper exposes the column', async () => {

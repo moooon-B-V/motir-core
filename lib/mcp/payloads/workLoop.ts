@@ -179,7 +179,8 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
   /** Who decided the plan. MCP has always published it; v1 does not. */
   decidedById: z.string().nullable(),
   /**
-   * WHO AUTHORED the plan (Story MOTIR-2982 · MOTIR-2986) — MCP's own fields,
+   * WHO ASKED for the plan and WHO AUTHORED it (Story MOTIR-2982 · MOTIR-2986)
+   * — MCP's own fields,
    * and deliberately NOT added to v1's `planSchema`.
    *
    * `docs/decisions/agent-authored-plans.md` Q1: the plan-authoring operations
@@ -192,6 +193,7 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    * An agent that authored a plan reads its own attribution back; a person's
    * read of the same fact is the Plans surface (MOTIR-2991), not `/api/v1`.
    */
+  createdById: z.string().nullable(),
   authorSource: z.enum(PLANNING_SOURCES).nullable(),
   authorHarness: z.string().nullable(),
   authorModel: z.string().nullable(),
@@ -214,6 +216,7 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
     projectId: plan.projectId,
     itemCount: plan.itemCount,
     decidedById: plan.decidedById,
+    createdById: plan.createdById,
     authorSource: plan.authorSource,
     authorHarness: plan.authorHarness,
     authorModel: plan.authorModel,

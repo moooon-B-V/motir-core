@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
-import { makeWorkItemFixture } from '../../fixtures';
+import { createTestUser, makeWorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -25,6 +25,82 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
+});
+
+describe('Plan REQUESTER — who asked, as distinct from who wrote and who decided', () => {
+  it('records the requester when a producer passes one, and reads it back', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const created = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Somebody asked for this', createdById: fx.ownerId },
+      fx.ctx,
+    );
+
+    expect(created.createdById).toBe(fx.ownerId);
+    const read = await plansService.getPlan(created.id, fx.ctx);
+    expect(read.createdById).toBe(fx.ownerId);
+  });
+
+  it('is NOT defaulted from the acting context — the cadence guarantee', async () => {
+    const fx = await makeWorkItemFixture();
+
+    // THE POINT OF THE WHOLE FIELD, and the reason it is explicit rather than
+    // read from `ctx`. `createPlan` always HAS an acting user, and on the
+    // auto-plan path that user is the PROJECT OWNER, substituted by
+    // `autoPlanCadenceService` so the job has a credential — nobody clicked. A
+    // service-side default would therefore record a request the owner never
+    // made, on the one plan whose whole point is that no person asked.
+    const created = await plansService.createPlan(fx.projectId, { title: 'cadence' }, fx.ctx);
+
+    expect(created.createdById).toBeNull();
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: created.id } });
+    expect(row.createdById).toBeNull();
+    // …and the acting user was NOT null, so this is a real abstention rather
+    // than a fixture that had nobody to record.
+    expect(fx.ctx.userId).toBe(fx.ownerId);
+  });
+
+  it('is INDEPENDENT of who wrote it and who decided it — three parties, one row', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await createTestUser({ email: 'writer@example.com' });
+
+    const created = await plansService.createPlan(
+      fx.projectId,
+      {
+        createdById: fx.ownerId,
+        authorSource: 'mcp',
+        authorHarness: 'Claude Code',
+        authorModel: 'claude-opus-5',
+      },
+      fx.ctx,
+    );
+
+    const read = await plansService.getPlan(created.id, fx.ctx);
+    expect(read.createdById).toBe(fx.ownerId);
+    expect(read.authorSource).toBe('mcp');
+    // `decidedById` stays null until somebody actually decides — the third axis
+    // moves on its own clock and neither of the other two implies it.
+    expect(read.decidedById).toBeNull();
+    expect(other.id).not.toBe(fx.ownerId);
+  });
+
+  it('survives its requester being deleted — SET NULL, never a cascade', async () => {
+    const fx = await makeWorkItemFixture();
+    const requester = await createTestUser({ email: 'leaver@example.com' });
+    const created = await plansService.createPlan(
+      fx.projectId,
+      { title: 'asked before leaving', createdById: requester.id },
+      fx.ctx,
+    );
+
+    await adminDb.user.delete({ where: { id: requester.id } });
+
+    // The plan is still there and still reviewable; it has simply become
+    // unattributable, which is the honest reading of a departed requester.
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: created.id } });
+    expect(row.createdById).toBeNull();
+  });
 });
 
 describe('Plan authorship — the `source · harness · model` triple on a Plan', () => {

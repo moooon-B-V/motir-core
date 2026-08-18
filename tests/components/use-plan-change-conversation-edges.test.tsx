@@ -104,8 +104,11 @@ const MATERIALIZED: PlanWithItemsDto = {
   // (MOTIR-916) — same Plan, same review, same confirm, per this card's
   // invariant that the trigger is irrelevant.
   origin: 'user',
-  // WHO authored it (MOTIR-2986) — null on a plan Motir's own planner produced;
-  // only the `create_plan` MCP tool writes the triple.
+  // WHO ASKED (MOTIR-2986) — a rail-driven run is a request path, so the acting
+  // user is the requester.
+  createdById: 'u1',
+  // WHO WROTE it — null on a plan Motir's own planner produced; only the
+  // `create_plan` MCP tool writes the triple.
   authorSource: null,
   authorHarness: null,
   authorModel: null,

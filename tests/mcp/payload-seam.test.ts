@@ -862,7 +862,8 @@ describe('the work-loop payloads', () => {
       plannedAt: null,
       decidedAt: null,
       decidedById: 'user-1',
-      // WHO authored the plan (MOTIR-2986) — MCP's own fields, extended here
+      createdById: 'requester-1',
+      // WHO asked and WHO authored (MOTIR-2986) — MCP's own fields, extended here
       // beside `decidedById` for the same reason and deliberately NOT added to
       // v1's `planSchema` (`docs/decisions/agent-authored-plans.md` Q1).
       authorSource: 'mcp' as const,
@@ -871,6 +872,7 @@ describe('the work-loop payloads', () => {
       items: [{ id: 'p-1' }],
     } as never);
     expect(plan.decidedById).toBe('user-1');
+    expect(plan.createdById).toBe('requester-1');
     expect(plan.authorSource).toBe('mcp');
     expect(plan.authorHarness).toBe('Claude Code');
     expect(plan.authorModel).toBe('claude-opus-5');

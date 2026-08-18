@@ -99,7 +99,17 @@ export const aiGenerationService = {
     );
     const plan = await plansService.createPlan(
       ctx.projectId,
-      { title: input.title ?? null, summary: input.summary ?? null, sourceJobId: jobId },
+      {
+        title: input.title ?? null,
+        summary: input.summary ?? null,
+        sourceJobId: jobId,
+        // WHO ASKED (MOTIR-2986). This seam is reached ONLY from a request path
+        // — somebody clicked Generate — so the acting user IS the requester and
+        // recording them is honest. Passed explicitly rather than defaulted in
+        // the service, because the cadence path shares that service and its
+        // acting user is a substituted credential, not a requester.
+        createdById: ctx.userId,
+      },
       ctx,
     );
     return { jobId, planId: plan.id };

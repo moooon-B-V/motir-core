@@ -240,6 +240,7 @@ model User {
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
   decidedPlans                Plan[]                    @relation("PlanDecidedBy")
+  requestedPlans              Plan[]                    @relation("PlanCreatedBy")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
   createdImports              Import[]                  @relation("ImportCreatedBy")
@@ -4074,8 +4075,21 @@ model Plan {
   /// `cadence` (the auto-plan watcher fired it when the ready set drained).
   /// Set at submit; never changes afterwards.
   origin        PlanOrigin              @default(user)
-  /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY and
-  /// `sourceJobId`'s WHICH JOB — the `source · harness · model` triple
+  /// WHO ASKED for this plan (MOTIR-2986) — the person whose request produced
+  /// it, as opposed to `decidedById`'s who APPROVED it and `authorSource`'s
+  /// which AGENT wrote it. A plan has up to three parties and they are commonly
+  /// three different ones: a teammate asks, an agent writes, a lead approves.
+  ///
+  /// NULL is a MEANING, and it is the `cadence` case. `autoPlanCadenceService`
+  /// runs the watcher under the PROJECT OWNER's credential so the job has one —
+  /// nobody clicked anything — so recording that owner here would attribute to a
+  /// person a request they never made. The requester is written ⟺ a person
+  /// actually asked (`origin = 'user'`); a cadence plan is identified by its
+  /// `origin`, not by a fabricated requester.
+  createdById   String?                 @map("created_by_id")
+  /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY,
+  /// `createdById`'s WHO ASKED and `sourceJobId`'s WHICH JOB — the
+  /// `source · harness · model` triple
   /// `docs/decisions/work-item-provenance.md` Decision 2 fixes for a work item,
   /// mirrored onto the plan by `docs/decisions/agent-authored-plans.md` Q3. The
   /// enum is REUSED rather than duplicated so a plan's author and its
@@ -4104,6 +4118,7 @@ model Plan {
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   decidedBy User?      @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy User?      @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items     PlanItem[]
 
   @@index([workspaceId])

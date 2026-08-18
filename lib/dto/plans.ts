@@ -229,6 +229,19 @@ export interface PlanDto {
    *  auto-plan watcher fired it). Set at submit; never changes. */
   origin: PlanOriginDto;
   /**
+   * WHO ASKED for the plan (Story MOTIR-2982 · MOTIR-2986) — a THIRD party
+   * beside {@link PlanDto.decidedById} (who approved it) and the authorship
+   * triple below (which agent wrote it). Commonly three different people: a
+   * teammate asks, an agent writes, a lead approves.
+   *
+   * NULL is a MEANING, not a gap: it is the `cadence` case. The auto-plan
+   * watcher runs under the project OWNER's credential so its job has one, and
+   * nobody clicked — so the requester is recorded ⟺ a person actually asked
+   * (`origin === 'user'`), and a cadence plan is identified by its `origin`
+   * rather than by a requester it would otherwise fabricate.
+   */
+  createdById: string | null;
+  /**
    * WHO authored the plan (Story MOTIR-2982 · MOTIR-2986) — the
    * `source · harness · model` triple `docs/decisions/agent-authored-plans.md`
    * Q3 mirrors onto the plan from `work-item-provenance.md` Decision 2. Distinct
@@ -271,6 +284,16 @@ export interface CreatePlanInput {
   title?: string | null;
   summary?: string | null;
   sourceJobId?: string | null;
+  /**
+   * WHO ASKED for the plan (MOTIR-2986) — see {@link PlanDto.createdById}.
+   *
+   * EXPLICIT, never defaulted from the acting context, and that is the whole
+   * point: `createPlan` always HAS a `ctx.userId`, and on the cadence path that
+   * value is the project owner's, substituted so the job has a credential. A
+   * default would therefore record a request the owner never made. Producers on
+   * a request path pass it; the cadence watcher does not.
+   */
+  createdById?: string | null;
   /**
    * WHO authored the plan (MOTIR-2986) — see {@link PlanDto.authorSource}. All
    * three OPTIONAL: every shipped producer (generation, augment, expand, replan,

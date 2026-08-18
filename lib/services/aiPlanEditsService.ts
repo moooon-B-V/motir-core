@@ -162,9 +162,24 @@ async function submitPlanEditJob(
     },
     { userId: ctx.userId },
   );
+  // WHO ASKED (MOTIR-2986) — and this is the ONE seam where the acting user is
+  // not always the answer. `submitPlanJob` serves BOTH the request paths (expand
+  // / augment / replan / contextual, `origin: 'user'`) and the auto-plan cadence
+  // watcher, which calls it with `origin: 'cadence'` under the PROJECT OWNER's
+  // credential (`autoPlanCadenceService` builds `{ userId: owner.userId }` so the
+  // job has one). Nobody clicked on that path, so recording the owner would
+  // attribute to them a request they never made. The requester is therefore
+  // written ⟺ a person actually asked, and `origin` is what identifies the rest.
+  const origin = opts.origin ?? 'user';
   const plan = await plansService.createPlan(
     ctx.projectId,
-    { title: null, summary: null, sourceJobId: jobId, origin: opts.origin ?? 'user' },
+    {
+      title: null,
+      summary: null,
+      sourceJobId: jobId,
+      origin,
+      createdById: origin === 'user' ? ctx.userId : null,
+    },
     ctx,
   );
   return { jobId, planId: plan.id };
