@@ -22,6 +22,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png` | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan / Re-plan is a CONVERSATION, not a single message** — the button opens the universal workspace directly; for Re-plan, the reason is captured as the FIRST CHAT TURN inside the workspace's chat rail (no pre-workspace form). Map scoped to item neighborhood, proposed nodes dashed, done work LOCKED. Confirm gate (MOTIR-911) as a bottom bar. Six panels: Plan button on detail · Re-plan button on detail · Plan button on quick-view · Re-plan button on quick-view · scoped workspace with conversation (Plan flow + Re-plan flow + continuing conversation) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
 | **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`       | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`               | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
+| **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`             | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. Seven panels: the door (rail placement) · held · delivered · unrecorded branch · one repo · none · role + `decision` · editing. Story MOTIR-2725 · MOTIR-2413 (design). Gates MOTIR-2415; inherited by MOTIR-2414. See below.                                                                                                                                                                                                                                                                                                                    |
 
 ---
 
@@ -4495,3 +4496,210 @@ panel never renders a 300 KB per-area document, and nothing is lost.
   COMPOSES this panel rather than deploying the mock to a preview host.
 - **History.** See above — deliberate, and named.
 - **The quick view.** Unchanged, matching the acceptance panel's precedent.
+
+---
+
+## ⭐ The repository SET on the work-item DETAIL page (Story MOTIR-2725 · MOTIR-2413 — `repository-set.mock.html`)
+
+**Asset:** `repository-set.mock.html` + `repository-set.png` (7 panels: 0 the door · 1 held ·
+2 delivered · 2b unknown branch · 3 one repo · 4 none · 5 role + `decision` · 6 editing).
+**Gates:** MOTIR-2415 (implement, detail). **Inherited by** MOTIR-2414 (quick view), which
+COMPRESSES this treatment and may not re-decide any of it.
+
+### Why the asset exists
+
+The surface table above had no repository row. `work_item.targetRepo` has been readable only from
+the dispatch payload or the database since MOTIR-1804, and MOTIR-2725 turns it into an ordered SET
+whose elements each carry a **delivery state the completion gate reads** — so the surface has a
+second job the single pin never had, and neither `detail.pen` nor `CoreFieldsPanel.tsx` draws
+either half.
+
+### What this COMPOSES, and what is new
+
+Every element below is the shipped one, reused markup-for-markup. **It was RENDERED before it was
+drawn**: the real `FieldCard` and the real `DevelopmentSectionBody` were bundled and screenshotted
+against the real `app/globals.css`, and the mock reuses the class strings that render produced. The
+mock's tokens are EXTRACTED from `packages/design-system/theme.css` by script and its icons from the
+installed `lucide-react`, so no hex and no path is hand-typed and the asset cannot drift.
+
+| Element                                                                    | Source                                                                         | Redrawn?                      |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------- |
+| The rail card chrome                                                       | `app/(authed)/items/[key]/_components/FieldCard.tsx`                           | No — verbatim                 |
+| The pull-request rows, their state + CI pills, the meta line, the link-out | `components/github/DevelopmentSection.tsx` (`PR_STATE_META` / `CI_STATE_META`) | No — verbatim                 |
+| The empty state                                                            | the same file's `EmptyState` branch                                            | No — verbatim                 |
+| The `primary` / `role` chips                                               | `components/ui/Pill.tsx` `tone="neutral"`                                      | No                            |
+| The rail's own grammar + order                                             | `CoreFieldsPanel.tsx`, `provenance.mock.html`                                  | No                            |
+| **A Development row for a repository with NO pull request yet**            | —                                                                              | **YES — the one new element** |
+
+### The five questions, answered
+
+#### Q1 — the SET, drawn, and how the PRIMARY is distinguished
+
+One row per repository **in the stored order**, top to bottom, inside a single rail `FieldCard`
+labelled **Repositories**. Order is shown by position and nothing else — no ordinals, no drag
+handles.
+
+**The primary is element 0, and it wears a neutral `Pill` reading `primary`.** Two equal chips would
+throw away the only asymmetry the data has: element 0 is the repository a dispatch actually runs in
+(`resolveDispatchRepo`, ADR §2). The chip is drawn **only when the card carries more than one
+repository** — on a one-element set there is nothing to distinguish it from, and the chip would be
+noise (panel 3).
+
+⚠️ **The asymmetry is real but the guarantee is weak, and the design has to carry that.** An author
+who never thought about order still produces a first element (ADR §1.2). That is precisely why the
+primary is labelled rather than merely first: a reader must be able to SEE which repository a
+dispatch would use, and correct it.
+
+#### Q2 — per-repository DELIVERY state, and the division of labour
+
+**The rail says WHERE and WHETHER. The Development section says WHICH pull request.** Both, with one
+vocabulary and no overlap:
+
+- **The rail** carries a leading state glyph per row — the one bit the completion gate reads:
+
+  | State     | Glyph                  | Colour            | Means                                                        |
+  | --------- | ---------------------- | ----------------- | ------------------------------------------------------------ |
+  | Delivered | `circle-check`         | `--el-success`    | a linked PR merged onto THIS repository's own default branch |
+  | Awaiting  | `circle-dashed`        | `--el-icon-muted` | no such merge — usually no pull request yet                  |
+  | Unknown   | `circle-question-mark` | `--el-warning`    | a merged PR whose base branch Motir never recorded           |
+
+  Under the rows, one muted count line: _"1 of 2 delivered. `motir-ai` is outstanding."_ It collapses
+  to _"Both delivered."_ when the set is satisfied and **disappears entirely on a one-element set**.
+
+- **The Development section GROWS A ROW** for every repository the card carries that has no linked
+  pull request — same row grammar, dashed border, `--el-surface-soft` fill, the title slot reading
+  **"No pull request yet"**, the meta line carrying the repository, and one `Awaiting` pill. **This is
+  the answer to the card's harder question, and it is the only new element in the asset**: "no pull
+  request yet" is exactly the state the completion gate holds an item for, and the shipped section has
+  nothing to render for it today (verified in the render — see `repository-set.png` panel 1 against
+  the shipped section's own output).
+
+  A merged PR whose base was never recorded gets the same dashed row with **"Merged — branch not
+  recorded"** and an `Unknown` pill (panel 2b), because a null base reads as UNKNOWN in both
+  directions (MOTIR-2729) and the surface must not assert a branch Motir does not know.
+
+- **The big `EmptyState` still shows**, unchanged, only when the item has no linked pull request AND
+  carries no repositories (panel 4). A card that carries repositories always has rows.
+
+**Why both surfaces and not one.** A reader asking _"is this finished?"_ reads the rail — a list of
+three glyphs answers it in one glance. A reader asking _"what's the PR?"_ reads Development. Putting
+the delivery state only in Development would mean scrolling the left column to learn where a card
+ships; putting the pull requests in the rail would rebuild a section that already exists, in 288px.
+
+#### Q3 — the states that survive from the pin
+
+- **A NAME** (`motir-core`) — `--el-text`, `font-mono` (it is a directory name the CLI keys on).
+- **A ROLE whose repository does not exist yet** — panel 5. ⚠️ **Corrected against the ADR:** the
+  card assumed a role could be an ELEMENT of the set. `docs/decisions/work-item-repository-set.md`
+  §1.3 keeps `targetRepoRole` **singular** and complementary to the primary, because two parallel
+  scalar lists cannot represent an element whose name is known and whose role is not. So the role is
+  not a list row: it is what the card shows when the NAME set is empty and a role was recorded. Drawn
+  muted, with a `role` chip and the caption _"No repository recorded yet — this card was planned for
+  the `api` role, whose repository has not been created."_ **It takes NO delivery glyph** — `Awaiting`
+  would promise a pull request that cannot exist, because a role has no repository, therefore no
+  default branch.
+- **The EMPTY set** — Q4 below.
+
+#### Q4 — the EMPTY set, and editing
+
+**Empty (panel 4).** The value reads **`None`** — the shipped word every unset rail field already
+uses (`issueViews.none`, the Sprint field's own sentinel), so the product does not learn a second
+word for nothing. Under it, one muted line: **"Optional — not every card ships in a repository."**
+That line is what makes the state read as deliberate rather than as a hole, and it is the whole
+treatment: **no warning tint, no `+ Add repository` call to action, no required marker, no
+asterisk.** The chevron is the identical affordance every editable rail field carries, so the field
+is not singled out.
+
+**Editable — YES, on the detail page (panel 6).** The rail is already a WRITE surface (MOTIR-2561),
+so "read-only because it is a rail" is not available; and the write layer validates every element
+against a bounded project domain, so this is a picker and never free text. The editor opens under the
+same chevron, in place, and is a **two-column list: a checkbox for membership, a radio for the
+primary.**
+
+⚠️ **The only ORDER decision a person makes is which repository is primary.** That is the only
+position the data acts on — element 0 is what dispatch resolves and nothing reads position 1 or 2 —
+so a drag handle in a 288px rail would be interaction cost for a distinction with no consequence. The
+stored order is primary-first, then the project's own repository-set order. This constrains the UI
+only; the API accepts any order (ADR §3).
+
+Per `CLAUDE.md`'s inline-edit rule, the success response IS the confirmation: the cell keeps its
+optimistic value and **no `router.refresh()` fires against it**.
+
+#### Q5 — the `decision` card: a PLANNING CONVENTION, not a display or validation rule
+
+**The field renders identically for every `type`, including `decision`** (panel 5, right).
+
+Rung 2 decided this, not taste. **MOTIR-2400 is a `type: decision` card pinned to `motir-core` that
+shipped an ADR there**, and MOTIR-2726 — this story's own decision card — does the same: its
+deliverable is a file, in a repository, and that repository is a true fact about the card. A DISPLAY
+rule would hide something true. A VALIDATION rule would reject a correct write and strand existing
+rows.
+
+So the rule lives one level up, in the planner: a decision that is not repo-scoped simply carries no
+repository, and the empty state above is how it says so. **Nothing happens to already-pinned decision
+cards** — they render their repository, exactly as MOTIR-2400 does today.
+
+### The access path — the field's POSITION is its door (panel 0)
+
+The field has no button, no menu item and no tab, so its access path is where it sits, and panel 0
+draws it in place with its neighbours dimmed: **after Estimate, before the collapsed Provenance
+disclosure** — last of the always-visible rail fields.
+
+Two reasons, both about when it is read: it is consulted at DISPATCH and REVIEW time rather than at
+triage time, so it must not push Status, Assignee or Priority down the rail; and it is more actionable
+than provenance — it gates completion — so it stays expanded rather than joining that disclosure.
+
+Shipped rail order it lands in (`CoreFieldsPanel.tsx` on `origin/main`): Status · (session branch) ·
+Type · Work type · Executor · Priority · Assignee · Reporter · Parent · Labels · Components · Due date
+· Sprint · Story points · Estimate · **Repositories** · Provenance (collapsed).
+
+### Copy — the exact strings
+
+| Slot                     | String                                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Field label              | `Repositories`                                                                                                   |
+| Empty value              | `None`                                                                                                           |
+| Empty caption            | `Optional — not every card ships in a repository.`                                                               |
+| Primary chip             | `primary`                                                                                                        |
+| Role chip                | `role`                                                                                                           |
+| Role caption             | `No repository recorded yet — this card was planned for the {role} role, whose repository has not been created.` |
+| Count caption (partial)  | `{n} of {total} delivered. {repo} is outstanding.`                                                               |
+| Count caption (complete) | `Both delivered.` / `All delivered.`                                                                             |
+| Count caption (unknown)  | `{repo} merged, but Motir has no record of which branch.`                                                        |
+| Awaiting row title       | `No pull request yet`                                                                                            |
+| Awaiting row pill        | `Awaiting`                                                                                                       |
+| Unknown row title        | `Merged — branch not recorded`                                                                                   |
+| Unknown row pill         | `Unknown`                                                                                                        |
+| Editor column heads      | `On` · `Primary`                                                                                                 |
+| Editor caption           | `The primary is the repository a dispatch runs in.`                                                              |
+| Delivery glyph tooltips  | `Delivered` · `Awaiting` · `Unknown`                                                                             |
+
+Every string needs its `messages/en.json` key AND its `zh` counterpart in the same PR (the parity
+gate). A string not in this table is a finding against this card, not a decision for MOTIR-2415.
+
+### Tokens / a11y
+
+- Colour is `--el-*` only: `--el-success` · `--el-warning` · `--el-icon-muted` · `--el-text` ·
+  `--el-text-muted` · `--el-text-secondary` · `--el-text-identifier` · `--el-border` ·
+  `--el-border-strong` · `--el-surface` · `--el-surface-soft` · `--el-chip-bg` · `--el-chip-border` ·
+  `--el-tint-mint` / `--el-tint-sky` / `--el-tint-peach` / `--el-tint-rose` · `--el-accent` ·
+  `--el-accent-text`. **No Tier-0 `--color-*`, no invented hue.**
+- Shape is element-semantic only: `--radius-card` · `--radius-control` · `--radius-badge` ·
+  `--spacing-control-x/y` · `--spacing-chip-x/y` · `--shadow-card`. No raw `rounded-*` / `p-*` / `h-*`
+  except the arbitrary sizes the shipped components already emit (`h-[17px]`, `text-[13.5px]`).
+- **State never rides colour alone.** Each of the three delivery states has its own GLYPH SHAPE
+  (solid check · dashed circle · question mark) as well as its own hue, and each carries a `title`.
+  The dashed BORDER on an awaiting row is a redundant second cue beside the muted title text and the
+  pill — not the only carrier of the state.
+- The delivery glyph is decorative to a screen reader; the row's accessible content is the repository
+  name plus its state word, so the list reads as _"motir-core, delivered, primary"_ rather than as a
+  bare name with a coloured dot.
+
+### Out of scope
+
+- The quick-view compression — **MOTIR-2414**, which inherits every decision above and may not
+  re-open one; a disagreement is a finding against this card.
+- The Development section's other content, the explicit-link affordance, and the rail's other fields —
+  untouched.
+- Storage, dispatch and the completion rule — `docs/decisions/work-item-repository-set.md`
+  (MOTIR-2726). This design READS them.

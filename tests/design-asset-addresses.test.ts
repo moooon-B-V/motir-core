@@ -921,6 +921,18 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  guarded like any other. An exemption cannot outlive its reason — and the
   //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
   //  what made sure nobody had to remember.)
+  // ── A path this design STOPPER cites AHEAD of the code branch that creates it ──
+  // The same shape the `lib/permissions/limits.ts` rows had (MOTIR-2472): a
+  // `design/*` PR merges FIRST, by design, and names a file its story's own
+  // parent PR ships. Both rows below are FORWARD-LOOKING and carry a delete-me:
+  // when MOTIR-2725's `motir-core` parent PR merges, the ADR exists and the
+  // `carries no KNOWN_PATHS entry that has stopped applying` test above turns
+  // red until they are removed — which is the mechanism working, not a chore.
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'docs/decisions/work-item-repository-set.md',
+    why: 'MOTIR-2413 is the DESIGN STOPPER of MOTIR-2725 and merges ahead of the story. The ADR it corrects itself against (§1.3, why `targetRepoRole` stays singular) is committed on `parent/MOTIR-2725-repo-set` and lands with MOTIR-2726. DELETE this row when that parent PR merges.',
+  },
   // MOTIR-2653 CREATED `app/(authed)/home/page.tsx`, so its forward-looking row
   // is gone — deleted by the card that built the file, in the same commit.
 ];
