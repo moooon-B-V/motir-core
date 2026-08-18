@@ -8,6 +8,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -159,6 +160,16 @@ export interface QuickViewData {
    * (design/github Panel 4a).
    */
   pullRequests: LinkedPullRequestDto[];
+  /**
+   * Every repository the item ships in, with each one's DELIVERY state (Story
+   * MOTIR-2725 · MOTIR-2416) — the SAME value the detail page renders, resolved
+   * by the same `workItemsService.listRepoDelivery`.
+   *
+   * The peek COMPRESSES how it is drawn (a row cap, a shorter caption — design
+   * MOTIR-2414), never what it says: the two surfaces read one field so they
+   * cannot disagree about whether a repository has landed.
+   */
+  repoDelivery: RepoDelivery[];
   /**
    * Does the item already have children (MOTIR-910)? The peek header's
    * Plan / Re-plan entrance picks its face from this — an item with children is

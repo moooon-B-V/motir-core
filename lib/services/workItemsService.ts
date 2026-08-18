@@ -4175,6 +4175,12 @@ export const workItemsService = {
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
     const pullRequests = await this.listLinkedPullRequests(detail.item.id, ctx);
+    // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2416) — the SAME resolved
+    // value the detail page reads, from the same service method calling the same
+    // classifier. The peek showing a different delivery state from the detail
+    // page is the drift this story exists to remove, so the two surfaces do not
+    // each compute it.
+    const repoDelivery = await this.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx);
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -4192,6 +4198,7 @@ export const workItemsService = {
       sprints,
       projectComponents,
       estimationConfig,
+      repoDelivery,
     );
   },
 

@@ -233,16 +233,25 @@ export function DevelopmentSection({
   pullRequests,
   itemIdentifier,
   className,
+  awaitingRepos = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
   className?: string;
+  /** Repositories the item carries whose work has not landed (MOTIR-2416) —
+   *  passed straight through to the shared body, so the peek shows the same
+   *  placeholder rows the detail page does rather than a reduced second form. */
+  awaitingRepos?: RepoDelivery[];
 }) {
   const t = useTranslations('github');
   return (
     <section className={className} data-testid="development-section">
       <SectionLabel label={t('development.title')} />
-      <DevelopmentSectionBody pullRequests={pullRequests} itemIdentifier={itemIdentifier} />
+      <DevelopmentSectionBody
+        pullRequests={pullRequests}
+        itemIdentifier={itemIdentifier}
+        awaitingRepos={awaitingRepos}
+      />
     </section>
   );
 }
