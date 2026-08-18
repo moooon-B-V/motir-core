@@ -415,6 +415,32 @@
       .attrib .model {
         color: var(--muted);
       }
+      /* WHO ASKED — the person. The shipped initial-letter `Avatar`
+         (app/(authed)/items/_components/issueCellPrimitives.tsx), at the 18px
+         meta-line size rather than its 22px row size. */
+      .who-av {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--text);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 600;
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+      }
+      .attrib .person {
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The hairline that separates WHO ASKED from WHO WROTE inside one entry —
+         they are one sentence about provenance, not two facts to scan apart. */
+      .attrib .sep {
+        color: var(--faint);
+      }
       /* WHY the plan started — `Plan.origin = cadence`. A separate entry, never
          merged into the WHO one. */
       .attrib.origin {
@@ -1530,16 +1556,27 @@
       </div>
 
       <!-- ============================================================= -->
-      <!-- PANEL A2 — WHO AUTHORED THIS PLAN (MOTIR-2985, amends A + B)   -->
+      <!-- PANEL A2 — WHO ASKED, WHO WROTE (MOTIR-2985, amends A + B)     -->
       <!-- ============================================================= -->
       <div class="panel">
         <div class="panel-cap">
           <span class="n">A2</span>
-          <h2>Who authored this plan — the list-row attribution &amp; the detail header</h2>
+          <h2>Who asked for this plan, and who wrote it</h2>
           <span class="note"
-            >AMENDS panels A and B — one meta entry, five states; the row, its pills, the staleness
-            flag and the approve / decline bar are UNCHANGED</span
+            >AMENDS panels A and B — one meta entry carrying TWO parties; the row, its pills, the
+            staleness flag and the approve / decline bar are UNCHANGED</span
           >
+        </div>
+
+        <div class="note-box" style="margin: 0 0 16px">
+          <b>A plan has THREE parties, and they are commonly three different people.</b> A teammate
+          <b>asks</b> for it, an agent or Motir <b>writes</b> it, a lead <b>approves</b> it. Only
+          the third was ever recorded (<code>decidedById</code>, drawn in panel A as “approved
+          yesterday by Mara”). The first is the one a reviewer wants first —
+          <i>somebody's credential produced this; whose?</i> — and an agent-authored plan makes that
+          question sharper, not softer: <b>the MCP token belongs to a person</b>, and a Motir
+          generation was <b>clicked</b> by one. So the attribution names the PERSON first and the
+          agent second.
         </div>
 
         <div class="frame">
@@ -1552,7 +1589,7 @@
                 >
               </div>
               <div class="list">
-                <!-- 1 — AGENT-AUTHORED: the state this amendment exists for -->
+                <!-- 1 — a PERSON asked, an AGENT wrote: the state this exists for -->
                 <div
                   class="row"
                   style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
@@ -1574,7 +1611,9 @@
                     <div class="m">
                       <span><b>14</b> items</span><span>planned <b>2h ago</b></span>
                       <span class="attrib"
-                        ><svg
+                        ><span class="who-av">M</span><b class="person">Mara</b>
+                        <span class="sep">·</span>
+                        <svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1585,7 +1624,7 @@
                           <rect x="3" y="11" width="18" height="10" rx="2" />
                           <circle cx="12" cy="5" r="2" />
                           <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
-                        >by <b class="harness">Claude Code</b></span
+                        >via <b class="harness">Claude Code</b></span
                       >
                     </div>
                   </div>
@@ -1606,7 +1645,7 @@
                   </div>
                 </div>
 
-                <!-- 2 — MOTIR-GENERATED: the state every plan in the product is today -->
+                <!-- 2 — a PERSON asked, MOTIR wrote: every plan in the product today -->
                 <div class="row">
                   <span class="ic" style="background: var(--mint)"
                     ><svg
@@ -1624,7 +1663,9 @@
                     <div class="m">
                       <span><b>8</b> items</span><span>approved <b>yesterday</b></span>
                       <span class="attrib"
-                        ><svg
+                        ><span class="who-av">J</span><b class="person">Jonas</b>
+                        <span class="sep">·</span>
+                        <svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1638,7 +1679,7 @@
                           <path
                             d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
                           /></svg
-                        >by <b>Motir AI</b></span
+                        >via <b>Motir AI</b></span
                       >
                     </div>
                   </div>
@@ -1658,7 +1699,7 @@
                   </div>
                 </div>
 
-                <!-- 3 — AUTO-PLANNED: a DIFFERENT fact (origin), never merged with WHO -->
+                <!-- 3 — NOBODY asked: the cadence watcher fired it -->
                 <div class="row">
                   <span class="ic" style="background: var(--sky)"
                     ><svg
@@ -1685,16 +1726,10 @@
                           stroke-linecap="round"
                           stroke-linejoin="round"
                         >
-                          <path
-                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
-                          />
-                          <path
-                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
-                          /></svg
-                        >by <b>Motir AI</b></span
-                      >
-                      <span class="attrib origin"
-                        ><svg
+                          <path d="M21 12a9 9 0 1 1-3-6.7" />
+                          <path d="M21 3v6h-6" /></svg
+                        >auto-planned <span class="sep">·</span>
+                        <svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1702,9 +1737,13 @@
                           stroke-linecap="round"
                           stroke-linejoin="round"
                         >
-                          <path d="M21 12a9 9 0 1 1-3-6.7" />
-                          <path d="M21 3v6h-6" /></svg
-                        >auto-planned</span
+                          <path
+                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
+                          />
+                          <path
+                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                          /></svg
+                        >via <b>Motir AI</b></span
                       >
                     </div>
                   </div>
@@ -1760,7 +1799,35 @@
                   </div>
                 </div>
 
-                <!-- 5 — LONG HARNESS + LONG TITLE: what truncates, and what does not -->
+                <!-- 5 — the REQUESTER SURVIVES the agent going unnamed -->
+                <div class="row">
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Refund flow for partially-captured payments</div>
+                    <div class="m">
+                      <span><b>9</b> items</span><span>planned <b>1h ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">P</span><b class="person">Priya</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned">Planned</span>
+                  </div>
+                </div>
+
+                <!-- 6 — LONG values in a NARROW row: what truncates, and in what order -->
                 <div class="row" style="width: 430px">
                   <span class="ic" style="background: var(--lavender)"
                     ><svg
@@ -1781,7 +1848,12 @@
                     <div class="m">
                       <span><b>23</b> items</span><span>planned <b>5m ago</b></span>
                       <span class="attrib"
-                        ><svg
+                        ><span class="who-av">A</span
+                        ><b class="person" title="Alexandra Buchholz-Nakamura"
+                          >Alexandra Buchholz-Nakamura</b
+                        >
+                        <span class="sep">·</span>
+                        <svg
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -1792,7 +1864,7 @@
                           <rect x="3" y="11" width="18" height="10" rx="2" />
                           <circle cx="12" cy="5" r="2" />
                           <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
-                        >by
+                        >via
                         <b class="harness" title="acme-internal-planning-harness v4 (nightly build)"
                           >acme-internal-planning-harness v4 (nightly build)</b
                         ></span
@@ -1806,19 +1878,19 @@
               </div>
 
               <div class="note-box">
-                <b>What truncates.</b> The plan TITLE keeps its own single-line ellipsis and is
-                never shortened by the attribution — the meta line sits below it and wraps. Inside
-                the attribution, only the HARNESS truncates (at <code>12rem</code>), with the full
-                value on the element's <code>title</code>; the word “by”, the glyph, the item count
-                and the timestamp always stay legible. The meta line is <code>flex-wrap</code>, so
-                on a narrow row the attribution moves to its own line rather than pushing anything
-                out.
+                <b>What truncates, in order.</b> The plan TITLE keeps its own single-line ellipsis
+                and is never shortened by the attribution — the meta line sits below it and wraps.
+                Inside the attribution, the PERSON truncates at <code>10rem</code> and the HARNESS
+                at <code>12rem</code>, each with its full value on <code>title</code>; the avatar,
+                the “via”, the item count and the timestamp always stay legible. The meta line is
+                <code>flex-wrap</code>, so a narrow row moves the whole attribution to its own line
+                rather than pushing anything out.
               </div>
             </div>
           </div>
         </div>
 
-        <!-- the DETAIL header — the same fact where the reader lands -->
+        <!-- the DETAIL header — the same two parties where the reader lands -->
         <div class="frame" style="margin-top: 18px">
           <div class="app" style="grid-template-columns: 1fr; height: auto">
             <div class="main">
@@ -1836,7 +1908,9 @@
                   <div class="hdrmeta">
                     <span><b>14</b> items</span>
                     <span class="attrib"
-                      ><svg
+                      ><span class="who-av">M</span>Requested by <b class="person">Mara</b>
+                      <span class="sep">·</span>
+                      <svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -1847,7 +1921,8 @@
                         <rect x="3" y="11" width="18" height="10" rx="2" />
                         <circle cx="12" cy="5" r="2" />
                         <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
-                      >by <b class="harness">Claude Code</b> ·
+                      >written by <b class="harness">Claude Code</b>
+                      <span class="sep">·</span>
                       <span class="model">claude-opus-5</span></span
                     >
                   </div>
@@ -1861,7 +1936,9 @@
                   <div class="hdrmeta">
                     <span><b>8</b> items</span>
                     <span class="attrib"
-                      ><svg
+                      ><span class="who-av">J</span>Requested by <b class="person">Jonas</b>
+                      <span class="sep">·</span>
+                      <svg
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -1873,7 +1950,43 @@
                         <path
                           d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
                         /></svg
-                      >by <b>Motir AI</b></span
+                      >written by <b>Motir AI</b></span
+                    >
+                  </div>
+                </div>
+
+                <div class="hdrcard">
+                  <div class="hdrtop">
+                    <h4>Fill the ready set — expansion of “Payments”</h4>
+                    <span class="pill planned">Planned</span>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>6</b> items</span>
+                    <span class="attrib"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M21 12a9 9 0 1 1-3-6.7" />
+                        <path d="M21 3v6h-6" /></svg
+                      >Auto-planned — nobody requested this <span class="sep">·</span>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+                        <path
+                          d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                        /></svg
+                      >written by <b>Motir AI</b></span
                     >
                   </div>
                 </div>
@@ -1890,17 +2003,19 @@
               </div>
 
               <div class="note-box">
-                <b>The detail shows the MODEL; the list row does not.</b> The row is scanned — the
-                harness answers “whose plan is this?” and a model string beside it would double the
-                line's length for a fact nobody scans on. The header is read, once, by the person
-                about to press Approve, and there the model is the difference between two agent
-                plans. Absent model ⇒ the <code>·</code> and the model both disappear; the harness
-                stands alone.
+                <b>The header SPELLS the roles; the row does not.</b> The row is scanned, and an
+                avatar in front of a name already reads as “this person's” — so it says
+                <code>Mara · via Claude Code</code>. The header is read once, by the person about to
+                press Approve, and there the words <b>Requested by</b> / <b>written by</b> are what
+                stop the two names being taken for one party. The header also carries the
+                <b>model</b>, which the row omits: it is the difference between two agent plans, and
+                nobody scans a list on it.
               </div>
             </div>
           </div>
         </div>
       </div>
+
       <!-- ============================================================= -->
       <!-- PANEL B — Plan detail = generation-review MODE of 1193 shell   -->
       <!-- ============================================================= -->
