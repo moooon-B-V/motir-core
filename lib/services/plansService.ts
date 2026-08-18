@@ -118,6 +118,21 @@ function validateProposedSizing(pf: PlanItemProposedFields): void {
   validateEstimateMinutes(pf.estimateMinutes ?? null);
 }
 
+/**
+ * A SELF-REPORTED free-text provenance value (MOTIR-2986) — the authoring
+ * agent's harness or model. Stored as-supplied per
+ * `docs/decisions/work-item-provenance.md` Decision 2 ("no server-side
+ * validation against a fixed list"), with the one normalization that decision
+ * itself names: trimmed, empty → null. An all-whitespace value is not an
+ * attribution, and letting one through would render as a blank the reader cannot
+ * distinguish from a real harness name.
+ */
+function normalizeSelfReported(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function validateProposal(p: ProposalInput): void {
   if (p.op === 'add') {
     if (!p.proposedFields || !p.proposedFields.title?.trim()) {
@@ -1092,6 +1107,21 @@ export const plansService = {
             // without passing anything; only the cadence watcher passes
             // `cadence`.
             origin: input.origin ?? 'user',
+            // WHO authored it (MOTIR-2986) — the orthogonal fact, written in the
+            // SAME insert rather than by an update-after-insert, because these
+            // are write-once values on a row nobody else holds yet. No lock and
+            // no concurrency guard: not a read-then-write, not a counter, not a
+            // status guard.
+            //
+            // Every shipped producer omits all three, so this spread stores
+            // nulls and the row is identical to one written before the columns
+            // existed. The harness/model are self-reported free text
+            // (`work-item-provenance.md` Decision 2) — trimmed here, empty → null,
+            // so a caller sending `""` cannot make the surface render a blank
+            // attribution that reads as a value.
+            authorSource: input.authorSource ?? null,
+            authorHarness: normalizeSelfReported(input.authorHarness),
+            authorModel: normalizeSelfReported(input.authorModel),
           },
           tx,
         ),

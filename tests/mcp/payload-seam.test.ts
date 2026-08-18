@@ -843,7 +843,7 @@ describe('the work-loop payloads', () => {
     expect(planOutcomePayload.probes[0]!.select(built as never)).toEqual([outcome]);
   });
 
-  it('the plan keeps `decidedById`, which v1 does not publish', () => {
+  it('the plan keeps `decidedById` and the authorship triple, which v1 does not publish', () => {
     const plan = presentMcpPlan({
       id: 'plan-1',
       projectId: 'proj-1',
@@ -857,9 +857,18 @@ describe('the work-loop payloads', () => {
       plannedAt: null,
       decidedAt: null,
       decidedById: 'user-1',
+      // WHO authored the plan (MOTIR-2986) — MCP's own fields, extended here
+      // beside `decidedById` for the same reason and deliberately NOT added to
+      // v1's `planSchema` (`docs/decisions/agent-authored-plans.md` Q1).
+      authorSource: 'mcp' as const,
+      authorHarness: 'Claude Code',
+      authorModel: 'claude-opus-5',
       items: [{ id: 'p-1' }],
     } as never);
     expect(plan.decidedById).toBe('user-1');
+    expect(plan.authorSource).toBe('mcp');
+    expect(plan.authorHarness).toBe('Claude Code');
+    expect(plan.authorModel).toBe('claude-opus-5');
     expect(plan.itemCount).toBe(1);
     expect(plan.items).toHaveLength(1);
     expect(derived(planPayload, plan).id).toBe('plan-1');

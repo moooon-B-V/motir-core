@@ -119,7 +119,14 @@ const _typesTotal: AssertTotal<WorkItemTypeDto, (typeof WORK_ITEM_TYPES)[number]
 const EXECUTORS = ['coding_agent', 'human'] as const satisfies readonly ExecutorDto[];
 const _executorsTotal: AssertTotal<ExecutorDto, (typeof EXECUTORS)[number]> = true;
 
-const PLANNING_SOURCES = [
+/**
+ * EXPORTED (MOTIR-2986) so the MCP plan payload's `authorSource` enum is THIS
+ * list rather than a second copy of it — `docs/decisions/agent-authored-plans.md`
+ * Q3 reuses the vocabulary precisely so there is one place a new member has to
+ * be added. The `AssertTotal` directly below is what makes that safe: the list
+ * cannot drift from `WorkItemPlanningSourceDto` without a compile error.
+ */
+export const PLANNING_SOURCES = [
   'native',
   'mcp',
   'manual',

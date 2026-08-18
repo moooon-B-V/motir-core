@@ -13,6 +13,7 @@ import {
   planJobHandleSchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
+import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { definePayload } from './define';
@@ -177,6 +178,23 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
   itemCount: z.number().int(),
   /** Who decided the plan. MCP has always published it; v1 does not. */
   decidedById: z.string().nullable(),
+  /**
+   * WHO AUTHORED the plan (Story MOTIR-2982 · MOTIR-2986) — MCP's own fields,
+   * and deliberately NOT added to v1's `planSchema`.
+   *
+   * `docs/decisions/agent-authored-plans.md` Q1: the plan-authoring operations
+   * are agent-facing, and MOTIR-2982's scope boundary says the public REST
+   * surface's plan operations stay exactly as wide as they are today. Extending
+   * HERE rather than upstream is what keeps that true at the SCHEMA, not merely
+   * at the route list — `decidedById` directly above is the precedent that this
+   * extension point exists for exactly this case.
+   *
+   * An agent that authored a plan reads its own attribution back; a person's
+   * read of the same fact is the Plans surface (MOTIR-2991), not `/api/v1`.
+   */
+  authorSource: z.enum(PLANNING_SOURCES).nullable(),
+  authorHarness: z.string().nullable(),
+  authorModel: z.string().nullable(),
   items: z.array(z.unknown()),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
@@ -196,6 +214,9 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
     projectId: plan.projectId,
     itemCount: plan.itemCount,
     decidedById: plan.decidedById,
+    authorSource: plan.authorSource,
+    authorHarness: plan.authorHarness,
+    authorModel: plan.authorModel,
     items: plan.items,
   };
 }

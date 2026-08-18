@@ -38,6 +38,13 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     summary: row.summary,
     sourceJobId: row.sourceJobId,
     origin: row.origin,
+    // WHO authored the plan (MOTIR-2986) — read back on every path that returns
+    // a plan: `getPlan`, the plans LIST page, and the `get_plan` MCP tool. Null
+    // on every plan no `create_plan` call produced, which is the *unattributed*
+    // state the Plans surface draws.
+    authorSource: row.authorSource,
+    authorHarness: row.authorHarness,
+    authorModel: row.authorModel,
     itemCount,
     createdAt: row.createdAt.toISOString(),
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,

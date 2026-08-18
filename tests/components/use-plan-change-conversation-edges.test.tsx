@@ -104,6 +104,11 @@ const MATERIALIZED: PlanWithItemsDto = {
   // (MOTIR-916) — same Plan, same review, same confirm, per this card's
   // invariant that the trigger is irrelevant.
   origin: 'user',
+  // WHO authored it (MOTIR-2986) — null on a plan Motir's own planner produced;
+  // only the `create_plan` MCP tool writes the triple.
+  authorSource: null,
+  authorHarness: null,
+  authorModel: null,
   itemCount: 1,
   createdAt: '2026-07-27T09:00:00.000Z',
   plannedAt: '2026-07-27T09:01:00.000Z',
