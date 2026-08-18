@@ -22,6 +22,7 @@ import {
   type V1ProjectCaller,
 } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // END-TO-END CONFORMANCE for the WORK-LOOP operations (Story 11.7 · Subtask
 // 11.7.9 — MOTIR-2243), written from the INTEGRATOR's seat: a real PAT, real
@@ -406,9 +407,16 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
   });
 
   it('rate-limits a work-loop call with 429, headers and the error envelope', async () => {
+    // The window is ALIGNED, and the case waits for a whole one: it spends the
+    // budget across three calls and asserts the LAST is refused, so a grid
+    // boundary landing between them resets the counter and serves it (MOTIR-3016
+    // — found by the widened alignment guard, which flagged this file as
+    // building a budget without importing the helper). Same shape as its
+    // neighbours `rate-limit.test.ts` and `story-gate.test.ts`.
     process.env['MOTIR_API_V1_RATE_LIMIT'] = '2';
-    process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = '60000';
+    process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
     resetRateLimitStore();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
     const limited = await createV1ProjectCaller({ scopes: ['read'] });
     const created = await http(`/api/v1/projects/${caller.projectKey}/work-items`, caller, {
       method: 'POST',

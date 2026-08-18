@@ -33,8 +33,17 @@
  * that file, so it kept firing from `story-gate.test.ts` (MOTIR-2224) — the
  * same defect, re-diagnosed from scratch, paid for twice. This module is the
  * ONE definition; import it rather than re-deriving the arithmetic. A guard
- * test (`tests/api/v1/rate-limit-window-alignment.guard.test.ts`) fails if a
- * second copy appears anywhere under `tests/`.
+ * test (`tests/api/v1/rate-limit-window-alignment.test.ts`) fails if a second
+ * copy appears anywhere under `tests/`.
+ *
+ * ── ⚠️ And NOT importing it is the failure the guard could not see ───────────
+ * The guard above catches a file that RECOMPUTES the phase. It cannot catch a
+ * file that never aligns at all, because an absent call matches no pattern —
+ * which is how `tests/rateLimit/guard.test.ts` rolled dice on every CI run from
+ * the day it was written, in the same directory as a sibling that aligns
+ * correctly (MOTIR-3016). The guard now derives its SUBJECTS instead: any test
+ * that builds a rate-limit budget must import this module, or opt out by name
+ * with a reason.
  */
 
 /** Sleep for `ms` milliseconds. */
@@ -126,6 +135,23 @@ export const SUBPROCESS_WINDOW_MS = 60_000;
  * at a quarter of the wait an unconditional alignment would cost.
  */
 export const SUBPROCESS_HEADROOM_MS = 15_000;
+
+/**
+ * The fixed-window cell the limiter is in RIGHT NOW, for a given window — the
+ * `windowStart` every counter row is keyed on.
+ *
+ * ⚠️ This is the SECOND form of the grid arithmetic, and it went unguarded for
+ * as long as the first one did. `waitForWindowBoundary` computes the phase with
+ * a modulo; a test that wants to read the counter back computes the same grid
+ * with a floor-divide and multiply, and the two look nothing alike to a reader
+ * or to a regular expression. MOTIR-2224's guard forbade only the modulo, so
+ * `tests/rateLimit/guard.test.ts` and `tests/api/v1/shared-store.test.ts` each
+ * kept a private copy of this one while the module header above claimed the
+ * arithmetic lived in exactly one place (MOTIR-3016).
+ */
+export function currentWindowStart(windowMs: number): number {
+  return Math.floor(Date.now() / windowMs) * windowMs;
+}
 
 /**
  * Sleep to just past the next fixed-window boundary of `windowMs`, handing the
