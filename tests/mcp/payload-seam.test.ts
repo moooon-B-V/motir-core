@@ -412,6 +412,7 @@ const workItemDto = {
   publicChildrenHidden: false,
   sessionBranch: null,
   targetRepo: 'motir-core',
+  targetRepos: ['motir-core'],
   planningSource: 'mcp' as const,
   planningHarness: null,
   planningModel: null,

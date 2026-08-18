@@ -131,6 +131,23 @@ const inputSchema = {
         'PR). Omit (or null) to leave it unpinned — dispatch then falls back to the ' +
         "workspace's single connected repo, or reports no repo when ambiguous.",
     ),
+  targetRepos: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Optional: EVERY repository this item ships in, ORDERED — bare repo names ' +
+        '(e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST ' +
+        'element is the PRIMARY: the one dispatch routes the CLI to. The rest ' +
+        "record where the item's other work lands, and the item does not complete " +
+        'until EVERY repository on the list has a pull request merged onto that ' +
+        "repository's own default branch. Each element is validated against the " +
+        "project's repository domain; duplicates collapse, blank elements are " +
+        'dropped, and one unknown element rejects the whole write. Use it for a ' +
+        'card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, ' +
+        'so this is for a story or a task, not a subtask. `[]` is the empty set. ' +
+        "MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: " +
+        'supplying both is rejected rather than silently resolved.',
+    ),
   // Planning provenance (MOTIR-1685): an item created through this tool is
   // stamped `planningSource = mcp` server-side; the agent MAY self-report the
   // harness + model it planned with. Both open free-text (recorded as-is, no
@@ -165,6 +182,7 @@ interface CreateWorkItemArgs {
   type?: WorkItemType | null;
   executor?: Executor | null;
   targetRepo?: string | null;
+  targetRepos?: string[];
   plannedWithHarness?: string;
   plannedWithModel?: string;
 }
@@ -222,6 +240,10 @@ export async function runCreateWorkItem(
       // the normalization (`owner/name` → name) and the connected-set validation
       // — this stays a thin pass-through, like every other leaf field here.
       ...(args.targetRepo !== undefined ? { targetRepo: args.targetRepo } : {}),
+      // The repository SET (MOTIR-2728): same thin pass-through. The service owns
+      // the per-element validation AND the refusal when both fields arrive — the
+      // scalar is the set's first element, so the two can disagree.
+      ...(args.targetRepos !== undefined ? { targetRepos: args.targetRepos } : {}),
       // Planning provenance (MOTIR-1685): server-set `source: 'mcp'` for anything
       // created through this agent tool surface; the harness/model are the agent's
       // self-reported values (null when not supplied). The source is fixed here —

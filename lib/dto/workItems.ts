@@ -151,6 +151,23 @@ export interface WorkItemDto {
    */
   targetRepo: string | null;
   /**
+   * EVERY repository this item's work ships in (Story MOTIR-2725 · MOTIR-2728,
+   * ADR `docs/decisions/work-item-repository-set.md` §3) — ordered, with
+   * **element 0 the PRIMARY**, which is exactly what `targetRepo` above holds.
+   *
+   * The two are not two facts: `targetRepo === targetRepos[0] ?? null`, always.
+   * The scalar survives because `/api/v1` publishes it and §8 of
+   * `public-api-conventions.md` forbids removing, renaming or retyping a
+   * published field without a new major — so the set is ADDITIVE here and on
+   * every exposed shape, and a consumer that reads only the scalar keeps getting
+   * the repository dispatch routes to.
+   *
+   * `[]` is the empty set — the same state the null pin has always meant, and the
+   * state most cards are in. It is legitimate and optional by design; nothing
+   * anywhere may present the field as required.
+   */
+  targetRepos: string[];
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — how the item was PLANNED and how it
    * was IMPLEMENTED, each a `source · harness · model` triple. All six nullable:
    * a null triple is the "unknown / —" state (pre-feature rows; items never

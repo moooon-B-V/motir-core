@@ -452,12 +452,12 @@ export function criterionRepoPaths(
  * Why a straddle finding was emitted — the two arms are different questions and
  * a reader must not have to infer which one fired.
  *
- * - `contradiction` — the card PINS `targetRepo: X` and a criterion is
- *   discharged in repo Y. The card contradicts itself; the pin and the criterion
- *   are both things the card asserts.
- * - `unpinnable` — the card pins NOTHING and its criteria name two or more
- *   distinct repos. Gate 1's *"`targetRepo: null` on a card whose deliverables
- *   you can ENUMERATE is not 'not yet pinned' — check whether it is
+ * - `contradiction` — the card CARRIES a repository set and a criterion is
+ *   discharged in a repo the set does not contain. The card contradicts itself;
+ *   the set and the criterion are both things the card asserts.
+ * - `unpinnable` — the card carries NO repository and its criteria name two or
+ *   more distinct repos. Gate 1's *"`targetRepo: null` on a card whose
+ *   deliverables you can ENUMERATE is not 'not yet pinned' — check whether it is
  *   UNPINNABLE"*, which is the same finding wearing a friendlier face.
  */
 export type RepoStraddleReason = 'contradiction' | 'unpinnable';
@@ -470,11 +470,20 @@ export interface RepoStraddleCriterion extends CriterionRepoPath {
 /**
  * The FIRST acceptance criterion that straddles a repo boundary, or `null`.
  *
- * **Pinned card (`targetRepo` non-null) — the CONTRADICTION arm.** The first
- * resolvable path whose repo is not the pin. A criterion naming a path in the
- * PINNED repo is the normal case and never fires, however many times it does so.
+ * **Card carrying repositories — the CONTRADICTION arm.** The first resolvable
+ * path whose repo is not in the card's SET. A criterion naming a path in ANY
+ * repository the card carries is the normal case and never fires, however many
+ * times it does so.
  *
- * **Unpinned card (`targetRepo` null) — the UNPINNABLE arm.** With nothing to
+ * ⚠️ **Widened from a single pin to the SET (Story MOTIR-2725 · MOTIR-2728).**
+ * This check encodes ONE SUBTASK = ONE REPO, and that rule is untouched — what
+ * changed is that a work item can now legitimately CARRY more than one
+ * repository, so "the repo this card ships in" is a set membership test rather
+ * than an equality. **Not deleted, and not softened:** a card naming a repository
+ * it does NOT carry is still exactly the defect this was built to find, and a
+ * two-element set does not excuse a path in a third repo.
+ *
+ * **Card carrying nothing — the UNPINNABLE arm.** With nothing to
  * contradict, one repo across the criteria is a card that simply has not been
  * pinned yet, and nothing is emitted. TWO OR MORE distinct repos is the finding:
  * the reported path is the first occurrence of the SECOND repo — the point at
@@ -487,15 +496,15 @@ export interface RepoStraddleCriterion extends CriterionRepoPath {
  */
 export function firstRepoStraddleCriterion(
   md: string | null | undefined,
-  targetRepo: string | null,
+  targetRepos: readonly string[],
   candidates: readonly RepoCandidate[],
 ): RepoStraddleCriterion | null {
   const paths = criterionRepoPaths(md, candidates);
   if (paths.length === 0) return null;
 
-  if (targetRepo !== null) {
-    const pin = targetRepo.toLowerCase();
-    const offender = paths.find((p) => p.repo.toLowerCase() !== pin);
+  if (targetRepos.length > 0) {
+    const carried = new Set(targetRepos.map((r) => r.toLowerCase()));
+    const offender = paths.find((p) => !carried.has(p.repo.toLowerCase()));
     return offender ? { ...offender, reason: 'contradiction' } : null;
   }
 
