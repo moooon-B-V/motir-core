@@ -30,7 +30,19 @@ import {
 
 /** Bind the synthetic App installation (+ its one selected repo) to a
  *  workspace — the state the real setup redirect leaves behind. Idempotent. */
-export async function seedGithubInstallation(workspaceId: string): Promise<GithubInstallationDTO> {
+export async function seedGithubInstallation(
+  workspaceId: string,
+  /** Extra repositories to mirror onto the same installation (MOTIR-2730). The
+   *  default keeps every existing caller byte-identical — a multi-repo fixture
+   *  is opt-in, so no shipped spec's connected set changes underneath it. */
+  extraRepos: readonly {
+    providerRepoId: string;
+    owner: string;
+    name: string;
+    defaultBranch: string;
+    archived: boolean;
+  }[] = [],
+): Promise<GithubInstallationDTO> {
   return githubInstallationService.persistInstallation({
     workspaceId,
     installation: {
@@ -38,7 +50,7 @@ export async function seedGithubInstallation(workspaceId: string): Promise<Githu
       accountLogin: E2E_INSTALLATION_ACCOUNT.login,
       accountType: E2E_INSTALLATION_ACCOUNT.type,
     },
-    repos: [{ ...E2E_REPO }],
+    repos: [{ ...E2E_REPO }, ...extraRepos.map((r) => ({ ...r }))],
   });
 }
 
@@ -84,18 +96,23 @@ export function pullRequestPayload(args: {
   state: 'open' | 'closed';
   merged: boolean;
   baseRef?: string;
+  /** WHICH repository the delivery is for (MOTIR-2730). Defaults to
+   *  {@link E2E_REPO}, so every existing caller produces the same payload it
+   *  always did; a two-repository spec passes the second one explicitly. */
+  repo?: { providerRepoId: string; defaultBranch: string };
 }): Record<string, unknown> {
+  const repo = args.repo ?? E2E_REPO;
   return {
     action: args.action,
     installation: { id: Number(E2E_INSTALLATION_ID) },
-    repository: { id: Number(E2E_REPO.providerRepoId) },
+    repository: { id: Number(repo.providerRepoId) },
     pull_request: {
       number: args.number,
       state: args.state,
       merged: args.merged,
       title: args.title,
       head: { ref: args.headRef },
-      base: { ref: args.baseRef ?? E2E_REPO.defaultBranch },
+      base: { ref: args.baseRef ?? repo.defaultBranch },
       user: { id: E2E_GITHUB_USER.id },
     },
   };
