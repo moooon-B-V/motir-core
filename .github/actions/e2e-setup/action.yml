@@ -114,13 +114,54 @@ runs:
     # the cache-miss `--with-deps` path also downloads the browser binary, and a
     # transient Ubuntu-archive 503 / network blip would otherwise red-light the
     # leg at setup. A transient failure self-heals on retry.
+    #
+    # EVERY ATTEMPT IS WRAPPED IN `timeout` (MOTIR-2970), and that wrapper is
+    # what makes the retry above real rather than decorative. A `for` loop over
+    # `if cmd; then exit 0; fi` can only fire on a non-zero EXIT, and the way
+    # the Ubuntu archive actually fails here is a HANG: on 2026-08-18 three legs
+    # across two PRs (#2103 bulk-1, #2103 billing-cloud, #2105 bulk-2) each sat
+    # in the `apt-get update` that `playwright install(-deps)` shells out to for
+    # 6h0m — GitHub's default per-JOB budget, not a slow suite — with attempts 2
+    # and 3 unreachable and `Run E2E` never starting. Evidence: run 32073646174,
+    # job 95529249270, where THIS step logged `duration_ms=21531687` after apt
+    # fell back from a silent `azure.archive.ubuntu.com` to `archive.ubuntu.com`
+    # and wedged with no timeout of its own. Bounding the attempt turns a wedge
+    # into a failed attempt, which the existing loop already knows how to
+    # handle, and drops the ceiling on this class by an order of magnitude (the
+    # exact numbers are below, with the measurement they come from).
+    #
+    # `--kill-after` guarantees the attempt returns even if the child ignores
+    # SIGTERM. Both budgets are sized off measurement, not feel: across 44 legs
+    # of four green runs the WHOLE composite action — pnpm + node + three caches
+    # + artifact download + `prisma migrate deploy` + this install — ran 65s to
+    # 311s, median 85s. So 5min for the cache-hit path (apt only) and 7.5min for
+    # the cache-miss path (which also downloads the Chromium bundle) are each
+    # well past anything a healthy runner has ever needed, which is the point: a
+    # budget tight enough to cut off legitimate work would just trade this flake
+    # for a new one. Worst case a fully wedged mirror now costs 3x the budget
+    # plus two 15s backoffs — ~15min cache-hit, ~23min cache-miss — against the
+    # 360min it used to cost, and under the leg's own `timeout-minutes` in
+    # ci.yml.
+    #
+    # ⚠️ Read the exit status through `|| status=$?`, NOT through `if`: this
+    # step runs under `bash -e`, and `if cmd; then …; fi` yields 0 when no
+    # branch is taken, so `$?` after the `fi` cannot tell a timeout (124/137)
+    # from a plain failure.
     - name: Install Playwright browser + OS deps (cache miss)
       shell: bash
       if: steps.playwright-cache.outputs.cache-hit != 'true'
+      env:
+        PLAYWRIGHT_INSTALL_TIMEOUT: 450s
       run: |
         for attempt in 1 2 3; do
-          if pnpm exec playwright install --with-deps chromium; then exit 0; fi
-          echo "::warning::playwright install --with-deps attempt $attempt failed; retrying in 15s"
+          status=0
+          timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install --with-deps chromium || status=$?
+          if [ "$status" -eq 0 ]; then exit 0; fi
+          if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            echo "::warning::playwright install --with-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; retrying in 15s"
+          else
+            echo "::warning::playwright install --with-deps attempt $attempt failed (exit $status); retrying in 15s"
+          fi
           sleep 15
         done
         echo "::error::playwright install --with-deps failed after 3 attempts"
@@ -128,10 +169,18 @@ runs:
     - name: Install Playwright OS deps (cache hit)
       shell: bash
       if: steps.playwright-cache.outputs.cache-hit == 'true'
+      env:
+        PLAYWRIGHT_INSTALL_TIMEOUT: 300s
       run: |
         for attempt in 1 2 3; do
-          if pnpm exec playwright install-deps chromium; then exit 0; fi
-          echo "::warning::playwright install-deps attempt $attempt failed; retrying in 15s"
+          status=0
+          timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install-deps chromium || status=$?
+          if [ "$status" -eq 0 ]; then exit 0; fi
+          if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+            echo "::warning::playwright install-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; retrying in 15s"
+          else
+            echo "::warning::playwright install-deps attempt $attempt failed (exit $status); retrying in 15s"
+          fi
           sleep 15
         done
         echo "::error::playwright install-deps failed after 3 attempts"
