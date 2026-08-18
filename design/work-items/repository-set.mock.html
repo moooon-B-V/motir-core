@@ -36,46 +36,35 @@
     -->
     <style>
       :root {
-        /* ── Color: brand & primary ─────────────────────────────────────── */
-        /* Notion's signature purple — reserved for the dominant CTA only. */
         --color-primary: #5645d4;
         --color-primary-foreground: #ffffff;
         --color-primary-pressed: #4534b3;
-        /* Accent FILL behind white text (filled buttons/badges). In light theme it
-     equals --color-primary; the dark theme darkens it so white label text
-     clears WCAG AA (the brighter --color-primary stays the accent used AS text
-     on the page). See [data-theme='dark']. (MOTIR-757) */
         --color-primary-fill: #5645d4;
 
-        /* Surfaces */
-        --color-background: #ffffff; /* canvas */
-        --color-foreground: #1a1a1a; /* ink (primary text) */
-        --color-surface: #f6f5f4; /* subtle section backgrounds */
-        --color-surface-soft: #fafaf9; /* quieter section divisions */
-        --color-canvas: #ecebe7; /* recessed board behind raised cards (planning canvas) */
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
 
-        /* Text scale (Notion's warm-charcoal hierarchy) */
         --color-ink: #1a1a1a;
-        --color-charcoal: #37352f; /* body emphasis */
-        --color-slate: #5d5b54; /* secondary text */
-        --color-steel: #787671; /* tertiary / footer */
-        --color-stone: #a4a097; /* muted labels */
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
         --color-muted: #f3f4f6;
         --color-muted-foreground: #787671;
 
-        /* Borders / hairlines */
         --color-hairline: #e5e3df;
         --color-hairline-soft: #ede9e4;
         --color-hairline-strong: #c8c4be;
         --color-border: #e5e3df;
 
-        /* Accent secondary (used sparingly — pastel tints for feature cards) */
-        --color-accent: #ff64c8; /* brand pink */
+        --color-accent: #ff64c8;
         --color-accent-orange: #dd5b00;
         --color-accent-teal: #2a9d99;
         --color-accent-green: #1aae39;
 
-        /* Card tints (pale, for tinted surface variants) */
         --color-tint-peach: #ffe8d4;
         --color-tint-rose: #fde0ec;
         --color-tint-mint: #d9f3e1;
@@ -83,44 +72,29 @@
         --color-tint-sky: #dcecfa;
         --color-tint-yellow: #fef7d6;
 
-        /* Semantic */
         --color-success: #1aae39;
         --color-warning: #dd5b00;
         --color-destructive: #e03131;
         --color-destructive-foreground: #ffffff;
         --color-info: #0075de;
 
-        /* Link blue (NOT primary purple — distinct role). Tuned to clear WCAG AA
-     (4.5:1) on BOTH the white page (#ffffff → 4.94:1) AND the slightly darker
-     --color-surface-soft (#fafaf9 → 4.73:1) that hovered rows paint behind it,
-     so a link on a hovered soft-surface row stays accessible
-     (bug-filters-directory-name-link-hover-aa-contrast — #0075de was 4.37:1
-     on the soft surface). */
         --color-link: #0070d2;
         --color-link-pressed: #005bab;
 
-        /* ── Typography ─────────────────────────────────────────────────── */
-        /* CSS variables set by next/font in app/layout.tsx. */
         --font-sans:
           var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: var(--font-serif-source, Georgia), serif;
         --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 
-        /* Type scale — Notion-ish hierarchy.
-     Headings (xl and up) default to serif; body defaults to sans. */
-        --font-size-xs: 0.75rem; /* 12px — micro labels */
-        --font-size-sm: 0.875rem; /* 14px — small body, buttons */
-        --font-size-base: 1rem; /* 16px — primary body */
-        --font-size-lg: 1.25rem; /* 20px — h4 / subtitle */
-        --font-size-xl: 1.5rem; /* 24px — h3 / card titles */
-        --font-size-2xl: 2rem; /* 32px — h2 */
-        --font-size-3xl: 3rem; /* 48px — h1 */
-        --font-size-display: 5rem; /* 80px — hero display */
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
 
-        /* ── Shape (the warm-editorial base style) ─────────────────────── */
-        /* Notion uses sober rectangles (8px buttons); Figma uses pills (50px).
-     The base scale IS the `warm-editorial` style (sober rectangles); the
-     `soft-playful` style adopts Figma's pills in its [data-style] block. */
         --radius-xs: 4px;
         --radius-sm: 6px;
         --radius-md: 8px;
@@ -128,17 +102,14 @@
         --radius-xl: 16px;
         --radius-pill: 9999px;
 
-        /* Semantic shape tokens — components reference these, not --radius-md
-     directly. Lets a [data-style] block override these without renaming. */
-        --radius-btn: 8px; /* Notion-style sober button */
+        --radius-btn: 8px;
         --radius-card: 12px;
         --radius-input: 8px;
         --radius-modal: 12px;
         --radius-badge: 9999px;
-        --radius-control: 6px; /* small interactive affordances — menu/list rows, icon & close buttons, tooltips, code chips */
-        --radius-kbd: 4px; /* keyboard-hint chips */
+        --radius-control: 6px;
+        --radius-kbd: 4px;
 
-        /* ── Elevation ──────────────────────────────────────────────────── */
         --shadow-flat: none;
         --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
         --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
@@ -146,7 +117,6 @@
         --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
         --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
 
-        /* ── Spacing ────────────────────────────────────────────────────── */
         --spacing-xxs: 4px;
         --spacing-xs: 8px;
         --spacing-sm: 12px;
@@ -159,7 +129,6 @@
         --spacing-section-lg: 96px;
         --spacing-hero: 120px;
 
-        /* Component-specific spacing */
         --spacing-btn-x: 18px;
         --spacing-btn-y: 10px;
         --spacing-btn-x-sm: 12px;
@@ -168,26 +137,22 @@
         --spacing-input-y: 12px;
         --spacing-card-padding: 24px;
 
-        /* Control-level spacing — small affordances. Flip with the active style so a
-     getdesign swap can redefine control DENSITY, not just radius. */
-        --spacing-control-x: 10px; /* menu/list rows, combobox trigger & search, sidebar rows */
+        --spacing-control-x: 10px;
         --spacing-control-y: 6px;
-        --spacing-icon-btn: 4px; /* square icon / close buttons */
-        --spacing-chip-x: 10px; /* badge / pill chips */
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
         --spacing-chip-y: 2px;
-        --spacing-kbd-x: 6px; /* <kbd> keyboard-hint chips */
+        --spacing-kbd-x: 6px;
         --spacing-kbd-y: 2px;
-        --spacing-tooltip-x: 8px; /* tooltip & inline code blocks */
+        --spacing-tooltip-x: 8px;
         --spacing-tooltip-y: 4px;
 
-        /* Heights */
         --height-btn-sm: 32px;
         --height-btn-md: 40px;
         --height-btn-lg: 48px;
         --height-input: 44px;
-        --height-control: 36px; /* single-line / square small control */
+        --height-control: 36px;
 
-        /* ── Interaction ────────────────────────────────────────────────── */
         --transition-duration: 150ms;
         --transition-fast: 100ms;
         --transition-slow: 250ms;
@@ -199,13 +164,11 @@
       }
       [data-theme='dark'] {
         color-scheme: dark;
-
         --color-background: #0f0f0f;
         --color-foreground: #f3f4f6;
         --color-surface: #1a1a1a;
         --color-surface-soft: #161616;
-        --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
-
+        --color-canvas: #0e0e0e;
         --color-ink: #f3f4f6;
         --color-charcoal: #e5e5e5;
         --color-slate: #a4a097;
@@ -213,94 +176,64 @@
         --color-stone: #5d5b54;
         --color-muted: #1a1a1a;
         --color-muted-foreground: #a4a097;
-
         --color-hairline: #2a2a2a;
         --color-hairline-soft: #1f1f1f;
         --color-hairline-strong: #3a3a3a;
         --color-border: #2a2a2a;
 
-        /* Primary stays close to brand; brightened from the light theme so the accent
-     reads as TEXT/icon on the near-black canvas (#7b6ce5 on #0f0f0f ≈ 4.67:1, AA
-     text). But white text ON this as a FILL is only 4.1:1 — so filled accent
-     buttons use the darker --color-primary-fill below instead (MOTIR-757). */
         --color-primary: #7b6ce5;
         --color-primary-foreground: #ffffff;
         --color-primary-pressed: #5645d4;
-        /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
-     (AA), while #6c5cdd still clears 3:1 as a fill against the dark canvas. */
         --color-primary-fill: #6c5cdd;
 
-        /* Pastel tints dimmed for dark backgrounds */
         --color-tint-peach: #3a2a1a;
         --color-tint-rose: #3a1f2a;
         --color-tint-mint: #1a2f25;
         --color-tint-lavender: #2a253a;
         --color-tint-sky: #1a2a3a;
         --color-tint-yellow: #3a341a;
-
         --color-link: #58a6ff;
         --color-link-pressed: #79b8ff;
       }
       :root,
       [data-appearance-scope] {
-        /* ── Page ──────────────────────────────────────────────────────── */
         --el-page-bg: var(--color-background);
         --el-page-text: var(--color-foreground);
         --el-page-text-muted: var(--color-muted-foreground);
 
-        /* ── Text scale (the warm-charcoal hierarchy, named by ROLE) ────── */
-        --el-text: var(--color-foreground); /* primary ink */
-        --el-text-strong: var(--color-charcoal); /* emphasis / AA-safe text on tints */
-        --el-text-secondary: var(--color-slate); /* secondary copy — AA on EVERY surface */
-        /* ⚠️ AA-SAFE ONLY ON THE WHITE PAGE/CARD, and by 0.04 (4.54:1). On
-     --el-surface it is 4.17, on --el-muted 4.12, on --el-surface-soft 4.34 —
-     all under AA. A muted caption belongs inside a card, never on a panel.
-     (MOTIR-2455; light theme is the binding one — every ink clears AA on dark.) */
-        --el-text-muted: var(--color-muted-foreground); /* muted / captions */
-        --el-text-tertiary: var(--color-steel); /* tertiary / footers */
-        /* ⚠️ NEVER CARRIES TEXT WCAG MEASURES — 2.37–2.82:1 on every surface in BOTH
-     themes, so there is no context in which it passes. It is for DECORATIVE
-     glyphs (aria-hidden, or a role="img" whose label carries the meaning) and
-     for DISABLED / inactive text, which WCAG 1.4.3 exempts. Active
-     informational text takes --el-text-secondary. (MOTIR-2455) */
-        --el-text-faint: var(--color-stone); /* faint labels — decoration + disabled ONLY */
-        --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
 
-        /* ── Accent (active CTA identity) + brand highlight ─────────────── */
-        /* --el-accent is the FILL behind --el-accent-text (white): filled buttons,
-     badges, toggles. --el-accent-on-surface is the accent used AS text/icon on
-     a page surface. They diverge in dark theme (fill darkens for white-text AA;
-     text stays brand-bright for AA on the near-black canvas) — MOTIR-757. */
         --el-accent: var(--color-primary-fill);
         --el-accent-text: var(--color-primary-foreground);
         --el-accent-on-surface: var(--color-primary);
         --el-accent-pressed: var(--color-primary-pressed);
-        --el-highlight: var(--color-accent); /* brand pink — decorative accents */
+        --el-highlight: var(--color-accent);
 
-        /* ── Surfaces ──────────────────────────────────────────────────── */
         --el-surface: var(--color-surface);
         --el-surface-soft: var(--color-surface-soft);
-        --el-canvas: var(--color-canvas); /* recessed board behind raised cards (planning canvas) */
+        --el-canvas: var(--color-canvas);
         --el-surface-text: var(--color-foreground);
-        --el-muted: var(--color-muted); /* faint fill — chips, code, inverted text */
+        --el-muted: var(--color-muted);
 
-        /* ── Borders ───────────────────────────────────────────────────── */
-        --el-border: var(--color-border); /* default hairline */
+        --el-border: var(--color-border);
         --el-border-soft: var(--color-hairline-soft);
         --el-border-strong: var(--color-hairline-strong);
 
-        /* ── Links ─────────────────────────────────────────────────────── */
         --el-link: var(--color-link);
         --el-link-pressed: var(--color-link-pressed);
 
-        /* ── Semantic status ───────────────────────────────────────────── */
         --el-danger: var(--color-destructive);
         --el-danger-text: var(--color-destructive-foreground);
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-info: var(--color-info);
 
-        /* ── Pastel tints (Pill tones, feature surfaces) ───────────────── */
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
         --el-tint-mint: var(--color-tint-mint);
@@ -308,419 +241,192 @@
         --el-tint-sky: var(--color-tint-sky);
         --el-tint-yellow: var(--color-tint-yellow);
 
-        /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
-     Each workflow status renders its dot/icon in its OWN hue, so in_review /
-     blocked / cancelled differentiate from the three lifecycle CATEGORIES the
-     filter dots used to collapse them onto. Maps to a Tier-0 --color-* (the
-     gold-standard --el-chart-* / --el-type-* pattern), so every palette re-skins
-     them automatically through its --color-* overrides — no per-palette block
-     needed (the card's "+ 10 palette blocks" is satisfied by that indirection;
-     verified slate ≠ stone and info/warning/destructive/success/primary are all
-     palette-defined across all 10). The status DOT uses the hue at full strength;
-     a status CHIP bg = color-mix(var(--el-status-X) 14%, var(--el-surface)) with
-     --el-text-strong (design/design-system/design-notes.md §A). Keys grounded in
-     lib/workflows/defaultWorkflow.ts. */
-        --el-status-todo: var(--color-stone); /* neutral grey — not started */
-        --el-status-in-progress: var(--color-info); /* blue — active */
-        --el-status-planning: var(
-          --color-accent-teal
-        ); /* teal — being RE-PLANNED, not being worked */
-        --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
-        --el-status-done: var(--color-success); /* green — resolved */
-        --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
-        --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
 
-        /* ── Priority hues (MOTIR-1273 · 1266.2 — a 5-step diverging ramp) ──
-     Un-collapses lib/issues/priorityMeta.ts, where `medium` AND `lowest` were
-     both neutral grey (the exact "can't differentiate" complaint). red → orange
-     → mid-slate → blue → faint-stone: two DISTINCT greys for medium / lowest,
-     kept legible by the redundant ArrowUp / Minus / ArrowDown icon (AA, finding
-     #35). The Pill `priority` tone tints these over --el-surface
-     (design/design-system/design-notes.md §B). */
-        --el-priority-highest: var(--color-destructive); /* red */
-        --el-priority-high: var(--color-warning); /* orange */
-        --el-priority-medium: var(--color-slate); /* mid slate (un-collapsed) */
-        --el-priority-low: var(--color-info); /* blue */
-        --el-priority-lowest: var(--color-stone); /* faint stone (un-collapsed) */
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
 
-        /* ── Semantic SURFACES (MOTIR-1273 · 1266.2 — banner / callout fills) ──
-     Names the banner/callout fills components reached for as raw --el-tint-*
-     (the FormField error box, the public danger / warning banners). Each = a
-     tint base + a strong-ink text token, AA-safe (charcoal-on-tint clears
-     ~10:1 both themes, finding #35). notice-info / callout / success are
-     defined AHEAD of their dedicated surfaces (the spec's "NEW (no impl)"
-     pattern; design/design-system/design-notes.md §C). */
         --el-danger-surface: var(--color-tint-rose);
         --el-danger-surface-text: var(--color-charcoal);
         --el-warning-surface: var(--color-tint-peach);
-        --el-warning-text: var(--color-charcoal); /* ink on the warning surface */
+        --el-warning-text: var(--color-charcoal);
         --el-success-surface: var(--color-tint-mint);
         --el-notice-info-bg: var(--color-tint-sky);
         --el-notice-info-border: var(--color-info);
         --el-callout-bg: var(--color-tint-lavender);
         --el-callout-text: var(--color-charcoal);
 
-        /* ── Identity hues (MOTIR-1274 · 1266.3 — un-collapse the shared --el-tint-* pool) ──
-     Roles / org-roles / privacy / labels / avatars each got a DEDICATED token so a
-     palette can tune them apart (today they all pulled from the same six --el-tint-*,
-     so a label, a role and an avatar could not diverge). Every token DEFAULTS to
-     today's exact tint → zero visual change in the motir base; each maps to a Tier-0
-     --color-* so palettes + the dark block re-skin them for free (no per-palette
-     block — the gold-standard --el-chart-* / --el-type-* indirection). This block
-     also DECOUPLES the --el-type-* MISUSE: NotificationRow event badges, the
-     ProjectAvatar mono tile and the OrgUsageClient model dots were borrowing
-     work-item-KIND hues for non-type meaning; they get their own --el-notif-* /
-     --el-avatar-fallback / --el-model-* tokens at the SAME hues (still zero change).
-     design/design-system/design-notes.md §D. */
-        /* Roles / org-roles / privacy — Pill memberRole/orgRole/tone (today hardcoded in
-     Pill.tsx CVA). admin→lavender, member→sky, viewer→mint; owner→lavender; private→
-     lavender, public→sky (public defined AHEAD — no rendered "public" badge yet). */
         --el-role-admin: var(--color-tint-lavender);
         --el-role-member: var(--color-tint-sky);
         --el-role-viewer: var(--color-tint-mint);
-        /* A project's OWN role (MOTIR-2485) — peach, the next free slot: the members
-     surface had already spent lavender / sky / mint on the three built-ins. */
         --el-role-custom: var(--color-tint-peach);
         --el-org-role-owner: var(--color-tint-lavender);
         --el-org-role-admin: var(--color-tint-sky);
         --el-org-role-member: var(--color-tint-mint);
         --el-privacy-private: var(--color-tint-lavender);
         --el-privacy-public: var(--color-tint-sky);
-        /* Label ramp — lib/labels/labelTint.ts hashes the name → 1..6 in the fixed order
-     peach,rose,mint,lavender,sky,yellow (the seed-loader family; matches shipped). */
         --el-label-1: var(--color-tint-peach);
         --el-label-2: var(--color-tint-rose);
         --el-label-3: var(--color-tint-mint);
         --el-label-4: var(--color-tint-lavender);
         --el-label-5: var(--color-tint-sky);
         --el-label-6: var(--color-tint-yellow);
-        /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
-     project.avatarColor ∈ these strings, so numbering them would break stored rows
-     (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
-     the mono initials tile keeps its blue but stops borrowing --el-type-task. */
         --el-avatar-peach: var(--color-tint-peach);
         --el-avatar-rose: var(--color-tint-rose);
         --el-avatar-mint: var(--color-tint-mint);
         --el-avatar-lavender: var(--color-tint-lavender);
         --el-avatar-sky: var(--color-tint-sky);
         --el-avatar-yellow: var(--color-tint-yellow);
-        --el-avatar-fallback: var(
-          --color-info
-        ); /* mono tile — was --el-type-task (= --color-info) */
-        /* Notification event badges (decouple --el-type-* misuse #2; same hues → zero change).
-     mentioned keeps the accent fill it already used — --el-accent resolves to
-     --color-primary-fill (purple), NOT --color-accent (pink); the spec's base column
-     read --color-accent but its note said "alias for consistency", so per §2
-     zero-visual-change this maps to the SHIPPED value. */
-        --el-notif-mentioned: var(
-          --color-primary-fill
-        ); /* the accent fill (matches prior --el-accent) */
-        --el-notif-commented: var(--color-info); /* was --el-type-task */
-        --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
-        --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
-        /* The EXECUTOR badge on a Home row's assignee avatar (Story MOTIR-2649 ·
-     Subtask MOTIR-2653, per design/home/design-notes.md §"The agent state").
-     Same mapping form as --el-notif-mentioned above and for the same reason:
-     it resolves to the accent fill today, but owning its own slot means a
-     palette can move agent badges without dragging the CTA with them. The
-     third pillar becoming visible is worth a token of its own. */
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
         --el-executor-agent: var(--color-primary-fill);
-        /* AI model dots (promote to a named family; deepseek was borrowing --el-type-subtask).
-     opus keeps the accent fill, same --color-primary-fill reasoning as mentioned. */
-        --el-model-opus: var(
-          --color-primary-fill
-        ); /* the accent fill (matches prior --el-accent) */
+        --el-model-opus: var(--color-primary-fill);
         --el-model-sonnet: var(--color-info);
         --el-model-haiku: var(--color-success);
-        --el-model-deepseek: var(--color-accent-teal); /* was --el-type-subtask */
+        --el-model-deepseek: var(--color-accent-teal);
 
-        /* ── Icon + text roles (MOTIR-1275 · 1266.4 — split the --el-text-muted /
-     --el-text triple-duty) ──
-     Icons and overlines/subtitles were borrowing the body-copy text tokens
-     (--el-text-muted for every icon + caption, --el-text for the tooltip fill),
-     so a palette could not tune an icon apart from prose. These give each role
-     its own token mapped to the SAME Tier-0 neutral it resolves to today, so
-     every palette + the dark block re-skin them for free (the gold-standard
-     --el-chart-* / --el-type-* indirection — no per-palette block). icon-btn /
-     icon-heading are defined AHEAD of an explicit consumer (the spec's
-     "NEW (no impl)" pattern; buttons inherit currentColor today).
-     design/design-system/design-notes.md §E. */
-        --el-icon-muted: var(--color-muted-foreground); /* inactive nav / chevron / close */
-        --el-icon-active: var(--color-primary); /* active nav icon (was --el-accent-on-surface) */
-        --el-icon-btn: var(
-          --color-foreground
-        ); /* explicit button-icon ink (usually currentColor) */
-        --el-icon-heading: var(--color-charcoal); /* an icon beside a heading */
-        --el-icon-field: var(--color-muted-foreground); /* search / chevron / calendar in inputs */
-        --el-text-eyebrow: var(--color-muted-foreground); /* uppercase-mono overline */
-        --el-text-subtitle: var(--color-slate); /* lead paragraph (Modal / EmptyState desc) */
-        --el-text-helper: var(--color-muted-foreground); /* form hint (was --el-text-muted) */
-        --el-text-identifier: var(
-          --color-slate
-        ); /* monospace MOTIR-123 keys (was --el-text-secondary) */
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
 
-        /* ── Component-surface primitives (MOTIR-1275 · 1266.4) ──
-     Names the control surfaces that were overloading --el-surface (option
-     highlight / chip fill / switch knob), --el-border(-strong) (control vs
-     panel edge) and --el-text (tooltip fill). Each defaults to the exact
-     Tier-0 --color-* the component renders today → zero visual change in the
-     motir base; a palette can now tune each apart. Two deliberate
-     spec-vs-shipped reconciliations (rung-2), documented in §F of the notes:
-     (1) --el-count-bg maps to --color-muted, NOT the spec's tentative
-     --color-surface — board count badges render ON an --el-surface column, so
-     surface would erase them; muted is the shipped fill (and identical to
-     surface in dark). (2) --el-overlay-scrim is the lone concrete-value token
-     (no --color-* base), so it carries an explicit dark companion below; light
-     == today's bg-black/40, dark DEEPENS to ~65% for a legible scrim.
-     design/design-system/design-notes.md §F. */
-        --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
-        --el-tooltip-text: var(
-          --color-background
-        ); /* text on the tooltip (was --el-text-inverted) */
-        --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
-        --el-switch-knob: var(--color-surface); /* the thumb (was --el-surface) */
-        --el-option-active-bg: var(
-          --color-muted
-        ); /* highlighted listbox option (was --el-surface) */
-        --el-overlay-scrim: #00000066; /* modal/dialog scrim — concrete (light); dark companion below */
-        --el-chip-bg: var(--color-surface); /* neutral chip fill (tinted chips keep their tint) */
-        --el-chip-border: var(--color-border); /* neutral chip edge */
-        --el-card: var(--color-background); /* untinted card surface — fixes the bg-card orphan */
-        --el-input-border: var(
-          --color-hairline-strong
-        ); /* input outline (was --el-border-strong) */
-        --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
 
-        /* ── Non-editable field states (MOTIR-2495) ──
-     A field that cannot be typed into used to be drawn with `opacity-50` on the
-     whole wrapper, which composites its CHILDREN — value, placeholder, and the
-     `addonStart`/`addonEnd` affixes — against the page and roughly halves
-     whatever contrast the palette guaranteed them. Contrast is a property of a
-     PAIR (theme.css's own colour rule); opacity quietly makes it a property of
-     a triple, so no ink choice can be checked and none can be fixed: the org
-     URL's affix was already `--el-text-secondary`, the darkest caption ink, and
-     still measured below AA. These four tokens express the two states as
-     COLOUR instead, so every ink over them is AA-checkable and palette-swappable.
-     Measured on the base palette, light (the binding theme; dark clears by more):
-       disabled  value/affix --color-slate on --color-muted   = 6.18:1 ✓
-       read-only value       --color-foreground on --color-surface = 15.98:1 ✓
-       read-only affix       --color-slate on --color-surface  = 6.24:1 ✓
-     The DISABLED border is deliberately softer than the enabled one — the state
-     reads through fill + ink + edge together, so it survives a surface-material
-     style (glassmorphism repaints [data-surface='input'], and its rule outranks
-     a utility class) that erases the fill alone. */
-        --el-input-disabled-bg: var(--color-muted); /* disabled field fill (replaces opacity-50) */
-        --el-input-disabled-border: var(
-          --color-hairline
-        ); /* disabled field edge — softer than enabled */
-        --el-input-disabled-text: var(
-          --color-slate
-        ); /* disabled value/placeholder/affix ink — AA on the fill above */
-        --el-input-readonly-bg: var(
-          --color-surface
-        ); /* read-only field fill — not editable, but focusable + full ink */
-        --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
-        --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
 
-        /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
-        /* The colour the UI was missing: each issue type renders its icon in its
-     own hue, matching ISSUE_TYPE_META.colorToken. */
-        --el-type-epic: var(--color-accent); /* pink */
+        --el-type-epic: var(--color-accent);
         --el-type-story: var(--color-accent-green);
         --el-type-task: var(--color-info);
         --el-type-bug: var(--color-destructive);
         --el-type-subtask: var(--color-accent-teal);
 
-        /* ── Work-item TYPE hues (the work-NATURE palette, Story 2.7 · 2.7.4) ────
-     Parallel to the per-KIND hues above: the ten fixed `WorkItemType` members
-     each render their icon/chip in their own hue (matches
-     lib/issues/workItemTypeMeta.ts). NO new Tier-0 colour needed — the seven
-     "produces an artifact" types take the seven saturated hues; the three
-     "meta / admin" types (decision, manual, chore) take the three greys
-     (desaturation is semantically apt). Each maps to a Tier-0 var, so the
-     [data-theme="dark"] block re-skins them automatically. The chip puts the
-     hue in a color-mix tint BACKGROUND with --el-text-strong text (AA,
-     finding #35); never a page-level tint. */
-        --el-type-code: var(--color-info); /* blue   — implementation */
-        --el-type-design: var(--color-accent); /* pink   — UI/UX design */
-        --el-type-test: var(--color-success); /* green  — automated tests */
-        --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
-        --el-type-research: var(--color-primary); /* purple — spike / investigation */
-        --el-type-review: var(--color-accent-orange); /* orange — QA / review */
-        --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
-        --el-type-decision: var(--color-charcoal); /* ink    — decision record */
-        --el-type-manual: var(--color-stone); /* stone  — human provisioning */
-        --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
 
-        /* The four members ADR Amendment 1 (MOTIR-2629) admitted, per MOTIR-2631's
-     design (design/work-items/design-notes.md, "Q2"). The block above spent
-     ALL SEVEN mutually distinct saturated hues and all three greys at ten
-     members, and there is no eighth — inventing one is forbidden. So each
-     newcomer POINTS AT the Tier-0 hue of the member the amendment named as its
-     NEAREST NEIGHBOUR, and the GLYPH carries the difference (the chip renders
-     its label too, so hue was never the sole carrier — finding #35).
-     Each keeps its OWN token so a future palette can split them without
-     touching a component, and so WORK_ITEM_TYPE_META's per-member `hueVar`
-     shape holds. Hue names the FAMILY; the glyph names the member. */
-        --el-type-copy: var(--color-accent-teal); /* teal   — with content (Author) */
-        --el-type-translate: var(--color-accent-teal); /* teal   — with content (Author) */
-        --el-type-verification: var(--color-accent-orange); /* orange — with review (Investigate) */
-        --el-type-legal: var(--color-charcoal); /* ink    — with decision (Govern) */
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
 
-        /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
-     Every chart colour routes through one of these, NEVER a raw --color-*
-     in chart code (the per-component growth pattern). They map to Tier-0
-     vars, so the Tier-1 dark block re-skins them automatically. The pair
-     committed/completed is distinguished by TEXT label too, never colour
-     alone (finding #35). */
-        --el-chart-guideline: var(--color-stone); /* burndown ideal line (dashed) */
-        --el-chart-actual: var(--color-primary); /* burndown actual remaining */
-        --el-chart-scope: var(--color-warning); /* scope-change marker */
-        --el-chart-committed: var(--color-info); /* velocity committed bar */
-        --el-chart-completed: var(--color-success); /* velocity completed bar */
-        --el-chart-average: var(--color-charcoal); /* velocity average (dashed ref) */
-        --el-chart-plot: var(--color-surface-soft); /* plot background fill */
-        --el-chart-grid: var(--color-border); /* gridlines */
-        --el-chart-axis: var(--color-steel); /* axis line + tick labels */
-        /* Story 6.3 dashboards (6.3.4) — the categorical donut ramp + the
-     created/resolved series + the deficit/surplus difference fills. Same
-     growth pattern: map to existing Tier-0 vars, so the dark block re-skins
-     them automatically. The donut cycles cat-1..7; "None"/unset is always
-     cat-none (neutral grey); created/resolved read by line + legend label,
-     never colour alone (finding #35). */
-        --el-chart-cat-1: var(--color-primary); /* distribution donut segment 1 */
-        --el-chart-cat-2: var(--color-info); /* segment 2 */
-        --el-chart-cat-3: var(--color-success); /* segment 3 */
-        --el-chart-cat-4: var(--color-warning); /* segment 4 */
-        --el-chart-cat-5: var(--color-accent-teal); /* segment 5 */
-        --el-chart-cat-6: var(--color-accent); /* segment 6 */
-        --el-chart-cat-7: var(--color-charcoal); /* segment 7 (ramp length) */
-        --el-chart-cat-none: var(--color-stone); /* the "None" / unset group */
-        --el-chart-created: var(--color-info); /* created-vs-resolved: created line */
-        --el-chart-resolved: var(--color-success); /* created-vs-resolved: resolved line */
-        --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
-        --el-chart-surplus: var(--color-success); /* fill where resolved > created */
-        --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
-        --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
-        /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
-     collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
-     -started / -target names are taken (velocity / old burndown), so reusing
-     them would silently re-skin those charts. The --el-chart-plot/grid/axis
-     scaffold is reused unchanged. */
-        --el-chart-cycle-scope: var(--color-stone); /* live total scope (gray) */
-        --el-chart-cycle-started: var(--color-warning); /* started / in progress (amber) */
-        --el-chart-cycle-completed: var(--color-info); /* completed (solid blue) */
-        --el-chart-cycle-target: var(--color-info); /* ideal remaining (blue, dotted) */
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
 
-        /* ── Public projects (Story 6.12 · public read-only view) ──────────
-     New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an
-     existing Tier-0 value (the per-component token-growth pattern). The
-     [data-theme="dark"] block re-skins them automatically because every
-     mapping is a --color-* var the Tier-1 block already flips (no concrete
-     hex). Per design/public-projects/design-notes.md "Colour roles". */
-        --el-public-banner-bg: var(
-          --color-tint-sky
-        ); /* "you're viewing a public project" framing */
-        --el-public-banner-text: var(--color-charcoal); /* AA ~10:1 on the sky tint */
-        --el-vote-bg: var(--color-tint-lavender); /* upvote control resting fill (6.12.7) */
-        --el-vote-active-bg: var(--color-primary); /* voted: accent fill */
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
         --el-vote-active-text: var(--color-primary-foreground);
         --el-roadmap-submitted: var(--color-tint-peach);
         --el-roadmap-planned: var(--color-tint-lavender);
         --el-roadmap-progress: var(--color-tint-sky);
         --el-roadmap-done: var(--color-tint-mint);
-        /* ── Onboarding / canvas (Story 1266.6 · MOTIR-1277) ───────────────
-     Per-element hues for the onboarding canvas: revision-diff kind chips
-     (RevisionDiff), the discovery chat bubbles (DiscoveryChatRail), the
-     planning-canvas edges (PlanningCanvas), and the station tier tile
-     (StationNode). Each maps to the exact Tier-0 --color-* it renders
-     today (zero visual change vs the borrowed --el-tint-* / --el-accent /
-     --el-border), so a palette re-skins them via its --color-* override
-     and [data-theme="dark"] flips them — no per-palette / dark entry.
-     Per design/design-system/design-notes.md §H. NB: the card's "wire
-     --el-roadmap-* into StationNode" is corrected there — roadmap stays
-     scoped to the PUBLIC roadmap; the canvas gets its own
-     --el-station-tier-* family (a different semantic concept). */
         --el-diff-added: var(--color-tint-mint);
         --el-diff-removed: var(--color-tint-rose);
         --el-diff-moved: var(--color-tint-sky);
-        --el-chat-bubble-user: var(--color-primary-fill); /* text stays --el-accent-text */
-        --el-chat-bubble-ai: var(--color-surface-soft); /* text stays --el-text */
-        /* Canvas dependency edges ride the RECESSED --el-canvas, not a raised surface, so
-     they use INK tokens (--color-slate / -charcoal), NOT the hairline-on-a-card
-     --color-border / -hairline-strong which are near-invisible there (~1.0-1.9:1 vs
-     the canvas in every palette — MOTIR-1564). Ink clears WCAG 1.4.11 (≥3:1) on the
-     canvas across all palettes/themes while still re-tinting per palette; solid vs
-     dashed + the arrowhead marker carry the committed/pending distinction. */
-        --el-canvas-edge-pending: var(
-          --color-slate
-        ); /* dashed, not-yet-committed edge (quiet ink) */
-        --el-canvas-edge-committed: var(--color-charcoal); /* solid, settled edge (emphasis ink) */
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
         --el-station-tier-discovery: var(--color-tint-sky);
         --el-station-tier-vision: var(--color-tint-lavender);
         --el-station-tier-feasibility: var(--color-tint-mint);
         --el-station-tier-validation: var(--color-tint-peach);
-        /* the Overview hero's soft corner washes (decorative tints only; all text
-     sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
         --el-hero-wash-a: var(--color-tint-lavender);
         --el-hero-wash-b: var(--color-tint-sky);
-        /* "Building in public" (Story 6.17.2/6.17.4) — the reframed `public` access
-     option glyph + the "Live"/status badge. Tier-0 flips (--color-tint-lavender
-     and --color-charcoal both re-skin under [data-theme="dark"]) re-skin these
-     automatically, so they live in Tier 3 once with no dark-block entry. */
-        --el-build-bg: var(--color-tint-lavender); /* badge / reframed-option tint */
-        --el-build-text: var(--color-charcoal); /* AA ~10:1 on the lavender tint, both themes */
-        --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
 
-        /* ── Interaction / agile surfaces (MOTIR-1276 · 1266.5) ──────────────
-     Un-collapses the dnd / selection / overdue / accent meanings that all
-     rode --el-tint-lavender / --el-accent / --el-text, so a palette can tune a
-     drop target apart from a selected row apart from an overdue date. Each
-     maps to a --color-* → zero base-palette change AND every palette + dark
-     re-skins for free (§1; the chart/type ramp pattern). The previously
-     undifferentiated meanings (selection vs drop; overdue vs a future date)
-     now read distinctly; the rest default to today's exact value.
-     design/design-system/design-notes.md §G. */
-        --el-selection-bg: var(
-          --color-tint-sky
-        ); /* selected row/card — sky, NOT the drop lavender */
-        --el-droptarget-bg: var(--color-tint-lavender); /* dnd drop-zone fill (shipped) */
-        --el-board-column-accent: var(--color-primary); /* drop ring / column border */
-        --el-overdue: var(--color-destructive); /* past-due date */
-        --el-due-soon: var(--color-warning); /* due today / within 3 days */
-        --el-sprint-accent: var(--color-tint-lavender); /* sprint-header emphasis (shipped) */
-        --el-epic-accent: var(--color-accent); /* pink epic identity (aliases --el-type-epic) */
-        --el-archived-pill-bg: var(--color-muted); /* inactive "Archived" badge fill */
-        --el-archived-pill-text: var(--color-slate); /* AA-safe ink on the muted fill */
-        --el-auth-wash: var(--color-tint-sky); /* sign-in background wash (text on the card) */
-        --el-tabnav-track: var(--color-surface); /* tab-bar track (Segmented / PublicTabNav) */
-        --el-tabnav-active: var(--color-primary); /* active-tab glyph (== --el-accent-on-surface) */
-        --el-card-icon-bg: var(--color-muted); /* hub/settings card icon tile */
-        --el-card-icon-fg: var(--color-primary); /* the icon inside that tile */
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
 
-        /* ── Code/mono (used by /tokens reference route) ───────────────── */
         --el-code-bg: var(--color-muted);
         --el-code-text: var(--color-charcoal);
 
-        /* ── App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
-     sidebar rail on $--surface and the content area on $--background; the
-     active nav row inverts that (a $--background row against the $--surface
-     rail) so the current page reads as inset into the page canvas. ──── */
-        --el-sidebar-bg: var(
-          --color-surface
-        ); /* the rail — surface, distinct from the page canvas */
-        --el-sidebar-border: var(--color-hairline); /* the 1px seam between rail and content */
-        --el-sidebar-item-bg-hover: #eeede9; /* subtle hover lift — one shade darker than surface (light) */
-        --el-sidebar-item-bg-active: var(
-          --color-background
-        ); /* active row = canvas inset into the rail */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
       }
       [data-theme='dark'] {
         --el-sidebar-item-bg-hover: #222222;
-        /* The modal scrim deepens in dark (MOTIR-1275 · 1266.4): on a near-black
-     canvas a 40% scrim barely separates the dialog, so dark uses ~65% — the
-     other concrete-hex --el-* alongside the sidebar hover. Light value (40%,
-     == the prior bg-black/40) lives in the :root block above. */
         --el-overlay-scrim: #000000a6;
       }
     </style>
