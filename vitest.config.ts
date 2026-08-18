@@ -771,6 +771,21 @@ export default defineConfig({
         // is indistinguishable from a missing one.
         'lib/github/historicalPullRequests.ts',
         'lib/services/historicalPullRequestBackfillService.ts',
+        // MOTIR-3034 — the `base_ref` repair and the event-free re-evaluation of
+        // the repository-set completion gate, gated for the SAME reason its
+        // MOTIR-1965 neighbours above are, one turn sharper: this tooling does not
+        // merely write to shipped history, it can move a card to DONE with no
+        // human and no merge behind it. Every guard that keeps it honest is a
+        // branch — the empty repository set that must ABSTAIN, the open change
+        // request that must HOLD, the provider answer that must be left NULL
+        // rather than guessed, the already-filled row that must not be rewritten —
+        // and each one prevents a specific false claim. An untested guard here is
+        // indistinguishable from a missing one, and what it would silently do is
+        // complete work items nobody shipped.
+        'lib/github/restRetry.ts',
+        'lib/github/pullRequestBase.ts',
+        'lib/services/pullRequestBaseRefBackfillService.ts',
+        'lib/services/repoSetCompletionService.ts',
         // Story 7.24 · MOTIR-1812 → gated by MOTIR-1813. The "M" universal AI
         // callout: its action REGISTRY plus the two components that consume it.
         // The registry is the extension point MOTIR-1343 / MOTIR-1344 each land a
@@ -2016,6 +2031,36 @@ export default defineConfig({
         'lib/github/historicalPullRequests.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/historicalPullRequestBackfillService.ts': {
           branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // MOTIR-3034 (see the `include` note). MEASURED over `tests/github/` +
+        // `tests/integration/github/`, then pinned — not guessed:
+        //   restRetry.ts                      100 / 100  / 100
+        //   pullRequestBase.ts                100 /  96  / 100
+        //   pullRequestBaseRefBackfillService 100 /  95  / 100
+        //   repoSetCompletionService.ts        93 /  86  / 100   (lines/branches/functions)
+        'lib/github/restRetry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/pullRequestBase.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/pullRequestBaseRefBackfillService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // ⚠️ `branches: 85` on this ONE file, and the reason is named rather than
+        // left as a softer number somebody later reads as slippage. What stands
+        // uncovered is a single arm: `updateStatus` throwing
+        // `ProjectAccessDeniedError` / `ProjectNotFoundError`. The move is
+        // attributed to the WORKSPACE OWNER (there is no change-request author on
+        // this path), and a workspace owner passes `canEdit` on every
+        // `accessLevel` — `private` included, where `lib/projects/access.ts`
+        // admits them explicitly — so NO VALID FIXTURE produces that error. The
+        // arm is still correct to keep: `reevaluateItems` loops, and an uncaught
+        // throw there would abort a whole sweep's remaining repairs. Lines and
+        // functions are pinned at 90 like every sibling; only the arm that cannot
+        // be reached from a legitimate tenant is priced in.
+        'lib/services/repoSetCompletionService.ts': {
+          branches: 85,
           functions: 90,
           lines: 90,
         },

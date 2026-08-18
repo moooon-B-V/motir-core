@@ -93,7 +93,7 @@ async function transition(page: Page, id: string, statusKey: string): Promise<vo
 /** The detail rail's Repositories field card.
  *
  *  ⚠️ ANCHORED on the card's own text, not a substring. After the first merge the
- *  gate posts a hold comment that says "…ships in more than one repository", and
+ *  gate posts a hold comment naming the repositories it is still waiting on, and
  *  that comment's card sits EARLIER in the DOM — so a `hasText: 'Repositories'`
  *  filter plus `.first()` silently retargets to the comment the moment the
  *  feature starts working. The rail card's text BEGINS with its label. */
