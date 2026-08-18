@@ -179,13 +179,16 @@ import type {
 } from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
+  resolveAuthoredRepoPinsInProject,
+  resolveAuthoredRepoRefsInProject,
   resolveAuthoredTargetRepoInProject,
-  resolveAuthoredTargetReposInProject,
   resolveItemDispatchRepo,
+  type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
+import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
@@ -202,10 +205,13 @@ import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 function assertSingleTargetRepoInput(
   targetRepo: string | null | undefined,
   targetRepos: readonly (string | null | undefined)[] | null | undefined,
+  targetRepositories?: readonly (string | null | undefined)[] | null | undefined,
 ): void {
-  if (targetRepo !== undefined && targetRepos !== undefined) {
-    throw new ConflictingTargetRepoInputError();
-  }
+  const supplied =
+    (targetRepo !== undefined ? 1 : 0) +
+    (targetRepos !== undefined ? 1 : 0) +
+    (targetRepositories !== undefined ? 1 : 0);
+  if (supplied > 1) throw new ConflictingTargetRepoInputError();
 }
 
 /** A validated single pin, as the one-element set it means (`null` → `[]`). The
@@ -213,6 +219,36 @@ function assertSingleTargetRepoInput(
  *  valid set without knowing the set exists. */
 function toRepoSet(pin: string | null): string[] {
   return pin === null ? [] : [pin];
+}
+
+/**
+ * REPLACE one item's repository REFERENCES with `refs`, in order (Story
+ * MOTIR-2732 · MOTIR-3039, ADR `work-item-repository-set.md` "Amendment
+ * 2026-08-18" §A2).
+ *
+ * Delete-then-insert rather than a per-element diff, because a repository set is
+ * authored as a whole: element 0 is the primary, so `[a, b]` → `[b, a]` is a
+ * different decision and not two no-ops, and `@@unique([workItemId, position])`
+ * makes any interleaved patch fight itself. That is also why `position` is a plain
+ * ordinal — there is no incremental re-order to keep cheap.
+ *
+ * Positions are written CONTIGUOUS from 0, which the unique index then enforces:
+ * a gap is a database error rather than something a reader has to interpret.
+ *
+ * Runs inside the caller's transaction (both repository calls require `tx`), so a
+ * failed write leaves neither the row nor its references behind.
+ */
+async function writeRepoRefs(
+  workItemId: string,
+  workspaceId: string,
+  refs: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await workItemRepoRepository.deleteByWorkItem(workItemId, tx);
+  await workItemRepoRepository.createMany(
+    refs.map((projectRepoId, position) => ({ workspaceId, workItemId, projectRepoId, position })),
+    tx,
+  );
 }
 
 /** Ordered list equality — a REORDER counts as a change, because element 0 is the
@@ -841,13 +877,29 @@ export const workItemsService = {
     // PRIMARY — `targetRepos[0] ?? null` — so exactly ONE of the two fields may be
     // supplied; both is `ConflictingTargetRepoInputError` (422), never a silent
     // precedence rule that drops a repository the caller believed they recorded.
-    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos);
-    const targetRepos =
-      input.targetRepos !== undefined
-        ? await resolveAuthoredTargetReposInProject(input.targetRepos, input.projectId, ctx)
-        : toRepoSet(
-            await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
-          );
+    //
+    // ⚠️ The REFERENCE model (Story MOTIR-2732 · MOTIR-3039, ADR "Amendment
+    // 2026-08-18"): whichever of the three fields arrives, resolution produces
+    // BOTH the `project_repository` row ids — the AUTHORED state, written to
+    // `work_item_repository` inside the transaction below — and the NAMES, which
+    // the legacy columns carry as a DERIVED projection until §A7's contract step
+    // retires them. One resolution, so the two can never name different
+    // repositories; and `targetRepositories` joins the mutual exclusion rather
+    // than layering a precedence rule over it.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos, input.targetRepositories);
+    const repoPins: ResolvedRepoPins =
+      input.targetRepositories !== undefined
+        ? await resolveAuthoredRepoRefsInProject(input.targetRepositories, input.projectId, ctx)
+        : input.targetRepos !== undefined
+          ? await resolveAuthoredRepoPinsInProject(input.targetRepos, input.projectId, ctx)
+          : await resolveAuthoredRepoPinsInProject(
+              toRepoSet(
+                await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
+              ),
+              input.projectId,
+              ctx,
+            );
+    const targetRepos = repoPins.names;
     const targetRepo = primaryTargetRepo(targetRepos);
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
@@ -1046,6 +1098,12 @@ export const workItemsService = {
       };
 
       const row = await workItemRepository.create(data, tx);
+
+      // The repository REFERENCES (MOTIR-3039), in the SAME transaction as the
+      // row: an item and where it ships commit or roll back together. Empty for
+      // an unpinned item, and empty for a project with no repository set — that
+      // project's pin lives in `targetRepo` alone (§A7's compatibility rung).
+      await writeRepoRefs(row.id, workspaceId, repoPins.refs, tx);
 
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
@@ -1253,6 +1311,7 @@ export const workItemsService = {
       'executor',
       'targetRepo',
       'targetRepos',
+      'targetRepositories',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1287,18 +1346,34 @@ export const workItemsService = {
     // exclusive here exactly as they are on create (ADR §3.4). Whichever arrives,
     // BOTH columns are written together — the scalar is the set's primary and is
     // never left describing a different repository than element 0.
-    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos);
-    let nextTargetRepos: string[] | undefined;
-    if (patch.targetRepo !== undefined || patch.targetRepos !== undefined) {
+    //
+    // ⚠️ The REFERENCE model (MOTIR-3039) patches through the same slot, and
+    // `targetRepositories` joins the mutual exclusion as a THIRD arm. One
+    // resolution yields the row ids (the authored state) and the names (the
+    // derived projection), so a patch can never move one without the other.
+    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos, patch.targetRepositories);
+    let nextRepoPins: ResolvedRepoPins | undefined;
+    if (
+      patch.targetRepo !== undefined ||
+      patch.targetRepos !== undefined ||
+      patch.targetRepositories !== undefined
+    ) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
-      nextTargetRepos =
-        patch.targetRepos !== undefined
-          ? await resolveAuthoredTargetReposInProject(patch.targetRepos, pre.projectId, ctx)
-          : toRepoSet(
-              await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
-            );
+      nextRepoPins =
+        patch.targetRepositories !== undefined
+          ? await resolveAuthoredRepoRefsInProject(patch.targetRepositories, pre.projectId, ctx)
+          : patch.targetRepos !== undefined
+            ? await resolveAuthoredRepoPinsInProject(patch.targetRepos, pre.projectId, ctx)
+            : await resolveAuthoredRepoPinsInProject(
+                toRepoSet(
+                  await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
+                ),
+                pre.projectId,
+                ctx,
+              );
     }
+    const nextTargetRepos: string[] | undefined = nextRepoPins?.names;
     const nextTargetRepo: string | null | undefined =
       nextTargetRepos === undefined ? undefined : primaryTargetRepo(nextTargetRepos);
 
@@ -1548,6 +1623,24 @@ export const workItemsService = {
       if (nextExecutor !== current.executor) {
         update.executor = nextExecutor;
         diff.executor = { from: current.executor, to: nextExecutor };
+      }
+
+      // The repository REFERENCES (MOTIR-3039), written BEFORE the empty-diff
+      // early return and compared on their OWN value rather than on the names.
+      //
+      // Both details are load-bearing. A card in a project that had NO repository
+      // set holds only a name; once the set exists, re-sending that same name
+      // resolves to a ROW for the first time — the names are identical, the
+      // revision diff is legitimately empty, and the reference is nonetheless new.
+      // Gating this on `diff` (or on `sameRepoSet`) would silently drop exactly the
+      // write that migrates such a card onto the reference model.
+      if (nextRepoPins !== undefined) {
+        const currentRefs = (await workItemRepoRepository.listByWorkItem(id, tx)).map(
+          (r) => r.projectRepoId,
+        );
+        if (!sameRepoSet(nextRepoPins.refs, currentRefs)) {
+          await writeRepoRefs(id, ctx.workspaceId, nextRepoPins.refs, tx);
+        }
       }
 
       if (Object.keys(diff).length === 0) {

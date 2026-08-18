@@ -933,6 +933,29 @@ export interface CreateWorkItemInput {
    */
   targetRepos?: string[];
   /**
+   * The repository REFERENCES this item's work ships in (Story MOTIR-2732 ·
+   * MOTIR-3039, ADR `docs/decisions/work-item-repository-set.md` "Amendment
+   * 2026-08-18") — the `project_repository` row ids, ORDERED, element 0 the
+   * PRIMARY that dispatch routes to.
+   *
+   * The reference-native form of the two fields above, and the AUTHORED state
+   * once §A7's expand → contract sequence completes: `targetRepo` and
+   * `targetRepos` are the NAMES these references resolve to, which is why a
+   * repository rename changes what a card displays and nothing about what it
+   * points at. An element that is not one of THIS project's repository rows is
+   * rejected with `UnknownProjectRepoRefError` (422) — the FIRST one, all-or-
+   * nothing, exactly as an unknown name is; duplicates collapse (first occurrence
+   * wins).
+   *
+   * ⚠️ MUTUALLY EXCLUSIVE with BOTH `targetRepo` and `targetRepos` (§3.4, widened
+   * to three): they describe one field, so supplying two of them raises
+   * `ConflictingTargetRepoInputError` (422) rather than silently picking a winner.
+   *
+   * A project with NO repository set has no rows to name, so its callers keep
+   * sending names — §A7's compatibility rung, unchanged.
+   */
+  targetRepositories?: string[];
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — stamp how the item was planned
    * and/or implemented at create time. The stamper subtasks (MOTIR-1689/1691)
    * supply `planning` with a server-set `source`; omitting it leaves all six
@@ -1089,6 +1112,21 @@ export interface UpdateWorkItemInput {
    * list and must never describe a different repository than its first element.
    */
   targetRepos?: string[];
+  /**
+   * Patch the repository REFERENCES (Story MOTIR-2732 · MOTIR-3039): replace them
+   * wholesale with this ordered list of `project_repository` row ids, or clear
+   * them with `[]`.
+   *
+   * Same validation, same de-duplication, same all-or-nothing rule and the same
+   * mutual exclusion — now three-way — as the create shape; the patch surface is
+   * never looser than the create one. A REORDER is a real change for the same
+   * reason it is on the name path: element 0 is where dispatch routes.
+   *
+   * The references are the AUTHORED state, so a patch through this field and a
+   * patch through `targetRepos` reach the same place; what differs is whether the
+   * caller is naming a ROW (stable across a rename) or a NAME (not).
+   */
+  targetRepositories?: string[];
 }
 
 /**

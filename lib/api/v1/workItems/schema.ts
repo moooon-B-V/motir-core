@@ -736,6 +736,14 @@ export const createWorkItemBodySchema = z
     // twice and the service raises `CONFLICTING_TARGET_REPO_INPUT` (422) rather
     // than silently picking a winner (ADR §3.4).
     targetRepos: z.array(z.string()).optional(),
+    // The repository REFERENCES (MOTIR-3039) — `project_repository` row ids,
+    // ordered, element 0 the primary. The reference-native form of the two fields
+    // above and the AUTHORED state; the names are what they resolve to, so a
+    // rename changes what a card displays and nothing about what it points at.
+    // MUTUALLY EXCLUSIVE with BOTH of them (§3.4 widened to three): supplying two
+    // raises `CONFLICTING_TARGET_REPO_INPUT` (422). An id outside the item's own
+    // project raises `UNKNOWN_PROJECT_REPO_REF` (422).
+    targetRepositories: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })
@@ -768,6 +776,10 @@ export const updateWorkItemBodySchema = z
      *  exclusive with `targetRepo`, exactly as on create — the patch surface is
      *  never looser than the create one. */
     targetRepos: z.array(z.string()).optional(),
+    /** Replace the repository REFERENCES wholesale, or clear them with `[]`
+     *  (MOTIR-3039). Mutually exclusive with BOTH name fields, exactly as on
+     *  create — the patch surface is never looser than the create one. */
+    targetRepositories: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })

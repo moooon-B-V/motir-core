@@ -10,6 +10,7 @@ import {
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
   UnknownStatusError,
+  UnknownProjectRepoRefError,
   UnknownTargetRepoError,
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
@@ -236,6 +237,11 @@ export function toToolError(err: unknown): CallToolResult {
     // scope it checked, so the agent self-corrects in one hop instead of
     // guessing — the MCP analogue of the route's 422.
     err instanceof UnknownTargetRepoError ||
+    // The reference-model counterpart (MOTIR-3039): a `targetRepositories` element
+    // naming a repository row outside the item's project. Its message lists the
+    // project's rows as `id (name)`, so the agent self-corrects in one hop — the
+    // same contract as the name error above, on an id.
+    err instanceof UnknownProjectRepoRefError ||
     // Story-point value validation (7.8.21): a malformed `storyPoints` on
     // create_work_item / update_work_item — out of the Decimal(6, 2) range,
     // negative, or > 2 decimals — surfaces as a clean 422-equivalent tool error

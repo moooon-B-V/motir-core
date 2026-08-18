@@ -29,6 +29,7 @@ export type WorkItemErrorTag =
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
+  | 'UNKNOWN_PROJECT_REPO_REF'
   | 'ARCHIVED_TARGET_REPO'
   | 'CONFLICTING_TARGET_REPO_INPUT'
   | 'MISSING_ARTIFACT_EVIDENCE';
@@ -324,11 +325,48 @@ export class ConflictingTargetRepoInputError extends WorkItemError {
   readonly code = 'CONFLICTING_TARGET_REPO_INPUT' as const;
   constructor() {
     super(
-      'Send either targetRepo or targetRepos, not both — targetRepo is the FIRST element of ' +
-        'targetRepos, so supplying both describes the same field twice. Use targetRepos for a ' +
-        'card that ships in more than one repository, and either field for one.',
+      'Send exactly ONE of targetRepo, targetRepos or targetRepositories — targetRepo is the ' +
+        'FIRST element of targetRepos, and both are the resolved NAMES of targetRepositories, ' +
+        'so supplying more than one describes the same field twice. Use targetRepositories to ' +
+        'pin repository ROWS, targetRepos for names, and either field for a single repository.',
     );
     this.name = 'ConflictingTargetRepoInputError';
+  }
+}
+
+/**
+ * A write named a `project_repository` ROW that is not one of the item's OWN
+ * project's repositories (Story MOTIR-2732 · MOTIR-3039, ADR
+ * `docs/decisions/work-item-repository-set.md` "Amendment 2026-08-18" §A2).
+ *
+ * The reference counterpart of {@link UnknownTargetRepoError}, and it exists for
+ * the same reason that one does even though a foreign key now backs the column:
+ * **the foreign key cannot see this.** `project_repository.project_id` and
+ * `work_item.project_id` are two columns nothing relates, so a row belonging to a
+ * SIBLING project of the same workspace satisfies the constraint perfectly while
+ * pinning the card to a repository that has nothing to do with it — exactly the
+ * defect `docs/decisions/target-repo-attribution.md`'s 2026-07-30 amendment made
+ * a typed error for the NAME path. Moving the pin from a string to an id does not
+ * move that check into the database; it moves it onto an id.
+ *
+ * ONE error for "no such row" and "another project's row", deliberately, matching
+ * `projectAccessService`'s no-existence-leak posture: a caller learns which
+ * repositories this project HAS, and nothing about which ones it does not.
+ *
+ * A `WorkItemError`, so the route layer maps it to 422 and an MCP caller sees a
+ * self-correctable tool error naming the project's rows rather than an opaque 500.
+ */
+export class UnknownProjectRepoRefError extends WorkItemError {
+  readonly tag = 'UNKNOWN_PROJECT_REPO_REF' as const;
+  readonly code = 'UNKNOWN_PROJECT_REPO_REF' as const;
+  constructor(ref: string, knownRefs: readonly string[]) {
+    super(
+      knownRefs.length === 0
+        ? `Unknown repository reference "${ref}" — this project has no repository set. ` +
+            'Add the repository to the project first, or leave targetRepositories unset.'
+        : `Unknown repository reference "${ref}". This project's repositories: ${knownRefs.join(', ')}.`,
+    );
+    this.name = 'UnknownProjectRepoRefError';
   }
 }
 
