@@ -264,6 +264,29 @@ Testable, term by term:
   repository with `merged: true` whose base was that repository's own
   `repo.defaultBranch` — the same mirrored comparison `mergedIntoNonDefaultBase` already
   makes, never a hard-coded `'main'`.
+
+  > **⚠️ Amended the same day, before the gate was built — the mirror did not RECORD the
+  > base.** The sentence above says "reuse the comparison the first gate makes", and the
+  > first gate makes it against `cr.baseRef`, a field of the LIVE delivery payload
+  > (`changeRequestStatusSync.ts:213`). `github_pull_request` persists `state`, `merged`,
+  > `merged_at`, `head_ref` and `changed_paths` — and no base
+  > (`git grep "baseRef\|base_ref" -- lib/repositories/githubPullRequestRepository.ts`
+  > → nothing). A per-delivery gate never needed it; a set-based gate asks about merges
+  > that already happened in other repositories, and the mirror row is their only record.
+  >
+  > So **MOTIR-2729 also adds `github_pull_request.base_ref String?`**, written from
+  > `cr.baseRef` (a required field on both providers and on the historical backfill),
+  > **nullable and not backfilled** — a row written before the change genuinely does not
+  > know its base. **A null reads as UNKNOWN, in both directions:** it does not satisfy a
+  > repository (that would complete on a stranded merge — MOTIR-1873's case, `merged:
+true` forever on a deleted branch, which is exactly the composition this gate must
+  > not re-open), and it does not mark one outstanding either (that would hold every
+  > already-complete card in the product on its next delivery). The hold names it as
+  > _no record of the branch_ rather than asserting a branch Motir does not know.
+  >
+  > This paragraph is the ADR's own inward debt, found an hour after it was written and
+  > fixed here rather than in a second document. Planning bug: **MOTIR-2979**.
+
 - **The empty set:** the gate ABSTAINS. This is the common case and every card that
   exists today; it must not regress.
 

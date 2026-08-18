@@ -4326,6 +4326,24 @@ model GithubPullRequest {
   state          String
   merged         Boolean  @default(false)
   headRef        String   @map("head_ref")
+  /// The branch the change request targets, as of the last delivery (Story
+  /// MOTIR-2725 · MOTIR-2729). The completion decision has always compared this
+  /// against the repository's mirrored `defaultBranch` — a merge onto anything
+  /// else never reached the trunk (MOTIR-1873) — but it read it off the LIVE
+  /// payload (`NormalizedChangeRequest.baseRef`) and dropped it here, which is
+  /// all a PER-DELIVERY gate ever needs. The repository-SET gate is the first
+  /// consumer that asks about merges which already happened, in OTHER
+  /// repositories, whose only record is this row.
+  ///
+  /// NULLABLE and deliberately NOT backfilled: a row ingested before this column
+  /// existed genuinely does not know its base, and a consumer must read null as
+  /// UNKNOWN in BOTH directions — it does not prove the merge reached the trunk
+  /// (which would complete a card on a stranded merge), and it does not prove it
+  /// did not (which would hold every already-complete card in the product). Same
+  /// rule `merged_at` above states for the same reason. Every live path supplies
+  /// it: it is REQUIRED on `NormalizedChangeRequest` for both providers and on
+  /// the historical backfill, so only pre-existing rows are ever null.
+  baseRef        String?  @map("base_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
