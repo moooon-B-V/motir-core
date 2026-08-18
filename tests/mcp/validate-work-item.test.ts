@@ -8,6 +8,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueType } from '@/lib/issues/parentRules';
+import { isReferenceAdvisory } from '@/lib/dto/workItems';
 import type { ExecutorDto, WorkItemTypeDto, WorkItemValidityDto } from '@/lib/dto/workItems';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -626,7 +627,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
 
     // The OWNER sees it (an always-pass role) …
     const asOwner = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
-    expect(asOwner.advisories.filter((a) => a.kind !== 'shape').map((a) => a.referenced)).toEqual([
+    expect(asOwner.advisories.filter(isReferenceAdvisory).map((a) => a.referenced)).toEqual([
       secretItem.identifier,
     ]);
 

@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_SUBSUMPTION_QUERY_PATHS,
   POST_MERGE_CRITERION_PHRASES,
+  SUBSUMPTION_EXEMPT_PHRASES,
   acceptanceCriteriaSpan,
+  bodyFilePaths,
   bodyReferenceSeverities,
   criterionRepoPaths,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isSubsumptionCheckExempt,
   resolvePathRepo,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
@@ -548,5 +552,122 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
     expect(firstRepoStraddleCriterion('Prose only.', 'motir-core', REPOS)).toBeNull();
     expect(firstRepoStraddleCriterion(null, 'motir-core', REPOS)).toBeNull();
     expect(firstRepoStraddleCriterion('', null, REPOS)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SUBSUMPTION CHECK's pure half (MOTIR-2903) — which paths a body names,
+// and whether the card has opted out.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('bodyFilePaths — the paths a card names', () => {
+  it('scans the WHOLE body, not the acceptance criteria — the canonical fixture depends on it', () => {
+    // MOTIR-2757's shape, reduced: the only path in its acceptance-criteria span
+    // is a test file with no commits since it was filed, while the path the
+    // sweep actually took sits in its CONTEXT REFS. An AC-scoped scan returns
+    // the wrong one, which is the measurement that made criterion 2's original
+    // "every path its acceptance criteria name" fire on nothing.
+    const md = [
+      "`workflowsService`'s three read methods read on the `db` singleton.",
+      '',
+      '## Acceptance criteria',
+      '',
+      '- `tests/permissions/userlessTenantRead.test.ts` covers the bound path.',
+      '',
+      '## Context refs',
+      '',
+      '- `lib/services/workflowsService.ts` — the read surface.',
+    ].join('\n');
+
+    expect(bodyFilePaths(md)).toEqual([
+      'tests/permissions/userlessTenantRead.test.ts',
+      'lib/services/workflowsService.ts',
+    ]);
+  });
+
+  it('keeps document order, dedupes, and strips backticks and a trailing line reference', () => {
+    const md = [
+      'See `docs/rls-runtime-role-inventory.md:274` and, 245 lines later,',
+      '`docs/rls-runtime-role-inventory.md:519` — one file, both halves.',
+      'The channel is **lib/services/proseGraphAdvisoryService.ts**.',
+    ].join('\n');
+
+    expect(bodyFilePaths(md)).toEqual([
+      'docs/rls-runtime-role-inventory.md',
+      'lib/services/proseGraphAdvisoryService.ts',
+    ]);
+  });
+
+  it('drops a token whose last segment has no extension — URLs and bare owner/repo pairs', () => {
+    // These are the shapes that make a naive "two segments and a slash" rule
+    // useless: every card in this corpus links a pull request and names a repo.
+    const md = [
+      'Filed as https://github.com/moooon-B-V/motir-meta/pull/211, published to',
+      'https://app.motir.co/api/mcp, in the moooon-B-V/motir-core repo.',
+      'The registry probe is `https://ghcr.io/token?scope=repository:x/y:pull`.',
+      'The one real path is `lib/db.ts`.',
+    ].join('\n');
+
+    expect(bodyFilePaths(md)).toEqual(['lib/db.ts']);
+  });
+
+  it('keeps a path that ends a sentence, where the token regex swallows the full stop', () => {
+    expect(bodyFilePaths('The change lands in `lib/github/pullRequestFiles.ts`.')).toEqual([
+      'lib/github/pullRequestFiles.ts',
+    ]);
+  });
+
+  it('caps at MAX_SUBSUMPTION_QUERY_PATHS and takes the FIRST ones in document order', () => {
+    const md = Array.from(
+      { length: MAX_SUBSUMPTION_QUERY_PATHS + 25 },
+      (_, i) => `- \`lib/generated/f-${i}.ts\``,
+    ).join('\n');
+    const paths = bodyFilePaths(md);
+
+    expect(paths).toHaveLength(MAX_SUBSUMPTION_QUERY_PATHS);
+    expect(paths[0]).toBe('lib/generated/f-0.ts');
+    expect(paths.at(-1)).toBe(`lib/generated/f-${MAX_SUBSUMPTION_QUERY_PATHS - 1}.ts`);
+  });
+
+  it('returns nothing for an empty, null or path-free body', () => {
+    expect(bodyFilePaths(null)).toEqual([]);
+    expect(bodyFilePaths('')).toEqual([]);
+    expect(bodyFilePaths('Prose with no path in it at all.')).toEqual([]);
+  });
+});
+
+describe('isSubsumptionCheckExempt — the named opt-out (criterion 5)', () => {
+  it('exempts a card that DECLARES itself a boundary contract, in any of the pinned phrasings', () => {
+    for (const phrase of SUBSUMPTION_EXEMPT_PHRASES) {
+      expect(isSubsumptionCheckExempt(`This is a ${phrase} card: producer plus mirror.`)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('is case- and wrap-insensitive, because the corpus writes it both ways', () => {
+    expect(isSubsumptionCheckExempt('A Boundary\nContract card.')).toBe(true);
+    expect(isSubsumptionCheckExempt('TWO-PRS-ONE-CARD, deliberately.')).toBe(true);
+  });
+
+  it('does NOT exempt a card that merely shares paths with a sibling — silence is not an exclusion', () => {
+    // The rule this pins is `run.md`'s: an absent edge and a considered
+    // exclusion are the same absent edge, so the only honest mute is an
+    // assertion the author writes down.
+    const md = [
+      'This card and MOTIR-9999 both touch `lib/services/x.ts`.',
+      '',
+      '## Acceptance criteria',
+      '',
+      '- The service is bound.',
+    ].join('\n');
+
+    expect(isSubsumptionCheckExempt(md)).toBe(false);
+    expect(isSubsumptionCheckExempt(null)).toBe(false);
+    expect(isSubsumptionCheckExempt('')).toBe(false);
+  });
+
+  it('does not fire on a phrase embedded in a longer word', () => {
+    expect(isSubsumptionCheckExempt('the boundary contracts of the module')).toBe(false);
   });
 });

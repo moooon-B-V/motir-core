@@ -1283,13 +1283,75 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseRepoStraddleAdvisoryDto;
 
 /**
+ * The severity of a SUBSUMPTION advisory (MOTIR-2903). One member today, named
+ * rather than inlined so the family reads like its two siblings and a second
+ * member cannot arrive without every renderer's `switch` noticing.
+ */
+export type WorkItemProseSubsumptionSeverityDto = 'likely-already-shipped';
+
+/**
+ * A card whose DELIVERABLE MAY ALREADY BE IN THE REPOSITORY (MOTIR-2903): a path
+ * its body names was touched by a merged pull request that is not this card's
+ * own and that merged AFTER the card was filed.
+ *
+ * ⚠️ **Its own family, not a third `shape` severity, and the difference is not
+ * cosmetic.** A shape advisory is defined as a defect in what the card's own
+ * ACCEPTANCE CRITERIA ask for, with no second party anywhere in the finding, and
+ * it carries the 1-based `criterionIndex` the remedy cuts at. This finding has a
+ * far end (a merged pull request), is scoped to the whole BODY rather than the
+ * criteria — the path that catches the canonical fixture sits in its Context
+ * refs — and its remedy is not a cut but *read the diff, and close the card if
+ * it is already done*. Squeezing it into `shape` would have needed an optional
+ * `criterionIndex`, which §8 forbids on a published schema anyway.
+ *
+ * ⚠️ **Never a gate, for a reason specific to this check.** It is a heuristic
+ * that fails toward the FALSE POSITIVE: two cards working the same file in
+ * sequence is the ordinary case, not the defect. As a blocker it would make
+ * legitimately-ready cards unstartable and train authors to stop naming paths in
+ * card bodies — the same inversion {@link WorkItemProseReferenceAdvisoryDto}
+ * records for the reference tier. MOTIR-2075's lesson is that a non-blocking
+ * notice is only as good as the step that reads it; the answer taken here is to
+ * fix the step's INPUT (it rides in `claim_next_ready`'s claim payload, which a
+ * run cannot start without reading), not to make a heuristic authoritative.
+ *
+ * The opt-out is `isSubsumptionCheckExempt` — a boundary-contract card shares
+ * paths with its sibling by design, and unlike the other two findings this one
+ * re-fires on every dispatch until the card closes.
+ */
+export interface WorkItemProseSubsumptionAdvisoryDto {
+  /** The union discriminant — see {@link WorkItemProseAdvisoryDto}. */
+  kind: 'subsumption';
+  /** The card whose body names the covered path. */
+  item: string;
+  severity: WorkItemProseSubsumptionSeverityDto;
+  /** The FIRST path the body names that a qualifying merge touched. */
+  path: string;
+  /** The covering merge, as `owner/name#number` — where to read the diff. */
+  pullRequest: string;
+  /** That pull request's title, or `null` when the mirror row carries none. */
+  pullRequestTitle: string | null;
+  /** When it merged, ISO-8601 — always AFTER the card's own `createdAt`. */
+  mergedAt: string;
+}
+
+/**
  * ONE prose advisory — a discriminated union over `kind` (MOTIR-2175).
  *
- * Two families, ONE non-blocking channel:
+ * Three families, ONE non-blocking channel:
  *  - **`reference`** — the card NAMES a not-done work item it has no
  *    `blocked_by` edge to ({@link WorkItemProseReferenceAdvisoryDto}).
  *  - **`shape`** — the card's own criteria are mis-shaped; there is no far end
  *    at all ({@link WorkItemProseShapeAdvisoryDto}).
+ *  - **`subsumption`** — a path the card's body names is already in a merged
+ *    diff, so its deliverable may be shipped ({@link WorkItemProseSubsumptionAdvisoryDto}).
+ *
+ * ⚠️ **Narrow POSITIVELY, never with `a.kind !== 'shape'`.** That catch-all was
+ * correct while `reference` was the only untagged member and became a latent
+ * mis-render the moment a third family arrived (MOTIR-2903): it would have fed a
+ * subsumption advisory to a renderer reading `a.referenced`. Use
+ * {@link isReferenceAdvisory} / {@link isSubsumptionAdvisory} — a type predicate
+ * narrows the array, so a FOURTH family cannot be added without every renderer
+ * failing to compile, which is the property this union was shaped for.
  *
  * ⚠️ **The discriminant is OPTIONAL on `reference` and REQUIRED on `shape`, and
  * that asymmetry is deliberate.** Every field of the reference variant but
@@ -1304,7 +1366,30 @@ export type WorkItemProseShapeAdvisoryDto =
  */
 export type WorkItemProseAdvisoryDto =
   | WorkItemProseReferenceAdvisoryDto
-  | WorkItemProseShapeAdvisoryDto;
+  | WorkItemProseShapeAdvisoryDto
+  | WorkItemProseSubsumptionAdvisoryDto;
+
+/**
+ * Narrow an advisory to the REFERENCE family (MOTIR-2903).
+ *
+ * The positive form of the `a.kind !== 'shape'` catch-all every renderer used
+ * to carry. The discriminant is absent on this variant by design (see the union
+ * note), so the test is "tagged `reference`, or not tagged at all" — which keeps
+ * a payload from a server predating the tag reading as a reference, exactly as
+ * before, while a NEWER family is no longer swept in.
+ */
+export function isReferenceAdvisory(
+  a: WorkItemProseAdvisoryDto,
+): a is WorkItemProseReferenceAdvisoryDto {
+  return a.kind === undefined || a.kind === 'reference';
+}
+
+/** Narrow an advisory to the SUBSUMPTION family (MOTIR-2903). */
+export function isSubsumptionAdvisory(
+  a: WorkItemProseAdvisoryDto,
+): a is WorkItemProseSubsumptionAdvisoryDto {
+  return a.kind === 'subsumption';
+}
 
 /**
  * Narrow an advisory to the ORDERING shape (MOTIR-2175).

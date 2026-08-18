@@ -325,6 +325,47 @@ describe('the dispatch-prompt schema', () => {
     });
     expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
   });
+
+  it('carries a SUBSUMPTION advisory field-for-field, and only its own (MOTIR-2903)', () => {
+    // The seam's whole job: a field added to `WorkItemProseAdvisoryDto` for an
+    // internal consumer must not become public API by accident, and a NEW family
+    // must not be mapped through another family's branch. Before MOTIR-2903 the
+    // presenter's `else` swept everything not tagged `shape` into the reference
+    // shape, so this entry would have crossed the wire as
+    // `{ referenced: undefined, referencedStatus: undefined }`.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'subsumption',
+          item: 'PROD-1',
+          severity: 'likely-already-shipped',
+          path: 'lib/services/workflowsService.ts',
+          pullRequest: 'moooon-B-V/motir-core#2059',
+          pullRequestTitle: 'Bind the READ surface for motir_app',
+          mergedAt: '2026-08-15T14:00:00.000Z',
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toEqual({
+      kind: 'subsumption',
+      item: 'PROD-1',
+      severity: 'likely-already-shipped',
+      path: 'lib/services/workflowsService.ts',
+      pullRequest: 'moooon-B-V/motir-core#2059',
+      pullRequestTitle: 'Bind the READ surface for motir_app',
+      mergedAt: '2026-08-15T14:00:00.000Z',
+    });
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
 });
 
 describe('the work-loop job handle (ADR Amendment 6 Q3)', () => {

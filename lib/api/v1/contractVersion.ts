@@ -63,5 +63,10 @@
  *   not record provenance at all without also asserting a lineage that does not
  *   exist. Additive: one new endpoint, on the existing `integration` scope, with
  *   `POST …/integration` unchanged in shape and behaviour.
+ * - `1.9.0` — MOTIR-2903 adds the SUBSUMPTION member to the dispatch prompt's
+ *   `advisories` union: a card whose body names a path a later merge already
+ *   changed, so its deliverable may already be in the repository. Additive — a
+ *   new member of a union on a field clients are required to tolerate unknown
+ *   members of, with every existing member byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.8.0';
+export const V1_CONTRACT_VERSION = '1.9.0';

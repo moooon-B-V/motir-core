@@ -1954,16 +1954,26 @@ export const workItemRepository = {
       type: string | null;
       executor: string | null;
       targetRepo: string | null;
+      createdAt: Date;
     }>
   > {
     if (ids.length === 0) return [];
     // `type` / `executor` ride along for the prose advisory's ORDERING exemption
-    // (MOTIR-2175), and `targetRepo` for the REPO-STRADDLE check's pin side
-    // (MOTIR-2177) — the same rows, a few columns wider, rather than more reads.
+    // (MOTIR-2175), `targetRepo` for the REPO-STRADDLE check's pin side
+    // (MOTIR-2177), and `createdAt` for the SUBSUMPTION check's `since`
+    // (MOTIR-2903 — "merged AFTER this card was filed" is half that rule) — the
+    // same rows, a few columns wider, rather than more reads.
     const client = tx ?? db;
     return client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
-      select: { id: true, descriptionMd: true, type: true, executor: true, targetRepo: true },
+      select: {
+        id: true,
+        descriptionMd: true,
+        type: true,
+        executor: true,
+        targetRepo: true,
+        createdAt: true,
+      },
     });
   },
 

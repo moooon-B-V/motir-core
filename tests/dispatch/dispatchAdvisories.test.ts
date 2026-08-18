@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
+import { isReferenceAdvisory } from '@/lib/dto/workItems';
 import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -101,10 +102,12 @@ async function toInReview(id: string, fx: WorkItemFixture): Promise<void> {
   await workItemsService.updateStatus(id, 'in_review', fx.ctx);
 }
 
-// The REFERENCE family's far ends. `advisories` is a union since MOTIR-2175, so
-// the shape variant (which has no far end) is narrowed out rather than mapped.
+// The REFERENCE family's far ends. `advisories` is a union since MOTIR-2175 and
+// three-membered since MOTIR-2903, so the families with no far end are narrowed
+// out POSITIVELY rather than by "not shape" — which is what stops a new family
+// being mapped for a `referenced` it does not have.
 const keys = (advisories: WorkItemProseAdvisoryDto[]) =>
-  advisories.filter((a) => a.kind !== 'shape').map((a) => a.referenced);
+  advisories.filter(isReferenceAdvisory).map((a) => a.referenced);
 
 describe('buildDispatchProseAdvisories — the single-card resolver', () => {
   it('reports a card whose ACCEPTANCE CRITERIA name a not-done item it has no edge to', async () => {

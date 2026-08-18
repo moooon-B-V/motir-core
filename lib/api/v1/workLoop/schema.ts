@@ -100,11 +100,46 @@ const shapeAdvisorySchema = z.object({
 });
 
 /**
- * ONE advisory. A plain union rather than a discriminated one, because the
- * discriminant is absent on the reference variant — narrow with
- * `'kind' in a && a.kind === 'shape'`; the else branch is a reference.
+ * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
+ * pull request that is not this card's own and that merged after the card was
+ * filed, so its deliverable may already be in the repository (MOTIR-2903).
+ *
+ * Its own variant rather than a third shape severity: a shape finding carries
+ * the `criterionIndex` its remedy cuts at, and this one has no criterion — the
+ * path that catches the canonical fixture sits in a card's Context refs, not in
+ * its criteria. Making `criterionIndex` optional on the shipped shape schema
+ * would have been a nullability change, which §8 forbids.
+ *
+ * ⚠️ Additive under §8 — a new member of a union whose `severity` was already
+ * open-ended, on a field every client is required to tolerate unknown members
+ * of. `V1_CONTRACT_VERSION` moves with it (Amendment 8's obligation), which is
+ * how a client learns the family exists without re-reading a document.
  */
-export const dispatchAdvisorySchema = z.union([shapeAdvisorySchema, referenceAdvisorySchema]);
+const subsumptionAdvisorySchema = z.object({
+  kind: z.literal('subsumption'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** The first path the card's body names that a qualifying merge touched. */
+  path: z.string(),
+  /** The covering merge as `owner/name#number` — where to read the diff. */
+  pullRequest: z.string(),
+  /** That pull request's title, or `null` when the mirror row carries none. */
+  pullRequestTitle: z.string().nullable(),
+  /** When it merged, ISO-8601 — always after the card's own creation. */
+  mergedAt: z.string(),
+});
+
+/**
+ * ONE advisory. A plain union rather than a discriminated one, because the
+ * discriminant is absent on the reference variant — narrow POSITIVELY on the
+ * TAGGED members (`'kind' in a && a.kind === 'shape' | 'subsumption'`); an
+ * untagged object, and only an untagged one, is a reference.
+ */
+export const dispatchAdvisorySchema = z.union([
+  shapeAdvisorySchema,
+  subsumptionAdvisorySchema,
+  referenceAdvisorySchema,
+]);
 export type V1DispatchAdvisory = z.infer<typeof dispatchAdvisorySchema>;
 
 /**
@@ -158,24 +193,36 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     targetRepoDefaultBranch: dto.targetRepoDefaultBranch,
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
-    advisories: dto.advisories.map((advisory) =>
-      advisory.kind === 'shape'
-        ? {
-            kind: 'shape' as const,
-            item: advisory.item,
-            severity: advisory.severity,
-            criterionIndex: advisory.criterionIndex,
-            ...(advisory.severity === 'likely-ordering-violation'
-              ? { phrase: advisory.phrase }
-              : { path: advisory.path, repo: advisory.repo, reason: advisory.reason }),
-          }
-        : {
-            item: advisory.item,
-            referenced: advisory.referenced,
-            referencedStatus: advisory.referencedStatus,
-            severity: advisory.severity,
-          },
-    ),
+    advisories: dto.advisories.map((advisory) => {
+      if (advisory.kind === 'shape') {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          criterionIndex: advisory.criterionIndex,
+          ...(advisory.severity === 'likely-ordering-violation'
+            ? { phrase: advisory.phrase }
+            : { path: advisory.path, repo: advisory.repo, reason: advisory.reason }),
+        };
+      }
+      if (advisory.kind === 'subsumption') {
+        return {
+          kind: 'subsumption' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          path: advisory.path,
+          pullRequest: advisory.pullRequest,
+          pullRequestTitle: advisory.pullRequestTitle,
+          mergedAt: advisory.mergedAt,
+        };
+      }
+      return {
+        item: advisory.item,
+        referenced: advisory.referenced,
+        referencedStatus: advisory.referencedStatus,
+        severity: advisory.severity,
+      };
+    }),
   };
 }
 

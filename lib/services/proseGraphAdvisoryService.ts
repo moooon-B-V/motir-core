@@ -1,15 +1,18 @@
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import {
+  bodyFilePaths,
   bodyReferenceSeverities,
   firstPostMergeCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isSubsumptionCheckExempt,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
@@ -79,6 +82,21 @@ export interface ProseAdvisorySubject {
    * exactly the right question to ask of it.
    */
   targetRepo: string | null;
+  /**
+   * The card's real work-item id and filing instant — read ONLY by the
+   * SUBSUMPTION check (MOTIR-2903), which needs both: the id to exclude the
+   * card's OWN pull requests from the covering set, and `createdAt` as the
+   * `since` for *"merged AFTER this card was filed"*.
+   *
+   * BOTH nullable, and both are a real answer rather than a missing value: on
+   * the PROJECTED plan path a not-yet-materialized `add` has no row, no id and
+   * no filing instant — and a card that does not exist yet cannot have been
+   * subsumed, so the check is skipped for it rather than guessed at. Optional
+   * (not required like the fields above) precisely because the projection has
+   * nothing to decide here; every path with a stored row supplies them.
+   */
+  id?: string | null;
+  createdAt?: Date | null;
 }
 
 /**
@@ -179,6 +197,13 @@ export async function buildProseVsGraphAdvisories(
     ? await listConnectedRepoNames(ctx)
     : [];
 
+  // The SUBSUMPTION check's data source (MOTIR-2903): the merged pull requests
+  // whose diffs intersect ANY path ANY subject's body names. ONE read for the
+  // whole batch — see `buildSubsumptionIndex` for why the per-subject clauses
+  // (`since`, and the card's own pull requests) are applied in memory rather
+  // than as N queries.
+  const subsumption = await buildSubsumptionIndex(scanned, ctx);
+
   const advisories: WorkItemProseAdvisoryDto[] = [];
   for (const s of scanned) {
     // The SHAPE advisories first: they need no reference resolution at all (each
@@ -188,6 +213,8 @@ export async function buildProseVsGraphAdvisories(
     if (ordering) advisories.push(ordering);
     const straddle = repoStraddleAdvisory(s.subject, repoCandidates);
     if (straddle) advisories.push(straddle);
+    const subsumed = subsumptionAdvisory(s.subject, subsumption);
+    if (subsumed) advisories.push(subsumed);
     for (const [id, severity] of s.refs) {
       const ref = localRefs?.get(id) ?? resolved.get(id);
       if (!ref || ref.done) continue;
@@ -212,16 +239,27 @@ export async function buildProseVsGraphAdvisories(
   return advisories;
 }
 
-/** SHAPE sorts before REFERENCE within one card. */
-const familyRank = (a: WorkItemProseAdvisoryDto): number => (a.kind === 'shape' ? 0 : 1);
+/**
+ * SHAPE, then SUBSUMPTION, then REFERENCE within one card.
+ *
+ * Subsumption sits in the middle deliberately: like a shape finding it is a fact
+ * about this card rather than a question about what it names, but unlike one its
+ * remedy is *read the merged diff*, not *cut here* — and a reader who is about
+ * to be told the card may already be built should hear that before a list of
+ * references to go and verify.
+ */
+const familyRank = (a: WorkItemProseAdvisoryDto): number =>
+  a.kind === 'shape' ? 0 : a.kind === 'subsumption' ? 1 : 2;
 
 /**
  * The within-family tie-break key. A shape advisory has no far end, so it sorts
  * on its SEVERITY — stated rather than left to `Array.sort` stability, now that
- * one card can carry two of them (MOTIR-2177).
+ * one card can carry two of them (MOTIR-2177). A subsumption advisory sorts on
+ * its PATH, which is the finding's own identity (at most one is emitted per
+ * card, so this only has to be total, not discriminating).
  */
 const tieKey = (a: WorkItemProseAdvisoryDto): string =>
-  a.kind === 'shape' ? a.severity : a.referenced;
+  a.kind === 'shape' ? a.severity : a.kind === 'subsumption' ? a.path : a.referenced;
 
 /**
  * The ORDERING advisory for ONE subject (MOTIR-2175) — gate 14's third axis.
@@ -271,6 +309,152 @@ function repoStraddleAdvisory(
   };
 }
 
+/** One merged pull request, reduced to what the subsumption check reads. */
+interface CoveringMerge {
+  /** `owner/name#number` — where a reader goes to read the diff. */
+  reference: string;
+  /** The bare repo NAME, for the `targetRepo` narrowing. */
+  repoName: string;
+  title: string | null;
+  mergedAt: Date;
+  /** The work item this pull request is LINKED to, or null. */
+  workItemId: string | null;
+  /** The paths it touched, as a set, for a per-path hit test. */
+  paths: ReadonlySet<string>;
+}
+
+/**
+ * The merged pull requests that could cover ANY subject in this batch —
+ * **ONE query for the whole batch**, not one per subject.
+ *
+ * `findMergedTouchingPaths` (MOTIR-2922) takes a single `since` and a single
+ * `excludeWorkItemId`, and both of those are per-SUBJECT facts: each card has
+ * its own filing instant, and each excludes its OWN pull requests. Issuing the
+ * query per subject would be N round-trips for a `validate_work_item` over a
+ * subtree of thirty cards. So the query is widened to the UNION of every
+ * subject's paths with the EARLIEST `since` and no exclusion, and both
+ * per-subject clauses are re-applied in memory in {@link subsumptionAdvisory} —
+ * where they are exact comparisons on columns the rows already carry, not
+ * approximations of the SQL.
+ *
+ * Costs NOTHING for the common batch: a body naming no file path contributes no
+ * paths, and an empty union skips the read entirely — the same
+ * pay-only-when-it-could-fire shape `hasCriterionPathTokens` gives the straddle
+ * check.
+ *
+ * Read through `withWorkspaceServiceContext`, so the row set is the caller's
+ * tenant by RLS and not merely by the `workspaceId` argument.
+ */
+async function buildSubsumptionIndex(
+  scanned: ReadonlyArray<{ subject: ProseAdvisorySubject }>,
+  ctx: ServiceContext,
+): Promise<CoveringMerge[]> {
+  const union = new Set<string>();
+  for (const s of scanned) {
+    if (s.subject.id == null || s.subject.createdAt == null) continue;
+    if (isSubsumptionCheckExempt(s.subject.descriptionMd)) continue;
+    for (const p of bodyFilePaths(s.subject.descriptionMd)) union.add(p);
+  }
+  if (union.size === 0) return [];
+
+  const since = scanned.reduce<Date | null>((earliest, s) => {
+    const at = s.subject.createdAt;
+    if (at == null) return earliest;
+    return earliest === null || at < earliest ? at : earliest;
+  }, null);
+  if (since === null) return [];
+
+  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    githubPullRequestRepository.findMergedTouchingPaths(
+      ctx.workspaceId,
+      [...union],
+      since,
+      null,
+      tx,
+    ),
+  );
+  return rows.flatMap((row) =>
+    // `mergedAt` is nullable on the model (every row written before MOTIR-2922
+    // has none), and the ordering clause is the half of the rule that cannot be
+    // approximated — a row that cannot say WHEN it merged is dropped rather than
+    // assumed recent. The query already filters on it, so this is the type
+    // narrowing rather than a second policy.
+    row.mergedAt === null
+      ? []
+      : [
+          {
+            reference: `${row.repo.owner}/${row.repo.name}#${row.number}`,
+            repoName: row.repo.name,
+            title: row.title,
+            mergedAt: row.mergedAt,
+            workItemId: row.workItemId,
+            paths: new Set(row.changedPaths),
+          },
+        ],
+  );
+}
+
+/**
+ * The SUBSUMPTION advisory for ONE subject (MOTIR-2903) — *at least one path
+ * this card's BODY names was touched by a merged pull request that is not this
+ * card's own, and that merged after this card was filed*.
+ *
+ * Reports the FIRST covered path in DOCUMENT order, with the most recently
+ * merged pull request that touched it. First-in-the-body rather than
+ * first-by-date because the finding's job is to point a reader at the place to
+ * start reading, and a body names its most load-bearing path first; most-recent
+ * merge because that is the state of `main` the card would be rebuilt against.
+ *
+ * Two narrowings applied here rather than in SQL, both exact:
+ *  - **The card's OWN pull requests never cover it.** A card whose branch is
+ *    open is doing its work, not having it done for it.
+ *  - **`mergedAt` must be strictly after the card's `createdAt`.** A merge that
+ *    predates the card is the substrate it was written against, which is the
+ *    opposite finding.
+ *
+ * And one narrowing that is precision rather than correctness: when the card
+ * PINS a `targetRepo`, only merges in that repo count. A card is one repo and
+ * one pull request, so a same-named path in another repo (`lib/db.ts` exists in
+ * three of them) is a coincidence, not a covering merge. An unpinned card takes
+ * every repo in the workspace, which is the honest reading of a card that has
+ * not said where it ships.
+ */
+function subsumptionAdvisory(
+  subject: ProseAdvisorySubject,
+  merges: readonly CoveringMerge[],
+): WorkItemProseAdvisoryDto | null {
+  if (merges.length === 0) return null;
+  const { id, createdAt } = subject;
+  if (id == null || createdAt == null) return null;
+  if (isSubsumptionCheckExempt(subject.descriptionMd)) return null;
+
+  const pin = subject.targetRepo?.toLowerCase() ?? null;
+  const candidates = merges.filter(
+    (m) =>
+      m.workItemId !== id &&
+      m.mergedAt > createdAt &&
+      (pin === null || m.repoName.toLowerCase() === pin),
+  );
+  if (candidates.length === 0) return null;
+
+  for (const path of bodyFilePaths(subject.descriptionMd)) {
+    // `candidates` arrives ordered by `mergedAt` desc (the accessor's own
+    // `orderBy`), so the first hit is the most recent merge touching this path.
+    const covering = candidates.find((m) => m.paths.has(path));
+    if (!covering) continue;
+    return {
+      kind: 'subsumption',
+      item: subject.item,
+      severity: 'likely-already-shipped',
+      path,
+      pullRequest: covering.reference,
+      pullRequestTitle: covering.title,
+      mergedAt: covering.mergedAt.toISOString(),
+    };
+  }
+  return null;
+}
+
 /**
  * The DISPATCH-time advisories for ONE card (MOTIR-2079) — what the dispatch
  * prompt renders, what `motir run` / `motir next` warn about, and what
@@ -313,6 +497,18 @@ export async function buildDispatchProseAdvisories(
     type?: string | null;
     executor?: string | null;
     targetRepo?: string | null;
+    /**
+     * The card's filing instant — the SUBSUMPTION check's `since` (MOTIR-2903).
+     *
+     * A `string` is accepted because `WorkItemDto.createdAt` is ISO text and
+     * `dispatchPromptService` passes the whole DTO; `null` / absent means the
+     * caller's row shape does not carry it (`ReadyItemDispatchDto` does not), in
+     * which case this function READS it rather than skipping the check — see the
+     * lazy read below. A dispatch surface that silently dropped the check
+     * depending on which caller reached it is exactly the *"addressed to nobody"*
+     * failure MOTIR-2079 exists to end.
+     */
+    createdAt?: Date | string | null;
   },
   ctx: ServiceContext,
 ): Promise<WorkItemProseAdvisoryDto[]> {
@@ -328,15 +524,36 @@ export async function buildDispatchProseAdvisories(
   const wellOrdered =
     isOrderingCheckExempt(type, executor) || firstPostMergeCriterion(item.descriptionMd) === null;
   const namesNoPath = !hasCriterionPathTokens(item.descriptionMd);
-  if (namesNothing && wellOrdered && namesNoPath) return [];
+  // The SUBSUMPTION check's own clear-ness (MOTIR-2903). A FOURTH scan, and it
+  // cannot ride on `namesNoPath`: that one is AC-scoped, and this check reads
+  // the whole body — the path that catches the canonical fixture sits in its
+  // Context refs, so a card with no path in its criteria can still be subsumed.
+  const namesNoFile =
+    isSubsumptionCheckExempt(item.descriptionMd) || bodyFilePaths(item.descriptionMd).length === 0;
+  if (namesNothing && wellOrdered && namesNoPath && namesNoFile) return [];
 
-  const { ancestors, blockerLinks } = await withWorkspaceServiceContext(
+  // The SUBSUMPTION check's `since`, when the caller's row shape carries it.
+  // `ReadyItemDispatchDto` does not, so it is read below — inside the batch that
+  // is already open, and ONLY when the check could actually fire.
+  const suppliedCreatedAt =
+    item.createdAt == null
+      ? null
+      : item.createdAt instanceof Date
+        ? item.createdAt
+        : new Date(item.createdAt);
+
+  const { ancestors, blockerLinks, rows } = await withWorkspaceServiceContext(
     ctx.workspaceId,
     async (tx) => ({
       ancestors: await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
       blockerLinks: await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
+      rows:
+        suppliedCreatedAt === null && !namesNoFile
+          ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
+          : [],
     }),
   );
+  const createdAt = suppliedCreatedAt ?? rows[0]?.createdAt ?? null;
   const exemptIds = new Set<string>([item.id]);
   for (const a of ancestors) exemptIds.add(a.id);
   for (const l of blockerLinks) exemptIds.add(l.toId);
@@ -350,9 +567,13 @@ export async function buildDispatchProseAdvisories(
         type,
         executor,
         targetRepo,
+        id: item.id,
+        createdAt,
       },
     ],
     ctx,
   );
-  return advisories.filter((a) => a.kind === 'shape' || a.severity === 'likely-missing-edge');
+  return advisories.filter(
+    (a) => a.kind === 'shape' || a.kind === 'subsumption' || a.severity === 'likely-missing-edge',
+  );
 }
