@@ -1293,6 +1293,122 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items`
+
+The three tools above hand a **prompt** to Motir's planner and let it decide the
+tree. These two are the other door: **you decide the tree, and Motir reviews it
+exactly like any other plan.** Reach for them when you have already decomposed
+the work — you are sitting in the repository with the code in front of you, which
+is the position from which planning is easiest and Motir's own generator is not.
+
+The comparison that matters is with `create_work_item`, not with the
+conversation tools:
+
+|                            | `create_work_item`             | `create_plan` + `add_plan_items`                         |
+| -------------------------- | ------------------------------ | -------------------------------------------------------- |
+| what lands                 | a `work_item` row, immediately | a `Plan` of proposals                                    |
+| review                     | none                           | a person reads the tree and Approves / Declines in Motir |
+| AI credits                 | none                           | none — no job runs, no prompt is assembled               |
+| who is recorded as planner | `mcp` + the harness you report | the same, on the plan AND on every item it creates       |
+
+##### `create_plan`
+
+Open a `generating` plan on a project — the container you then fill.
+
+| Input                | Type   | Required | Notes                                                                |
+| -------------------- | ------ | -------- | -------------------------------------------------------------------- |
+| `projectKey`         | string | yes      | The project key, e.g. `"ACME"`. Case-insensitive.                    |
+| `title`              | string | no       | A short label — what this plan proposes, in a line.                  |
+| `summary`            | string | no       | A longer Markdown summary, shown to the reviewer above the tree.     |
+| `plannedWithHarness` | string | no       | The harness you run as, e.g. `"Claude Code"`. Shown to the reviewer. |
+| `plannedWithModel`   | string | no       | The model you run, e.g. `"claude-opus-5"`. Shown beside the harness. |
+
+**Output** — `structuredContent`: the plan (`id`, `status: "generating"`,
+`projectId`, `title`, `summary`, `origin`, `itemCount`, `authorSource`,
+`authorHarness`, `authorModel`, the lifecycle timestamps).
+
+**The authorship is recorded, and it is not something you can claim.**
+`authorSource` is set to `mcp` **server-side** — exactly as `create_work_item`
+fixes its own `source` — so the two arguments you do supply are the harness and
+the model, self-reported and stored as given. This is what the Plans list and the
+plan-detail header show: a reviewer can see they are approving an agent's plan
+rather than a Motir generation. When the plan is approved, every work item it
+creates carries the same triple (`mcp · <harness> · <model>`).
+
+Requires **`work_item:edit`** — the permission `plansService.createPlan` itself
+asserts, even though no work item is created here.
+
+##### `add_plan_items`
+
+Append a batch of proposals, and optionally close the plan.
+
+| Input       | Type    | Required | Notes                                                                  |
+| ----------- | ------- | -------- | ---------------------------------------------------------------------- |
+| `planId`    | string  | yes      | The id `create_plan` returned.                                         |
+| `proposals` | array   | yes      | One or more proposals; see the shape below.                            |
+| `final`     | boolean | no       | `true` on the LAST batch — closes the plan (`generating` → `planned`). |
+
+Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blockedByRefs?, baseRevision? }`
+— the same shape `get_plan` returns, minus the fields the server owns:
+
+- **`op`** — `add` · `modify` · `remove`.
+- **`proposedFields`** (`add`, required) — `title` (required), `kind`,
+  `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`,
+  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`.
+- **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
+- **`parentRef`** / **`blockedByRefs`** — a real `work_item.id`, **or** an
+  intra-plan temp-ref `planItem:<id>`.
+
+**Output** — `structuredContent`: the plan and its `items[]`, plus
+**`planItemIds`** — the ids of the proposals **this call** created, **in the order
+you sent them**.
+
+**That order is the contract, and it is how a tree gets built.** A proposal can
+only be a parent once it has an id, so send the tree **layer by layer, parents
+before children**, and pass `planItem:<id>` from a previous call's `planItemIds`
+as the next layer's `parentRef` or `blockedByRefs` entry:
+
+```jsonc
+// 1 — the epics and stories
+add_plan_items({ planId, proposals: [
+  { op: "add", proposedFields: { title: "Billing", kind: "epic" } },
+  { op: "add", proposedFields: { title: "Invoices", kind: "story" }, parentRef: "planItem:<epic id>" },
+]})
+// → planItemIds: ["ck_epic", "ck_story"]   (index-for-index with what you sent)
+
+// 2 — the leaves, hung off ids from step 1, and CLOSE the plan
+add_plan_items({ planId, final: true, proposals: [
+  { op: "add", proposedFields: { title: "Invoice PDF", kind: "subtask", storyPoints: 3, estimateMinutes: 45 },
+    parentRef: "planItem:ck_story" },
+  { op: "add", proposedFields: { title: "Email the invoice", kind: "subtask", storyPoints: 2, estimateMinutes: 30 },
+    parentRef: "planItem:ck_story", blockedByRefs: ["planItem:ck_pdf"] },
+]})
+```
+
+`final: true` moves the plan to `planned`, which is what puts it in the review
+queue. **Appending to a plan that has already been closed is refused** —
+`PLAN_NOT_GENERATING` — so send `final` exactly once, on your last batch. The
+plan row is locked for the append, so two concurrent callers serialize rather
+than interleaving into each other's `planItemIds`.
+
+You do **not** set planning provenance on a proposal: `add_plan_items` stamps
+each `add` from the plan's own authorship, so the plan and the items it creates
+can never disagree about who wrote them.
+
+Requires **`ai:view_plan`** — the permission `plansService.addProposals` asserts.
+Together with `create_plan`'s `work_item:edit`, a token needs **both** keys to
+author a plan end to end.
+
+> **⚠️ Neither tool creates a work item.** Approving the plan in Motir is the
+> only path from a proposal to a `work_item` row, and approval does **not** happen
+> on this surface. Do not report proposed work as created. Read the plan back with
+> `get_plan` to show what you proposed.
+
+Errors: an unknown / other-tenant `projectKey` or `planId` returns
+`PROJECT_NOT_FOUND` / `PLAN_NOT_FOUND` (404-not-403, no existence leak); a
+malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
+`PLAN_NOT_GENERATING`.
+
 #### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
 
 Changing a plan in Motir is not a one-shot prompt: it is a **persisted,

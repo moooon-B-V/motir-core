@@ -456,6 +456,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
     descriptionFingerprint: 'c23f12cfee90',
   },
+  create_plan: {
+    summary:
+      'Open a plan to propose into — the reviewable container an agent fills instead of writing items.',
+    descriptionFingerprint: '7c51786d65d6',
+  },
+  add_plan_items: {
+    summary:
+      'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
+    descriptionFingerprint: '3b22fa8a946b',
+  },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",
     descriptionFingerprint: 'aa4e7ce9b277',

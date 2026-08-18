@@ -171,8 +171,13 @@ describe('expandStoredGrant — reading a row written before this story', () => 
 
   it('expands the six legacy strings', () => {
     const { grant, unrecognised } = expandStoredGrant(['read', 'work_items:write']);
+    // `ai:view_plan` joined `work_items:write` on 2026-08-18 (MOTIR-2988):
+    // `add_plan_items` is the first MCP tool to assert that key, and the forward
+    // map must confer whatever `TOOL_SCOPES` files under a scope or a legacy row
+    // silently loses a tool — which `tests/tokens/story-gate.test.ts` asserts
+    // directly, tool by tool.
     expect([...grant].sort()).toEqual(
-      ['project:browse', 'work_item:edit', 'comment:add', 'ai:plan'].sort(),
+      ['project:browse', 'work_item:edit', 'comment:add', 'ai:plan', 'ai:view_plan'].sort(),
     );
     expect(unrecognised).toEqual([]);
   });

@@ -61,12 +61,27 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // The two plan READS resolve through `plansService.getPlan` /
   // `findPlanIdForJob`, both `assertCanBrowse`. They are NOT `ai:view_plan`:
   // that key gates the plan DECISIONS (`approvePlan` / `declinePlan` /
-  // `addProposals`), none of which is an MCP tool.
+  // `addProposals`).
+  //
+  // ⚠️ AMENDED 2026-08-18 (MOTIR-2988). This comment used to end "…, none of
+  // which is an MCP tool." That was true until `add_plan_items` shipped, and it
+  // is exactly the sentence a later reader would use to conclude the new
+  // `ai:view_plan` entry below is a mistake — so it is corrected here rather
+  // than left to age. The reads are still `project:browse`; what changed is that
+  // one of the DECISIONS now has a door.
   get_plan_status: 'project:browse',
   get_plan: 'project:browse',
 
   // ── work_item:edit — the work-item writes ────────────────────────────────
   create_work_item: 'work_item:edit',
+  // OPENS a plan, and creates no work item — but `plansService.createPlan` runs
+  // `projectAccessService.assertCanEdit` (→ `hasPermission(…, 'work_item:edit')`,
+  // lib/projects/access.ts), so this is the key its own service asserts. §3's
+  // rule is total: declaring something narrower here than the gate actually
+  // applies would be a fiction, not a narrowing. Its partner `add_plan_items`
+  // sits under `ai:view_plan` below, so authoring a plan needs BOTH — see
+  // `docs/decisions/agent-authored-plans.md` Q2.
+  create_plan: 'work_item:edit',
   update_work_item: 'work_item:edit',
   transition_status: 'work_item:edit',
   // Flips the claimed item to in_progress through `applyStatusTransition` →
@@ -115,6 +130,16 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   open_plan_session: 'ai:plan',
   append_plan_turn: 'ai:plan',
   submit_plan_session: 'ai:plan',
+
+  // ── ai:view_plan — the plan DECISION that now has a door ─────────────────
+  // `plansService.addProposals` (and `markPlanned`, which `final: true` also
+  // reaches) assert `ai:view_plan` by name. The key's name reads as a view and
+  // gates a write — the service says so itself ("a write key wearing a read's
+  // name"), which is why the decision record puts it at `member` rather than at
+  // browse. NOT `ai:plan`: this tool starts no job and spends no AI credits, so
+  // the key that gates the billable submits would be the wrong one in both
+  // directions (`docs/decisions/agent-authored-plans.md` Q2).
+  add_plan_items: 'ai:view_plan',
 
   // ── work_item:delete — the recoverable and the irreversible ──────────────
   // `archiveWorkItem` / `unarchiveWorkItem` / `deleteWorkItem` all assert

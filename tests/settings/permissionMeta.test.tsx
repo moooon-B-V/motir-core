@@ -105,9 +105,21 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // 4 rows against 2 (because `work_item` holds two permissions), which is
     // both lopsided and taller than what was measured — so the balance is
     // asserted on rows, and pinned, rather than left to drift with the catalog.
+    //
+    // ⚠️ 2026-08-18 (MOTIR-2988): the grantable set grew from six keys to SEVEN.
+    // `ai:view_plan` was in the catalog but ungrantable, because no
+    // token-reachable operation asserted it; `add_plan_items` is the first that
+    // does, and `GRANTABLE_PERMISSIONS` is DERIVED from exactly that. So the
+    // balanced split is now 4/3 and the taller column carries one more row than
+    // the asset measured. That is a real consequence for the modal's height, and
+    // it is pinned here rather than absorbed: the PROPERTY (balanced within one
+    // row, no group broken across the columns) is what the layout rule is, and
+    // the NUMBERS are what someone has to look at again if the set grows further.
     const [left, right] = permissionColumnsForTokens();
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
-    expect(rows(left)).toBe(3);
+    expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(1);
+    expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
+    expect(rows(left)).toBe(4);
     expect(rows(right)).toBe(3);
   });
 

@@ -123,6 +123,11 @@ const DERIVED_TOOLS = new Set<string>([
   'expand_item',
   'get_plan_status',
   'get_plan',
+  // MOTIR-2988 — the plan-AUTHORING door. `create_plan` derives through the very
+  // same definition `get_plan` does; `add_plan_items` through a `.extend` of it
+  // carrying the append's own `planItemIds`.
+  'create_plan',
+  'add_plan_items',
   'open_plan_session',
   'append_plan_turn',
   'submit_plan_session',

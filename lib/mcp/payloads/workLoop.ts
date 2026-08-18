@@ -227,6 +227,36 @@ export const planPayload = definePayload({
   probes: [],
 });
 
+/**
+ * The `add_plan_items` payload — the plan, plus the ids of the proposals THAT
+ * CALL created, in append order (Story MOTIR-2982 · MOTIR-2988).
+ *
+ * A `.extend` of the plan shape above rather than a hand-authored look-alike, so
+ * the two stay one shape: everything a caller can read about the plan is the
+ * same as what `get_plan` returns, and the ONE addition is the transport fact
+ * `get_plan` has no way to know — which of the plan's items this particular
+ * append produced.
+ *
+ * That list is the intra-plan TEMP-REF contract: a caller passes
+ * `planItem:<id>` from it as a later batch's `parentRef` / `blockedByRefs`, so a
+ * tree arrives layer by layer, parents before children
+ * (`docs/decisions/agent-authored-plans.md` Q1).
+ */
+export const mcpPlanAppendSchema = mcpPlanSchema.extend({
+  planItemIds: z.array(z.string()),
+});
+export type McpPlanAppend = z.infer<typeof mcpPlanAppendSchema>;
+
+/** Map an append result — the plan through the shared shape, plus the new ids. */
+export function presentMcpPlanAppend(plan: PlanWithItemsDto, planItemIds: string[]): McpPlanAppend {
+  return { ...presentMcpPlan(plan), planItemIds };
+}
+
+export const planAppendPayload = definePayload({
+  schema: mcpPlanAppendSchema as unknown as z.ZodType<McpPlanAppend>,
+  probes: [],
+});
+
 /** A planning CONVERSATION — v1's `PlanSession`, which the MCP payload matches. */
 export const planSessionPayload = definePayload({
   schema: planSessionSchema as unknown as z.ZodType<z.infer<typeof planSessionSchema>>,

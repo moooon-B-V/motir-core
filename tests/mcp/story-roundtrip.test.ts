@@ -252,6 +252,15 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         dispatch_prompt: { key: item1 },
         get_plan_status: { planId: plan.id },
         get_plan: { planId: plan.id },
+        // The plan-AUTHORING door (MOTIR-2988). `create_plan` is project-keyed,
+        // so a non-member must read tenant A's project as not-found rather than
+        // open a plan inside it; `add_plan_items` is plan-id-keyed, the same
+        // shape as the two reads above.
+        create_plan: { projectKey: 'PROD', title: 'leak?' },
+        add_plan_items: {
+          planId: plan.id,
+          proposals: [{ op: 'add', proposedFields: { title: 'leak?' } }],
+        },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -626,6 +635,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         dispatch_prompt: { key: item1 },
         get_plan_status: { planId: plan.id },
         get_plan: { planId: plan.id },
+        create_plan: { projectKey: 'PROD', title: 'scoped plan' },
+        add_plan_items: {
+          planId: plan.id,
+          proposals: [{ op: 'add', proposedFields: { title: 'scoped proposal' } }],
+        },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },

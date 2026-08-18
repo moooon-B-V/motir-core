@@ -83,11 +83,19 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
  * from `lib/mcp/toolPermissions.ts`:
  *
  *   * `read` — every read bottoms out in `assertCanBrowse`.
- *   * `work_items:write` — its twelve tools split three ways once the real
- *     gates are named: the work-item writes (`work_item:edit`), `add_comment`
- *     (`comment:add`) and the four planning submits (`ai:plan`). Expanding to
- *     all three is what keeps an existing token working; the SPLIT is what
- *     lets a NEW token withhold planning or commenting.
+ *   * `work_items:write` — its tools split FOUR ways once the real gates are
+ *     named: the work-item writes (`work_item:edit`), `add_comment`
+ *     (`comment:add`), the four planning submits (`ai:plan`), and — since
+ *     MOTIR-2988 — `add_plan_items` (`ai:view_plan`). Expanding to all of them
+ *     is what keeps an existing token working; the SPLIT is what lets a NEW
+ *     token withhold planning, commenting or plan authoring.
+ *
+ *     ⚠️ `ai:view_plan` joined 2026-08-18 because `add_plan_items` is the first
+ *     MCP tool to assert it, and this map must confer whatever `TOOL_SCOPES`
+ *     files under a scope or a legacy row silently loses a tool
+ *     (`tests/tokens/story-gate.test.ts` asserts exactly that). It confers no
+ *     other reach: `approvePlan` / `declinePlan` assert the same key and are not
+ *     token-reachable at all, so the widening is one tool wide.
  *   * `work_items:archive` / `work_items:delete` — both archive and delete
  *     assert `work_item:delete`, so the old two-scope split has no counterpart
  *     in the gates.
@@ -105,7 +113,7 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
  */
 export const LEGACY_SCOPE_PERMISSIONS: Record<TokenScope, readonly PermissionKey[]> = {
   read: ['project:browse'],
-  'work_items:write': ['work_item:edit', 'comment:add', 'ai:plan'],
+  'work_items:write': ['work_item:edit', 'comment:add', 'ai:plan', 'ai:view_plan'],
   'work_items:archive': ['work_item:delete'],
   'work_items:delete': ['work_item:delete'],
   'sprints:write': ['sprint:manage'],
@@ -158,6 +166,17 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_plan_status: 'read',
   get_plan: 'read',
   open_plan_session: 'read',
+  // The plan-AUTHORING door (MOTIR-2988), mapped into the RETIRED six-scope
+  // vocabulary only because this table is total over the registry and a new tool
+  // would not compile without a row. Both are writes, and `work_items:write` is
+  // the nearest thing the legacy set has — it is the scope the four planning
+  // submits above already sit under here, and the reason it is wrong in the same
+  // way for all of them is exactly what `docs/decisions/token-permissions.md` §3
+  // replaced this table to fix. The REAL gates are in `TOOL_PERMISSIONS`
+  // (`create_plan` → `work_item:edit`, `add_plan_items` → `ai:view_plan`); this
+  // row governs nothing but the deprecated docs rendering.
+  create_plan: 'work_items:write',
+  add_plan_items: 'work_items:write',
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',
