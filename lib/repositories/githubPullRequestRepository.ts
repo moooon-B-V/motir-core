@@ -94,6 +94,18 @@ export const githubPullRequestRepository = {
     await tx.$queryRaw`SELECT id FROM github_pull_request WHERE repo_id = ${repoId} AND number = ${number} FOR UPDATE`;
   },
 
+  /** Take a row lock on the PR by its internal id, so the ONE CI-feedback comment
+   *  a change request carries at a head sha is claimed by exactly one of the N
+   *  concurrent check deliveries (MOTIR-2946). The feedback body is DERIVED from
+   *  every check row at that sha and then written as a comment, so without the
+   *  lock two deliveries both read "no comment yet" and both create one — the
+   *  lock-before-read-derived-update rule, with the comment as the derived write.
+   *  A no-op when the row does not exist (the caller has already resolved it, so
+   *  in practice it always does). */
+  async lockById(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM github_pull_request WHERE id = ${id} FOR UPDATE`;
+  },
+
   /** The PR on a repo's head branch (`head_ref`), preferring the OPEN one — the
    *  CI-event fallback when the check payload carries no PR number list. Stable
    *  across a re-push (unlike a head SHA). Open-first, then newest, so a reused

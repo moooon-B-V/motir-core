@@ -35,6 +35,36 @@
   activity feed. **NO `workflow_transition` row was added** — in particular not
   `todo → done`; the board's draggable edges are unchanged.
 
+- **Amended:** 2026-08-17 (MOTIR-2957) — **§4's trigger is read off the TRANSITION, never
+  off the row.** The clause itself is unchanged (_"an item **transitions into** a
+  done-category status"_), and always described the MOVE; the implementation tested it by
+  re-reading the item and asking whether it _was_ done at job time, which is a different
+  predicate. The two agree except when a concurrent derivation has moved the item in
+  between — the case the amendment above made common, because a `work-item/created`
+  recompute for a child created moments BEFORE the parent was set Done pulls the parent
+  back to rung 4 and the row read then **cancelled the very cascade that would have
+  completed that child**. Neither direction acted, the child set never changed again, and
+  the tree settled at `todo` with the user's Done discarded: **7 of 20** parents,
+  measured on `origin/main` @ `a09c21ee`. §5's concurrency bullet gains the **cascade-trigger**
+  half it was missing — it reasoned only about a stale CHILD read, and said nothing about
+  the parent status the cascade itself reads to decide whether to fire (the sibling entry
+  below adds the OTHER parent-side half, about the row a backward set overwrites). Part 2
+  of the termination argument is now sound rather than nearly so — it always assumed the cascade
+  an entry schedules actually runs. **No semantic change and no new toggle**; the
+  `work-item/transitioned` payload already carried `fromStatusKey` / `toStatusKey`.
+- **Amended:** 2026-08-17 (MOTIR-2965) — **a BACKWARD derivation stands down for a status
+  the user set LATER than the child-set edit that triggered it.** §5's concurrency bullet
+  reasoned only about a stale CHILD read and said nothing about the PARENT row a backward set
+  overwrites; the answer to _"whose write wins when a derived recompute and a person's
+  transition contend for one row"_ is now written down: **the person's, when theirs is the
+  younger of the two.** The failure it settles: a user adds a subtask, moves the story along
+  within the job's ~350 ms latency, and the rung-4 recompute — reading the children perfectly
+  accurately — puts the story back to `todo`; their next click is refused **422**, because
+  `todo → done` is not an edge and the status they were moving from is gone. **No semantic
+  change to the ladder, no new toggle and NO `workflow_transition` row** — the arm declines
+  a move it was making, and reports `stale_backward`. §3's BACKWARD bullet gains the date
+  clause; §5 gains the parent-side half of its concurrency bullet.
+
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
 > authoritative source (the convention `work-item-type-taxonomy.md` set).
@@ -227,6 +257,19 @@ Notes that are decisions, not detail:
     "there is unstarted work under this item" — and the workflow graph does not get a
     vote on whether that claim is true. A workflow says which moves a _person_ may make
     on the board.
+  - **AND A CLAIM HAS A DATE — the backward arm stands down for a NEWER user write**
+    _(added 2026-08-17, MOTIR-2965)_. Needing no legal edge is exactly what makes this the
+    one arm that can overwrite a status a person just set, and the cost of doing so lands on
+    their NEXT click rather than this one. So before the system set, compare the parent's
+    **own last status change** with the **newest edit to the child set** this pass is
+    reasoning about: **when the parent's status is the younger of the two, decline** and
+    report `stale_backward`. What is wrong in that case is not the reading of the children —
+    it is accurate — but the claim's date against the row: a status written after the newest
+    child-set edit was written by somebody who **already knew** about those children, so the
+    derivation has nothing to tell them. See §5's concurrency bullet for the mechanism and
+    the two instants it compares. The FORWARD arm needs no counterpart: it is legality-gated,
+    so it can only ever take moves the person could have taken by hand, and the `same_rung`
+    tie already protects a deliberate `blocked` marker.
   - **This is a SECOND asymmetry, on a different axis from §4's.** §4's asymmetry is by
     direction of travel **in the tree** (up is legality-gated, down is a system set).
     This one is by direction of travel **along the ladder**, within the upward direction
@@ -322,7 +365,10 @@ Three constraints that are decisions, not detail:
 ### 4. The DOWNWARD cascade (parent → children)
 
 **Trigger:** an item transitions **into a `done`-category status** — by a user, by the
-upward rollup, or by the change-request webhook when its PR merges. **Effect:** every
+upward rollup, or by the change-request webhook when its PR merges. **Read off the
+TRANSITION** (`toStatusKey` in a done category, `fromStatusKey` not), never off the item's
+current status — see the 2026-08-17 / MOTIR-2957 amendment above for the failure the row
+read produced once rung 4 could move that row underneath it. **Effect:** every
 **not-done DIRECT child** (non-archived, non-triaged) is set to the project's `done`
 status. Grandchildren are reached by re-emission, never by a subtree walk.
 
@@ -441,6 +487,52 @@ asymmetries on two axes.)_
   a stale "this child is not done" read is benign, because the action is an
   unconditional force-to-done that `applyStatusTransition` no-ops if the child got there
   first.
+
+  **The cascade's stale read that is NOT benign is of the PARENT** _(added 2026-08-17,
+  MOTIR-2957)_. The sentence above reasons about the CHILD aggregate and is right about
+  it; what it does not cover is the cascade's own **trigger** condition. Deciding "did this
+  item enter done?" by re-reading the item makes the cascade cancellable by any concurrent
+  derivation that moved it since — and rung 4 introduced one that does so routinely, for a
+  child created just before the parent was set Done. So the trigger is taken from the
+  transition the event carries (§4), which no later write can rewrite, and the cascade
+  needs no lock: the entry it acts on is a historical fact, not a current reading.
+  (The paragraph that follows closes the same hole from the other end — there the parent row
+  a backward set OVERWRITES, here the parent status the cascade READS.)
+
+  **Whose write wins: the ROLLUP's stale read that is not of the children at all**
+  _(added 2026-08-17, MOTIR-2965)_. The bullet above locks the parent so the CHILD aggregate
+  is read consistently, and it is right about that. What it does not cover is the **parent
+  row the backward arm overwrites** — a row the lock protects for the duration of the pass
+  and not for a moment before it. A backward set needs no legal edge, so it is the only
+  derivation that can land on a status a person set seconds earlier; and because the
+  workflow deliberately has no `todo → done`, the person does not learn this on the click
+  that was overwritten but on the **next** one, as a bare 422 about a status they never saw.
+
+  **The rule: a backward set is DECLINED when the parent's status is newer than the
+  child-set edit that triggered the pass.** Two instants, both compared inside the locked
+  transaction:
+
+  | instant              | where it comes from                                                                                                          |
+  | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+  | the parent's status  | the `changedAt` of its most recent revision carrying a `status` diff (`workItemRevisionRepository.findLatestStatusChangeAt`) |
+  | the child-set edit   | `aggregateChildrenStatus.lastChangedAt` — `MAX(GREATEST(createdAt, updatedAt))` over the LIVE children                       |
+  | …for a row that LEFT | the trigger's own `occurredAt`, carried on `work-item/child-set.changed`; the later of the two is used                       |
+
+  Three properties this deliberately has. **It reads the SET, not the event, wherever it
+  can** — the same idempotence-under-redelivery §3a's aggregate-only read buys, and the
+  reason §3's "carry the event's `toStatusKey`" alternative was rejected; only an archive /
+  re-parent / delete, which removes the very row that changed, has to carry an instant.
+  **It can only ever SUPPRESS** — no backward set becomes possible that was not possible
+  before, so a wrong answer leaves the shipped behaviour rather than inventing a move.
+  **And missing evidence is not evidence:** a parent with no status revision at all (an
+  import, a fixture, a direct row write) has no date to beat, and the arm proceeds exactly
+  as it shipped.
+
+  **What this does NOT change.** The ladder's semantics are untouched: a `done` parent given
+  a fresh `todo` child still comes back, because the create is then the younger instant. The
+  rule bites only when a person has moved the parent SINCE — and a later child-set edit
+  re-dates the claim, so the parent is never permanently stranded.
+
 - **Derived transitions are REAL transitions.** They fire the automation engine and the
   watcher/bell notifications exactly like a board move, because that is what they are —
   a status genuinely changed and watchers asked to be told. Accepted consequence: a

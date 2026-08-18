@@ -13,6 +13,7 @@ import { childStatusCascadeService } from '@/lib/services/childStatusCascadeServ
 import {
   statusDerivationOnChildSetChanged,
   statusDerivationOnCreated,
+  statusDerivationOnRequested,
   statusDerivationOnTransitioned,
 } from '@/lib/jobs/definitions/statusDerivation';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
@@ -151,10 +152,22 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     expect(rollUp).toHaveBeenCalledTimes(1);
     expect(rollUp).toHaveBeenCalledWith('wi-1', 'ws-1');
     expect(cascade).toHaveBeenCalledTimes(1);
-    expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1');
+    // ⚠️ AND THE CASCADE'S THIRD ARGUMENT IS THE TRANSITION, THREADED OFF THE
+    // ENVELOPE (MOTIR-2957). ADR §4's trigger is *"an item transitions INTO a
+    // done-category status"* — a property of the MOVE — and the service used to
+    // re-derive it by reading the item's current status instead. That is a
+    // different predicate the moment a concurrent derivation has moved the row,
+    // which rung 4 does routinely; the cascade then declined, and a user's Done
+    // was discarded with nothing left to re-fire it. This assertion is the seam
+    // where the transition is either carried across or dropped, so it pins the
+    // VALUES off the event and not merely the arity.
+    expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1', {
+      fromStatusKey: 'in_progress',
+      toStatusKey: 'done',
+    });
     // The payload carries no parentId, so each service resolves its own
-    // neighbours WITHIN that workspace — the handler passes the item id and the
-    // tenant, and nothing else.
+    // neighbours WITHIN that workspace — the handler passes the item id, the
+    // tenant, and the transition, and nothing else.
     expect(result).toEqual({
       rollup: { outcome: 'no_parent' },
       cascade: { outcome: 'not_done' },
@@ -277,6 +290,29 @@ describe('the child-set consumers — the wiring (MOTIR-2892)', () => {
     );
     expect(createdConsumers.length).toBeGreaterThanOrEqual(3);
   });
+
+  // ── The silent-edit consumer (Bug MOTIR-2902) ────────────────────────────
+  it('status-derivation/requested is REGISTERED and triggers on the derivation-only event', () => {
+    expect(jobFunctions).toContain(statusDerivationOnRequested);
+    const opts = (
+      statusDerivationOnRequested as { opts?: { triggers?: Array<{ event?: string }> } }
+    ).opts;
+    expect(opts?.triggers).toEqual([{ event: 'work-item/derivation.requested' }]);
+  });
+
+  it('is the ONLY consumer of that event — which is what keeps the import storm-free', () => {
+    // `setImportedStatus` deliberately emits no `work-item/transitioned` so a
+    // bulk import cannot fan out one notification per row. This event exists to
+    // trigger derivation WITHOUT reopening that. The moment a second consumer
+    // subscribes — a watcher, the bell fan-in, the automation engine — that
+    // property is gone and the import is storming again, silently.
+    const consumers = jobFunctions.filter((f) =>
+      ((f as { opts?: { triggers?: Array<{ event?: string }> } }).opts?.triggers ?? []).some(
+        (t) => t.event === 'work-item/derivation.requested',
+      ),
+    );
+    expect(consumers).toEqual([statusDerivationOnRequested]);
+  });
 });
 
 describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
@@ -309,6 +345,10 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
     expect(cascade).not.toHaveBeenCalled();
   });
 
+  /** A fixed instant, so the trigger assertion below is about the value being
+   *  CARRIED rather than about when the test ran. */
+  const EDIT_AT = '2026-08-17T12:00:00.000Z';
+
   it('child-set changed: recomputes EVERY parent named, each in its own step', async () => {
     const recompute = vi
       .spyOn(parentStatusRollupService, 'recomputeParent')
@@ -327,6 +367,7 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
             parentIds: ['old-parent', 'new-parent'],
             workItemId: 'mover-1',
             reason: 'reparented' as const,
+            occurredAt: EDIT_AT,
           },
         },
       ],
@@ -336,8 +377,13 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
     // A re-parent changes TWO child sets in opposite directions — recomputing
     // only one of them is the defect this asserts against.
     expect(recompute).toHaveBeenCalledTimes(2);
-    expect(recompute).toHaveBeenCalledWith('old-parent', 'ws-1');
-    expect(recompute).toHaveBeenCalledWith('new-parent', 'ws-1');
+    // The EDIT's own instant rides along (MOTIR-2965) — a re-parent removes the
+    // mover from the old parent's set, so nothing left in that set dates the
+    // change and a backward recompute could not tell a stale claim from a live
+    // one. Both ends get the same instant: one edit, two child sets.
+    const trigger = { occurredAt: new Date(EDIT_AT) };
+    expect(recompute).toHaveBeenCalledWith('old-parent', 'ws-1', trigger);
+    expect(recompute).toHaveBeenCalledWith('new-parent', 'ws-1', trigger);
     expect(cascade).not.toHaveBeenCalled();
   });
 

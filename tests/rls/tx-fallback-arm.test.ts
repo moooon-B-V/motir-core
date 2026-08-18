@@ -499,6 +499,16 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
 
     const actor = await workItemRevisionRepository.findLatestArchivedActor(itemId);
     expect(actor).toBeNull(); // never archived — null under BOTH roles
+
+    // The status-derivation guard's read (MOTIR-2965). Bound, it finds the
+    // transition below; unbound it must come back NULL — and null is the arm
+    // that matters most here, because the recompute reads "no date to beat" as
+    // "proceed", so an unbound read would silently restore the very overwrite
+    // this guard exists to prevent.
+    await workItemsService.updateStatus(itemId, 'in_progress', fx.ctx);
+    const changedAt = await workItemRevisionRepository.findLatestStatusChangeAt(itemId);
+    if (isAppRoleTestMode()) expect(changedAt).toBeNull();
+    else expect(changedAt).toBeInstanceOf(Date);
   });
 
   it('customFieldOptionRepository — the option lookups, unbound', async () => {

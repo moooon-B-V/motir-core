@@ -32,5 +32,15 @@ export const config = {
   // Every URL that maps to a file under /app/(authed)/* must be listed
   // here. As new authed routes are added in later Subtasks (1.2, 1.4, …)
   // they get appended to this list.
+  //
+  // ⚠️ `/admin` IS DELIBERATELY NOT HERE, and adding it would break a security
+  // posture rather than tighten one (`docs/decisions/platform-staff-auth.md`
+  // §2, MOTIR-2896). The redirect above is VISIBLY DIFFERENT from an unknown
+  // path's 404, so a cookie-less request bounced to `/sign-in?next=/admin`
+  // proves the route is real — which is exactly what the admin area's
+  // 404-not-403 posture exists to prevent. An anonymous request must instead
+  // reach `app/(admin)/layout.tsx` and be answered there by
+  // `requirePlatformStaff()` with the ordinary 404. It costs nothing: that
+  // layout makes the same session read every authed page already makes.
   matcher: ['/dashboard/:path*', '/settings/:path*', '/invite/:path*'],
 };

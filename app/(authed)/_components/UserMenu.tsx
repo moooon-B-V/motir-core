@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { LogOut, Settings, UserCog } from 'lucide-react';
+import { LogOut, Settings, Shield, UserCog } from 'lucide-react';
+import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
 import { signOut } from '@/lib/auth/client';
@@ -11,9 +12,25 @@ import { signOut } from '@/lib/auth/client';
 export interface UserMenuProps {
   name: string;
   email: string;
+  /**
+   * The acting user is platform staff — renders the staff-only "Platform admin"
+   * row, the single door into the operator console (design
+   * `platform-admin/console.mock.html` Panel 1).
+   *
+   * ⚠️ ABSENT for non-staff, not disabled and not CSS-hidden: the row is not
+   * RENDERED, so no markup anywhere names `/admin`. That is half of the
+   * 404-not-403 posture (`docs/decisions/platform-staff-auth.md` §2 / §4) — the
+   * other half is the route itself answering 404 — and a hidden-but-present row
+   * would defeat it in the one place a curious tenant would look first.
+   *
+   * Resolved SERVER-side in the authed layout from the `platformRole` column;
+   * this component receives a boolean and trusts nothing else. A client that
+   * flipped it would see a menu row leading to a route that 404s them.
+   */
+  platformStaff?: boolean;
 }
 
-export function UserMenu({ name, email }: UserMenuProps) {
+export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) {
   const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -70,6 +87,28 @@ export function UserMenu({ name, email }: UserMenuProps) {
             <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
             {t('userMenu.workspaceSettings')}
           </a>
+          {platformStaff ? (
+            <>
+              <div role="separator" className="my-1 border-t border-(--el-border)" />
+              <a
+                href="/admin"
+                onClick={() => setOpen(false)}
+                className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-start gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+              >
+                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-(--el-info)" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block">{t('userMenu.platformAdmin')}</span>
+                  <span className="block text-xs text-(--el-text-secondary)">
+                    {t('userMenu.platformAdminHint')}
+                  </span>
+                </span>
+                <Pill tone="neutral" className="mt-0.5 shrink-0">
+                  {t('userMenu.staffOnly')}
+                </Pill>
+              </a>
+              <div role="separator" className="my-1 border-t border-(--el-border)" />
+            </>
+          ) : null}
           <button
             type="button"
             onClick={handleSignOut}

@@ -52,6 +52,23 @@ async function statusOf(id: string): Promise<string> {
   return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status;
 }
 
+/**
+ * The TRANSITION that woke the cascade. Since MOTIR-2957 the trigger is read off
+ * the event, not off the row — see `CascadeTrigger`. Every test that puts a parent
+ * IN a done status is describing a parent that has just ENTERED one, so this is
+ * the default; the tests about the trigger itself pass their own.
+ */
+const ENTERED_DONE = { fromStatusKey: 'in_progress', toStatusKey: 'done' } as const;
+
+/** `cascadeToChildren` with the entered-done trigger unless a test names another. */
+async function cascade(
+  itemId: string,
+  workspaceId: string,
+  trigger: { fromStatusKey: string; toStatusKey: string } = ENTERED_DONE,
+) {
+  return childStatusCascadeService.cascadeToChildren(itemId, workspaceId, trigger);
+}
+
 /** A done story over children in the given statuses. */
 async function doneStoryWithChildren(fx: WorkItemFixture, statuses: string[]) {
   const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
@@ -74,7 +91,7 @@ describe('the cascade — a done parent completes its children', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
     expect(await statusOf(children[0]!.id)).toBe('done');
@@ -101,7 +118,7 @@ describe('the cascade — a done parent completes its children', () => {
       'in_review',
     ]);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'cascaded' });
     expect((res as { childIds: string[] }).childIds).toHaveLength(3);
@@ -116,7 +133,7 @@ describe('the cascade — a done parent completes its children', () => {
       data: { sessionBranch: 'motir/auto-1' },
     });
 
-    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    await cascade(story.id, fx.workspaceId);
 
     const child = await adminDb.workItem.findUniqueOrThrow({ where: { id: children[0]!.id } });
     expect(child.status).toBe('done');
@@ -146,7 +163,7 @@ describe('the cascade — a done parent completes its children', () => {
     });
     await setStatus(story.id, 'todo');
 
-    await childStatusCascadeService.cascadeToChildren(epic.id, fx.workspaceId);
+    await cascade(epic.id, fx.workspaceId);
     expect(await statusOf(story.id)).toBe('done');
   });
 
@@ -163,7 +180,7 @@ describe('the cascade — a done parent completes its children', () => {
     });
     await setStatus(leaf.id, 'todo');
 
-    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    await cascade(story.id, fx.workspaceId);
 
     expect(await statusOf(task.id)).toBe('done');
     // Untouched by THIS pass — it is reached by the event emitted for `task`.
@@ -176,17 +193,58 @@ describe('the cascade — a done parent completes its children', () => {
 // The cascade's trigger is unchanged by MOTIR-2888: it fires only on ENTRY into a
 // done-category status, never on exit. That is what keeps a parent which has just
 // come BACK to todo from force-closing the child that brought it there.
+//
+// What MOTIR-2957 changed is WHERE that entry is read from — the transition the
+// event carries, not the item's current status. The two agree except when a
+// concurrent derivation has moved the row in between, which is the one case rung 4
+// made common. Every test below therefore states its own trigger where the trigger
+// is the subject.
 describe('entry-triggered only, gates, and no-ops', () => {
   it('a NON-done transition is a clean no-op (the trigger is entry into done)', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
     await setStatus(story.id, 'in_progress');
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
+    expect(
+      await cascade(story.id, fx.workspaceId, {
+        fromStatusKey: 'todo',
+        toStatusKey: 'in_progress',
+      }),
+    ).toEqual({
       outcome: 'not_done',
     });
     expect(await statusOf(children[0]!.id)).toBe('todo');
     expect(sent).toHaveLength(0);
+  });
+
+  it('a parent LEAVING done cascades nothing — the exit is not an entry', async () => {
+    // ADR §5's termination argument, part 2, asserted directly: the one motion
+    // rung 4 introduced (a parent coming BACK) must start no downward wave, or a
+    // parent that has just returned to `todo` would force-close the very child
+    // that brought it there.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'todo');
+
+    expect(
+      await cascade(story.id, fx.workspaceId, { fromStatusKey: 'done', toStatusKey: 'todo' }),
+    ).toEqual({ outcome: 'not_done' });
+    expect(await statusOf(children[0]!.id)).toBe('todo');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('a move WITHIN the done category is not an entry either', async () => {
+    // `done → cancelled` leaves the parent terminal throughout, so there is no
+    // entry to act on — and re-cascading would re-touch children a previous pass
+    // already settled.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'cancelled');
+
+    expect(
+      await cascade(story.id, fx.workspaceId, { fromStatusKey: 'done', toStatusKey: 'cancelled' }),
+    ).toEqual({ outcome: 'not_done' });
+    expect(await statusOf(children[0]!.id)).toBe('todo');
   });
 
   it('a CANCELLED parent cascades too — cancelled is a done-category status', async () => {
@@ -195,18 +253,46 @@ describe('entry-triggered only, gates, and no-ops', () => {
     await setStatus(story.id, 'cancelled');
 
     expect(
-      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
+      await cascade(story.id, fx.workspaceId, {
+        fromStatusKey: 'in_progress',
+        toStatusKey: 'cancelled',
+      }),
     ).toMatchObject({
       outcome: 'cascaded',
     });
     expect(await statusOf(children[0]!.id)).toBe('done');
   });
 
+  it('⚠️ the ROW may already have moved on — the cascade still fires (MOTIR-2957)', async () => {
+    // THE REGRESSION. The trigger used to be tested by re-reading the item, and a
+    // rung-4 recompute racing in from a sibling `work-item/created` job — for a
+    // child created moments BEFORE the parent was set Done — moves the parent to
+    // `todo` in exactly this window. The row read then answered `not_done`, the
+    // cascade never ran, the child set never changed again, and the user's Done was
+    // gone for good: measured 7 times in 20 against `origin/main` @ `a09c21ee`.
+    //
+    // The state below IS that interleaving, frozen: the transition says the parent
+    // entered `done`, and the row already says `todo`.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'todo');
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
+    expect(await statusOf(children[0]!.id)).toBe('done');
+    // And the emission that carries the recompute back up — the parent's children
+    // are now all done, so rung 1 returns it to `done` and the pair reaches the
+    // fixed point ADR §5 part 2 describes.
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ name: 'work-item/transitioned' });
+  });
+
   it('already-done children are never re-touched, and nothing is emitted', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['done', 'cancelled']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
 
     expect(res).toEqual({ outcome: 'no_open_children', itemId: story.id });
     // A cancelled child keeps the terminal status its team chose.
@@ -219,7 +305,7 @@ describe('entry-triggered only, gates, and no-ops', () => {
     const leaf = await createTestWorkItem(fx, { kind: 'story', title: 'Leaf' });
     await setStatus(leaf.id, 'done');
 
-    expect(await childStatusCascadeService.cascadeToChildren(leaf.id, fx.workspaceId)).toEqual({
+    expect(await cascade(leaf.id, fx.workspaceId)).toEqual({
       outcome: 'no_open_children',
       itemId: leaf.id,
     });
@@ -233,7 +319,7 @@ describe('entry-triggered only, gates, and no-ops', () => {
       data: { autoCompleteChildrenOnParentDone: false },
     });
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
+    expect(await cascade(story.id, fx.workspaceId)).toEqual({
       outcome: 'toggle_off',
       itemId: story.id,
     });
@@ -248,9 +334,7 @@ describe('entry-triggered only, gates, and no-ops', () => {
       data: { autoRollupParentStatus: false },
     });
 
-    expect(
-      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
-    ).toMatchObject({
+    expect(await cascade(story.id, fx.workspaceId)).toMatchObject({
       outcome: 'cascaded',
     });
     expect(await statusOf(children[0]!.id)).toBe('done');
@@ -264,7 +348,7 @@ describe('entry-triggered only, gates, and no-ops', () => {
       data: { archivedAt: new Date() },
     });
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
 
     expect((res as { childIds: string[] }).childIds).toEqual([children[0]!.id]);
     // An archived child must not be resurrected into `done`.
@@ -273,7 +357,7 @@ describe('entry-triggered only, gates, and no-ops', () => {
 
   it('an unknown item id is a clean no-op', async () => {
     const fx = await makeWorkItemFixture();
-    expect(await childStatusCascadeService.cascadeToChildren('nope', fx.workspaceId)).toEqual({
+    expect(await cascade('nope', fx.workspaceId)).toEqual({
       outcome: 'unresolvable',
     });
   });
@@ -287,16 +371,14 @@ describe('the two directions cannot loop', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo', 'in_progress']);
 
-    await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    await cascade(story.id, fx.workspaceId);
 
     for (const c of children) expect(await statusOf(c.id)).toBe('done');
     expect(await statusOf(story.id)).toBe('done');
 
     // Re-running the cascade is idempotent — no children left open, no events.
     sent.length = 0;
-    expect(
-      await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId),
-    ).toMatchObject({
+    expect(await cascade(story.id, fx.workspaceId)).toMatchObject({
       outcome: 'no_open_children',
     });
     expect(sent).toHaveLength(0);
@@ -313,7 +395,7 @@ describe('defensive error routing — the job must never fail behind a user tran
     const fx = await makeWorkItemFixture();
     const { story } = await doneStoryWithChildren(fx, ['todo']);
     vi.spyOn(workItemsService, 'applyStatusTransition').mockRejectedValue(err);
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
     vi.restoreAllMocks();
     return res;
   }
@@ -348,7 +430,7 @@ describe('defensive error routing — the job must never fail behind a user tran
     // statuses, which the workflow service protects.
     vi.spyOn(workflowsService, 'resolveStatusKey').mockResolvedValue(null);
 
-    expect(await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId)).toEqual({
+    expect(await cascade(story.id, fx.workspaceId)).toEqual({
       outcome: 'no_matching_status',
       itemId: story.id,
     });
@@ -373,7 +455,7 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, fx.workspaceId);
+    const res = await cascade(story.id, fx.workspaceId);
 
     // On `main` before MOTIR-2880 this was `{ outcome: 'unresolvable' }`.
     expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
@@ -385,7 +467,7 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
     const other = await makeWorkItemFixture({ identifier: 'OTHR' });
     const { story, children } = await doneStoryWithChildren(fx, ['todo']);
 
-    const res = await childStatusCascadeService.cascadeToChildren(story.id, other.workspaceId);
+    const res = await cascade(story.id, other.workspaceId);
 
     expect(res).toEqual({ outcome: 'unresolvable' });
     expect(await statusOf(children[0]!.id)).toBe('todo');

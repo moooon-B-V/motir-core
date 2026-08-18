@@ -814,7 +814,10 @@
       "account": "Account menu",
       "workspaceSettings": "Workspace settings",
       "accountSettings": "Account settings",
-      "signingOut": "Signing out…"
+      "signingOut": "Signing out…",
+      "platformAdmin": "Platform admin",
+      "platformAdminHint": "Operator console · the whole estate",
+      "staffOnly": "Staff only"
     },
     "account": {
       "signOut": "Sign out",
@@ -6119,6 +6122,39 @@
       "next": "Next",
       "startOver": "Back to the top",
       "end": "That's everything."
+    }
+  },
+  "platformAdmin": {
+    "shell": {
+      "brand": "Motir",
+      "area": "Platform admin",
+      "groupPlatform": "Platform",
+      "groupOperations": "Operations",
+      "footerStaff": "Platform staff",
+      "exitToApp": "Exit to app"
+    },
+    "nav": {
+      "overview": "Overview",
+      "usage": "Usage & cost",
+      "tenants": "Tenants",
+      "monitoring": "Monitoring",
+      "governance": "Governance",
+      "soonUsage": "10.1",
+      "soonTenants": "10.1",
+      "soonMonitoring": "10.2",
+      "soonGovernance": "10.3"
+    },
+    "topBar": {
+      "staffMark": "Platform staff",
+      "allReadsAudited": "all reads audited",
+      "searchPlaceholder": "Search organizations, workspaces, projects, users…"
+    },
+    "overview": {
+      "breadcrumb": "Platform · Overview",
+      "title": "Platform overview",
+      "subtitle": "The whole estate at a glance — how many organizations, workspaces, projects and users Motir hosts, and what's happened recently across every tenant. Read-only; tenant governance lives in the Governance toolkit.",
+      "pendingTitle": "The estate is not wired up yet",
+      "pendingDescription": "The counts and the activity feed read across every tenant, which is the audited cross-tenant read layer — a separate card. This console's gate, its audit trail and this shell are in place; the numbers arrive with them."
     }
   }
 }

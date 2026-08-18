@@ -196,6 +196,15 @@ export interface WorkItemChildSetChangedData {
   workItemId: string;
   /** Which edit produced it, so a run log can tell an archive from a move. */
   reason: 'reparented' | 'archived' | 'unarchived' | 'deleted';
+  /**
+   * WHEN the edit committed, ISO-8601 (Bug MOTIR-2965). The recompute's backward
+   * arm dates its claim from the newest edit to the child set, and every edit on
+   * THIS event removes a row from that set — so unlike a create or a transition,
+   * it leaves nothing behind for `aggregateChildrenStatus.lastChangedAt` to read.
+   * Without it, archiving the started child of a parent a person had already
+   * moved would read as a stale claim and be declined.
+   */
+  occurredAt: string;
 }
 
 /**
@@ -417,7 +426,44 @@ export interface JobEventDataMap {
   'work-item/created': WorkItemCreatedData;
   'work-item/field.changed': WorkItemFieldChangedData;
   'work-item/child-set.changed': WorkItemChildSetChangedData;
+  'work-item/derivation.requested': WorkItemDerivationRequestedData;
   'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
+}
+
+/**
+ * The `work-item/derivation.requested` event payload (Bug MOTIR-2902).
+ *
+ * ── Why this event exists, and why it is not one of the other three ─────────
+ * Derivation's three shipped triggers all ride an edit that ANNOUNCES itself: a
+ * transition, a create, a child-set edit. A bulk import performs a fourth kind
+ * of edit that announces nothing — `setImportedStatus` pins a child's mapped
+ * status and deliberately emits NO `work-item/transitioned`, so an import cannot
+ * fan out one notification per imported row. That contract is correct and stays.
+ *
+ * The consequence was that the ONLY derivation trigger an import produced was
+ * the `work-item/created` that fired BEFORE the pin, so the recompute could read
+ * the child as `todo`, settle the parent at `todo`, and never re-fire — the child
+ * set never changes again. This event is the pin's own trigger: derivation-only,
+ * with no notification consumer, so the storm the import avoids stays avoided.
+ *
+ * ⚠️ It carries NO `occurredAt`, unlike `work-item/child-set.changed`, and that
+ * is deliberate. Per `RecomputeTrigger`, only an edit INVISIBLE to the aggregate
+ * needs to date itself. A status pin leaves its mark on a live child row, so
+ * `aggregateChildrenStatus.lastChangedAt` already dates it — and reading the date
+ * off the SET rather than off the event is what keeps the recompute idempotent
+ * under redelivery.
+ */
+export interface WorkItemDerivationRequestedData {
+  workspaceId: string;
+  /** The parent to recompute. Never null: an item with no parent has nothing to
+   *  derive, so the emit site skips it rather than sending a no-op. */
+  parentId: string;
+  /** The child whose status was pinned. Carried for the run log and triage; the
+   *  recompute reads the PARENT, so this is not an input. */
+  workItemId: string;
+  /** Which silent edit asked for it, so a run log can tell them apart if more
+   *  are added. */
+  reason: 'imported-status-pinned';
 }
 
 /** Every registered event/job name. */

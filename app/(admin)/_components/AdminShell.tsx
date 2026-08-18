@@ -1,0 +1,303 @@
+'use client';
+
+import { type ReactNode } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Activity, Building2, Coins, LogOut, Search, Server, Shield } from 'lucide-react';
+import { Pill } from '@/components/ui/Pill';
+import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
+import type { PlatformOperatorDTO } from '@/lib/dto/platform';
+
+/**
+ * The operator console shell — design `platform-admin/console.mock.html`
+ * **Panel 2** (`.admin-nav` rail + `.adminbar` operator top bar), the frame
+ * every console screen renders inside.
+ *
+ * Composed from the shipped primitives, per the asset's own "Primitives
+ * composed (no hand-rolling)" section: `Sidebar` for the rail (brand header,
+ * grouped rows, the reserved 10.2 / 10.3 rows, the operator footer + "Exit to
+ * app"), `Pill` for the reserved-row tags. No bespoke admin CSS, and every
+ * colour routes through `--el-*` — the tint-sky operator bar with an `--el-info`
+ * rule and shield is the asset's colour-roles table, not a choice made here.
+ *
+ * The rail is FULL-HEIGHT beside the bar rather than under it, which is why
+ * this does not compose `AppLayout`: `AppLayout` puts its `topNav` above BOTH
+ * columns, and the asset draws the operator bar inside the main column only.
+ * That is a deliberate difference from the tenant shell — the bar carries the
+ * "all reads audited" marker, which belongs over the content it qualifies.
+ *
+ * Client-side only for `usePathname` (the active row) and the collapse store.
+ * It receives an operator DTO — an email and a role — never a
+ * `PlatformPrincipal`.
+ */
+export interface AdminShellLabels {
+  brand: string;
+  area: string;
+  groupPlatform: string;
+  groupOperations: string;
+  navOverview: string;
+  navUsage: string;
+  navTenants: string;
+  navMonitoring: string;
+  navGovernance: string;
+  staffMarkTitle: string;
+  staffMarkSubtitle: string;
+  searchPlaceholder: string;
+  footerStaff: string;
+  exitToApp: string;
+  /**
+   * The version tags on the reserved rows — the story that builds each. The
+   * asset draws "10.2" / "10.3"; "10.1" carries the two Platform rows this
+   * foundation does not build either (MOTIR-732 / MOTIR-733).
+   */
+  soonUsage: string;
+  soonTenants: string;
+  soonMonitoring: string;
+  soonGovernance: string;
+}
+
+export interface AdminShellProps {
+  operator: PlatformOperatorDTO;
+  labels: AdminShellLabels;
+  children: ReactNode;
+}
+
+export function AdminShell({ operator, labels, children }: AdminShellProps) {
+  const pathname = usePathname();
+
+  // The rail's two groups, exactly as the asset draws them.
+  //
+  // ⚠️ Every destination except Overview is `disabled` + a version tag, and the
+  // tag names the story that builds it. The asset draws Monitoring / Governance
+  // that way already (10.2 / 10.3); this foundation extends the SAME grammar to
+  // Usage & cost and Tenants, because it does not build those either —
+  // MOTIR-732 and MOTIR-733 do, on top of MOTIR-730's cross-tenant read layer.
+  // The alternative was a live row pointing at a route with no page, which
+  // renders the app's 404 — a door that opens onto the "this does not exist"
+  // answer the gate uses for a REFUSAL, from inside the console. Two different
+  // things must not produce the same screen. The `Sidebar` primitive already
+  // renders a disabled row as non-interactive with its state carried by the
+  // badge rather than by colour alone.
+  const sections: SidebarSection[] = [
+    {
+      id: 'platform',
+      label: labels.groupPlatform,
+      items: [
+        {
+          icon: <Activity />,
+          label: labels.navOverview,
+          href: '/admin',
+          active: pathname === '/admin',
+        },
+        {
+          icon: <Coins />,
+          label: labels.navUsage,
+          href: '/admin/usage',
+          disabled: true,
+          badge: <Pill tone="neutral">{labels.soonUsage}</Pill>,
+        },
+        {
+          icon: <Building2 />,
+          label: labels.navTenants,
+          href: '/admin/tenants',
+          disabled: true,
+          badge: <Pill tone="neutral">{labels.soonTenants}</Pill>,
+        },
+      ],
+    },
+    {
+      id: 'operations',
+      label: labels.groupOperations,
+      items: [
+        {
+          icon: <Server />,
+          label: labels.navMonitoring,
+          href: '/admin/monitoring',
+          disabled: true,
+          badge: <Pill tone="neutral">{labels.soonMonitoring}</Pill>,
+        },
+        {
+          icon: <Shield />,
+          label: labels.navGovernance,
+          href: '/admin/governance',
+          disabled: true,
+          badge: <Pill tone="neutral">{labels.soonGovernance}</Pill>,
+        },
+      ],
+    },
+  ];
+
+  return (
+    <div className="flex h-dvh overflow-hidden bg-(--el-page-bg)">
+      <a
+        href="#admin-main"
+        className="sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated) focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)"
+      >
+        Skip to content
+      </a>
+
+      <div className="hidden w-[240px] shrink-0 md:block">
+        <Sidebar
+          aria-label={labels.area}
+          collapsed={false}
+          header={<AdminBrand brand={labels.brand} area={labels.area} />}
+          sections={sections}
+          footer={
+            <AdminRailFooter
+              operator={operator}
+              staffLabel={labels.footerStaff}
+              exitLabel={labels.exitToApp}
+            />
+          }
+        />
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <AdminTopBar
+          operator={operator}
+          markTitle={labels.staffMarkTitle}
+          markSubtitle={labels.staffMarkSubtitle}
+          searchPlaceholder={labels.searchPlaceholder}
+        />
+        <main
+          id="admin-main"
+          tabIndex={-1}
+          className="min-h-0 flex-1 overflow-y-auto focus:outline-none"
+        >
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/** The rail's brand header — the asset's `.brand` block. */
+function AdminBrand({ brand, area }: { brand: string; area: string }) {
+  return (
+    <div className="flex items-center gap-2 px-(--spacing-control-x) py-(--spacing-control-y)">
+      <span
+        aria-hidden
+        className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
+      >
+        M
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate font-sans text-sm font-semibold text-(--el-text)">
+          {brand}
+        </span>
+        <span className="block truncate font-sans text-xs text-(--el-text-secondary)">{area}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The rail footer — operator identity, then the door back out to the app. */
+function AdminRailFooter({
+  operator,
+  staffLabel,
+  exitLabel,
+}: {
+  operator: PlatformOperatorDTO;
+  staffLabel: string;
+  exitLabel: string;
+}) {
+  const initials = operator.email.trim().slice(0, 2).toUpperCase();
+  return (
+    <div className="flex flex-col gap-1 border-t border-(--el-sidebar-border) pt-3">
+      <div className="flex items-center gap-2 px-(--spacing-control-x) py-(--spacing-control-y)">
+        <span
+          aria-hidden
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-(--el-tint-sky) font-sans text-[11px] font-semibold text-(--el-text-strong)"
+        >
+          {initials}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate font-sans text-xs font-medium text-(--el-text)">
+            {staffLabel}
+          </span>
+          <span className="block truncate font-sans text-xs text-(--el-text-secondary)">
+            {operator.email}
+          </span>
+        </span>
+      </div>
+      <Link
+        href="/"
+        className="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm text-(--el-text-secondary) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+      >
+        <LogOut aria-hidden className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)" />
+        {exitLabel}
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * The operator top bar — the asset's `.adminbar`.
+ *
+ * `--el-tint-sky` ground with an `--el-info` bottom rule and shield, per the
+ * asset's colour-roles table. Ink is `--el-text-strong` throughout: on a tint,
+ * `--el-text-muted` fails AA (CLAUDE.md's measured pair table), and the marker
+ * is the one thing on this bar that must be readable on every screen.
+ *
+ * ⚠️ THE SEARCH BOX IS INERT IN THIS BUILD, and says so rather than pretending.
+ * The asset draws it on every console screen (Panel 3), but the estate search it
+ * calls reads ACROSS TENANTS — which is MOTIR-730's read layer and MOTIR-731's
+ * surface, and which this card's acceptance criteria forbid. Rendering a live
+ * box over a search that cannot run would be the worse half of both options. It
+ * carries `disabled` + `aria-disabled`, so it reads as a designed-for control
+ * that is not yet wired — the same disposition the rail's reserved 10.2 / 10.3
+ * rows take, in the vocabulary the design already established for them.
+ */
+function AdminTopBar({
+  operator,
+  markTitle,
+  markSubtitle,
+  searchPlaceholder,
+}: {
+  operator: PlatformOperatorDTO;
+  markTitle: string;
+  markSubtitle: string;
+  searchPlaceholder: string;
+}) {
+  const initials = operator.email.trim().slice(0, 2).toUpperCase();
+  return (
+    <div className="flex shrink-0 items-center gap-4 border-b-2 border-(--el-info) bg-(--el-tint-sky) px-4 py-2">
+      <span className="flex items-center gap-2">
+        <span
+          aria-hidden
+          className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-page-bg) text-(--el-info)"
+        >
+          <Shield className="h-4 w-4" />
+        </span>
+        <span className="leading-tight">
+          <span className="block font-sans text-xs font-semibold text-(--el-text-strong)">
+            {markTitle}
+          </span>
+          <span className="block font-sans text-[11px] text-(--el-text-strong)">
+            {markSubtitle}
+          </span>
+        </span>
+      </span>
+
+      <button
+        type="button"
+        disabled
+        aria-disabled
+        className="flex h-(--height-control) min-w-0 flex-1 items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-input-x) text-left font-sans text-sm text-(--el-text-muted) disabled:pointer-events-none"
+      >
+        <Search aria-hidden className="h-4 w-4 shrink-0 text-(--el-text-faint)" />
+        <span className="truncate">{searchPlaceholder}</span>
+        <kbd className="ml-auto shrink-0 rounded-(--radius-kbd) border border-(--el-border) bg-(--el-surface) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px] text-(--el-text-secondary)">
+          ⌘K
+        </kbd>
+      </button>
+
+      <span
+        aria-hidden
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-(--el-page-bg) font-sans text-[11px] font-semibold text-(--el-text-strong)"
+      >
+        {initials}
+      </span>
+    </div>
+  );
+}

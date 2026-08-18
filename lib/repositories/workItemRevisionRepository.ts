@@ -37,6 +37,39 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * WHEN this work item's status was last changed — the `changedAt` of its most
+   * recent revision carrying a `status` diff, or `null` if it has never moved
+   * (Bug MOTIR-2965; `docs/decisions/status-derivation.md` §5).
+   *
+   * The upward recompute's BACKWARD arm reads it to date the row it is about to
+   * overwrite. A status set AFTER the child-set edit that woke the recompute was
+   * set by someone who already knew about those children, so a derived claim
+   * about them is stale ABOUT THE ROW even when its reading of the children is
+   * perfectly accurate — the ordering hole MOTIR-2957 closed on the cascade's
+   * side, here on the rollup's.
+   *
+   * `diff -> 'status' IS NOT NULL` is the established status-revision predicate
+   * in this file (the sprint burndown + cycle-time reads use it), and the query
+   * walks the `(workItemId, changedAt)` index to a single row. Takes the caller's
+   * `tx` so the rollup reads it inside the transaction that locked the parent —
+   * the comparison and the write must see one consistent snapshot.
+   */
+  async findLatestStatusChangeAt(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ changed_at: Date }>>`
+      SELECT r."changedAt" AS "changed_at"
+        FROM "work_item_revision" r
+       WHERE r."workItemId" = ${workItemId}
+         AND r."diff" -> 'status' IS NOT NULL
+       ORDER BY r."changedAt" DESC
+       LIMIT 1`;
+    return rows[0]?.changed_at ?? null;
+  },
+
+  /**
    * The revision history of one work item, newest first (`changedAt DESC`) by
    * default so the activity feed renders most-recent-at-top; `order: 'asc'`
    * (Subtask 5.5.1 — the Activity section's oldest-first toggle) walks the

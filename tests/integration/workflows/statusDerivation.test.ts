@@ -38,8 +38,17 @@ interface Emitted {
   // (MOTIR-2880) — every `work-item/*` envelope has always had it, and the pump
   // reads it off the event rather than inventing one, so the drain drives the
   // production path. `toStatusKey` / `parentIds` are per-event (MOTIR-2892 added
-  // the child-set envelope), hence optional.
-  data: { workItemId: string; workspaceId: string; toStatusKey?: string; parentIds?: string[] };
+  // the child-set envelope; MOTIR-2957 the `fromStatusKey` the cascade reads its
+  // trigger off; MOTIR-2902 the singular `parentId` of the derivation-only
+  // trigger), hence optional.
+  data: {
+    workItemId: string;
+    workspaceId: string;
+    fromStatusKey?: string;
+    toStatusKey?: string;
+    parentIds?: string[];
+    parentId?: string;
+  };
 }
 
 const queue: Emitted[] = [];
@@ -77,9 +86,10 @@ async function drain(): Promise<number> {
     const event = queue.shift()!;
     processed.push(event.name);
     // Route by event NAME, exactly as `lib/jobs/registry.ts` does — derivation
-    // has three consumers since MOTIR-2892, because a recompute is a function of
-    // the child SET and `work-item/transitioned` fires on none of the edits that
-    // change that set.
+    // has FOUR consumers: three since MOTIR-2892, because a recompute is a
+    // function of the child SET and `work-item/transitioned` fires on none of the
+    // edits that change that set; and a fourth since MOTIR-2902, because an
+    // import's status pin is an edit that fires none of the other three.
     //
     // ⚠️ The workspace comes off the EVENT in every branch, exactly as each job
     // step takes it from `payload.workspaceId` (MOTIR-2880). Both phases of the
@@ -89,9 +99,16 @@ async function drain(): Promise<number> {
       // The job's order, deliberately: rollup first — it is the direction that
       // can CREATE work for the other.
       await parentStatusRollupService.rollUpForChild(event.data.workItemId, event.data.workspaceId);
+      // The cascade's trigger is the TRANSITION this event carries (MOTIR-2957),
+      // handed over exactly as the job step hands it over — a pump that re-read the
+      // row instead would not be driving the production path.
       await childStatusCascadeService.cascadeToChildren(
         event.data.workItemId,
         event.data.workspaceId,
+        {
+          fromStatusKey: event.data.fromStatusKey ?? '',
+          toStatusKey: event.data.toStatusKey ?? '',
+        },
       );
     } else if (event.name === 'work-item/created') {
       // No cascade: a create transitions nothing, so nothing ENTERED a
@@ -101,6 +118,13 @@ async function drain(): Promise<number> {
       for (const parentId of event.data.parentIds ?? []) {
         await parentStatusRollupService.recomputeParent(parentId, event.data.workspaceId);
       }
+    } else if (event.name === 'work-item/derivation.requested') {
+      // The silent-edit trigger (MOTIR-2902): the parent is named on the event,
+      // so there is nothing to re-read. No cascade — a status pin under an
+      // import transitions nothing into a done-category status through this path.
+      // Non-null by the emit site's contract: `setImportedStatus` skips the emit
+      // entirely for a root item, so an event with no parent cannot exist.
+      await parentStatusRollupService.recomputeParent(event.data.parentId!, event.data.workspaceId);
     }
     // Every other `work-item/*` event (embeddings, mentions) has no derivation
     // consumer and is simply drained.
@@ -440,9 +464,13 @@ describe('recursion, termination, and up↔down non-interference', () => {
 
     const revsBefore = await adminDb.workItemRevision.count({ where: { workItemId: story.id } });
 
-    // Redeliver the last event: same dispatch, same item, already-settled tree.
+    // Redeliver the last event: same dispatch, same item, same TRANSITION payload,
+    // already-settled tree.
     await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
-    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId);
+    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId, {
+      fromStatusKey: 'in_review',
+      toStatusKey: 'done',
+    });
     const extra = await drain();
 
     expect(extra).toBe(0); // nothing moved ⇒ nothing emitted
@@ -731,6 +759,58 @@ describe('the recompute, assembled — a parent that comes back', () => {
     });
     expect(fresh.status).toBe('todo');
     expect(await statusOf(settled.id)).toBe('done');
+  });
+
+  it('⚠️ the create-recompute lands AFTER the parent is set Done — the cascade still runs (MOTIR-2957)', async () => {
+    // THE INTERLEAVING, played deterministically. The pump normally drains one
+    // event before the next is produced, which is precisely why six shipped tests
+    // could not see this (`notes.html` #288, one level up): every one of them
+    // SETTLES between actions, and the defect only exists when two jobs are in
+    // flight at once.
+    //
+    // What production does, and what this reproduces beat for beat: a child is
+    // created (queueing `work-item/created`), the parent is set Done a few
+    // milliseconds later, and the create's rung-4 recompute runs FIRST — pulling
+    // the parent back to `todo` because its one child is unstarted. The cascade
+    // step then runs against a parent whose row already says `todo`.
+    //
+    // Before the fix the cascade re-read that row, answered `not_done`, and the
+    // tree settled at `todo` / `todo` for good — the user's Done discarded, 7 times
+    // in 20 measured against `origin/main` @ `a09c21ee`. Now the trigger is the
+    // transition, so the cascade completes the child, the child re-emits, rung 1
+    // recomputes the parent to `done`, and the pair lands on ADR §5 part 2's fixed
+    // point.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story' });
+    await setStatus(story.id, 'todo');
+
+    // 1. The child is created — this is what queues the rung-4 recompute.
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'The only child',
+      },
+      fx.ctx,
+    );
+    const child = await adminDb.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'The only child' },
+    });
+
+    // 2. The parent is set Done BEFORE that recompute has been played — the race
+    //    window, held open rather than hoped for.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+
+    // 3. Now play everything. The create event is at the FRONT of the queue, so the
+    //    recompute runs before the cascade — the losing order.
+    expect(queue[0]?.name).toBe('work-item/created');
+    await drain();
+
+    expect(await statusOf(child.id)).toBe('done');
+    expect(await statusOf(story.id)).toBe('done');
   });
 
   it('REOPEN, and back again: the parent follows its child in both directions', async () => {
@@ -1024,5 +1104,202 @@ describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
     expect(await statusOf(story.id)).toBe('todo');
     expect(steps).toBeLessThan(MAX_STEPS);
     expect(queue).toHaveLength(0);
+  });
+});
+
+// ── The USER's write vs a derived backward set (Bug MOTIR-2965, ADR §5) ──
+//
+// MOTIR-2957 fixed the ordering hole on the CASCADE's side; this is the same
+// hole on the ROLLUP's. A rung-4 backward set needs no legal edge, so it can
+// overwrite a status a person set — and the person then meets a 422 on their
+// NEXT click, for a reason that lives in the previous one.
+//
+// The interleaving is driven deterministically: the pump holds the create's
+// event, so `drain()` plays the recompute at the exact instant the fixture
+// names — BETWEEN the user's two hops.
+describe("a user's own write vs a derived backward set", () => {
+  it('the recompute does NOT undo a status the user set AFTER the child was created', async () => {
+    // The card's fixture, step by step. The measured window is ~350 ms; here it
+    // is exact, because the queue is only played when this test says so.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Plan me' });
+    await setStatus(story.id, 'todo');
+    const identifier = (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+      .identifier;
+
+    // 1. The user adds a subtask. `work-item/created` is QUEUED — the rung-4
+    //    recompute has not run yet.
+    const res = await runCreateWorkItem(
+      { projectKey: fx.projectIdentifier, parentKey: identifier, kind: 'subtask', title: 'First' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+
+    // 2. Within the job's latency the user starts the story. Legal, accepted.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    expect(await statusOf(story.id)).toBe('in_progress');
+
+    // 3. The queued recompute lands NOW — between the two clicks. Its rung-4
+    //    reading is accurate (one child, todo, nothing started) and its claim is
+    //    nonetheless STALE about the row: the status it is about to overwrite is
+    //    newer than the child-set edit that woke it.
+    await drain();
+
+    // 4. The user clicks Done. This is the assertion the bug is about: before
+    //    the fix the story sat at `todo` here, and `todo → done` is not an edge,
+    //    so the second click came back 422.
+    expect(await statusOf(story.id)).toBe('in_progress');
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+    expect(await statusOf(story.id)).toBe('done');
+  });
+});
+
+describe('the IMPORT interleaving — the pin carries its own trigger (MOTIR-2902)', () => {
+  // A bulk import writes each row in TWO phases:
+  //
+  //   createWorkItem(child)            → emits `work-item/created`
+  //   setImportedStatus(child, status) → emits NOTHING, deliberately, so an
+  //                                      import cannot fan out one notification
+  //                                      per imported row
+  //
+  // So `work-item/created` is the ONLY derivation trigger an import produces,
+  // and which state it observes is decided purely by WHEN the job runs. The two
+  // cases below are the same code taking the two orders, and they show the
+  // asymmetry that makes this worth a debounce rather than a retry: the good
+  // order self-corrects, and the bad order is TERMINAL.
+
+  it('the WINNING order — the recompute runs after the pin and the parent follows', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'todo');
+
+    // The import pins the mapped status FIRST, then the recompute runs.
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('the LOSING order RECOVERS — the pin re-opens the question the create-recompute closed', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'todo');
+
+    // The recompute wins the race and reads the child BEFORE the import pins it.
+    await parentStatusRollupService.rollUpForChild(child.id, fx.workspaceId);
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    // At this instant the parent IS wrong — the recompute read a state the pin
+    // then replaced. That much is unavoidable and harmless.
+    expect(await statusOf(parent.id)).toBe('todo');
+
+    // What makes it a defect rather than a lag is whether anything re-opens the
+    // question. Before MOTIR-2902 nothing did: the child set never changes
+    // again and `setImportedStatus` emitted nothing, so `drain()` returned 0 and
+    // the parent kept the stale answer forever. The pin now emits its OWN
+    // derivation trigger, so there is exactly one event waiting.
+    // TWO steps, and the second is the point of the first. The pin's trigger
+    // recomputes the parent; moving the parent emits `work-item/transitioned`,
+    // which is how derivation carries to the NEXT level up (a no-op here, since
+    // the story has no parent). A run that produced only the trigger would mean
+    // the recompute had decided not to move anything.
+    expect(await drain()).toBe(2);
+    expect(processed).toEqual(['work-item/derivation.requested', 'work-item/transitioned']);
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('the pin emits NOTHING for a root item — there is no parent to derive', async () => {
+    const fx = await makeWorkItemFixture();
+    const root = await createTestWorkItem(fx, { kind: 'epic', title: 'Imported root' });
+    await setStatus(root.id, 'todo');
+
+    await workItemsService.setImportedStatus(root.id, 'in_progress', fx.ctx);
+
+    // A guaranteed no-op run per imported top-level row is exactly the fan-out
+    // an import cannot afford, so the emit site skips it rather than sending one.
+    expect(processed).not.toContain('work-item/derivation.requested');
+    expect(await drain()).toBe(0);
+  });
+
+  it('the REAL import shape — create parentless, pin, THEN wire the parent in pass 2', async () => {
+    // This is what the CSV importer actually does, and what the previous two
+    // attempts at this card both missed. `importPersistService` is a two-pass
+    // design: a row whose parent is imported LATER cannot be parented on create,
+    // so pass 1 creates it flat and pins its mapped status, and pass 2 wires the
+    // parent through `updateWorkItem`. Every derivation trigger therefore fired
+    // while the tree was still flat, and the moment the children were actually
+    // attached, `updateWorkItem` emitted nothing at all.
+    const fx = await makeWorkItemFixture();
+
+    // ── pass 1: both rows, flat, each pinned to its CSV status ──────────────
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Checkout epic' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, { kind: 'task', title: 'Payment subtask' });
+    await setStatus(child.id, 'todo');
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    // Nothing so far can have derived anything: the child has no parent, so the
+    // pin's own trigger is correctly skipped and the parent has no children.
+    await drain();
+    expect(await statusOf(parent.id)).toBe('todo');
+
+    // ── pass 2: the edge ───────────────────────────────────────────────────
+    await workItemsService.updateWorkItem(child.id, { parentId: parent.id }, fx.ctx);
+
+    // THE ASSERTION. Wiring the parent changes its child set, so derivation must
+    // run — and it must read the child's PINNED status, which pass 1 already
+    // committed.
+    await drain();
+    expect(processed).toContain('work-item/child-set.changed');
+    expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+
+  it('a plain field patch emits NO child-set event — only a parent MOVE changes a set', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await tree(fx, ['todo']);
+    await drain();
+    const from = processed.length;
+
+    await workItemsService.updateWorkItem(children[0]!.id, { title: 'Renamed' }, fx.ctx);
+    await drain();
+
+    // The emit is gated on the parent actually CHANGING. A patch that does not
+    // name `parentId`, or names the one it already has, moves no item between
+    // sets and must stay silent — otherwise every edit in the product enqueues a
+    // recompute of its parent.
+    expect(processed.slice(from)).not.toContain('work-item/child-set.changed');
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
+  it('a NO-OP pin still settles the parent — the import re-run case', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Imported parent' });
+    await setStatus(parent.id, 'todo');
+    const child = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'Imported child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'in_progress');
+
+    // The mapped status is already the child's status — the common case on a
+    // re-sync. The parent is still stale from whenever it was last computed, so
+    // the trigger must fire on the pin's INTENT, not on whether a row moved.
+    await workItemsService.setImportedStatus(child.id, 'in_progress', fx.ctx);
+
+    await drain();
+    expect(await statusOf(parent.id)).toBe('in_progress');
   });
 });
