@@ -247,6 +247,24 @@ async function main() {
     userIdByEmail.set(u.email, user.id);
   }
   const ownerId = userIdByEmail.get(OWNER_EMAIL)!;
+
+  // ── Platform staff: one operator, so /admin is reachable in dev ───────────
+  // MOTIR-2896 / `docs/decisions/platform-staff-auth.md` §6. Platform standing
+  // is orthogonal to every tenant role, so this is a WRITE of the column and
+  // never a consequence of `OWNER_EMAIL` owning the workspace — the ADR's §1
+  // invariant is precisely that no tenant role produces a `PlatformRole`, and a
+  // seed that derived one from the other would be the first counter-example.
+  //
+  // The seed account is used rather than a seventh user because the whole team
+  // roster is asserted elsewhere, and because the console's door lives in the
+  // authed shell's account menu: a staff user with no workspace would have
+  // platform standing and no menu to reach it from.
+  //
+  // ⚠️ DEV ONLY. Production's first grant is an operator script run against the
+  // production database — no bootstrap endpoint, no env var, no
+  // "first user becomes staff" rule. That step is MOTIR-2932 (8.5.18).
+  await db.user.update({ where: { id: ownerId }, data: { platformRole: 'superadmin' } });
+
   /** The reporter/assignee pool, in SEED_USERS order (keeps `pick` deterministic). */
   const memberIds = SEED_USERS.map((u) => userIdByEmail.get(u.email)!);
 

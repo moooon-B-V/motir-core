@@ -33,10 +33,22 @@ import type {
 // re-fires for the grandparent (up) or the grandchildren (down) and stops when a
 // level does not change — a no-op emits nothing. The two directions cannot loop
 // either: a parent reaching done via cascade already has every child done, so the
-// rollup over it is a no-op, and forward-only plus done-is-terminal precludes a
-// cycle. Neither service throws for a business reason (both return a typed
-// outcome), so an "impossible" derivation never fails the job behind a status
-// change the user already made successfully.
+// rollup over it is a no-op, and a parent LEAVING done starts no downward wave,
+// because the cascade fires only on ENTRY into a done-category status (ADR §5's
+// termination argument, part 2 — the clause that replaced this line's old appeal
+// to forward-only, which rung 4 retired). Neither service throws for a business
+// reason (both return a typed outcome), so an "impossible" derivation never fails
+// the job behind a status change the user already made successfully.
+//
+// ⚠️ AND "ENTRY" IS A PROPERTY OF THE TRANSITION, WHICH IS WHY THE CASCADE STEP
+// BELOW IS HANDED THE EVENT'S from/to (MOTIR-2957). Part 2 of that argument only
+// holds if the cascade a done-entry schedules actually RUNS. It used to be
+// decided by re-reading the item, so a rung-4 recompute landing in between — from
+// a sibling `work-item/created` job for a child created just before the parent was
+// set Done — moved the parent to `todo` and the cascade then saw a not-done row and
+// declined. Neither direction acted, the child set never changed again, and the
+// parent sat at `todo` with the user's Done gone. Measured 7 times in 20 on
+// `origin/main` @ `a09c21ee`.
 //
 // `retryPolicy: 'idempotent'`: both services converge on re-run — the rollup
 // no-ops once the parent is in the target status, the cascade no-ops once no
@@ -54,8 +66,15 @@ export const statusDerivationOnTransitioned = defineJob(
     const rollup = await ctx.step.run('roll-up-parent', () =>
       services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
+    // The cascade is decided by the TRANSITION this event carries, not by re-reading
+    // the item — MOTIR-2957. See `CascadeTrigger`: a rung-4 recompute racing in from a
+    // sibling `work-item/created` job can move the item out of `done` before this step
+    // runs, and a row read then cancels the cascade the user's Done asked for.
     const cascade = await ctx.step.run('cascade-to-children', () =>
-      services.childStatusCascade.cascadeToChildren(payload.workItemId, payload.workspaceId),
+      services.childStatusCascade.cascadeToChildren(payload.workItemId, payload.workspaceId, {
+        fromStatusKey: payload.fromStatusKey,
+        toStatusKey: payload.toStatusKey,
+      }),
     );
 
     // Returned for the run log — which direction acted, and on what. Both

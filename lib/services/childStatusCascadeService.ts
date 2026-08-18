@@ -41,6 +41,29 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 // Downward performs a system completion no legal user path allows, which is the
 // honest shape of "the parent is done, so its children are done".
 
+/**
+ * The TRANSITION that woke the cascade — the `fromStatusKey` / `toStatusKey` the
+ * `work-item/transitioned` event already carries (MOTIR-2957).
+ *
+ * ⚠️ THE TRIGGER IS THIS, NOT THE ROW. §4's trigger is *"an item **transitions
+ * into** a done-category status"* — a property of the MOVE. This service used to
+ * test it by re-reading the item and asking whether it *is* done now, which is a
+ * different predicate and differs in exactly one case: a concurrent derivation has
+ * moved the item since. Rung 4 (MOTIR-2888) made that case common and load-bearing
+ * — a `work-item/created` recompute for a child created moments BEFORE the parent
+ * was set Done pulls the parent back to `todo`, and the row read then cancelled the
+ * cascade that would have completed that very child. Measured on `origin/main`
+ * @ `a09c21ee`: **7 of 20** parents settled at `todo` with every child still
+ * `todo` — the user's Done discarded, permanently, because the child set never
+ * changes again.
+ */
+export interface CascadeTrigger {
+  /** The status the item left. A move BETWEEN two done-category statuses is not an entry. */
+  readonly fromStatusKey: string;
+  /** The status the item reached. Its category is what makes this an entry into done. */
+  readonly toStatusKey: string;
+}
+
 /** What a cascade pass did, for the caller's log. Like the rollup, every outcome
  *  is a NORMAL result: this runs behind a status change the user already made
  *  successfully and must not turn that into a failed job. */
@@ -68,7 +91,11 @@ export const childStatusCascadeService = {
    *
    * Never throws for a business reason; returns a typed outcome instead.
    */
-  async cascadeToChildren(itemId: string, workspaceId: string): Promise<CascadeOutcome> {
+  async cascadeToChildren(
+    itemId: string,
+    workspaceId: string,
+    trigger: CascadeTrigger,
+  ): Promise<CascadeOutcome> {
     // Phase 1 — resolve the neighbourhood. No acting USER on a background job, but
     // there IS a tenant: `work-item/transitioned` carries `workspaceId`, so this
     // binds the WORKSPACE tier.
@@ -86,7 +113,10 @@ export const childStatusCascadeService = {
       const children = await workItemRepository.findChildren(itemId, tx);
       return {
         projectId: item.projectId,
-        status: item.status,
+        // The item's CURRENT status is deliberately NOT read here any more — the
+        // trigger is the transition (`CascadeTrigger`). The `findById` stays: it is
+        // what resolves the project, proves the item exists in this tenant, and
+        // answers `unresolvable` when it does not.
         enabled: settings?.autoCompleteChildrenOnParentDone ?? false,
         ownerUserId: owner?.userId ?? null,
         children: children.map((c) => ({ id: c.id, status: c.status })),
@@ -99,10 +129,22 @@ export const childStatusCascadeService = {
     // resolved is that workspace's by construction.
     const { projectId, ownerUserId } = resolved;
 
-    // The trigger is ENTRY INTO a done-category status. Any other transition is a
-    // clean no-op — which is also half of why the two directions cannot loop.
-    const current = await workflowsService.getStatusByKey(projectId, resolved.status, workspaceId);
-    if (current?.category !== 'done') return { outcome: 'not_done' };
+    // The trigger is ENTRY INTO a done-category status, read off the TRANSITION —
+    // see `CascadeTrigger` for why this must not be a re-read of the row. Any other
+    // move is a clean no-op, which is also half of why the two directions cannot
+    // loop: a parent LEAVING done (`toStatusKey` outside the category) cascades
+    // nothing, so the one motion rung 4 introduced starts no downward wave.
+    const [from, to] = await Promise.all([
+      workflowsService.getStatusByKey(projectId, trigger.fromStatusKey, workspaceId),
+      workflowsService.getStatusByKey(projectId, trigger.toStatusKey, workspaceId),
+    ]);
+    // An unknown key answers `not_done` rather than throwing — same shape as every
+    // other business outcome here, and the honest answer when the workflow has
+    // since dropped the status the event named.
+    if (to?.category !== 'done') return { outcome: 'not_done' };
+    // A shuffle WITHIN the done category (`done → cancelled`) is not an entry, and
+    // re-cascading on it would re-touch children a previous pass already settled.
+    if (from?.category === 'done') return { outcome: 'not_done' };
 
     if (!resolved.enabled) return { outcome: 'toggle_off', itemId };
     if (!ownerUserId) return { outcome: 'unresolvable' };

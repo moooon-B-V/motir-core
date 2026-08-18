@@ -38,11 +38,13 @@ interface Emitted {
   // (MOTIR-2880) — every `work-item/*` envelope has always had it, and the pump
   // reads it off the event rather than inventing one, so the drain drives the
   // production path. `toStatusKey` / `parentIds` are per-event (MOTIR-2892 added
-  // the child-set envelope; MOTIR-2902 the singular `parentId` of the
-  // derivation-only trigger), hence optional.
+  // the child-set envelope; MOTIR-2957 the `fromStatusKey` the cascade reads its
+  // trigger off; MOTIR-2902 the singular `parentId` of the derivation-only
+  // trigger), hence optional.
   data: {
     workItemId: string;
     workspaceId: string;
+    fromStatusKey?: string;
     toStatusKey?: string;
     parentIds?: string[];
     parentId?: string;
@@ -84,9 +86,10 @@ async function drain(): Promise<number> {
     const event = queue.shift()!;
     processed.push(event.name);
     // Route by event NAME, exactly as `lib/jobs/registry.ts` does — derivation
-    // has three consumers since MOTIR-2892, because a recompute is a function of
-    // the child SET and `work-item/transitioned` fires on none of the edits that
-    // change that set.
+    // has FOUR consumers: three since MOTIR-2892, because a recompute is a
+    // function of the child SET and `work-item/transitioned` fires on none of the
+    // edits that change that set; and a fourth since MOTIR-2902, because an
+    // import's status pin is an edit that fires none of the other three.
     //
     // ⚠️ The workspace comes off the EVENT in every branch, exactly as each job
     // step takes it from `payload.workspaceId` (MOTIR-2880). Both phases of the
@@ -96,9 +99,16 @@ async function drain(): Promise<number> {
       // The job's order, deliberately: rollup first — it is the direction that
       // can CREATE work for the other.
       await parentStatusRollupService.rollUpForChild(event.data.workItemId, event.data.workspaceId);
+      // The cascade's trigger is the TRANSITION this event carries (MOTIR-2957),
+      // handed over exactly as the job step hands it over — a pump that re-read the
+      // row instead would not be driving the production path.
       await childStatusCascadeService.cascadeToChildren(
         event.data.workItemId,
         event.data.workspaceId,
+        {
+          fromStatusKey: event.data.fromStatusKey ?? '',
+          toStatusKey: event.data.toStatusKey ?? '',
+        },
       );
     } else if (event.name === 'work-item/created') {
       // No cascade: a create transitions nothing, so nothing ENTERED a
@@ -454,9 +464,13 @@ describe('recursion, termination, and up↔down non-interference', () => {
 
     const revsBefore = await adminDb.workItemRevision.count({ where: { workItemId: story.id } });
 
-    // Redeliver the last event: same dispatch, same item, already-settled tree.
+    // Redeliver the last event: same dispatch, same item, same TRANSITION payload,
+    // already-settled tree.
     await parentStatusRollupService.rollUpForChild(children[1]!.id, fx.workspaceId);
-    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId);
+    await childStatusCascadeService.cascadeToChildren(children[1]!.id, fx.workspaceId, {
+      fromStatusKey: 'in_review',
+      toStatusKey: 'done',
+    });
     const extra = await drain();
 
     expect(extra).toBe(0); // nothing moved ⇒ nothing emitted
@@ -745,6 +759,58 @@ describe('the recompute, assembled — a parent that comes back', () => {
     });
     expect(fresh.status).toBe('todo');
     expect(await statusOf(settled.id)).toBe('done');
+  });
+
+  it('⚠️ the create-recompute lands AFTER the parent is set Done — the cascade still runs (MOTIR-2957)', async () => {
+    // THE INTERLEAVING, played deterministically. The pump normally drains one
+    // event before the next is produced, which is precisely why six shipped tests
+    // could not see this (`notes.html` #288, one level up): every one of them
+    // SETTLES between actions, and the defect only exists when two jobs are in
+    // flight at once.
+    //
+    // What production does, and what this reproduces beat for beat: a child is
+    // created (queueing `work-item/created`), the parent is set Done a few
+    // milliseconds later, and the create's rung-4 recompute runs FIRST — pulling
+    // the parent back to `todo` because its one child is unstarted. The cascade
+    // step then runs against a parent whose row already says `todo`.
+    //
+    // Before the fix the cascade re-read that row, answered `not_done`, and the
+    // tree settled at `todo` / `todo` for good — the user's Done discarded, 7 times
+    // in 20 measured against `origin/main` @ `a09c21ee`. Now the trigger is the
+    // transition, so the cascade completes the child, the child re-emits, rung 1
+    // recomputes the parent to `done`, and the pair lands on ADR §5 part 2's fixed
+    // point.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Story' });
+    await setStatus(story.id, 'todo');
+
+    // 1. The child is created — this is what queues the rung-4 recompute.
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'subtask',
+        title: 'The only child',
+      },
+      fx.ctx,
+    );
+    const child = await adminDb.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'The only child' },
+    });
+
+    // 2. The parent is set Done BEFORE that recompute has been played — the race
+    //    window, held open rather than hoped for.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+
+    // 3. Now play everything. The create event is at the FRONT of the queue, so the
+    //    recompute runs before the cascade — the losing order.
+    expect(queue[0]?.name).toBe('work-item/created');
+    await drain();
+
+    expect(await statusOf(child.id)).toBe('done');
+    expect(await statusOf(story.id)).toBe('done');
   });
 
   it('REOPEN, and back again: the parent follows its child in both directions', async () => {
