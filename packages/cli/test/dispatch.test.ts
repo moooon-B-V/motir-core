@@ -18,6 +18,7 @@ import type {
   DispatchPrompt,
   DispatchReferenceAdvisory,
   DispatchRepoStraddleAdvisory,
+  DispatchSubsumptionAdvisory,
 } from '../src/client.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
@@ -306,6 +307,59 @@ describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)',
     expect(text).toContain('criterion 5 says "once it lands"');
     expect(text).toContain('criterion 3 names motir-ai/src/services/codeRepoService.ts');
     expect(text).not.toContain('undefined');
+  });
+
+  /** The SUBSUMPTION family (MOTIR-2903) — a far end that is a PULL REQUEST. */
+  const subsumptionAdvisory = (
+    over: Partial<DispatchSubsumptionAdvisory> = {},
+  ): DispatchAdvisory => ({
+    kind: 'subsumption',
+    item: 'PROD-7',
+    severity: 'likely-already-shipped',
+    path: 'lib/services/workflowsService.ts',
+    pullRequest: 'moooon-B-V/motir-core#2059',
+    pullRequestTitle: 'Bind the READ surface for motir_app',
+    mergedAt: '2026-08-15T14:00:00.000Z',
+    ...over,
+  });
+
+  it('renders a SUBSUMPTION advisory by its path and covering pull request (MOTIR-2903)', () => {
+    const text = renderDispatchAdvisories(
+      prompt({ advisories: [subsumptionAdvisory()] }),
+    ) as string;
+    expect(text).toContain('lib/services/workflowsService.ts');
+    expect(text).toContain('moooon-B-V/motir-core#2059');
+    expect(text).toContain('NOT a blocker');
+    // The regression the positive reference filter exists to prevent: the old
+    // `kind !== 'shape'` catch-all swept this into the REFERENCE renderer and
+    // printed "- undefined (undefined)".
+    expect(text).not.toContain('undefined');
+    expect(text).not.toContain('--force');
+  });
+
+  it('renders all THREE families together, each with its own remedy', () => {
+    const text = renderDispatchAdvisories(
+      prompt({
+        advisories: [shapeAdvisory(), straddleAdvisory(), subsumptionAdvisory(), advisory()],
+      }),
+    ) as string;
+    expect(text).toContain('PROD-5 (in_review)');
+    expect(text).toContain('criterion 5 says "once it lands"');
+    expect(text).toContain('criterion 3 names motir-ai/src/services/codeRepoService.ts');
+    expect(text).toContain('moooon-B-V/motir-core#2059');
+    expect(text).not.toContain('undefined');
+  });
+
+  it('prints NOTHING for a FAMILY this build has never heard of', () => {
+    // The same version skew as the severity case below, one level up: a fourth
+    // `kind` from a newer server must match NO filter — which is exactly what
+    // the old catch-all failed to do when `subsumption` was that new family.
+    const future = {
+      kind: 'provenance',
+      item: 'PROD-7',
+      severity: 'likely-something-new',
+    } as unknown as DispatchAdvisory;
+    expect(renderDispatchAdvisories(prompt({ advisories: [future] }))).toBeNull();
   });
 
   it('prints NOTHING for a shape severity this build has never heard of', () => {

@@ -1,6 +1,11 @@
 import { existsSync } from 'node:fs';
 import { resolveRepo, type LinkConfig, type RepoResolutionSource } from './config/linkConfig.js';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from './client.js';
+import {
+  isOrderingAdvisory,
+  isReferenceAdvisory,
+  isRepoStraddleAdvisory,
+  isSubsumptionAdvisory,
+} from './client.js';
 import type { DispatchPrompt, DispatchWorkflowMode } from './client.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
@@ -176,12 +181,15 @@ export function workflowLabel(mode: DispatchWorkflowMode, sessionBranch: string 
 export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | null {
   const advisories = dispatch.advisories ?? [];
   if (advisories.length === 0) return null;
-  const references = advisories.filter((a) => a.kind !== 'shape');
-  // Matched by SEVERITY, not merely by family: a severity a newer server emits
-  // and this build does not know matches neither filter and prints nothing,
-  // rather than printing another member's fields as `undefined`.
+  // Matched POSITIVELY, family and severity both: a family or severity a newer
+  // server emits and this build does not know matches NO filter and prints
+  // nothing, rather than printing another member's fields as `undefined`. The
+  // reference filter used to be the `kind !== 'shape'` catch-all, which had
+  // exactly that defect the moment a third family arrived (MOTIR-2903).
+  const references = advisories.filter(isReferenceAdvisory);
   const shapes = advisories.filter(isOrderingAdvisory);
   const straddles = advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = advisories.filter(isSubsumptionAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -221,6 +229,19 @@ export function renderDispatchAdvisories(dispatch: DispatchPrompt): string | nul
       '            one PR: check the other repo before branching. If that half is already',
       '            merged, or this is a boundary-contract card, proceed; otherwise surface',
       "            the split rather than dropping the other repo's criteria.",
+    );
+  }
+  // The SUBSUMPTION advisory (MOTIR-2903). The operator is the one who can read
+  // a diff in ten seconds and decide, and the alternative to their reading it is
+  // an agent spending a session rebuilding something already on `main`.
+  for (const s of subsumed) {
+    lines.push(
+      `Advisory:   ${dispatch.key}'s body names ${s.path}, which ${s.pullRequest} already`,
+      `            changed (merged ${s.mergedAt}).`,
+      '            This is NOT a blocker — the dispatch proceeds. But this card may already',
+      "            be built: read that pull request against the card's acceptance criteria.",
+      '            If it delivers them, close the card with the merge as the evidence instead',
+      '            of rebuilding it. If the two merely share a file, proceed.',
     );
   }
   // Nothing MATCHED, not merely nothing sent: a payload carrying only advisories

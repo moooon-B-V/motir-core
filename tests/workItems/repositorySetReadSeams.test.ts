@@ -165,7 +165,17 @@ describe('the /api/v1 contract — additive, and its version says so', () => {
     // Not a decorative bump: the number rides `X-Motir-Api-Version` on every
     // response, and an additive change a client cannot detect is a change it
     // cannot adopt.
-    expect(V1_CONTRACT_VERSION).toBe('1.9.0');
+    //
+    // ⚠️ AT LEAST 1.9.0, not EXACTLY it (MOTIR-2903). This card's addition took
+    // 1.9.0; the assertion this replaces pinned that string, which made the
+    // NEXT additive change under §8 — every one of which is REQUIRED to move
+    // this number — red-light itself on a guard belonging to a card it does not
+    // touch. What the guard is for is that the version moved PAST the last
+    // release that predates `targetRepos`, and a monotonic floor says exactly
+    // that while surviving its own success.
+    const [major, minor] = V1_CONTRACT_VERSION.split('.').map(Number);
+    expect(major).toBe(1);
+    expect(minor).toBeGreaterThanOrEqual(9);
   });
 
   it('maps the both-fields conflict to 422, not a 500', () => {

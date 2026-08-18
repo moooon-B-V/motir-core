@@ -73,5 +73,10 @@
  *   The two write fields are MUTUALLY EXCLUSIVE (`CONFLICTING_TARGET_REPO_INPUT`,
  *   422) — a new CONDITION getting a status, which §8 permits, on an existing
  *   code family. See `docs/decisions/work-item-repository-set.md` §3.
+ * - `1.10.0` — MOTIR-2903 adds the SUBSUMPTION member to the dispatch prompt's
+ *   `advisories` union: a card whose body names a path a later merge already
+ *   changed, so its deliverable may already be in the repository. Additive — a
+ *   new member of a union on a field clients are required to tolerate unknown
+ *   members of, with every existing member byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.9.0';
+export const V1_CONTRACT_VERSION = '1.10.0';

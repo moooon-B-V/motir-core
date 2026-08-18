@@ -1,6 +1,11 @@
 import type { DispatchWorkflowMode } from '@/lib/dto/dispatch';
 import { isManualReadyItem } from '@/lib/dto/ready';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
+import {
+  isOrderingAdvisory,
+  isReferenceAdvisory,
+  isRepoStraddleAdvisory,
+  isSubsumptionAdvisory,
+} from '@/lib/dto/workItems';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -323,9 +328,10 @@ function section(heading: string, lines: string[]): string[] {
  */
 function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   if (advisories.length === 0) return [];
-  const references = advisories.filter((a) => a.kind !== 'shape');
+  const references = advisories.filter(isReferenceAdvisory);
   const shapes = advisories.filter(isOrderingAdvisory);
   const straddles = advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = advisories.filter(isSubsumptionAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -393,6 +399,31 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  own body pins the producer/mirror split (two coordinated PRs, one card), the finding',
       '  is a known false positive and you proceed. Otherwise do NOT silently pick one repo and',
       "  drop the other's criteria: that is run.md guard #5 — surface the split and STOP.",
+    );
+  }
+
+  // The SUBSUMPTION advisory (MOTIR-2903). Addressed to the agent because the
+  // agent is the one about to spend a session rebuilding something that is
+  // already on `main` — a rebuild that is green in isolation, conflicts with
+  // nothing, and ends with a second mechanism for a problem that already has
+  // one. The remedy is a diff to READ, so the pull request is named rather than
+  // the finding merely asserted.
+  if (subsumed.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD MAY ALREADY BE BUILT — read the diff before you write a line:',
+      ...subsumed.map(
+        (a) =>
+          `    - ${a.path}, which this card's body names, was changed by ${a.pullRequest}` +
+          ` (merged ${a.mergedAt}${a.pullRequestTitle ? ` — "${a.pullRequestTitle}"` : ''}),` +
+          ' after this card was filed.',
+      ),
+      "  A card is not closed when the work that satisfies it merges under someone else's",
+      '  key, so a card whose deliverable already shipped still reads ready, still ranks',
+      "  high, and still gets claimed. READ that pull request against this card's",
+      '  acceptance criteria. If it already delivers them, STOP: close the card with the',
+      '  merge as the evidence and report it — do not rebuild merged work. If the two',
+      '  merely touch the same file, which is the ordinary case, proceed normally.',
     );
   }
   return lines;

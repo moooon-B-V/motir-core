@@ -5417,6 +5417,11 @@ async function computeSubtreeProseAdvisories(
       type: row?.type ?? null,
       executor: row?.executor ?? null,
       targetRepos: row?.targetRepos ?? [],
+      // The SUBSUMPTION check's two inputs (MOTIR-2903), from the same batched
+      // read: the id excludes the card's OWN pull requests from the covering
+      // set, and `createdAt` is its `since`.
+      id: member.id,
+      createdAt: row?.createdAt ?? null,
     };
   });
 

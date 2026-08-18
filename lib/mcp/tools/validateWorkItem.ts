@@ -3,7 +3,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
+import {
+  isOrderingAdvisory,
+  isReferenceAdvisory,
+  isRepoStraddleAdvisory,
+  isSubsumptionAdvisory,
+} from '@/lib/dto/workItems';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
@@ -50,9 +55,10 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     result.valid ? 'still VALID' : 'unaffected'
   } either way`;
 
-  const references = result.advisories.filter((a) => a.kind !== 'shape');
+  const references = result.advisories.filter(isReferenceAdvisory);
   const shapes = result.advisories.filter(isOrderingAdvisory);
   const straddles = result.advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = result.advisories.filter(isSubsumptionAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -108,6 +114,27 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'consumer, two coordinated PRs, legitimately one card — is reported here and is an ' +
         'accepted false positive; and the bare-SYMBOL tell (a symbol whose repo you happen to ' +
         "know) is invisible to this check, so gate 1's prose still applies.",
+    );
+  }
+  // The SUBSUMPTION family (MOTIR-2903) — and this surface is the one whose
+  // `advisories: []` is the observation the family exists to invert. MOTIR-2757
+  // was `valid: true` with an empty array while its whole deliverable sat merged
+  // on `main`.
+  if (subsumed.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards name a file that a LATER merge already changed, so ` +
+        'their deliverable may already be in the repository:',
+      ...subsumed.map(
+        (a) =>
+          `  ${a.item} names ${a.path}, changed by ${a.pullRequest} (merged ${a.mergedAt}` +
+          `${a.pullRequestTitle ? ` — "${a.pullRequestTitle}"` : ''})`,
+      ),
+      "Read that diff against the card's acceptance criteria. If it delivers them, close the " +
+        'card with the merge as the evidence rather than letting it be claimed and rebuilt. Two ' +
+        'cards touching one file in sequence is the ordinary case and is why this never gates; a ' +
+        'boundary-contract card that shares paths with its sibling by design opts out by saying ' +
+        'so in its body (isSubsumptionCheckExempt).',
     );
   }
   return lines;

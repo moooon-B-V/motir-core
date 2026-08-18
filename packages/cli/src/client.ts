@@ -329,10 +329,40 @@ export interface DispatchRepoStraddleAdvisory extends DispatchShapeAdvisoryBase 
 export type DispatchShapeAdvisory = DispatchOrderingAdvisory | DispatchRepoStraddleAdvisory;
 
 /**
- * One advisory, either family. Narrow with `a.kind === 'shape'`; anything else —
- * including a payload from a server that predates the union — is a reference.
+ * The card's body names a file a LATER merge already changed, so its deliverable
+ * may already be in the repository (MOTIR-2903).
  */
-export type DispatchAdvisory = DispatchReferenceAdvisory | DispatchShapeAdvisory;
+export interface DispatchSubsumptionAdvisory {
+  kind: 'subsumption';
+  /** The dispatched card's key. */
+  item: string;
+  severity: 'likely-already-shipped';
+  /** The first path the body names that a qualifying merge touched. */
+  path: string;
+  /** The covering merge, as `owner/name#number`. */
+  pullRequest: string;
+  /** Its title, or `null` when the server has none. */
+  pullRequestTitle: string | null;
+  /** When it merged, ISO-8601. */
+  mergedAt: string;
+}
+
+/**
+ * One advisory, any family. Narrow POSITIVELY on the TAGGED members
+ * (`isOrderingAdvisory` / `isRepoStraddleAdvisory` / `isSubsumptionAdvisory`);
+ * an UNTAGGED object — including a payload from a server that predates the
+ * union — is a reference, which is what `isReferenceAdvisory` tests.
+ *
+ * ⚠️ The old `a.kind !== 'shape'` catch-all is the shape to avoid here: it read
+ * a NEWER family as a reference and printed `a.referenced` as `undefined`. A
+ * build older than MOTIR-2903 does exactly that with a subsumption advisory —
+ * which is why the reference filter is a positive predicate from here on, and
+ * why the server bumps `V1_CONTRACT_VERSION` when the union grows.
+ */
+export type DispatchAdvisory =
+  | DispatchReferenceAdvisory
+  | DispatchShapeAdvisory
+  | DispatchSubsumptionAdvisory;
 
 /**
  * Narrow to the ORDERING member. A predicate rather than an inline `filter`
@@ -346,6 +376,19 @@ export function isOrderingAdvisory(a: DispatchAdvisory): a is DispatchOrderingAd
 /** Narrow to the REPO-STRADDLE member (MOTIR-2177). */
 export function isRepoStraddleAdvisory(a: DispatchAdvisory): a is DispatchRepoStraddleAdvisory {
   return a.kind === 'shape' && a.severity === 'likely-repo-straddle';
+}
+
+/** Narrow to the SUBSUMPTION member (MOTIR-2903). */
+export function isSubsumptionAdvisory(a: DispatchAdvisory): a is DispatchSubsumptionAdvisory {
+  return a.kind === 'subsumption' && a.severity === 'likely-already-shipped';
+}
+
+/**
+ * Narrow to the REFERENCE member — the positive form of the `kind !== 'shape'`
+ * catch-all, so a family this build does not know is not mis-read as one.
+ */
+export function isReferenceAdvisory(a: DispatchAdvisory): a is DispatchReferenceAdvisory {
+  return a.kind === undefined || a.kind === 'reference';
 }
 
 /** The `dispatch_prompt` payload (`DispatchPromptDto`) — the canonical prompt

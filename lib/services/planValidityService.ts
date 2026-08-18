@@ -385,6 +385,14 @@ async function projectedProseAdvisories(
       // exactly gate 1's question about a card whose deliverables you can
       // enumerate but whose repo you cannot.
       targetRepos: stored?.targetRepos ?? [],
+      // The SUBSUMPTION check's inputs (MOTIR-2903) — STORED only, and null for
+      // a not-yet-materialized `add`, which is the honest answer: a card that
+      // does not exist yet has no pull requests of its own to exclude and no
+      // filing instant to measure a merge against, so the check is SKIPPED for
+      // it rather than run on a substituted date. A `modify` of a real row keeps
+      // both, so an existing card being re-planned is still checked.
+      id: stored?.id ?? null,
+      createdAt: stored?.createdAt ?? null,
     };
   });
 

@@ -512,3 +512,153 @@ export function firstRepoStraddleCriterion(
   const second = paths.find((p) => p.repo.toLowerCase() !== first);
   return second ? { ...second, reason: 'unpinnable' } : null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SUBSUMPTION CHECK (MOTIR-2903) — "is this card's deliverable already in
+// the repository?", asked of the one artifact where the overlap is a FACT.
+//
+// A different question again from the three above, and the reason it needs a
+// data source none of them touches. The reference scan compares a body against
+// the GRAPH; the two shape checks read a body against ITSELF. This one compares
+// a body against the REPOSITORY — because the plan, on its own, cannot answer
+// it. MOTIR-2757's work was swept up by MOTIR-2846, and MOTIR-2846's
+// description contains not one of `workflowsService`, `getWorkflow`,
+// `listStatusesByProject`, `getStatusByKey` or `lib/services/workflowsService.ts`
+// — nor does its parent story, nor any of that story's twenty-one children. Two
+// authors described the same change in disjoint vocabularies, one naming a
+// scanner's verdict list and the other naming three methods. The commit that
+// touched `lib/services/workflowsService.ts` is the ONLY place the two meet.
+//
+// So the rule, as amended on MOTIR-2903 by the close-out of MOTIR-2923:
+//
+//   at least ONE path the card's BODY names was touched by a merged pull
+//   request that is not this card's own, and that merged AFTER this card was
+//   filed.
+//
+// ⚠️ Every clause of that is load-bearing, and the two the card originally
+// carried were MEASURED to fire on nothing:
+//  - **BODY, not acceptance criteria.** The only path in MOTIR-2757's AC span is
+//    `tests/permissions/userlessTenantRead.test.ts`, which has no commits since
+//    that card was filed; the path the sweep actually took sits in its CONTEXT
+//    REFS. An AC-scoped scan reads well and never fires.
+//  - **At least ONE, not EVERY.** Of the five paths MOTIR-2757's body names,
+//    `c99efdc7` touched two. Full coverage is the same rule that fires never.
+//
+// The pure half is here: which paths a body names, and whether the card has
+// opted out. The repository read and the coverage decision live in
+// `proseGraphAdvisoryService`, on `githubPullRequestRepository`'s
+// `findMergedTouchingPaths` (MOTIR-2922) — this module stays IO-free.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A path token's final segment must carry an EXTENSION for the token to count
+ * as a file path. This is what keeps the check a reading of file names rather
+ * than a guess about what a slash means: `ghcr.io/token`, `app.motir.co/api/mcp`
+ * and `github.com/moooon-B-V/motir-meta/pull/211` all end in an extensionless
+ * segment and are dropped, while `lib/services/workflowsService.ts` and
+ * `docs/rls-runtime-role-inventory.md` are kept.
+ */
+const PATH_EXTENSION_RE = /\.[A-Za-z0-9]+$/;
+
+/**
+ * Trailing sentence punctuation the token regex swallows. `.` is in
+ * {@link PATH_TOKEN_RE}'s character class (it has to be — extensions), so a path
+ * ending a sentence arrives as `lib/db.ts.` and would fail the extension test.
+ */
+const TRAILING_DOTS_RE = /\.+$/;
+
+/**
+ * How many distinct paths one body contributes to the subsumption query.
+ *
+ * A cap on UNBOUNDED input, in the same spirit as `MAX_CAPTURED_PR_PATHS` on the
+ * capture side, and stated rather than sliced at the call site. Hitting it is
+ * not observed in this corpus — the widest card body names fewer than twenty
+ * paths — and the consequence if it ever is hit is a MISSED advisory, never a
+ * wrong one: the check reports the first covered path, so dropping the tail can
+ * only lose a finding on a channel that never blocks.
+ */
+export const MAX_SUBSUMPTION_QUERY_PATHS = 200;
+
+/**
+ * The repo-relative file paths a body NAMES, in document order, deduped.
+ *
+ * Scope is the WHOLE body, deliberately — see the module note: the path that
+ * catches the canonical fixture lives in its Context refs, not in its criteria.
+ * That is the inverse of both shape checks, which scan the AC span only, and the
+ * difference is the finding's nature: a mis-shaped criterion is a defect in what
+ * the card ASKS FOR, while a subsumed card is a fact about what it DESCRIBES.
+ *
+ * Inline markup is stripped first (the corpus writes paths in backticks), and a
+ * trailing `:274` line reference falls away for free — `:` is not in
+ * {@link PATH_TOKEN_RE}'s class, so `docs/x.md:274` yields `docs/x.md`.
+ *
+ * ⚠️ KNOWN BLIND SPOT — a REPO-QUALIFIED path (`motir-ai/src/foo.ts`) is
+ * returned verbatim and therefore matches nothing, because `changed_paths`
+ * stores what GitHub reports and GitHub reports repo-RELATIVE paths. Stripping
+ * the prefix would need the workspace's connected-repository set, which would
+ * make this function impure and candidate-dependent for a form the corpus writes
+ * rarely. The cost is a MISS on such a card, on a non-blocking channel; the
+ * alternative — guessing that a leading segment is a repo name — would cost
+ * false positives on every `docs/decisions/x.md`-shaped path.
+ */
+export function bodyFilePaths(md: string | null | undefined): string[] {
+  if (!md) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const m of md.replace(INLINE_MARKUP_RE, '').matchAll(PATH_TOKEN_RE)) {
+    const token = (m[0] as string).replace(TRAILING_DOTS_RE, '');
+    if (!PATH_EXTENSION_RE.test(token)) continue;
+    if (token.split('/').filter((s) => s.length > 0).length < 2) continue;
+    if (seen.has(token)) continue;
+    seen.add(token);
+    out.push(token);
+    if (out.length === MAX_SUBSUMPTION_QUERY_PATHS) break;
+  }
+  return out;
+}
+
+/**
+ * The phrases by which a card DECLARES itself a boundary contract — a producer
+ * plus its mirrored consumer, two coordinated pull requests, legitimately one
+ * card (`plan-rules/kind-leaf.md`'s two-PRs-one-card rule).
+ *
+ * Matched case-insensitively anywhere in the body, and pinned by
+ * `tests/workItems/proseVsGraph.test.ts` so the list cannot drift silently.
+ */
+export const SUBSUMPTION_EXEMPT_PHRASES = [
+  'two-prs-one-card',
+  'boundary contract',
+  'boundary-contract',
+] as const;
+
+const SUBSUMPTION_EXEMPT_MATCHERS: readonly RegExp[] = SUBSUMPTION_EXEMPT_PHRASES.map(
+  (phrase) => new RegExp(`\\b${phrase.split(' ').join('\\s+')}\\b`, 'i'),
+);
+
+/**
+ * Whether a card is EXEMPT from the subsumption check — the named predicate the
+ * repo-straddle check deliberately does NOT have, and the reason it can exist
+ * here when it could not there.
+ *
+ * The shape both checks fire on falsely is the same one: a boundary-contract
+ * card shares paths with its sibling, so the sibling's merge covers a path this
+ * card's body names and the advisory then fires **for as long as the card is
+ * open**. That permanence is what makes it worth an opt-out. A straddle
+ * advisory is a one-off reading of a static body; this one re-fires on every
+ * dispatch, every claim and every validate until the card closes, so an accepted
+ * false positive here is not one line of output but a standing one.
+ *
+ * ⚠️ **The exemption is the card SAYING it, and nothing else.** There is no
+ * signal in the graph for "these two cards are one contract" — an absent edge
+ * and a considered exclusion are the same absent edge (`run.md`: *silence is not
+ * an exclusion*) — so the only honest mute is an assertion the author writes
+ * down, in the body, where a reader meets it. Deliberately NOT keyed on
+ * `type` / `executor` the way {@link isOrderingCheckExempt} is: gate 14's
+ * exemption is the rule's own remedy read back (a `deploy` card is DEFINED by
+ * needing the merge), while no card KIND is defined by being a boundary
+ * contract.
+ */
+export function isSubsumptionCheckExempt(md: string | null | undefined): boolean {
+  if (!md) return false;
+  return SUBSUMPTION_EXEMPT_MATCHERS.some((re) => re.test(md));
+}

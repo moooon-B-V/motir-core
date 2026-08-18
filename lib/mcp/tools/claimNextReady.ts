@@ -7,7 +7,12 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
+import {
+  isOrderingAdvisory,
+  isReferenceAdvisory,
+  isRepoStraddleAdvisory,
+  isSubsumptionAdvisory,
+} from '@/lib/dto/workItems';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -62,9 +67,10 @@ function summarize(
   if (item.contextRefs.length > 0) lines.push(`Context refs: ${item.contextRefs.join(', ')}`);
   // The prose-vs-graph advisory (MOTIR-2079). Phrased as a prompt to LOOK, never
   // as a failure: the claim SUCCEEDED and the item is In Progress either way.
-  const references = advisories.filter((a) => a.kind !== 'shape');
+  const references = advisories.filter(isReferenceAdvisory);
   const shapes = advisories.filter(isOrderingAdvisory);
   const straddles = advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = advisories.filter(isSubsumptionAdvisory);
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +
@@ -97,6 +103,21 @@ function summarize(
         ' One subtask, one repo, one PR. CHECK IT before you branch: if the other repo already ' +
         "has that half, or this card's body pins a producer/mirror contract split, proceed — " +
         "otherwise surface the split and stop rather than dropping the other repo's criteria.",
+    );
+  }
+  // The SUBSUMPTION advisory (MOTIR-2903) — and THIS surface is the reason the
+  // family exists. MOTIR-2757 was claimed while its entire deliverable sat
+  // merged on `main`, with `ready: true`, `openBlockers: []`, `valid: true` and
+  // `advisories: []`; the claim payload is the one response a run cannot start
+  // without reading, so a finding delivered here is the one that reaches the
+  // party who would otherwise rebuild merged work.
+  for (const s of subsumed) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): this card's body names ${s.path}, which ` +
+        `${s.pullRequest} already changed (merged ${s.mergedAt}` +
+        `${s.pullRequestTitle ? ` — "${s.pullRequestTitle}"` : ''}). READ THAT DIFF BEFORE YOU ` +
+        'BRANCH: if it already delivers this card, close the card and say so rather than ' +
+        'rebuilding work that is on main. If the two merely share a file, proceed.',
     );
   }
   if (item.descriptionMd) {

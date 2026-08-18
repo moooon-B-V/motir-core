@@ -4,7 +4,12 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems';
+import {
+  isOrderingAdvisory,
+  isReferenceAdvisory,
+  isRepoStraddleAdvisory,
+  isSubsumptionAdvisory,
+} from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -61,9 +66,10 @@ const inputSchema = {
  * caller who skims the summary see them at all.
  */
 function advisorySummary(dto: DispatchPromptDto): string[] {
-  const references = dto.advisories.filter((a) => a.kind !== 'shape');
+  const references = dto.advisories.filter(isReferenceAdvisory);
   const shapes = dto.advisories.filter(isOrderingAdvisory);
   const straddles = dto.advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = dto.advisories.filter(isSubsumptionAdvisory);
   const lines: string[] = [];
   if (references.length > 0) {
     lines.push(
@@ -87,6 +93,14 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
           ? " — not this card's pinned repo."
           : ', and this card pins no repo while its criteria name more than one.') +
         ' One subtask, one repo, one PR — check the other repo before branching.',
+    );
+  }
+  // The SUBSUMPTION advisory (MOTIR-2903).
+  for (const s of subsumed) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): its body names ${s.path}, which ` +
+        `${s.pullRequest} already changed (merged ${s.mergedAt}). This card may already be ` +
+        'built — read that diff against its acceptance criteria before writing a line.',
     );
   }
   return lines;

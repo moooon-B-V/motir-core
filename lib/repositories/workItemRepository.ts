@@ -1955,13 +1955,16 @@ export const workItemRepository = {
       executor: string | null;
       targetRepo: string | null;
       targetRepos: string[];
+      createdAt: Date;
     }>
   > {
     if (ids.length === 0) return [];
     // `type` / `executor` ride along for the prose advisory's ORDERING exemption
-    // (MOTIR-2175), and `targetRepo` + `targetRepos` for the REPO-STRADDLE check's
-    // carried side (MOTIR-2177, widened to the SET in MOTIR-2728) — the same rows,
-    // a few columns wider, rather than more reads.
+    // (MOTIR-2175), `targetRepo` + `targetRepos` for the REPO-STRADDLE check's
+    // carried side (MOTIR-2177, widened to the SET in MOTIR-2728), and `createdAt`
+    // for the SUBSUMPTION check's `since` (MOTIR-2903 — "merged AFTER this card was
+    // filed" is half that rule) — the same rows, a few columns wider, rather than
+    // more reads.
     const client = tx ?? db;
     return client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
@@ -1972,6 +1975,7 @@ export const workItemRepository = {
         executor: true,
         targetRepo: true,
         targetRepos: true,
+        createdAt: true,
       },
     });
   },
