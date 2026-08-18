@@ -33,7 +33,14 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 /** Satisfies the credential-strength rule (same shape as plans-review-seed's). */
 export const AGENT_PLAN_SEED_PASSWORD = 'agent-authored-plan-e2e-pass-7';
 
-const BASE_URL = process.env.MOTIR_BASE_URL ?? 'http://localhost:3000';
+// ⚠️ NO `process.env.MOTIR_BASE_URL` HERE. That variable is set on the
+// webServer's env (`playwright.acceptance.config.ts`), NOT on the runner
+// process — so reading it from a spec silently falls back to :3000 and every
+// tool call dies as `TypeError: fetch failed` at the transport, instantly and
+// identically on every test. It passed locally only because the run exported it
+// by hand. The origin the RUNNER knows is Playwright's own `baseURL`, which is
+// the same value the browser is pointed at, so `agentSession` takes it as an
+// argument and the spec reads it from the test fixtures.
 
 /** The harness/model the seeded "agent" self-reports — asserted on screen. */
 export const AGENT_HARNESS = 'Claude Code';
@@ -122,10 +129,14 @@ export async function seedAgentAuthoredPlan(email: string): Promise<AgentPlanSee
   };
 }
 
-/** An MCP session over the REAL streamable-HTTP transport, as an agent opens one. */
-export async function agentSession(token: string): Promise<Client> {
+/**
+ * An MCP session over the REAL streamable-HTTP transport, as an agent opens one.
+ *
+ * `baseURL` is Playwright's, passed in by the spec — see the note above.
+ */
+export async function agentSession(token: string, baseURL: string): Promise<Client> {
   const client = new Client({ name: 'agent-authored-plan-e2e', version: '0.0.0' });
-  const transport = new StreamableHTTPClientTransport(new URL('/api/mcp', BASE_URL), {
+  const transport = new StreamableHTTPClientTransport(new URL('/api/mcp', baseURL), {
     requestInit: { headers: { Authorization: `Bearer ${token}` } },
   });
   await client.connect(transport);

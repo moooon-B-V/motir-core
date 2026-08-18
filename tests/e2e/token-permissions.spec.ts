@@ -118,14 +118,17 @@ test('a token grants what was ticked — and a real write is refused by name', a
 
     // Turn EVERYTHING off. The CTA goes dead and says why, rather than minting
     // a credential that can do nothing.
-    for (const name of [
-      'View project',
-      'Edit work items',
-      'Add comments',
-      'Manage sprints',
-      'Run AI planning',
-    ]) {
-      await dialog.getByRole('switch', { name, exact: true }).click();
+    //
+    // Driven off what is CHECKED rather than a written list of names
+    // (MOTIR-2988): the default grant is DERIVED from `TOOL_PERMISSIONS`, so a
+    // story that gives an existing catalog key its first tool adds a switch here.
+    // A list would leave that one on and quietly stop testing the refusal.
+    const switches = dialog.getByRole('group', { name: 'Permissions' }).getByRole('switch');
+    const count = await switches.count();
+    expect(count, 'the permission grid rendered no switches').toBeGreaterThan(0);
+    for (let i = 0; i < count; i += 1) {
+      const toggle = switches.nth(i);
+      if (await toggle.isChecked()) await toggle.click();
     }
     await expect(dialog.getByRole('alert')).toContainText(
       'Grant at least one permission to create a token.',

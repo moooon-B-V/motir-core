@@ -52,6 +52,20 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
+/**
+ * Playwright's own origin, asserted present.
+ *
+ * The MCP transport is the one part of this flow that does not go through the
+ * `page`, so it has to be told where the server is — and the fixture is the only
+ * runner-side authority for that (`MOTIR_BASE_URL` is the webServer's env, not
+ * the runner's). Failing here names the cause; letting it default sends every
+ * test to `TypeError: fetch failed` at the transport instead.
+ */
+function mcpOrigin(baseURL: string | undefined): string {
+  if (!baseURL) throw new Error('no Playwright baseURL — the MCP transport has nowhere to go');
+  return baseURL;
+}
+
 /** The Plans list row for a plan, addressed by its link target. */
 const planRow = (page: Parameters<typeof signIn>[0], planId: string) =>
   page.locator(`a[href="/plans/${planId}"]`);
@@ -62,6 +76,7 @@ async function signInAsReviewer(page: Parameters<typeof signIn>[0], seed: AgentP
 
 test('an agent authors a plan over the MCP; a person reviews it and approves', async ({
   page,
+  baseURL,
   chapter,
   beat,
   acceptanceStory,
@@ -71,7 +86,7 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
   const seed = await seedAgentAuthoredPlan('agent-plan@example.com');
 
   // ── Step 1 — the agent authors, over the real MCP ────────────────────────
-  const client = await agentSession(seed.token);
+  const client = await agentSession(seed.token, mcpOrigin(baseURL));
   const authored = await authorPlanOverMcp(client, seed.projectKey, {
     title: 'Marketplace payouts for sellers',
     harness: AGENT_HARNESS,
@@ -209,10 +224,11 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
 
 test('the list renders the states the happy path skips — long harness, and no author at all', async ({
   page,
+  baseURL,
 }) => {
   const seed = await seedAgentAuthoredPlan('agent-plan-states@example.com');
 
-  const client = await agentSession(seed.token);
+  const client = await agentSession(seed.token, mcpOrigin(baseURL));
   const long = await authorPlanOverMcp(client, seed.projectKey, {
     title: 'Invoicing pipeline migration',
     harness: LONG_HARNESS,
@@ -242,10 +258,10 @@ test('the list renders the states the happy path skips — long harness, and no 
   await expect(legacyRow).not.toContainText(seed.reviewerName);
 });
 
-test('DECLINE leaves the tree exactly as it was', async ({ page }) => {
+test('DECLINE leaves the tree exactly as it was', async ({ page, baseURL }) => {
   const seed = await seedAgentAuthoredPlan('agent-plan-decline@example.com');
 
-  const client = await agentSession(seed.token);
+  const client = await agentSession(seed.token, mcpOrigin(baseURL));
   const authored = await authorPlanOverMcp(client, seed.projectKey, {
     title: 'Refund flow',
     harness: AGENT_HARNESS,
