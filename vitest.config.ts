@@ -1110,6 +1110,17 @@ export default defineConfig({
         // way that ends is with someone loosening a threshold to make a build
         // pass. Read the number off CI and pin it when the 7.5 arms are covered.
         'lib/services/aiBoundaryService.ts',
+        // Story MOTIR-2982 · Subtask MOTIR-2992 — the agent-authored plan surface.
+        // Every file this story added or changed that carries decision logic; the
+        // pure type/DTO modules it also touched carry none and are left out.
+        //
+        // ⚠️ The row's builder and component are written `app/**/plans/…`, NOT
+        // `app/(authed)/plans/…`, for the reason the block comment at the top of
+        // this section gives — a literal route-group path matches no reported
+        // file and gates nothing.
+        'lib/mcp/tools/authorPlan.ts',
+        'app/**/plans/planRowView.ts',
+        'app/**/plans/_components/PlanRow.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2136,6 +2147,20 @@ export default defineConfig({
         'app/**/home/_components/HomeList.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/home/_components/HomeTabs.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/home/_components/homeRows.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2982 · Subtask MOTIR-2992 — the agent-authored plan
+        // surface, MEASURED on this branch before being pinned (the sequence
+        // this block prescribes throughout), with `tests/mcp/author-plan.test.ts`,
+        // `tests/components/PlanRow.test.tsx` and `tests/integration/plans/`:
+        //
+        //   lib/mcp/tools/authorPlan.ts        100 stmts · 97.05 branch · 100 fn · 100 lines
+        //   app/**/plans/planRowView.ts        100 stmts · 95.65 branch · 100 fn · 100 lines
+        //   app/**/plans/_components/PlanRow.tsx  100 stmts · 97.91 branch · 100 fn · 100 lines
+        //
+        // Pinned at the 90 floor rather than at the measured number, so a later
+        // refactor has room without anyone loosening a gate to make a build pass.
+        'lib/mcp/tools/authorPlan.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/planRowView.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/_components/PlanRow.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

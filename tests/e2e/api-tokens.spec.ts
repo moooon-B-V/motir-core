@@ -13,11 +13,12 @@
 // Every mutation waits on its route response (the authoritative signal — never
 // the optimistic UI alone, per the E2E discipline).
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { createFirstProject, signUp } from './_helpers/shell-session';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -297,14 +298,22 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
 
   // THE TALLEST SHAPE THE MODAL HAS. Three things stack here, and each was
   // added by a different card: the Organization picker (≥2 orgs only), the
-  // Project picker (MOTIR-2606's required binding), and the six-permission
-  // grid (MOTIR-2580). Asserting all three are present is what makes the
-  // footer assertion below a test of the WORST case rather than of whichever
-  // case happens to render today.
+  // Project picker (MOTIR-2606's required binding), and the permission grid
+  // (MOTIR-2580). Asserting all three are present is what makes the footer
+  // assertion below a test of the WORST case rather than of whichever case
+  // happens to render today.
+  //
+  // ⚠️ The grid's SIZE is derived, not written down (MOTIR-2988). It was `6`,
+  // and it became 7 the moment `ai:view_plan` gained its first token-reachable
+  // operation — `GRANTABLE_PERMISSIONS` is COMPUTED from `TOOL_PERMISSIONS`, so
+  // any story that gives an existing catalog key a tool grows this modal without
+  // touching it. A literal here turns that into a red build on an unrelated
+  // branch; reading the same derived set the picker reads keeps this a test of
+  // the modal's HEIGHT, which is what it is for.
   await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();
   await expect(dialog.getByRole('combobox', { name: 'Project' })).toBeVisible();
   await expect(dialog.getByRole('group', { name: 'Permissions' }).getByRole('switch')).toHaveCount(
-    6,
+    GRANTABLE_PERMISSIONS.length,
   );
 
   // The panel obeys its own cap — it grows no further than 90vh (630px here).
@@ -336,6 +345,32 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
 // nothing is not a token. The CTA goes dead and the modal says why, rather than
 // minting a credential every call would then refuse. Asserted here as well as in
 // the acceptance clip, because the bulk lane is what runs on every PR.
+/**
+ * Turn OFF every permission switch that is currently on.
+ *
+ * Written as a sweep rather than as a list of labels because the grant is
+ * DERIVED (`GRANTABLE_PERMISSIONS` is computed from `TOOL_PERMISSIONS`): a story
+ * that gives an existing catalog key its first tool adds a switch to this modal
+ * and to the default grant. A list would then miss it, leave one permission on,
+ * and turn "the empty grant is refused" into a test that asserts nothing —
+ * failing loudly here is better than that, but not needing to change at all is
+ * better still.
+ */
+async function turnEveryPermissionOff(dialog: Locator): Promise<void> {
+  const switches = dialog.getByRole('group', { name: 'Permissions' }).getByRole('switch');
+  const count = await switches.count();
+  expect(count, 'the permission grid rendered no switches').toBeGreaterThan(0);
+  for (let i = 0; i < count; i += 1) {
+    const toggle = switches.nth(i);
+    if (await toggle.isChecked()) await toggle.click();
+  }
+  // The sweep really did empty it — otherwise a switch that failed to toggle
+  // would leave this helper silently doing nothing.
+  for (let i = 0; i < count; i += 1) {
+    await expect(switches.nth(i)).not.toBeChecked();
+  }
+}
+
 test('a grant with nothing selected refuses submission, with its reason', async ({ page }) => {
   await signUp(page, 'tokens-empty-grant-e2e@example.com');
   await createFirstProject(page, 'Empty Grant E2E');
@@ -346,17 +381,12 @@ test('a grant with nothing selected refuses submission, with its reason', async 
   await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('grants-nothing');
 
-  // Everything the DEFAULT grant turned on, turned back off. (Delete is already
-  // off — the one permission the default withholds.)
-  for (const name of [
-    'View project',
-    'Edit work items',
-    'Add comments',
-    'Manage sprints',
-    'Run AI planning',
-  ]) {
-    await dialog.getByRole('switch', { name, exact: true }).click();
-  }
+  // Everything the DEFAULT grant turned on, turned back off. Driven off what is
+  // CHECKED rather than a written list of names (MOTIR-2988): the default grant
+  // is derived from the grantable set, so a story that makes another catalog key
+  // token-reachable adds a switch here — and a hard-coded list would then leave
+  // one on and silently stop testing the refusal it exists for.
+  await turnEveryPermissionOff(dialog);
 
   await expect(dialog.getByRole('alert')).toContainText(
     'Grant at least one permission to create a token.',

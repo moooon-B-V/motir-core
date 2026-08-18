@@ -38,6 +38,17 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     summary: row.summary,
     sourceJobId: row.sourceJobId,
     origin: row.origin,
+    // WHO ASKED for it (MOTIR-2986) — null on a cadence plan, deliberately: the
+    // watcher's context carries the project owner only so the job has a
+    // credential, and nobody asked.
+    createdById: row.createdById,
+    // WHO authored the plan (MOTIR-2986) — read back on every path that returns
+    // a plan: `getPlan`, the plans LIST page, and the `get_plan` MCP tool. Null
+    // on every plan no `create_plan` call produced, which is the *unattributed*
+    // state the Plans surface draws.
+    authorSource: row.authorSource,
+    authorHarness: row.authorHarness,
+    authorModel: row.authorModel,
     itemCount,
     createdAt: row.createdAt.toISOString(),
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,

@@ -13,6 +13,7 @@ import {
   planJobHandleSchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
+import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { definePayload } from './define';
@@ -177,6 +178,25 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
   itemCount: z.number().int(),
   /** Who decided the plan. MCP has always published it; v1 does not. */
   decidedById: z.string().nullable(),
+  /**
+   * WHO ASKED for the plan and WHO AUTHORED it (Story MOTIR-2982 · MOTIR-2986)
+   * — MCP's own fields,
+   * and deliberately NOT added to v1's `planSchema`.
+   *
+   * `docs/decisions/agent-authored-plans.md` Q1: the plan-authoring operations
+   * are agent-facing, and MOTIR-2982's scope boundary says the public REST
+   * surface's plan operations stay exactly as wide as they are today. Extending
+   * HERE rather than upstream is what keeps that true at the SCHEMA, not merely
+   * at the route list — `decidedById` directly above is the precedent that this
+   * extension point exists for exactly this case.
+   *
+   * An agent that authored a plan reads its own attribution back; a person's
+   * read of the same fact is the Plans surface (MOTIR-2991), not `/api/v1`.
+   */
+  createdById: z.string().nullable(),
+  authorSource: z.enum(PLANNING_SOURCES).nullable(),
+  authorHarness: z.string().nullable(),
+  authorModel: z.string().nullable(),
   items: z.array(z.unknown()),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
@@ -196,6 +216,10 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
     projectId: plan.projectId,
     itemCount: plan.itemCount,
     decidedById: plan.decidedById,
+    createdById: plan.createdById,
+    authorSource: plan.authorSource,
+    authorHarness: plan.authorHarness,
+    authorModel: plan.authorModel,
     items: plan.items,
   };
 }
@@ -203,6 +227,36 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
 /** The `get_plan` payload. No probe — see the narrowing note above. */
 export const planPayload = definePayload({
   schema: mcpPlanSchema as unknown as z.ZodType<McpPlan>,
+  probes: [],
+});
+
+/**
+ * The `add_plan_items` payload — the plan, plus the ids of the proposals THAT
+ * CALL created, in append order (Story MOTIR-2982 · MOTIR-2988).
+ *
+ * A `.extend` of the plan shape above rather than a hand-authored look-alike, so
+ * the two stay one shape: everything a caller can read about the plan is the
+ * same as what `get_plan` returns, and the ONE addition is the transport fact
+ * `get_plan` has no way to know — which of the plan's items this particular
+ * append produced.
+ *
+ * That list is the intra-plan TEMP-REF contract: a caller passes
+ * `planItem:<id>` from it as a later batch's `parentRef` / `blockedByRefs`, so a
+ * tree arrives layer by layer, parents before children
+ * (`docs/decisions/agent-authored-plans.md` Q1).
+ */
+export const mcpPlanAppendSchema = mcpPlanSchema.extend({
+  planItemIds: z.array(z.string()),
+});
+export type McpPlanAppend = z.infer<typeof mcpPlanAppendSchema>;
+
+/** Map an append result — the plan through the shared shape, plus the new ids. */
+export function presentMcpPlanAppend(plan: PlanWithItemsDto, planItemIds: string[]): McpPlanAppend {
+  return { ...presentMcpPlan(plan), planItemIds };
+}
+
+export const planAppendPayload = definePayload({
+  schema: mcpPlanAppendSchema as unknown as z.ZodType<McpPlanAppend>,
   probes: [],
 });
 

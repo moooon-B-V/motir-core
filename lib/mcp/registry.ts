@@ -18,6 +18,11 @@ import {
 } from './tools/expandItem';
 import { GET_PLAN_TOOL_NAME, registerGetPlan } from './tools/getPlan';
 import {
+  ADD_PLAN_ITEMS_TOOL_NAME,
+  CREATE_PLAN_TOOL_NAME,
+  registerAuthorPlan,
+} from './tools/authorPlan';
+import {
   APPEND_PLAN_TURN_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
   SUBMIT_PLAN_SESSION_TOOL_NAME,
@@ -81,6 +86,8 @@ export const MCP_TOOL_NAMES = [
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
   GET_PLAN_TOOL_NAME,
+  CREATE_PLAN_TOOL_NAME,
+  ADD_PLAN_ITEMS_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
   APPEND_PLAN_TURN_TOOL_NAME,
   SUBMIT_PLAN_SESSION_TOOL_NAME,
@@ -177,6 +184,14 @@ export function registerMcpTools(
   // of sending its user to a browser to look. Same proposal gate: it reads
   // proposals, it does not create work items.
   registerGetPlan(target, resolveContext);
+  // The plan AUTHORING door (MOTIR-2988) — `create_plan` + `add_plan_items`, so
+  // an agent can PROPOSE a tree the user reviews instead of writing work items
+  // straight into it. The third door beside `create_work_item` (writes now, no
+  // review) and the plan-session tools (hand a PROMPT to motir-ai and let it do
+  // the planning): here the agent says what the tree should be, and Motir
+  // reviews it exactly like any other plan. Same proposal gate — nothing becomes
+  // a work item until somebody approves it in Motir.
+  registerAuthorPlan(target, resolveContext);
   // The plan-change CONVERSATION (MOTIR-1832) — open/resume a thread, append a
   // turn, submit the accumulated intent. The substrate `motir plan` talks
   // through, and the same thread the web app's planning rail shows: accumulation

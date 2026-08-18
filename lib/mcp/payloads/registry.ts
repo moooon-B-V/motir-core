@@ -28,6 +28,7 @@ import {
   markIntegratedPayload,
   planJobHandlePayload,
   planOutcomePayload,
+  planAppendPayload,
   planPayload,
   planSessionPayload,
   planSubmitPayload,
@@ -92,6 +93,12 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   expand_item: planJobHandlePayload as unknown as PayloadDefinition<never>,
   get_plan_status: planOutcomePayload as unknown as PayloadDefinition<never>,
   get_plan: planPayload as unknown as PayloadDefinition<never>,
+  // The plan-AUTHORING door (MOTIR-2988). `create_plan` returns the plan itself,
+  // so it derives through the very same definition `get_plan` does; the append
+  // adds ONE transport field (`planItemIds`) to that shape, which is why it is a
+  // `.extend` of it rather than a second description of a plan.
+  create_plan: planPayload as unknown as PayloadDefinition<never>,
+  add_plan_items: planAppendPayload as unknown as PayloadDefinition<never>,
   open_plan_session: planSessionPayload as unknown as PayloadDefinition<never>,
   append_plan_turn: planSessionPayload as unknown as PayloadDefinition<never>,
   submit_plan_session: planSubmitPayload as unknown as PayloadDefinition<never>,

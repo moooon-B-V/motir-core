@@ -3,6 +3,7 @@ import { getFormatter } from 'next-intl/server';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanDto } from '@/lib/dto/plans';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { userRepository } from '@/lib/repositories/userRepository';
 
 import type { PlanRowView, PlanWhenKey } from './_components/types';
 
@@ -43,6 +44,25 @@ async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number
   }
 }
 
+/**
+ * The REQUESTERS of a page of plans, as `id → display name` (MOTIR-2991).
+ *
+ * ONE query for the whole page, over the DISTINCT ids — never a lookup per row.
+ * The list is paginated and a per-row read would make the plans page's cost grow
+ * with the page size for a field that is one join away; `userRepository.findByIds`
+ * already exists for exactly this shape.
+ *
+ * A missing id resolves to `null` rather than throwing: `createdById` is
+ * `ON DELETE SET NULL`, so the only way to hold an id with no user is a race with
+ * a deletion, and an unattributable plan is a correct reading of that.
+ */
+async function requesterNames(plans: PlanDto[]): Promise<Map<string, string>> {
+  const ids = [...new Set(plans.map((plan) => plan.createdById).filter((id) => id != null))];
+  if (ids.length === 0) return new Map();
+  const users = await userRepository.findByIds(ids);
+  return new Map(users.map((user) => [user.id, user.name]));
+}
+
 export async function buildPlanRowViews(
   plans: PlanDto[],
   ctx: ServiceContext,
@@ -51,6 +71,7 @@ export async function buildPlanRowViews(
 
   // Per-plan staleness is independent — fan out (bounded by the page size).
   const staleCounts = await Promise.all(plans.map((plan) => staleCountFor(plan, ctx)));
+  const names = await requesterNames(plans);
 
   return plans.map((plan, i) => {
     const { key, iso } = whenFor(plan);
@@ -62,6 +83,14 @@ export async function buildPlanRowViews(
       staleCount: staleCounts[i] ?? 0,
       whenKey: key,
       whenLabel: format.relativeTime(new Date(iso)),
+      // The three-party attribution (MOTIR-2991, `design-notes.md` Part III).
+      // Resolved HERE so the row component stays presentational, exactly as the
+      // relative time and the staleness count already are.
+      origin: plan.origin,
+      sourceJobId: plan.sourceJobId,
+      createdByName: plan.createdById ? (names.get(plan.createdById) ?? null) : null,
+      authorSource: plan.authorSource,
+      authorHarness: plan.authorHarness,
     };
   });
 }

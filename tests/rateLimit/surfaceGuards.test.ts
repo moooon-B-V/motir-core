@@ -878,13 +878,28 @@ describe('the routes are actually WIRED to the guards', () => {
       .map((file) => (file.split('/').pop() as string).replace(/\.ts$/, ''));
     expect(submitters.length).toBeGreaterThan(5);
 
+    // A positive control for the comment-stripping below: if it ever over-matched
+    // and emptied every module, the `continue` inside the loop would make this
+    // whole check pass while asserting nothing. At least the modules that reach
+    // `aiPlanEditsService` / `planChangeSessionsService` must still be seen.
+    let modulesReachingASubmitter = 0;
+
     for (const file of globSync('lib/mcp/tools/*.ts')) {
       const source = readFileSync(file, 'utf8');
-      const reaches = submitters.filter((service) =>
-        new RegExp(`\\b${service}\\s*\\.`).test(source),
-      );
+      // ⚠️ Match against CODE, not comments (MOTIR-2988). The regex below is a
+      // text search, and these modules carry long headers that EXPLAIN which
+      // service they mirror — `lib/mcp/tools/authorPlan.ts` names
+      // `aiGenerationService.appendProposals` in prose while calling only
+      // `plansService`, and that prose is exactly the documentation this codebase
+      // wants. Firing on it would fail a module that submits no job, and the fix
+      // a future author would reach for is rewording the comment — i.e. routing
+      // around the guard, which is a worse outcome than the drift it prevents.
+      // Stripping comments loses nothing: a real call is never inside one.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      const reaches = submitters.filter((service) => new RegExp(`\\b${service}\\s*\\.`).test(code));
       if (reaches.length === 0) continue;
-      const billable = [...source.matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].filter((m) =>
+      modulesReachingASubmitter += 1;
+      const billable = [...code.matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].filter((m) =>
         isBillableTool(m[1] as string),
       );
       expect(
@@ -892,6 +907,12 @@ describe('the routes are actually WIRED to the guards', () => {
         `${file} calls ${reaches.join(', ')} — which submit model jobs — but declares no billable tool`,
       ).toBeGreaterThan(0);
     }
+
+    expect(
+      modulesReachingASubmitter,
+      'the code-only match saw NO tool module reaching a job-submitting service — ' +
+        'the stripping over-matched and this check is now vacuous',
+    ).toBeGreaterThan(0);
   });
 
   it('every billable tool is registered by a module the glob above actually reached', async () => {

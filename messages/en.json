@@ -225,7 +225,11 @@
     "editLabelDescription": "Description",
     "editTitleRequired": "Enter a title.",
     "editSave": "Save changes",
-    "editCancel": "Cancel"
+    "editCancel": "Cancel",
+    "requestedBy": "Requested by {name}",
+    "writtenByHarness": "written by {harness}",
+    "writtenByMotir": "written by Motir AI",
+    "autoPlannedNobodyAsked": "Auto-planned — nobody requested this"
   },
   "planEdits": {
     "submitting": "Submitting…",
@@ -5247,7 +5251,10 @@
       "replan": "Re-plan",
       "planAria": "Plan {item}",
       "replanAria": "Re-plan {item}"
-    }
+    },
+    "viaHarness": "via {harness}",
+    "viaMotir": "via Motir AI",
+    "autoPlanned": "auto-planned"
   },
   "planningWorkspace": {
     "noProjectTitle": "No project selected",

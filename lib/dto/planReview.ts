@@ -14,7 +14,13 @@
 // intra-plan temp-ref (`planItem:<id>`) is stripped to the referenced add's
 // node id; a real work-item ref stays as-is.
 
-import type { PlanItemOpDto, PlanStatusDto, StaleReason } from '@/lib/dto/plans';
+import type {
+  PlanItemOpDto,
+  PlanStatusDto,
+  StaleReason,
+  PlanAuthorSourceDto,
+  PlanOriginDto,
+} from '@/lib/dto/plans';
 
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
 export interface PlanItemChangeDto {
@@ -88,6 +94,30 @@ export interface PlanReviewDto {
   decidedAt: string | null;
   /** The decider's display name, resolved from `decidedById`. */
   decidedByName: string | null;
+  /**
+   * The plan's THREE-party attribution (Story MOTIR-2982 · MOTIR-2991) — see
+   * `design/ai-planning/design-notes.md` Part III.
+   *
+   * The detail is fed by THIS shape, not by `PlanDto`, so the fields have to be
+   * carried here as well: without them the header has nothing to render however
+   * complete the carrier is.
+   *
+   * `createdByName` is resolved from `Plan.createdById` the same way
+   * `decidedByName` is; `origin` and `sourceJobId` are what distinguish the
+   * remaining states — a Motir generation is `sourceJobId !== null` (the
+   * generator records no author, MOTIR-2996), and *nobody asked* is
+   * `origin === 'cadence'`.
+   *
+   * ⚠️ Unlike the LIST row, the header keeps the requester on a DECIDED plan: it
+   * names the roles in words, and its decider lives in `history` below rather
+   * than in the same line, so neither reason the row drops it applies here.
+   */
+  origin: PlanOriginDto;
+  sourceJobId: string | null;
+  createdByName: string | null;
+  authorSource: PlanAuthorSourceDto | null;
+  authorHarness: string | null;
+  authorModel: string | null;
   /** The lifecycle timeline (created → planned → decision). */
   history: PlanHistoryEventDto[];
   /** The proposed items, enriched for the canvas. */

@@ -278,9 +278,21 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
       // human-initiated plan; only the auto-plan cadence watcher passes
       // `cadence`. Asserted on the call, not just defaulted downstream, so a
       // future submit path can't silently start mislabelling its provenance.
+      //
+      // `createdById` (MOTIR-2986) rides the SAME decision, and this is the
+      // request-path arm of it: somebody clicked, so the acting user IS the
+      // requester and is recorded. The cadence arm — where the acting user is a
+      // substituted project-owner credential and `createdById` must stay NULL —
+      // is asserted in `tests/integration/ai/autoPlanCadence.test.ts`.
       expect(plansService.createPlan).toHaveBeenCalledWith(
         'pj_1',
-        { title: null, summary: null, sourceJobId: 'job_1', origin: 'user' },
+        {
+          title: null,
+          summary: null,
+          sourceJobId: 'job_1',
+          origin: 'user',
+          createdById: ctx.userId,
+        },
         ctx,
       );
     });

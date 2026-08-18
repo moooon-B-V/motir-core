@@ -57,9 +57,9 @@ datasource db {
 }
 
 model User {
-  id                  String   @id @default(cuid())
-  email               String   @unique
-  emailVerified       Boolean  @default(false)
+  id                  String        @id @default(cuid())
+  email               String        @unique
+  emailVerified       Boolean       @default(false)
   name                String
   image               String?
   /// The user's GLOBAL last-active project pointer (Subtask 8.8.27) — the
@@ -85,8 +85,8 @@ model User {
   /// (dev) and the production operator script (MOTIR-2932) until Story 10.3
   /// ships a grant surface — nothing in the product writes it.
   platformRole        PlatformRole? @map("platform_role")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   accounts                    Account[]
   sessions                    Session[]
@@ -240,6 +240,7 @@ model User {
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
   decidedPlans                Plan[]                    @relation("PlanDecidedBy")
+  requestedPlans              Plan[]                    @relation("PlanCreatedBy")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
   createdImports              Import[]                  @relation("ImportCreatedBy")
@@ -4097,34 +4098,68 @@ enum PlanOrigin {
 /// untouched. The lifecycle timestamps + decider ARE the history surface (when
 /// planned / when decided / by whom). Workspace-scoped tenant data (RLS).
 model Plan {
-  id          String     @id @default(cuid())
-  workspaceId String     @map("workspace_id")
-  projectId   String     @map("project_id")
-  status      PlanStatus @default(generating)
+  id            String                  @id @default(cuid())
+  workspaceId   String                  @map("workspace_id")
+  projectId     String                  @map("project_id")
+  status        PlanStatus              @default(generating)
   /// A short label for the plan — typically the idea/prompt the generation came from.
-  title       String?
+  title         String?
   /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
-  summary     String?    @db.Text
+  summary       String?                 @db.Text
   /// AI-suggested product/project name (MOTIR-1554/1551) — set on the FINAL
   /// plan-proposals append, and ONLY by the onboarding generation. Consumed at
   /// approve to rename a still-provisional draft project. Null otherwise.
-  productName String?    @map("product_name")
+  productName   String?                 @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
-  sourceJobId String?    @map("source_job_id")
+  sourceJobId   String?                 @map("source_job_id")
   /// WHY this plan was started (MOTIR-916) — `user` (someone clicked) or
   /// `cadence` (the auto-plan watcher fired it when the ready set drained).
   /// Set at submit; never changes afterwards.
-  origin      PlanOrigin @default(user)
-  createdAt   DateTime   @default(now()) @map("created_at")
+  origin        PlanOrigin              @default(user)
+  /// WHO ASKED for this plan (MOTIR-2986) — the person whose request produced
+  /// it, as opposed to `decidedById`'s who APPROVED it and `authorSource`'s
+  /// which AGENT wrote it. A plan has up to three parties and they are commonly
+  /// three different ones: a teammate asks, an agent writes, a lead approves.
+  ///
+  /// NULL is a MEANING, and it is the `cadence` case. `autoPlanCadenceService`
+  /// runs the watcher under the PROJECT OWNER's credential so the job has one —
+  /// nobody clicked anything — so recording that owner here would attribute to a
+  /// person a request they never made. The requester is written ⟺ a person
+  /// actually asked (`origin = 'user'`); a cadence plan is identified by its
+  /// `origin`, not by a fabricated requester.
+  createdById   String?                 @map("created_by_id")
+  /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY,
+  /// `createdById`'s WHO ASKED and `sourceJobId`'s WHICH JOB — the
+  /// `source · harness · model` triple
+  /// `docs/decisions/work-item-provenance.md` Decision 2 fixes for a work item,
+  /// mirrored onto the plan by `docs/decisions/agent-authored-plans.md` Q3. The
+  /// enum is REUSED rather than duplicated so a plan's author and its
+  /// materialized items' authors are drawn from ONE closed vocabulary and cannot
+  /// disagree; a second enum would be a second display switch to keep total.
+  ///
+  /// SERVER-SET at the write seam — `mcp` from the `create_plan` MCP tool, the
+  /// same discipline `create_work_item` applies so an agent cannot claim
+  /// `native`/`manual`. NEVER a caller field.
+  authorSource  WorkItemPlanningSource? @map("author_source")
+  /// The authoring agent's harness, SELF-REPORTED at `create_plan`
+  /// (`plannedWithHarness`) — free text by Decision 2, stored as-supplied
+  /// (trimmed, empty → null). Null on every plan Motir's own generator produced:
+  /// the generator path is deliberately not retrofitted here (MOTIR-2996).
+  authorHarness String?                 @map("author_harness")
+  /// The authoring agent's model, SELF-REPORTED at `create_plan`
+  /// (`plannedWithModel`) — free text, same rules as `authorHarness`.
+  authorModel   String?                 @map("author_model")
+  createdAt     DateTime                @default(now()) @map("created_at")
   /// Set when generation completes (→ `planned`).
-  plannedAt   DateTime?  @map("planned_at")
+  plannedAt     DateTime?               @map("planned_at")
   /// Set on approve/decline, with the deciding actor.
-  decidedAt   DateTime?  @map("decided_at")
-  decidedById String?    @map("decided_by_id")
+  decidedAt     DateTime?               @map("decided_at")
+  decidedById   String?                 @map("decided_by_id")
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   decidedBy User?      @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy User?      @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items     PlanItem[]
 
   @@index([workspaceId])
@@ -4410,16 +4445,16 @@ model GithubRepo {
 /// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedChangeRequest.
 model GithubPullRequest {
-  id             String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider       String   @default("github")
+  provider              String    @default("github")
   /// FK → GithubRepo.id (internal cuid).
-  repoId         String   @map("repo_id")
-  number         Int
+  repoId                String    @map("repo_id")
+  number                Int
   /// Normalized change-request state: "open" | "closed" (merged is the boolean).
-  state          String
-  merged         Boolean  @default(false)
-  headRef        String   @map("head_ref")
+  state                 String
+  merged                Boolean   @default(false)
+  headRef               String    @map("head_ref")
   /// The branch the change request targets, as of the last delivery (Story
   /// MOTIR-2725 · MOTIR-2729). The completion decision has always compared this
   /// against the repository's mirrored `defaultBranch` — a merge onto anything
@@ -4437,14 +4472,14 @@ model GithubPullRequest {
   /// rule `merged_at` above states for the same reason. Every live path supplies
   /// it: it is REQUIRED on `NormalizedChangeRequest` for both providers and on
   /// the historical backfill, so only pre-existing rows are ever null.
-  baseRef        String?  @map("base_ref")
+  baseRef               String?   @map("base_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
-  title          String?
+  title                 String?
   /// Nullable link to the work item this PR resolves. SetNull on delete so the
   /// PR row (history) survives a work-item deletion with a null link.
-  workItemId     String?  @map("work_item_id")
+  workItemId            String?   @map("work_item_id")
   /// Whether `workItemId` was set by the EXPLICIT item→PR link affordance
   /// (MOTIR-1596, design/github Panel 5) rather than the MOTIR-892 auto-resolver.
   /// A manual link is the manual OVERRIDE of the resolver: it is STICKY — the
@@ -4453,27 +4488,27 @@ model GithubPullRequest {
   /// the key stays linked (and drives status sync) across later PR events. A
   /// takeover (moving the link to another item) keeps this true; the auto-
   /// resolver only ever writes rows where this is false.
-  linkedManually Boolean  @default(false) @map("linked_manually")
+  linkedManually        Boolean   @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
   /// ingested before this column existed, which is why a consumer must treat
   /// null as "unknown", never as "merged at the epoch". `updatedAt` cannot serve
   /// this purpose: a later `check_suite`-driven upsert moves it, so it answers
   /// "when did we last hear about this PR", not "when did the work land".
-  mergedAt       DateTime? @map("merged_at")
+  mergedAt              DateTime? @map("merged_at")
   /// The repo-relative paths the MERGE touched, captured best-effort after the
   /// status sync commits (MOTIR-2922). Empty when the PR has not merged, when
   /// the capture failed, and on rows that predate the column — all three are the
   /// same "no evidence" state on purpose, because a consumer that could tell
   /// them apart would still have nothing to do with the difference.
-  changedPaths   String[] @default([]) @map("changed_paths")
+  changedPaths          String[]  @default([]) @map("changed_paths")
   /// Whether `changedPaths` is a PREFIX of the merge's real file list rather
   /// than the whole of it — set when the list exceeded `MAX_CAPTURED_PR_PATHS`
   /// or the page walk hit its cap. A consumer may read absence of a path as
   /// evidence ONLY while this is false (the no-silent-caps rule).
-  changedPathsTruncated Boolean @default(false) @map("changed_paths_truncated")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  changedPathsTruncated Boolean   @default(false) @map("changed_paths_truncated")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   repo      GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
   workItem  WorkItem?        @relation(fields: [workItemId], references: [id], onDelete: SetNull)

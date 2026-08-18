@@ -5,6 +5,7 @@
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
 import type { JobStatus } from '@/lib/ai/types';
+import type { WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 
@@ -23,6 +24,22 @@ export type PlanItemOpDto = 'add' | 'modify' | 'remove';
  * about how the plan is reviewed, approved, or declined.
  */
 export type PlanOriginDto = 'user' | 'cadence';
+
+/**
+ * Wire form of the Prisma `WorkItemPlanningSource` enum as it appears on a PLAN
+ * (Story MOTIR-2982 · MOTIR-2986) — WHO authored the plan.
+ *
+ * An ALIAS of {@link WorkItemPlanningSourceDto}, never a re-listing of its
+ * members. The enum is REUSED rather than duplicated
+ * (`docs/decisions/agent-authored-plans.md` Q3): a plan's author and the authors
+ * stamped on the work items it materializes must be drawn from ONE closed
+ * vocabulary or the Plans surface and the work-item detail can disagree about the
+ * same fact. The alias exists only so a reader of `PlanDto` sees which vocabulary
+ * the field speaks — spelling the members out here would recreate exactly the
+ * second list Q3 refused (it already has FOUR members, not the three
+ * `work-item-provenance.md` Decision 2 lists).
+ */
+export type PlanAuthorSourceDto = WorkItemPlanningSourceDto;
 
 /**
  * The proposed fields of an `add` PlanItem — the new node's values, which live
@@ -211,6 +228,38 @@ export interface PlanDto {
   /** WHY the plan was started — `user` (someone clicked) or `cadence` (the
    *  auto-plan watcher fired it). Set at submit; never changes. */
   origin: PlanOriginDto;
+  /**
+   * WHO ASKED for the plan (Story MOTIR-2982 · MOTIR-2986) — a THIRD party
+   * beside {@link PlanDto.decidedById} (who approved it) and the authorship
+   * triple below (which agent wrote it). Commonly three different people: a
+   * teammate asks, an agent writes, a lead approves.
+   *
+   * NULL is a MEANING, not a gap: it is the `cadence` case. The auto-plan
+   * watcher runs under the project OWNER's credential so its job has one, and
+   * nobody clicked — so the requester is recorded ⟺ a person actually asked
+   * (`origin === 'user'`), and a cadence plan is identified by its `origin`
+   * rather than by a requester it would otherwise fabricate.
+   */
+  createdById: string | null;
+  /**
+   * WHO authored the plan (Story MOTIR-2982 · MOTIR-2986) — the
+   * `source · harness · model` triple `docs/decisions/agent-authored-plans.md`
+   * Q3 mirrors onto the plan from `work-item-provenance.md` Decision 2. Distinct
+   * from `origin` (WHY it was started) and `sourceJobId` (WHICH job produced it):
+   * an agent-authored plan and a Motir generation are BOTH `origin: 'user'`.
+   *
+   * `authorSource` is SERVER-SET at the write seam — `mcp` from the `create_plan`
+   * MCP tool, never a caller field. `authorHarness` / `authorModel` are the
+   * authoring agent's self-reported free text.
+   *
+   * All three null on every plan written by any path other than that tool,
+   * INCLUDING Motir's own generator — which is deliberately not retrofitted here
+   * (MOTIR-2996). So the Plans surface reads *Motir-generated* off
+   * `sourceJobId != null`, and *unattributed* off both being null.
+   */
+  authorSource: PlanAuthorSourceDto | null;
+  authorHarness: string | null;
+  authorModel: string | null;
   itemCount: number;
   createdAt: string;
   plannedAt: string | null;
@@ -235,6 +284,32 @@ export interface CreatePlanInput {
   title?: string | null;
   summary?: string | null;
   sourceJobId?: string | null;
+  /**
+   * WHO ASKED for the plan (MOTIR-2986) — see {@link PlanDto.createdById}.
+   *
+   * EXPLICIT, never defaulted from the acting context, and that is the whole
+   * point: `createPlan` always HAS a `ctx.userId`, and on the cadence path that
+   * value is the project owner's, substituted so the job has a credential. A
+   * default would therefore record a request the owner never made. Producers on
+   * a request path pass it; the cadence watcher does not.
+   */
+  createdById?: string | null;
+  /**
+   * WHO authored the plan (MOTIR-2986) — see {@link PlanDto.authorSource}. All
+   * three OPTIONAL: every shipped producer (generation, augment, expand, replan,
+   * contextual, cadence) calls `createPlan` without them and stores nulls,
+   * producing a row identical to one produced before this field existed.
+   *
+   * `authorSource` is passed by the WRITE SEAM, not by that seam's caller — the
+   * `create_plan` MCP tool fixes `'mcp'` here the same way `create_work_item`
+   * fixes `source: 'mcp'`, so an agent cannot claim `native`/`manual`. The
+   * service does not validate it beyond the type: it is not caller input.
+   */
+  authorSource?: PlanAuthorSourceDto | null;
+  /** The authoring agent's self-reported harness. Trimmed; empty → null. */
+  authorHarness?: string | null;
+  /** The authoring agent's self-reported model. Trimmed; empty → null. */
+  authorModel?: string | null;
   /** Defaults to `user` when omitted — so every existing caller (and every
    *  request-path submit) keeps recording a human-initiated plan without
    *  passing anything. Only the cadence watcher passes `cadence`. */
