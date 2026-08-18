@@ -128,7 +128,13 @@ async function expectDerivedStatus(id: string, status: string, what: string): Pr
  *  already-derived ancestor is dragged back under a passing assertion.
  *
  *  That is a race in the SETUP, not in the behaviour under test, so the setup waits
- *  it out — on the job's own ledger row, never a sleep. `job_run` is truncated with
+ *  it out — on the job's own ledger row, never a sleep.
+ *
+ *  MOTIR-2965 has since made a backward recompute stand down for a parent whose status
+ *  is NEWER than the child-set edit, which closes both of those at the source. This
+ *  stays anyway, and deliberately: an ARRANGE should not be correct only for as long as
+ *  a particular derivation rule wins a particular race. It is cheap — one indexed count,
+ *  returning the moment the job lands. `job_run` is truncated with
  *  the workspace in `beforeEach`, so `n` succeeded `status-derivation/created` runs
  *  means every create this test has made is derived and settled.
  *
@@ -265,8 +271,9 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     const b = await createItem(page, tenant.projectId, 'subtask', 'Child B', story.id);
     // Four creates, four rung-4 recomputes — settled before the first transition.
     // The EPIC is what this protects: its recompute reads `{ story: todo }`, so one
-    // landing after the epic has rolled up to `in_progress` puts it back at `todo`
-    // under the assertion below.
+    // landing after the epic has rolled up to `in_progress` would put it back at
+    // `todo` under the assertion below. MOTIR-2965's staleness arm now declines that
+    // too; the settle keeps the arrange quiescent either way.
     await settleCreates(4);
 
     // Rung 1 — the first child starts.
@@ -434,9 +441,10 @@ test.describe('bidirectional status derivation — settings, rollup, cascade', (
     // Rollup is ON in this test, so the child's create-recompute really can put the
     // story back to `todo` — and it used to do so BETWEEN the two hops below, which
     // made `todo → done` illegal and 422'd the driving transition itself (1 run in
-    // 10). Nothing about the cascade toggle is under test in that window, so the
-    // setup settles first. The 422 the user would get in that same interleaving is
-    // a real defect and is MOTIR-2965's, not this spec's to assert.
+    // 10). That interleaving is now refused at the source by MOTIR-2965's staleness
+    // arm, and the user-facing 422 it produced was that card's to fix rather than this
+    // spec's to assert. The settle stays because nothing about the cascade toggle —
+    // which IS what this test is about — should depend on that arm holding.
     await settleCreates(2);
 
     await transition(page, story.id, 'in_progress');

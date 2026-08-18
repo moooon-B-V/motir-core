@@ -430,6 +430,41 @@ describe('entitlementsService — upload caps (§4.3)', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('sums across the org’s WORKSPACES — the reach no workspace binding could have (MOTIR-2956)', async () => {
+    // §4.3b is a per-ORGANIZATION cap and an org spans workspaces, which is why
+    // the usage read runs under `withOrgServiceWriteContext` rather than a
+    // workspace context. Until MOTIR-2956 the org GUC it binds was read by no
+    // policy on `attachment` (nor on the `workspace` its sum JOINs), so under
+    // `motir_app` the total was 0 and this gate never fired for anyone.
+    //
+    // Neither workspace here is on its own over the 2 GB free cap; together they
+    // are. A per-workspace sum would let both uploads through.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    const sibling = await adminDb.workspace.create({
+      data: { organizationId: orgId, name: 'Second', slug: `second-${fx.workspaceId}` },
+    });
+
+    const half = 1_200_000_000; // 1.2e9 each; 2.4e9 > 2 GiB (2,147,483,648)
+    for (const [i, workspaceId] of [fx.workspaceId, sibling.id].entries()) {
+      await adminDb.attachment.create({
+        data: {
+          workspaceId,
+          uploaderUserId: fx.ownerId,
+          blobPathname: `https://blob.test/ws${i}`,
+          mimeType: 'application/pdf',
+          sizeBytes: half,
+          originalFilename: `ws${i}.pdf`,
+        },
+      });
+    }
+
+    await expect(entitlementsService.assertWithinStorageCap(orgId, 1)).rejects.toMatchObject({
+      entitlement: 'storage',
+      detail: { usage: 2 * half },
+    });
+  });
+
   it('lifts the storage cap on scaled (100 GB headroom)', async () => {
     const fx = await makeWorkItemFixture();
     const orgId = await orgIdOf(fx.workspaceId);

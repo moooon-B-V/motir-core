@@ -1095,3 +1095,50 @@ describe('the child finished FASTER than derivation ran (MOTIR-2901)', () => {
     expect(queue).toHaveLength(0);
   });
 });
+
+// ── The USER's write vs a derived backward set (Bug MOTIR-2965, ADR §5) ──
+//
+// MOTIR-2957 fixed the ordering hole on the CASCADE's side; this is the same
+// hole on the ROLLUP's. A rung-4 backward set needs no legal edge, so it can
+// overwrite a status a person set — and the person then meets a 422 on their
+// NEXT click, for a reason that lives in the previous one.
+//
+// The interleaving is driven deterministically: the pump holds the create's
+// event, so `drain()` plays the recompute at the exact instant the fixture
+// names — BETWEEN the user's two hops.
+describe("a user's own write vs a derived backward set", () => {
+  it('the recompute does NOT undo a status the user set AFTER the child was created', async () => {
+    // The card's fixture, step by step. The measured window is ~350 ms; here it
+    // is exact, because the queue is only played when this test says so.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Plan me' });
+    await setStatus(story.id, 'todo');
+    const identifier = (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+      .identifier;
+
+    // 1. The user adds a subtask. `work-item/created` is QUEUED — the rung-4
+    //    recompute has not run yet.
+    const res = await runCreateWorkItem(
+      { projectKey: fx.projectIdentifier, parentKey: identifier, kind: 'subtask', title: 'First' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+
+    // 2. Within the job's latency the user starts the story. Legal, accepted.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    expect(await statusOf(story.id)).toBe('in_progress');
+
+    // 3. The queued recompute lands NOW — between the two clicks. Its rung-4
+    //    reading is accurate (one child, todo, nothing started) and its claim is
+    //    nonetheless STALE about the row: the status it is about to overwrite is
+    //    newer than the child-set edit that woke it.
+    await drain();
+
+    // 4. The user clicks Done. This is the assertion the bug is about: before
+    //    the fix the story sat at `todo` here, and `todo → done` is not an edge,
+    //    so the second click came back 422.
+    expect(await statusOf(story.id)).toBe('in_progress');
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+    expect(await statusOf(story.id)).toBe('done');
+  });
+});

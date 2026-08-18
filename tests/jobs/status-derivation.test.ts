@@ -321,6 +321,10 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
     expect(cascade).not.toHaveBeenCalled();
   });
 
+  /** A fixed instant, so the trigger assertion below is about the value being
+   *  CARRIED rather than about when the test ran. */
+  const EDIT_AT = '2026-08-17T12:00:00.000Z';
+
   it('child-set changed: recomputes EVERY parent named, each in its own step', async () => {
     const recompute = vi
       .spyOn(parentStatusRollupService, 'recomputeParent')
@@ -339,6 +343,7 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
             parentIds: ['old-parent', 'new-parent'],
             workItemId: 'mover-1',
             reason: 'reparented' as const,
+            occurredAt: EDIT_AT,
           },
         },
       ],
@@ -348,8 +353,13 @@ describe('the child-set consumers — the dispatch (MOTIR-2892)', () => {
     // A re-parent changes TWO child sets in opposite directions — recomputing
     // only one of them is the defect this asserts against.
     expect(recompute).toHaveBeenCalledTimes(2);
-    expect(recompute).toHaveBeenCalledWith('old-parent', 'ws-1');
-    expect(recompute).toHaveBeenCalledWith('new-parent', 'ws-1');
+    // The EDIT's own instant rides along (MOTIR-2965) — a re-parent removes the
+    // mover from the old parent's set, so nothing left in that set dates the
+    // change and a backward recompute could not tell a stale claim from a live
+    // one. Both ends get the same instant: one edit, two child sets.
+    const trigger = { occurredAt: new Date(EDIT_AT) };
+    expect(recompute).toHaveBeenCalledWith('old-parent', 'ws-1', trigger);
+    expect(recompute).toHaveBeenCalledWith('new-parent', 'ws-1', trigger);
     expect(cascade).not.toHaveBeenCalled();
   });
 

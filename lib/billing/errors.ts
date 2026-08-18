@@ -71,6 +71,21 @@ export class UnknownBillingPriceError extends Error {
   }
 }
 
+/**
+ * Checkout was asked to buy a unit count the catalog does not sell at that price
+ * — a non-bundle top-up size, or ANY multiplier on a recurring plan (MOTIR-2949).
+ * Maps to 400, like the unknown-price sibling: both are a tampered or stale
+ * client input, and both are refused before the boundary so no Stripe Session
+ * with the wrong quantity can ever be opened.
+ */
+export class InvalidBillingQuantityError extends Error {
+  readonly code = 'BILLING_INVALID_QUANTITY';
+  constructor(priceLookupKey: string, quantity: number) {
+    super(`Quantity ${quantity} is not purchasable for ${priceLookupKey}.`);
+    this.name = 'InvalidBillingQuantityError';
+  }
+}
+
 // ── The §4 entitlement-cap surface (Story 8.1.11) error ────────────────────
 
 /**

@@ -23,12 +23,26 @@ import { normalizeWorkItemRefs, parseWorkItemKeys } from '@/lib/mentions/workIte
  * on). Explicit tokens and keys that don't resolve are left as-is (the pure
  * `normalizeWorkItemRefs` rules). Used inside the caller's write transaction.
  *
- * `tx` is OPTIONAL because the only thing this helper does against the database
- * is a READ (key → id). A caller inside a write transaction passes its `tx` so
- * the resolve sees the same snapshot; a caller normalizing a body BEFORE opening
- * its transaction (the planner turn, MOTIR-2226 — whose write is a short locked
- * append that should not also carry a lookup) omits it and reads through the
- * singleton, exactly as the repository's own optional-`tx` read allows.
+ * ⚠️ `tx` is OPTIONAL in the SIGNATURE and MANDATORY in practice — every caller
+ * must pass one (MOTIR-2960). The resolve is `findByIdentifiers`, whose
+ * `tx ?? db` falls back to the shared singleton, and `work_item` is
+ * workspace-keyed: with no `app.workspace_id` bound, the lookup matches nothing
+ * and returns `[]`. This helper then returns the fields UNCHANGED, so an unbound
+ * call does not fail — it silently declines to normalize, and every ref stays
+ * plain text. There is no error and no log to notice.
+ *
+ * A caller already inside a write transaction passes its `tx`, so the resolve
+ * sees the same snapshot. A caller normalizing BEFORE it opens a transaction —
+ * the planner turn (MOTIR-2226), whose write is a short locked append that
+ * should not also carry a lookup — opens a read-only binding of its own with
+ * `withWorkspaceServiceContext` and passes THAT. It does not omit the argument.
+ *
+ * (This paragraph previously blessed the omission, naming the planner turn as
+ * the legitimate case. That was written while `@/lib/db` was still the BYPASSRLS
+ * owner, where the fallback did work; under `motir_app` it cannot, and the
+ * comment had authorized the one call site that was wrong. The parameter stays
+ * optional only because widening it to required is a separate change across five
+ * call sites — treat it as required.)
  */
 export async function normalizeBodyRefs(
   args: {

@@ -117,7 +117,7 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   // Start a Stripe session over the boundary, then redirect the browser to the
   // hosted URL. A failure surfaces a toast (the session/credits are untouched).
   const startSession = useCallback(
-    async (path: 'checkout' | 'portal', body?: Record<string, string>) => {
+    async (path: 'checkout' | 'portal', body?: Record<string, string | number>) => {
       setRedirecting(true);
       try {
         const res = await fetch(`/api/organizations/${orgId}/billing/${path}`, {
@@ -140,8 +140,17 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
     [orgId, t, toast],
   );
 
+  // `quantity` is the credit top-up's bundle multiplier and is omitted for every
+  // other line — the subscription CTAs buy exactly one unit, and the service
+  // refuses a multiplier on a recurring price outright (MOTIR-2949). A selector
+  // whose value never reaches this call is how the button's label and the charge
+  // came to be computed from two different numbers.
   const checkout = useCallback(
-    (priceLookupKey: string) => startSession('checkout', { priceLookupKey }),
+    (priceLookupKey: string, quantity?: number) =>
+      startSession('checkout', {
+        priceLookupKey,
+        ...(quantity === undefined ? {} : { quantity }),
+      }),
     [startSession],
   );
   const portal = useCallback(() => startSession('portal'), [startSession]);
@@ -246,7 +255,7 @@ interface SharedViewProps {
   canManage: boolean;
   orgName: string;
   memberCount: number;
-  checkout: (priceLookupKey: string) => void;
+  checkout: (priceLookupKey: string, quantity?: number) => void;
   portal: () => void;
   redirecting: boolean;
 }
@@ -1437,12 +1446,14 @@ function TopupCard({
   t: T;
   canManage: boolean;
   paidActive: boolean;
-  checkout: (priceLookupKey: string) => void;
+  checkout: (priceLookupKey: string, quantity?: number) => void;
   redirecting: boolean;
 }) {
-  const { unitCredits, unitAmountUsd, priceLookupKey } = data.catalog.creditTopup;
-  const bundles = [1, 5, 10];
-  const [units, setUnits] = useState(1);
+  // `bundleUnits` comes from the catalog, so the sizes the label prices and the
+  // sizes `startCheckout` will accept are the SAME list (MOTIR-2949). A local
+  // `[1, 5, 10]` here is a set the service knows nothing about.
+  const { unitCredits, unitAmountUsd, priceLookupKey, bundleUnits } = data.catalog.creditTopup;
+  const [units, setUnits] = useState(bundleUnits[0] ?? 1);
   const credits = units * unitCredits;
   const total = units * unitAmountUsd;
   const enabled = canManage && paidActive;
@@ -1466,7 +1477,7 @@ function TopupCard({
           {t('topup.balance', { n: fmt(Math.max(0, data.motirAi.balance)) })}
         </p>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t('topup.title')}>
-          {bundles.map((u) => {
+          {bundleUnits.map((u) => {
             const selected = u === units;
             return (
               <button
@@ -1497,7 +1508,7 @@ function TopupCard({
               variant="primary"
               size="sm"
               loading={redirecting}
-              onClick={() => checkout(priceLookupKey)}
+              onClick={() => checkout(priceLookupKey, units)}
             >
               {t('topup.buy', { n: fmt(credits), total: fmt(total) })}
             </Button>

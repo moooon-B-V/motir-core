@@ -4301,6 +4301,24 @@ model GithubPullRequest {
   /// takeover (moving the link to another item) keeps this true; the auto-
   /// resolver only ever writes rows where this is false.
   linkedManually Boolean  @default(false) @map("linked_manually")
+  /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
+  /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
+  /// ingested before this column existed, which is why a consumer must treat
+  /// null as "unknown", never as "merged at the epoch". `updatedAt` cannot serve
+  /// this purpose: a later `check_suite`-driven upsert moves it, so it answers
+  /// "when did we last hear about this PR", not "when did the work land".
+  mergedAt       DateTime? @map("merged_at")
+  /// The repo-relative paths the MERGE touched, captured best-effort after the
+  /// status sync commits (MOTIR-2922). Empty when the PR has not merged, when
+  /// the capture failed, and on rows that predate the column — all three are the
+  /// same "no evidence" state on purpose, because a consumer that could tell
+  /// them apart would still have nothing to do with the difference.
+  changedPaths   String[] @default([]) @map("changed_paths")
+  /// Whether `changedPaths` is a PREFIX of the merge's real file list rather
+  /// than the whole of it — set when the list exceeded `MAX_CAPTURED_PR_PATHS`
+  /// or the page walk hit its cap. A consumer may read absence of a path as
+  /// evidence ONLY while this is false (the no-silent-caps rule).
+  changedPathsTruncated Boolean @default(false) @map("changed_paths_truncated")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

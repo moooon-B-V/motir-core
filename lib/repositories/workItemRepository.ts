@@ -2632,6 +2632,16 @@ export const workItemRepository = {
    * the ladder's "every child is done" test unanswerable. No live row can reach
    * that state: every item is created in the workflow's initial status, and a
    * status that is IN USE cannot be deleted (`workflowsService.deleteStatus`).
+   *
+   * `lastChangedAt` (MOTIR-2965) rides along because it answers a question about
+   * the SAME set in the SAME round-trip: WHEN did this child set last change?
+   * The backward arm of the recompute compares it against the parent's own last
+   * status change, so that a derived claim about these children cannot overwrite
+   * a status a person set knowing about them. It is `MAX(GREATEST(createdAt,
+   * updatedAt))` over the live children and `null` for an empty set — which is
+   * the same set the counts describe, deliberately: a row that LEFT the set
+   * (archived, re-parented, deleted) is invisible here, which is exactly why the
+   * child-set triggers pass their own instant instead (ADR §5).
    */
   async aggregateChildrenStatus(
     parentId: string,
@@ -2643,15 +2653,17 @@ export const workItemRepository = {
     inProgress: number;
     inReview: number;
     done: number;
+    lastChangedAt: Date | null;
   }> {
     const client = tx ?? db;
     const rows = await client.$queryRaw<
-      Array<{ category: string; is_review: boolean; count: number }>
+      Array<{ category: string; is_review: boolean; count: number; last_changed_at: Date | null }>
     >`
       SELECT ws."category"::text AS "category",
              (${reviewStatusKey}::text IS NOT NULL AND w."status" = ${reviewStatusKey}::text)
                AS "is_review",
-             COUNT(*)::int AS "count"
+             COUNT(*)::int AS "count",
+             MAX(GREATEST(w."createdAt", w."updatedAt")) AS "last_changed_at"
         FROM "work_item" w
         JOIN "workflow_status" ws
           ON ws."project_id" = w."projectId" AND ws."key" = w."status"
@@ -2660,9 +2672,26 @@ export const workItemRepository = {
           AND ${notInTriageSql('w')}
         GROUP BY ws."category", "is_review"`;
 
-    const out = { total: 0, todo: 0, inProgress: 0, inReview: 0, done: 0 };
+    const out = {
+      total: 0,
+      todo: 0,
+      inProgress: 0,
+      inReview: 0,
+      done: 0,
+      lastChangedAt: null as Date | null,
+    };
     for (const r of rows) {
       out.total += r.count;
+      // The NEWEST edit to the live child SET, folded across the GROUP BY's
+      // per-category rows (MOTIR-2965). It is what a backward derivation's claim
+      // is dated FROM: a parent status written after it was written by someone
+      // who already knew about these children. `updatedAt` is the honest signal —
+      // a transition, an archive-in and an ordinary field edit all bump it, and
+      // over-freshness merely leaves the shipped behaviour in place, whereas
+      // under-freshness would suppress a legitimate recompute.
+      if (r.last_changed_at && (!out.lastChangedAt || r.last_changed_at > out.lastChangedAt)) {
+        out.lastChangedAt = r.last_changed_at;
+      }
       // A review status is reported as `inReview` whatever category it sits in —
       // it is the caller's declared review stage, and splitting it out is the
       // entire reason this method takes the key.
