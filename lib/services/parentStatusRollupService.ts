@@ -1,6 +1,7 @@
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
@@ -40,6 +41,17 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 //                are user-draggable board edges. A derived backward move is a
 //                CLAIM ABOUT THE CHILDREN, not a user's workflow step.
 //
+// ⚠️ AND A CLAIM HAS A DATE — THE BACKWARD ARM STANDS DOWN FOR A NEWER USER
+// WRITE (Bug MOTIR-2965). Needing no legal edge is what makes the backward arm
+// the one that can silently overwrite a status a person just set; the cost lands
+// on their NEXT click, as a bare 422, because the status they were moving from is
+// no longer the one the row holds. So the arm compares the parent's own last
+// status change against the newest edit to the child set it is reasoning about,
+// and declines (`stale_backward`) when the row is the younger of the two. The
+// children's reading is not what is wrong in that case — it is accurate; what is
+// wrong is telling somebody something they already knew when they wrote the row.
+// The same ordering hole MOTIR-2957 closed on the cascade's side.
+//
 // Direct parent only. The grandparent recomputes when the parent's OWN transition
 // re-emits `work-item/transitioned` and the derivation job (MOTIR-1621) re-fires
 // — recursion by re-emission, with no ancestor walk and no loop guard, because a
@@ -59,6 +71,24 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // sync uses. It is NOT userless in the tenant sense: the triggering event carries
 // `workspaceId`, so both phases bind a workspace context (MOTIR-2880 — phase 1
 // used to open a system context, which no `work_item` policy admits).
+
+/**
+ * The child-set edit that WOKE this recompute (Bug MOTIR-2965).
+ *
+ * ⚠️ ONLY the triggers whose edit is invisible to the aggregate need to pass it.
+ * A create and a transition both leave their mark ON a live child row, so
+ * `aggregateChildrenStatus`'s `lastChangedAt` already dates them — and reading it
+ * off the SET rather than off the event is what keeps the recompute idempotent
+ * under redelivery, the same property ADR §3's rejected "carry the event's
+ * `toStatusKey`" alternative gave up. An archive, a re-parent or a delete removes
+ * the row that changed, so there is nothing left in the set to read: those
+ * triggers carry `occurredAt` and the LATER of the two is used.
+ */
+export interface RecomputeTrigger {
+  /** When the child-set edit committed. Later than any row the aggregate can see
+   *  precisely when the row it concerns is no longer in the set. */
+  readonly occurredAt: Date;
+}
 
 /** The ladder, highest rung first — the FIRST match wins. Each rung names the
  *  intent it wants; the concrete status key is resolved against the project's own
@@ -104,6 +134,12 @@ export type RollupOutcome =
    *  children are all todo. Neither forward nor backward, so nothing moves and a
    *  human's `blocked` marker survives the next child event (MOTIR-2891). */
   | { outcome: 'same_rung'; parentId: string; toStatus: string }
+  /** A BACKWARD set was declined because the parent's status is NEWER than the
+   *  child-set edit that woke this recompute (Bug MOTIR-2965). Its own variant
+   *  rather than folding into `same_rung`, for the reason `rolled_back` is one:
+   *  a run log that cannot say "a derivation stood down in favour of a person's
+   *  write" cannot answer why a parent is not where the ladder says it is. */
+  | { outcome: 'stale_backward'; parentId: string; toStatus: string }
   | { outcome: 'no_matching_status'; parentId: string }
   | { outcome: 'illegal_transition'; parentId: string; toStatus: string }
   | { outcome: 'access_denied'; parentId: string }
@@ -146,7 +182,11 @@ export const parentStatusRollupService = {
    *
    * Never throws for a business reason; returns a typed outcome instead.
    */
-  async rollUpForChild(childId: string, workspaceId: string): Promise<RollupOutcome> {
+  async rollUpForChild(
+    childId: string,
+    workspaceId: string,
+    trigger?: RecomputeTrigger,
+  ): Promise<RollupOutcome> {
     // Resolve the child's parent, then hand off. The child is only ever an
     // ADDRESS for its parent — every rung reads the parent's whole child set — so
     // the two entry points share one implementation (MOTIR-2892: the child-set
@@ -169,7 +209,7 @@ export const parentStatusRollupService = {
       return child?.parentId ?? null;
     });
     if (!parentId) return { outcome: 'no_parent' };
-    return parentStatusRollupService.recomputeParent(parentId, workspaceId);
+    return parentStatusRollupService.recomputeParent(parentId, workspaceId, trigger);
   },
 
   /**
@@ -191,7 +231,11 @@ export const parentStatusRollupService = {
    * workspace FROM the parent row would be circular — that read is the one being
    * scoped.
    */
-  async recomputeParent(parentIdIn: string, workspaceId: string): Promise<RollupOutcome> {
+  async recomputeParent(
+    parentIdIn: string,
+    workspaceId: string,
+    trigger?: RecomputeTrigger,
+  ): Promise<RollupOutcome> {
     const resolved = await withWorkspaceServiceContext(workspaceId, async (tx) => {
       const parent = await workItemRepository.findById(parentIdIn, tx);
       if (!parent) return null;
@@ -306,6 +350,46 @@ export const parentStatusRollupService = {
       let steps: string[];
       let system = false;
       if (wanted.rank < currentRank) {
+        // ⚠️ THE USER'S WRITE WINS ITS WINDOW (Bug MOTIR-2965, ADR §5). A
+        // backward set needs no legal edge, so it is the one arm that can
+        // overwrite a status the workflow would have protected — and the person
+        // then meets a 422 on their NEXT click, for a reason that lives in the
+        // previous one (`todo → done` is not an edge, deliberately).
+        //
+        // The reading of the children is not what is wrong here: it is accurate.
+        // What is stale is the claim's DATE against the row it would overwrite.
+        // A parent status written AFTER the newest edit to this child set was
+        // written by someone who already knew about these children, so the
+        // derivation has nothing to tell them. Decline, and say so in the log.
+        //
+        // This is deliberately the BACKWARD arm only. Forward is legality-gated,
+        // so it can only ever take moves the person could have taken themselves;
+        // `same_rung` already protects a deliberate `blocked` marker on the tie.
+        // And it can only ever SUPPRESS a move: no new backward set becomes
+        // possible, so the blast radius is one outcome variant.
+        const statusChangedAt = await workItemRevisionRepository.findLatestStatusChangeAt(
+          parentId,
+          tx,
+        );
+        // A row that LEFT the set (archived / re-parented / deleted) is invisible
+        // to the aggregate, so the child-set triggers pass their own instant and
+        // the later of the two dates this pass's claim.
+        //
+        // `lastChangedAt` is non-null HERE by construction: it is null only for an
+        // empty aggregate, and an empty aggregate returned `no_rung` above. A
+        // parent that has never moved is the case with no date to beat, and it is
+        // `statusChangedAt` that is null then — the arm proceeds, exactly as it
+        // shipped, because a comparison with no evidence must not suppress.
+        const fromSet = agg.lastChangedAt!;
+        const fromTrigger = trigger?.occurredAt ?? null;
+        const childSetChangedAt = fromTrigger && fromTrigger > fromSet ? fromTrigger : fromSet;
+        if (statusChangedAt && statusChangedAt > childSetChangedAt) {
+          return {
+            outcome: { outcome: 'stale_backward', parentId, toStatus: wanted.key },
+            emit: null,
+          };
+        }
+
         // BACKWARD — a privileged system set. ONE call: no `canTransition` probe,
         // no walk and no fallback, because a backward derivation must not depend
         // on a board edge existing (`done → todo` is not one in the default

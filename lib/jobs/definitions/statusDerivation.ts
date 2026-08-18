@@ -121,11 +121,18 @@ export const statusDerivationOnChildSetChanged = defineJob(
     // is a pure function of its OWN children, so the pair commutes — which is
     // exactly what lets a move's two ends be two steps instead of one
     // transaction spanning both.
+    // The edit's own instant is carried BECAUSE these four edits remove the row
+    // that changed (MOTIR-2965). A create or a transition leaves its mark on a
+    // live child, so the aggregate dates it; an archive / re-parent / delete
+    // leaves the set with nothing to read, and a backward set that could not date
+    // itself would stand down for a parent status it is entitled to correct.
+    const trigger = { occurredAt: new Date(payload.occurredAt) };
+
     const outcomes = [];
     for (const [i, parentId] of payload.parentIds.entries()) {
       outcomes.push(
         await ctx.step.run(`recompute-parent-${i}`, () =>
-          services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId),
+          services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId, trigger),
         ),
       );
     }

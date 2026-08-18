@@ -2374,6 +2374,9 @@ export const workItemsService = {
         parentIds: [parentId],
         workItemId: id,
         reason: 'archived',
+        // The edit's own instant: this row is LEAVING the aggregate, so nothing
+        // it can read dates the change (MOTIR-2965).
+        occurredAt: new Date().toISOString(),
       });
     }
     return dto;
@@ -2417,6 +2420,9 @@ export const workItemsService = {
         parentIds: [parentId],
         workItemId: id,
         reason: 'unarchived',
+        // The edit's own instant: this row is LEAVING the aggregate, so nothing
+        // it can read dates the change (MOTIR-2965).
+        occurredAt: new Date().toISOString(),
       });
     }
     return dto;
@@ -2504,6 +2510,9 @@ export const workItemsService = {
         parentIds: [parentId],
         workItemId: id,
         reason: 'deleted',
+        // The edit's own instant: this row is LEAVING the aggregate, so nothing
+        // it can read dates the change (MOTIR-2965).
+        occurredAt: new Date().toISOString(),
       });
     }
   },
@@ -2674,6 +2683,9 @@ export const workItemsService = {
         parentIds,
         workItemId: id,
         reason: 'reparented',
+        // The edit's own instant: this row is LEAVING the aggregate, so nothing
+        // it can read dates the change (MOTIR-2965).
+        occurredAt: new Date().toISOString(),
       });
     }
     return dto;

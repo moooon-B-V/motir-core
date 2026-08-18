@@ -777,3 +777,122 @@ describe('phase 1 binds the WORKSPACE, not the system flag (MOTIR-2880)', () => 
     }
   });
 });
+
+// ── The backward arm stands down for a NEWER user write (Bug MOTIR-2965) ──
+//
+// A backward set needs no legal edge, which is what lets it overwrite a status a
+// person just set — and the cost lands on their NEXT click as a bare 422. The arm
+// therefore dates its claim: a parent status written AFTER the newest edit to the
+// child set was written by somebody who already knew about these children.
+//
+// The comparison reads the parent's last STATUS REVISION, so these tests move the
+// parent through `workItemsService.updateStatus` (which records one) rather than
+// the `setStatus` helper (a direct row write that records nothing) wherever the
+// ordering is the point.
+describe('a backward set vs a newer user write', () => {
+  it('DECLINES the backward set, and says so — `stale_backward`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo']);
+
+    // The user starts the story AFTER its only child was created. Rung 4 still
+    // reads `todo` correctly — the decline is about the claim's date, not its
+    // accuracy.
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    // The user's own move emitted; the assertion below is about what the ROLLUP
+    // announces.
+    sent.length = 0;
+
+    const out = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(out).toEqual({ outcome: 'stale_backward', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+    // Nothing moved, so nothing is announced — the same rule every other no-op
+    // outcome follows, and what keeps the recursion's fixed point intact.
+    expect(sent).toHaveLength(0);
+  });
+
+  it('and the user can then reach Done — the 422 the bug is named for is gone', async () => {
+    // `todo → done` is not an edge, so a parent knocked back to `todo` makes the
+    // NEXT click impossible. This is that click, taken.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo']);
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    await expect(workItemsService.updateStatus(story.id, 'done', fx.ctx)).resolves.toBeDefined();
+    expect(await statusOf(story.id)).toBe('done');
+    // AC 3: it was reached over an edge the project already had, not a new one.
+    expect(await workflowsService.canTransition(fx.projectId, 'todo', 'done', fx.workspaceId)).toBe(
+      false,
+    );
+  });
+
+  it('STILL comes back when the child-set edit is the NEWER of the two', async () => {
+    // The other direction, and the one that must not regress: the ADR's decided
+    // semantics are untouched whenever the derivation has something to tell.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['done']);
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(story.id, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+    sent.length = 0;
+
+    // NOW the child reopens — after the parent's last status write.
+    await workItemsService.updateStatus(children[0]!.id, 'in_progress', fx.ctx);
+    const out = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(out).toEqual({
+      outcome: 'rolled_back',
+      parentId: story.id,
+      toStatus: 'in_progress',
+    });
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('a parent that has never moved has no date to beat — the shipped behaviour stands', async () => {
+    // No status revision at all (the row was written directly, as an import or a
+    // fixture does). With no evidence on one side the comparison must not
+    // suppress: `laterOf`/the null guard leave the backward set exactly as it
+    // shipped.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo']);
+    await setStatus(story.id, 'done');
+
+    const out = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(out).toEqual({ outcome: 'rolled_back', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+
+  it('a REMOVED row still dates its own edit — the trigger carries `occurredAt`', async () => {
+    // The case the aggregate structurally cannot see. The started child LEAVES
+    // the set, so every row left in it is older than the parent's status; only
+    // the trigger's own instant separates this from a stale claim.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['todo', 'todo']);
+    await workItemsService.updateStatus(children[0]!.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+
+    // The only started child is archived out of the aggregate.
+    await adminDb.workItem.update({
+      where: { id: children[0]!.id },
+      data: { archivedAt: new Date() },
+    });
+
+    // Without the trigger the surviving `todo` child is older than the parent's
+    // status, so the claim reads as stale and the parent is stranded.
+    const stranded = await parentStatusRollupService.recomputeParent(story.id, fx.workspaceId);
+    expect(stranded).toEqual({
+      outcome: 'stale_backward',
+      parentId: story.id,
+      toStatus: 'todo',
+    });
+
+    const out = await parentStatusRollupService.recomputeParent(story.id, fx.workspaceId, {
+      occurredAt: new Date(),
+    });
+
+    expect(out).toEqual({ outcome: 'rolled_back', parentId: story.id, toStatus: 'todo' });
+    expect(await statusOf(story.id)).toBe('todo');
+  });
+});

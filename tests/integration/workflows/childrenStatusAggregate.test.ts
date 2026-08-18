@@ -72,6 +72,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 0,
       inReview: 0,
       done: 0,
+      lastChangedAt: null,
     });
   });
 
@@ -95,6 +96,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       inReview: 1,
       done: 2,
+      lastChangedAt: expect.any(Date),
     });
   });
 
@@ -133,6 +135,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       inReview: 0,
       done: 0,
+      lastChangedAt: expect.any(Date),
     });
     // …and the task's own aggregate sees exactly that grandchild.
     expect(
@@ -166,6 +169,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 0,
       inReview: 0,
       done: 1,
+      lastChangedAt: expect.any(Date),
     });
   });
 
@@ -197,6 +201,7 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 1,
       inReview: 1,
       done: 0,
+      lastChangedAt: expect.any(Date),
     });
     // …and with NO review status declared, both count as plain in-progress (the
     // degenerate reading: that project simply never reaches the in-review rung).
@@ -210,6 +215,54 @@ describe('aggregateChildrenStatus (MOTIR-1619)', () => {
       inProgress: 2,
       inReview: 0,
       done: 0,
+      lastChangedAt: expect.any(Date),
     });
+  });
+
+  // ── `lastChangedAt` — WHEN this child set last changed (Bug MOTIR-2965) ──
+  //
+  // It rides this aggregate because the recompute's backward arm dates its claim
+  // from it: a parent status written later than this was written by somebody who
+  // already knew about these children.
+  it('reports the NEWEST edit across the live children, and null for an empty set', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await storyIn(fx, 'Dated');
+
+    // No live children ⇒ nothing to date. Same guard the counts have: derive
+    // from a child set, or do not derive.
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+        )
+      ).lastChangedAt,
+    ).toBeNull();
+
+    await child(fx, story.id, 'a', 'todo');
+    const before = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+    );
+    expect(before.lastChangedAt).toBeInstanceOf(Date);
+
+    // A LATER edit to any live child moves it forward — the property the arm
+    // relies on, since a transition and an archive-in both land as an update.
+    const b = await child(fx, story.id, 'b', 'todo');
+    await adminDb.workItem.update({
+      where: { id: b.id },
+      data: { title: 'edited later' },
+    });
+    const after = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+    );
+    expect(after.lastChangedAt!.getTime()).toBeGreaterThan(before.lastChangedAt!.getTime());
+
+    // An ARCHIVED child leaves the set entirely — counts AND date. This is the
+    // blind spot the child-set triggers carry their own `occurredAt` for.
+    await adminDb.workItem.update({ where: { id: b.id }, data: { archivedAt: new Date() } });
+    const excluded = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.aggregateChildrenStatus(story.id, 'in_review', tx),
+    );
+    expect(excluded.total).toBe(1);
+    expect(excluded.lastChangedAt!.getTime()).toBe(before.lastChangedAt!.getTime());
   });
 });
