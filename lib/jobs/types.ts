@@ -196,6 +196,15 @@ export interface WorkItemChildSetChangedData {
   workItemId: string;
   /** Which edit produced it, so a run log can tell an archive from a move. */
   reason: 'reparented' | 'archived' | 'unarchived' | 'deleted';
+  /**
+   * WHEN the edit committed, ISO-8601 (Bug MOTIR-2965). The recompute's backward
+   * arm dates its claim from the newest edit to the child set, and every edit on
+   * THIS event removes a row from that set — so unlike a create or a transition,
+   * it leaves nothing behind for `aggregateChildrenStatus.lastChangedAt` to read.
+   * Without it, archiving the started child of a parent a person had already
+   * moved would read as a stale claim and be declined.
+   */
+  occurredAt: string;
 }
 
 /**
