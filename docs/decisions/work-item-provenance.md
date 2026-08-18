@@ -2,7 +2,11 @@
 
 - **Status:** Accepted (2026-07-09)
 - **Story / Subtask:** 7.x Work-item provenance (MOTIR-1685) · Subtask MOTIR-1686
-- **Supersedes / superseded by:** none
+- **Supersedes / superseded by:** none. **Amended 2026-08-18** by
+  `docs/decisions/agent-authored-plans.md` (MOTIR-2984, Story MOTIR-2982) — Decision 4 gains
+  the two MCP plan-authoring write seams, and **Decision 5's materialize PIN is lifted**
+  (materialize reads the proposal's `source` / `harness`, defaulting to `native` / `Motir`).
+  Both amendments are written inline below.
 - **Consumed by:** MOTIR-1687 (schema enums + columns + service/repository write API +
   read DTO), MOTIR-1688 (design), MOTIR-1689 (stamp manual + MCP planning), MOTIR-1690
   (motir-ai native-provenance producer), MOTIR-1691 (stamp native planning at
@@ -129,6 +133,14 @@ enum WorkItemImplementationSource {
 }
 ```
 
+> **Note added 2026-08-18 (MOTIR-2984).** `WorkItemPlanningSource` has since gained a
+> FOURTH member, **`api`**, in `20260804003255_add_api_planning_source` — written by
+> `POST /api/v1/projects/{projectKey}/work-items` (`provenance: { planning: { source: 'api' } }`).
+> The block above is left as the dated record of what was decided; this note is here so a
+> reader who takes the member list from it does not write a display or validation switch that
+> is one arm short. The "extensible only by an explicit enum-addition + migration" rule below
+> is what that addition followed, so the enum is doing exactly what this decision intended.
+
 **Why enums for `source`:** the author _category_ is a small closed set (rung 1) that the
 display switches over totally and that a filter facet could later close over — exactly
 why `WorkItemType` / `WorkItemExplanationSource` are enums (rung 2). Extensible only by an
@@ -168,12 +180,21 @@ authorship to a **free-form** app identity and record open model ids (rung 1). S
 
 The **default `source` per write-seam** — server-set, never from client body:
 
-| Write seam                                                     | `source` set                                  | `harness` / `model`                      |
-| -------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------- |
-| Manual UI (`createIssueAction`)                                | `planning = manual`                           | both null (a human via UI)               |
-| MCP `create_work_item`                                         | `planning = mcp`                              | caller-supplied (new optional args)      |
-| Native materialize (`plansService.materialize`)                | `planning = native`                           | `harness = Motir`, `model` from proposal |
-| Self-reported session (`mark_integrated` / `complete_session`) | `implementation = byok` (default) or `manual` | caller-supplied                          |
+| Write seam                                                     | `source` set                                                                             | `harness` / `model`                                                      |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Manual UI (`createIssueAction`)                                | `planning = manual`                                                                      | both null (a human via UI)                                               |
+| MCP `create_work_item`                                         | `planning = mcp`                                                                         | caller-supplied (new optional args)                                      |
+| MCP `create_plan` (MOTIR-2988)                                 | `plan.authorSource = mcp`                                                                | caller-supplied (`plannedWithHarness` / `plannedWithModel`)              |
+| MCP `add_plan_items` (MOTIR-2988)                              | stamps each `add`'s `planningProvenance.source` from the plan's `authorSource`           | copied from the plan's `authorHarness` / `authorModel`                   |
+| Native materialize (`plansService.materialize`)                | `planning` **read from the proposal**, default `native` (Decision 5, amended 2026-08-18) | `harness` read from the proposal, default `Motir`; `model` from proposal |
+| Self-reported session (`mark_integrated` / `complete_session`) | `implementation = byok` (default) or `manual`                                            | caller-supplied                                                          |
+
+The two `create_plan` / `add_plan_items` rows record a plan-level triple, not a work-item
+one: `Plan.authorSource` / `authorHarness` / `authorModel`
+(`docs/decisions/agent-authored-plans.md` Q3). `authorSource` is **server-set** at the tool,
+exactly as `create_work_item` fixes `source: 'mcp'`, and the MCP tool's proposal schema does
+not accept `planningProvenance` at all — `add_plan_items` stamps it. The rule the table's
+last-but-one row now states is Decision 5's amendment, immediately below.
 
 ### Service write API (MOTIR-1687)
 
@@ -216,6 +237,67 @@ claim trusted-metered provenance.
 ---
 
 ## Decision 5 — motir-ai native-provenance proposal contract
+
+> ### ⚠️ AMENDED 2026-08-18 (MOTIR-2984, Story MOTIR-2982) — the pin is LIFTED; materialize READS the proposal's `source` / `harness`, defaulting to `native` / `Motir`
+>
+> **The superseded sentence, quoted so the reversal reads as a reversal** (it is the last
+> paragraph of this decision as originally written, and it stands below unedited):
+>
+> > Note: `source` AND `harness` are **pinned to `native`/`Motir` at materialize**, not read
+> > from the proposal — a forged non-native `source`/`harness` on
+> > `proposedFields.planningProvenance` can never change the stamp (the internal seam is
+> > trusted as native by construction).
+>
+> **What changed.** That pin rested on the premise stated in the code above the write —
+> _"every item materialized from an approved plan was planned NATIVELY by Motir"_. It was
+> true when written, because motir-ai's generator was the only writer of a `Plan`.
+> MOTIR-2982 gives an external agent a PAT-authed door onto the same substrate
+> (`create_plan` / `add_plan_items`), so a plan can now be authored by an agent, approved by
+> a person, and materialized — and under the pin every resulting item would be stamped as
+> Motir's own planning. That is a false claim on the exact record this ADR exists to keep
+> truthful, on every item of every such plan.
+>
+> **What did NOT change — the safety property.** _A proposal must not be able to CLAIM it was
+> planned natively._ The pin held that property by never reading the value; it is now held by
+> the WRITE SEAMS instead, and no caller can reach the field on any of them:
+>
+> - `add_plan_items` stamps `planningProvenance` server-side from the plan's `authorSource`
+>   and does not accept it as a caller argument — the discipline `create_work_item` already
+>   applies (_"the source is fixed here — never taken from a caller field — so an agent
+>   cannot claim `manual`/`native`"_, `lib/mcp/tools/createWorkItem.ts`). `create_plan` sets
+>   `authorSource` server-side in turn.
+> - `POST /api/internal/ai/plan-proposals` supplies `native · Motir` and is a §4
+>   service-bearer + job-token route, unreachable from a PAT — the seam this decision already
+>   calls _trusted as native by construction_.
+> - The proposal-EDIT path cannot reach the field at all: `UpdateProposalInput` has no
+>   `planningProvenance` member and `mergeProposedFields` is an explicit key-by-key merge over
+>   eight named fields, so a patch carrying one is discarded by construction.
+>
+> Backstop: a `source` outside the closed `WorkItemPlanningSource` set is rejected at the
+> **proposal boundary** (`validateProposal`) with a typed `InvalidProposalError`, never
+> written through to the column.
+>
+> **The amended rule** (`plansService.materialize`, MOTIR-2990):
+>
+> ```
+> planningSource  = pf.planningProvenance?.source  ?? 'native'
+> planningHarness = pf.planningProvenance?.harness ?? 'Motir'
+> planningModel   = pf.planningProvenance?.model   ?? null      // unchanged
+> ```
+>
+> **Every shipped native path is byte-identical after this.** The shipped producers reach
+> materialize either with no `planningProvenance` (taking the default) or with
+> `{ source: 'native', harness: 'Motir', model }` (MOTIR-1690's producer, writing the same
+> pair the pin wrote). The defensive-consumer property below survives unchanged: a proposal
+> carrying no provenance still stamps a valid native triple.
+>
+> **Intended consequence, via Decision 6's existing rule:** an `mcp`-sourced item is not
+> stripped by `toWorkItemDto`, so it SHOWS the model the agent self-reported — which is what
+> this decision's own closing note already prescribes (_"MCP/BYOK keep + expose their model —
+> the user reported their OWN"_). The mapper does not change.
+>
+> Argued in full, with the rung-2 evidence for each write seam, in
+> `docs/decisions/agent-authored-plans.md` Q4.
 
 The native LLM is known only to motir-ai (`PlanningRun.model`). motir-ai attaches planning
 provenance to **each `add` PlanItem proposal** it streams to core over
@@ -331,7 +413,11 @@ collapsed + expanded states; the display (MOTIR-1693) implements the disclosure 
   Epic 9's call — the columns here are the denormalized latest-authoritative projection.
 - **No new trust surface:** `source` is server-set at every seam; `hosted` is unreachable
   from the self-reported session tools; only `harness`/`model` are self-reported free text,
-  recorded as-is without implying verification.
+  recorded as-is without implying verification. **Since Decision 5's 2026-08-18 amendment
+  this bullet is a GUARANTEE rather than an observation** — materialize now reads the
+  proposal's `source`, so "server-set at every seam" is the property that keeps a forged
+  `native` impossible. Any future writer of `proposedFields.planningProvenance` inherits the
+  obligation.
 
 ```
 
