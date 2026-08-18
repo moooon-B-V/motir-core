@@ -371,6 +371,16 @@ export const workItemDetailSchema = workItemFieldsSchema.extend({
   commentCount: z.number().int(),
   sprintId: z.string().nullable(),
   targetRepo: z.string().nullable(),
+  /** EVERY repository the item ships in (Story MOTIR-2725 · MOTIR-2728), ordered,
+   *  element 0 the primary — which is exactly what `targetRepo` above holds.
+   *
+   *  ADDITIVE beside the scalar rather than replacing it: §8 of
+   *  `docs/decisions/public-api-conventions.md` lists removing, renaming and
+   *  retyping a published field as forbidden without a new major, and turning
+   *  `targetRepo` into an array is all three. A client written against today's
+   *  shape keeps reading the repository dispatch routes to; `V1_CONTRACT_VERSION`
+   *  moves for the addition (Amendment 8). */
+  targetRepos: z.array(z.string()),
   executor: executorSchema.nullable(),
   planningSource: planningSourceSchema.nullable(),
   planningHarness: z.string().nullable(),
@@ -580,6 +590,7 @@ export function presentWorkItemDetail(
     commentCount,
     sprintId: item.sprintId,
     targetRepo: item.targetRepo,
+    targetRepos: item.targetRepos,
     executor: item.executor,
     planningSource: item.planningSource,
     planningHarness: item.planningHarness,
@@ -720,6 +731,11 @@ export const createWorkItemBodySchema = z
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),
+    // The repository SET (MOTIR-2728). MUTUALLY EXCLUSIVE with `targetRepo`: the
+    // scalar IS this list's first element, so supplying both describes one field
+    // twice and the service raises `CONFLICTING_TARGET_REPO_INPUT` (422) rather
+    // than silently picking a winner (ADR §3.4).
+    targetRepos: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })
@@ -748,6 +764,10 @@ export const updateWorkItemBodySchema = z
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),
+    /** Replace the repository SET wholesale, or clear it with `[]`. Mutually
+     *  exclusive with `targetRepo`, exactly as on create — the patch surface is
+     *  never looser than the create one. */
+    targetRepos: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })

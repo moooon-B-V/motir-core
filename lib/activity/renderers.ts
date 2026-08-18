@@ -107,6 +107,12 @@ function textValue(v: unknown): ActivityValueDto {
   return noneOr(v, (p) => ({ type: 'text', text: safeString(p) }));
 }
 
+/** A list, as the joined members — or `none` when it is empty or absent. */
+function listValue(v: unknown): ActivityValueDto {
+  if (!Array.isArray(v) || v.length === 0) return { type: 'none' };
+  return { type: 'text', text: safeString(v.map((m) => safeString(m)).join(', ')) };
+}
+
 function dateValue(v: unknown): ActivityValueDto {
   return noneOr(v, (p) =>
     typeof p === 'string' ? { type: 'date', date: p } : { type: 'text', text: safeString(p) },
@@ -139,6 +145,32 @@ function textField(): RegistryEntry {
       const cell = asCell(value);
       if (!cell) return [genericPart(key, value)];
       return [{ kind: 'field', field: key, from: textValue(cell.from), to: textValue(cell.to) }];
+    },
+  };
+}
+
+/**
+ * A LIST-valued scalar field — rendered as its members, joined, so the History
+ * entry says WHAT the list became rather than `["a","b"]`.
+ *
+ * `textField()` would not be wrong here so much as illegible: `safeString`
+ * JSON-stringifies a non-scalar, so a repository-set change would read
+ * `["motir-core","motir-ai"] → ["motir-ai","motir-core"]` — which is exactly the
+ * change a reader auditing a mis-routed dispatch needs to understand, rendered in
+ * the form that makes it hardest to.
+ *
+ * The EMPTY list renders as `none`, the same "—" every nullable field uses when
+ * it is cleared. An empty repository set and an unpinned card are one state
+ * (`docs/decisions/work-item-repository-set.md` §1), and the History should not
+ * invent a second way to say it.
+ */
+function listField(): RegistryEntry {
+  return {
+    disposition: 'renderable',
+    render: (key, value) => {
+      const cell = asCell(value);
+      if (!cell) return [genericPart(key, value)];
+      return [{ kind: 'field', field: key, from: listValue(cell.from), to: listValue(cell.to) }];
     },
   };
 }
@@ -342,6 +374,12 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // reader auditing why a dispatch went to the wrong checkout needs to see it
   // change in the History.
   targetRepo: textField(),
+  // The repository SET (Story MOTIR-2725 · MOTIR-2728) — renderable for the same
+  // reason the pin above is, and a LIST rather than a text field so the entry
+  // reads "motir-core → motir-ai, motir-core" instead of two JSON blobs. A
+  // re-ORDER is a real change and shows as one: element 0 is the repository
+  // dispatch routes to, so moving it moves where an agent runs.
+  targetRepos: listField(),
   projectId: textField(),
   // -- body fields: edit recorded, content never inlined --------------------
   descriptionMd: editedField(),

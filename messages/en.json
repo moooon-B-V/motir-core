@@ -1151,7 +1151,20 @@
     "quickViewFieldSaved": "Saved",
     "quickViewStaleReloaded": "This item changed while the quick view was open. The fields below have been reloaded.",
     "sprintUpdateFailed": "Couldn’t update the sprint. Try again.",
-    "quickViewMoreFields": "{count, plural, one {# more field} other {# more fields}}"
+    "quickViewMoreFields": "{count, plural, one {# more field} other {# more fields}}",
+    "repositories": "Repositories",
+    "repositoriesOptional": "Optional — not every card ships in a repository.",
+    "repositoryPrimary": "primary",
+    "repositoriesMore": "+{count} more",
+    "repositoriesAllDelivered": "All delivered.",
+    "repositoriesDeliveredCount": "{delivered} of {total} delivered.",
+    "repositoriesOutstanding": "{delivered} of {total} delivered. {repo} is outstanding.",
+    "repositoriesUnknownBranch": "{repo} merged, but Motir has no record of which branch.",
+    "repositoryDelivery": {
+      "delivered": "Delivered",
+      "awaiting": "Awaiting",
+      "unknown": "Unknown"
+    }
   },
   "comments": {
     "title": "Activity",
@@ -5176,7 +5189,13 @@
       "linkAction": "Link",
       "notConnected": "GitHub isn't connected for this workspace. Connect it in Settings → Workspace → GitHub.",
       "prNotFound": "That pull request could not be found.",
-      "autoLinkCaptionManual": "Linked automatically when a branch or PR mentions <mono>{key}</mono> — or linked by hand from here."
+      "autoLinkCaptionManual": "Linked automatically when a branch or PR mentions <mono>{key}</mono> — or linked by hand from here.",
+      "noPullRequestYet": "No pull request yet",
+      "mergedBranchUnknown": "Merged — branch not recorded",
+      "repoState": {
+        "awaiting": "Awaiting",
+        "unknown": "Unknown"
+      }
     }
   },
   "aiPlanning": {

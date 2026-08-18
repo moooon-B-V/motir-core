@@ -40,6 +40,20 @@ export const E2E_REPO = {
   defaultBranch: 'main',
   archived: false,
 } as const;
+/** A SECOND repository on the same installation (Story MOTIR-2725 · MOTIR-2730)
+ *  — what a work item that ships in more than one repository needs in order to
+ *  exist at all. Its default branch is deliberately NOT `main`: the completion
+ *  gate compares each merge against that repository's OWN mirrored default
+ *  branch, and a fixture where both are `main` cannot tell a correct comparison
+ *  from a hard-coded one. */
+export const E2E_REPO_SECOND = {
+  providerRepoId: '88000002',
+  owner: 'moooon-e2e',
+  name: 'motir-demo-api',
+  defaultBranch: 'trunk',
+  archived: false,
+} as const;
+
 export const E2E_INSTALLATION_ACCOUNT = { login: 'moooon-e2e', type: 'Organization' } as const;
 
 // MOTIR's own provisioning org (Story MOTIR-1775 · MOTIR-1785) — the owner EVERY

@@ -2,6 +2,7 @@ import { defineJob } from '../defineJob';
 import type {
   WorkItemChildSetChangedData,
   WorkItemCreatedData,
+  WorkItemDerivationRequestedData,
   WorkItemTransitionedData,
 } from '../types';
 
@@ -108,6 +109,22 @@ export const statusDerivationOnCreated = defineJob(
     id: 'status-derivation/created',
     trigger: 'work-item/created',
     retryPolicy: 'idempotent',
+    // ⚠️ NOT DEBOUNCED, and that is a decision with evidence behind it
+    // (Bug MOTIR-2902). A parent-keyed debounce looks ideal here: a bulk import
+    // recomputes one parent once per row. It was implemented, and the Inngest
+    // DEV SERVER — what CI's E2E lane and every self-hosted run use — does not
+    // merely ignore it, it DROPS RUNS:
+    //
+    //   ERROR "error scheduling function"  error: "error enqueueing debounce
+    //         job: queue item already exists"
+    //   ERROR "error initializing fn"      function: "status-derivation/created"
+    //
+    // Two same-key events close together make the second fail to schedule at
+    // all, so the recompute never happens — silently, from the caller's side.
+    // Measured on #2114: `tests/e2e/status-derivation.spec.ts` saw 3 succeeded
+    // derivation runs where it required 4. The fan-out is a real cost and worth
+    // solving, but not with an instrument that loses work in the environment
+    // most people run.
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemCreatedData;
@@ -156,5 +173,56 @@ export const statusDerivationOnChildSetChanged = defineJob(
       );
     }
     return { reason: payload.reason, outcomes };
+  },
+);
+
+// ── The SILENT-EDIT trigger (Bug MOTIR-2902) ────────────────────────────────
+//
+// The fourth consumer, and the one that closes the import race. The three above
+// all ride an edit that announces itself. `setImportedStatus` is an edit that
+// does not: it pins an imported child's mapped status and deliberately emits no
+// `work-item/transitioned`, so a bulk import cannot fan out one notification per
+// row. That contract is right and is untouched here.
+//
+// Without this consumer the only derivation trigger an import produced was the
+// `work-item/created` that fired BEFORE the pin, so the recompute could read the
+// child as `todo`, settle the parent at `todo`, and never re-fire — the child set
+// never changes again, so the wrong answer was TERMINAL rather than late.
+//
+// ⚠️ WHY A DEDICATED EVENT AND NOT `work-item/child-set.changed`. That event's
+// contract is "the child that entered or left the set", and a status pin changes
+// no membership at all. Overloading its `reason` enum would have been a smaller
+// diff and a worse one: the next reader would find a set-change event that does
+// not change the set. A dedicated event also keeps the property this fix depends
+// on — derivation is its ONLY consumer, so nothing here can reintroduce the
+// notification storm the import avoids.
+//
+// ⚠️ AND WHY NOT A DEBOUNCE. Delaying the create-recompute past the pin was the
+// first two attempts at this bug, and both failed. It does not even address the
+// initial-import case — the importer creates every parented row FLAT and wires
+// the edge in a second pass, so there is no pin-adjacent window to slide past —
+// and on the Inngest dev server the debounce actively DROPS runs (see the note
+// on `status-derivation/created`). A trigger that depends only on an event being
+// emitted holds in every environment; one that depends on the scheduler honouring
+// an option holds in none that can be tested here.
+
+export const statusDerivationOnRequested = defineJob(
+  {
+    id: 'status-derivation/requested',
+    trigger: 'work-item/derivation.requested',
+    retryPolicy: 'idempotent',
+    // Not debounced, for the reason recorded on `status-derivation/created`
+    // above: the dev server's debounce drops runs rather than coalescing them.
+  },
+  async (ctx, services) => {
+    const payload = ctx.event.data as WorkItemDerivationRequestedData;
+
+    // `recomputeParent`, not `rollUpForChild`: the parent is already known, so
+    // there is nothing to re-read. No `trigger.occurredAt` — the pinned child is
+    // still IN the set with its new status, so the aggregate dates the edit
+    // itself, which is what keeps this idempotent under redelivery.
+    return ctx.step.run('recompute-parent', () =>
+      services.parentStatusRollup.recomputeParent(payload.parentId, payload.workspaceId),
+    );
   },
 );

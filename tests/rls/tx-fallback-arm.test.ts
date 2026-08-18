@@ -37,7 +37,6 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from '../helpers/adminDb';
-import { isAppRoleTestMode } from '../helpers/parallelDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The `tx ?? db` FALLBACK ARM (MOTIR-2815 part 1).
@@ -49,21 +48,23 @@ import { truncateAuthTables } from '../helpers/db';
 // `dashboardWidgetRepository` to 81%. The card predicted exactly this, and named
 // the honest fix: exercise the arm deliberately rather than lower the floor.
 //
-// ⚠️ WHAT THE ARM IS FOR, AND WHY THE ASSERTION IS PER-ROLE. The fallback is not
-// dead code to be deleted — it is what a repository does when nobody has bound a
-// transaction, and the whole point of this story is that the ANSWER in that state
-// is wrong. So the assertion is the one MOTIR-2805 established, and it is
-// deliberately opposite in the two modes:
+// ⚠️ WHAT THE ARM IS FOR, AND WHAT IT OWES. The fallback is not dead code to be
+// deleted — it is what a repository does when nobody has bound a transaction,
+// and the whole point of this story is that the ANSWER in that state is wrong.
+// So the assertion is the one MOTIR-2805 established: an UNBOUND read comes back
+// EMPTY, and that is CORRECT. Asserting rows here would be asserting that a path
+// with no binding somehow works — the exact false claim the story exists to
+// remove.
 //
-//   under the dev/CI BYPASSRLS owner  → the rows come back (RLS is inert)
-//   under `motir_app`                 → the answer is EMPTY, and that is CORRECT
+// ⚠️ AND THAT MAKES THE FIXTURE LOAD-BEARING. `expect([]).toEqual([])` also passes
+// when nothing was ever seeded, so every case below seeds through `adminDb` and
+// the bound path is proved elsewhere (`app-role-bound-context-reads.test.ts`) —
+// emptiness here is only evidence because the row demonstrably exists.
 //
-// Asserting rows under the app role here would be asserting that a path with no
-// binding somehow works — the exact false claim the story exists to remove. And
-// asserting emptiness under BOTH would pass vacuously on a broken fixture. Hence
-// `isAppRoleTestMode()`: this is the one file where the two roles genuinely owe
-// different answers, unlike `app-role-bound-context-reads.test.ts`, where the
-// bound path owes the SAME answer in both and is therefore ungated.
+// Until MOTIR-2734 each assertion below had a second arm, taken when
+// `TEST_DB_APP_ROLE` was unset: under the BYPASSRLS owner RLS is inert and the
+// rows come back. `@/lib/db` is now always `motir_app`, so that arm is
+// unreachable and has been removed rather than left as a branch nothing selects.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -74,23 +75,18 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** Rows under the owner; nothing under `motir_app`. The whole contract, once. */
-function expectFallbackAnswer<T>(rows: T[], seededAtLeast: number): void {
-  if (isAppRoleTestMode()) {
-    expect(
-      rows,
-      'an UNBOUND read must come back empty under `motir_app` — if it returns rows, ' +
-        'the policy is not gating this table and the verdict list is wrong about it',
-    ).toEqual([]);
-  } else {
-    expect(rows.length).toBeGreaterThanOrEqual(seededAtLeast);
-  }
+/** Nothing comes back unbound under `motir_app`. The whole contract, once. */
+function expectFallbackAnswer<T>(rows: T[]): void {
+  expect(
+    rows,
+    'an UNBOUND read must come back empty under `motir_app` — if it returns rows, ' +
+      'the policy is not gating this table and the verdict list is wrong about it',
+  ).toEqual([]);
 }
 
 /** …and the scalar form, for the counts. */
-function expectFallbackCount(value: number, seeded: number): void {
-  if (isAppRoleTestMode()) expect(value).toBe(0);
-  else expect(value).toBe(seeded);
+function expectFallbackCount(value: number): void {
+  expect(value).toBe(0);
 }
 
 /** A trivially-valid stored filter — the criteria are not what these cases test. */
@@ -113,28 +109,26 @@ describe('workflowsRepository — the arm every workflow read now falls back to'
     const { fx } = await seedItem('FA1');
 
     const statuses = await workflowsRepository.findStatuses(fx.projectId, fx.workspaceId);
-    expectFallbackAnswer(statuses, 3);
+    expectFallbackAnswer(statuses);
 
     const transitions = await workflowsRepository.findTransitions(fx.projectId, fx.workspaceId);
-    expectFallbackAnswer(transitions, 1);
+    expectFallbackAnswer(transitions);
 
     const byProjects = await workflowsRepository.findStatusesByProjects(
       [fx.projectId],
       fx.workspaceId,
     );
-    expectFallbackAnswer(byProjects, 3);
+    expectFallbackAnswer(byProjects);
 
     const byKey = await workflowsRepository.findStatusByKey(fx.projectId, 'todo', fx.workspaceId);
-    if (isAppRoleTestMode()) expect(byKey).toBeNull();
-    else expect(byKey?.key).toBe('todo');
+    expect(byKey).toBeNull();
 
     // …and the id-keyed pair, which needs a real id to be worth anything: read it
     // through the OWNER so the lookup below is a genuine miss-or-hit rather than
     // a lookup of nothing.
     const seeded = await adminDb.workflowStatus.findFirst({ where: { projectId: fx.projectId } });
     const byId = await workflowsRepository.findStatusById(seeded!.id, fx.workspaceId);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(seeded!.id);
+    expect(byId).toBeNull();
 
     const seededTransition = await adminDb.workflowTransition.findFirst({
       where: { projectId: fx.projectId },
@@ -143,8 +137,7 @@ describe('workflowsRepository — the arm every workflow read now falls back to'
       seededTransition!.id,
       fx.workspaceId,
     );
-    if (isAppRoleTestMode()) expect(transition).toBeNull();
-    else expect(transition?.id).toBe(seededTransition!.id);
+    expect(transition).toBeNull();
 
     const found = await workflowsRepository.findTransition(
       fx.projectId,
@@ -152,8 +145,7 @@ describe('workflowsRepository — the arm every workflow read now falls back to'
       seededTransition!.toStatusId,
       fx.workspaceId,
     );
-    if (isAppRoleTestMode()) expect(found).toBeNull();
-    else expect(found?.id).toBe(seededTransition!.id);
+    expect(found).toBeNull();
   });
 });
 
@@ -177,8 +169,8 @@ describe('the remaining fallback arms this story left without a caller', () => {
     // was open), which is the better end state — a required parameter cannot be
     // forgotten — and it removes them from this file's subject rather than
     // needing a case here.
-    expectFallbackAnswer(await attachmentRepository.listByWorkItem(itemId, {}), 1);
-    expectFallbackCount(await attachmentRepository.countByWorkItem(itemId), 1);
+    expectFallbackAnswer(await attachmentRepository.listByWorkItem(itemId, {}));
+    expectFallbackCount(await attachmentRepository.countByWorkItem(itemId));
     expect(attachment.id).toBeTruthy();
   });
 
@@ -197,11 +189,9 @@ describe('the remaining fallback arms this story left without a caller', () => {
 
     expectFallbackAnswer(
       await customFieldDefinitionRepository.listByProject(fx.projectId, fx.workspaceId),
-      1,
     );
     expectFallbackCount(
       await customFieldDefinitionRepository.countByProject(fx.projectId, fx.workspaceId),
-      1,
     );
     expectFallbackAnswer(
       await customFieldDefinitionRepository.listWithValuesForWorkItem(
@@ -209,12 +199,10 @@ describe('the remaining fallback arms this story left without a caller', () => {
         fx.workspaceId,
         itemId,
       ),
-      1,
     );
 
     const byId = await customFieldDefinitionRepository.findById(field.id, fx.workspaceId);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(field.id);
+    expect(byId).toBeNull();
   });
 
   it('dashboardRepository + dashboardWidgetRepository — the grid and its widgets', async () => {
@@ -240,15 +228,13 @@ describe('the remaining fallback arms this story left without a caller', () => {
     });
 
     const row = await dashboardRepository.findByIdWithFacts(fx.workspaceId, dashboard.id);
-    if (isAppRoleTestMode()) expect(row).toBeNull();
-    else expect(row?.id).toBe(dashboard.id);
+    expect(row).toBeNull();
 
-    expectFallbackAnswer(await dashboardRepository.listVisible(fx.workspaceId, fx.ownerId, 20), 1);
-    expectFallbackAnswer(await dashboardWidgetRepository.listByDashboard(dashboard.id), 1);
+    expectFallbackAnswer(await dashboardRepository.listVisible(fx.workspaceId, fx.ownerId, 20));
+    expectFallbackAnswer(await dashboardWidgetRepository.listByDashboard(dashboard.id));
 
     const named = await dashboardWidgetRepository.findByIdWithNames(dashboard.id, widget.id);
-    if (isAppRoleTestMode()) expect(named).toBeNull();
-    else expect(named?.id).toBe(widget.id);
+    expect(named).toBeNull();
   });
 
   it('automationRule + its executions — the rule list, and the audit trail', async () => {
@@ -275,28 +261,25 @@ describe('the remaining fallback arms this story left without a caller', () => {
       },
     });
 
-    expectFallbackAnswer(await automationRuleRepository.listByProject(fx.projectId), 1);
+    expectFallbackAnswer(await automationRuleRepository.listByProject(fx.projectId));
     void itemId;
     expectFallbackAnswer(
       await automationRuleRepository.listEnabledByProjectAndTrigger(fx.projectId, 'created'),
-      1,
     );
 
     const byId = await automationRuleRepository.findByIdInProject(rule.id, fx.projectId);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(rule.id);
+    expect(byId).toBeNull();
 
     expectFallbackAnswer(
       await automationRuleExecutionRepository.listByRule(rule.id, { skip: 0, take: 10 }),
-      1,
     );
-    expectFallbackCount(await automationRuleExecutionRepository.countByRule(rule.id), 1);
+    expectFallbackCount(await automationRuleExecutionRepository.countByRule(rule.id));
 
     // The idempotency probe, and the one whose unbound answer is actively
     // dangerous rather than merely empty: `false` means "never ran", so a
     // replayed event re-applies every action.
     const already = await automationRuleExecutionRepository.existsByRuleAndEvent(rule.id, 'evt-1');
-    expect(already).toBe(!isAppRoleTestMode());
+    expect(already).toBe(false);
   });
 });
 
@@ -395,15 +378,9 @@ describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
     const total = await savedFilterRepository.countVisible(listArgs);
     const subs = await savedFilterSubscriptionRepository.countByFilter(filter.id);
 
-    if (isAppRoleTestMode()) {
-      expect(rows).toEqual([]);
-      expect(total).toBe(0);
-      expect(subs).toBe(0);
-    } else {
-      expect(rows.map((r) => r.name)).toEqual(['Fallback']);
-      expect(total).toBe(1);
-      expect(subs).toBe(1);
-    }
+    expect(rows).toEqual([]);
+    expect(total).toBe(0);
+    expect(subs).toBe(0);
   });
 });
 
@@ -431,59 +408,52 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
       fx.ctx,
     );
 
-    expectFallbackAnswer(await workItemLinkRepository.findByFromItem(itemId), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findByToItem(other.id), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findBlockedByEdges([itemId]), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findBlockerStates(itemId), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findBlockerStatesForItems([itemId]), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findBlockerEdgesForItems([itemId]), 1);
-    expectFallbackAnswer(await workItemLinkRepository.findBlockedEdgesForItems([other.id]), 1);
-    expectFallbackAnswer(
-      await workItemLinkRepository.findBlockerSessionBranchesForItems([itemId]),
-      0,
-    );
+    expectFallbackAnswer(await workItemLinkRepository.findByFromItem(itemId));
+    expectFallbackAnswer(await workItemLinkRepository.findByToItem(other.id));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockedByEdges([itemId]));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerStates(itemId));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerStatesForItems([itemId]));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerEdgesForItems([itemId]));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockedEdgesForItems([other.id]));
+    expectFallbackAnswer(await workItemLinkRepository.findBlockerSessionBranchesForItems([itemId]));
 
     const one = await workItemLinkRepository.findById(link.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(link.id);
+    expect(one).toBeNull();
 
     const between = await workItemLinkRepository.findAnyBetween(itemId, other.id);
-    if (isAppRoleTestMode()) expect(between).toBeNull();
-    else expect(between?.id).toBeTruthy();
+    expect(between).toBeNull();
 
     const reciprocal = await workItemLinkRepository.findReciprocal(
       itemId,
       other.id,
       'is_blocked_by',
     );
-    if (isAppRoleTestMode()) expect(reciprocal).toBeNull();
-    else expect(reciprocal?.id).toBe(link.id);
+    expect(reciprocal).toBeNull();
   });
 
   it('sprintRepository — the sprint lookups, unbound', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'FB2' });
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Arm' }, fx.ctx);
 
-    expectFallbackAnswer(await sprintRepository.listByProject(fx.projectId, fx.workspaceId), 1);
-    expectFallbackAnswer(await sprintRepository.findByIds([sprint.id], fx.workspaceId), 1);
+    expectFallbackAnswer(await sprintRepository.listByProject(fx.projectId, fx.workspaceId));
+    expectFallbackAnswer(await sprintRepository.findByIds([sprint.id], fx.workspaceId));
     expectFallbackAnswer(
       await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 10),
-      0,
     );
     expectFallbackCount(
       await sprintRepository.countByProjectAndState(fx.projectId, fx.workspaceId, 'planned'),
-      1,
     );
-    // `maxSequenceForProject` returns 0 for "nothing found", which is also the
-    // unbound answer — so it is asserted only on the OWNER side, where a real
-    // sequence proves the read ran. Under the app role the arm is still executed
-    // (that is what the coverage floor needs) but there is nothing it can claim.
-    const maxSeq = await sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId);
-    if (!isAppRoleTestMode()) expect(maxSeq).toBeGreaterThan(0);
+    // ⚠️ NON-DISCRIMINATING, and kept for the coverage floor rather than the
+    // claim. `maxSequenceForProject` returns 0 for "nothing found", which is
+    // also the unbound answer, so a passing 0 does not distinguish the policy
+    // hiding the row from there being no row. Before MOTIR-2734 the assertion
+    // ran only on the OWNER side, where a real sequence proved the read had run;
+    // that side is gone with the flag, so what remains is the arm being
+    // EXECUTED. Do not read this line as evidence the read is gated.
+    expectFallbackCount(await sprintRepository.maxSequenceForProject(fx.projectId, fx.workspaceId));
 
     const byId = await sprintRepository.findById(sprint.id, fx.workspaceId);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(sprint.id);
+    expect(byId).toBeNull();
 
     const active = await sprintRepository.findActiveByProject(fx.projectId, fx.workspaceId);
     expect(active).toBeNull(); // never started — null under BOTH roles
@@ -497,11 +467,11 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
       end: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
 
-    expectFallbackAnswer(await workItemRevisionRepository.listByWorkItem(itemId), 2);
+    expectFallbackAnswer(await workItemRevisionRepository.listByWorkItem(itemId));
     // TWO: the `created` revision and the rename. The NUMBER is what separates a
     // bound read from the unbound zero, so it is asserted rather than rounded to
     // "some".
-    expectFallbackCount(await workItemRevisionRepository.countDisplayableByWorkItem(itemId, []), 2);
+    expectFallbackCount(await workItemRevisionRepository.countDisplayableByWorkItem(itemId, []));
     expectFallbackAnswer(
       await workItemRevisionRepository.aggregateNetResolvedByBucket(
         fx.projectId,
@@ -509,13 +479,11 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
         'day',
         window,
       ),
-      0,
     );
     expectFallbackAnswer(
       await workItemRevisionRepository.aggregateAverageAgeByBucket(fx.projectId, fx.workspaceId, [
         { key: 'now', end: window.end },
       ]),
-      0,
     );
     expectFallbackAnswer(
       await workItemRevisionRepository.aggregateResolutionTimeByBucket(
@@ -524,12 +492,10 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
         'day',
         window,
       ),
-      0,
     );
 
     const latest = await workItemRevisionRepository.findLatestIdsByWorkItemIds([itemId]);
-    if (isAppRoleTestMode()) expect(latest.size).toBe(0);
-    else expect(latest.get(itemId)).toBeTruthy();
+    expect(latest.size).toBe(0);
 
     const actor = await workItemRevisionRepository.findLatestArchivedActor(itemId);
     expect(actor).toBeNull(); // never archived — null under BOTH roles
@@ -541,8 +507,7 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     // this guard exists to prevent.
     await workItemsService.updateStatus(itemId, 'in_progress', fx.ctx);
     const changedAt = await workItemRevisionRepository.findLatestStatusChangeAt(itemId);
-    if (isAppRoleTestMode()) expect(changedAt).toBeNull();
-    else expect(changedAt).toBeInstanceOf(Date);
+    expect(changedAt).toBeNull();
   });
 
   it('customFieldOptionRepository — the option lookups, unbound', async () => {
@@ -561,26 +526,17 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
       data: { fieldId: field.id, label: 'Alpha', position: 'a0' },
     });
 
-    expectFallbackAnswer(
-      await customFieldOptionRepository.listByField(field.id, fx.workspaceId),
-      1,
-    );
+    expectFallbackAnswer(await customFieldOptionRepository.listByField(field.id, fx.workspaceId));
     expectFallbackAnswer(
       await customFieldOptionRepository.listByProject(fx.projectId, fx.workspaceId),
-      1,
     );
     expectFallbackAnswer(
       await customFieldOptionRepository.findByIds([option.id], fx.projectId, fx.workspaceId),
-      1,
     );
-    expectFallbackCount(
-      await customFieldOptionRepository.countByField(field.id, fx.workspaceId),
-      1,
-    );
+    expectFallbackCount(await customFieldOptionRepository.countByField(field.id, fx.workspaceId));
 
     const byId = await customFieldOptionRepository.findById(option.id, fx.workspaceId);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(option.id);
+    expect(byId).toBeNull();
   });
 
   it('the plan-change conversation, the offboarding queue and the CI charge', async () => {
@@ -603,12 +559,10 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
       'project',
       fx.workspaceId,
     );
-    if (isAppRoleTestMode()) expect(found).toBeNull();
-    else expect(found?.id).toBe(session.id);
+    expect(found).toBeNull();
 
     expectFallbackAnswer(
       await planChangeTurnRepository.listBySessionId(session.id, fx.workspaceId),
-      1,
     );
 
     // Two tables gated but NOT by `app.workspace_id`: the offboarding queue is a
@@ -617,7 +571,6 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
     // so nothing to hide. The value is the branch, not the verdict.
     expectFallbackAnswer(
       await codeGraphOffboardingRepository.findByProject(fx.workspaceId, fx.projectId),
-      0,
     );
 
     // ⚠️ Named in a comment on the first pass and never actually CALLED, which is
@@ -764,16 +717,9 @@ describe('workItemRepository — all 68 fallback arms have a caller', () => {
 
     const answers = await Promise.all(arms.map(([, p]) => p));
     for (const [i, [name]] of arms.entries()) {
-      if (isAppRoleTestMode()) {
-        expect(isEmptyish(answers[i]), `${name} must answer EMPTY unbound under motir_app`).toBe(
-          true,
-        );
-      }
-    }
-    // A floor on the OWNER side, so the table cannot pass by every call throwing
-    // its way to an empty answer: some of these must genuinely return rows.
-    if (!isAppRoleTestMode()) {
-      expect(answers.filter((a) => !isEmptyish(a)).length).toBeGreaterThan(5);
+      expect(isEmptyish(answers[i]), `${name} must answer EMPTY unbound under motir_app`).toBe(
+        true,
+      );
     }
   });
 });
@@ -804,13 +750,12 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
     });
     await adminDb.workItemLabel.create({ data: { workItemId: itemId, labelId: label.id } });
 
-    expectFallbackAnswer(await labelRepository.searchByPrefix(fx.projectId, 'perf'), 1);
-    expectFallbackAnswer(await labelRepository.listByWorkItem(itemId), 1);
-    expectFallbackAnswer(await workItemLabelRepository.listByWorkItem(itemId), 1);
+    expectFallbackAnswer(await labelRepository.searchByPrefix(fx.projectId, 'perf'));
+    expectFallbackAnswer(await labelRepository.listByWorkItem(itemId));
+    expectFallbackAnswer(await workItemLabelRepository.listByWorkItem(itemId));
 
     const byName = await labelRepository.findByNameLower(fx.projectId, 'perf-q3');
-    if (isAppRoleTestMode()) expect(byName).toBeNull();
-    else expect(byName?.id).toBe(label.id);
+    expect(byName).toBeNull();
   });
 
   it('componentRepository + workItemComponentRepository — the list, the join, the default assignee', async () => {
@@ -828,22 +773,19 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       data: { workItemId: itemId, componentId: component.id },
     });
 
-    expectFallbackAnswer(await componentRepository.listByProject(fx.projectId), 1);
-    expectFallbackAnswer(await componentRepository.listByWorkItem(itemId), 1);
-    expectFallbackAnswer(await workItemComponentRepository.listByWorkItem(itemId), 1);
-    expectFallbackCount(await workItemComponentRepository.countByComponent(component.id), 1);
+    expectFallbackAnswer(await componentRepository.listByProject(fx.projectId));
+    expectFallbackAnswer(await componentRepository.listByWorkItem(itemId));
+    expectFallbackAnswer(await workItemComponentRepository.listByWorkItem(itemId));
+    expectFallbackCount(await workItemComponentRepository.countByComponent(component.id));
 
     const byId = await componentRepository.findById(component.id);
-    if (isAppRoleTestMode()) expect(byId).toBeNull();
-    else expect(byId?.id).toBe(component.id);
+    expect(byId).toBeNull();
 
     const byName = await componentRepository.findByNameLower(fx.projectId, 'api');
-    if (isAppRoleTestMode()) expect(byName).toBeNull();
-    else expect(byName?.id).toBe(component.id);
+    expect(byName).toBeNull();
 
     const defaulted = await componentRepository.findFirstDefaultAssignee([component.id]);
-    if (isAppRoleTestMode()) expect(defaulted).toBeNull();
-    else expect(defaulted?.defaultAssigneeId).toBe(fx.ownerId);
+    expect(defaulted).toBeNull();
   });
 
   it('watcherRepository — the popover page, the count, and the membership probe', async () => {
@@ -851,13 +793,13 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
     // creating a second one trips the (work_item_id, user_id) unique.
     const { fx, itemId } = await seedItem('FC3');
 
-    expectFallbackAnswer(await watcherRepository.listByWorkItem(itemId, { take: 5 }), 1);
-    expectFallbackCount(await watcherRepository.countByWorkItem(itemId), 1);
+    expectFallbackAnswer(await watcherRepository.listByWorkItem(itemId, { take: 5 }));
+    expectFallbackCount(await watcherRepository.countByWorkItem(itemId));
 
     // `existsFor` is the boolean form of the same arm: FALSE unbound under the role
     // is the "no rows admitted" answer, not "this person is not watching".
     const watching = await watcherRepository.existsFor(itemId, fx.ownerId);
-    expect(watching).toBe(!isAppRoleTestMode());
+    expect(watching).toBe(false);
   });
 
   it('commentRepository + commentMentionRepository — the thread, its counts, the mentions', async () => {
@@ -883,15 +825,14 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       data: { commentId: root.id, mentionedUserId: fx.ownerId },
     });
 
-    expectFallbackAnswer(await commentRepository.listThreadsByWorkItem(itemId), 1);
-    expectFallbackAnswer(await commentMentionRepository.findByCommentIds([root.id]), 1);
-    expectFallbackCount(await commentRepository.countByWorkItem(itemId), 2);
-    expectFallbackCount(await commentRepository.countRootsByWorkItem(itemId), 1);
-    expectFallbackCount(await commentRepository.countByParent(root.id), 1);
+    expectFallbackAnswer(await commentRepository.listThreadsByWorkItem(itemId));
+    expectFallbackAnswer(await commentMentionRepository.findByCommentIds([root.id]));
+    expectFallbackCount(await commentRepository.countByWorkItem(itemId));
+    expectFallbackCount(await commentRepository.countRootsByWorkItem(itemId));
+    expectFallbackCount(await commentRepository.countByParent(root.id));
 
     const one = await commentRepository.findById(root.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(root.id);
+    expect(one).toBeNull();
   });
 
   it('notificationRepository — the drawer page, the badge count, the id lookup', async () => {
@@ -909,12 +850,11 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       },
     });
 
-    expectFallbackAnswer(await notificationRepository.listByRecipient(fx.ownerId, { take: 5 }), 1);
-    expectFallbackCount(await notificationRepository.countUnreadByRecipient(fx.ownerId), 1);
+    expectFallbackAnswer(await notificationRepository.listByRecipient(fx.ownerId, { take: 5 }));
+    expectFallbackCount(await notificationRepository.countUnreadByRecipient(fx.ownerId));
 
     const one = await notificationRepository.findById(row.id);
-    if (isAppRoleTestMode()) expect(one).toBeNull();
-    else expect(one?.id).toBe(row.id);
+    expect(one).toBeNull();
   });
 
   it('customFieldValueRepository — the issue’s values and the two guard counts', async () => {
@@ -941,14 +881,8 @@ describe('the fallback arms MOTIR-2881 left without a caller', () => {
       },
     });
 
-    expectFallbackAnswer(
-      await customFieldValueRepository.listByWorkItem(itemId, fx.workspaceId),
-      1,
-    );
-    expectFallbackCount(await customFieldValueRepository.countByField(field.id, fx.workspaceId), 1);
-    expectFallbackCount(
-      await customFieldValueRepository.countByOption(option.id, fx.workspaceId),
-      1,
-    );
+    expectFallbackAnswer(await customFieldValueRepository.listByWorkItem(itemId, fx.workspaceId));
+    expectFallbackCount(await customFieldValueRepository.countByField(field.id, fx.workspaceId));
+    expectFallbackCount(await customFieldValueRepository.countByOption(option.id, fx.workspaceId));
   });
 });

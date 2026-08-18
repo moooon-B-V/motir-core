@@ -95,21 +95,6 @@ export function currentWorkerIndex(): number {
 export const TEST_APP_ROLE = process.env['TEST_APP_DB_ROLE'] ?? 'motir_app';
 export const TEST_APP_ROLE_PASSWORD = process.env['TEST_APP_DB_PASSWORD'] ?? 'motir_app';
 
-/**
- * Whether this run exercises the code under test as the NON-BYPASS role.
- *
- * OPT-IN, and deliberately so. Under the app role the workspace RLS policies
- * actually execute, which is the point — but the existing suite's fixtures seed
- * and assert through `@/lib/db` with no workspace context, so they are denied
- * wholesale (measured 2026-08-09: 299 of 421 tests failing across a 36-file
- * sample, against 441 test files that import `db`). Migrating those is
- * MOTIR-2514's to size, not this card's. Unset — the default, and what CI runs —
- * every helper here resolves exactly as it did before this flag existed.
- */
-export function isAppRoleTestMode(): boolean {
-  return process.env['TEST_DB_APP_ROLE'] === '1';
-}
-
 /** Rewrite a connection string's userinfo to the app role's test credentials. */
 function withAppRoleCredentials(raw: string): string {
   const u = new URL(raw);
@@ -121,16 +106,23 @@ function withAppRoleCredentials(raw: string): string {
 /**
  * The DATABASE_URL pointing at the current worker's own database.
  *
- * Under the app-role flag this carries the NON-BYPASS role, so `@/lib/db` — the
- * singleton every service and repository imports — connects as it and the RLS
- * policies bite on the code under test. Fixtures and teardown do NOT go through
- * this; they use `currentWorkerAdminUrl()` (see `tests/helpers/adminDb.ts`).
+ * This carries the NON-BYPASS role, so `@/lib/db` — the singleton every service
+ * and repository imports — connects as it and the RLS policies bite on the code
+ * under test. Fixtures and teardown do NOT go through this; they use
+ * `currentWorkerAdminUrl()` (see `tests/helpers/adminDb.ts`).
+ *
+ * Unconditional since MOTIR-2734. It was opt-in behind `TEST_DB_APP_ROLE=1`
+ * while the suite's fixtures still seeded and asserted through `@/lib/db` with
+ * no workspace context and were denied wholesale; the twenty fixture batches
+ * under MOTIR-2755, the read-surface binding of MOTIR-2796 and the test
+ * call-site binding of MOTIR-2797 removed that population, so there is no
+ * second mode left to select. The two-client model the flag selected INTO is
+ * what remains: `@/lib/db` is `motir_app`, fixtures are `adminDb`.
  */
 export function currentWorkerUrl(): string {
   const u = baseUrl();
   u.pathname = `/${workerDbName(currentWorkerIndex())}`;
-  const url = u.toString();
-  return isAppRoleTestMode() ? withAppRoleCredentials(url) : url;
+  return withAppRoleCredentials(u.toString());
 }
 
 /**

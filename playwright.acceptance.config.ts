@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { E2E_GITHUB_WEBHOOK_SECRET } from './tests/e2e/_helpers/github-const';
 import { generateKeyPairSync } from 'node:crypto';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
@@ -194,6 +195,17 @@ export default defineConfig({
         UV_THREADPOOL_SIZE: '64',
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
+        // The GitHub webhook secret (Story MOTIR-2725 · MOTIR-2730). The
+        // acceptance lane had never needed it — no acceptance story drove a
+        // webhook until a card's completion depended on TWO merges arriving as
+        // real `pull_request` deliveries. Without it `/api/github/webhook`
+        // answers 500 `GITHUB_WEBHOOK_NOT_CONFIGURED` before verifying anything.
+        //
+        // The SAME synthetic literal the main lane sets and the spec signs with
+        // (`tests/e2e/_helpers/github-const.ts`), so the real 7.10.4 signature
+        // gate runs here exactly as it does there — the acceptance clip records
+        // the shipped path, not a relaxed one.
+        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
         MOTIR_BASE_URL: BASE_URL,
         E2E_DISABLE_RATE_LIMIT: '1',

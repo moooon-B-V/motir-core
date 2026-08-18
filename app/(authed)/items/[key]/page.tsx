@@ -138,6 +138,15 @@ export default async function IssueDetailPage({
   // The Development section's linked PRs (MOTIR-1579) — the same display-ready
   // read the peek payload uses; item.id came from the access-gated detail read.
   const pullRequests = await workItemsService.listLinkedPullRequests(detail.item.id, ctx);
+  // Per-repository DELIVERY for the rail's Repositories card (Story MOTIR-2725 ·
+  // MOTIR-2415) — a RESOLVED value, so it is read here, server-side, in the
+  // page's existing data path rather than fetched by the client. Empty set →
+  // no query at all.
+  const repoDelivery = await workItemsService.listRepoDelivery(
+    detail.item.id,
+    detail.item.targetRepos,
+    ctx,
+  );
 
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the
@@ -510,6 +519,11 @@ export default async function IssueDetailPage({
                   pullRequests={pullRequests}
                   itemIdentifier={item.identifier}
                   manualLinkable={canEdit}
+                  // Repositories the item carries that have not landed (Story
+                  // MOTIR-2725 · MOTIR-2415) — the state the completion gate
+                  // holds the item for, and the one thing this section could
+                  // not show. The quick view passes nothing until MOTIR-2416.
+                  awaitingRepos={repoDelivery.filter((d) => d.state !== 'delivered')}
                 />
               </ContentSectionCard>
             </DevelopmentLinkProvider>
@@ -592,6 +606,7 @@ export default async function IssueDetailPage({
               parent={detail.parent}
               reporterIsSelf={item.reporterId === ctx.userId}
               customFields={detail.customFields}
+              repoDelivery={repoDelivery}
               labelsComponents={{
                 projectKey: ctx.project.identifier,
                 labels: detail.labels,

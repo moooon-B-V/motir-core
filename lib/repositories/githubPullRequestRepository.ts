@@ -23,11 +23,27 @@ export interface UpsertGithubPullRequestInput {
   state: string;
   merged: boolean;
   headRef: string;
+  /** The branch the change request TARGETS (Story MOTIR-2725 · MOTIR-2729).
+   *  Required on `NormalizedChangeRequest` for both providers and on the
+   *  historical backfill, so every live path supplies it; the COLUMN is nullable
+   *  only because rows written before it existed cannot know theirs. */
+  baseRef: string;
   title: string | null;
   workItemId: string | null;
   /** Whether this link is the manual override (MOTIR-1596). The webhook passes
    *  the row's PRESERVED value so an auto delivery never clears a manual link. */
   linkedManually: boolean;
+}
+
+/** One linked change request, reduced to the four facts the repository-SET
+ *  completion gate decides on (Story MOTIR-2725 · MOTIR-2729). `baseRef` is null
+ *  for rows ingested before the column existed — UNKNOWN, never "the default
+ *  branch". */
+export interface LinkedChangeRequestCompletionFact {
+  repoName: string;
+  repoDefaultBranch: string;
+  merged: boolean;
+  baseRef: string | null;
 }
 
 /** A PR row with the context the Development surface renders (MOTIR-1579):
@@ -136,6 +152,41 @@ export const githubPullRequestRepository = {
     return tx.githubPullRequest.count({
       where: { workItemId, state: 'open', id: { not: excludePrId } },
     });
+  },
+
+  /**
+   * A work item's linked change requests, as the COMPLETION facts the
+   * repository-SET gate needs (Story MOTIR-2725 · MOTIR-2729): which repository
+   * each landed in, whether it merged, which branch it targeted, and that
+   * repository's own default branch.
+   *
+   * Takes a REQUIRED `tx` — unlike `listByWorkItemWithContext` beside it, which
+   * is a read-only render path. This one guards a status WRITE and must run
+   * inside the sync's resolve transaction, under the row lock already taken, so
+   * concurrent redeliveries serialize on it exactly as the two shipped gates do.
+   *
+   * Projected rather than `include: { repo: true }` so the gate cannot
+   * accidentally read a field it has no business in, and so the shape says what
+   * the decision is made of.
+   */
+  async listCompletionFactsByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LinkedChangeRequestCompletionFact[]> {
+    const rows = await tx.githubPullRequest.findMany({
+      where: { workItemId },
+      select: {
+        merged: true,
+        baseRef: true,
+        repo: { select: { name: true, defaultBranch: true } },
+      },
+    });
+    return rows.map((r) => ({
+      repoName: r.repo.name,
+      repoDefaultBranch: r.repo.defaultBranch,
+      merged: r.merged,
+      baseRef: r.baseRef,
+    }));
   },
 
   /** A work item's linked PRs, newest-updated first, with the repo + check rows

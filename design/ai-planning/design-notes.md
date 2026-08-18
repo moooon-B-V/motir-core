@@ -2,13 +2,16 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                | Files                                | Card                 | Section |
-| ---------------------- | ------------------------------------ | -------------------- | ------- |
-| The Plans surface      | `plans-surface.mock.html` + `.png`   | MOTIR-843 (7.4.1)    | Part I  |
-| AI **sprint** planning | `sprint-planning.mock.html` + `.png` | MOTIR-1749 (7.13.11) | Part II |
+| Surface                 | Files                                         | Card                 | Section  |
+| ----------------------- | --------------------------------------------- | -------------------- | -------- |
+| The Plans surface       | `plans-surface.mock.html` + `.png`            | MOTIR-843 (7.4.1)    | Part I   |
+| AI **sprint** planning  | `sprint-planning.mock.html` + `.png`          | MOTIR-1749 (7.13.11) | Part II  |
+| **Who authored a plan** | `plans-surface.mock.html` (panel A2) + `.png` | MOTIR-2985           | Part III |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
+Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
+and its AUTHOR, to a shipped row and a shipped header, and redraws nothing.
 
 ---
 
@@ -433,3 +436,216 @@ dock unmounts on success — it must not linger showing a proposal that has beco
   is surfaced is that card’s question, not this surface’s. This asset covers the **person-initiated**
   run. (Both land on the same approve gate, so a later card can mount this same dock.)
 - **The settings pane** — MOTIR-914 / MOTIR-1739 own it (`design/ai-settings/`).
+
+---
+
+# Part III — Who ASKED for this plan, and who WROTE it (MOTIR-2985 / Story MOTIR-2982)
+
+**Amends Parts I and II's asset in place**: the same three files
+(`design-notes.md` · `plans-surface.mock.html` · `plans-surface.png`), one new panel — **A2**.
+
+## 0. The premise — a plan has THREE parties
+
+A plan is produced by up to three different people, and the surface recorded only one of them:
+
+| axis             | question                                      | recorded before this                                                      |
+| ---------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
+| **Requested by** | which PERSON asked for this plan              | **nothing at all**                                                        |
+| **Written by**   | which agent (or Motir) produced the proposals | nothing at all                                                            |
+| **Decided by**   | which person approved / declined it           | `Plan.decidedById` ✓ (drawn in panel A as _"approved yesterday by Mara"_) |
+
+**The requester is the one a reviewer wants first**, and an agent-authored plan makes that question
+sharper rather than softer. _An agent_ is not an answer to _whose plan is this?_ — **the MCP token
+belongs to a person**, who minted it and pointed it at this project, and a Motir generation was
+**clicked** by a person. A surface that named only the agent would read as though nobody is
+accountable for a tree somebody is about to approve, which is a worse failure than the one the
+attribution was added to fix.
+
+So the attribution names **the person first and the agent second**, in one entry, as one sentence
+about provenance.
+
+## 1. What is UNCHANGED — composed, not redrawn
+
+- **The access path.** Plans is reached from the left-nav _Plans_ entry (Part I §5), and a row is a
+  single `<Link>` into `/plans/[id]` — `PlanRow.tsx` says so in its own header. **No new door.**
+- **The row's shape**: the 22px status icon-square, the title line, the meta line, the right-hand
+  pill cluster, the accent border on a `planned` row awaiting review.
+- **The status pills** and their tones, and the rule that status is carried by TEXT, not colour alone.
+- **The staleness flag**, **the plan-detail canvas, the history timeline, and the approve / decline bar.**
+
+## 2. Drawn against SHIPPED reality — what was RENDERED first
+
+The list row is already implemented, so this was drawn against pixels rather than source. The **real
+`PlanRow`** was bundled (esbuild) with the **real `messages/en.json`** through a
+`NextIntlClientProvider`, styled with the **real `app/globals.css` + `@motir/design-system` theme**,
+and screenshotted headlessly in both themes before this panel was written. Four things that render
+settled, which reading the `.tsx` would not have:
+
+1. The meta line has **room**: `14 items   planned 2 hours ago` occupies under a third of it. Both
+   parties fit without new chrome, a second row, or a pill.
+2. The right-hand cluster is where the eye lands for STATUS. Putting attribution there would give
+   the row **two chips that read as one** — a `Planned` pill beside a `Claude Code` pill is a status
+   the reader will try to interpret.
+3. The meta entries are visually identical to each other. A bare `Mara · via Claude Code` in that
+   line reads as more timestamps — hence the **avatar** and the **glyph** (§4).
+4. The shipped row does **not** render the decider, though panel A's mock draws _"approved yesterday
+   by Mara"_. That drove a design rule rather than a shrug — see §3's _A DECIDED row shows the
+   DECIDER_ — and the gap itself is pre-existing and **not** closed here.
+
+## 3. What it draws — seven rows, and the FIELD each reads
+
+The attribution is **one more entry in the row's existing meta line**, after the timestamp:
+`<avatar> Mara · 🤖 via Claude Code`.
+
+**Rows 1–4 ARE panel A's rows** — the same four plans, in the same order, with the same item counts,
+op summaries, timestamps, staleness flag and accent border. This panel AMENDS A, so it must be
+diffable against it: read the two side by side and the only difference is the new entry.
+Substituting different plans would have forced the reader to re-read both panels to work out what
+changed, which is the one thing an amendment panel exists to prevent. **Rows 5–7 are ADDED**, for
+three states panel A has no row for.
+
+| #   | row                             | the attribution shows                       | read from                                                         |
+| --- | ------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| 1   | **generating** (A's row 1)      | `M` `Mara`                                  | `createdById` → name; no author yet                               |
+| 2   | **planned + stale** (A's row 2) | `M` `Mara` · 🤖 `via ` **`Claude Code`**    | `createdById` → name · `authorSource === 'mcp'` → `authorHarness` |
+| 3   | **approved** (A's row 3)        | ✨ `via ` **`Motir AI`** — NO requester     | `sourceJobId !== null`; decided, see below                        |
+| 4   | **declined** (A's row 4)        | **nothing — the entry is absent**           | neither party known (a plan older than both columns)              |
+| 5   | **NOBODY asked** (cadence)      | ↻ `auto-planned` · ✨ `via ` **`Motir AI`** | `createdById === null` **and** `origin === 'cadence'`             |
+| 6   | **requester, no agent**         | `P` `Priya`                                 | `createdById` set, no author and no job                           |
+| 7   | **long values**                 | both names ellipsize; nothing else moves    | §5                                                                |
+
+### A DECIDED row shows the DECIDER, not the requester
+
+Panel A's rows 3 and 4 already end **`approved yesterday by Mara`** / **`declined 3 days ago by
+Mara`** — the THIRD party, drawn since 843. A decided row that also gained a requester would
+therefore carry **two bare person names in one line**, and a reader cannot tell which one holds which
+role; it is the two-chips-read-as-one hazard applied to people.
+
+The rule that resolves it is also the one that matches how the list is read: **while a plan is
+UNDECIDED, _who asked_ is what you weigh — you are about to approve their request. Once it is
+decided, _who decided_ is the operative fact and the requester is history.** So the row drops the
+requester on `approved` / `declined`, keeps the agent (which still answers _what wrote the tree I
+accepted?_), and the **detail header keeps both** (§6). It also caps the meta line at three entries
+in every state.
+
+⚠️ **`by Mara` is drawn in panel A and is NOT shipped.** `PlanRow` renders
+`t(view.whenKey, { when })` — _"approved yesterday"_, with no name. That gap is pre-existing, is
+**not** closed by this amendment, and is named here so nobody reads panel A as shipped behaviour or
+reads this panel as having deleted something.
+
+### ⚠️ State 3 is the one the DATA had to be shaped for, and it is not cosmetic
+
+`createPlan` **always has an acting user**, so the requester could not simply be defaulted from the
+context. On the auto-plan path that acting user is the **project owner**, substituted by
+`autoPlanCadenceService` (`{ userId: owner.userId }`) purely so the job has a credential — **nobody
+clicked anything**. Recording them would attribute to a real person a request they never made, on
+the single plan whose whole point is that no person asked.
+
+So `Plan.createdById` is **written ⟺ a person actually asked** (`origin === 'user'`), and state 3 is
+drawn from its ABSENCE plus `origin`. The column is explicit at every call site for exactly this
+reason, and the abstention is pinned by a test (`autoPlanCadence.test.ts`) rather than left to the
+next producer's judgement.
+
+### ⚠️ State 2 reads `sourceJobId !== null`, NOT `authorSource === 'native'`
+
+[The contract decision](motir:cmsympvcb017mi4philjyjccs) deliberately does not retrofit Motir's own
+generator, so **every plan the product generates carries `authorSource === null`**. Drawing state 2
+off `'native'` would specify a row the surface can never render. **MOTIR-2996** retires that
+inference, and when it lands this row becomes `authorSource === 'native'` with no other change.
+
+### State 4 renders NOTHING
+
+No em-dash, no `Unknown`, no greyed placeholder. Every plan predating these columns is in this state,
+and a placeholder in a scanned list is a value the reader must learn to ignore.
+
+## 4. Per element — the primitive, the tokens, the copy
+
+| element                  | primitive / markup                                                                                                  | colour token                                              | shape / size                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- |
+| the attribution entry    | a `<span>` **inside the existing meta line** — no new container, no `Pill`                                          | `--el-text-secondary` (the meta line's own ink)           | inherits: `text-xs`, `gap-x-3`                                  |
+| the requester avatar     | the **shipped `Avatar`** (`app/(authed)/items/_components/issueCellPrimitives.tsx`) — initial letter, `aria-hidden` | `bg-(--el-text)` / `text-(--el-text-inverted)`, unchanged | **18px** here vs its 22px row size — the meta line is `text-xs` |
+| the requester name       | `<b>`                                                                                                               | `--el-text-secondary` at `font-semibold`                  | `max-w-[10rem]`, truncate                                       |
+| the agent glyph          | lucide **`Bot`** (agent) · **`Sparkles`** (Motir) · **`RotateCw`** (auto-planned), `aria-hidden`                    | `--el-text-faint`                                         | `h-3 w-3`, `shrink-0`                                           |
+| the harness / `Motir AI` | `<b>`                                                                                                               | `--el-text-secondary` at `font-semibold`                  | `max-w-[12rem]`, truncate                                       |
+| the `·` separators       | `<span>`                                                                                                            | `--el-text-faint`                                         | —                                                               |
+| the model (DETAIL only)  | `<span>` after a `·`                                                                                                | `--el-text-muted`                                         | —                                                               |
+
+- **No new colour and no Tier-0 value.** Every ink is an `--el-*` token this surface already uses;
+  the entry has no background, border or fill, so it introduces no tint.
+- **The avatar is the SHIPPED primitive, resized, not a new one.** A design that hand-rolled a
+  circle would drift from every other person on the product the first time that primitive changes.
+- **`--el-text-faint` on the glyphs and separators is legal precisely because they are decorative.**
+  `CLAUDE.md`'s measured table puts faint at 2.39–2.61 against every surface here — below AA — and
+  permits it only where meaning is carried elsewhere. It is: the avatar is `aria-hidden` and the
+  NAMES say the whole thing. **Neither party is ever conveyed by icon or colour alone.**
+- **`--el-text-secondary` for the words** (6.24 on `--el-surface`, AA in both themes) rather than
+  `--el-text-muted`, which clears AA only on the white page — and this row sits on `--el-surface`.
+- **Copy** (i18n namespace `aiPlanning`, both catalogs — the parity gate):
+  - row: `requestedBy` → `{name}` · `viaHarness` → `via {harness}` · `viaMotir` → `via Motir AI` ·
+    `autoPlanned` → `auto-planned`
+  - detail: `requestedByLong` → `Requested by {name}` · `writtenByHarness` → `written by {harness}` ·
+    `writtenByMotir` → `written by Motir AI` · `autoPlannedLong` → `Auto-planned — nobody requested this`
+
+## 5. Long values — what truncates, and in what order
+
+Both names are free text of unbounded length (`authorHarness` is caller-supplied; a person's name is
+whatever they set). Panel A2's sixth row draws a long person AND a long harness AND a long title in a
+narrow row at once:
+
+- **The plan TITLE keeps its own single-line ellipsis** and is **never shortened by the attribution**
+  — the meta line is a separate line below it.
+- **The PERSON truncates at `max-w-[10rem]`, the HARNESS at `max-w-[12rem]`**, each with its full
+  value on its `title` attribute. The person is given the tighter bound deliberately: a display name
+  is usually short, and when it is not, the reader still gets the leading name.
+- **The avatar, the `via`, the separators, the item count and the timestamp always stay legible** —
+  none of them is inside a truncating box.
+- **The meta line stays `flex-wrap`**, so a row too narrow for all three entries moves the whole
+  attribution to its own line, as the panel draws. It never pushes anything out of the row and never
+  breaks the text column's `min-w-0 flex-1`.
+
+## 6. The DETAIL header — the same two parties, with the roles spelled out
+
+The plan-detail header is `PlanReviewRail`'s `<header>` (title + status pill + summary + `N items`).
+The attribution joins the **`N items` line**, with **two differences** from the row:
+
+1. **The roles are named in words** — `Requested by Mara · written by Claude Code` — where the row
+   says `Mara · via Claude Code`. The row is SCANNED, and an avatar in front of a name already reads
+   as _this person's_; the header is READ, once, by the person about to press Approve, and there the
+   words are what stop two names being taken for one party.
+2. **The header carries the MODEL**, after a `·`. It is the difference between two agent-written
+   plans and nobody scans a list on it. **Absent model ⇒ the separator and the model both
+   disappear**; absent everything ⇒ the entry is absent, as in the row.
+
+The cadence state is spelled out most explicitly of all here — **"Auto-planned — nobody requested
+this"** — because this is the surface where somebody is about to accept the work, and _no requester_
+is a fact they should read rather than infer from a missing name.
+
+**And unlike the row, the header keeps the requester on a DECIDED plan.** The row drops it because a
+second bare name competes with the decider in a scanned line (§3); the header has neither problem —
+it names the roles in words, and the decider already lives in its own **history timeline** below
+(`created → planned → approved by …`), not in the same line. So an approved plan's header reads
+_"Requested by Jonas · written by Motir AI"_, with the decider a row further down where it always
+was.
+
+## 7. What this amendment ASSIGNS to its sibling cards
+
+Written into those cards in the same pass (the sweep-the-referrers rule):
+
+- **[The Plan's authorship carrier](motir:cmsyms0us018si4phpqjya7i1)** additionally carries
+  **`Plan.createdById`** (+ its `PlanCreatedBy` relation, `ON DELETE SET NULL` like `decidedById`),
+  written on the request paths and deliberately NOT on the cadence path.
+- **[The Plans surface shows who authored a plan](motir:cmsymy41w01fri4phh1ur2b2v)** builds every
+  state above, in BOTH reads, and owes **two name resolutions the DTOs do not carry today**:
+  - `PlanDto.createdById` is an **id**; the LIST row needs a **name**. `planRowView.ts` is the
+    server-side place for it — it already enriches each row — and the batch must be **one query for
+    the page**, not one per row.
+  - `PlanReviewDto` carries neither `createdById` nor `sourceJobId`. It already resolves
+    `decidedByName` through `userRepository.findById` in `planReviewService`, which is the pattern to
+    follow; **without `sourceJobId` the header cannot tell state 2 from state 4** however complete
+    the authorship fields are.
+- **[MOTIR-2996](motir:cmsyo0t8100dpi3ph16o9k6bm)** retires the `sourceJobId` inference once the
+  generator records its own attribution, at which point state 2 reads `authorSource === 'native'`.
+
+**Explicitly NOT closed here:** the shipped row does not render the DECIDER, though panel A draws it.
+That is a pre-existing gap in the third axis, out of this story's scope, and it is named so nobody
+reads panel A as shipped behaviour.

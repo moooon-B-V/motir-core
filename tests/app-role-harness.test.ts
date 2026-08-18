@@ -2,17 +2,18 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
-import { currentWorkerAdminUrl, currentWorkerUrl, isAppRoleTestMode } from './helpers/parallelDb';
+import { currentWorkerAdminUrl, currentWorkerUrl } from './helpers/parallelDb';
 import { truncateAuthTables } from './helpers/db';
 
-// The two-client test harness (MOTIR-2513).
+// The two-client test harness (MOTIR-2513), which is now the ONLY harness
+// (MOTIR-2734 retired the `TEST_DB_APP_ROLE` opt-in).
 //
-// `TEST_DB_APP_ROLE=1` points `@/lib/db` — the singleton every service and
-// repository imports — at the NON-BYPASS runtime role, so the workspace RLS
-// policies execute against the code under test. Fixtures and teardown stay on
-// the OWNER via `adminDb`, because they need privileges the runtime role must
-// never have (TRUNCATE needs ownership; a two-tenant fixture writes across
-// tenants, which is exactly what the policies forbid).
+// `@/lib/db` — the singleton every service and repository imports — connects as
+// the NON-BYPASS runtime role, so the workspace RLS policies execute against the
+// code under test on every run. Fixtures and teardown stay on the OWNER via
+// `adminDb`, because they need privileges the runtime role must never have
+// (TRUNCATE needs ownership; a two-tenant fixture writes across tenants, which
+// is exactly what the policies forbid).
 //
 // The flag is opt-in and the default path is a strict no-op — asserted below
 // rather than assumed, because "this change is inert unless you ask for it" is
@@ -28,16 +29,14 @@ afterAll(async () => {
 });
 
 describe('the two-client harness wiring', () => {
-  it('leaves both URLs on the base credentials when the flag is unset', () => {
-    // The no-op default, as a CHECKED property. With the flag off the code under
-    // test and the fixtures share one role, exactly as before this card.
-    if (isAppRoleTestMode()) {
-      expect(new URL(currentWorkerUrl()).username).toBe(
-        process.env['TEST_APP_DB_ROLE'] ?? 'motir_app',
-      );
-    } else {
-      expect(currentWorkerUrl()).toBe(currentWorkerAdminUrl());
-    }
+  it('points the code under test at the non-bypass role, and the fixtures at the owner', () => {
+    // The two halves of the model, as a CHECKED property: the roles DIFFER, and
+    // that difference is the whole harness. Before MOTIR-2734 this arm ran only
+    // under `TEST_DB_APP_ROLE=1`; it is now the only arm there is.
+    expect(new URL(currentWorkerUrl()).username).toBe(
+      process.env['TEST_APP_DB_ROLE'] ?? 'motir_app',
+    );
+    expect(currentWorkerUrl()).not.toBe(currentWorkerAdminUrl());
   });
 
   it('points both clients at the SAME worker database either way', () => {
@@ -80,7 +79,7 @@ describe('the two-client harness wiring', () => {
   });
 });
 
-describe.runIf(isAppRoleTestMode())('under TEST_DB_APP_ROLE=1', () => {
+describe('as the non-bypass role', () => {
   it('runs the code under test as the non-bypass role, with RLS live', async () => {
     const [who] = await db.$queryRawUnsafe<{ current_user: string; active: boolean }[]>(
       `SELECT current_user, row_security_active('public.work_item') AS active`,

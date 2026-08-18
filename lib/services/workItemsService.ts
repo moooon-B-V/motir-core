@@ -180,10 +180,46 @@ import type {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   resolveAuthoredTargetRepoInProject,
+  resolveAuthoredTargetReposInProject,
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
+import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
+import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+
+/**
+ * Reject a write that supplies BOTH the scalar pin and the repository SET
+ * (Story MOTIR-2725 · MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md`
+ * §3.4).
+ *
+ * `undefined` on either side is "not supplied" and is always fine; a `null`
+ * `targetRepo` beside a `targetRepos` is NOT — clearing the pin is still
+ * describing the field, and a caller who meant to clear the set says
+ * `targetRepos: []`.
+ */
+function assertSingleTargetRepoInput(
+  targetRepo: string | null | undefined,
+  targetRepos: readonly (string | null | undefined)[] | null | undefined,
+): void {
+  if (targetRepo !== undefined && targetRepos !== undefined) {
+    throw new ConflictingTargetRepoInputError();
+  }
+}
+
+/** A validated single pin, as the one-element set it means (`null` → `[]`). The
+ *  bridge that lets every existing caller — which sends only the scalar — write a
+ *  valid set without knowing the set exists. */
+function toRepoSet(pin: string | null): string[] {
+  return pin === null ? [] : [pin];
+}
+
+/** Ordered list equality — a REORDER counts as a change, because element 0 is the
+ *  primary dispatch routes to, so `[a, b]` and `[b, a]` are different decisions. */
+function sameRepoSet(next: readonly string[], current: readonly string[]): boolean {
+  return next.length === current.length && next.every((r, i) => r === current[i]);
+}
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -799,11 +835,20 @@ export const workItemsService = {
     // `github_repo` RLS policies are workspace-keyed), so it must not run nested
     // inside our transaction. Throws `UnknownTargetRepoError` (422);
     // omitted/null/blank → unpinned.
-    const targetRepo = await resolveAuthoredTargetRepoInProject(
-      input.targetRepo,
-      input.projectId,
-      ctx,
-    );
+    //
+    // The SET (Story MOTIR-2725 · MOTIR-2727, ADR §1 / §3.4) rides the same
+    // pre-transaction slot for the same three reasons. `targetRepo` is the set's
+    // PRIMARY — `targetRepos[0] ?? null` — so exactly ONE of the two fields may be
+    // supplied; both is `ConflictingTargetRepoInputError` (422), never a silent
+    // precedence rule that drops a repository the caller believed they recorded.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos);
+    const targetRepos =
+      input.targetRepos !== undefined
+        ? await resolveAuthoredTargetReposInProject(input.targetRepos, input.projectId, ctx)
+        : toRepoSet(
+            await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
+          );
+    const targetRepo = primaryTargetRepo(targetRepos);
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
@@ -994,6 +1039,7 @@ export const workItemsService = {
         // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
         // caller didn't pin one (the dispatch payload resolves the default).
         targetRepo,
+        targetRepos,
         sprintId: targetSprintId,
         position,
         backlogRank,
@@ -1206,6 +1252,7 @@ export const workItemsService = {
       'type',
       'executor',
       'targetRepo',
+      'targetRepos',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1235,16 +1282,25 @@ export const workItemsService = {
     // inside the lock; a concurrent re-parent cannot move an item across
     // projects (`CrossProjectParentError`), so the project this validates
     // against is the project the write lands in.
-    let nextTargetRepo: string | null | undefined;
-    if (patch.targetRepo !== undefined) {
+    //
+    // The SET patches through the SAME slot, and the two fields are mutually
+    // exclusive here exactly as they are on create (ADR §3.4). Whichever arrives,
+    // BOTH columns are written together — the scalar is the set's primary and is
+    // never left describing a different repository than element 0.
+    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos);
+    let nextTargetRepos: string[] | undefined;
+    if (patch.targetRepo !== undefined || patch.targetRepos !== undefined) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
-      nextTargetRepo = await resolveAuthoredTargetRepoInProject(
-        patch.targetRepo,
-        pre.projectId,
-        ctx,
-      );
+      nextTargetRepos =
+        patch.targetRepos !== undefined
+          ? await resolveAuthoredTargetReposInProject(patch.targetRepos, pre.projectId, ctx)
+          : toRepoSet(
+              await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
+            );
     }
+    const nextTargetRepo: string | null | undefined =
+      nextTargetRepos === undefined ? undefined : primaryTargetRepo(nextTargetRepos);
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -1374,6 +1430,15 @@ export const workItemsService = {
       // Target repo (Story 7.9 · MOTIR-1804): the normalized + validated value
       // from above (`undefined` = not supplied). Compare against the stored pin
       // so a re-save of the same repo stays a no-op and writes no revision.
+      //
+      // The SET (MOTIR-2727) is compared as an ORDERED list — a reorder is a real
+      // change, because element 0 is what dispatch routes to. The two columns move
+      // TOGETHER, always: the scalar is the set's primary, so writing one without
+      // the other is what would turn a derived field into a second fact.
+      if (nextTargetRepos !== undefined && !sameRepoSet(nextTargetRepos, current.targetRepos)) {
+        update.targetRepos = nextTargetRepos;
+        diff.targetRepos = { from: current.targetRepos, to: nextTargetRepos };
+      }
       if (nextTargetRepo !== undefined && nextTargetRepo !== current.targetRepo) {
         update.targetRepo = nextTargetRepo;
         diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
@@ -1577,6 +1642,12 @@ export const workItemsService = {
         addedDescMentionIds,
         changedFieldIds,
         embeddingChanged,
+        // The re-parent ends, for the post-commit child-set emit (MOTIR-2902).
+        // Null when the patch did not move the item — a `parentId` absent from
+        // the patch, or present and equal, changes no child set.
+        movedBetween: parentChanged
+          ? { previousParentId: current.parentId, newParentId: patch.parentId ?? null }
+          : null,
       };
     });
 
@@ -1623,6 +1694,45 @@ export const workItemsService = {
         workspaceId: ctx.workspaceId,
         workItemId: result.dto.id,
       });
+    }
+
+    // ── Status derivation, child-set trigger (Bug MOTIR-2902) ──────────────
+    //
+    // `updateWorkItem` is the SECOND re-parent ingress, and it was missed.
+    // MOTIR-2892 wired `moveWorkItem` — which had emitted nothing at all — and
+    // the identical gap here went unnoticed because the two paths look unrelated
+    // from the outside: one is `move_to_parent`, the other is a field patch that
+    // happens to accept `parentId`.
+    //
+    // The CSV importer is the caller that makes it bite. It is a two-pass
+    // design: pass 1 creates each row WITHOUT a parent (a child whose parent is
+    // imported later cannot be parented yet) and pins its mapped status; pass 2
+    // wires the parent through THIS function. So every derivation trigger an
+    // import produced fired while the tree was still flat — the create-recompute
+    // saw a childless root, and the moment the children were actually attached,
+    // nothing fired at all. The parent kept whatever the CSV said, forever.
+    //
+    // Both ends are recomputed for the same reason `moveWorkItem` does it: one
+    // move changes two child sets in opposite directions — the previous parent
+    // may now be finished, the new one may need to come back. Either end may be
+    // null (moved to or from the top level); a move with no parent on either
+    // side cannot occur, since `parentChanged` means the two differ.
+    if (result.movedBetween) {
+      const parentIds = [
+        result.movedBetween.previousParentId,
+        result.movedBetween.newParentId,
+      ].filter((parentId): parentId is string => parentId !== null);
+      if (parentIds.length > 0) {
+        await sendEvent('work-item/child-set.changed', {
+          workspaceId: ctx.workspaceId,
+          parentIds,
+          workItemId: result.dto.id,
+          reason: 'reparented',
+          // The edit's own instant: a row LEAVING an aggregate leaves nothing
+          // behind to date the change (MOTIR-2965).
+          occurredAt: new Date().toISOString(),
+        });
+      }
     }
 
     return result.dto;
@@ -1700,6 +1810,34 @@ export const workItemsService = {
     const { dto } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
     );
+
+    // ── The pin's OWN derivation trigger (Bug MOTIR-2902) ──────────────────
+    //
+    // Post-commit, like every other emit in this service. This does NOT reopen
+    // the no-`work-item/transitioned` contract above: `work-item/derivation.requested`
+    // has exactly ONE consumer, `status-derivation/requested`, and no
+    // notification path subscribes to it — so the storm an import avoids stays
+    // avoided while the parent still gets recomputed.
+    //
+    // WHY IT IS NEEDED. Before this, the only derivation trigger an import
+    // produced was the `work-item/created` emitted by the create that PRECEDES
+    // this call. That recompute could run before the pin, read the child as
+    // `todo`, settle the parent at `todo` — and never re-fire, because the child
+    // set never changes again. The wrong answer was terminal, not late, which is
+    // why the ordering has to be guaranteed by an event rather than by a
+    // debounce window the runtime may not honour (the Inngest dev server does
+    // not; measured on #2114).
+    //
+    // Skipped for a ROOT item: with no parent there is nothing to derive, so an
+    // emit would be a guaranteed no-op run per imported top-level row.
+    if (dto.parentId) {
+      await sendEvent('work-item/derivation.requested', {
+        workspaceId: ctx.workspaceId,
+        parentId: dto.parentId,
+        workItemId: dto.id,
+        reason: 'imported-status-pinned',
+      });
+    }
     return dto;
   },
 
@@ -4110,6 +4248,12 @@ export const workItemsService = {
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
     const pullRequests = await this.listLinkedPullRequests(detail.item.id, ctx);
+    // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2416) — the SAME resolved
+    // value the detail page reads, from the same service method calling the same
+    // classifier. The peek showing a different delivery state from the detail
+    // page is the drift this story exists to remove, so the two surfaces do not
+    // each compute it.
+    const repoDelivery = await this.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx);
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -4127,6 +4271,7 @@ export const workItemsService = {
       sprints,
       projectComponents,
       estimationConfig,
+      repoDelivery,
     );
   },
 
@@ -4151,6 +4296,36 @@ export const workItemsService = {
       githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
     );
     return rows.map(toLinkedPullRequestDto);
+  },
+
+  /**
+   * PER-REPOSITORY DELIVERY for one item (Story MOTIR-2725 · MOTIR-2415) — every
+   * repository the item CARRIES, in order, each with the state the completion
+   * gate reads: `delivered` · `awaiting` · `unknown`.
+   *
+   * A RESOLVED value, so it is computed here, server-side, in the detail page's
+   * existing data path — never a client round trip on a server-rendered page.
+   *
+   * ⚠️ It calls the SAME `classifyRepoDelivery` the completion gate calls
+   * (`lib/workItems/repoDelivery.ts`). That is the point of the shared module: a
+   * second implementation would let the panel say `delivered` while the gate
+   * holds the card In Review, and a ledger that disagrees with the rule it
+   * displays is worse than no ledger.
+   *
+   * Same workspace-context requirement as the linked-PR read above — the
+   * `github_pull_request` policy is workspace-keyed, so an unbound read returns
+   * no rows for an item that has them.
+   */
+  async listRepoDelivery(
+    workItemId: string,
+    targetRepos: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<RepoDelivery[]> {
+    if (targetRepos.length === 0) return [];
+    const facts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+    );
+    return classifyRepoDelivery(targetRepos, facts);
   },
 
   /**
@@ -5237,10 +5412,11 @@ async function computeSubtreeProseAdvisories(
       descriptionMd: row?.descriptionMd ?? null,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE
-      // check's pin (MOTIR-2177), from the same batched read.
+      // check's repository SET (MOTIR-2177, widened in MOTIR-2728), from the same
+      // batched read.
       type: row?.type ?? null,
       executor: row?.executor ?? null,
-      targetRepo: row?.targetRepo ?? null,
+      targetRepos: row?.targetRepos ?? [],
     };
   });
 

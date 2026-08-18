@@ -29,6 +29,7 @@ const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
 const { createTestWorkspace } = await import('../fixtures/workspaceFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
+const { adminDb } = await import('../helpers/adminDb');
 
 // Import the handlers AFTER the mock is registered.
 const { POST: START } = await import('@/app/api/cli/device/start/route');
@@ -45,6 +46,24 @@ const { GET: GRANT } = await import('@/app/api/cli/device/grant/route');
 // RFC 8628 (`{ error, error_description }` at HTTP 400, `no-store`), not Motir's
 // `{ code }` convention, because its consumer is an OAuth client; start is
 // deliberately unauthenticated; approve is deliberately session-only.
+//
+// ── WHICH CLIENT EACH DIRECT-DB LINE TAKES (MOTIR-2952) ─────────────────────
+// The SAME split MOTIR-2911 wrote into the sibling service suite
+// (`tests/cli/cliDeviceService.test.ts`), which this file was left out of:
+//
+//   * every `apiToken` assertion → **MOTIR-2881's class 2**, an ASSERTION doing
+//     direct DB work rather than the subject of the test, so it takes `adminDb`,
+//     the database OWNER. What it needs OWNERSHIP for: `api_token`'s only policy
+//     is `api_token_owner_or_system` (`user_id = current_setting('app.user_id')`
+//     OR `app.system_admin`), and a route test binds neither GUC on the
+//     singleton — so the count is admitted no rows and answers `0` whether or
+//     not the route minted anything. That is not merely why line 253's `toBe(1)`
+//     went red under `motir_app`; it is why the three `toBe(0)` counts in this
+//     file were passing for no reason at all, and they move too.
+//   * `deviceCode` stays on `db`: `device_code` carries no RLS policy, so those
+//     statements are already admitted and moving them would say something false
+//     about why. The SUBJECT here is the route handlers, which keep running on
+//     the singleton exactly as production does.
 
 const BASE = 'http://localhost:3000/api/cli/device';
 const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -56,6 +75,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function jsonReq(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -208,7 +228,7 @@ describe('POST /api/cli/device/token — the five states on the wire', () => {
     const res = await TOKEN(pollReq(grant.device_code));
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe('access_denied');
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 
   it('200 with the PAT once approved — then 400 invalid_grant on the next poll', async () => {
@@ -250,7 +270,7 @@ describe('POST /api/cli/device/token — the five states on the wire', () => {
     const again = await TOKEN(pollReq(grant.device_code));
     expect(again.status).toBe(400);
     expect(((await again.json()) as { error: string }).error).toBe('invalid_grant');
-    expect(await db.apiToken.count()).toBe(1);
+    expect(await adminDb.apiToken.count()).toBe(1);
   });
 });
 
@@ -594,7 +614,7 @@ describe('POST /api/cli/device/approve — the two states the page renders diffe
     // different screen from 404 (never existed) and from 409 (already handled).
     expect(res.status).toBe(410);
     expect((await res.json()) as { code: string }).toMatchObject({ code: 'DEVICE_GRANT_EXPIRED' });
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 });
 
@@ -623,6 +643,6 @@ describe('POST /api/cli/device/token — the unbound grant', () => {
     expect(res.status).toBe(500);
     expect((await res.json()) as { error: string }).toMatchObject({ error: 'server_error' });
     expect(res.headers.get('cache-control')).toBe('no-store');
-    expect(await db.apiToken.count()).toBe(0);
+    expect(await adminDb.apiToken.count()).toBe(0);
   });
 });

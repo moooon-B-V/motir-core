@@ -9,7 +9,6 @@ import { stampOnboardingRan } from '@/scripts/stampOnboardingRan';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // MOTIR-1799 — the onboarding-ran marker for the dogfood project. Two
 // deliverables, both covered here against a real Postgres (the seed-test
@@ -186,22 +185,14 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
     const b = await makeTenant({ workspaceName: 'other-tenant', projectKey: 'MOTIR' });
 
     // Ambiguity is a property of the CROSS-TENANT search, which only the
-    // operator connection can run (MOTIR-2813) — so this asserts per ROLE.
+    // operator connection can run (MOTIR-2813). `@/lib/db` is `motir_app`
+    // (MOTIR-2734), which is not that connection, so the refusal — not the
+    // `ambiguous` verdict — is what this run can reach. The `ambiguous` branch
+    // is exercised by the operator-connection cases above.
     const run = stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false });
-    if (isAppRoleTestMode()) {
-      await expect(run).rejects.toThrow(/OPERATOR connection/);
-      expect(await readMarker(a.project.id)).toBeNull();
-      expect(await readMarker(b.project.id)).toBeNull();
-      return;
-    }
-    const outcome = await run;
+    await expect(run).rejects.toThrow(/OPERATOR connection/);
 
-    expect(outcome.kind).toBe('ambiguous');
-    if (outcome.kind === 'ambiguous') {
-      expect(outcome.candidates.map((c) => c.projectId).sort()).toEqual(
-        [a.project.id, b.project.id].sort(),
-      );
-    }
+    // Either way, nothing is written.
     expect(await readMarker(a.project.id)).toBeNull();
     expect(await readMarker(b.project.id)).toBeNull();
   });
@@ -282,16 +273,13 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
     // nothing and report the project missing. `assertOperatorConnection` reads
     // `pg_roles.rolbypassrls` and turns that into an accurate error instead.
     //
-    // ⚠️ Asserted per ROLE rather than per mode, because the two outcomes are
-    // both correct: under the owner the search runs, under `motir_app` it must
-    // refuse. A single expectation here would be wrong in one of the two modes.
+    // ⚠️ The refusal IS the assertion. Under the owner connection the search
+    // would run and report `would_stamp`; `@/lib/db` is `motir_app` since
+    // MOTIR-2734, so what must be proved is that the helper REFUSES rather than
+    // silently finding nothing and reporting the project missing.
     await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
 
     const run = stampOnboardingRan({ projectKey: 'MOTIR', dryRun: true });
-    if (isAppRoleTestMode()) {
-      await expect(run).rejects.toThrow(/OPERATOR connection/);
-    } else {
-      await expect(run).resolves.toMatchObject({ kind: 'would_stamp' });
-    }
+    await expect(run).rejects.toThrow(/OPERATOR connection/);
   });
 });

@@ -67,18 +67,22 @@ export interface ProseAdvisorySubject {
   type: string | null;
   executor: string | null;
   /**
-   * The card's `targetRepo` pin — read ONLY by the REPO-STRADDLE check
-   * (MOTIR-2177), which compares it against the repos its criteria name.
+   * The repositories the card CARRIES — read ONLY by the REPO-STRADDLE check
+   * (MOTIR-2177), which compares them against the repos its criteria name.
    *
-   * `null` is a real answer with its own arm ("unpinnable"), not a missing
-   * value, which is why it is required rather than optional: a caller that has
-   * not decided what it knows would otherwise silently take the unpinned branch.
-   * On the PROJECTED plan path a not-yet-materialized `add` genuinely has no
-   * repo NAME — a proposal carries a `targetRepoRole`, resolved to a name only
-   * at materialize — so `null` there is the truth, and the unpinnable arm is
-   * exactly the right question to ask of it.
+   * **A SET since MOTIR-2728**, because a work item can legitimately ship in more
+   * than one repository. The check is unchanged in intent: a criterion naming a
+   * path in a repo the card does NOT carry is still the defect, and the empty
+   * set still has its own arm ("unpinnable").
+   *
+   * EMPTY is a real answer, not a missing value, which is why it is required
+   * rather than optional: a caller that has not decided what it knows would
+   * otherwise silently take the unpinned branch. On the PROJECTED plan path a
+   * not-yet-materialized `add` genuinely has no repo NAME — a proposal carries a
+   * `targetRepoRole`, resolved to a name only at materialize — so `[]` there is
+   * the truth, and the unpinnable arm is exactly the right question to ask of it.
    */
-  targetRepo: string | null;
+  targetRepos: readonly string[];
 }
 
 /**
@@ -258,7 +262,7 @@ function repoStraddleAdvisory(
   subject: ProseAdvisorySubject,
   candidates: readonly RepoCandidate[],
 ): WorkItemProseAdvisoryDto | null {
-  const found = firstRepoStraddleCriterion(subject.descriptionMd, subject.targetRepo, candidates);
+  const found = firstRepoStraddleCriterion(subject.descriptionMd, subject.targetRepos, candidates);
   if (!found) return null;
   return {
     kind: 'shape',
@@ -313,12 +317,17 @@ export async function buildDispatchProseAdvisories(
     type?: string | null;
     executor?: string | null;
     targetRepo?: string | null;
+    targetRepos?: readonly string[];
   },
   ctx: ServiceContext,
 ): Promise<WorkItemProseAdvisoryDto[]> {
   const type = item.type ?? null;
   const executor = item.executor ?? null;
-  const targetRepo = item.targetRepo ?? null;
+  // The SET when the caller has one, else the scalar as the one-element set it
+  // means (MOTIR-2728) — so a caller that predates the set is never silently
+  // treated as unpinned, which would swap the check's arm rather than skip it.
+  const targetRepos: readonly string[] =
+    item.targetRepos ?? (item.targetRepo ? [item.targetRepo] : []);
   // Cheap short-circuit on the common shape: a body with no reference, no
   // ordering phrase and no path-like token in its criteria needs neither the
   // ancestor walk nor the edge read. ALL THREE scans are pure, and all three
@@ -349,7 +358,7 @@ export async function buildDispatchProseAdvisories(
         exemptIds,
         type,
         executor,
-        targetRepo,
+        targetRepos,
       },
     ],
     ctx,
