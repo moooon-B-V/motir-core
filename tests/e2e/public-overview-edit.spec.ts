@@ -31,7 +31,7 @@
 // per-field validation.)
 //
 // Setup mirrors public-project-flow.spec.ts: the admin signs up through the real
-// UI (auto-workspace → /dashboard); the project, its public access level, and a
+// UI (auto-workspace → /home); the project, its public access level, and a
 // seeded hero are created SERVER-SIDE through the shipped services (the one
 // sanctioned cross-layer reach for tests) — the make-public UI flow itself is
 // owned by 6.12.10 / 6.17.5. Every edit under test goes through the BROWSER.

@@ -62,6 +62,8 @@ import type {
   UpdateProposalInput,
 } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
 // every planner produces into. A `Plan` bundles proposed `PlanItem` operations
@@ -1014,6 +1016,55 @@ async function editAddProposal(
   return toPlanWithItemsDto(row, items);
 }
 
+/**
+ * Give the plan's planning conversation its TARGETS back (Story MOTIR-2786 ·
+ * MOTIR-2787) — the release half of the target lock, run when a plan is decided.
+ *
+ * A decision is exactly the moment the story's hand-off table describes as "that
+ * level's output exists": approve materializes the epic's stories, decline says
+ * they never will. Either way the conversation has finished with the items it was
+ * holding, and holding them any longer blocks a colleague for nothing.
+ *
+ * Resolved through `plan.sourceJobId` → the session whose `lastJobId` it is, which
+ * is the same link the resume path (`findPendingPlanIdForJob`) walks in the other
+ * direction. A plan with no source job, or one whose thread has since been
+ * deleted, releases nothing.
+ *
+ * BEST-EFFORT and AFTER the commit, like the two triggers beside it: a lock that
+ * fails to release is recoverable (the lease expires and the sweep clears it),
+ * while a plan approval that fails after materializing the tree is not. So the
+ * ordering of harms is unambiguous, and it is the reason this cannot be inside the
+ * transaction — the alternative is rolling back a materialized tree because a
+ * status write lost a race.
+ */
+async function releasePlanTargetLocks(
+  plan: { id: string; projectId: string; sourceJobId: string | null },
+  ctx: ServiceContext,
+): Promise<void> {
+  if (!plan.sourceJobId) return;
+  try {
+    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndLastJobId(
+        plan.projectId,
+        plan.sourceJobId!,
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+    if (!session) return;
+    await planTargetLockService.releaseForSession(session.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: plan.projectId,
+    });
+  } catch (err) {
+    console.warn(
+      `[plansService] releasing planning-target locks for plan ${plan.id} failed; the lease will expire and the sweep will clear it`,
+      err,
+    );
+  }
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -1478,6 +1529,10 @@ export const plansService = {
         });
     }
 
+    // Give the conversation its targets back — the epic's stories now exist, so
+    // the level the lock was held at is finished (MOTIR-2787).
+    await releasePlanTargetLocks(plan, ctx);
+
     // PROPOSE the project's repository set (Story MOTIR-1775 · MOTIR-1881) — the
     // approved plan is what the set's cardinality is derived from, so this is the
     // moment it can be proposed at all. Writes `proposed` rows the establish step
@@ -1552,6 +1607,10 @@ export const plansService = {
         );
       },
     );
+    // Declining is as terminal for the lock as approving: the output will never
+    // exist, so continuing to hold the targets blocks a colleague for nothing
+    // (MOTIR-2787). The tree was never touched, so there is nothing else to undo.
+    await releasePlanTargetLocks(plan, ctx);
     return toPlanDto(row, 0);
   },
 };

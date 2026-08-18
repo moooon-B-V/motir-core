@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { remeasureFirst } from './remeasureFirst';
 import {
   ADJUDICATED_UNBOUND_FILES,
   countByVerdict,
@@ -318,7 +319,8 @@ describe('the ratchets over the real test suite', () => {
 
     expect(
       untouched.length,
-      `${UNTOUCHED_OUT_OF_SCOPE_FLOOR - untouched.length} out-of-scope call site(s) ` +
+      remeasureFirst('UNTOUCHED_OUT_OF_SCOPE_FLOOR') +
+        `${UNTOUCHED_OUT_OF_SCOPE_FLOOR - untouched.length} out-of-scope call site(s) ` +
         `acquired a \`tx\` or were deleted.\n` +
         `\`not-gated\` and \`pre-auth\` sites are CORRECT unbound — no policy applies ` +
         `to the first, and the second is an adjudicated actorless read ` +

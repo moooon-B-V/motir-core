@@ -29,13 +29,13 @@ async function signUp(page: Page, email: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/dashboard', { timeout: 9_000 })
+      .waitForURL('**/home', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/dashboard')) return;
+    if (landed || page.url().includes('/home')) return;
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
 }
 
 test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keeps Settings/Docs', async ({

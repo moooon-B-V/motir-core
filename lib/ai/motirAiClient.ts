@@ -378,6 +378,13 @@ export async function createCheckoutSession(input: {
   priceId: string;
   successUrl: string;
   cancelUrl: string;
+  /**
+   * Unit count for the resolved Price — the credit top-up's bundle multiplier
+   * (MOTIR-2949). motir-ai reads it as an optional integer >= 1 and defaults to
+   * 1; the caller (`billingService.startCheckout`) always sends an explicit
+   * number, so the charge is never decided by a default two services away.
+   */
+  quantity?: number;
   idempotencyKey?: string;
 }): Promise<{ url: string }> {
   const { url, serviceToken } = config();

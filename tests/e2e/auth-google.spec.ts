@@ -119,7 +119,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
 
   await page.goto('/sign-up');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
-  await page.waitForURL('**/dashboard', { timeout: 15_000 });
+  await page.waitForURL('**/home', { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   // Exactly one user row + one google account row in the DB.
@@ -138,8 +138,8 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   // The Google button carries the HOST PAGE's `callbackURL`, so it lands
-  // wherever that page's default points — `/home` from /sign-in, `/dashboard`
-  // from /sign-up (MOTIR-2654). Same button, two destinations.
+  // wherever that page's default points — and since MOTIR-2921 both auth pages
+  // point at `/home`, so the same button has one destination from either.
   await page.waitForURL('**/home', { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
@@ -188,7 +188,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(EMAIL_FIRST_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
 
   // Snapshot the email-first user — there should be ONE row with a
   // credential account and emailVerified=false (verification UX is not

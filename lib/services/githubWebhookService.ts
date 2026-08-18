@@ -9,9 +9,11 @@ import type {
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   syncChangeRequestStatus,
@@ -346,9 +348,25 @@ export const githubWebhookService = {
     // (`changeRequestStatusSync`) — the same path GitLab uses (MOTIR-1475). The
     // only GitHub-specific part is resolving the connection + repo + author from
     // the App delivery's payload, which this provider supplies via the resolver.
-    return syncChangeRequestStatus(cr, lifecycle, (tx) =>
+    const result = await syncChangeRequestStatus(cr, lifecycle, (tx) =>
       resolveGithubChangeRequestContext(body, cr, tx),
     );
+
+    // POST-COMMIT, best-effort (MOTIR-2922): capture WHAT the merge changed and
+    // WHEN it landed. Runs AFTER the sync's transaction has committed and can
+    // never affect `result` — the status sync is the load-bearing effect of this
+    // delivery, and `notes.html` #39 is the standing rule that a side effect
+    // running after a durable write may never propagate an error that fails it. A
+    // merge that fails to close its card is a far worse outcome than a merge whose
+    // paths went uncaptured, and only one of those two is recoverable by a later
+    // read of the host.
+    //
+    // Gated on the MERGE, not on the sync's outcome: the paths are a fact about
+    // the repository, so they are worth capturing even when the delivery resolved
+    // no work item (a PR linked by hand later is then already carrying them).
+    if (cr.merged) await captureMergedPullRequestFiles(body, cr);
+
+    return result;
   },
 
   /**
@@ -611,6 +629,129 @@ async function reconcileInstallation(
     repos,
   });
   return 'synced';
+}
+
+/**
+ * Capture a MERGED pull request's changed paths + merge instant onto its mirror
+ * row (MOTIR-2922) — the substrate a subsumption check needs, and the one the
+ * mirror has never carried.
+ *
+ * ⚠️ EVERY failure here is swallowed. This runs after the status sync's
+ * transaction has committed, so by `notes.html` #39 (PROD-443) it may not
+ * propagate: coupling a committed mutation to a transport call turns a GitHub
+ * blip into a 500 the host then redelivers, and redelivery cannot fix a revoked
+ * token or an API outage. What is swallowed is TRANSPORT and persistence failure
+ * — a payload that does not parse is simply a capture with nothing to record, not
+ * an error to hide.
+ *
+ * A failed fetch still writes the row: `mergedAt` is read from the delivery we
+ * are already holding, so the ordering fact survives even when the file list does
+ * not, and `changedPaths` is left empty — which is the same "no evidence" state a
+ * pre-capture row carries, and correctly stops a consumer concluding anything
+ * from the absence of a path.
+ *
+ * A REDELIVERY re-captures rather than short-circuiting on a row that already has
+ * paths, deliberately: the write is idempotent (same merge, same file list), and
+ * it is the only thing that ever repairs a capture the first delivery dropped. A
+ * "skip if already captured" guard would trade one redundant request for a row
+ * that is permanently empty precisely when the first attempt failed.
+ *
+ * EXPORTED for its own tests, not for a second caller — `handlePullRequest` is
+ * the only production entry, and it is the only one that should be. Two of the
+ * paths below exist for races the handler cannot stage: a mirror row that
+ * vanished between the sync's commit and this write, and a failure escaping the
+ * inner fetch guard. Reaching them through a webhook delivery is impossible by
+ * construction — the sync upserts the row on the same payload — so testing them
+ * at all means calling this directly. (Same reasoning `changeRequestStatusSync`
+ * records for exporting `resolveChangeRequestWorkItem`.)
+ */
+export async function captureMergedPullRequestFiles(
+  body: Record<string, unknown>,
+  cr: NormalizedChangeRequest,
+): Promise<void> {
+  try {
+    const installationId = readInstallationId(body);
+    if (!installationId) return;
+
+    // Re-resolve the connection tier rather than threading it out of the shared
+    // sync: that sync is provider-agnostic and GitLab shares it, so widening its
+    // return shape for a GitHub-only capture would put GitHub's needs inside the
+    // one path that exists to have none. Two indexed reads on a delivery that
+    // already made a dozen.
+    const resolved = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return null;
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        cr.providerRepoId,
+        tx,
+      );
+      return repo ? { repo } : null;
+    });
+    if (!resolved) return;
+
+    // The OWNER/NAME come from the mirrored repo row, not the payload: the row is
+    // what the tenancy rule already trusts (MOTIR-1931), and it survives a payload
+    // shape this handler has never had to parse.
+    const { repo } = resolved;
+    const mergedAt = readMergedAt(body);
+
+    let files: PullRequestFiles = { paths: [], truncated: false };
+    try {
+      const { token } = await getGitProvider(PROVIDER).mintInstallationToken(installationId);
+      files = await listPullRequestFiles(token, repo.owner, repo.name, cr.number);
+    } catch (err) {
+      console.error(
+        `[githubWebhookService] changed-path capture failed for ${repo.owner}/${repo.name}` +
+          `#${cr.number}; the merge is recorded with no paths:`,
+        err,
+      );
+    }
+
+    await withSystemContext(async (tx) => {
+      // Bind the tenant for the same reason the sync does (MOTIR-2880): the write
+      // below touches `github_pull_request`, and binding is additive — the system
+      // flag stays set, so the row's own arm is unaffected either way.
+      await bindWorkspaceContext(tx, repo.workspaceId);
+      const touched = await githubPullRequestRepository.recordMergeCapture(
+        repo.id,
+        cr.number,
+        {
+          mergedAt,
+          changedPaths: files.paths,
+          changedPathsTruncated: files.truncated,
+        },
+        tx,
+      );
+      if (touched === 0) {
+        console.warn(
+          `[githubWebhookService] no ${repo.owner}/${repo.name}#${cr.number} row to stamp; ` +
+            `the merge capture was dropped`,
+        );
+      }
+    });
+  } catch (err) {
+    console.error(
+      `[githubWebhookService] merge capture threw after the status sync committed; ` +
+        `the sync's outcome stands:`,
+      err,
+    );
+  }
+}
+
+/** The merge INSTANT off the delivery (`pull_request.merged_at`). Null when the
+ *  payload omits it or it does not parse — never "now", which would look like a
+ *  measurement and be a guess. A null here is the same unknown a pre-capture row
+ *  carries, and the accessor's `mergedAt > since` filter excludes it, which is the
+ *  correct behaviour for a merge whose time we do not know. */
+function readMergedAt(body: Record<string, unknown>): Date | null {
+  const raw = asRecord(body['pull_request'])?.['merged_at'];
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 /** Resolve the GitHub connection + repo + bound author for a change-request event

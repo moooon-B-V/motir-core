@@ -198,8 +198,16 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
       { projectId: fx.projectId, kind: 'story', title: 'Story B' },
       fx.ctx,
     );
+    const c = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story C' },
+      fx.ctx,
+    );
     const client = await connectClient(fx.ctx);
 
+    // ⚠️ The sets here are DISJOINT — {A} and {B,C}, not {A} and {A,B} — because
+    // MOTIR-2787 made an overlapping open a REFUSAL rather than a second thread.
+    // The subject of this case is scope-key IDENTITY, which is unchanged; the
+    // overlap is its own case below.
     const wide = session(await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }));
     const onA = session(
       await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
@@ -207,31 +215,85 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
         targetKeys: [a.identifier],
       }),
     );
-    const onAB = session(
+    const onBC = session(
       await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
         projectKey: 'PROD',
-        targetKeys: [a.identifier, b.identifier],
+        targetKeys: [b.identifier, c.identifier],
       }),
     );
 
     // Three anchor sets → three conversations. The project-wide thread is not
-    // the {A} thread, and {A} is not {A,B}.
-    expect(new Set([wide.id, onA.id, onAB.id]).size).toBe(3);
+    // the {A} thread, and {A} is not {B,C}.
+    expect(new Set([wide.id, onA.id, onBC.id]).size).toBe(3);
     expect(onA.targetKeys).toEqual([a.identifier]);
-    expect(onAB.targetKeys).toEqual([a.identifier, b.identifier].sort());
+    expect(onBC.targetKeys).toEqual([b.identifier, c.identifier].sort());
 
     // The anchor SET is the identity: reversed, lower-cased and duplicated, it
     // is the same conversation — a CLI must not fork a second thread about the
-    // same items just because it listed them differently.
+    // same items just because it listed them differently. And re-opening it is a
+    // RESUME even though its targets are locked, because the lock is held by this
+    // very thread: an idempotent re-open refreshes the lease rather than refusing.
     const resumed = session(
       await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
         projectKey: 'prod',
-        targetKeys: [b.identifier.toLowerCase(), a.identifier, b.identifier],
+        targetKeys: [c.identifier.toLowerCase(), b.identifier, c.identifier],
       }),
     );
-    expect(resumed.id).toBe(onAB.id);
+    expect(resumed.id).toBe(onBC.id);
     const planChangeSessionCount = await adminDb.planChangeSession.count();
     expect(planChangeSessionCount).toBe(3);
+    await client.close();
+  });
+
+  it('an OVERLAPPING anchor set is refused, naming the item and the holder (MOTIR-2787)', async () => {
+    // The hole `scope_key` cannot close, through the agent surface: `{A}` and
+    // `{A,B}` are two different threads about one common item, and before this
+    // both would have expanded it — two planners writing competing children under
+    // one parent, neither aware of the other, with nobody getting an error.
+    //
+    // ⚠️ IT IS REFUSED FOR THE SAME CALLER TOO, deliberately. The unit is the
+    // planning SESSION, not the person: one agent holding two conversations about
+    // one item produces exactly the same strange tree as two agents do.
+    const fx = await makeWorkItemFixture();
+    const a = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story A' },
+      fx.ctx,
+    );
+    const b = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story B' },
+      fx.ctx,
+    );
+    const client = await connectClient(fx.ctx);
+
+    session(
+      await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
+        projectKey: 'PROD',
+        targetKeys: [a.identifier],
+      }),
+    );
+
+    const overlapping = await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [a.identifier, b.identifier],
+    });
+
+    expect(overlapping.isError).toBe(true);
+    // The agent has to be able to act on this: which target, and who holds it.
+    // A bare "locked" would leave it retrying the same refused call.
+    expect(text(overlapping)).toContain('PLAN_TARGET_LOCKED');
+    expect(text(overlapping)).toContain(a.identifier);
+
+    // The refused open wrote NOTHING — no second thread, and B is untouched and
+    // still plannable on its own.
+    expect(await adminDb.planChangeSession.count()).toBe(1);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: b.id } })).status).toBe('todo');
+    const onB = session(
+      await call(client, OPEN_PLAN_SESSION_TOOL_NAME, {
+        projectKey: 'PROD',
+        targetKeys: [b.identifier],
+      }),
+    );
+    expect(onB.targetKeys).toEqual([b.identifier]);
     await client.close();
   });
 

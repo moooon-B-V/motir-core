@@ -1930,3 +1930,136 @@ still raises the number it must not raise.
 class survive five scanners:** it reads `tests/` only, never `lib/` / `app/` / `scripts/`; it does not
 follow a client passed into a helper as a parameter; and it does not resolve `db` re-exported under
 another name.
+
+---
+
+## A BOUND read is only bound if the policy has THAT arm (MOTIR-2956, 2026-08-17)
+
+The free-tier **2 GB total-storage cap silently never fired** — for any organization, on any tier
+with a finite `maxTotalStorageBytes`. Not loose; **absent**. Surfaced by MOTIR-2734's PR CI
+(motir-core#2098), the first full-suite run with `motir_app` as the default connection, as one
+failing assertion in `tests/entitlementsService.test.ts`:
+
+```
+> accumulates org storage and blocks an upload that would exceed 2 GB on free
+  AssertionError: promise resolved "undefined" instead of rejecting
+```
+
+Reproduced on `origin/main` @ `45dd9a48` with `TEST_DB_APP_ROLE=1` — byte-identical failure, so the
+defect is on `main` and MOTIR-2734 only removes the flag that hides it.
+
+### The rule this entry exists to state
+
+**Binding a read means naming a value that some access rule on the queried tables actually consults.
+Naming a different value is not a weaker form of binding. It IS NOT BINDING, and from the calling
+code the two are indistinguishable** — the transaction opens, the `set_config` succeeds, the query
+returns, and the answer is zero.
+
+This is the fixture, and it is an unusually pure one because the author of the defect had already
+found the hazard and written the safeguard. `entitlementsService.assertWithinStorageCap` read:
+
+```ts
+// Bound to the ORG (MOTIR-2846): `attachment`'s policy is org-scoped, so
+// unbound the sum is 0 and the storage cap never fires — the one arm of §4.3b
+// that silently stops enforcing.
+const current = await withOrgServiceWriteContext(organizationId, (tx) =>
+  attachmentRepository.sumSizeByOrganization(organizationId, tx),
+);
+```
+
+The comment names the failure mode exactly. The three lines beneath it bind `app.organization_id`,
+which no policy on `attachment` reads: `attachment_workspace_or_system_admin` (20260610160411) has
+exactly two arms, `app.workspace_id` and `app.system_admin`. **The safeguard and the defect are the
+same three lines**, and a reviewer who sees an author that understood the risk has the strongest
+possible reason not to check whether the address was correct.
+
+**The only way to tell a bound read from a bound-looking one is to open the policies for the
+specific tables the query touches and confirm one of them names the GUC you are binding.** This is
+the third table in this effort to lack the arm a caller assumed (`public_request_vote` — MOTIR-2864;
+`github_identity` — MOTIR-2910), and all three were found by a test failing rather than by anyone
+reading a policy.
+
+### The fix — TWO arms, because a read is admitted only where EVERY table it touches is
+
+`notes.html` #269, applied at the fix rather than at the diagnosis. `sumSizeByOrganization` is
+
+```sql
+SELECT COALESCE(SUM(a."size_bytes"), 0) AS total
+  FROM "attachment" a
+  JOIN "workspace" w ON w."id" = a."workspace_id"
+ WHERE w."organizationId" = $1
+```
+
+so `workspace` is exactly as load-bearing as `attachment`, and it had no org arm either. An arm on
+`attachment` alone would have left the sum at zero — the fix reading as applied while changing
+nothing, which is the failure it replaces. `20260818010000_attachment_org_service_read_arm` adds
+both, `FOR SELECT`, leaving every existing policy untouched (permissive policies OR-combine).
+
+**Both arms require `app.user_id` to be EMPTY.** Three helpers bind `app.organization_id` and only
+one is the userless service path this read runs on:
+
+| helper                               | binds                      | arm fires                 |
+| ------------------------------------ | -------------------------- | ------------------------- |
+| `withOrgServiceWriteContext(orgId)`  | org only, **no user**      | yes                       |
+| `withOrgContext({ userId, orgId })`  | org + the acting user      | no                        |
+| `bindOrganizationContext(tx, orgId)` | org, additively, in either | per the enclosing context |
+
+An unguarded org arm would fire under `withOrgContext` too, which is a product change rather than a
+defect fix: `organizationsService.summarizeOrgFootprint` documents its own posture in source —
+_"`workspaces` is what the actor can see in the org — the workspace policy admits the workspaces
+they're a member of"_ — and `listMembers` enriches every member row from that same list. Both would
+begin reporting workspaces the actor is not a member of. The guard uses the idiom
+`workspace_public_project_read` already established for scoping an arm to one context:
+`coalesce(current_setting(…), '') = ''`.
+
+### The SWEEP — every `withOrgServiceWriteContext` / `bindOrganizationContext` caller
+
+Read per call site as the tables its statements TOUCH, joins included, against the policies on
+`origin/main` @ `45dd9a48`. **One site was broken; eleven were not**, and the eleven are recorded
+here rather than left as "we looked", because an unnamed caller is indistinguishable from an unswept
+one.
+
+| call site                                                  | tables touched under the org binding                          | org arm?                                                                          |
+| ---------------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `entitlementsService.assertWithinStorageCap` :172          | `attachment` ⨝ `workspace`                                    | **✗✗ — THE DEFECT, fixed here**                                                   |
+| `entitlementsService.tierForOrg` :53                       | `organization`                                                | ✓ `organization_active`                                                           |
+| `billingPropagationService.setScaledTrackerState` :29      | `organization` (UPDATE + RETURNING)                           | ✓ `organization_mutate_active` / `organization_active`                            |
+| `billingPropagationService.setAiIncludedSeat` :57          | `organization` (UPDATE + RETURNING)                           | ✓ same pair                                                                       |
+| `ciActionsGateService` :95                                 | `organization`                                                | ✓ `organization_active`                                                           |
+| `ciAllowanceService.getEntitlementState` :132              | `organization`, `organization_membership`, `ci_period_charge` | ✓ / ✓ `org_membership_visible_active_or_own` / ✓ `ci_period_charge_org_or_system` |
+| `ciAllowanceService.chargePeriod` :267                     | `ci_period_charge`, `organization_membership`                 | ✓ / ✓                                                                             |
+| `ciAllowanceService` :409 · :438 · :484                    | `ci_period_charge`                                            | ✓                                                                                 |
+| `ciMinutesMeterService` :202                               | `organization`                                                | ✓                                                                                 |
+| `ciRunnerAdmissionService.resolveCaps` :278                | `organization`                                                | ✓                                                                                 |
+| `billingService.syncScaledTrackerSeatQuantity` :347 (bind) | `organization`, `organization_membership`                     | ✓ / ✓                                                                             |
+| `workspacesService.addMember` :607 (bind)                  | `organization_membership` (INSERT)                            | ✓ `org_membership_insert_active_or_bootstrap`                                     |
+
+Every repository method behind those rows was read for JOINs rather than assumed from its name —
+that is the half `notes.html` #269 says an arm inventory cannot answer. `organizationRepository`
+(`findByIdInTx` / `findCapContext*` / `lockByIdForUpdate`), `organizationMembershipRepository.countByOrg`
+and `ciPeriodChargeRepository` each address one table and join nothing; only `sumSizeByOrganization`
+crosses a table boundary, and that is precisely where the defect was.
+
+**Out of scope, and stated so it is not mistaken for swept:** `withOrgContext` is a THIRD family (it
+binds `app.user_id` as well) whose readers are `organizationsService`, `billingService`,
+`aiUsageService`, `acceptanceVideoEligibilityService` and `lib/ai/tenantOrg.ts`. Their reads are
+member-scoped by design and admitted through `organization_membership_visible` /
+`workspace_membership_visible`, which is why this card's guard deliberately leaves them alone.
+
+### Blast radius, and why the timing was lucky
+
+- **Cloud only** — `assertWithinStorageCap` returns early on `!isCloudBilling()`, so a self-hosted
+  build is unaffected.
+- **Dark on production only once the deployed runtime connects as `motir_app`** — which is
+  MOTIR-2515, and has not landed. **This is a defect the cutover ACTIVATES**, found by the work that
+  would have caused it, one step before it could bite.
+
+### The regression net
+
+- `tests/attachments/attachment-repository.test.ts` — four cases under `SET LOCAL ROLE motir_app`,
+  so they discriminate **regardless of the suite's default connection**: the cross-workspace sum
+  (44 with the arms, `+0` without), the fail-closed unbound case, and the two that pin the narrowing
+  (an acting user withdraws the arm; the workspace arm is org-scoped, never global).
+- `tests/entitlementsService.test.ts` — the service itself rejects with `entitlement: 'storage'`,
+  including a new case whose two 1.2 GB attachments sit in **different workspaces of one org**, which
+  is the reach no workspace binding could have supplied.

@@ -166,9 +166,18 @@ export const entitlementsService = {
     if (!isCloudBilling()) return;
     const { maxTotalStorageBytes } = entitlementsFor(await tierForOrg(organizationId));
     if (maxTotalStorageBytes === null) return;
-    // Bound to the ORG (MOTIR-2846): `attachment`'s policy is org-scoped, so
-    // unbound the sum is 0 and the storage cap never fires — the one arm of §4.3b
-    // that silently stops enforcing.
+    // Bound to the ORG (MOTIR-2846, CORRECTED by MOTIR-2956). Unbound the sum
+    // is 0 and this cap silently stops enforcing — that hazard was named right
+    // and then not avoided, because the binding named a GUC the tables do not
+    // read. `attachment_workspace_or_system_admin` has two arms, `app.workspace_id`
+    // and `app.system_admin`; the ORG arms this call needs did not exist until
+    // 20260818010000_attachment_org_service_read_arm added them — one on
+    // `attachment` AND one on `workspace`, because the sum JOINs both and a read
+    // is admitted only if EVERY table it touches is (`notes.html` #269).
+    //
+    // Both arms require `app.user_id` to be UNSET, which is exactly what this
+    // userless helper binds; do not swap it for `withOrgContext` (which binds an
+    // acting user) or the arms stop firing and the sum silently returns to 0.
     const current = await withOrgServiceWriteContext(organizationId, (tx) =>
       attachmentRepository.sumSizeByOrganization(organizationId, tx),
     );

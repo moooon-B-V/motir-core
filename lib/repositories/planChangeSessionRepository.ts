@@ -49,6 +49,20 @@ export const planChangeSessionRepository = {
     return tx.planChangeSession.findFirst({ where: { id, workspaceId } });
   },
 
+  /** The thread that SUBMITTED a given job (Story MOTIR-2786 · MOTIR-2787) — the
+   *  reverse of `submit`'s `lastJobId` write, and how a plan decision finds the
+   *  conversation whose target lock it should release. Workspace-scoped, so a job
+   *  token from another tenant resolves to null. `tx` is required: every caller
+   *  reads it to guard a following write. */
+  async findByProjectAndLastJobId(
+    projectId: string,
+    lastJobId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({ where: { projectId, lastJobId, workspaceId } });
+  },
+
   /**
    * Take a row lock on the conversation (`SELECT … FOR UPDATE`) so appending a
    * turn serializes against a concurrent append on the SAME thread — the

@@ -246,6 +246,77 @@ describe('BillingClient', () => {
     });
   });
 
+  it('top-up: the SELECTED bundle reaches the checkout POST as `quantity` (MOTIR-2949)', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.endsWith('/billing')) {
+        return new Response(JSON.stringify(activeStandard()), { status: 200 });
+      }
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/topup' }), {
+        status: 200,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    // The top-up card lives on the AI plans screen, below the tier ladder.
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    await waitFor(() => expect(screen.getByText('Top up credits')).toBeTruthy());
+
+    // 1× is the default — pick the 10× bundle ($10 × 10 = $100 for 10,000).
+    fireEvent.click(screen.getByRole('button', { name: /10,000 credits/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Buy 10,000 credits/ })).toBeTruthy(),
+    );
+
+    // The label PROMISES 10,000 credits for $100 — the POST must carry the same
+    // order, or Stripe charges $10 for 1,000 (the bug this test reproduces).
+    fireEvent.click(screen.getByRole('button', { name: /Buy 10,000 credits — \$100/ }));
+    await waitFor(() =>
+      expect(hrefSetter).toHaveBeenCalledWith('https://stripe.test/checkout/topup'),
+    );
+    const checkoutCall = fetchMock.mock.calls.find(
+      ([u]) => typeof u === 'string' && u.endsWith('/checkout'),
+    );
+    expect(checkoutCall).toBeTruthy();
+    expect(JSON.parse((checkoutCall![1] as RequestInit).body as string)).toEqual({
+      priceLookupKey: 'credit_topup',
+      quantity: 10,
+    });
+  });
+
+  it('top-up: the DEFAULT 1× bundle sends quantity 1 (MOTIR-2949)', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.endsWith('/billing')) {
+        return new Response(JSON.stringify(activeStandard()), { status: 200 });
+      }
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/topup1' }), {
+        status: 200,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    await waitFor(() => expect(screen.getByText('Top up credits')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /Buy 1,000 credits — \$10/ }));
+    await waitFor(() =>
+      expect(hrefSetter).toHaveBeenCalledWith('https://stripe.test/checkout/topup1'),
+    );
+    const checkoutCall = fetchMock.mock.calls.find(
+      ([u]) => typeof u === 'string' && u.endsWith('/checkout'),
+    );
+    expect(JSON.parse((checkoutCall![1] as RequestInit).body as string)).toEqual({
+      priceLookupKey: 'credit_topup',
+      quantity: 1,
+    });
+  });
+
   it('no longer renders the redundant cloud-only note (8.1.16)', async () => {
     vi.stubGlobal(
       'fetch',
