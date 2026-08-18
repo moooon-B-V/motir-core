@@ -1,4 +1,3 @@
-import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import {
   postSignedWebhook,
@@ -46,26 +45,28 @@ import type { Page } from '@playwright/test';
 
 const EMAIL = 'e2e-repository-set@example.com';
 
-async function seedActiveProject(
-  email: string,
-  identifier: string,
-): Promise<{ projectId: string; workspaceId: string }> {
-  const local = email.split('@')[0]!;
-  const user = await db.user.findFirst({ where: { email } });
-  const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
-  expect(user, 'user exists after sign-up').not.toBeNull();
-  expect(ws, 'auto workspace exists').not.toBeNull();
+async function seedActiveProject(page: Page, identifier: string): Promise<{ projectId: string }> {
+  // ⚠️ NO `@/lib/db` singleton statements. `tests/rls/test-singleton-statement-guard`
+  // ratchets that population DOWN over `tests/e2e/**`, because a direct singleton
+  // write is REFUSED under `motir_app` and a direct read returns [] — neither
+  // raises, so a spec seeded that way fails in a way nobody can read. The ids come
+  // from the shipped `/api/workspaces/current`, through the BROWSER's own session
+  // (which the clip needs signed in anyway), and the project through the service.
+  const res = await page.request.get('/api/workspaces/current');
+  expect(res.status(), 'the auto-created workspace resolves').toBe(200);
+  const { workspace, membership } = (await res.json()) as {
+    workspace: { id: string };
+    membership: { userId: string };
+  };
   const project = await projectsService.createProject({
-    workspaceId: ws!.id,
-    actorUserId: user!.id,
+    workspaceId: workspace.id,
+    actorUserId: membership.userId,
     name: 'Repository set',
     identifier,
   });
-  await db.workspaceMembership.update({
-    where: { userId_workspaceId: { userId: user!.id, workspaceId: ws!.id } },
-    data: { activeProjectId: project.id },
-  });
-  return { projectId: project.id, workspaceId: ws!.id };
+  // No active-project write is needed: `getActiveProject` falls back to the
+  // workspace's first non-archived project, and this workspace has exactly one.
+  return { projectId: project.id };
 }
 
 /** Create a work item through the shipped `_test` route — the spec's data
@@ -155,7 +156,10 @@ test('a card that ships in two repositories holds until BOTH have merged', async
   acceptanceStory('MOTIR-2725');
 
   await signUp(page, EMAIL);
-  const { projectId, workspaceId } = await seedActiveProject(EMAIL, 'RSET');
+  const wsRes = await page.request.get('/api/workspaces/current');
+  expect(wsRes.status()).toBe(200);
+  const workspaceId = ((await wsRes.json()) as { workspace: { id: string } }).workspace.id;
+  const { projectId } = await seedActiveProject(page, 'RSET');
   await seedGithubInstallation(workspaceId, [E2E_REPO_SECOND]);
 
   const twoRepo = await mkItem(page, projectId, 'Ships in two repositories', [

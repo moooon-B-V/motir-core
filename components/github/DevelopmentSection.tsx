@@ -140,7 +140,13 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
     <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
       <Glyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
       <div className="min-w-0 flex-1 py-1">
-        <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text-muted)">
+        {/* `--el-text-secondary`, NOT `--el-text-muted`: this row's fill is
+            `--el-surface-soft`, where muted measures 4.34:1 and fails AA — it
+            clears only on the white page/card, by 0.04 (`CLAUDE.md`'s contrast
+            table; `tests/theme/inkContrastLint.test.ts` enforces the pair).
+            Secondary is 6.51:1 on the same fill and still reads as quieter than
+            a real pull-request title beside it. */}
+        <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text-secondary)">
           {t(unknown ? 'development.mergedBranchUnknown' : 'development.noPullRequestYet')}
         </div>
         <div className="truncate font-sans text-xs text-(--el-text-identifier)">
