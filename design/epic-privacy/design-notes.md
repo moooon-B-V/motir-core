@@ -168,7 +168,7 @@ and progress are hidden from non-members. Members still see everything.`
 | Switch — track OFF / ON, border OFF, knob          | `--el-muted` / `--el-accent`, `--el-border-strong`, `--el-surface` (ON knob `--el-accent-text`) |
 | Admin ON helper                                    | `--el-text-muted`                                                                               |
 | Error helper + icon                                | `--el-danger`                                                                                   |
-| Section label / column headers / state tags        | `--el-text-faint`                                                                               |
+| Section label / column headers / state tags        | `--el-text-secondary`                                                                           |
 | Card surface / border / shadow                     | `--el-page-bg` / `--el-border` / `--shadow-card`                                                |
 
 **Shape** (every surface, via `[data-display-style]` tokens — never raw

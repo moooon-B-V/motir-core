@@ -313,7 +313,7 @@ card, would be prototype-thinking — forbidden (finding #57).
   status tones, the lavender drop/selection tint, the accent on the bulk bar +
   insertion bar + selection check. Tints carry the hue in the BACKGROUND with
   `--el-text-strong` text (finding #35, AA — never a tinted page surface). The
-  reserved seams are `--el-text-faint` dashed slots.
+  reserved seams are `--el-text-faint` dashed slots. — faint is correct here: a reserved placeholder slot draws no text.
 - **Shape** via element-semantic tokens (`--radius-card` containers/menus,
   `--radius-btn` buttons, `--radius-input` controls, `--radius-badge` pills/chips,
   `--radius-control` menu rows / icon buttons, `--shadow-subtle`/`-card`/

@@ -240,7 +240,7 @@ fails: `binary` folds into column 1 as the spec table's **existing** `.nm` /
   `--el-code-text`, `--radius-kbd`), stacked when a profile has several —
   `opencode` has two, and wrapping them as one line would read as one path.
 - **The empty case is `.mount--none`** — an em dash plus the reason (`— OS
-keyring`), in `--el-text-faint`, non-mono. A blank cell reads as "we forgot".
+keyring`), in `--el-text-secondary`, non-mono. A blank cell reads as "we forgot".
 - **Eight rows.** `AGENT_PROFILES`, `sandbox/smoke/profiles.json` and the
   README's own prose all say eight; `base` is the agent-less image TAG, drawn in
   a `callout` **beside** the table. Putting it in as a ninth row is exactly the

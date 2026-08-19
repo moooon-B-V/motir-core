@@ -266,7 +266,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         margin: 44px auto 10px;
         padding-left: 2px;
         max-width: 1220px;
@@ -339,7 +339,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         padding: 14px 8px 4px;
       }
       .nav-item {
@@ -357,7 +357,7 @@
         width: 16px;
         height: 16px;
         flex: none;
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
       }
       .nav-item .soon {
         margin-left: auto;
@@ -365,7 +365,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-badge);
         padding: 1px 6px;
@@ -495,13 +495,13 @@
         width: 16px;
         height: 16px;
         flex: none;
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
       }
       .searchbar .kbd {
         margin-left: auto;
         font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-kbd);
         padding: 1px 6px;
@@ -552,7 +552,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         padding: 10px 10px 4px;
       }
       .sr-item {
@@ -873,7 +873,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         padding: 12px 12px 10px 0;
         border-bottom: 1px solid var(--el-border-soft);
         white-space: nowrap;
@@ -987,7 +987,7 @@
         align-items: center;
         justify-content: center;
         border-radius: var(--radius-control);
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
         cursor: pointer;
       }
       .tree .exp svg {
@@ -1225,10 +1225,10 @@
       .scope .seg svg {
         width: 15px;
         height: 15px;
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
       }
       .scope .sep {
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         font-size: 15px;
       }
 
@@ -1451,7 +1451,7 @@
       .trigger svg {
         width: 15px;
         height: 15px;
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
         flex: none;
       }
       .mini-search {
@@ -1643,7 +1643,7 @@
         font-family: ui-serif, Georgia, 'Times New Roman', serif;
         font-size: 40px;
         font-weight: 600;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         line-height: 1;
         margin-bottom: 6px;
         letter-spacing: 0.02em;
@@ -3131,9 +3131,9 @@
             <div class="page">
               <div class="scope" style="margin-bottom: 12px">
                 <span class="seg">Platform</span>
-                <span class="sep">›</span>
+                <span class="sep" aria-hidden="true">›</span>
                 <span class="seg">Tenants</span>
-                <span class="sep">›</span>
+                <span class="sep" aria-hidden="true">›</span>
                 <span class="seg active"
                   ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
                   ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
@@ -3866,9 +3866,9 @@
               <!-- THE DOOR: the same breadcrumb grammar as Panel 6, scoped to a USER. -->
               <div class="scope">
                 <span class="seg">Platform</span>
-                <span class="sep">›</span>
+                <span class="sep" aria-hidden="true">›</span>
                 <span class="seg">Users</span>
-                <span class="sep">›</span>
+                <span class="sep" aria-hidden="true">›</span>
                 <span class="seg active"
                   ><span class="tenant"><span class="ava ent-user">J</span>Jess Whitfield</span
                   ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg

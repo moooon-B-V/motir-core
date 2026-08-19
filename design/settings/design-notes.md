@@ -115,7 +115,7 @@ date-format rows land later:
 The shipped **`NotificationPreferencesCard`** matrix inside the area — a
 `grid-cols-[1fr_5rem_5rem]` of event rows × **Email / In-app** columns of
 `Switch` toggles (`role="switch"`, accent track when on). Header caption
-(`--el-text-faint` uppercase) with a `--el-border` rule; rows hairline-separated.
+(`--el-text-secondary` uppercase) with a `--el-border` rule; rows hairline-separated.
 Each switch carries an `aria-label`. No redesign — it just moves into its pane.
 
 ## Panel 3 — Security & access pane (API tokens) — the 7.8.3 surface
@@ -135,7 +135,7 @@ prefix for secret scanners). Motir keeps its coloured personality (peach
   **"Create token"** primary `Button` (size `sm`, `plus` glyph) on the right.
 - **The table** — a borderless row list (org-members roster grammar). Columns:
   **Label · Token · Created · Expires · Last used · Actions** (last
-  right-aligned). `thead` is the `--el-text-faint` uppercase caption with a
+  right-aligned). `thead` is the `--el-text-secondary` uppercase caption with a
   `--el-border` rule; rows hairline-separated (`--el-border-soft`).
   - **Label** — `text-sm font-medium`.
   - **Token** — the `tokenPrefix` in an inline **code chip** (`font-mono text-xs`
@@ -594,7 +594,7 @@ fields out so all six scopes are visible without any scroll region:
   name (`text-sm font-medium --el-text`), the one-line description (`text-xs
 --el-text-muted`), and a `Switch` on the right. Hairline `--el-border-soft` between
   rows inside a group; `grp-label` captions (`--font-mono`, uppercase,
-  `--el-text-faint`) head each group.
+  `--el-text-secondary`) head each group.
 - **Default render:** Read / Manage sprints / Connect integrations / Edit /
   Archive all **on** (accent track); **Delete off**.
 
