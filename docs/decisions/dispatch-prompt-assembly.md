@@ -40,15 +40,23 @@ deterministic half.**
 
 ### What varies, and who decides
 
-All three axes are decided **server-side, from state**. The tool's input schema is
+All four axes are decided **server-side, from state**. The tool's input schema is
 `{ key, sessionBranch? }`, and the optional branch is a fallback rather than a
 selector — see the note under the table.
 
-| Axis           | Source                              | Effect                                                                                                                                                                                                   |
-| -------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WHAT TO DO`   | the item's `type`                   | `code` ships code + tests; `design` renders shipped reality and draws the access path; `decision` ends in a decision doc; … (total over the ten types — a new type fails to compile until it is decided) |
-| human vs agent | `type: manual` or `executor: human` | the human-instruction form, and **no `GIT WORKFLOW` section**: there is no branch and no PR, so instructing one would be a lie the CLI could act on                                                      |
-| `GIT WORKFLOW` | the inherited `sessionBranch`       | `per_item_pr` (branch from `origin/main`, one PR, stop) vs `session_lineage` (branch from / integrate into that branch, then `mark_integrated`)                                                          |
+> **⚠️ The repository-count row was added 2026-08-19 (MOTIR-3129, Story MOTIR-2731)** —
+> see `work-item-repository-set.md` § _Amendment 2026-08-19_, §B2 and §B3, for why one
+> dispatch launches ONE agent process across N worktrees and what the prompt owes a
+> repository the agent is not standing in. `motir-core` assembles it; the CLI resolves the
+> local path of each repository and prints it (MOTIR-3133), because a server-authored
+> absolute path would be a guess rendered as an instruction.
+
+| Axis             | Source                                                            | Effect                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WHAT TO DO`     | the item's `type`                                                 | `code` ships code + tests; `design` renders shipped reality and draws the access path; `decision` ends in a decision doc; … (total over the ten types — a new type fails to compile until it is decided)                                                                                                                                                                                                         |
+| human vs agent   | `type: manual` or `executor: human`                               | the human-instruction form, and **no `GIT WORKFLOW` section**: there is no branch and no PR, so instructing one would be a lie the CLI could act on                                                                                                                                                                                                                                                              |
+| `GIT WORKFLOW`   | the inherited `sessionBranch`                                     | `per_item_pr` (branch from `origin/main`, one PR, stop) vs `session_lineage` (branch from / integrate into that branch, then `mark_integrated`)                                                                                                                                                                                                                                                                  |
+| repository COUNT | the item's repository SET (`targetRepos`, ordered, primary first) | ONE repository renders today's text unchanged. N repositories render a worktree, a branch and a pull request **per repository** — the SAME branch name in each (`work_item.sessionBranch` is a scalar), every pull-request title carrying the card's key, siblings addressed relatively (`../<repo>-<key>`), and a repository that is `unestablished` or `excluded` named as one the agent opens nothing against |
 
 The lineage is inherited from the item's integrated dependencies via
 `getReadiness` — the single source that ignores a terminal blocker's stale branch

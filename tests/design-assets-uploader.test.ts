@@ -273,6 +273,62 @@ describe('extractChangedNoteSections', () => {
     expect(out.noteMd).not.toContain('## Two');
   });
 
+  it('publishes EVERY section of a notes file the PR ADDED — one whole-file hunk', () => {
+    // MOTIR-3145. `git diff -U0` renders an ADDED file as a single
+    // `@@ -0,0 +1,N @@` hunk covering every line, which is exactly the shape of
+    // the card whose deliverable IS the note. Mapping that range to the FIRST
+    // section it overlaps published 1 of 25 sections and printed a success line.
+    const added = [
+      '# Area — design notes', // 1
+      '',
+      '| Surface | Asset |',
+      '| --- | --- |',
+      '| One | a |',
+      '',
+      '## One', // 7
+      'first body',
+      '',
+      '## Two', // 10
+      'second body',
+      '',
+      '## Three', // 13
+      'third body',
+      '',
+      '## Four', // 16
+      'fourth body', // 17
+    ].join('\n');
+
+    const git = () => '@@ -0,0 +1,17 @@';
+    const out = extractChangedNoteSections({
+      notePath: 'n.md',
+      base: 'b',
+      git,
+      readFile: () => added,
+    });
+
+    expect(out.reason).toBe('ok');
+    expect(out.sections).toBe(4);
+    for (const heading of ['## One', '## Two', '## Three', '## Four']) {
+      expect(out.noteMd).toContain(heading);
+    }
+    // The title and the index table are still NOT part of the note, even when
+    // the same hunk covers them (docs/decisions/design-result.md §1).
+    expect(out.noteMd!.startsWith('## One')).toBe(true);
+    expect(out.noteMd).not.toContain('| Surface | Asset |');
+  });
+
+  it('publishes BOTH sections a single hunk straddles', () => {
+    // `@@ -12,2 +12,2 @@` → new-side lines 12–13, which is the last line of
+    // section Two and the heading of section Three.
+    const git = () => '@@ -12,2 +12,2 @@';
+    const out = extractChangedNoteSections({ notePath: 'n.md', base: 'b', git, readFile });
+
+    expect(out.sections).toBe(2);
+    expect(out.noteMd).toContain('## Two');
+    expect(out.noteMd).toContain('## Three');
+    expect(out.noteMd).not.toContain('## One');
+  });
+
   it('publishes NOTHING for a change confined to the surface index table', () => {
     // The table is an INDEX. A card that adds a surface always adds its section
     // too, so the section carries the meaning — and falling back to the whole
@@ -314,20 +370,44 @@ describe('buildPublishSet', () => {
     // rather than a data-loss bound.
     const out = buildPublishSet({
       collected: { assets: [{ kind: 'mock', sourcePath: 'design/a/x.mock.html' }] },
-      noteResult: { noteMd: '## X\n\nbody', notePath: 'design/a/design-notes.md' },
+      noteResults: [{ noteMd: '## X\n\nbody', notePath: 'design/a/design-notes.md' }],
     });
 
     expect(out.noteMd).toBe('## X\n\nbody');
     expect(out.assets).toEqual([
       { kind: 'mock', sourcePath: 'design/a/x.mock.html' },
-      { kind: 'note_file', sourcePath: 'design/a/design-notes.md' },
+      { kind: 'note_file', sourcePath: 'design/a/design-notes.md', text: '## X\n\nbody' },
+    ]);
+  });
+
+  it('carries a note_file PER AREA, and concatenates them for the inline note', () => {
+    // MOTIR-3145. Two areas is a legitimate shape — a PR describing two
+    // surfaces — and the card is where both belong. Each file carries only its
+    // own text, so `sourcePath` stays a true statement about those bytes; the
+    // inline copy the panel renders is their concatenation.
+    const out = buildPublishSet({
+      collected: { assets: [] },
+      noteResults: [
+        { noteMd: '## Auth\n\nbody', notePath: 'design/auth/design-notes.md' },
+        { noteMd: '## Mono\n\nbody', notePath: 'design/typography/design-notes.md' },
+      ],
+    });
+
+    expect(out.noteMd).toBe('## Auth\n\nbody\n\n## Mono\n\nbody');
+    expect(out.assets).toEqual([
+      { kind: 'note_file', sourcePath: 'design/auth/design-notes.md', text: '## Auth\n\nbody' },
+      {
+        kind: 'note_file',
+        sourcePath: 'design/typography/design-notes.md',
+        text: '## Mono\n\nbody',
+      },
     ]);
   });
 
   it('adds no note_file when the PR changed no section', () => {
     const out = buildPublishSet({
       collected: { assets: [{ kind: 'image', sourcePath: 'design/a/x.png' }] },
-      noteResult: null,
+      noteResults: [],
     });
     expect(out.noteMd).toBeNull();
     expect(out.assets).toHaveLength(1);
@@ -414,6 +494,64 @@ describe('publishDesignResult', () => {
       'design/ws/item/design-notes.md',
     ]);
     expect(registered.noteMd).toBe('## X\n\nbody');
+  });
+
+  it('PUTs each note_file its OWN text, not the concatenation', async () => {
+    // MOTIR-3145. With two areas the inline `noteMd` is both notes joined; each
+    // stored file must still be the note it is NAMED for, or `sourcePath` is a
+    // lie about the bytes behind it.
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const impl = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith('/upload-token')) {
+        return {
+          ok: true,
+          json: async () => ({
+            targets: [
+              {
+                kind: 'note_file',
+                sourcePath: 'design/auth/design-notes.md',
+                pathname: 'p/1-design-notes.md',
+                token: 'https://store.example/put/auth',
+                contentType: 'text/markdown',
+              },
+              {
+                kind: 'note_file',
+                sourcePath: 'design/typography/design-notes.md',
+                pathname: 'p/2-design-notes.md',
+                token: 'https://store.example/put/typography',
+                contentType: 'text/markdown',
+              },
+            ],
+          }),
+        };
+      }
+      if (url.startsWith('https://store.example/')) return { ok: true };
+      return { ok: true, json: async () => ({ evidence: { id: 'ev-2' } }) };
+    });
+
+    await publishDesignResult({
+      baseUrl: 'https://app.example',
+      targetKey: 'MOTIR-1',
+      assets: [
+        { kind: 'note_file', sourcePath: 'design/auth/design-notes.md', text: '## Auth\n\nbody' },
+        {
+          kind: 'note_file',
+          sourcePath: 'design/typography/design-notes.md',
+          text: '## Mono\n\nbody',
+        },
+      ],
+      noteMd: '## Auth\n\nbody\n\n## Mono\n\nbody',
+      headers: {},
+      fetchImpl: impl as never,
+    });
+
+    expect(calls[1]!.init.body!.toString()).toBe('## Auth\n\nbody');
+    expect(calls[2]!.init.body!.toString()).toBe('## Mono\n\nbody');
+    // The inline copy the panel renders is still the whole thing.
+    expect(JSON.parse(calls[3]!.init.body as string).noteMd).toBe(
+      '## Auth\n\nbody\n\n## Mono\n\nbody',
+    );
   });
 
   it('fails loudly when the mint is refused', async () => {
@@ -608,6 +746,69 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
       'note_file',
     ]);
     expect(log.lines.join(' ')).toContain('MOTIR-2669');
+  });
+
+  it('publishes BOTH areas when a PR changed two notes files — neither is dropped', async () => {
+    // MOTIR-3145. The loop used to `break` on the first note that yielded a
+    // section, so a second area was never examined and appeared NOWHERE in the
+    // job log — indistinguishable from a PR that only ever touched one area.
+    const log = logger();
+    const publish = vi.fn(async (_args: Record<string, unknown>) => ({ id: 'ev-11' }));
+    const notes = ['design/auth/design-notes.md', 'design/typography/design-notes.md'];
+
+    const code = await main(
+      { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x', MOTIR_UPLOAD_TOKEN: 'pat' },
+      log as never,
+      {
+        collect: () => ({ assets: [], notes, ignored: [], deleted: [] }),
+        extractNote: ({ notePath }: { notePath: string }) =>
+          notePath.includes('auth')
+            ? { noteMd: '## Auth\n\nbody', reason: 'ok', sections: 18 }
+            : { noteMd: '## Mono\n\nbody', reason: 'ok', sections: 7 },
+        requestOidc: async () => null,
+        publish,
+      },
+    );
+
+    expect(code).toBe(0);
+    const call = publish.mock.calls[0]![0];
+    expect(call.assets).toEqual([
+      { kind: 'note_file', sourcePath: notes[0], text: '## Auth\n\nbody' },
+      { kind: 'note_file', sourcePath: notes[1], text: '## Mono\n\nbody' },
+    ]);
+    expect(call.noteMd).toBe('## Auth\n\nbody\n\n## Mono\n\nbody');
+    // Both areas are NAMED in the log, with their own section counts.
+    const said = log.lines.join('\n');
+    expect(said).toContain(`Design note: 18 changed section(s) from ${notes[0]}.`);
+    expect(said).toContain(`Design note: 7 changed section(s) from ${notes[1]}.`);
+  });
+
+  it('NAMES a note it omitted even after another note has already succeeded', async () => {
+    // The omission branch was unreachable past the first success, which is what
+    // made the drop silent. Order matters: the succeeding note comes FIRST.
+    const log = logger();
+    const publish = vi.fn(async (_args: Record<string, unknown>) => ({ id: 'ev-12' }));
+    const notes = ['design/auth/design-notes.md', 'design/typography/design-notes.md'];
+
+    await main(
+      { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x', MOTIR_UPLOAD_TOKEN: 'pat' },
+      log as never,
+      {
+        collect: () => ({ assets: [], notes, ignored: [], deleted: [] }),
+        extractNote: ({ notePath }: { notePath: string }) =>
+          notePath.includes('auth')
+            ? { noteMd: '## Auth\n\nbody', reason: 'ok', sections: 1 }
+            : { noteMd: null, reason: 'above-first-section', sections: 0 },
+        requestOidc: async () => null,
+        publish,
+      },
+    );
+
+    const call = publish.mock.calls[0]![0];
+    expect((call.assets as Array<{ sourcePath: string }>).map((a) => a.sourcePath)).toEqual([
+      notes[0],
+    ]);
+    expect(log.lines.join('\n')).toContain(`${notes[1]} changed above the first section`);
   });
 
   it('omits the note when the PR only touched the surface index table', async () => {

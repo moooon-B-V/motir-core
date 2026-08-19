@@ -175,6 +175,16 @@ mistake, not a singular whose reason is written down.
 
 ### 2. Dispatch — the PRIMARY, and nothing else changes
 
+> **⚠️ Amended 2026-08-19 (MOTIR-3129, Story MOTIR-2731) — the CLI is NOT untouched, and one
+> dispatch now carries the whole set.** The three-rung ladder, the primary, the archived refusal
+> and _"is an N-repo card ever ambiguous at dispatch? No"_ are all KEPT — dispatch still ROUTES to
+> one repository, the one the agent's process starts in. **Two sentences are LIFTED:** _"The CLI is
+> untouched, and `packages/cli`'s `<root>/<name>` checkout rule keeps its single answer"_ (the rule
+> is kept; it is now applied once per REPOSITORY) and _"This decision deliberately leaves `motir
+run` with exactly one repository per dispatch"_ (the payload carries the whole set; it still
+> launches ONE agent process). **Read "Amendment 2026-08-19 · §B0" before acting on anything in
+> this section** — the hand-off in its closing paragraph has been taken up.
+
 `resolveDispatchRepo` returns the same three-rung answer it returns today, reading the
 primary where it read the pin:
 
@@ -1024,6 +1034,234 @@ re-derive.**
 (**MOTIR-3036**) has its cause in §A5 and its fix on the surface card; the null-`base_ref`
 trap (**MOTIR-3034**) is untouched by this amendment — `unknown` keeps exactly the meaning
 §4 gave it.
+
+## Amendment 2026-08-19 (MOTIR-3129, Story MOTIR-2731) — running a card across N repositories: ONE agent, N worktrees, N pull requests
+
+**Card:** MOTIR-3129 · **Story:** MOTIR-2731 · **Read on `origin/main` @ `f035a3bc`.**
+
+§2 above closes with a hand-off: _"Running a card across N repositories — a worktree and a
+pull request per repo — is MOTIR-2731 and is NOT decided here."_ This is that decision. It
+ships no behaviour; its siblings implement it, and every answer below names the one that owns
+it.
+
+The gap it closes is not a missing capability so much as a missing sentence. MOTIR-2725 made a
+card able to SAY it ships in three repositories and made the completion gate refuse to finish it
+until all three have merged. Nothing was ever taught to help anyone open those three pull
+requests: `resolveDispatchRepoForItem` returns the primary, `resolveDispatchTarget` maps that one
+name to one checkout, `perItemPrWorkflow` renders one `git worktree add` and one pull request, and
+`renderAgentSuccess` says _"its pull request should be open"_ in the singular. Every one of those
+is completely actionable and wrong for a two-repository card — the agent follows the prompt, opens
+one pull request, exits 0, and the card sits at In Review held by a gate waiting on a repository
+nobody was ever told about.
+
+### B0. What §2 keeps, and the one sentence it lifts
+
+| §2 clause                                                                                             | Verdict                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The three-rung ladder — explicit primary, else the project's single repository, else `null`           | **KEPT verbatim.** Dispatch still ROUTES to one repository: the one the agent's process starts in.                                                                    |
+| `ArchivedTargetRepoError` still throws for the repository the resolution landed on                    | **KEPT and WIDENED** (§B5) — the refusal now covers every element of the set, for the same reason it covered the primary.                                             |
+| _"Is an N-repo card ever AMBIGUOUS at dispatch? No."_                                                 | **KEPT.** The set is ordered; the primary always wins. This amendment adds the other elements BESIDE the primary, it does not hold an election.                       |
+| _"What element 0 means at write time"_                                                                | **KEPT verbatim.**                                                                                                                                                    |
+| `lib/workItems/dispatchRepo.ts`'s two-domain ladder is untouched                                      | **KEPT.**                                                                                                                                                             |
+| _"The CLI is untouched, and `packages/cli`'s `<root>/<name>` checkout rule keeps its single answer."_ | **LIFTED — this is the clause the story overturns.** The RULE is kept; its arity is not. `<root>/<name>` is now applied once PER REPOSITORY (§B3), not once per card. |
+| _"This decision deliberately leaves `motir run` with exactly one repository per dispatch"_            | **LIFTED.** One dispatch now carries the whole set. It still launches exactly one agent process (§B2), which is the part that reads like an arity and is not one.     |
+
+A reader who lands on §2 alone must not come away believing the CLI is untouched. The two lifted
+sentences were true statements about a decision that deliberately stopped short, not properties of
+the design — and the marker on §2 points here.
+
+### B1. Q1 — the dispatch payload CARRIES the set. It is not fetched.
+
+**Decision: `DispatchPromptDto` gains `targetRepos: DispatchRepoDto[]`** — always present, `[]`
+when the card pins none, ordered with the primary first, each element
+`{ name, cloneUrl, defaultBranch, delivery }`. The three existing scalars keep their meaning and
+their values exactly, under the invariant §3.1 already fixed for the item shape and this extends
+to the dispatch shape: **`targetRepos[0]?.name ?? null === targetRepo`**, always, never
+independently writable state.
+
+**The alternative, and why not.** The CLI could read the item separately —
+`GET /api/v1/work-items/{key}` already publishes `targetRepos`. That costs a second request and,
+worse, a **second resolution path**. The names on the item are a read projection of the references
+(§A4); the dispatch name comes through `resolveItemDispatchPin` → `resolveDispatchRepo`, which
+applies the domain ladder and throws on an archived target. Two resolutions of one fact is
+precisely the defect `lib/workItems/repoDelivery.ts` exists to prevent one level down — _"a panel
+that resolved names differently from the gate would be the same bug wearing this story's own
+clothes"_ — and there is no reason to re-introduce it one level up.
+
+Each element also carries its **`delivery`** state (`delivered` / `awaiting` / `unknown` /
+`unestablished` / `excluded`, §A5), from `workItemsService.listRepoDelivery`, so a caller can tell
+a resume from a fresh run without a second request. The delivery state is the ONE fact the CLI
+cannot compute: it is a join over the installation mirror, and inviting the client to derive it
+would create exactly the second classifier the paragraph above rejects.
+
+**Contract class: additive, therefore a MINOR bump.** §8 of `public-api-conventions.md` lists _"a
+new field on a response object"_ as allowed; Amendment 8 makes moving `V1_CONTRACT_VERSION`
+obligatory for it. `1.11.0 → 1.12.0`, with the new line in `contractVersion.ts`'s log naming
+MOTIR-3131. No amendment to `public-api-conventions.md` is owed — §8 already permits this shape,
+and recording it as an exception would imply it was one.
+
+**Owner: MOTIR-3131**, which also carries the regenerated OpenAPI document and
+`packages/cli/src/api/schema.d.ts`.
+
+### B2. Q2 — ONE agent process, N worktrees. Not N dispatches.
+
+**Decision: one dispatch launches exactly ONE agent process**, with its `cwd` at the PRIMARY's
+checkout — byte-identical to what a card pinning only that repository launches today. The other
+repositories are places the agent WORKS, not places it is LAUNCHED in. N worktrees is therefore a
+**prompt** change (MOTIR-3132) plus a **resolution and reporting** change (MOTIR-3133); the
+launcher's cwd rule is untouched.
+
+**The alternative, and why not.** Dispatching the same card N times — once per repository — hands
+each agent the WHOLE card and forces each to decide which half of it belongs to that repository.
+That is exactly the straddle the `likely-repo-straddle` advisory exists to warn a human about,
+reproduced by the tool built to fix it. Two further costs make it unavailable rather than merely
+unattractive:
+
+- **A card has one claim.** `claim_next_ready` transitions one row `todo → in_progress`; the
+  second dispatch of the same card would find it already claimed, and the only way to express N
+  simultaneous runs of one card is to stop claiming it — losing the property that makes parallel
+  dispatch safe at all.
+- **A boundary-contract card's halves are written AGAINST each other** (`plan-rules/kind-leaf.md`).
+  One agent holding both sides can write the consumer defensively against the producer it just
+  wrote. Two agents cannot, and their merge order is then load-bearing.
+
+The prompt already tells the agent to create its own worktree (`worktreeDir` in
+`lib/dispatch/promptTemplate.ts`), so the change is arithmetic on a section that already exists,
+not a new mechanism.
+
+### B3. Q3 — what the agent is told about a repository it is NOT standing in
+
+**Decision: every repository, by name, in set order, with the primary marked** — and four facts
+that a card cannot be delivered without:
+
+1. **The same BRANCH NAME in every repository.** One card, one branch name, N repositories. This
+   is not a convenience: `work_item.sessionBranch` is a **scalar**, so a lineage whose branch name
+   differed per repository could not be recorded at all, and `mark_integrated` would need an arity
+   it does not have. Same rule in `per_item_pr` mode, for symmetry and for the operator's sake.
+2. **One pull request per repository, and EVERY title carries the card's `MOTIR-<n>`.** The
+   completion gate counts merges per repository against the item's linked change requests; a pull
+   request without the key is invisible to it, so the card is held forever by work that has
+   actually shipped. This is the single most expensive thing for the prompt to leave out, because
+   nothing fails at the time.
+3. **Sibling repositories are addressed RELATIVELY** (`../<repo>-<key>`, the shape `worktreeDir`
+   already renders). The prompt is assembled server-side and cannot know the operator's checkout
+   layout; the CLI can, and prints it (§B4). A server-authored absolute path would be a guess
+   rendered as an instruction.
+4. **A repository the agent must NOT open anything against is named as such** — see §B6.
+
+**Owner: MOTIR-3132** for the prompt's `GIT WORKFLOW` and `CONTEXT` sections. The one-repository
+and no-repository forms are byte-identical to today's: this amendment changes what an N-repository
+card is told, and nothing else.
+
+### B4. Q4 — a PARTIAL delivery is a resting state, not a failure
+
+**Decision: a run that delivers some of a card's repositories and not others exits 0 and says
+so.** Re-running the card is a **RESUME**: the repositories already `delivered` are named as
+delivered, the agent is told not to re-open them, and the run reports what remains. Nothing new is
+needed on the server: `repoSetCompletionService` re-evaluates the gate without a delivery event,
+and `listRepoDelivery` is the same classifier the detail page renders from.
+
+Three obligations follow, and they are obligations on the WORDS as much as on the code:
+
+- **The success output must not tell the operator the card is finished.** `renderAgentSuccess`
+  today says _"its pull request should be open"_ and _"review + merge the PR, then `motir done`"_ —
+  singular, and for this card wrong in the shape that reads as reassurance. For a card with more
+  than one repository it names every repository, says a pull request is expected in each, and
+  states that the item completes only when every one has merged.
+- **A resume is NAMED as one**, before the agent starts, whenever at least one repository is
+  `delivered` and at least one is not.
+- **A failed run's report names the card's repositories**, so a person reading it knows how wide
+  the half-done work is. The failure POLICY is unchanged.
+
+**Owner: MOTIR-3136.** `motir auto`'s session-branch half — one lineage across N checkouts, or
+none — is **MOTIR-3135**.
+
+### B5. The ARCHIVED refusal covers the whole set
+
+§2 keeps `ArchivedTargetRepoError` for the repository the resolution landed on. **It now throws
+for an archived repository ANYWHERE in the set, naming that repository.** The reason is §2's own:
+a read-only repository can accept no branch and no pull request, so the dispatch is
+**undispatchable rather than degraded** — and under the completion gate an archived non-primary is
+strictly worse than an archived primary, because the run appears to succeed and the card is then
+held forever by a repository that can never merge anything. A throw, not a `null` and not a
+warning: `null` is a real answer meaning _"Motir cannot say which repository"_, and this is not
+that. **Owner: MOTIR-3131.**
+
+### B6. The two sub-cases, decided rather than left to the implementer
+
+**(a) A repository in the set with NO LOCAL CHECKOUT — WARN, do not refuse.**
+
+`resolveDispatchTarget`'s three outcomes (`repo_checkout` / `bootstrap_root` / `unpinned_root`) are
+kept and applied **per element**. The agent's `cwd` is still decided by the PRIMARY alone, exactly
+as today — including the primary's own `bootstrap_root` fall-back to the link root. A NON-primary
+repository whose checkout is missing produces a WARNING line naming the repository, the path that
+was expected, how that path was resolved (`override` / `convention`), and the `motir link add
+<repo> <path>` hint. The dispatch proceeds and the process exit code is unchanged.
+
+Refusing was the tempting answer and is the wrong one, on the reasoning
+`renderDispatchAdvisories` already sets out: **the operator is the one who knows** whether that
+repository's half is already merged, or whether their checkout simply lives somewhere the
+convention does not predict. A refusal converts a resumable card into a blocked one over a fact
+the tool is not the authority on. `checkBootstrapCheckout` then runs for EVERY element after a
+successful run, so a checkout that never appeared is reported rather than silently assumed.
+
+**Owner: MOTIR-3133.**
+
+**(b) A row that is `unestablished` or `excluded` — there is nothing to open a pull request
+against, and the two mean opposite things.**
+
+- **`unestablished`** (the `project_repository` row is `proposed` / `creating` / `failed`, §A5) —
+  reported as a **STOPPER in its own words**, distinctly from `awaiting`. `awaiting` says a pull
+  request has not been opened yet and points at the host; `unestablished` says there is no
+  repository to open one against and points at the project's establish step. The distinction is
+  the reader's NEXT ACTION, and collapsing it is what produced the false _"No pull request yet"_
+  row MOTIR-3036 fixed one level down. It still HOLDS the card — the work plainly has not shipped
+  — and the agent is told not to attempt a branch or a pull request there.
+- **`excluded`** (the project is deliberately code-less there, `project-repository-set.md` §4.3) —
+  reported as excluded and **explicitly as not holding the card**. The agent is told the same
+  thing: nothing is expected of it there. Holding on `excluded` would make §4.3 unreachable.
+
+**Owner: MOTIR-3136** for the words and the reporting; **MOTIR-3131** for carrying the state on the
+payload so neither the CLI nor the agent has to derive it.
+
+### B7. Binding on MOTIR-2731's cards
+
+The inward half of the close-out (`notes.html` #304) — whose acceptance criteria does this
+amendment settle, and whose does it falsify? Walked over MOTIR-2731's child set, card by card.
+**Nothing below is falsified.** Every sibling was authored against this card's recommendations and
+this amendment adopts all four; the entries record which section is now the authority, and the two
+places the amendment decides something a card explicitly deferred to it.
+
+- **MOTIR-3131** (the payload) — §B1 is its shape, its invariant and its contract class; **§B5 is
+  the decision behind its archived-anywhere criterion**, which was the one clause whose reason
+  lived nowhere. Its byte-identical-prompt criteria are §B2's consequence, not a separate promise.
+- **MOTIR-3132** (the prompt) — §B3's four facts are its `GIT WORKFLOW` and `CONTEXT` content, and
+  §B3.1's scalar-`sessionBranch` argument is WHY the branch name is shared rather than derived per
+  repository. §B2 fixes that this is a prompt change and not a launcher change.
+- **MOTIR-3133** (per-repository resolution) — its body says _"If MOTIR-3129's amendment records a
+  different disposition, follow the amendment."_ **It does not: §B6(a) confirms WARN, not refuse**,
+  and adds the reason and the per-element `checkBootstrapCheckout` obligation. Its rule that
+  `resolveDispatchTarget` keeps its exported signature and its routing-matrix unit tests is
+  §B6(a)'s _kept and applied per element_.
+- **MOTIR-3135** (`motir auto`) — §B3.1 is the constraint its session registry has to satisfy: one
+  branch NAME across N checkouts, because the item records one. §B4 is what a partially opened
+  lineage reports.
+- **MOTIR-3136** (delivery reporting) — §B4 is its specification and §B6(b) its vocabulary. Its
+  criterion that one-repository and unpinned output stays byte-identical is the general rule this
+  amendment applies throughout.
+- **MOTIR-3138** (`docs/cli.md`) / **MOTIR-3139** (`motir-meta/prompts/run.md`) — the reference and
+  the runbook follow the shipped behaviour; where either disagrees with a sibling's code, the code
+  wins and the document is corrected. This amendment is the record of WHY, not a second
+  specification for them to implement.
+- **MOTIR-3140** / **MOTIR-3141** (the tests) — §B1's invariant, §B2's single-process property,
+  §B4's resume and §B6's two dispositions are the assertions; nothing here adds a criterion they
+  do not already carry.
+
+**What this amendment leaves unowned: nothing.** Every answer above lands on a sibling of
+MOTIR-2731 (`notes.html` #181 — a decision's outputs are deliverables, and an un-owned one is
+invisible). The two questions deliberately NOT answered here are owned elsewhere and named so:
+`motir run <story>` looping a story's CHILDREN is **MOTIR-3001**, and the status vocabulary a
+partially delivered card rests in is **MOTIR-2999**.
 
 ## Consequences
 

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planValidityService } from '@/lib/services/planValidityService';
+import { buildProjection } from '@/lib/services/planProjectionService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -861,6 +862,385 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     // subject to attribute a body-vs-edges gap to. Per-card coverage is the
     // `validateProjectedWorkItem` call, asserted above.
     expect(forest).toEqual({ planId, valid: true, blockers: [] });
+  });
+});
+
+// ── The QUIET half of every rule (Bug MOTIR-3123) ────────────────────────────
+//
+// `planValidityService.ts` was in NEITHER `include` nor `thresholds` in
+// `vitest.config.ts` until this bug, so the ≥90%-per-file gate had never applied
+// to the engine that answers *"can this plan be finished?"* — the check the
+// planner runs before it hands a tree to a person, the one the three §4
+// `validate-plan*` routes expose, and (MOTIR-3095) the one a PAT can reach.
+//
+// What the report showed missing was not diffuse: it was the SKIP half of each
+// rule. Only-not-done-members-need-a-check, in both walks. The all-done sprint's
+// early return. The parent-ready cascade's second half. The comparator that
+// decides the wire order. None of them announces itself when it breaks — a
+// re-checked done item makes a healthy plan look blocked, and an unstable order
+// reads as noise in a verdict rather than as a defect. Hence a named case each.
+
+describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
+  it('a DONE member is SKIPPED in the SUBTREE walk — its unsatisfied out-of-subtree blocker stops gating', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const outside = await mk(fx, 'Outside', 'task'); // out of subtree, not done
+    await link(fx, child.id, outside.id);
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    // The edge is load-bearing while the gated member is not done…
+    const gated = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(gated.valid).toBe(false);
+    expect(gated.blockers).toEqual([
+      {
+        item: child.identifier,
+        blockedBy: outside.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+
+    // …and is not consulted at all once it is. The blocker has not moved.
+    await markDone(child.id);
+    const skipped = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(skipped.valid).toBe(true);
+    expect(skipped.blockers).toEqual([]);
+  });
+
+  it('a DONE member is SKIPPED in the FOREST walk too — the cross-project blocker that gated it stops gating', async () => {
+    const fx = await makeWorkItemFixture();
+    // The only forest-invalidating gate is an OUT-of-forest blocker (every
+    // same-project node is a forest member), so the blocker lives in project BETA.
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'BETA',
+    });
+    const qBlocker = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
+      fx.ctx,
+    );
+    const gatedItem = await mk(fx, 'Gated root', 'task'); // a REAL forest root
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: gatedItem.id,
+      patch: { blockedByAdd: [qBlocker.id] },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const gated = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(gated.valid).toBe(false);
+    expect(gated.blockers).toEqual([
+      {
+        item: gatedItem.identifier,
+        blockedBy: qBlocker.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+
+    await markDone(gatedItem.id);
+    const skipped = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    expect(skipped).toEqual({ planId, valid: true, blockers: [] });
+  });
+
+  it('a subtree whose EVERY member is done scans no BODIES either — the advisory pass returns early', async () => {
+    const fx = await makeWorkItemFixture();
+    const substrate = await mk(fx, 'Substrate', 'task'); // not done, and NOT wired
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    // A body that names a not-done item with no `blocked_by` edge — the exact
+    // shape the prose-vs-graph advisory reports on a NOT-done card.
+    await workItemsService.updateWorkItem(
+      child.id,
+      { descriptionMd: `## Acceptance criteria\n- needs ${refToken('SUB', substrate.id)}` },
+      fx.ctx,
+    );
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const scanned = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(scanned.advisories.map((a) => a.item)).toEqual([child.identifier]);
+
+    await markDone(story.id);
+    await markDone(child.id);
+    const empty = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(empty).toEqual({ key: story.identifier, valid: true, blockers: [], advisories: [] });
+  });
+
+  it('a target the plan REMOVES projects to an EMPTY subtree — vacuously valid, nothing walked and nothing scanned', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const outside = await mk(fx, 'Outside', 'task');
+    await link(fx, child.id, outside.id); // live-invalid before the plan
+
+    const live = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(live.valid).toBe(false);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, { op: 'remove', workItemId: story.id });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    // The ROOT still resolves against the LIVE tree — it exists — but it is not
+    // in the projection, so the containing set is empty and the walk never runs.
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res).toEqual({ key: story.identifier, valid: true, blockers: [], advisories: [] });
+  });
+
+  it('a CROSS-PROJECT blocker carried into the projection is not a LOCAL reference for the advisory pass', async () => {
+    const fx = await makeWorkItemFixture();
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'BETA',
+    });
+    const qBlocker = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
+      fx.ctx,
+    );
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { blockedByAdd: [qBlocker.id] },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(false);
+    expect(res.blockers).toEqual([
+      {
+        item: child.identifier,
+        blockedBy: qBlocker.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+    // The BETA node entered the projection off a live/plan edge with no browse
+    // check, so it is deliberately EXCLUDED from the local reference map and
+    // goes through the advisory service's own batched read + `filterBrowsable`.
+    expect(res.advisories).toEqual([]);
+  });
+});
+
+describe('planValidityService.validateProjectedSprint — the sprint rule’s quiet half (MOTIR-3123)', () => {
+  it('an ALL-DONE projected sprint returns valid before any probe is built', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const member = await mk(fx, 'In sprint', 'task');
+    const backlog = await mk(fx, 'Backlog blocker', 'task'); // not in the sprint, not done
+    await putInSprint(member.id, sprintId);
+    await link(fx, member.id, backlog.id);
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const gated = await planValidityService.validateProjectedSprint(planId, fx.ctx);
+    expect(gated.valid).toBe(false);
+    expect(gated.blockers).toEqual([
+      {
+        item: member.identifier,
+        blockedBy: backlog.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+
+    await markDone(member.id);
+    const allDone = await planValidityService.validateProjectedSprint(planId, fx.ctx);
+    expect(allDone).toEqual({ sprintId, valid: true, blockers: [] });
+  });
+
+  it('the PARENT-READY cascade: a not-done in-sprint parent is gated by a child that is neither done nor in the sprint — and NOT by one that is done', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const parent = await mk(fx, 'Parent', 'story');
+    const openChild = await mk(fx, 'Open child', 'subtask', parent.id); // backlog, not done
+    const doneChild = await mk(fx, 'Done child', 'subtask', parent.id); // backlog, DONE
+    await markDone(doneChild.id);
+    await putInSprint(parent.id, sprintId);
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedSprint(planId, fx.ctx);
+    expect(res.valid).toBe(false);
+    // Exactly one blocker: the DONE child is satisfied under `loose` and never
+    // reaches the verdict, which is the half of the cascade nothing asserted.
+    expect(res.blockers).toEqual([
+      {
+        item: parent.identifier,
+        blockedBy: openChild.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('an ANCESTOR’s blocker gates every in-sprint descendant, is reported ONCE per member, and the wire order is by item then by blocker', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    // Keys are allocated in creation order, so PROD-1 … PROD-5 below sort in the
+    // order they are created — which is what makes the expected wire order legible.
+    const story = await mk(fx, 'Story', 'story'); // PROD-1 — NOT in the sprint
+    const childA = await mk(fx, 'Child A', 'subtask', story.id); // PROD-2 — in sprint
+    const childB = await mk(fx, 'Child B', 'subtask', story.id); // PROD-3 — in sprint
+    const blockerOne = await mk(fx, 'Blocker one', 'task'); // PROD-4 — backlog, not done
+    const blockerTwo = await mk(fx, 'Blocker two', 'task'); // PROD-5 — backlog, not done
+    await putInSprint(childA.id, sprintId);
+    await putInSprint(childB.id, sprintId);
+    await link(fx, story.id, blockerOne.id); // the ANCESTOR's edge — cascades to A and B
+    await link(fx, childA.id, blockerOne.id); // A's OWN edge to the SAME blocker
+    await link(fx, childA.id, blockerTwo.id); // A's second blocker
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedSprint(planId, fx.ctx);
+    expect(res.valid).toBe(false);
+    // A is gated by One through BOTH its own edge and its parent's — reported
+    // once. B is gated by One through the parent alone. Sorted by gated item,
+    // then by blocker: (A,One), (A,Two), (B,One).
+    expect(res.blockers).toEqual([
+      {
+        item: childA.identifier,
+        blockedBy: blockerOne.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+      {
+        item: childA.identifier,
+        blockedBy: blockerTwo.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+      {
+        item: childB.identifier,
+        blockedBy: blockerOne.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+    expect(res.blockers.map((b) => `${b.item} ${b.blockedBy}`)).toEqual([
+      `${childA.identifier} ${blockerOne.identifier}`,
+      `${childA.identifier} ${blockerTwo.identifier}`,
+      `${childB.identifier} ${blockerOne.identifier}`,
+    ]);
+  });
+});
+
+// ── Why three defensive arms carry a `v8 ignore` instead of a case ───────────
+//
+// MOTIR-3123 asked for a named test per uncovered arm. Three of them cannot
+// have one, and the reason is a property of the PROJECTION rather than of the
+// walks: `buildProjection` only ever records an edge whose target it has
+// already put in `nodes`, `remove` deletes a node together with every edge
+// touching it, and `childrenByParent` is derived from the FINAL `nodes` map. So
+// `if (!blocker)` / `if (!child)` can never fire — and because a member's
+// blocker set is a `Set` of ids and every node's identifier is distinct, the
+// `seen` de-duplication inside the two walks can never fire either. (The
+// `addBlocker` de-duplication in the SPRINT walk is a different matter and IS
+// live: there one member is reached through several probes — asserted above.)
+//
+// Per `notes.html` #175, a falsified negative premise is discharged by
+// asserting the INVARIANT rather than by dropping the criterion. This is that
+// assertion; the three `v8 ignore` directives in the service cite it.
+
+describe('planValidityService — the projection invariant behind the walks’ defensive arms (MOTIR-3123)', () => {
+  it('every edge target and every child resolves to a node, and identifiers are distinct — including after a `remove` drops a blocker', async () => {
+    const fx = await makeWorkItemFixture();
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'BETA',
+    });
+    const qBlocker = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
+      fx.ctx,
+    );
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const doomed = await mk(fx, 'Doomed blocker', 'task');
+    const archived = await mk(fx, 'Archived blocker', 'task');
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await link(fx, child.id, doomed.id);
+    await link(fx, child.id, qBlocker.id);
+
+    const planId = await freshPlan(fx);
+    const pAdd = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Proposed child', kind: 'subtask' },
+      parentRef: story.id,
+      blockedByRefs: [doomed.id, archived.id, qBlocker.id],
+    });
+    const addId = itemIdByTitle(pAdd, 'Proposed child');
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Second proposed child', kind: 'subtask' },
+      parentRef: story.id,
+      blockedByRefs: [`planItem:${addId}`],
+    });
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { blockedByAdd: [archived.id] },
+    });
+    // LAST: the removal that strands every edge naming it.
+    await addProposal(fx, planId, { op: 'remove', workItemId: doomed.id });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const proj = await buildProjection(planId, fx.ctx);
+
+    // The `remove` really did land — otherwise the assertions below are vacuous.
+    expect(proj.nodes.has(doomed.id)).toBe(false);
+    expect(proj.removedIds.has(doomed.id)).toBe(true);
+    // …and there is something to walk.
+    expect(proj.blockedBy.size).toBeGreaterThan(0);
+    expect(proj.childrenByParent.size).toBeGreaterThan(0);
+
+    for (const [fromId, blockerIds] of proj.blockedBy) {
+      expect(proj.nodes.has(fromId)).toBe(true);
+      for (const blockerId of blockerIds) expect(proj.nodes.has(blockerId)).toBe(true);
+    }
+    for (const childIds of proj.childrenByParent.values()) {
+      for (const childId of childIds) expect(proj.nodes.has(childId)).toBe(true);
+    }
+    const identifiers = [...proj.nodes.values()].map((n) => n.identifier);
+    expect(new Set(identifiers).size).toBe(identifiers.length);
   });
 });
 

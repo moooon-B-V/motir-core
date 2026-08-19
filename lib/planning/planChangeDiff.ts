@@ -157,12 +157,19 @@ export function proposedAddsForLevel(
 /** The wire field names `planReviewService` emits → the diff-chrome's copy keys.
  *  It doubles as the WHITELIST: a field with no key here is dropped rather than
  *  rendered, so adding a diffable field server-side can never crash the canvas on
- *  a missing translation — it just doesn't name it until the copy lands. */
-const FIELD_KEY: Record<string, string> = {
+ *  a missing translation — it just doesn't name it until the copy lands.
+ *
+ *  EXPORTED so `tests/components/plan-change-field-labels.test.tsx` can hold it
+ *  against `PLAN_ITEM_CHANGE_FIELDS` (MOTIR-3151). The drop is the runtime SAFETY
+ *  NET and stays; what the test adds is that a field of today's vocabulary must
+ *  not be silently omitted from this node's summary — the failure this map is
+ *  gentle about is invisible rather than loud, which is how it survives. */
+export const FIELD_KEY: Record<string, string> = {
   title: 'title',
   priority: 'priority',
   type: 'type',
   description: 'description',
+  explanation: 'explanation',
   links: 'links',
   estimateMinutes: 'estimate',
   storyPoints: 'points',

@@ -157,15 +157,41 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
     expect(gateCode).toMatch(new RegExp(`\\b${GUARD_JOB}\\b`));
   });
 
-  it('leaves the expensive lanes skipped on `design/*`', () => {
-    // The saving the prefix exists for. "Fixing" this card by deleting the
+  it('leaves the expensive lanes skipped on a design-only diff', () => {
+    // The saving the design lane exists for. "Fixing" this card by deleting the
     // skips would make the guards run and cost twenty minutes a design PR —
     // and would look identical to a pass from the guard job's side.
-    for (const job of ['test', 'coverage', 'e2e', 'sandbox', 'runner-image']) {
+    //
+    // The MECHANISM moved in MOTIR-3148 and the CLAIM did not: the lanes used
+    // to test the branch PREFIX (`!startsWith(github.head_ref, 'design/')`),
+    // which skipped them for a branch NAMED `design/*` whatever it contained.
+    // They now read the `changes` job, which computes the same exclusion from
+    // the DIFF. So this asserts BOTH halves — that each lane is gated on that
+    // job, and that the job's exclusion set still contains design assets.
+    // Asserting only the first would pass a `changes` job that had quietly
+    // stopped excluding `design/`.
+    for (const job of ['test', 'coverage', 'e2e', 'e2e-at-scale']) {
+      expect(codeOf(ciJobs.get(job) ?? ''), job).toContain("needs.changes.outputs.app == 'true'");
+    }
+    for (const job of ['sandbox', 'runner-image']) {
       expect(codeOf(ciJobs.get(job) ?? ''), job).toContain(
-        "!startsWith(github.head_ref, 'design/')",
+        "needs.changes.outputs.images == 'true'",
       );
     }
+    const changes = codeOf(ciJobs.get('changes') ?? '');
+    expect(changes, 'the changes job exists').not.toBe('');
+    expect(changes).toMatch(/docs\/\*\|design\/\*\|scripts\/plan-seed\/\*\|\*\.md/);
+  });
+
+  it('lets NO job in ci.yml decide what to run from the branch NAME (MOTIR-3148)', () => {
+    // AC 3 of MOTIR-3148, as a self-recounting predicate rather than a count:
+    // a job added later that reintroduces a branch-prefix gate fails this too.
+    // Scoped to CODE — the comments in this workflow quote the retired
+    // expression on purpose, and prose gates nothing.
+    const gated = [...ciJobs.entries()]
+      .filter(([, body]) => codeOf(body).includes('startsWith(github.head_ref'))
+      .map(([id]) => id);
+    expect(gated).toEqual([]);
   });
 
   it('runs EVERY spec that reads the design asset tree', () => {

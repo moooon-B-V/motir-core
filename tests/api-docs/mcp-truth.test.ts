@@ -194,4 +194,25 @@ describe('the dependency-graph boundary (Amendment 13 Q2)', () => {
     const body = source.slice(source.indexOf('export type McpCatalogueToolName'));
     expect(body).not.toMatch(new RegExp(`\\b${mcpToolCount()}\\b`));
   });
+
+  it('and `docs/mcp.md` states the SAME count — the one claim nothing checked (MOTIR-3121)', () => {
+    // The page above derives its count, so it cannot drift. The in-repo
+    // reference the page fronts (`MCP_REFERENCE_URL`) states it in PROSE, and
+    // until this assertion nothing compared the two — so it absorbed three tools
+    // silently: at MOTIR-3098's base the registry held 41 while the sentence
+    // said 39, and the natural move for anyone adding a tool is to INCREMENT the
+    // number they read rather than count the registry, which propagates the
+    // error instead of fixing it.
+    //
+    // It belongs in this file and not with the other registries: those are total
+    // by TYPE, and a sentence in a Markdown file cannot be. This is the cheapest
+    // thing that makes it fail like they do.
+    const reference = read('docs/mcp.md');
+    const match = reference.match(/registers \*\*(\d+) tools\*\*/);
+    expect(
+      match,
+      '`docs/mcp.md` must state the tool count as `registers **N tools**`',
+    ).toBeTruthy();
+    expect(Number(match?.[1]), 'docs/mcp.md is behind the registry').toBe(mcpToolCount());
+  });
 });

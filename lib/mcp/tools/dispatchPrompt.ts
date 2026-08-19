@@ -117,6 +117,27 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   return lines;
 }
 
+/**
+ * The `Repo:` line. A card carrying MORE THAN ONE repository names every one of
+ * them, in set order with the primary first, each with its delivery state
+ * (MOTIR-3131) — because a reader told only the primary cannot tell a fresh card
+ * from one whose other half already merged, and the completion gate holds the
+ * card until every repository has.
+ *
+ * BYTE-IDENTICAL for a card with one repository or none: those are the shapes
+ * every existing caller and test reads, and this card changes the envelope, not
+ * what a single-repository dispatch looks like.
+ */
+function repoLine(dto: DispatchPromptDto): string {
+  if (dto.targetRepos.length <= 1) {
+    return `Repo: ${dto.targetRepo ?? 'not pinned (Motir cannot say)'}`;
+  }
+  const named = dto.targetRepos
+    .map((r, i) => `${r.name}${i === 0 ? ' (primary)' : ''}${r.delivery ? ` — ${r.delivery}` : ''}`)
+    .join(', ');
+  return `Repos (${dto.targetRepos.length}): ${named}`;
+}
+
 /** Compact summary for the human watching the session; the prompt itself rides
  *  in `structuredContent` (it is the machine payload, and long). */
 function summarize(dto: DispatchPromptDto): string {
@@ -126,7 +147,7 @@ function summarize(dto: DispatchPromptDto): string {
       : 'one pull request of its own';
   return [
     `Dispatch prompt for ${dto.key}`,
-    `Repo: ${dto.targetRepo ?? 'not pinned (Motir cannot say)'}`,
+    repoLine(dto),
     `Git workflow: ${workflow}`,
     // The advisory is inside the prompt already; naming it up here is what makes
     // a caller that skims the summary see it (MOTIR-2079 — the whole incident was

@@ -215,11 +215,14 @@ describe('ALL THREE published surfaces agree — one card, one test', () => {
     // Amendment 8 makes the bump obligatory for an additive change, because the
     // number rides a response header rather than a document nobody fetches.
     //
-    // MOTIR-2728 moved it to `1.11.0`, and this used to assert that literal. It
-    // now asserts "at or past 1.11.0" instead, because the obligation applies to
-    // EVERY additive change: the exact form made the next card to honour it fail
-    // this test (MOTIR-3110 was the first), which turns a rule the repository
-    // wants followed into a test that punishes following it.
+    // ⚠️ AT LEAST 1.11.0, not EXACTLY it (MOTIR-3131). This card's addition took
+    // 1.11.0; pinning that string made the NEXT additive change under §8 — every
+    // one of which is REQUIRED to move this number — red-light itself on a guard
+    // belonging to a card it does not touch. MOTIR-2903 fixed the same assertion
+    // one file over (`repositorySetReadSeams.test.ts`) and this copy was missed.
+    // What the guard is for is that the version moved PAST the last release that
+    // predates `targetRepositories`, and a monotonic floor says exactly that
+    // while surviving its own success.
     const [major, minor] = V1_CONTRACT_VERSION.split('.').map(Number);
     expect(major).toBe(1);
     expect(minor).toBeGreaterThanOrEqual(11);

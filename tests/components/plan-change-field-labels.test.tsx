@@ -1,0 +1,145 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithIntl } from '../helpers/renderWithIntl';
+import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { FIELD_KEYS } from '@/components/planning/PlanEditsReviewDock';
+import { FIELD_KEY } from '@/lib/planning/planChangeDiff';
+import { PLAN_ITEM_CHANGE_FIELDS } from '@/lib/dto/planReview';
+import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import enMessages from '@/messages/en.json';
+import zhMessages from '@/messages/zh.json';
+
+// MOTIR-3151. `planReviewService.buildChanges` emits a change row per patched
+// field and BOTH review surfaces name that row by interpolating the field into a
+// message key (`field_<wire name>`). No compiler and no type can follow that, so
+// MOTIR-1532 added the sizing rows, stopped at the producer, and the plan-review
+// canvas rendered `planReview.field_storyPoints` to a human deciding whether to
+// approve a plan — with nothing red anywhere.
+//
+// This file is the check that was missing: the wire vocabulary is a closed list
+// (`PLAN_ITEM_CHANGE_FIELDS`), and every member of it owes copy in every catalog
+// and a name in each of the THREE hand-maintained maps that stand between a
+// field and its label. The DiffLine cases at the foot cover the other half —
+// what a field with NO copy must degrade to, so the next gap is readable rather
+// than a leaked key path.
+
+afterEach(cleanup);
+
+const CATALOGS = { en: enMessages, zh: zhMessages } as const;
+const NAMESPACES = ['planReview', 'planEdits'] as const;
+const LOCALES = Object.keys(CATALOGS) as (keyof typeof CATALOGS)[];
+
+/** The catalogs are imported as their literal JSON types; every lookup here is
+ *  by a computed key, so read them through one loose view rather than casting at
+ *  each call site. */
+type LooseCatalog = Record<string, unknown>;
+
+function labels(locale: keyof typeof CATALOGS, path: readonly string[]): Record<string, string> {
+  let node = CATALOGS[locale] as unknown as LooseCatalog;
+  for (const segment of path) node = node[segment] as LooseCatalog;
+  return node as Record<string, string>;
+}
+
+describe('the change-list field vocabulary', () => {
+  const cases = NAMESPACES.flatMap((namespace) =>
+    LOCALES.map((locale) => [namespace, locale] as const),
+  );
+
+  it.each(cases)('%s carries a %s label for every field the wire can name', (namespace, locale) => {
+    const block = labels(locale, [namespace]);
+    for (const field of PLAN_ITEM_CHANGE_FIELDS) {
+      const key = `field_${field}`;
+      // A key-path render is what a MISSING message looks like on screen, so the
+      // absence is asserted per field rather than as a count — the count passes
+      // when two fields are added and one label is.
+      expect(block[key], `messages/${locale}.json ${namespace}.${key} is missing`).toBeTruthy();
+    }
+  });
+
+  it("maps every wire field in the dock's FIELD_KEYS", () => {
+    // The dock's fallback makes an unmapped field READABLE (it prints the wire
+    // name), which is exactly why nobody notices the map going stale.
+    for (const field of PLAN_ITEM_CHANGE_FIELDS) {
+      expect(FIELD_KEYS[field], `FIELD_KEYS has no entry for ${field}`).toBe(`field_${field}`);
+    }
+  });
+
+  it("names every wire field in the canvas chrome's FIELD_KEY, with copy", () => {
+    // The third place the same wire name has to be repeated by hand — and the
+    // quietest, because this map DROPS what it does not recognise. A field added
+    // to `buildChanges` and not to this map simply vanishes from the changed
+    // node's summary; nothing renders wrong and nothing fails.
+    for (const field of PLAN_ITEM_CHANGE_FIELDS) {
+      const copyKey = FIELD_KEY[field];
+      expect(copyKey, `planChangeDiff FIELD_KEY has no entry for ${field}`).toBeTruthy();
+      for (const locale of LOCALES) {
+        const chrome = labels(locale, ['planningWorkspace', 'conversation', 'diff', 'field']);
+        expect(
+          chrome[copyKey!],
+          `messages/${locale}.json planningWorkspace.conversation.diff.field.${copyKey} is missing`,
+        ).toBeTruthy();
+      }
+    }
+  });
+});
+
+function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto {
+  return {
+    planItemId: 'pi_size',
+    op: 'modify',
+    nodeId: 'wi_size',
+    parentNodeId: null,
+    parentIdentifier: null,
+    parentTitle: null,
+    parentKind: null,
+    blockedByNodeIds: [],
+    identifier: 'PROD-21',
+    title: 'Seller onboarding',
+    kind: 'subtask',
+    priority: null,
+    type: null,
+    descriptionMd: null,
+    explanationMd: null,
+    explanationSource: null,
+    storyPoints: null,
+    estimateMinutes: null,
+    targetRepo: null,
+    targetRepoRole: null,
+    executor: null,
+    planningProvenance: null,
+    status: 'todo',
+    hasChildren: false,
+    changes,
+    stale: false,
+    staleReasons: [],
+    targetMissing: false,
+  };
+}
+
+describe('DiffLine', () => {
+  it('renders the sizing labels in zh as well as en', () => {
+    // The catalogue assertions above prove the KEYS exist; this proves the
+    // surface reads them, in the locale that has no English to fall back on.
+    renderWithIntl(
+      <PlanItemNode item={modifiedItem([{ field: 'storyPoints', from: '3', to: '5' }])} />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    const line = screen.getByTestId('diff-line');
+    expect(line.textContent).not.toContain('field_storyPoints');
+    expect(line.textContent).toContain('故事点');
+  });
+
+  it('renders a field the catalog does not know as its WIRE NAME, never a key path', () => {
+    // Deliberately absent from every catalog: this is the shape of the NEXT
+    // field somebody teaches `buildChanges` to emit — and of a field a deployed
+    // client's bundle simply predates. `PlanItemChangeDto.field` stays a plain
+    // `string` so that case can be REPRESENTED here at all; the surface must
+    // degrade rather than print `planReview.field_…`.
+    const unknown = 'aFieldNoCatalogKnows';
+    renderWithIntl(<PlanItemNode item={modifiedItem([{ field: unknown, from: 'a', to: 'b' }])} />);
+    const line = screen.getByTestId('diff-line');
+    expect(line.textContent).not.toContain('planReview.');
+    expect(line.textContent).toContain(unknown);
+  });
+});

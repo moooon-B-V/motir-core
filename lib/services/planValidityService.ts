@@ -271,6 +271,7 @@ export const planValidityService = {
         if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
           continue;
         const key = `${member.identifier} ${blocker.identifier}`;
+        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there one member is reached through several probes). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
         blockers.push({
@@ -354,6 +355,7 @@ export const planValidityService = {
         if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
           continue;
         const key = `${member.identifier} ${blocker.identifier}`;
+        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there one member is reached through several probes). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
         blockers.push({
@@ -458,6 +460,7 @@ export const planValidityService = {
     for (const m of notDone) {
       for (const childId of proj.childrenByParent.get(m.id) ?? []) {
         const child = proj.nodes.get(childId);
+        /* v8 ignore next -- UNREACHABLE: `childrenByParent` is derived from the FINAL `nodes` map (`buildProjection`), so every child id it holds resolves. Same invariant + same test as the `seen` guards above (MOTIR-3123). */
         if (!child) continue;
         if (gatingItemSatisfied(memberIds.has(childId), isDone(proj, child), condition)) continue;
         addBlocker(m.id, child.identifier, child.status, child.sprintId);
