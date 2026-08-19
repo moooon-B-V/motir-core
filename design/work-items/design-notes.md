@@ -22,8 +22,8 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png`           | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan / Re-plan is a CONVERSATION, not a single message** — the button opens the universal workspace directly; for Re-plan, the reason is captured as the FIRST CHAT TURN inside the workspace's chat rail (no pre-workspace form). Map scoped to item neighborhood, proposed nodes dashed, done work LOCKED. Confirm gate (MOTIR-911) as a bottom bar. Six panels: Plan button on detail · Re-plan button on detail · Plan button on quick-view · Re-plan button on quick-view · scoped workspace with conversation (Plan flow + Re-plan flow + continuing conversation) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
 | **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`                 | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
-| **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. Seven panels: the door (rail placement) · held · delivered · unrecorded branch · one repo · none · role + `decision` · editing. Story MOTIR-2725 · MOTIR-2413 (design). Gates MOTIR-2415; inherited by MOTIR-2414. See below.                                                                                                                                                                                                                                                                                                                    |
-| **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. Story MOTIR-2725 · MOTIR-2414 (design). Gates MOTIR-2416. See below.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.              |
+| **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
 
 ---
 
@@ -4502,10 +4502,60 @@ panel never renders a 300 KB per-area document, and nothing is lost.
 
 ## ⭐ The repository SET on the work-item DETAIL page (Story MOTIR-2725 · MOTIR-2413 — `repository-set.mock.html`)
 
-**Asset:** `repository-set.mock.html` + `repository-set.png` (7 panels: 0 the door · 1 held ·
-2 delivered · 2b unknown branch · 3 one repo · 4 none · 5 role + `decision` · 6 editing).
-**Gates:** MOTIR-2415 (implement, detail). **Inherited by** MOTIR-2414 (quick view), which
-COMPRESSES this treatment and may not re-decide any of it.
+**Asset:** `repository-set.mock.html` + `repository-set.png` (10 panels: 0 the door · 1 held ·
+2 delivered · 2b unknown branch · **2c the five delivery states** · **2d the destination** ·
+3 one repo · 4 none · **5 a `proposed` row** · 6 editing).
+**Gates:** MOTIR-2415 (implement, detail) → **MOTIR-3042** (the reference redraw).
+**Inherited by** MOTIR-2414 (quick view), which COMPRESSES this treatment and may not re-decide
+any of it.
+
+### ⭐ REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038, 2026-08-19)
+
+A card used to name its repository as a WORD. It now points at a `project_repository` ROW — an
+object with an id, a role, a label, an establish state and a page of its own (MOTIR-3037's
+amendment to `docs/decisions/work-item-repository-set.md`). Three things follow, and each is drawn:
+
+**1. The repository is a LINK.**
+
+| element                | token / role                                                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| repository name (link) | `text-(--el-link)` + `underline underline-offset-2` — the shipped link idiom                                                |
+| link destination       | `/settings/project/repositories#<name>` — the project's OWN settings row                                                    |
+| delivery glyph         | unchanged: `--el-success` · `--el-icon-muted` · `--el-warning`, each with its own SHAPE so the row never rides colour alone |
+| `primary` chip         | unchanged `dsPillNeutral` (`--radius-badge`, `--spacing-chip-x/y`)                                                          |
+| ROLE chip              | `dsPillNeutral`, after the name — a category, not an identity                                                               |
+| establish STATE chip   | `dsPillWarning` (`--el-tint-peach` fill, `--el-text-strong` ink) — shown ONLY when the row is not established               |
+| count caption          | unchanged `text-(--el-text-muted)` on the card surface (AA: 4.54:1 on white)                                                |
+
+**Where the link GOES, and why it is not GitHub** (the DRAW-THE-ENTRANCE rule, panel 2d). It goes
+to that repository's row on `/settings/project/repositories`, anchored and highlighted. Two
+reasons, the second decisive: the card points at a ROW, so the row is what "the repository" now
+names; and **a `proposed` row has no host repository at all**, so a link to GitHub would be dead
+for exactly the state this redraw exists to express. The host is one further click, from the
+link-out already on that row — panel 2d draws the whole path rather than the affordance alone.
+
+**2. The FIVE delivery states, each with its own copy** (panel 2c; MOTIR-3037 §A5 decides what
+each MEANS, this asset decides what each row SAYS). Only four hold the card:
+
+| state               | row copy                                  | pill            | holds? | the reader's next action           |
+| ------------------- | ----------------------------------------- | --------------- | ------ | ---------------------------------- |
+| `delivered`         | the pull request's own title              | `dsPillDone`    | no     | nothing                            |
+| `awaiting`          | "No pull request yet"                     | `dsPillNeutral` | yes    | open / merge the PR                |
+| `unknown`           | "Merged, but the branch was not recorded" | `dsPillWarning` | yes    | say which branch it landed on      |
+| **`unestablished`** | **"Repository not created yet"**          | `dsPillWarning` | yes    | **the establish step, NOT GitHub** |
+| **`excluded`**      | **"Skipped for this project"**            | `dsPillNeutral` | **no** | nothing — deliberately code-less   |
+
+`unestablished` is deliberately NOT "Awaiting": awaiting promises a pull request someone could
+open, and a `proposed` / `creating` row has no default branch to open one against. `excluded` is
+the one state that does not hold the card (ADR `project-repository-set.md` §4.3 — a skipped row
+leaves the project explicitly code-less), and it is drawn quiet for exactly that reason.
+
+**3. `--el-text-muted` on `--el-surface-soft` is GONE, and it was MOTIR-3014 that removed it.**
+That card landed first (motir-core#2126, merged 2026-08-19T00:12:38Z) and replaced the failing
+4.34:1 pair with `--el-text-secondary` (6.51:1) across these files. **This redraw KEEPS what it
+did** — the card's own instruction for that branch — rather than re-deriving the fix. No new
+ink/surface pair is introduced by the reference treatment: the link uses `--el-link`, and the two
+new chips reuse the shipped `dsPillNeutral` / `dsPillWarning` recipes unchanged.
 
 ### Why the asset exists
 
@@ -4722,8 +4772,35 @@ gate). A string not in this table is a finding against this card, not a decision
 
 **Asset:** `repository-set-quick-view.mock.html` + `repository-set-quick-view.png` (5 panels: two
 repositories at the measured fold · four — the overflow rule · one · none · the editor).
-**Gates:** MOTIR-2416. **Inherits from** MOTIR-2413 (`repository-set.mock.html`) and re-opens nothing
-it settled.
+**Gates:** MOTIR-2416 → **MOTIR-3042** (the reference redraw). **Inherits from** MOTIR-2413
+(`repository-set.mock.html`) and re-opens nothing it settled.
+
+### ⭐ REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038, 2026-08-19)
+
+**The repository is a LINK here too**, same token (`text-(--el-link)`), same destination
+(`/settings/project/repositories#<name>`). Compression governs the READ, and a link is not a
+compression — a repository the reader can follow on the detail page and cannot follow in the peek
+would be two different facts about one object.
+
+**The ROLE is DETAIL-ONLY. The compact row DROPS it — MEASURED, not asserted.**
+
+Measured in the real modal (`h-[680px] max-h-[82vh] w-[90vw]`, the 300px rail, 267px usable inside
+the row, chromium at 1280×900):
+
+| row                                          | space for the name | name needs | result        |
+| -------------------------------------------- | ------------------ | ---------- | ------------- |
+| `acme-booking-service` + ROLE + `primary`    | **129px**          | **151px**  | **TRUNCATED** |
+| `acme-booking-service` + ROLE (no `primary`) | 197px              | 197px      | fits          |
+| `motir-core` + ROLE + `primary`              | 129px              | 129px      | fits, exactly |
+
+So the role costs roughly six characters of repository NAME, and on the primary row — the one that
+says where dispatch goes — a twenty-character name loses its tail. **The name is the identity and
+the role is a category**, so the category is what gives way. `motir-core` fitting _exactly_ is the
+tell that this is a knife-edge rather than a margin: any longer name with both chips truncates.
+
+This is the same KIND of change compact already makes — it caps rows at three and drops the
+explanatory line — and it does not change a WORD of what is shown, only how many elements are.
+A reader who needs the role is one click from the detail page, where panel 2c names it.
 
 ### What is INHERITED, and is not re-decided here
 
