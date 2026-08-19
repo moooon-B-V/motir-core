@@ -884,6 +884,12 @@ export default defineConfig({
         'lib/api/v1/workItems/childEdges.ts',
         'lib/api/v1/workItems/schema.ts',
         'lib/api/v1/workItems/resolveKey.ts',
+        // Story MOTIR-3000: the general attachment door — the v1 route and the
+        // MCP tool in front of it. Both are thin adapters over one service
+        // path, which is exactly why they are gated: a gate re-implemented in
+        // either would show up here as an uncovered branch.
+        'app/api/v1/work-items/[key]/attachments/route.ts',
+        'lib/mcp/tools/attachFile.ts',
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
@@ -1319,6 +1325,11 @@ export default defineConfig({
         'lib/api/v1/workItems/childEdges.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/workItems/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/workItems/resolveKey.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/work-items/[key]/attachments/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts': {
           branches: 90,
           functions: 90,
@@ -1794,6 +1805,7 @@ export default defineConfig({
         'lib/mcp/tools/listReady.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/addComment.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/attachFile.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/searchWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/listSprints.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-1879 — the project-enumeration read (tests/mcp/list-projects.test.ts
