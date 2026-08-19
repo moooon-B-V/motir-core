@@ -67,13 +67,14 @@ function PlanAttribution({ view }: { view: PlanRowView }) {
   const t = useTranslations('aiPlanning');
   const decided = view.status === 'approved' || view.status === 'declined';
 
-  // WHO WROTE it. `mcp` + a harness is an agent; Motir is read off `sourceJobId`
-  // and NOT off `authorSource === 'native'`, which no shipped writer produces
-  // (the generator path is not retrofitted — MOTIR-2996).
+  // WHO WROTE it, read off `authorSource` ALONE (MOTIR-2996): `mcp` + a harness
+  // is an agent, `native` is Motir. The row used to infer the Motir case from
+  // `sourceJobId != null` because the generator recorded no author; it records
+  // `native · Motir` now, so the fact has one source instead of two.
   const agent =
     view.authorSource === 'mcp' && view.authorHarness
       ? { Icon: Bot, label: t('viaHarness', { harness: view.authorHarness }), truncates: true }
-      : view.sourceJobId != null
+      : view.authorSource === 'native'
         ? { Icon: Sparkles, label: t('viaMotir'), truncates: false }
         : null;
 

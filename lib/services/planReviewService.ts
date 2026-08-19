@@ -252,11 +252,11 @@ export const planReviewService = {
       decidedAt: plan.decidedAt,
       decidedByName,
       // The three-party attribution the header renders (`design-notes.md`
-      // Part III §6). `origin` + `sourceJobId` are carried because they are what
-      // separate *Motir generated it* from *nobody asked* from *unattributed* —
-      // the authorship columns alone cannot tell those apart.
+      // Part III §6). `origin` separates *nobody asked* from a plan somebody
+      // requested; the authorship triple now answers *who wrote it* on its own,
+      // so `sourceJobId` is no longer carried (MOTIR-2996) — it named WHICH JOB
+      // and was only ever here to stand in for WHO.
       origin: plan.origin,
-      sourceJobId: plan.sourceJobId,
       createdByName,
       authorSource: plan.authorSource,
       authorHarness: plan.authorHarness,

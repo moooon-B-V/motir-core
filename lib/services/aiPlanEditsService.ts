@@ -192,6 +192,20 @@ async function submitPlanEditJob(
       sourceJobId: jobId,
       origin,
       createdById: origin === 'user' ? ctx.userId : null,
+      // WHO WROTE it (MOTIR-2996) — and unlike `createdById` above, this one
+      // does NOT vary by path. Every submit this seam serves (expand / augment /
+      // replan / contextual, and the cadence watcher) hands the tree to motir-ai
+      // to write, so Motir is the author of all of them; only the REQUESTER
+      // differs. Recording it retires the `sourceJobId != null` inference the
+      // Plans surface stood on.
+      //
+      // SERVER-SET here, exactly as `create_plan` fixes `mcp`
+      // (`agent-authored-plans.md` Q3: the source is never a caller field).
+      // `authorModel` stays null — the planning LLM is motir-ai's
+      // (`PlanningRun.model`) and Decision 6 strips a native model at the read
+      // boundary regardless.
+      authorSource: 'native',
+      authorHarness: 'Motir',
     },
     ctx,
   );

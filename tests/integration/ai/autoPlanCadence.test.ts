@@ -623,6 +623,44 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
     expect(plan.origin).toBe('cadence');
   });
 
+  it('records the AUTHOR as `native · Motir` on both arms — it does not vary with who asked (MOTIR-2996)', async () => {
+    // The cadence arm and the request arm differ in `origin` and `createdById`
+    // and in NOTHING ELSE about authorship: motir-ai writes the tree either way,
+    // so the plan RECORDS who wrote it rather than leaving the Plans surface to
+    // infer it from `sourceJobId != null` — an inference that answers WHICH JOB
+    // and holds only while a motir-ai job is the sole non-MCP writer of a `Plan`.
+    const { fx: cadenceFx } = await makeDrainedProject();
+    await autoPlanCadenceService.runCadenceSweep();
+    const cadencePlan = await adminDb.plan.findFirstOrThrow({
+      where: { projectId: cadenceFx.projectId },
+    });
+
+    const requestFx = await makeWorkItemFixture();
+    const stub = await makeItem(requestFx, { kind: 'epic', title: 'Unexpanded epic' });
+    await aiPlanEditsService.submitExpand(stub.identifier, {
+      userId: requestFx.ownerId,
+      workspaceId: requestFx.workspaceId,
+      projectId: requestFx.projectId,
+      project: requestFx.project,
+    });
+    const requestPlan = await adminDb.plan.findFirstOrThrow({
+      where: { projectId: requestFx.projectId },
+    });
+
+    for (const plan of [cadencePlan, requestPlan]) {
+      expect(plan.authorSource).toBe('native');
+      expect(plan.authorHarness).toBe('Motir');
+      // Null MODEL, deliberately: the planning LLM is motir-ai's
+      // (`PlanningRun.model`), motir-core does not know it, and
+      // `work-item-provenance.md` Decision 6 strips a native model at the read
+      // boundary anyway — so a value here could never be spent.
+      expect(plan.authorModel).toBeNull();
+    }
+    // The two rows really are the two arms, so this is not one path asserted twice.
+    expect(cadencePlan.origin).toBe('cadence');
+    expect(requestPlan.origin).toBe('user');
+  });
+
   it('a request-path submit stays origin=user — the default, so no existing caller changed behaviour', async () => {
     const fx = await makeWorkItemFixture();
     const stub = await makeItem(fx, { kind: 'epic', title: 'Unexpanded epic' });

@@ -87,7 +87,6 @@ export async function buildPlanRowViews(
       // Resolved HERE so the row component stays presentational, exactly as the
       // relative time and the staleness count already are.
       origin: plan.origin,
-      sourceJobId: plan.sourceJobId,
       createdByName: plan.createdById ? (names.get(plan.createdById) ?? null) : null,
       authorSource: plan.authorSource,
       authorHarness: plan.authorHarness,

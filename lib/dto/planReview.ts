@@ -179,17 +179,21 @@ export interface PlanReviewDto {
    * complete the carrier is.
    *
    * `createdByName` is resolved from `Plan.createdById` the same way
-   * `decidedByName` is; `origin` and `sourceJobId` are what distinguish the
-   * remaining states — a Motir generation is `sourceJobId !== null` (the
-   * generator records no author, MOTIR-2996), and *nobody asked* is
+   * `decidedByName` is; `authorSource` alone answers WHO WROTE it — `mcp` is an
+   * agent, `native` is Motir (MOTIR-2996) — and *nobody asked* is
    * `origin === 'cadence'`.
+   *
+   * ⚠️ `sourceJobId` used to be carried here purely so the header could tell a
+   * Motir generation from an unattributed plan, back when the generator recorded
+   * no author. It is GONE (MOTIR-2996): the generator records `native · Motir`,
+   * so the fact has one source rather than two, and the DTO no longer ships a
+   * field whose only reader was an inference.
    *
    * ⚠️ Unlike the LIST row, the header keeps the requester on a DECIDED plan: it
    * names the roles in words, and its decider lives in `history` below rather
    * than in the same line, so neither reason the row drops it applies here.
    */
   origin: PlanOriginDto;
-  sourceJobId: string | null;
   createdByName: string | null;
   authorSource: PlanAuthorSourceDto | null;
   authorHarness: string | null;

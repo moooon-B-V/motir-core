@@ -292,6 +292,14 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
       // requester and is recorded. The cadence arm — where the acting user is a
       // substituted project-owner credential and `createdById` must stay NULL —
       // is asserted in `tests/integration/ai/autoPlanCadence.test.ts`.
+      //
+      // `authorSource` / `authorHarness` (MOTIR-2996) are the THIRD party and the
+      // one that does NOT vary by path: motir-ai writes the tree for every submit
+      // this seam serves, so Motir is the author of all of them and the pair is
+      // SERVER-SET here rather than read from anything the caller passed. This is
+      // what retires the `sourceJobId != null` inference the Plans surface stood
+      // on — asserted on the call so a future submit path cannot silently drop it
+      // and leave its plans reading as unattributed.
       expect(plansService.createPlan).toHaveBeenCalledWith(
         'pj_1',
         {
@@ -300,6 +308,8 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
           sourceJobId: 'job_1',
           origin: 'user',
           createdById: ctx.userId,
+          authorSource: 'native',
+          authorHarness: 'Motir',
         },
         ctx,
       );

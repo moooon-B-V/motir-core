@@ -248,12 +248,14 @@ function ReviewAttribution({
   review: PlanReviewDto;
   t: ReturnType<typeof useTranslations>;
 }) {
-  // Motir is read off `sourceJobId`, NOT off `authorSource === 'native'` — the
-  // generator records no author (MOTIR-2996), so no shipped writer produces it.
+  // WHO WROTE it, read off `authorSource` ALONE (MOTIR-2996) — `mcp` + a harness
+  // is an agent, `native` is Motir. The header used to infer the Motir case from
+  // `sourceJobId != null`, which answered WHICH JOB and stood in for WHO only
+  // while a motir-ai job was the sole non-MCP writer of a `Plan`.
   const agent =
     review.authorSource === 'mcp' && review.authorHarness
       ? { Icon: Bot, label: t('writtenByHarness', { harness: review.authorHarness }) }
-      : review.sourceJobId != null
+      : review.authorSource === 'native'
         ? { Icon: Sparkles, label: t('writtenByMotir') }
         : null;
   const cadence = review.origin === 'cadence';

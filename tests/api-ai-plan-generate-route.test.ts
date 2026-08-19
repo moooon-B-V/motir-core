@@ -183,6 +183,16 @@ describe('POST /api/ai/plan/generate', () => {
     expect(plan!.status).toBe('generating');
     expect(plan!.sourceJobId).toBe('job_gen_1');
     expect(plan!.projectId).toBe(fx.projectId);
+    // …and it RECORDS who wrote it (MOTIR-2996). Motir's own generator authored
+    // this tree, so the row says so instead of leaving the Plans surface to infer
+    // it from `sourceJobId != null` — which answers WHICH JOB and stands in for
+    // WHO only while a motir-ai job is the sole non-MCP writer of a `Plan`.
+    // Server-set at this seam, exactly as `create_plan` fixes `mcp`.
+    expect(plan!.authorSource).toBe('native');
+    expect(plan!.authorHarness).toBe('Motir');
+    // Null MODEL: the planning LLM is motir-ai's (`PlanningRun.model`), and the
+    // read boundary strips a native model anyway (provenance Decision 6).
+    expect(plan!.authorModel).toBeNull();
   });
 
   it('threads the project aiGenerateExplanations opt-in into the generate_tree envelope (MOTIR-850)', async () => {

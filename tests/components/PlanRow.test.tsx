@@ -23,10 +23,9 @@ function view(overrides: Partial<PlanRowView> = {}): PlanRowView {
     whenKey: 'plannedAt',
     whenLabel: '2 hours ago',
     // The three-party attribution (MOTIR-2991). The default is the UNATTRIBUTED
-    // state — no requester, no author, no job — so every pre-existing case below
+    // state — no requester and no author — so every pre-existing case below
     // keeps asserting the row without one, and each attribution state opts in.
     origin: 'user',
-    sourceJobId: null,
     createdByName: null,
     authorSource: null,
     authorHarness: null,
@@ -104,18 +103,18 @@ describe('PlanRow — who asked and who wrote', () => {
     expect(screen.getByText('via Claude Code')).toBeTruthy();
   });
 
-  it('names the person and MOTIR when a generation job produced it', () => {
-    // Read off `sourceJobId`, NOT `authorSource === 'native'` — the generator
-    // records no author (MOTIR-2996), so a row keyed on 'native' would never
-    // render for any plan the product actually creates.
-    renderWithIntl(<PlanRow view={view({ createdByName: 'Jonas', sourceJobId: 'job_1' })} />);
+  it('names the person and MOTIR when Motir generated it', () => {
+    // Read off `authorSource === 'native'` ALONE (MOTIR-2996). The generator now
+    // RECORDS its authorship, so the row no longer infers it from a
+    // `sourceJobId` — which named WHICH JOB, not who wrote the plan.
+    renderWithIntl(<PlanRow view={view({ createdByName: 'Jonas', authorSource: 'native' })} />);
     expect(screen.getByText('Jonas')).toBeTruthy();
     expect(screen.getByText('via Motir AI')).toBeTruthy();
   });
 
   it('says AUTO-PLANNED instead of a requester when nobody asked', () => {
     renderWithIntl(
-      <PlanRow view={view({ origin: 'cadence', createdByName: null, sourceJobId: 'job_2' })} />,
+      <PlanRow view={view({ origin: 'cadence', createdByName: null, authorSource: 'native' })} />,
     );
     expect(screen.getByText('auto-planned')).toBeTruthy();
     expect(screen.getByText('via Motir AI')).toBeTruthy();
@@ -150,7 +149,7 @@ describe('PlanRow — who asked and who wrote', () => {
             status,
             whenKey: status === 'approved' ? 'approvedAt' : 'declinedAt',
             createdByName: 'Mara',
-            sourceJobId: 'job_3',
+            authorSource: 'native',
           })}
         />,
       );
