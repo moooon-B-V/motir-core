@@ -1037,6 +1037,45 @@ MOTIR-1782), never of a second branch in the model.
   membership rule — so any future change to project access levels or roles reaches the code
   grant automatically, and is a place to re-check this amendment.
 
+## AMENDMENT (2026-08-19, MOTIR-3073) — the proposer asks whether the project HAS CODE, not whether its set is empty
+
+`proposeRepositorySet`'s original gate was _"does this project's repository set have any
+row?"_, and §4.3's idempotence argument is why: a set with rows must never be touched. That
+argument is unchanged and still correct. What it does not cover is the project that arrives
+**with a codebase already** — because such a project has no rows either, and the two states
+are indistinguishable to that gate.
+
+The **migrate** onboarding path records its repository as `connected_repo_ref` on the
+onboarding run and never writes this table. So every migrated project read as never-proposed
+forever, and its first plan approval proposed a starter repo, showed the establish step in
+place of the approved plan's items, and — because a project's set IS its repo-pin domain
+(`dispatchRepo.ts`'s scope ladder) — made every repository the project actually uses
+unpinnable. Observed on Motir's own project; the row is retired by MOTIR-3078.
+
+**The gate is now two questions, in this order:**
+
+1. `set_exists` — unchanged, first, and still the access-gated one.
+2. `project_has_code` — the project's onboarding run names a connected repository.
+
+**The signal is PROJECT-scoped, and deliberately only the onboarding run.** `GithubRepo` and
+the code-graph index ledger are keyed on the WORKSPACE (`projectStateService.resolveCodeState`
+says so in its own header), so gating on _"the installation has repos"_ or _"something is
+indexed"_ would silence the proposer for every project after the first in any workspace that
+has ever connected code — and the second project in a workspace genuinely does need a
+repository. It is keyed on the FIELD rather than on `kind === 'migrate'`, so any future
+onboarding path that connects an existing repository is covered the day it ships.
+
+### A project that has code AND a set with an unsettled row
+
+This state is now reachable only DELIBERATELY — the proposer will not create it, so a row on
+such a project was put there by a person or by an earlier plan (multi-repo is a legitimate
+shape: having code does not mean having _all_ the code a plan needs). Nothing changes for it:
+`set_exists` answers first, the set is left alone, and the establish step continues to render
+for the unsettled row exactly as it does today. **The step is not dropped and needs no new
+door** — MOTIR-1764's permanent entry point already leads back to it. What the amendment
+removes is only the case where Motir invented the row itself and then demanded a decision
+about it.
+
 ## Deferred to the spike — asserted nowhere in this document
 
 MOTIR-1777 verifies four GitHub mechanics, and **no decision above depends on their
