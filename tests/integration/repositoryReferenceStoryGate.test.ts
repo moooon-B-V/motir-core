@@ -8,11 +8,13 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { presentWorkItemDetail, workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { presentMcpWorkItem } from '@/lib/mcp/payloads/workItems';
 import { resolveItemDispatchPin } from '@/lib/workItems/dispatchRepo';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -130,6 +132,43 @@ describe('1 — REFERENCE ⟷ RENAME: the story’s central claim', () => {
     }
   });
 
+  it('a rename moves the COMPLETION GATE with it — not only the panel', async () => {
+    // ⚠️ The defect the acceptance flow found (MOTIR-3043), pinned here so it
+    // cannot come back below the browser. `work_item.targetRepos` is a STORED
+    // projection written when the item is written; a rename on the host rewrites
+    // nothing. The panel resolved through the references and showed the new
+    // name, while the gate compared the OLD one against a pull request reporting
+    // the new one, matched nothing, and held the card open forever.
+    //
+    // A card that survives a rename everywhere except the gate has not survived
+    // it — so both sides are read here, from the same row, after the rename.
+    const fx = await scenario('rename-gate@example.com');
+    const item = await workItemsService.createWorkItem(
+      {
+        projectId: fx.project.id,
+        kind: 'task',
+        title: 'Renamed out from under the gate',
+        targetRepositories: [fx.web.id],
+      },
+      fx.ctx,
+    );
+    await projectRepoSetService.patchRow(fx.web.id, { name: 'motir-core-after' }, fx.ctx);
+
+    // The item's own stored projection is deliberately NOT re-read here: it is
+    // stale by construction, and that is exactly the point.
+    const stale = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(stale.targetRepos).toEqual([CORE.name]);
+
+    const expected = await withWorkspaceServiceContext(fx.workspace.id, (tx) =>
+      resolveExpectedRepos(item.id, stale.targetRepos, tx),
+    );
+    // What the GATE will compare — the resolved name, not the stored one.
+    expect(expected.map((e) => e.repo)).toEqual(['motir-core-after']);
+    // …and what the PANEL shows, from the same resolution.
+    const delivery = await workItemsService.listRepoDelivery(item.id, stale.targetRepos, fx.ctx);
+    expect(delivery.map((d) => d.repo)).toEqual(['motir-core-after']);
+  });
+
   it('a rename moves the DISPATCH with it — the pin resolves to the row, not to the old word', async () => {
     const fx = await scenario('dispatch@example.com');
     const item = await workItemsService.createWorkItem(
@@ -174,6 +213,28 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
         archived: false,
       })),
     });
+
+    // ⚠️ REALIZE both rows. A row that is still `proposed` names no repository on
+    // any host, so §A5 classifies it `unestablished` and the gate holds the card
+    // — correctly, and regardless of any pull request. A fixture that mirrors two
+    // real repositories while leaving the project's own rows proposed is not a
+    // two-repository project; it is an inconsistent one, and the gate would be
+    // right to refuse it.
+    for (const [row, repo] of [
+      [fx.web, CORE],
+      [fx.api, AI],
+    ] as const) {
+      const mirrored = await withWorkspaceServiceContext(fx.workspace.id, (tx) =>
+        githubRepoRepository.findConnectedByWorkspaceAndName(
+          fx.workspace.id,
+          'moooon',
+          repo.name,
+          tx,
+        ),
+      );
+      expect(mirrored, `the mirror carries ${repo.name}`).not.toBeNull();
+      await projectRepoSetService.attachRealizedRepoRow(row.id, mirrored!.id, fx.ctx);
+    }
 
     const story = await workItemsService.createWorkItem(
       { projectId: fx.project.id, kind: 'story', title: 'Spans two repositories' },

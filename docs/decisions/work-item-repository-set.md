@@ -800,6 +800,40 @@ comment posted by §4.2's visible hold names all three, split the same way — a
 on one list while the note printed another would be the two-rules failure `repoDelivery.ts`
 exists to prevent.
 
+#### A5.1 — the `expected` side is RESOLVED, not read off `targetRepos`
+
+⚠️ **Recorded after the fact, from the acceptance flow (MOTIR-3043), because it was decided by
+omission and the omission was a defect.**
+
+§A4 makes `work_item.targetRepos` a **stored projection** of the references, written when the
+item is written. Nothing rewrites it when a repository is renamed on the host — the row's
+realized name changes, and the projection keeps the old word. So a gate that classifies off
+that column compares a name **no pull request will ever report again**, matches nothing, and
+holds the card open for a repository that is delivered.
+
+The panel did not have this problem: it resolved through the references and showed the new
+name. That is the failure at its most misleading — the surface says `delivered`, the gate says
+outstanding, and §A5's opening promise (_"ONE derivation shared by the completion gate and the
+rendered panel, so the two can never disagree"_) was true about the CLASSIFIER and false about
+what each side handed it.
+
+**The rule, stated so it cannot be re-omitted:** every caller of `classifyRepoDelivery` builds
+its `expected` side by RESOLVING the item's references at read time — `resolveExpectedRepos`
+(`lib/workItems/expectedRepos.ts`) — never from `targetRepos` directly. The stored names remain
+the FALLBACK, and only the fallback: they are what a project with no `project_repository` set
+still pins with (§5's compatibility rung), which is the one case that has no reference to
+resolve.
+
+The read requires a transaction, and that is not incidental: the join table is RLS-gated on a
+GUC bound only on a transaction, so an unbound read returns `[]` — indistinguishable from _"this
+card carries no repositories"_, which would complete the card rather than hold it. The worse of
+the two failures, silently.
+
+**Why no unit test could see it.** Both sides were right about their own half — the classifier
+compares what it is given, and each caller passed something defensible. The disagreement only
+exists across a rename, and a rename only happens through a webhook that no unit test drives.
+It took the browser flow, which is the argument for that flow existing at all.
+
 ### A6. A container's set is the UNION of its leaves' — MATERIALIZED, and NOT writable
 
 §1.3's deferral, MOTIR-2978, resolves to this rather than to a widened role. Recorded here

@@ -7,6 +7,7 @@ import type {
 } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -264,7 +265,11 @@ export async function syncChangeRequestStatus(
       lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
         ? repoSetShortfall(
             classifyRepoDelivery(
-              workItem.targetRepos,
+              // RESOLVED through the references, not the stored name projection
+              // (Story MOTIR-2732 · MOTIR-3043). The projection goes stale the
+              // moment a repository is renamed on the host, and a gate reading
+              // it compares a name no pull request will ever report again.
+              await resolveExpectedRepos(workItem.id, workItem.targetRepos, tx),
               await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
             ),
           )

@@ -193,11 +193,8 @@ import {
   type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
-import {
-  classifyRepoDelivery,
-  type ExpectedRepo,
-  type RepoDelivery,
-} from '@/lib/workItems/repoDelivery';
+import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
   ConflictingTargetRepoInputError,
   ContainerRepoSetNotWritableError,
@@ -4643,18 +4640,14 @@ export const workItemsService = {
     // read projection of the references (ADR §A4), so an empty projection means
     // an empty reference list; there is nothing for either query to find.
     if (targetRepos.length === 0) return [];
-    const { refs, facts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
-      refs: await workItemRepoRepository.listByWorkItem(workItemId, tx),
+    // ⚠️ Through the SHARED resolver the completion gate uses, not a second copy
+    // of the same rule. Two derivations of one fact is the defect this story
+    // fixes one level up, and a panel that resolved names differently from the
+    // gate would be the same bug wearing this story's own clothes.
+    const { expected, facts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      expected: await resolveExpectedRepos(workItemId, targetRepos, tx),
       facts: await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
     }));
-    const expected: ExpectedRepo[] =
-      refs.length > 0
-        ? toWorkItemRepositoryDtos(refs).map((r) => ({
-            repo: r.name,
-            establishState: r.state,
-            role: r.role,
-          }))
-        : targetRepos.map((repo) => ({ repo }));
     return classifyRepoDelivery(expected, facts);
   },
 
