@@ -23,7 +23,12 @@ import { rateLimitService } from '@/lib/services/rateLimitService';
 import { createV1Caller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../../helpers/db';
-import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
+import {
+  ALIGNED_WINDOW_MS,
+  currentWindowStart,
+  sleep,
+  waitForWindowBoundary,
+} from '../../helpers/rateLimitWindow';
 
 // `/api/v1` counts through the SHARED store (Subtask 8.5.10 — MOTIR-2037).
 //
@@ -56,11 +61,6 @@ function req(headers: Record<string, string>) {
 /** The counter key the wrapper will use for this caller — its token's hash. */
 function keyFor(caller: { token: string }): string {
   return tokenFingerprint(caller.token);
-}
-
-/** The window cell `consumeRateLimit` is in right now, for a given window. */
-function currentWindowStart(windowMs: number): number {
-  return Math.floor(Date.now() / windowMs) * windowMs;
 }
 
 const savedEnv = {

@@ -30,11 +30,28 @@ const TESTS_DIR = join(REPO_ROOT, 'tests');
 const HELPER = 'tests/helpers/rateLimitWindow.ts';
 
 /**
- * A hand-rolled grid phase: any modulo of the wall clock. Built from escapes so
- * this file's own source is not itself a match — the guard must not be the
- * second copy it exists to forbid.
+ * A hand-rolled grid phase, in EITHER of its two forms — built from escapes so
+ * this file's own source is not itself a match; the guard must not be the second
+ * copy it exists to forbid.
+ *
+ *   1. A MODULO of the wall clock — the shape `waitForWindowBoundary` uses.
+ *   2. A floor-DIVIDE by a window multiplied back by the same window — the shape
+ *      `currentWindowStart` uses, i.e. the `windowStart` a counter row is keyed
+ *      on, and the shape `lib/rateLimit/limiter.ts` itself computes.
+ *
+ * ⚠️ Form 2 was missing until MOTIR-3016, and it was not hypothetical: BOTH
+ * `tests/rateLimit/guard.test.ts` and `tests/api/v1/shared-store.test.ts` kept a
+ * private copy of it while this file asserted the arithmetic lived in exactly one
+ * module. Two expressions of one grid look nothing alike to a regular expression,
+ * so "the copy is forbidden" was true of one of them and silently false of the
+ * other. The back-reference is what keeps `Math.floor(Date.now() / 1000)` — an
+ * ordinary conversion to seconds, all over the tree — out of it: a phase
+ * multiplies the divisor back, a unit conversion does not.
  */
-const GRID_PHASE = new RegExp(String.raw`Date\.now\(\)\s*%`);
+const GRID_PHASE = new RegExp(
+  String.raw`Date\.now\(\)\s*%` +
+    String.raw`|Math\.floor\(\s*Date\.now\(\)\s*\/\s*([A-Za-z_$][\w$]*|\d[\d_]*)\s*\)\s*\*\s*\1\b`,
+);
 
 /** Every `.ts` / `.tsx` under `tests/`, repo-relative with POSIX separators. */
 function testSources(): string[] {
@@ -92,6 +109,29 @@ describe('fixed-window alignment lives in ONE place', () => {
     const innocent = 'const startedAt = Date.now();\nconst elapsed = Date.now() - startedAt;';
 
     expect(GRID_PHASE.test(innocent)).toBe(false);
+  });
+
+  // Form 2 — the floor-divide grid, added by MOTIR-3016 after the sweep found
+  // two live copies of it that this guard had been reading green over.
+  it('fires on the floor-divide form of the same grid', () => {
+    // Interpolated for the same reason as above: written out, this file would be
+    // the copy it forbids.
+    const windowStart = `const s = Math.floor(Date.now() ${'/'} WINDOW) * WINDOW;`;
+    const local = `function cell(w: number) { return Math.floor(Date.now() ${'/'} w) * w; }`;
+
+    expect(GRID_PHASE.test(windowStart)).toBe(true);
+    expect(GRID_PHASE.test(local)).toBe(true);
+  });
+
+  it('does NOT fire on a conversion to seconds, which multiplies nothing back', () => {
+    // `Math.floor(Date.now() / 1000)` appears throughout the tree — in
+    // `retryAfterSeconds`, in every `resetAt` assertion. A guard that flagged it
+    // would be turned off rather than obeyed.
+    const seconds = 'expect(decision.resetAt).toBeGreaterThan(Math.floor(Date.now() / 1000));';
+    const divided = 'const cells = Math.floor(Date.now() / windowMs);';
+
+    expect(GRID_PHASE.test(seconds)).toBe(false);
+    expect(GRID_PHASE.test(divided)).toBe(false);
   });
 
   // The other half of the contract: every suite that asserts on an ACCUMULATED
@@ -216,6 +256,32 @@ describe('fixed-window alignment lives in ONE place', () => {
    */
   const EXEMPT: ReadonlyMap<string, string> = new Map();
 
+  /**
+   * A real IMPORT of the alignment helper — not a mention of it.
+   *
+   * ⚠️ This started as `source.includes('helpers/rateLimitWindow')`, and that is
+   * the SAME defect this file already documents one section up under "detection
+   * is by ASSIGNMENT, never by mention": every file that aligns also NAMES the
+   * helper in a comment explaining why, so a substring check is satisfied by the
+   * comment alone. Caught by mutation (MOTIR-3016) — deleting the import
+   * statement from `tests/rateLimit/guard.test.ts` left its header paragraph
+   * behind, and the guard stayed green over a file that no longer aligned at
+   * all. A guard whose pass condition a COMMENT can satisfy is a guard the next
+   * author disables by documenting their intention.
+   *
+   * ⚠️ And the FIRST tightening was too tight, which is the other half of the
+   * lesson: keying on `from '…'` alone reported
+   * `tests/api-coding-convention-route.test.ts` as an offender, a file that
+   * aligns perfectly well through a top-level `await import('./helpers/…')`
+   * because it needs the module before a `vi.mock` factory runs. A guard with a
+   * false positive gets deleted rather than obeyed, so the pattern accepts every
+   * form that actually BINDS the module — static `from`, dynamic `import(`,
+   * `require(` — and rejects only a bare mention in prose. What all three share,
+   * and a comment does not, is a QUOTED specifier in an import position.
+   */
+  const IMPORTS_HELPER =
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)['"][^'"]*helpers\/rateLimitWindow['"]/;
+
   it('derives the budget envs from lib/ (a guard over zero budgets proves nothing)', () => {
     const budgets = budgetEnvs();
 
@@ -237,7 +303,7 @@ describe('fixed-window alignment lives in ONE place', () => {
       const set = budgets.filter((name) => assigned.has(name));
       if (set.length === 0 || EXEMPT.has(file)) continue;
 
-      if (source.includes('helpers/rateLimitWindow')) continue;
+      if (IMPORTS_HELPER.test(source)) continue;
       const unpinned = set.filter((name) => !assigned.has(`${name}_WINDOW_MS`));
       if (unpinned.length > 0) offenders.push(`${file} → ${unpinned.join(', ')}`);
     }
@@ -300,6 +366,216 @@ describe('fixed-window alignment lives in ONE place', () => {
     const reading = `const budget = Number(process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] ?? '10');`;
 
     expect(assignedEnvs(reading).has('MOTIR_AI_GENERATE_RATE_LIMIT')).toBe(false);
+  });
+
+  // ── THE THIRD DERIVATION: AN ABSENT ALIGNMENT (MOTIR-3016) ────────────────
+  // The two halves above catch a file that does the WRONG thing — copies the
+  // phase, or pins a budget and leaves its window at the shipped default. Both
+  // key on something being PRESENT. Neither can see a file that does NOTHING,
+  // and that is the population that keeps producing this defect.
+  //
+  // `tests/rateLimit/guard.test.ts` built its budgets INLINE —
+  // `{ limit: 1, windowMs: WINDOW }` handed straight to `enforceRateLimit` — so
+  // it assigned no env for the derivation above to notice, recomputed no phase
+  // for the sweep above to flag, and simply never aligned. It rolled dice on
+  // every CI run from the day it was written, red-lighting unrelated pull
+  // requests, with a correctly-aligned sibling sitting in the same directory.
+  // The sweep that found it found a second one, `tests/rateLimit/sharedStore.test.ts`.
+  //
+  // ⚠️ The reusable part is the asymmetry, and it is why this half exists at
+  // all: a guard keyed on A WRONG THING BEING PRESENT catches the careless; a
+  // guard keyed on A RIGHT THING BEING ABSENT catches the unaware — and the
+  // unaware are the larger population. The first kind is much easier to write,
+  // which is why it is usually the one that exists.
+  //
+  // So the subject set is widened rather than the pattern: a file BUILDS a
+  // rate-limit budget when it assigns a budget env (the derivation above) OR
+  // constructs the budget object itself, and every such file must import the
+  // helper. Opting out is possible and must be SAID — `NON_ACCUMULATING`, with a
+  // reason per entry. Silence is not an opt-out, which is the whole difference
+  // between this and the state the defect grew in.
+
+  /**
+   * `RateLimitBudget`'s field names, read from `lib/`. Derived rather than
+   * written out for the same reason the budget envs are: a renamed field must
+   * break this guard loudly, not disable it silently.
+   */
+  function budgetFields(): string[] {
+    const source = readFileSync(join(REPO_ROOT, 'lib/api/v1/rateLimit.ts'), 'utf8');
+    const body = /export interface RateLimitBudget\s*\{([^}]*)\}/.exec(source)?.[1] ?? '';
+    return [...body.matchAll(/(\w+)\s*:/g)].map(([, name]) => name as string).sort();
+  }
+
+  /**
+   * An object literal carrying EVERY field of `RateLimitBudget`, in either order
+   * — i.e. a budget constructed in the test rather than read from the
+   * environment.
+   *
+   * Requiring the whole shape is what keeps the false positives out, and there
+   * are two real ones in the tree: a `RateLimitDecision` literal has `limit` and
+   * no `windowMs` (`retryAfterPluralisation.test.ts` is full of them), and the
+   * acceptance-video diagnostics carry a `windowMs` that is a sampling interval
+   * with no `limit` anywhere near it. Neither is a budget, and neither matches.
+   */
+  function inlineBudget(): RegExp {
+    const [first, second] = budgetFields();
+    const pair = (a: string, b: string) => String.raw`\{[^{}]*\b${a}\s*:[^{}]*\b${b}\s*:[^{}]*\}`;
+    return new RegExp(`${pair(first!, second!)}|${pair(second!, first!)}`);
+  }
+
+  /**
+   * THE PREDICATE. A test file builds a fixed-window rate-limit budget when it
+   * either assigns one through the environment or constructs one inline.
+   */
+  function buildsRateLimitBudget(source: string, budgets: string[]): boolean {
+    const assigned = assignedEnvs(source);
+    return budgets.some((name) => assigned.has(name)) || inlineBudget().test(source);
+  }
+
+  /**
+   * Files that build a budget and legitimately never ACCUMULATE — a single
+   * counted call, or a budget that is only ever read for its shape — so the
+   * alignment buys them nothing.
+   *
+   * The named alternative to silence. An entry is a decision on the record with
+   * the reason it is one; a file that merely forgot has no entry and fails.
+   *
+   * Empty is the honest state today: every file that builds a budget imports the
+   * helper. A genuinely single-call suite added later belongs here WITH its
+   * reason, not quietly outside the assertion.
+   */
+  const NON_ACCUMULATING: ReadonlyMap<string, string> = new Map([
+    [
+      'tests/api/v1/work-item-conformance.test.ts',
+      'Assigns the budget envs ONLY to save and restore the ambient values around ' +
+        'the suite; no case sets a budget of its own. Its one limiter case — "a full ' +
+        'paged scan of a realistic collection never trips the limiter" — deletes both ' +
+        'envs to run against the SHIPPED budget and asserts every request is ALLOWED. ' +
+        'A straddle can only ever hand a case MORE budget, so it cannot turn an ' +
+        'assertion that something was allowed red; only a REFUSAL is exposed to the ' +
+        'race, and this file asserts none. (MOTIR-3016)',
+    ],
+  ]);
+
+  it('derives the budget SHAPE from lib/ (a guard over an empty shape proves nothing)', () => {
+    const fields = budgetFields();
+
+    expect(fields).toEqual(['limit', 'windowMs']);
+    // ...and the regex built from it really does need BOTH — a decision literal
+    // carries `limit` and is not a budget.
+    expect(inlineBudget().test(`const b = { limit: 1, windowMs: 60_000 };`)).toBe(true);
+    expect(
+      inlineBudget().test(`const d = { allowed: false, limit: 5, remaining: 0, degraded: false };`),
+    ).toBe(false);
+  });
+
+  it('the predicate finds the suites that actually build budgets', () => {
+    const budgets = budgetEnvs();
+    const subjects = testSources().filter((file) =>
+      buildsRateLimitBudget(readFileSync(join(REPO_ROOT, file), 'utf8'), budgets),
+    );
+
+    // Both arms are represented: the two files MOTIR-3016 converted build their
+    // budgets INLINE and assign no env at all, which is exactly why the
+    // env-only derivation above could not see them.
+    expect(subjects).toContain('tests/rateLimit/guard.test.ts');
+    expect(subjects).toContain('tests/rateLimit/sharedStore.test.ts');
+    expect(subjects).toContain('tests/rateLimit/surfaceGuards.test.ts');
+    expect(subjects).toContain('tests/api/v1/rate-limit.test.ts');
+    expect(subjects).toContain('tests/mcp/rate-limit-gate.test.ts');
+    // A suite that builds no budget is not a subject — otherwise the assertion
+    // below would be over the whole tree and would have to be turned off.
+    expect(subjects).not.toContain('tests/rateLimit/retryAfterPluralisation.test.ts');
+    expect(subjects).not.toContain('tests/acceptance-video-diagnostics.test.ts');
+  });
+
+  it('every test file that BUILDS a rate-limit budget imports the alignment helper', () => {
+    const budgets = budgetEnvs();
+    const offenders: string[] = [];
+
+    for (const file of testSources()) {
+      if (file === HELPER || NON_ACCUMULATING.has(file)) continue;
+      const source = readFileSync(join(REPO_ROOT, file), 'utf8');
+      if (!buildsRateLimitBudget(source, budgets)) continue;
+      if (!IMPORTS_HELPER.test(source)) offenders.push(file);
+    }
+
+    expect(
+      offenders,
+      `these test files build a fixed-window rate-limit budget and never align to ` +
+        `the epoch grid the limiter buckets on, so any case of theirs that spends ` +
+        `the budget more than once can have its counter reset mid-test and serve a ` +
+        `call it expected to be refused. Import \`ALIGNED_WINDOW_MS\` from ${HELPER} ` +
+        `and \`await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS)\` ` +
+        `before every ACCUMULATING case — or, if the file genuinely never ` +
+        `accumulates, add it to NON_ACCUMULATING with the reason. See MOTIR-3016`,
+    ).toEqual([]);
+  });
+
+  // ⚠️ Same discipline as both halves above: proven by DELIBERATELY introducing
+  // the violation. This is the arm that matters most, because the thing it
+  // detects is an ABSENCE — and an assertion that nothing is missing passes
+  // just as happily when it is looking at nothing at all.
+  it('fires on a suite that builds a budget inline and never aligns', () => {
+    const budgets = budgetEnvs();
+    // `tests/rateLimit/guard.test.ts` as it stood before MOTIR-3016, in three
+    // lines: a raw window, an inline budget, two counted calls, no helper.
+    const violating = [
+      `const WINDOW = 60_000;`,
+      `const limb = { scope: 'public-write', key, budget: { limit: 1, windowMs: WINDOW } };`,
+      `expect((await enforceRateLimit([limb])).response).not.toBeNull();`,
+    ].join('\n');
+
+    expect(buildsRateLimitBudget(violating, budgets)).toBe(true);
+    expect(IMPORTS_HELPER.test(violating)).toBe(false);
+  });
+
+  it('a COMMENT naming the helper does not count as importing it', () => {
+    // The mutation that found this: strip the import statement and the file's
+    // own explanatory paragraph still says `tests/helpers/rateLimitWindow.ts`.
+    const mentions = [
+      `// See tests/helpers/rateLimitWindow.ts for why this matters.`,
+      `const budget = { limit: 1, windowMs: 60_000 };`,
+    ].join('\n');
+    const imports = `import { ALIGNED_WINDOW_MS } from '@/tests/helpers/rateLimitWindow';`;
+    const relative = `import { sleep } from '../../helpers/rateLimitWindow';`;
+    // `tests/api-coding-convention-route.test.ts`'s form — it needs the module
+    // before a `vi.mock` factory runs, so the import is dynamic and top-level.
+    const dynamic = `const { ALIGNED_WINDOW_MS } = await import('./helpers/rateLimitWindow');`;
+
+    expect(IMPORTS_HELPER.test(mentions)).toBe(false);
+    expect(IMPORTS_HELPER.test(imports)).toBe(true);
+    expect(IMPORTS_HELPER.test(relative)).toBe(true);
+    expect(IMPORTS_HELPER.test(dynamic)).toBe(true);
+  });
+
+  it('does NOT fire on a suite that builds a decision rather than a budget', () => {
+    const budgets = budgetEnvs();
+    // `retryAfterPluralisation.test.ts`'s shape — it asserts on the 429's prose
+    // and never touches a counter, a window or a clock beyond one offset.
+    const decision = [
+      `function refusal(secondsOut: number): RateLimitDecision {`,
+      `  return { allowed: false, limit: 60, remaining: 0, resetAt: 1, degraded: false };`,
+      `}`,
+    ].join('\n');
+
+    expect(buildsRateLimitBudget(decision, budgets)).toBe(false);
+  });
+
+  it('does NOT fire on a windowMs that is not a budget at all', () => {
+    const budgets = budgetEnvs();
+    // The acceptance-video diagnostics sample interval — same field name, no
+    // limiter within a mile of it.
+    const sampling = `samples.push({ label: 'nav', windowMs: Math.round(end - start) });`;
+
+    expect(buildsRateLimitBudget(sampling, budgets)).toBe(false);
+  });
+
+  it('every NON_ACCUMULATING entry names a real file and says why', () => {
+    for (const [file, reason] of NON_ACCUMULATING) {
+      expect(testSources(), `${file} opts out but does not exist`).toContain(file);
+      expect(reason.length, `${file}'s opt-out needs a reason`).toBeGreaterThan(20);
+    }
   });
 
   it('every exemption carries a reason', () => {

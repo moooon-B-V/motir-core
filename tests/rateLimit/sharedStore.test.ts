@@ -22,12 +22,36 @@ import {
 } from '@/lib/rateLimit/store';
 import { consumeSharedRateLimit, RATE_LIMIT_DISABLE_ENV } from '@/lib/rateLimit/limiter';
 import { rateLimitKey, clientIp } from '@/lib/rateLimit/keys';
+import {
+  ALIGNED_HEADROOM_MS,
+  ALIGNED_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '@/tests/helpers/rateLimitWindow';
 
 // The SHARED rate-limit store (Subtask 8.5.9 / MOTIR-1165) against the REAL
 // Postgres — the store's whole purpose is that two processes share one window, so
 // a mocked counter would test the opposite of the property that matters.
-
-const WINDOW = 60_000;
+//
+// ── THE WINDOW IS ALIGNED (MOTIR-3016) ───────────────────────────────────────
+// Found by the same sweep as `guard.test.ts` next door, and the same shape: a
+// raw `const WINDOW = 60_000` handed to budgets, with no alignment anywhere. Two
+// cases here spend a budget across several calls and assert the last one is
+// REFUSED, so an epoch boundary landing mid-case resets the counter and serves
+// it instead. See `tests/helpers/rateLimitWindow.ts`.
+//
+// Most of this file is NOT exposed to that: every `rateLimitService.increment`
+// case passes an EXPLICIT `windowStart` (`60_000`, `120_000`, `0`) rather than
+// deriving one from the clock, so no grid boundary can move underneath it. Only
+// the two cases that go through `consumeSharedRateLimit` — which derives the
+// cell from `Date.now()` — accumulate against a live window, and only those two
+// wait:
+//
+//   'over-limit fails CLOSED — the one thing that must not fail open'
+//   'any other value leaves the limiter ON'
+//
+// The disable-flag case loops five times and does not wait, because with the
+// limiter disabled nothing is counted at all — and an assertion that a request
+// was ALLOWED cannot be broken by a reset, which only ever grants more budget.
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
@@ -47,9 +71,9 @@ afterAll(async () => {
 describe('the counter increments ATOMICALLY', () => {
   it('returns the NEW count on each call, and persists it', async () => {
     const windowStart = 60_000;
-    expect(await rateLimitService.increment('k1', windowStart, WINDOW)).toBe(1);
-    expect(await rateLimitService.increment('k1', windowStart, WINDOW)).toBe(2);
-    expect(await rateLimitService.increment('k1', windowStart, WINDOW)).toBe(3);
+    expect(await rateLimitService.increment('k1', windowStart, ALIGNED_WINDOW_MS)).toBe(1);
+    expect(await rateLimitService.increment('k1', windowStart, ALIGNED_WINDOW_MS)).toBe(2);
+    expect(await rateLimitService.increment('k1', windowStart, ALIGNED_WINDOW_MS)).toBe(3);
     expect(await rateLimitCounterRepository.findCountUnsafe('k1', BigInt(windowStart))).toBe(3);
   });
 
@@ -59,7 +83,9 @@ describe('the counter increments ATOMICALLY', () => {
     // value must be unique, and the set must be exactly 1..20.
     const windowStart = 120_000;
     const counts = await Promise.all(
-      Array.from({ length: 20 }, () => rateLimitService.increment('race', windowStart, WINDOW)),
+      Array.from({ length: 20 }, () =>
+        rateLimitService.increment('race', windowStart, ALIGNED_WINDOW_MS),
+      ),
     );
     expect(new Set(counts).size).toBe(20);
     expect([...counts].sort((a, b) => a - b)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
@@ -67,34 +93,34 @@ describe('the counter increments ATOMICALLY', () => {
   });
 
   it('a NEW window is a new row, so the count RESETS', async () => {
-    expect(await rateLimitService.increment('k2', 60_000, WINDOW)).toBe(1);
-    expect(await rateLimitService.increment('k2', 60_000, WINDOW)).toBe(2);
+    expect(await rateLimitService.increment('k2', 60_000, ALIGNED_WINDOW_MS)).toBe(1);
+    expect(await rateLimitService.increment('k2', 60_000, ALIGNED_WINDOW_MS)).toBe(2);
     // Next window — a different primary key entirely.
-    expect(await rateLimitService.increment('k2', 120_000, WINDOW)).toBe(1);
+    expect(await rateLimitService.increment('k2', 120_000, ALIGNED_WINDOW_MS)).toBe(1);
     expect(await rateLimitCounterRepository.findCountUnsafe('k2', BigInt(60_000))).toBe(2);
   });
 
   it('different keys never share a bucket', async () => {
-    expect(await rateLimitService.increment('a', 60_000, WINDOW)).toBe(1);
-    expect(await rateLimitService.increment('b', 60_000, WINDOW)).toBe(1);
+    expect(await rateLimitService.increment('a', 60_000, ALIGNED_WINDOW_MS)).toBe(1);
+    expect(await rateLimitService.increment('b', 60_000, ALIGNED_WINDOW_MS)).toBe(1);
   });
 
   it('stamps expires_at as windowStart + windowMs, from the app clock', async () => {
-    await rateLimitService.increment('exp', 60_000, WINDOW);
+    await rateLimitService.increment('exp', 60_000, ALIGNED_WINDOW_MS);
     const rows = await db.$queryRaw<Array<{ expires_at: Date }>>`
       SELECT "expires_at" FROM "rate_limit_counter" WHERE "key" = 'exp'
     `;
-    expect(rows[0]?.expires_at.getTime()).toBe(60_000 + WINDOW);
+    expect(rows[0]?.expires_at.getTime()).toBe(60_000 + ALIGNED_WINDOW_MS);
   });
 });
 
 describe('the sweep', () => {
   it('deletes only rows whose window has PASSED', async () => {
     // Two ancient windows and one far-future one.
-    await rateLimitService.increment('old-1', 0, WINDOW);
-    await rateLimitService.increment('old-2', WINDOW, WINDOW);
+    await rateLimitService.increment('old-1', 0, ALIGNED_WINDOW_MS);
+    await rateLimitService.increment('old-2', ALIGNED_WINDOW_MS, ALIGNED_WINDOW_MS);
     const future = Date.now() + 10 * 60_000;
-    await rateLimitService.increment('fresh', future, WINDOW);
+    await rateLimitService.increment('fresh', future, ALIGNED_WINDOW_MS);
 
     const result = await rateLimitService.sweepExpired(new Date());
 
@@ -104,7 +130,7 @@ describe('the sweep', () => {
   });
 
   it('is idempotent — a second pass deletes nothing and reports one batch', async () => {
-    await rateLimitService.increment('old', 0, WINDOW);
+    await rateLimitService.increment('old', 0, ALIGNED_WINDOW_MS);
     expect((await rateLimitService.sweepExpired(new Date())).deleted).toBe(1);
     const second = await rateLimitService.sweepExpired(new Date());
     expect(second.deleted).toBe(0);
@@ -112,14 +138,14 @@ describe('the sweep', () => {
   });
 
   it('stops after ONE batch when the batch is not full (the bounded-pass contract)', async () => {
-    await rateLimitService.increment('old', 0, WINDOW);
+    await rateLimitService.increment('old', 0, ALIGNED_WINDOW_MS);
     const { batches } = await rateLimitService.sweepExpired(new Date());
     expect(batches).toBe(1);
     expect(RATE_LIMIT_SWEEP_BATCH_SIZE).toBeGreaterThan(1);
   });
 
   it('the repository honours its LIMIT, so one pass cannot delete the world', async () => {
-    for (const k of ['x1', 'x2', 'x3']) await rateLimitService.increment(k, 0, WINDOW);
+    for (const k of ['x1', 'x2', 'x3']) await rateLimitService.increment(k, 0, ALIGNED_WINDOW_MS);
     const deleted = await db.$transaction((tx) =>
       rateLimitCounterRepository.deleteExpired(new Date(), 2, tx),
     );
@@ -128,7 +154,7 @@ describe('the sweep', () => {
   });
 
   it('defaults `now` to the wall clock, which is how the cron job calls it', async () => {
-    await rateLimitService.increment('old', 0, WINDOW);
+    await rateLimitService.increment('old', 0, ALIGNED_WINDOW_MS);
     expect((await rateLimitService.sweepExpired()).deleted).toBe(1);
   });
 
@@ -136,7 +162,7 @@ describe('the sweep', () => {
     // The multi-pass path: with a batch size of 1 and three expired rows, the
     // sweep runs 1,1,1 (each full → go again) then a fourth empty pass that ends
     // it. Without the loop a backlog larger than one batch would never drain.
-    for (const k of ['a', 'b', 'c']) await rateLimitService.increment(k, 0, WINDOW);
+    for (const k of ['a', 'b', 'c']) await rateLimitService.increment(k, 0, ALIGNED_WINDOW_MS);
     const { deleted, batches } = await rateLimitService.sweepExpired(new Date(), 1);
     expect(deleted).toBe(3);
     expect(batches).toBe(4);
@@ -144,7 +170,7 @@ describe('the sweep', () => {
   });
 
   it('honours the per-run cap rather than looping forever on a huge backlog', async () => {
-    for (const k of ['a', 'b', 'c']) await rateLimitService.increment(k, 0, WINDOW);
+    for (const k of ['a', 'b', 'c']) await rateLimitService.increment(k, 0, ALIGNED_WINDOW_MS);
     // Cap the passes by asking for a batch of 1 — the loop is bounded by
     // RATE_LIMIT_SWEEP_MAX_BATCHES, which is far above 4, so this drains fully;
     // the assertion pins that the cap exists and is the larger of the two bounds.
@@ -163,7 +189,7 @@ describe('the store adapter fails OPEN — on an error AND on a hang', () => {
       increment: () => Promise.reject(new Error('database is on fire')),
     });
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const decision = await consumeSharedRateLimit('k', { limit: 1, windowMs: WINDOW });
+    const decision = await consumeSharedRateLimit('k', { limit: 1, windowMs: ALIGNED_WINDOW_MS });
     expect(decision.allowed).toBe(true);
     expect(decision.degraded).toBe(true);
     expect(decision.remaining).toBe(1);
@@ -183,14 +209,14 @@ describe('the store adapter fails OPEN — on an error AND on a hang', () => {
 
     // The adapter itself rejects — it does NOT swallow the failure, so the caller
     // can tell a timeout from a genuinely empty window.
-    await expect(hung.increment('k', 60_000, WINDOW)).rejects.toBeInstanceOf(
+    await expect(hung.increment('k', 60_000, ALIGNED_WINDOW_MS)).rejects.toBeInstanceOf(
       RateLimitStoreTimeoutError,
     );
 
     // And the limiter over that adapter fails OPEN rather than hanging.
     __setSharedRateLimitStoreForTest(hung);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const decision = await consumeSharedRateLimit('k', { limit: 1, windowMs: WINDOW });
+    const decision = await consumeSharedRateLimit('k', { limit: 1, windowMs: ALIGNED_WINDOW_MS });
     expect(decision.allowed).toBe(true);
     expect(decision.degraded).toBe(true);
     spy.mockRestore();
@@ -199,13 +225,14 @@ describe('the store adapter fails OPEN — on an error AND on a hang', () => {
 
   it('a store that answers within the deadline is NOT treated as a failure', async () => {
     const store = createPostgresRateLimitStore({ timeoutMs: 5_000 });
-    expect(await store.increment('deadline-ok', 60_000, WINDOW)).toBe(1);
+    expect(await store.increment('deadline-ok', 60_000, ALIGNED_WINDOW_MS)).toBe(1);
     expect(DEFAULT_RATE_LIMIT_STORE_TIMEOUT_MS).toBeGreaterThan(0);
   });
 
   it('over-limit fails CLOSED — the one thing that must not fail open', async () => {
-    const budget = { limit: 2, windowMs: WINDOW };
+    const budget = { limit: 2, windowMs: ALIGNED_WINDOW_MS };
     const key = 'closed';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await consumeSharedRateLimit(key, budget)).allowed).toBe(true);
     expect((await consumeSharedRateLimit(key, budget)).allowed).toBe(true);
     const third = await consumeSharedRateLimit(key, budget);
@@ -229,8 +256,8 @@ describe('which backend is in force', () => {
     // ever touching the table.
     const store = sharedRateLimitStore();
     return (async () => {
-      expect(await store.increment('mem', 60_000, WINDOW)).toBe(1);
-      expect(await store.increment('mem', 60_000, WINDOW)).toBe(2);
+      expect(await store.increment('mem', 60_000, ALIGNED_WINDOW_MS)).toBe(1);
+      expect(await store.increment('mem', 60_000, ALIGNED_WINDOW_MS)).toBe(2);
       expect(await rateLimitCounterRepository.countAllUnsafe()).toBe(0);
     })();
   });
@@ -273,7 +300,7 @@ describe('the disable flag', () => {
     // Load-bearing for the E2E suite: Playwright signs several users up from one
     // IP, and Better-Auth already gates its own limiter on this SAME flag.
     process.env[RATE_LIMIT_DISABLE_ENV] = '1';
-    const budget = { limit: 1, windowMs: WINDOW };
+    const budget = { limit: 1, windowMs: ALIGNED_WINDOW_MS };
     for (let i = 0; i < 5; i += 1) {
       const decision = await consumeSharedRateLimit('disabled', budget);
       expect(decision.allowed).toBe(true);
@@ -285,7 +312,8 @@ describe('the disable flag', () => {
 
   it('any other value leaves the limiter ON', async () => {
     process.env[RATE_LIMIT_DISABLE_ENV] = '0';
-    const budget = { limit: 1, windowMs: WINDOW };
+    const budget = { limit: 1, windowMs: ALIGNED_WINDOW_MS };
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await consumeSharedRateLimit('on', budget)).allowed).toBe(true);
     expect((await consumeSharedRateLimit('on', budget)).allowed).toBe(false);
   });
