@@ -846,6 +846,227 @@ bound are both MOTIR-3096's own deliverables, named in its body; neither is an o
 
 ---
 
+## AMENDMENT 4 — the DEEPEN turn: an agent fills in the cards it proposed (MOTIR-3089, 2026-08-19)
+
+Q1 gave the authoring door two tools and no third. `add_plan_items` is **append-only**, and a
+proposal is frozen the moment it lands — which forbids the one authoring strategy Motir's own
+generator uses. `motir-ai`'s issue-tree handler runs **titles-first** (MOTIR-845): Phase 1 appends
+title-only `add`s so the SHAPE is settled and reviewable early, Phase 2 PATCHES each card's body,
+type, priority and sizing one at a time, all before `markPlanned` closes the frontier. That deepen op
+is shipped — `plansService.deepenProposal` (MOTIR-1441) — and is reachable **only** over the §4 job
+token, so an external agent on the MCP is held to a strategy Motir abandoned for its own planner.
+
+This amendment answers the four questions the PAT-authed twin needs. They are numbered **D1–D4** to
+avoid colliding with Q1–Q4 above; they are MOTIR-3089's own Q1–Q4 in order.
+
+> Every reading below was taken off `origin/main` at `d7550252` on 2026-08-19.
+
+There are two edit-a-proposal paths, and they delegate to ONE helper:
+
+| method           | status gate  | route                                        | auth                                            |
+| ---------------- | ------------ | -------------------------------------------- | ----------------------------------------------- |
+| `updateProposal` | `planned`    | `PATCH /api/plans/{id}/items/{itemId}`       | session cookie — the human review surface       |
+| `deepenProposal` | `generating` | `PATCH /api/internal/ai/plan-proposals/{id}` | §4 job token (`authenticateAndLimitJobRequest`) |
+
+Both call `editAddProposal` (`lib/services/plansService.ts:1336`) — row-locked one-shot, add-only,
+sparse merge, non-empty-title + sizing re-validation — differing **only** in the status they expect
+(`:1710` vs `:1733`). So the behaviour is written and tested; what is missing is a caller.
+
+---
+
+### D1 — Which plan STATUS may a PAT deepen in?
+
+#### Decision: `generating` ONLY. `update_plan_item` is the PAT-authed twin of `deepenProposal` and inherits its gate unchanged.
+
+The tool passes `expectedStatus: 'generating'` by calling `plansService.deepenProposal`, and a call
+against any other status refuses with `PlanNotInExpectedStatusError` **naming the actual status**, so
+the agent can tell a terminal refusal from a retryable one.
+
+**Rejected: `generating` + `planned`.** Three reasons, in the order they bind:
+
+1. **`planned` IS the review queue, and a queue that moves under the reader is not a review.** The
+   whole proposition this ADR exists to serve is that a person looks at a tree before it becomes
+   work. An agent that can rewrite a card while somebody is reading it has taken back the thing the
+   review was for. Nothing about the deepen use case needs it: `final: true` is the agent's OWN
+   decision about when it has finished, so an agent that wants another turn simply does not send it
+   yet.
+2. **It duplicates `updateProposal`'s reach with a weaker record of who did it.** The review edit runs
+   under a session cookie and a named human; a PAT edit records the token owner, who may not be the
+   person holding the queue. Two writers on one row with two different attribution stories is how an
+   audit trail stops answering the question it exists for.
+3. **A change after `final` is not a deepen, it is a re-decision.** Deepening fills in a card whose
+   shape the agent already settled. Changing a card somebody has been asked to approve is a different
+   act with a different owner, and the surface for it already exists.
+
+**The consequence, stated rather than smoothed over:** an agent that sends `final: true` and then
+notices a bad card cannot fix it on this surface. Its recourses are the reviewer's own inline edit,
+or a decline and a fresh plan — which is cheap, and is D4's territory.
+
+---
+
+### D2 — Which PERMISSION does the tool name?
+
+#### Decision: `ai:view_plan` — the key `editAddProposal` itself asserts.
+
+`docs/decisions/token-permissions.md` §3's rule is total and Q2 above applied it: an entry names the
+permission the tool's own SERVICE already asserts, read off the code. Read off `origin/main`:
+
+| tool               | service call                  | the assertion, at                                                                | key            |
+| ------------------ | ----------------------------- | -------------------------------------------------------------------------------- | -------------- |
+| `update_plan_item` | `plansService.deepenProposal` | `assertPermission(plan.projectId, ctx, 'ai:view_plan')` (`plansService.ts:1355`) | `ai:view_plan` |
+
+Not `work_item:edit` — that is `create_plan`'s key because `createPlan` asserts `assertCanEdit`, and
+naming it here would be a fiction in the narrowing direction: the gate does not become tighter because
+the map says so. Not `ai:plan` either — Q2's last paragraph holds unchanged: this tool starts no model
+job and spends no provider tokens, so it does not join `MCP_BILLABLE_TOOLS`.
+
+**The family resemblance and the assertion agree, and the assertion is why.** `add_plan_items` is
+`ai:view_plan` because `addProposals` asserts it; the deepen is the same act on the same plan and
+asserts the same key at `:1355`. That the two answers coincide is a check, not the argument.
+
+**Two consequences carry over from Q2 unchanged, and neither is widened here:**
+
+- **A device-minted CLI token cannot deepen.** `CLI_TOKEN_GRANT` is
+  `['project:browse', 'work_item:edit', 'comment:add', 'ai:plan']` — no `ai:view_plan`. Asked and
+  answered per the grant's own doc comment: `packages/cli/src/client.ts` calls no plan-authoring tool,
+  and the grant is deliberately NOT widened.
+- **AMENDMENT 1's refusal shape is unchanged, one call earlier.** A sandboxed run holding that grant
+  can `create_plan` and is refused on its first `add_plan_items` (MOTIR-3051); it never reaches a
+  deepen. This amendment adds no new way for such a token to leave a half-built plan behind.
+
+---
+
+### D3 — Does the EDITABLE SET widen?
+
+#### Decision: by exactly ONE field — `executor`. `targetRepo` / `targetRepoRole` and `parentRef` / `blockedByRefs` are NOT deepenable.
+
+The line, stated once so the next field lands on a rule rather than on a precedent: **a deepen may
+change what a card SAYS and who ACTS on it; it may not change where the card SITS or SHIPS.** Structure
+is settled by append order and validated at approve; content is what a second pass is for.
+
+#### (a) `executor` — WIDENED, and the reading the card asked for
+
+MOTIR-3089 asked whether a titles-first proposal that gains its `type` on deepen ends up with the right
+executor at materialize, _"or a null one"_, and said to read the code before answering. **It ends up
+with a null one.**
+
+- `mergeProposedFields` is an explicit key-by-key merge and says so:
+  _"`executor` is never touched (not in the editable set)"_ (`plansService.ts:224`).
+- `materialize` writes
+  `executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null`
+  (`plansService.ts:805`). It never calls `defaultExecutorForType`.
+
+So the type→executor default map — `lib/issues/executorDefaults.ts`, which the 2.7.2 ADR froze as the
+single source for _"what executor does a freshly-typed work item default to"_, and which the picker, the
+seed loader and `workItemsService` all call — is the one thing the materialize path does not consult. A
+card deepened to `type: 'code'` materializes unassignable, and nothing on the way there says so.
+
+- **Rejected — make `materialize` seed from `defaultExecutorForType`.** It would change what EVERY
+  approve does, including every plan motir-ai has ever generated, to close a gap in one new caller; and
+  it would overwrite a deliberate `executor: null` with a default, since a proposal cannot express the
+  difference between _unset_ and _deliberately nobody_. It also puts a defaulting rule inside the one
+  transaction that creates rows, which is the worst place to discover it is wrong.
+- **Rejected — leave the set closed and require `executor` at APPEND.** It is expressible today
+  (`add_plan_items`'s `proposedFields` already carries `executor`), but it demands that the skeleton
+  pass already know the card's `type` — which is precisely what the deepen pass exists to decide. A
+  phase split that forces the second phase's input into the first is not a phase split.
+
+**Widening costs the human review surface nothing, and that is a reading rather than an intention.**
+`UpdateProposalInput` already carries a field the review route does not pick up — `explanationMd`
+(`lib/dto/plans.ts:363`, added by MOTIR-850) — because
+`app/api/plans/[id]/items/[itemId]/route.ts` builds its input by ENUMERATING the keys it accepts. Adding
+`executor` to the DTO and to `mergeProposedFields` therefore leaves `PATCH /api/plans/{id}/items/{itemId}`
+byte-identical, and MOTIR-3088's boundary — _the human review surface does not change_ — holds literally.
+
+**Where the value is validated: at the transport, exactly as on the append path.** `add_plan_items`
+constrains `executor` with `z.enum(['coding_agent', 'human'])` in its own argument schema
+(`lib/mcp/tools/authorPlan.ts`), not in the service; `validateProposal` does not check it. The deepen
+tool constrains it identically. **No service-level validation is added and none is removed** — this
+amendment widens a merge, not a contract.
+
+#### (b) `targetRepo` / `targetRepoRole` — NOT widened
+
+`mergeProposedFields` omits both, and the code already records that it does
+(`plansService.ts:1794` — _"`updateProposal`'s editable set (`mergeProposedFields`) does not include
+`targetRepo`"_).
+
+**Is the pin knowable at skeleton time? Yes — and it has to be.** ONE SUBTASK = ONE REPO = ONE PR makes
+the repo pin part of a leaf's IDENTITY: the card that ships in `motir-core` and the card that ships in
+`motir-meta` are two cards, not one card with a field to fill in later. That is the same class of fact as
+`parentRef` and `blockedByRefs`, and it belongs in the same pass.
+
+- **Rejected — widen so a deepen may re-pin.** It would give an AGENT a power the human REVIEWER does not
+  have: the review route cannot re-pin a proposal's repo either, and `updateProposal` could not express it
+  if it tried. A capability asymmetry in that direction is the wrong one to introduce.
+- It also buys no earlier validation. A proposal's `targetRepo` is checked at APPROVE against the
+  project's repository set (`PlanItemProposedFields.targetRepo`), not at append, so a late pin is not a
+  pin that gets verified sooner.
+
+**What an agent does when it pinned wrong:** before `final`, author a fresh plan — they cost nothing and
+start no job. After `final`, it is the reviewer's decline.
+
+#### (c) `parentRef` / `blockedByRefs` — NOT widened, explicitly
+
+- **They are not in the editable set's SHAPE at all.** They live on the `PlanItem` row, not inside
+  `proposedFields`, so "widen `UpdateProposalInput`" is not even the right move for them — it would be a
+  second, different write.
+- **A mutable ref graph moves a cycle's discovery to the worst possible moment.** The append-order
+  temp-ref contract is what makes a tree buildable layer by layer: `add_plan_items` returns
+  `planItemIds` in append order, and `topoOrderAdds` (`plansService.ts:279`) resolves `planItem:` parent
+  refs at materialize, throwing `UnresolvedPlanRefError` on a cycle. Refs that can be rewritten after they
+  land let an agent build a cycle inside a `generating` plan that nothing catches until a person clicks
+  approve.
+
+**What an agent does instead:** send the layers in dependency order, parents before children — the
+contract `add_plan_items` already publishes — or author a fresh plan.
+
+---
+
+### D4 — Is `remove` reachable? Can an agent WITHDRAW a proposal it appended?
+
+#### Decision: NO, and it is DEFERRED to its own card rather than answered here.
+
+**This is not the same shape as the deepen, and the difference is why it is deferred.** The deepen was a
+transport gap: the service method existed, was tested, and had no PAT-authed caller. Withdrawing a
+proposal has no substrate at all.
+
+- `op: 'remove'` is not it. It requires `workItemId` (`plansService.ts:216`) — it targets an existing
+  `work_item` and removes a card from the TREE at approve. It cannot address a `PlanItem` this plan
+  created.
+- `planItemRepository` has `create` / `findById` / `findByPlan` / `update` / `setWorkItemId` /
+  `deleteByPlan`. There is no per-item delete, and `deleteByPlan` is a whole-plan operation.
+
+**The interim answer, and it is a real one: decline the plan and author a new one.** A plan costs nothing,
+starts no job and spends no credits; nothing exists in the tree until approve. Re-authoring a `generating`
+plan is cheap in exactly the way re-doing shipped work is not.
+
+- **Rejected — neuter the card through the deepen** (retitle it _withdrawn_, empty its body). It leaves a
+  proposal a reviewer must still read and dispose of, and it makes the plan's item count a lie.
+
+**The debt this defers, named so the next card inherits it rather than rediscovers it.** An MCP-authored
+plan abandoned mid-skeleton stays `generating`: AMENDMENT 2's reconciling sweep asks motir-ai what became
+of the JOB, and an MCP-authored plan has no job (`sourceJobId` is null). AMENDMENT 1 keeps an EMPTY one
+from pausing that project's cadence; one that already holds proposals is exactly the case AMENDMENT 1
+says somebody owes a decision on. **This amendment does not pay that debt** — it is the reason a withdraw
+op is worth its own card rather than a clause here.
+
+---
+
+### What this amendment does NOT do
+
+- **It does not change `materialize`.** Approve reads `proposedFields` exactly as it did; the executor a
+  deepened card carries is one the agent set, never one the platform inferred.
+- **It does not change the human review surface.** `updateProposal` and
+  `PATCH /api/plans/{id}/items/{itemId}` are untouched, including their accepted key set.
+- **It does not touch the internal generation seam.** `aiGenerationService.patchProposal` and its
+  `sourceJobId` resolution stay as they are; the MCP tool resolves by `planId` and must not grow a second
+  resolution path into that service.
+- **It does not widen `CLI_TOKEN_GRANT`,** and it adds no `/api/v1` twin — plan authoring is agent-facing,
+  and the public REST plan operations stay read-only.
+- **It does not add a withdraw / remove-a-proposal op** (D4).
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -875,3 +1096,11 @@ bound are both MOTIR-3096's own deliverables, named in its body; neither is an o
   persists anything, and the ready-set family (`list_ready` / `next_ready` /
   `claim_next_ready`) is deliberately excluded — a proposal is not dispatchable. Omitting
   `planId` leaves every one of them byte-identical to today.
+- **A PAT may now DEEPEN a proposal it appended, while the plan is still `generating`**
+  (AMENDMENT 4, MOTIR-3089): `update_plan_item`, gated by `ai:view_plan` — the key
+  `editAddProposal` asserts — so the titles-first strategy Motir's own generator uses is
+  reachable from the MCP. The editable set gains exactly one field, `executor`, because
+  `materialize` writes `pf.executor ?? null` and never consults the type→executor default map;
+  the repo pin and the ref graph stay structural and stay settled at append. `remove` is still
+  unreachable, and an abandoned MCP-authored plan that already holds proposals is still a debt
+  nobody has paid.

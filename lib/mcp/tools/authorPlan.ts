@@ -8,6 +8,7 @@ import type {
   PlanItemProposedFields,
   PlanWithItemsDto,
   ProposalInput,
+  UpdateProposalInput,
 } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
@@ -43,10 +44,13 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // `createPlan` asserts edit access; `addProposals` locks the plan row, re-reads
 // its status, refuses an append once the plan has left `generating`, validates
 // each proposal's op/grammar/sizing, and rejects an intra-plan temp-ref cycle at
-// the boundary. This module is zod argument schemas, two adapters and error
+// the boundary. This module is zod argument schemas, three adapters and error
 // mapping — the shape `planSession.ts` and `getPlan.ts` are built to.
 //
-// ── The TWO tools, and why not one or three (ADR Q1) ───────────────────────
+// ── The TWO AUTHORING tools, and why not one (ADR Q1) ──────────────────────
+// (A THIRD tool, `update_plan_item`, joined them in 2026-08-19's AMENDMENT 4 —
+// see its own header below. Q1 is about how a tree is APPENDED; the deepen is a
+// different act on a proposal that already landed, so it does not reopen this.)
 // The shipped producer contract is `createPlan` → repeated `addProposals` →
 // `markPlanned`, composed by `aiGenerationService.appendProposals` behind
 // `POST /api/internal/ai/plan-proposals` — where `markPlanned` is reached by a
@@ -80,8 +84,39 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // limit like every other write tool. Adding them would cap plan authoring
 // against the owner's GENERATION allowance for no reason.
 
+// ── AND `update_plan_item` (Story MOTIR-3088 · Subtask MOTIR-3090) ─────────
+// The THIRD tool, added 2026-08-19. `add_plan_items` is append-only, so a
+// proposal was frozen the moment it landed — which forbade the one authoring
+// strategy Motir's own generator uses. `motir-ai`'s issue-tree handler runs
+// TITLES-FIRST (MOTIR-845): append title-only `add`s so the SHAPE of the tree is
+// settled and reviewable early, then PATCH each card's bodies, type, priority
+// and sizing one at a time, all before `markPlanned` closes the frontier.
+//
+// That deepen op has been shipped since MOTIR-1441 (`plansService.deepenProposal`)
+// and was reachable ONLY over the §4 job token, so an external agent on the MCP
+// was held to a strategy Motir abandoned for its own planner. This tool is the
+// PAT-authed door onto it — and, like its two siblings, a TRANSPORT: the lock,
+// the status gate, the add-only rule, the sparse merge and the sizing
+// re-validation all already live in `editAddProposal`.
+//
+// ⚠️ IT RESOLVES BY `planId`, NOT BY `sourceJobId`. The internal seam's
+// `aiGenerationService.patchProposal` finds its plan through the plan repository's
+// `sourceJobId` lookup; an MCP-authored plan has NO generation job, so that
+// lookup would throw `NoPlanForJobError` for every plan `create_plan` opened.
+// This tool calls `plansService.deepenProposal(planId, …)` directly and adds no
+// second resolution path to `aiGenerationService`. (MOTIR-3090's acceptance is a
+// grep: nothing under `lib/mcp/` names that repository method, and this comment
+// is deliberately written not to.)
+//
+// The CONTRACT is `docs/decisions/agent-authored-plans.md` AMENDMENT 4:
+// D1 `generating` only (a plan in the review queue must hold still while a person
+// reads it), D2 `ai:view_plan` (the key `editAddProposal` itself asserts),
+// D3 the editable set gains `executor` and NOTHING else, D4 withdrawing a
+// proposal is still unreachable and deferred.
+
 export const CREATE_PLAN_TOOL_NAME = 'create_plan';
 export const ADD_PLAN_ITEMS_TOOL_NAME = 'add_plan_items';
+export const UPDATE_PLAN_ITEM_TOOL_NAME = 'update_plan_item';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -223,6 +258,95 @@ const addPlanItemsInputSchema = {
     ),
 };
 
+/**
+ * `update_plan_item`'s arguments — the plan, the proposal, and a SPARSE patch.
+ *
+ * ⚠️ ABSENT ≠ NULL, and the schema must not blur them. `editAddProposal`'s whole
+ * contract is that an absent key leaves the field untouched while an explicit
+ * `null` clears it (`mergeProposedFields` tests `!== undefined`, key by key). A
+ * zod `.default(null)` — or any coercion of `undefined` to `null` — would turn
+ * every partial patch into a destructive one, silently. So every field below is
+ * `.optional()` (may be missing) AND, where the underlying field is nullable,
+ * `.nullable()` (may be explicitly cleared), and the adapter rebuilds the input
+ * with `in` presence checks, the way the shipped review route
+ * (`app/api/plans/[id]/items/[itemId]/route.ts`) does.
+ *
+ * `title` is `.trim().min(1)` to match `proposedFieldsSchema` above rather than
+ * to substitute for the service's non-empty-title guard — the two doors must not
+ * disagree about what a title is. It is the ONE non-nullable member: a proposal
+ * with no title is not a proposal.
+ *
+ * `executor` is here because AMENDMENT 4 D3a put it in the editable set, and it
+ * is constrained by the SAME enum `proposedFieldsSchema` uses. `targetRepo` /
+ * `targetRepoRole`, `parentRef` and `blockedByRefs` are deliberately absent —
+ * D3b and D3c argue both refusals on the record.
+ */
+const updatePlanItemInputSchema = {
+  planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
+  planItemId: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      'The proposal to deepen — one of the ids `add_plan_items` returned in `planItemIds`, ' +
+        'in the order you sent them.',
+    ),
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Replace the proposed title. Cannot be blanked — a proposal needs a title.'),
+  kind: z
+    .enum(['epic', 'story', 'task', 'bug', 'subtask'])
+    .optional()
+    .describe('Replace the proposed kind.'),
+  descriptionMd: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Markdown body — WHAT to do. Send `null` to clear it; omit to leave it as it is.'),
+  explanationMd: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Markdown body — WHY it matters. Send `null` to clear it; omit to leave it as it is.',
+    ),
+  type: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Leaf work type (code / design / test / decision / manual / …); `null` clears it.'),
+  priority: z
+    .enum(['lowest', 'low', 'medium', 'high', 'highest'])
+    .nullable()
+    .optional()
+    .describe('Priority; `null` clears it.'),
+  executor: z
+    .enum(['coding_agent', 'human'])
+    .nullable()
+    .optional()
+    .describe(
+      'WHO executes this leaf. Worth setting whenever you set `type`: approving a plan does ' +
+        'NOT derive an executor from the type, so a proposal that never carried one ' +
+        'materializes unassigned. `null` clears it.',
+    ),
+  storyPoints: z
+    .number()
+    .nullable()
+    .optional()
+    .describe(
+      'Agile sizing, re-validated on the merged result exactly as at append; `null` clears it.',
+    ),
+  estimateMinutes: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe('Estimated minutes of work; `null` clears it.'),
+};
+
 interface CreatePlanArgs {
   projectKey: string;
   title?: string;
@@ -235,6 +359,20 @@ interface AddPlanItemsArgs {
   planId: string;
   proposals: z.infer<typeof proposalSchema>[];
   final?: boolean;
+}
+
+interface UpdatePlanItemArgs {
+  planId: string;
+  planItemId: string;
+  title?: string;
+  kind?: string;
+  descriptionMd?: string | null;
+  explanationMd?: string | null;
+  type?: string | null;
+  priority?: string | null;
+  executor?: string | null;
+  storyPoints?: number | null;
+  estimateMinutes?: number | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +423,36 @@ function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[]): string 
       ? 'This plan is now `planned` — it is in the review queue and accepts no further ' +
         `proposals. Read it back with \`${GET_PLAN_TOOL_NAME}\`.`
       : `Still \`generating\` — send \`final: true\` on your last batch when the tree is complete.`,
+    '',
+    PROPOSAL_GATE,
+  ].join('\n');
+}
+
+/**
+ * `update_plan_item`'s summary — say WHICH fields this call changed.
+ *
+ * The list is the ARGUMENT keys the caller sent, not a diff of the stored
+ * proposal: an agent that patches `descriptionMd` to the value it already had has
+ * still made that call, and a summary claiming otherwise would be answering a
+ * question nobody asked. What it does buy is the absent-vs-null distinction being
+ * VISIBLE in the transcript — a human watching a deepen pass can see that a call
+ * touched two fields and not eight.
+ */
+function summarizeDeepen(
+  plan: PlanWithItemsDto,
+  planItemId: string,
+  changed: readonly string[],
+): string {
+  return [
+    `Deepened proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
+      `${plan.itemCount} proposal(s) in total.`,
+    changed.length > 0
+      ? `Fields set by this call: ${changed.join(', ')}. Every other field was left as it was.`
+      : 'No fields were sent, so nothing changed.',
+    '',
+    `Still \`generating\` — deepen the rest, then send \`final: true\` on a last ` +
+      `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` batch to put the plan in front of a reviewer. ` +
+      'After that this tool is refused: a plan somebody is reading does not move.',
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -403,6 +571,67 @@ export async function runAddPlanItems(
   );
 }
 
+/**
+ * The adapter: deepen ONE proposal on a `generating` plan.
+ *
+ * Three things it does and one it deliberately does not:
+ *
+ * 1. **Rebuild the patch with PRESENCE checks, never defaults.** `'key' in args`
+ *    is the whole absent-vs-null contract — `mergeProposedFields` tests each key
+ *    `!== undefined`, so a key this adapter invents as `null` CLEARS a field the
+ *    caller never mentioned. This is the same shape the shipped review route
+ *    (`app/api/plans/[id]/items/[itemId]/route.ts`) uses, for the same reason.
+ * 2. **Resolve by `planId`.** `plansService.deepenProposal` takes the plan id
+ *    directly; the internal seam's `sourceJobId` lookup is not reusable here
+ *    because an MCP-authored plan has no generation job (module header).
+ * 3. **Report which fields the CALL set** — see {@link summarizeDeepen}.
+ *
+ * It does NOT pre-read the plan. `add_plan_items` does, because it stamps each
+ * `add`'s provenance from the plan's own authorship; a deepen stamps nothing, and
+ * `editAddProposal` resolves, gates (`ai:view_plan`), locks and re-reads the plan
+ * itself. A read here would add a round trip and a second, weaker existence check
+ * in front of the real one.
+ */
+export async function runUpdatePlanItem(
+  args: UpdatePlanItemArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const patchable = [
+    'title',
+    'kind',
+    'descriptionMd',
+    'explanationMd',
+    'type',
+    'priority',
+    'executor',
+    'storyPoints',
+    'estimateMinutes',
+  ] as const;
+
+  const input: UpdateProposalInput = {};
+  const changed: string[] = [];
+  for (const key of patchable) {
+    // PRESENCE, then a belt-and-braces `undefined` skip. `mergeProposedFields`
+    // tests each key `!== undefined`, so an `undefined` that slipped through
+    // would merge as absent anyway — but it would still be COUNTED as changed,
+    // and the summary would tell a reader this call touched a field it did not.
+    // (`undefined` cannot arrive over JSON; this survives a zod version that
+    // materializes missing optional keys.)
+    if (!(key in args) || args[key] === undefined) continue;
+    // The value is already narrowed by the zod schema to the member's own type;
+    // the assignment is per-key so no `any` widens the input.
+    (input as Record<string, unknown>)[key] = args[key];
+    changed.push(key);
+  }
+
+  const plan = await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
+
+  return toolOk(
+    summarizeDeepen(plan, args.planItemId, changed),
+    derived(planPayload, presentMcpPlan(plan)),
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -453,6 +682,37 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runAddPlanItems(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    UPDATE_PLAN_ITEM_TOOL_NAME,
+    {
+      title: 'Deepen a proposal you appended',
+      description:
+        'Fill in a proposal you already appended to a plan that is still being written — the ' +
+        'SECOND phase of a titles-first author. Phase one: append title-only proposals with ' +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` so the SHAPE of the tree is settled and its parent / ` +
+        'dependency edges are wired. Phase two: call this once per proposal to write its ' +
+        'description and explanation, its work type, priority, executor and sizing — now that ' +
+        'you can see every sibling you proposed. The patch is SPARSE: a field you omit is left ' +
+        'exactly as it was, and an explicit `null` clears it. Address the proposal by the id ' +
+        `\`${ADD_PLAN_ITEMS_TOOL_NAME}\` returned for it in \`planItemIds\`. Legal only while ` +
+        'the plan is still `generating` — once you send `final: true` it is in front of a ' +
+        'reviewer and stops moving, and this tool refuses, naming the status. It cannot ' +
+        're-parent a proposal, change its dependency edges or re-pin its repo: those are the ' +
+        'shape you settled in phase one. ' +
+        'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
+        'plan in Motir is the only path from a proposal to a work item, and approval does not ' +
+        'happen on this surface. Costs nothing and starts no job.',
+      inputSchema: updatePlanItemInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runUpdatePlanItem(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }
