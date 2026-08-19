@@ -131,6 +131,22 @@ export interface PlanStalenessService {
    * tenant-scoped (404-not-403); batched (no N+1). Throws PlanNotFoundError when
    * the plan does not resolve in the workspace, and ProjectAccessDeniedError
    * (→ 404) when the actor cannot browse the project.
+   *
+   * ⚠️ ONLY A `planned` PLAN CAN BE STALE (MOTIR-3165). Staleness answers one
+   * question — *would approving this now still be correct?* — and `approvePlan`
+   * / `declinePlan` each refuse unless the plan is `planned`, so on a decided
+   * plan that question cannot be asked again. This rule OWNS itself here rather
+   * than in its callers: `planRowView`'s `staleCountFor` and
+   * `autoPlanCadenceService`'s both wrote it by hand and were right, while
+   * `getPlanReview` called the engine unconditionally — and that one caller is
+   * the surface a person actually reads.
+   *
+   * On an approved plan the warning was not merely useless but CAUSED by the
+   * approval: `findChildrenCreatedAfter` has no exclusion for the items the plan
+   * itself materialized, and `isRealRef` drops every intra-plan `planItem:`
+   * edge, so N proposals under one committed parent each saw the other N−1 as
+   * unexplained new siblings. The more thoroughly a plan was approved, the more
+   * alarming its own record looked.
    */
   computePlanStaleness(planId: string, ctx: ServiceContext): Promise<PlanStalenessDto>;
 }
@@ -146,6 +162,24 @@ export const planStalenessService: PlanStalenessService = {
     const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planItemRepository.findByPlan(planId, tx),
     );
+
+    // A DECIDED (or still `generating`) plan is all-clear by construction — see
+    // the `planned`-only rule above. The verdict is still shaped per item, so a
+    // caller that maps over `items` needs no second code path; it just has
+    // nothing to report. The access checks above still run, so this is not a
+    // cheaper answer to a question the caller was not allowed to ask.
+    if (plan.status !== 'planned') {
+      return {
+        planId,
+        stale: false,
+        items: items.map((item) => ({
+          planItemId: item.id,
+          workItemId: item.workItemId,
+          stale: false,
+          reasons: [],
+        })),
+      };
+    }
 
     // --- Collect the distinct work-item ids the rules will read (real refs
     //     only; intra-plan temp-refs resolve at materialize, never stale). ---
@@ -220,8 +254,13 @@ export const planStalenessService: PlanStalenessService = {
     const itemVerdicts: PlanItemStalenessDto[] = items.map((item) => {
       const reasons = RULES.flatMap((rule) => rule(item, sctx));
       return {
+        // The work item the verdict is ABOUT, whenever there is one (MOTIR-3165).
+        // A `modify` / `remove` always has a target; an `add` has one once
+        // materialize has stamped it, and the `op` test used to null that out —
+        // so a verdict about an approved proposal could not name the card it
+        // concerned. An un-materialized `add` still reports null, correctly.
         planItemId: item.id,
-        workItemId: item.op === 'add' ? null : item.workItemId,
+        workItemId: item.workItemId,
         stale: reasons.length > 0,
         reasons,
       };
