@@ -244,6 +244,26 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
       ),
       'compound',
     ).toEqual(['stylesheet']);
+    // TAGS are structural too, and excluding them hid 381 faint findings and 270
+    // MUTED violations — on the arm that is enforced (MOTIR-3147). `.doc h3`
+    // paints every heading in the doc, in every render; that is the same fact a
+    // bare `.a` states, one coordinate over.
+    expect(
+      counted(
+        scan(`<div class="doc"><h3>Heading</h3></div>`, `.doc h3 { color: var(--el-text-faint); }`),
+      ).map((f) => f.element),
+      'descendant with a tag',
+    ).toEqual(['h3']);
+    expect(
+      counted(
+        scan(
+          `<table class="spec"><tr><th>Col</th></tr></table>`,
+          `table.spec th { color: var(--el-text-faint); }`,
+        ),
+      ).map((f) => f.element),
+      'tag.class ancestor + tag leaf',
+    ).toEqual(['th']);
+
     // …and the muted arm sees the same shape, which is what took it 0 -> 391.
     expect(
       violations(
@@ -264,7 +284,7 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
     ).toEqual(['--el-surface']);
   });
 
-  it('still ABSTAINS on a state, pseudo-element, attribute or tag rule', () => {
+  it('still ABSTAINS on a state, pseudo-element or attribute rule', () => {
     // The original warrant, unchanged and still load-bearing: a state rule
     // paints in one render and not another, so reading one would be a false
     // positive nobody can act on. A widening that swallowed these would trade a
@@ -278,7 +298,6 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
     abstains(`.zoomctl .pct:focus { color: var(--el-text-faint); }`, ':focus');
     abstains(`.zoomctl .pct::before { color: var(--el-text-faint); }`, '::before');
     abstains(`.zoomctl[data-open] .pct { color: var(--el-text-faint); }`, 'attribute');
-    abstains(`div.zoomctl span { color: var(--el-text-faint); }`, 'tag');
   });
 
   it('never rules on markup inside a <style> or a comment', () => {

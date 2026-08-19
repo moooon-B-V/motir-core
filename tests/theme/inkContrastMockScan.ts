@@ -316,7 +316,7 @@ function collapse(source: string): string {
  * BEFORE it must be its immediate parent rather than any ancestor.
  */
 interface StyleRule {
-  steps: Array<{ classes: string[]; child: boolean }>;
+  steps: Array<{ classes: string[]; child: boolean; tag: string | null }>;
   color: string | null;
   background: string | null;
 }
@@ -343,9 +343,13 @@ function stylesheetText(html: string): string {
  * resolving them is not a guess — it is the same fact a bare `.a` states, one
  * containment step further out.
  *
+ * Read: TAGS too (`th`, `table.spec`, `.doc h3`) — a tag is structural, so such a
+ * rule paints in every render exactly as a class chain does. Excluding them cost
+ * 381 faint findings and 270 MUTED violations, on the arm that is enforced
+ * (MOTIR-3147); the same mistake as the bare-only form, one coordinate over.
+ *
  * Abstains: a selector carrying a pseudo-class or pseudo-element (`:hover`,
- * `:focus`, `::before`), an attribute (`[data-state]`), a tag (`table td`), or a
- * universal. **That restriction is the original one and its warrant is
+ * `:focus`, `::before`), an attribute (`[data-state]`), or a universal. **That restriction is the original one and its warrant is
  * unchanged:** a STATE rule paints in one render and not another, so clearing an
  * ink on the strength of one would be a false NEGATIVE, and claiming a tint from
  * one would be a false positive nobody can act on. Both directions are still
@@ -389,18 +393,24 @@ function parseSelector(selector: string): StyleRule['steps'] | null {
       child = true;
       continue;
     }
-    // A compound must be classes and nothing else: `.a`, `.a.b`, `.a\(x\)`.
-    if (!/^(?:\.(?:[\w-]|\\.)+)+$/.test(part)) return null;
+    // A compound is an optional TAG plus zero or more classes: `.a`, `.a.b`,
+    // `th`, `table.spec`. A tag is STRUCTURAL — `.doc h3` paints every heading in
+    // the doc, in every render — so it is read for the same reason a descendant
+    // class chain is (MOTIR-3147). What still abstains is STATE, below.
+    if (!/^[a-zA-Z][-\w]*(?:\.(?:[\w-]|\\.)+)*$|^(?:\.(?:[\w-]|\\.)+)+$/.test(part)) return null;
     const classes = [...part.matchAll(/\.((?:[\w-]|\\.)+)/g)].map((m) => m[1]!.replace(/\\/g, ''));
-    if (classes.length === 0) return null;
-    steps.push({ classes, child });
+    const tagMatch = part.match(/^([a-zA-Z][-\w]*)/);
+    const tag = tagMatch ? tagMatch[1]!.toLowerCase() : null;
+    if (classes.length === 0 && !tag) return null;
+    steps.push({ classes, child, tag });
     child = false;
   }
   return steps.length ? steps : null;
 }
 
-/** Every class in `classes` is on `element`. */
-function carries(element: MockElement, classes: string[]): boolean {
+/** `element` matches this compound: its tag (when named) and every class. */
+function carries(element: MockElement, classes: string[], tag: string | null): boolean {
+  if (tag !== null && element.tag !== tag) return false;
   return classes.every((c) => element.classes.includes(c));
 }
 
@@ -417,7 +427,7 @@ function carries(element: MockElement, classes: string[]): boolean {
  */
 function ruleMatches(rule: StyleRule, element: MockElement, elements: MockElement[]): boolean {
   const last = rule.steps[rule.steps.length - 1]!;
-  if (!carries(element, last.classes)) return false;
+  if (!carries(element, last.classes, last.tag)) return false;
   let node: MockElement | undefined = element;
   for (let i = rule.steps.length - 1; i > 0; i -= 1) {
     const step = rule.steps[i - 1]!;
@@ -425,11 +435,11 @@ function ruleMatches(rule: StyleRule, element: MockElement, elements: MockElemen
     let ancestor: MockElement | undefined =
       node!.parent === -1 ? undefined : elements[node!.parent];
     if (asChild) {
-      if (!ancestor || !carries(ancestor, step.classes)) return false;
+      if (!ancestor || !carries(ancestor, step.classes, step.tag)) return false;
       node = ancestor;
       continue;
     }
-    while (ancestor && !carries(ancestor, step.classes)) {
+    while (ancestor && !carries(ancestor, step.classes, step.tag)) {
       ancestor = ancestor.parent === -1 ? undefined : elements[ancestor.parent];
     }
     if (!ancestor) return false;
