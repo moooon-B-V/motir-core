@@ -1832,6 +1832,15 @@ export default defineConfig({
         // land with its test in the same PR without the gate becoming a ratchet.
         'lib/mcp/tools/validatePlan.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/planRef.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-3097 — the story gate PINS what the story added, because
+        // an unnamed new file is an ungated one. MEASURED FIRST, on this branch,
+        // over `tests/mcp/plan-projection-gate` + `projected-reads` +
+        // `validate-plan` + `tests/integration/plans/planValidityService` +
+        // `tests/integration/ai/validatePlanRoutes`: 100 lines / 90.9 branches /
+        // 100 functions. Pinned at 90, the floor it clears, rather than at the
+        // measured number — a threshold nobody can land a new branch under is a
+        // ratchet, and this file is the one both halves of the story read.
+        'lib/services/planProjectionService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/updateSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/deleteSprint.ts': { branches: 90, functions: 90, lines: 90 },
