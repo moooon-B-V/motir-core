@@ -760,71 +760,70 @@ canvas is FED: the committed level plus the plan's proposals, rather than a fore
 `PlanItem`s alone (`buildPlanForest`). The canvas engine is untouched, per the roadmap's own build
 note.
 
-## 3. Panel F — the proposal READ view, and its door
+## 3. Panel F — read a proposal with the SHIPPED quick view, and REMOVE the edit modal
+
+### The decision (Yue, 2026-08-19)
+
+**Viewing a proposal is viewing a card.** It uses the same `Modal size="xl"` + `IssueQuickViewPanel`
+quick view a normal work item gets, with **editing disabled** — not a bespoke panel that resembles it.
+
+**And the proposal EDIT modal is REMOVED.** MOTIR-1370's inline-edit form over five fields is
+withdrawn: manual editing of a proposal is not needed. A proposal is **read**, and changed by
+**re-planning** — which is the model the rest of the product already runs on, where a plan is a
+proposal a person accepts or declines rather than a draft they hand-correct. Part I §3 Panel B's
+inline-edit bullet and panel **B′** are **SUPERSEDED**; they stay in the asset marked as such,
+because they are the record of what shipped, not a live specification.
+
+This also settles the door cleanly. The node's control cluster carries **`View` and nothing else**.
 
 ### The door
 
-The canvas already has one, and this design does not invent a second: MOTIR-1351 specifies
-**select a node → the selected card's `View` button → a `Modal size="xl"` peek**, and MOTIR-1352
-shipped it for work-item nodes. The proposed node gains the same **`View`** button, in the node's
-top-right control cluster, **to the left of** MOTIR-1370's edit pencil — so the pair reads
-`View · Edit`, in the order the roadmap's own selected card uses (`View` then `Open ›`).
+MOTIR-1351 specifies **select a node → the selected card's `View` button → a `Modal size="xl"` peek**,
+and MOTIR-1352 shipped it for work-item nodes. The proposed node gains the same `View`, on **every**
+op. A `modify` / `remove` peeks its **live target** — the already-shipped `WorkItemQuickView`,
+unchanged. An `add` peeks its proposal.
 
-**Which ops carry it: all three.** An `add` peeks its PROPOSAL (there is nothing else to peek); a
-`modify` or `remove` peeks the **live target**, which is an ordinary work item and therefore the
-already-shipped `WorkItemQuickView`. The pencil remains `add`-only, because only an `add` is
-editable. That asymmetry is the point: **every proposal can be read; only one kind can be written.**
-
-### The body for an `add` — and the one place it must NOT copy the work-item peek
+### The body for an `add` — and the one difference forced by the model
 
 The shipped work-item peek ends with a deliberate deferral:
 
 > _"Explanation, child items, the full relationships / links panel, attachments, and the activity
 > feed live on the **full page**."_
 
-That is correct for a work item and **impossible for a proposal**: a proposal has no full page —
-`app/(authed)/plans/` holds `page.tsx` and `[id]/page.tsx` and nothing per item — and MOTIR-3070's
-sharpest finding is that `explanationMd` is carried, diffed, and materialized while no code path in
-the review surface reads it. So the proposal peek **renders both bodies inline**, as two sibling
-sections in the work-item page's own grammar, and defers nothing.
+That is correct for a work item and **impossible for a proposal**: there is no per-item route
+(`app/(authed)/plans/` holds `page.tsx` and `[id]/page.tsx`), and MOTIR-3070's sharpest finding is
+that `explanationMd` is carried, diffed and materialized while nothing in the review surface reads it.
+**So the proposal peek renders both bodies inline.** That is not a departure from _"the same as
+viewing a normal card"_ — it is what the same experience means when the page the peek defers to does
+not exist.
 
-| Field                             | Rendered as                                                                              | Composed from                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `descriptionMd`                   | `Description` section, **Markdown**                                                      | `.qv-section-label` + `.qv-desc` (the shipped peek)                          |
-| `explanationMd`                   | `Why this matters` section, **Markdown**, directly below                                 | the same pair — the item page renders the two as siblings                    |
-| `kind` · `type`                   | rail rows with the shipped `IssueTypeIcon` + work-type chip                              | `.qv-rail` `.rail-field`                                                     |
-| `priority`                        | rail row, shipped priority chip                                                          | `.rail-field`                                                                |
-| `storyPoints` · `estimateMinutes` | one rail row each — points as the shipped `EstimateBadge` language, estimate in minutes  | `.rail-field`                                                                |
-| `targetRepo` / `targetRepoRole`   | rail row, mono repo name; the ROLE when no name is pinned yet                            | `.rail-field` + the repository row from `design/work-items/repository-set.*` |
-| `executor`                        | rail row — _Coding agent_ / _Human_                                                      | `.rail-field`                                                                |
-| `explanationSource`               | a quiet `AI-drafted` marker beside the `Why this matters` label, when the source says so | the shipped provenance chip language                                         |
+| Field                             | Rendered as                                                     | Composed from                                             |
+| --------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
+| `descriptionMd`                   | `Description` section, **Markdown**                             | `.qv-section-label` + `.qv-desc` (the shipped peek)       |
+| `explanationMd`                   | `Why this matters` section, **Markdown**, directly below        | the same pair — the item page renders the two as siblings |
+| `kind` · `type`                   | rail rows with the shipped `IssueTypeIcon` + work-type chip     | `.qv-rail` `.rail-field`                                  |
+| `priority`                        | rail row, shipped priority chip                                 | `.rail-field`                                             |
+| `storyPoints` · `estimateMinutes` | one rail row each                                               | `.rail-field`                                             |
+| `targetRepo` / `targetRepoRole`   | rail row, mono repo name; the ROLE when no name is pinned yet   | `.rail-field` + `design/work-items/repository-set.*`      |
+| `executor`                        | rail row — _Coding agent_ / _Human_                             | `.rail-field`                                             |
+| `explanationSource`               | a quiet `AI-drafted` marker beside the `Why this matters` label | the shipped provenance chip language                      |
 
-**The head differs from the work-item peek in exactly three ways, and each is forced by the model:**
-there is **no identifier** (the `.qv-id` slot carries the `add` op badge and the word `new` instead —
-the same `new` the node already shows), there is **no status pill** (a proposal has no status until
-it materializes), and the primary action is **not** `Open full page →` — there is no page — so the
-head carries `Close` alone. Nothing else moves.
+**The head differs from the work-item peek only where the model has nothing to put there:** no
+identifier (a proposal has none until it materializes — the `new` the node already shows), no status
+pill (same reason), and no `Open full page →` (there is no page). The rail is read-only, as the
+shipped peek's already is.
 
-### `modify` / `remove`
+### After a decision
 
-The peek shows the **live target**, i.e. the shipped `WorkItemQuickView` verbatim, with the op badge
-in the head so the reader knows which side they are looking at. The old→new diff stays where Panel B
-already draws it, on the node: duplicating it inside the peek would give two renderings of one fact
-that can disagree. A `remove` peek is the target as it stands today — the thing that will be archived.
-
-### Read-only, and after a decision
-
-The peek exposes **no write path**: no fields, no save, no destructive action. `ProposalEditModal`
-remains the only editor for an `add`, reached from the pencil beside `View`. A **decided** plan is
-read-only per Part I, and the read view **stays available** on it — reading is exactly what a decided
-plan still supports, and it is how somebody later answers _what did we approve?_.
+A **decided** plan is read-only per Part I, and the read view **stays available** on it — reading is
+what a decided plan still supports, and it is how somebody later answers _what did we approve?_.
 
 ### a11y
 
-`Modal` owns focus trap, `Esc`, and the backdrop; the dialog is labelled by the proposal title. The
-op badge carries **text**, not colour alone. `View` and `Edit` are icon buttons with `aria-label`s and
-stop propagation so a press cannot start a canvas drag — the same guard the shipped node's pencil
-uses. Copy lives in the `planReview` namespace.
+`Modal` owns focus trap, `Esc` and the backdrop; the dialog is labelled by the proposal title. The op
+badge carries **text**, not colour alone. `View` is an icon button with an `aria-label` that stops
+propagation so a press cannot start a canvas drag — the same guard the shipped node's controls use.
+Copy lives in the `planReview` namespace.
 
 ## 4. Tokens + primitives
 
