@@ -603,3 +603,168 @@ describe('contract discipline — additive only', () => {
     expect(wire['targetRepoCloneUrl']).toBeNull();
   });
 });
+
+// ── 6 · a project that ARRIVED WITH CODE keeps it when the set gains a row ───
+//
+// MOTIR-3086. The five sections above all reason about a project whose
+// repositories are the ones its SET names — a project born in Motir, where the
+// set is a complete statement and the workspace rung is pure back-compat. This
+// section is the other project: one that arrived with a codebase, whose
+// repositories are recorded NOWHERE in `project_repository` because the connect
+// branch writes no row (ADR amendment 2026-08-19 · MOTIR-3086). Its first row
+// used to REPLACE its repo list rather than extend it.
+
+/**
+ * Give `fx`'s project a codebase of its OWN — the `migrate` onboarding run's
+ * `connectedRepoRef`, which is the only PROJECT-scoped record that a project
+ * arrived with code (MOTIR-3073's gate reads the same field).
+ *
+ * Deliberately does NOT touch `project_repository`: that is the whole shape of
+ * the defect — such a project has zero rows by construction, and its
+ * repositories are known only through the workspace installation.
+ */
+async function giveProjectItsOwnCode(fx: WorkItemFixture, connectedRepoRef: string): Promise<void> {
+  await adminDb.migrateOnboarding.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      kind: 'migrate',
+      step: 'done',
+      status: 'completed',
+      connectedRepoRef,
+    },
+  });
+}
+
+describe('a project that already has code, gaining its FIRST set row', () => {
+  it('keeps every repository it already had PINNABLE (MOTIR-3086)', async () => {
+    // The reported defect, at the reporter's own base: five repos connected,
+    // no set rows, one row added — and from that moment nothing the project
+    // already had could be pinned on a card.
+    const fx = await makeWorkItemFixture();
+    for (const name of ['motir-core', 'motir-ai', 'motir-gateway', 'motir-meta']) {
+      await connectRepo(fx.workspaceId, name);
+    }
+    await giveProjectItsOwnCode(fx, 'moooon/motir-core');
+
+    // Legal BEFORE the first row — the compatibility rung answers.
+    const before = await makeReady(fx, 'pinned before', 'motir-core');
+    expect(before.targetRepo).toBe('motir-core');
+
+    // The DELIBERATE path 3073 does not touch: the user asks Motir to host a new
+    // repository alongside the ones they already have.
+    await proposeRepo(fx, 'motir-hosted-web');
+
+    // …and the repositories the project already had are STILL pinnable.
+    const after = await makeReady(fx, 'pinned after', 'motir-core');
+    expect(after.targetRepo).toBe('motir-core');
+    // Every one of them, not just the one the onboarding run happens to name —
+    // which is why this is a UNION and not a seed of that single field.
+    for (const name of ['motir-ai', 'motir-gateway', 'motir-meta']) {
+      expect((await makeReady(fx, `pinned ${name}`, name)).targetRepo).toBe(name);
+    }
+    // The newly-added row is pinnable too — the set is not shadowed by the union.
+    expect((await makeReady(fx, 'pinned new', 'motir-hosted-web')).targetRepo).toBe(
+      'motir-hosted-web',
+    );
+  });
+
+  it('keeps them in the DISPATCH domain, set rows FIRST', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'motir-core');
+    await giveProjectItsOwnCode(fx, 'moooon/motir-core');
+    await establishRepo(fx, 'motir-hosted-web');
+
+    expect((await listDispatchRepoNames(fx.projectId, fx.ctx)).map((r) => r.name)).toEqual([
+      'motir-hosted-web',
+      'motir-core',
+    ]);
+  });
+
+  it('a pin whose repo is workspace-only resolves with its CLONE coordinates', async () => {
+    // The union hands back real `GithubRepo` rows, so the coordinates an agent
+    // with no checkout needs survive the switch that used to drop them.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'motir-core', {
+      owner: 'moooon-B-V',
+      defaultBranch: 'trunk',
+    });
+    await giveProjectItsOwnCode(fx, 'moooon-B-V/motir-core');
+    await proposeRepo(fx, 'motir-hosted-web');
+    await makeReady(fx, 'pinned', 'motir-core');
+
+    expect(await dispatchOf(fx)).toMatchObject({
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: 'https://github.com/moooon-B-V/motir-core.git',
+      targetRepoDefaultBranch: 'trunk',
+    });
+  });
+
+  it('stops guessing a single default once the union makes the domain ambiguous', async () => {
+    // A consequence to state rather than discover: such a project genuinely HAS
+    // two repositories, so there is no non-arbitrary single choice — and routing
+    // every unpinned card into the just-added hosted repo is the other half of
+    // the reported defect.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'motir-core');
+    await giveProjectItsOwnCode(fx, 'moooon/motir-core');
+    await establishRepo(fx, 'motir-hosted-web');
+    await makeReady(fx, 'unpinned');
+
+    expect((await dispatchOf(fx)).targetRepo).toBeNull();
+  });
+
+  it('still REJECTS a name that is in NEITHER domain — the typo', async () => {
+    // The union widens the domain to the WORKSPACE's repos, so what it must not
+    // lose is the typo. (A sibling PROJECT's set row is a different case: it is
+    // covered below.)
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'motir-core');
+    await giveProjectItsOwnCode(fx, 'moooon/motir-core');
+    await proposeRepo(fx, 'motir-hosted-web');
+
+    await expect(makeReady(fx, 'typo', 'motir-cero')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
+  });
+});
+
+describe('a project with NO code of its own is UNCHANGED by the first row', () => {
+  it('the set IS the list — a workspace repo outside it stays unpinnable', async () => {
+    // The other direction of the transition, and the reason the new rung is
+    // CONDITIONED rather than unconditional: for a project born in Motir the set
+    // is a complete statement of its repositories, so it still answers alone and
+    // the sibling-isolation §3 asserts is untouched.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'someone-elses-repo');
+    await proposeRepo(fx, 'acme-api');
+
+    await expect(makeReady(fx, 'not ours', 'someone-elses-repo')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
+    expect((await makeReady(fx, 'ours', 'acme-api')).targetRepo).toBe('acme-api');
+  });
+
+  it('an onboarding run that never connected a repo is not "has code"', async () => {
+    // The signal is the FIELD, not the run: a project that started the migrate
+    // wizard and abandoned it at `connect` has no code, and must not acquire a
+    // union because a row exists in `migrate_onboarding`.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'someone-elses-repo');
+    await adminDb.migrateOnboarding.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        kind: 'migrate',
+        step: 'connect',
+        status: 'active',
+        connectedRepoRef: null,
+      },
+    });
+    await proposeRepo(fx, 'acme-api');
+
+    await expect(makeReady(fx, 'not ours', 'someone-elses-repo')).rejects.toBeInstanceOf(
+      UnknownTargetRepoError,
+    );
+  });
+});

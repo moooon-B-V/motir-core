@@ -1002,7 +1002,10 @@ MOTIR-1782), never of a second branch in the model.
   compatibility path for every project that predates the set (including this one). Once a
   project has an established set, MOTIR-1783 resolves against the **project's** set instead
   of "the workspace's single repo"; the fallback is what answers for a project that has
-  none.
+  none. _(2026-08-19 amendment, MOTIR-3086: "for a project that has none" is no longer the
+  whole condition — the fallback is ALSO layered under the set, set first, for a project that
+  arrived WITH CODE of its own, whose repositories the set is structurally unable to name. See
+  the MOTIR-3086 amendment below.)_
 - **Ownership is a set-level property**, so 9.3.7's transfer flow gets a project-scoped
   query and a whole-set transfer, not a per-repo hunt. §3.5 is what guarantees the set is
   transferable as a unit. _(2026-07-30 amendment: every created set is Motir-owned, so
@@ -1075,6 +1078,105 @@ for the unsettled row exactly as it does today. **The step is not dropped and ne
 door** — MOTIR-1764's permanent entry point already leads back to it. What the amendment
 removes is only the case where Motir invented the row itself and then demanded a decision
 about it.
+
+## AMENDMENT (2026-08-19, MOTIR-3086) — the workspace rung is layered UNDER the set for a project that arrived WITH CODE
+
+The amendment above stopped Motir from **proposing** a repository to a project that already
+has code. This one is about the **deliberate** path it does not touch: a user who genuinely
+wants Motir to host a new repository alongside the ones they already have, via the establish
+step's `＋ Add repository`. Today that request costs them the repositories they came with.
+
+**The mechanism.** `dispatchRepo.ts`'s scope ladder chose between two registries on
+`getRepoNameDomains`'s `hasSet: rows.length > 0`, so the very FIRST row a project ever gained
+switched its repo domain — pin AND dispatch — from "the workspace's connected repositories" to
+"exactly this set". For a project born in Motir that is right and invisible. For a project
+that ARRIVED with code it is the whole defect, because such a project has **zero rows by
+construction**: the establish step's _"I already have code"_ branch sends the user to the
+GitHub **connect** flow, which is a WORKSPACE-level installation connection and writes no
+`project_repository` row at all (`GithubRepo` is keyed on `workspace_id` and has no
+`project_id`). The first hosted repository therefore did not join a list — **it became the
+list**, because until that moment no list existed as data. Observed on Motir's own project:
+five repositories connected and indexed, one row added, and from that moment `motir-core`
+could not be pinned on any card through the MCP, the UI, or a plan.
+
+### The decision
+
+**The workspace rung is layered UNDER the set — set first — exactly when the project has code
+the set cannot describe.** The signal is the one the MOTIR-3073 amendment already argued for
+and shipped: the project's onboarding run names a connected repository. It is now a shared
+predicate (`lib/projectRepos/ownCode.ts`) that both the proposer's gate and the resolver's
+ladder call, so the two cannot come to disagree about which projects arrived with code.
+
+Order is meaningful and the SET goes first: a repository the project planned outranks one it
+inherited from the installation, and a repository named by both is answered by its set row.
+
+### This CONTRADICTS `dispatchRepo.ts`'s recorded reasoning, and here is the argument against it
+
+The resolver's header stated, and the "Consequences" bullet above assumed:
+
+> It is a fallback for a MISSING set, never a second guess layered under a real one: a project
+> that HAS planned its repositories is answered by that plan alone, even when the plan resolves
+> to nothing.
+
+That sentence is **narrowed, not withdrawn**, and it remains exactly right for the project it
+was written about. Its argument is sound — a project that has planned its repositories should
+be answered by that plan, and layering a second guess under a real plan would hand back a
+repository the project deliberately did not choose, including the sibling project's repository
+that workspace-wide validation used to accept.
+
+**What it did not survive is the two-registry finding.** The sentence rests on a premise it
+does not state: that the set is a complete statement of a project's repositories. That premise
+is _unavailable_ to a project whose repositories arrived through the connect branch — not
+merely unmet, but structurally impossible, because nothing on that branch can record them.
+For such a project the set is a statement about the repositories Motir was asked to **plan**,
+and answering _"which repositories does this project have?"_ by it alone answers a different
+question. A rule that is sound wherever its premise holds and wrong wherever the premise
+cannot hold is a rule with a missing condition, which is what this amendment supplies.
+
+Two consequences of that reading are worth stating rather than discovering:
+
+- **The fallback did nothing wrong.** It stepped aside exactly as its author intended, and the
+  outcome was still wrong. The defect is in the predicate that told it to.
+- **The union is CONDITIONED, not unconditional.** A project with no code of its own is
+  answered by its set alone, byte-identically to before — which is why the shipped
+  repository-set journey needed no edit, and why `§3`'s sibling-project isolation is untouched
+  for every project it was written for.
+
+### What follows from it
+
+- **A project with code and a set of ≥1 row now has an AMBIGUOUS domain, and stops guessing a
+  single default.** `resolveDispatchRepo`'s "exactly one repo" rule is unchanged; the domain
+  is simply larger, so an unpinned card resolves to `null` rather than routing into whichever
+  repository was added last. That is the other half of the reported defect, not a regression:
+  such a project genuinely HAS several repositories and there is no non-arbitrary choice.
+- **A pin that resolves through the workspace rung is stored as a NAME, not a reference.** The
+  union adds no `project_repository` row, so there is nothing for such a pin to point at, and
+  a partial reference list would leave `refs[0]` naming a different repository than `names[0]`
+  — the primary every dispatch surface routes on. `resolveAuthoredRepoPinsInProject` therefore
+  emits references all-or-nothing and otherwise falls to `work-item-repository-set.md` §A7's
+  compatibility rung, which is where that project's pins already were before its first row.
+- **`hasSet` is no longer a switch.** It still records that the project has planned
+  repositories, and that is still what makes the set answer FIRST. Whether anything is layered
+  under it is a second question, asked where the ladder lives.
+
+### What this does NOT fix — the deeper reading, deliberately not taken here
+
+**A project still has no real record of its own repositories.** `GithubRepo` has no
+`project_id`, so _"this project's repositories"_ is not expressible as data until the set
+table is populated, and this amendment answers the question with a union of two registries
+rather than with one honest record. The stronger fix — the connect branch recording a
+`connected` row per repository the project actually uses — was considered and is **not** done
+here, for a reason worth recording rather than re-deriving:
+
+**neither seeding nor recording can recover what was never told to Motir.** Only the
+onboarding run's `connectedRepoRef` is project-scoped, and it names ONE repository. A faithful
+seed of Motir's own project produces one row and loses the other four — the exact repositories
+the defect was reported about. That a project uses `motir-gateway` is not recorded anywhere,
+in any registry, so making the set complete for an EXISTING project requires **asking the
+user**, which is a new surface and a migration, not a fix for this defect. The union is what
+makes the product correct with the data that exists; recording the association is what would
+let this rung eventually retire, and it is the thing to build next if a project's repository
+record is wanted for its own sake.
 
 ## Deferred to the spike — asserted nowhere in this document
 
