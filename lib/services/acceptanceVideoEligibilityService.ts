@@ -1,3 +1,4 @@
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withOrgContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -41,7 +42,17 @@ export const acceptanceVideoEligibilityService = {
     }
 
     const organizationId = access.organizationId;
-    const [org, orgAccess] = await Promise.all([
+    // MOTIR-3077 — DANGEROUS bucket, repaired. `resolveOrgAccess` is an ACCESS
+    // GATE (`assertOrgMember` → `OrganizationNotFoundError`) and it rejects on an
+    // ORDINARY path: an actor who reaches this workspace without being a member
+    // of the organization behind it. Under `Promise.all` that refusal returned
+    // immediately and left the sibling arm — its own `withOrgContext`
+    // interactive transaction — running unobserved, holding a pool connection
+    // and `AccessShareLock`s past the point where the caller believed the read
+    // was over. That is MOTIR-3066's `getQuickView` shape exactly, with the gate
+    // written second instead of first. `allSettledOrThrow` awaits both arms and
+    // then rethrows the first rejection in ARRAY order.
+    const [org, orgAccess] = await allSettledOrThrow([
       withOrgContext({ userId: input.actorUserId, organizationId }, (tx) =>
         organizationRepository.findByIdInTx(organizationId, tx),
       ),

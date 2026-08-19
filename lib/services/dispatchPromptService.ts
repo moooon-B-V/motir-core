@@ -97,6 +97,10 @@ export const dispatchPromptService = {
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The access gate (`getWorkItemByIdentifier`) is awaited above, and none
+    // of these five arms has a refusal path — `resolveDispatchRepoForItem`
+    // returns `null` for an unresolvable repo instead of throwing.
     const [parentRow, blockerKeys, readiness, dispatchRepo, advisories] = await Promise.all([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

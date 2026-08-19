@@ -2,21 +2,25 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                       | Files                                         | Card                 | Section  |
-| ----------------------------- | --------------------------------------------- | -------------------- | -------- |
-| The Plans surface             | `plans-surface.mock.html` + `.png`            | MOTIR-843 (7.4.1)    | Part I   |
-| AI **sprint** planning        | `sprint-planning.mock.html` + `.png`          | MOTIR-1749 (7.13.11) | Part II  |
-| **Who authored a plan**       | `plans-surface.mock.html` (panel A2) + `.png` | MOTIR-2985           | Part III |
-| Out-of-plan **PARENT** signal | `plans-surface.mock.html` (panel E) + `.png`  | MOTIR-3082           | Part IV  |
-| A proposal **READ view**      | `plans-surface.mock.html` (panel F) + `.png`  | MOTIR-3082           | Part IV  |
+| Surface                                      | Files                                                   | Card                 | Section  |
+| -------------------------------------------- | ------------------------------------------------------- | -------------------- | -------- |
+| The Plans surface                            | `plans-surface.mock.html` + `.png`                      | MOTIR-843 (7.4.1)    | Part I   |
+| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                    | MOTIR-1749 (7.13.11) | Part II  |
+| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`           | MOTIR-2985           | Part III |
+| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png` | MOTIR-3074           | Part IV  |
+| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`            | MOTIR-3082           | Part V   |
+| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`            | MOTIR-3082           | Part V   |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
 Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
 and its AUTHOR, to a shipped row and a shipped header, and redraws nothing.
-**Part IV amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
+Part IV amends the same asset again, and is the one place either amendment MOVES a shipped
+element: the review rail's status tag leaves the title's line for its own.
+
+**Part V amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
 parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
-differing), and a read view for one proposal composing the shipped canvas peek.
+differing), and a read view for one proposal composing the shipped quick view.
 
 ---
 
@@ -610,7 +614,7 @@ narrow row at once:
 
 ## 6. The DETAIL header — the same two parties, with the roles spelled out
 
-The plan-detail header is `PlanReviewRail`'s `<header>` (title + status pill + summary + `N items`).
+The plan-detail header is `PlanReviewRail`'s `<header>` (status tag + title + summary + `N items`).
 The attribution joins the **`N items` line**, with **two differences** from the row:
 
 1. **The roles are named in words** — `Requested by Mara · written by Claude Code` — where the row
@@ -657,9 +661,67 @@ reads panel A as shipped behaviour.
 
 ---
 
-# Part IV — The plan-review DETAIL surfaces: the out-of-plan PARENT signal and a proposal READ view (MOTIR-3082 / bug MOTIR-3070)
+# Part IV — The review rail's STATUS TAG is an overline, above the title (MOTIR-3074)
 
-**Amends Parts I–III's asset in place**: the same three files
+Amends the **header gallery** in Part I's asset — the one place that asset draws
+`PlanReviewRail`'s `<header>` as it actually ships. (Panel B's rail sketch predates that header and
+draws neither the plan title nor the status tag, so there is nothing in it to correct.) Placement
+only: no new element, no new token, no copy change, and the `data-testid="plan-status-pill"` hook
+every shipped test reads is untouched.
+
+## 1. What changed
+
+The tag used to share one `flex items-center justify-between` row with the title. **It now sits on
+its own line ABOVE it**, and the title owns the full rail width.
+
+## 2. Why the row failed — and why it is not an edge case
+
+Plan titles are **generated** — long by
+default, and routinely carrying a token with no break opportunity in it (a `SCREAMING_CASE`
+constant, a repo name, a cuid). The rail is a fixed **22rem** column, so a `shrink-0` tag took
+roughly a third of the text width; the title wrapped to five lines while `items-center` held the
+one-line tag against the middle of the block, and the tag ended up **inside the title's text
+column**, reading as an annotation on line 3 of the sentence rather than as the plan's state. That
+is the one thing this element exists to answer — _did my plan go through?_ — and it is read at the
+moment somebody is about to press Approve.
+
+## 3. Measured, at the shipped 352px rail width
+
+**Measured in chromium**, on the reported title (_"…into
+`SHARED_PLANNING_RULES` (motir-ai) — supersedes plan `cmszanri500bfi3phws7wdiu8`"_):
+
+| shape                                  | rail overflow | title lines | tag inside the title's rows |
+| -------------------------------------- | ------------- | ----------- | --------------------------- |
+| shipped — tag beside the title         | **7px**       | 5           | **yes**                     |
+| guard only, tag still beside the title | 0px           | **7**       | **yes**                     |
+| **tag as an overline + the guard**     | **0px**       | **5**       | **no**                      |
+
+The middle row is why the guard alone was not the fix: it stops the overflow and leaves both the
+collision and two extra lines of wrapping.
+
+## 4. What is unchanged, and the guard on the title
+
+**The tag keeps its full status coverage and its `data-testid` hook** — the move is placement only,
+no change to the tint map, the copy, or what a test reads. It stays `align-self: flex-start` so a
+flex COLUMN child does not stretch across the rail.
+
+**And the title carries the overflow guard whatever the placement**: `min-w-0` +
+**`overflow-wrap: anywhere`** (Tailwind `wrap-anywhere`). `anywhere`, not `break-word`, is
+load-bearing — only `anywhere` feeds its break opportunities into the **min-content** size a
+flex/grid item's automatic minimum is measured from, which is the size that pushed the `<aside>`
+past its track. Measured on the same harness: `break-words` alone left the 7px overflow standing;
+`wrap-anywhere` alone cleared it. With the overline placement a token wider than the _whole_
+column still overflows without the guard — 324px on a 60-character token, 0px with it — so the two
+halves are independent and both are owed.
+
+This is the repo's most-repeated overflow class (`min-w-0` on a shrinkable track) landing in a
+header that never got the guard; the page's own `<h1>` one level up already had it.
+
+---
+
+# Part V — The plan-review DETAIL surfaces: a proposal on its parent's LEVEL, and a proposal READ view (MOTIR-3082 / bug MOTIR-3070)
+
+**Amends Parts I–IV's asset in place**: the same three files
 (`design-notes.md` · `plans-surface.mock.html` · `plans-surface.png`), two new panels — **E** and **F**.
 Nothing already drawn is redrawn.
 

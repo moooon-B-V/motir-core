@@ -14,6 +14,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
 
 // The BILLABLE-TOOL gate at the MCP dispatch seam (MOTIR-2610), wired.
 //
@@ -82,6 +83,15 @@ beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
   __resetSharedRateLimitStoreForTest();
+  // AFTER the reset — the reset drops exactly the override this installs.
+  // ⚠️ The SECOND unstated precondition of every refusal here (MOTIR-3067). The
+  // block above pins the WINDOW; this pins the store DEADLINE. Without it the
+  // reset above rebuilds the production store, whose 250 ms budget
+  // `consumeSharedRateLimit` fails OPEN on — and a served call arrives at
+  // `toContain(RATE_LIMITED_CODE)` as the fixture's `PROJECT_NOT_FOUND`, i.e. as
+  // the same "reads like a product bug" failure this file's header already
+  // describes for the window. See `tests/helpers/rateLimitStore.ts`.
+  pinSharedRateLimitStoreDeadline();
   for (const key of ENVS) delete process.env[key];
   // The gate must never read as "off" here — a suite that inherited the E2E
   // switch would assert nothing at all.

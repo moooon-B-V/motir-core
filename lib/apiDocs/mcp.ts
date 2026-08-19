@@ -447,9 +447,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '677e882f5e83',
   },
   get_plan_status: {
+    // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
+    // description's edit was to the parenthetical explaining WHY the `job` block
+    // exists (a failed job no longer leaves its plan `generating` forever — a
+    // reconciler declines an empty one within the hour), and this line was never
+    // about that. What the tool answers is the same thing it answered before.
     summary:
       'What became of a submitted planning job — its state, and how many proposals it produced.',
-    descriptionFingerprint: '6a4d3e564af1',
+    descriptionFingerprint: '7fe35804ba38',
   },
   get_plan: {
     summary:

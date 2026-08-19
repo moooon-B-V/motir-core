@@ -455,17 +455,39 @@
         padding: 14px 16px;
         box-shadow: var(--sh-subtle);
       }
+      /* MOTIR-3074 — the status tag is an OVERLINE on its own line ABOVE the title,
+         not a shrink-0 pill beside it. Plan titles are GENERATED: long by default and
+         routinely carrying an unbreakable token, so on a shared row the title wrapped
+         to five lines while `align-items: center` held the one-line tag against the
+         middle of the block, and the tag read as an annotation on line 3 of the
+         sentence. Stacked, the title owns the full rail width at every length. */
       .hdrtop {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
       }
+      .hdrtop .pill {
+        align-self: flex-start;
+        max-width: 100%;
+      }
+      /* The guard, owed wherever the tag sits: a flex/grid item's automatic minimum
+         size is its longest unbreakable word, and the rail is a fixed 22rem track.
+         `overflow-wrap: anywhere` — NOT `break-word`, which does not feed its break
+         opportunities into that min-content size. */
       .hdrcard h4 {
         margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
         font-size: 15px;
         font-weight: 600;
         color: var(--text);
+      }
+      /* The long-title case, drawn at the SHIPPED rail width rather than the
+         gallery's full width — the collision only exists in a 22rem column. */
+      .hdrcard.at-rail-width {
+        max-width: 352px;
       }
       .hdrcard .sum {
         margin: 6px 0 0;
@@ -1271,7 +1293,7 @@
         font-size: 12px;
       }
 
-      /* ===== Part IV (MOTIR-3082) — the plan-review DETAIL surfaces ========= */
+      /* ===== Part V (MOTIR-3082) — the plan-review DETAIL surfaces ========== */
       /* Panel E — the level's nodes keep the real component's FIXED footprint
          (NODE_W/NODE_H) and clamp the title to two lines, exactly as the shipped
          PlanItemNode does. Without this a long title reflows the card and the
@@ -2129,8 +2151,8 @@
               <div class="list" style="display: grid; gap: 14px">
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Stripe Connect payouts</h4>
                     <span class="pill planned">Planned</span>
+                    <h4>Stripe Connect payouts</h4>
                   </div>
                   <p class="sum">Marketplace sellers get paid out through Stripe Connect.</p>
                   <div class="hdrmeta">
@@ -2158,8 +2180,8 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Email digest &amp; weekly summaries</h4>
                     <span class="pill approved">Approved</span>
+                    <h4>Email digest &amp; weekly summaries</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>8</b> items</span>
@@ -2185,8 +2207,8 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
                     <span class="pill planned">Planned</span>
+                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>6</b> items</span>
@@ -2221,16 +2243,55 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Crypto wallet checkout</h4>
                     <span class="pill declined">Declined</span>
+                    <h4>Crypto wallet checkout</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>11</b> items</span>
                   </div>
                 </div>
+
+                <!-- The case the placement is FOR: a generated title, at the real
+                     rail width, carrying a SCREAMING_CASE constant and a cuid. -->
+                <div class="hdrcard at-rail-width">
+                  <div class="hdrtop">
+                    <span class="pill approved">Approved</span>
+                    <h4>
+                      Mirror the sweep-is-not-its-grep-pattern limb into SHARED_PLANNING_RULES
+                      (motir-ai) — supersedes plan cmszanri500bfi3phws7wdiu8
+                    </h4>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>6</b> items</span>
+                    <span class="attrib"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="11" width="18" height="10" rx="2" />
+                        <circle cx="12" cy="5" r="2" />
+                        <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                      >written by <b class="harness">Claude Code</b></span
+                    >
+                  </div>
+                </div>
               </div>
 
               <div class="note-box">
+                <b>The status tag is an OVERLINE, above the title (MOTIR-3074).</b> Plan titles are
+                GENERATED — long by default, and routinely carrying an unbreakable token (a
+                <code>SCREAMING_CASE</code> constant, a repo name, a cuid). Beside the title, a
+                <code>shrink-0</code> tag took a third of a 22rem rail: the title wrapped to five
+                lines, the vertically-centred tag landed inside its text column, and the title's own
+                longest word pushed the rail past its track (measured: 7px of overflow at the
+                shipped width). On its own line the title owns the full width and a five-line title
+                reads exactly like a one-line one — and the state stays the first thing read, which
+                is what the tag is for. The title additionally carries <code>min-w-0</code> +
+                <code>overflow-wrap: anywhere</code>, which is owed whatever the placement.<br /><br />
                 <b>The header SPELLS the roles; the row does not.</b> The row is scanned, and an
                 avatar in front of a name already reads as “this person's” — so it says
                 <code>Mara · via Claude Code</code>. The header is read once, by the person about to
@@ -2396,7 +2457,7 @@
                         <path d="M12 5v14M5 12h14" /></svg
                       >add</span
                     >
-                    <!-- Edit a proposed add (MOTIR-1370) — REMOVED by Part IV §3; this
+                    <!-- Edit a proposed add (MOTIR-1370) — REMOVED by Part V §3; this
                          pencil and the modal below it are the record of what shipped, not a
                          live specification. The live per-item affordance is View (panel F). -->
                     <button
@@ -2709,7 +2770,7 @@
           <span class="n">B</span>
           <h2>
             <s>Edit a proposed <code>add</code> — the inline-edit modal (MOTIR-1370)</s> ·
-            <strong style="color: var(--danger)">SUPERSEDED by Part IV</strong>
+            <strong style="color: var(--danger)">SUPERSEDED by Part V</strong>
           </h2>
           <span class="note"
             >REMOVED 2026-08-19 — manual editing of a proposal is not needed: a proposal is READ
@@ -3308,7 +3369,7 @@
                   >add</span
                 >
                 <!-- View, on EVERY op. There is no edit affordance: the proposal
-                     edit modal is REMOVED (Part IV §3) — a proposal is read, and
+                     edit modal is REMOVED (Part V §3) — a proposal is read, and
                      changed by re-planning, not by hand. -->
                 <button class="viewbtn is-selected" aria-label="View proposal" title="View">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">

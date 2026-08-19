@@ -1,6 +1,10 @@
 import { Prisma, type Plan } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
+/** A plan the abandoned-plan sweep may act on — a `Plan` whose `sourceJobId` the
+ *  selecting predicate has already proved non-null. */
+export type AbandonedPlanCandidate = Plan & { sourceJobId: string };
+
 // Plan repository — single Prisma operations on the `plan` table (Story 7.21 ·
 // MOTIR-1336). Writes require `tx` (a compile-time guarantee they run in a
 // transaction); pure read paths use the `db` singleton. No business logic, no
@@ -83,6 +87,15 @@ export const planRepository = {
    * for a project whose real `planned` proposal sits one row down — trading a
    * permanent pause for the stacked proposal the gate exists to prevent.
    *
+   * ⚠️ THE OTHER HALF — an empty plan whose PRODUCER died — is not reachable from
+   * here and never was: that row carries a `sourceJobId`, so it is identical to a
+   * healthy in-flight generation until somebody asks the job. It is reconciled
+   * OUT of `generating` by `abandonedPlanService.reconcileAbandoned`
+   * (MOTIR-3064), which asks and then writes a terminal status — so by the time
+   * this read sees it, it is `declined` and decided. The predicate below is
+   * unchanged by that fix, deliberately: a gate that guessed at liveness is the
+   * thing AMENDMENT 2 rejected.
+   *
    * Newest first, so the ONE row returned is the plan a caller would show. Takes
    * an optional `tx` because both consumers read it inside a workspace context
    * (correct under the non-bypass `motir_app` role, where the plan policy keys
@@ -103,6 +116,65 @@ export const planRepository = {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+  },
+
+  /**
+   * The ABANDONED-PLAN candidates, across workspaces — the discovery read behind
+   * the reconciling sweep (MOTIR-3064). Returns `generating` plans that have a
+   * PRODUCER, hold NO proposals, and are older than `olderThan`; the sweep then
+   * asks motir-ai what became of each one's job and terminates only the ones
+   * whose producer is provably gone.
+   *
+   * THIS IS THE OTHER HALF OF {@link findUndecidedByProject}'s exclusion, and the
+   * two are deliberately disjoint. MOTIR-3051 excluded the orphan with NO
+   * producer, because that row can be judged from itself. This one carries a
+   * `sourceJobId`, so it is indistinguishable BY THE ROW from a generation that
+   * is going perfectly well and simply has not appended yet — the answer is not
+   * in the plan table at all, it is in whether the job behind it is still alive.
+   * So the gate cannot widen to cover it, and a sweep that ASKS is the shape
+   * (`docs/decisions/agent-authored-plans.md` AMENDMENT 2).
+   *
+   * ⚠️ `olderThan` IS A CORRECTNESS ARGUMENT, NOT A PERFORMANCE ONE. Between
+   * `submitExpand`'s `createPlan` and motir-ai's first append a healthy plan
+   * holds zero items with a live job — the exact shape this read selects. The age
+   * bound is what keeps the sweep out of that window entirely, so it can never
+   * race a submit it would otherwise be asking about milliseconds after it
+   * happened.
+   *
+   * ⚠️ AND IT IS EMPTY-ONLY, BY THE CARD'S OWN SCOPE (MOTIR-3064 AC 5). A job
+   * that died AFTER some appends left a PARTIAL plan, and that is a real proposal
+   * a person can read and decline — the release valve works there, so nothing
+   * here may touch it.
+   *
+   * Cross-workspace, so it runs under `withSystemContext` against the plan
+   * policy's `FOR SELECT` system arm; every write the sweep then makes re-binds
+   * to that row's own workspace. **`plan_item` needs that arm too, and the
+   * direction is the surprising one**: `items: { none: {} }` is a correlated
+   * subquery in the SAME statement, so an RLS-hidden proposal row makes `NOT
+   * EXISTS` vacuously true and a PARTIAL plan read as empty — the blind spot
+   * WIDENS this scan rather than narrowing it. Both arms ship in this card's
+   * migration. Bounded by `take` and ordered oldest-first, so a
+   * backlog drains over successive passes rather than in one long transaction.
+   */
+  async listAbandonedCandidates(
+    olderThan: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<AbandonedPlanCandidate[]> {
+    // The cast is the WHERE clause's `sourceJobId: { not: null }` stated in the
+    // type system: the caller needs a `string` to ask motir-ai with, and a
+    // runtime re-check would be a branch no query result can take. Narrowing it
+    // HERE keeps the proof next to the predicate that establishes it.
+    return tx.plan.findMany({
+      where: {
+        status: 'generating',
+        sourceJobId: { not: null },
+        createdAt: { lte: olderThan },
+        items: { none: {} },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    }) as Promise<AbandonedPlanCandidate[]>;
   },
 
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
