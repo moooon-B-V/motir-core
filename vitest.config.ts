@@ -250,6 +250,15 @@ export default defineConfig({
         'lib/jobs/definitions/notificationFanIn.ts',
         'lib/notifications/errors.ts',
         'lib/services/workItemsService.ts',
+
+        // Bug MOTIR-3050 — the blocker-readiness classifier, LIFTED OUT of
+        // `workItemsService` (gated just above) so `plansService.materialize`
+        // can reach the same rule when it chooses a materialized add's birth
+        // status. Moving gated code into an ungated file would have quietly
+        // dropped it out of the report, so it is re-entered here and pinned at
+        // the same 90 the file it came from carries. Measured on this branch
+        // before pinning: 100 lines / 100 functions / 100 branches.
+        'lib/workItems/blockerReadiness.ts',
         'lib/services/backlogService.ts',
         'lib/repositories/workItemRepository.ts',
         'lib/repositories/workItemLinkRepository.ts',
@@ -1594,6 +1603,8 @@ export default defineConfig({
         'lib/jobs/definitions/notificationFanIn.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/notifications/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Bug MOTIR-3050 (see the `include` note above).
+        'lib/workItems/blockerReadiness.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2694 · Subtask MOTIR-2696 (see the `include` note above).
         'lib/workItems/embeddingDocument.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemEmbeddingRepository.ts': {

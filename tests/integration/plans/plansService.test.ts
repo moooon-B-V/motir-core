@@ -1291,3 +1291,233 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     ).rejects.toBeInstanceOf(InvalidEstimateError);
   });
 });
+
+// ── MOTIR-3050 ─────────────────────────────────────────────────────────────────
+// An approved plan's dependent cards used to land at the workflow's INITIAL
+// status even when the proposal carried `blockedByRefs` naming an unfinished
+// item: the edges were wired, the status was not derived from them. These prove
+// the derivation happens AT BIRTH and nowhere else — and that it reuses the
+// readiness classifier rather than defining a second rule.
+describe('plansService.approvePlan — a materialized add is born `blocked` when its edges say so (MOTIR-3050)', () => {
+  it('an add blocked_by a NOT-DONE existing item materializes as `blocked`', async () => {
+    const fx = await makeWorkItemFixture();
+    const blockerId = await seedItem(fx, 'Unfinished blocker');
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Waits on the blocker', kind: 'task' },
+        blockedByRefs: [blockerId],
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Waits on the blocker' },
+    });
+    expect(created.status).toBe('blocked');
+  });
+
+  it('an add blocked_by an INTRA-PLAN sibling materializes as `blocked` (the sibling cannot be done)', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Chain' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Produces', kind: 'task' } }],
+      fx.ctx,
+    );
+    const producerItemId = first.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Consumes', kind: 'task' },
+          blockedByRefs: [`planItem:${producerItemId}`],
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const producer = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Produces' } });
+    const consumer = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Consumes' } });
+    expect(producer.status).toBe('todo'); // nothing blocks it
+    expect(consumer.status).toBe('blocked');
+  });
+
+  it('an add with NO blockers still materializes at the INITIAL status (AC 2 — unchanged)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Free to start', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Free to start' } });
+    expect(created.status).toBe('todo');
+  });
+
+  it('an add whose only blocker is already DONE materializes at the INITIAL status', async () => {
+    const fx = await makeWorkItemFixture();
+    const blockerId = await seedItem(fx, 'Finished blocker');
+    await adminDb.workItem.update({ where: { id: blockerId }, data: { status: 'done' } });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Its blocker landed', kind: 'task' },
+        blockedByRefs: [blockerId],
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Its blocker landed' },
+    });
+    expect(created.status).toBe('todo');
+  });
+
+  it('reuses the READINESS classifier, not a second rule: an INTEGRATED (session-branch) blocker satisfies too', async () => {
+    const fx = await makeWorkItemFixture();
+    const blockerId = await seedItem(fx, 'Integrated blocker');
+    // Non-terminal, but integrated-awaiting-review — `classifyBlockerReadiness`
+    // counts this as satisfied (Subtask 7.8.11), so the dependent is ready and
+    // must NOT be born blocked.
+    await adminDb.workItem.update({
+      where: { id: blockerId },
+      data: { status: 'in_review', sessionBranch: 'session/abc' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Rides the session branch', kind: 'task' },
+        blockedByRefs: [blockerId],
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Rides the session branch' },
+    });
+    expect(created.status).toBe('todo');
+  });
+
+  it('AC 3 — a `modify` that newly blocks an EXISTING card leaves its status alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const blockerId = await seedItem(fx, 'Newly discovered prerequisite');
+    const targetId = await seedItem(fx, 'Already in flight');
+    await adminDb.workItem.update({ where: { id: targetId }, data: { status: 'in_progress' } });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { blockedByAdd: [blockerId] } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    // The EDGE lands; the status is the card's own recorded state and is not
+    // rewritten by an approve (see the note in plansService.materialize).
+    expect(target.status).toBe('in_progress');
+    const link = await adminDb.workItemLink.findFirst({
+      where: { fromId: targetId, toId: blockerId, kind: 'is_blocked_by' },
+    });
+    expect(link).not.toBeNull();
+  });
+
+  it('AC 4 — the two authoring doors agree: the same tree via create+transition and via approve ends in the same statuses', async () => {
+    const fx = await makeWorkItemFixture();
+
+    // Door 1 — DIRECT: create the pair, wire the edge, and set `blocked` by hand
+    // (what the planner runbook prescribes on that path).
+    const directBlockerId = await seedItem(fx, 'direct blocker');
+    const directDependentId = await seedItem(fx, 'direct dependent');
+    await workItemsService.linkWorkItems(
+      { fromId: directDependentId, toId: directBlockerId, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({
+      where: { id: directDependentId },
+      data: { status: 'blocked' },
+    });
+
+    // Door 2 — PROPOSE: the same shape through a plan.
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Same tree' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'plan blocker', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'plan dependent', kind: 'task' },
+          blockedByRefs: [`planItem:${first.items[0]!.id}`],
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const directBlocker = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: directBlockerId },
+    });
+    const directDependent = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: directDependentId },
+    });
+    const planBlocker = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'plan blocker' },
+    });
+    const planDependent = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'plan dependent' },
+    });
+
+    expect(planBlocker.status).toBe(directBlocker.status);
+    expect(planDependent.status).toBe(directDependent.status);
+  });
+
+  it('AC 5 — readiness is unchanged: it still comes from the edges, and it agrees with the seeded status', async () => {
+    const fx = await makeWorkItemFixture();
+    const blockerId = await seedItem(fx, 'Readiness blocker');
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Readiness dependent', kind: 'task' },
+        blockedByRefs: [blockerId],
+      },
+      { op: 'add', proposedFields: { title: 'Readiness free', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const dependent = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Readiness dependent' },
+    });
+    const free = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Readiness free' } });
+
+    const dependentDetail = await workItemsService.getIssueDetail(
+      fx.projectId,
+      dependent.identifier,
+      fx.ctx,
+    );
+    const freeDetail = await workItemsService.getIssueDetail(fx.projectId, free.identifier, fx.ctx);
+    expect(dependentDetail.readiness.ready).toBe(false);
+    expect(dependentDetail.readiness.openBlockers.map((b) => b.id)).toEqual([blockerId]);
+    expect(freeDetail.readiness.ready).toBe(true);
+
+    // …and readiness stays a function of the EDGES, not of the stored status:
+    // finishing the blocker makes the dependent ready while it still reads `blocked`.
+    await adminDb.workItem.update({ where: { id: blockerId }, data: { status: 'done' } });
+    const afterDetail = await workItemsService.getIssueDetail(
+      fx.projectId,
+      dependent.identifier,
+      fx.ctx,
+    );
+    expect(afterDetail.readiness.ready).toBe(true);
+    expect(afterDetail.item.status).toBe('blocked');
+  });
+});
