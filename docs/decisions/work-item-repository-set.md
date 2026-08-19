@@ -725,6 +725,36 @@ whose tree is being planned.
 `V1_CONTRACT_VERSION` are not engaged by it — the version bump in §A4 is for the published
 shapes alone.
 
+#### A4.2 The ACTIVITY renderer and the repo-straddle ADVISORY — the two seams a shape table cannot answer
+
+§A4 and §A4.1 describe SHAPES. Two of MOTIR-3041's five seams are not shape questions, and each
+asks something the implementation would otherwise decide in a comment.
+
+**The activity renderer records NAMES, and an old entry renders verbatim.**
+`lib/activity/renderers.ts` registers `targetRepo: textField()` and `targetRepos: listField()` —
+the diff renders the strings it stored. Under references the diff **keeps storing the resolved
+NAMES**, not the row ids, and no history entry is migrated. Three reasons, the second decisive:
+
+- A cuid tells a reader nothing, and History is read by people auditing why a dispatch went to the
+  wrong checkout.
+- **A history entry is a record of what was true THEN.** Rendering a reference's CURRENT name would
+  make an old entry assert something that was not true when it was written — which is the opposite
+  of an audit, and strictly worse than the stale-name problem it would be fixing.
+- Old entries then need no special case: they already hold names, and they keep rendering exactly
+  as they do today.
+
+So the rename property (§A1 point 2) deliberately does NOT reach into History. A rename changes
+every LIVE surface and changes nothing about the record of what was decided. That asymmetry is the
+decision, not an oversight — and it is the answer to MOTIR-3041's _"the card should say which of
+those the renderer does for old entries."_
+
+**The repo-straddle advisory keeps comparing NAMES, and the resolution becomes explicit.**
+`lib/workItems/proseVsGraph.ts` matches a path in a card's PROSE against the card's repository.
+Prose contains names, so the comparison stays a name comparison — what changes is only where the
+card's side of it comes from: the references, resolved ONCE through §A4's rule, rather than read
+off a column. Stated so the resolution is a call the reader can see rather than an incidental
+property of whichever field the advisory happened to read.
+
 ### A5. Question 4 — what the classifier compares, and what a `proposed` row DELIVERS
 
 `classifyRepoDelivery(expected, linked)` (`lib/workItems/repoDelivery.ts`) keeps its shape
@@ -792,6 +822,14 @@ because MOTIR-2978 and MOTIR-3033 both build to it and neither may decide it alo
 - **An ARCHIVED descendant contributes nothing.** A parent is not waiting on work that has
   been archived out of it, and §4's "has every repository merged?" would otherwise be
   unanswerable for a story whose archived child pinned a repository nothing will ever ship to.
+- **A concurrent recompute SERIALIZES on the container's own row lock.** The rollup is a
+  read-derive-write over a set of children, which is the shape a lost update lives in: two children
+  of one story updated at the same time each recompute the parent, and the later write can be
+  derived from a snapshot taken before the earlier one landed. So the recompute takes the
+  CONTAINER's row lock (`SELECT … FOR UPDATE`) inside the mutating transaction and re-reads its
+  descendants UNDER that lock — never from the caller's snapshot. This is `CLAUDE.md`'s
+  lock-before-read-derived-update rule, named here because a rollup is exactly the case it exists
+  for and because MOTIR-2978's AC 3 asserts the outcome without prescribing the mechanism.
 - **A direct write to a container's set is REJECTED with a typed error** —
   `ContainerRepoSetNotWritableError` → 422 / a self-correctable MCP tool error — on all three
   write surfaces. **Not silently ignored**, for the reason §3.4 gives for rejecting a silent
@@ -914,11 +952,17 @@ re-derive.**
   and `MOTIR-3040 blocked_by MOTIR-3041`**, wired by this card rather than left as a build
   order somebody has to rediscover (`plan-rules/core.md` gate 4: an absent edge and a
   considered exclusion are the same absent edge).
-- **MOTIR-3041** (read seams) — §A4 gives the exact shape of every seam, the resolved-name
-  source, the `V1_CONTRACT_VERSION` bump, and the write-side three-way exclusion AC 5 asks
-  about. AC 3's rename assertion is the property §A1 point 2 exists for.
+- **MOTIR-3041** (read seams) — §A4 gives the shape of the THREE published seams (DTO,
+  `/api/v1`, MCP), the resolved-name source, the `V1_CONTRACT_VERSION` bump, and the write-side
+  three-way exclusion AC 5 asks about. **§A4.2 answers the other two**, which are not shape
+  questions: the activity renderer stores NAMES and renders an old entry verbatim (AC 1's fourth
+  seam, and the card's own "say which of those the renderer does for old entries"), and the
+  advisory keeps comparing names with the resolution made explicit. AC 3's rename assertion is the
+  property §A1 point 2 exists for — **and §A4.2 bounds it: History is deliberately outside it.**
 - **MOTIR-2978** (the container rollup) — §A6 is its specification, including AC 4's "chosen
-  disposition" for a direct write (rejected, typed) and AC 2's archive case.
+  disposition" for a direct write (rejected, typed), AC 2's archive case, and **AC 3's
+  concurrency**, whose mechanism §A6 now names (the container's row lock, re-reading descendants
+  under it) rather than leaving the card to assert an outcome with no prescribed means.
 - **MOTIR-3033** (`materialize` writes the set) — §A6's "once per container per materialize,
   after the adds pass, inside the same transaction" is its AC 5; §A3 removes its own open
   question about whether the role still rides along (it does not).
