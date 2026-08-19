@@ -35,6 +35,20 @@ async function seedItem(
   return { id: dto.id, identifier: dto.identifier };
 }
 
+/** One node of a real epic → story → task CHAIN, for the ancestor-trail cases. */
+async function seedChild(
+  fx: WorkItemFixture,
+  kind: 'epic' | 'story' | 'task',
+  title: string,
+  parentId?: string,
+): Promise<{ id: string; identifier: string }> {
+  const dto = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind, title, ...(parentId ? { parentId } : {}) },
+    fx.ctx,
+  );
+  return { id: dto.id, identifier: dto.identifier };
+}
+
 beforeEach(async () => {
   await truncateAuthTables();
 });
@@ -294,6 +308,92 @@ describe('planReviewService.getPlanReview', () => {
 
     expect(item.parentIdentifier).toBeNull();
     expect(item.parentTitle).toBeNull();
+  });
+
+  // ── The committed ANCESTOR CHAIN (bug MOTIR-3152) ─────────────────────────
+  // The canvas breadcrumb walks the whole path down to the arrival level, not
+  // its last link. `parentIdentifier` can only ever name the immediate parent, so
+  // the canvas synthesised ONE crumb and every ancestor above it was missing —
+  // and the crumb it did draw sat under a root labelled "Plan" that navigated to
+  // the project roadmap root. The chain has to be carried.
+
+  it('carries the committed ancestor path down to the parent — ROOT FIRST, the parent LAST', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'The agent loop');
+    const story = await seedChild(fx, 'story', 'Plan review', epic.id);
+    const task = await seedChild(fx, 'task', 'The canvas', story.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Canvas plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: task.id, proposedFields: { title: 'A proposed subtask' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items[0]!;
+
+    expect(item.parentTrail).toEqual([
+      { id: epic.id, identifier: epic.identifier, title: 'The agent loop' },
+      { id: story.id, identifier: story.identifier, title: 'Plan review' },
+      { id: task.id, identifier: task.identifier, title: 'The canvas' },
+    ]);
+    // The immediate parent stays exactly what it was — the trail is an addition,
+    // and its LAST element is that same parent.
+    expect(item.parentTrail.at(-1)!.id).toBe(item.parentNodeId);
+  });
+
+  it('is a one-element trail when the committed parent is itself a root', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'A root epic');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Root plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: epic.id, proposedFields: { title: 'A proposed story' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.parentTrail).toEqual([
+      { id: epic.id, identifier: epic.identifier, title: 'A root epic' },
+    ]);
+  });
+
+  it('is EMPTY for a root proposal, an intra-plan parent, and a deleted parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const doomed = await seedItem(fx, 'Doomed parent');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Mixed plan' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A proposed epic', kind: 'epic' } }],
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: `planItem:${first.items[0]!.id}`,
+          proposedFields: { title: 'A proposed story', kind: 'story' },
+        },
+        { op: 'add', parentRef: doomed.id, proposedFields: { title: 'An orphaned proposal' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.workItem.delete({ where: { id: doomed.id } });
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    for (const title of ['A proposed epic', 'A proposed story', 'An orphaned proposal']) {
+      expect({ title, trail: review.items.find((i) => i.title === title)!.parentTrail }).toEqual({
+        title,
+        trail: [],
+      });
+    }
   });
 
   // ── MOTIR-3160 (bug MOTIR-3154) — the DECIDED review model ────────────────

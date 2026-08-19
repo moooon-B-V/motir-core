@@ -378,6 +378,120 @@ describe('the dispatch-prompt schema', () => {
     });
     expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
   });
+
+  it('carries a SIZING advisory field-for-field, with NO criterionIndex (MOTIR-3110)', () => {
+    // The second `kind: 'shape'` variant, and the reason it is a variant rather
+    // than a third severity inside the existing one: it has no criterion to
+    // point at, and loosening `criterionIndex` to optional on the shipped shape
+    // schema would be a nullability change ADR §8 forbids. So the union grew
+    // instead — additive, on a field clients must already tolerate unknown
+    // members of.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      // MOTIR-3131 — the presenter maps the repository SET too; this fixture
+      // exercises the ADVISORY branch and carries an empty one.
+      targetRepos: [],
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'shape',
+          item: 'PROD-1',
+          severity: 'likely-over-gate-sizing',
+          threshold: 'both',
+          storyPoints: 13,
+          estimateMinutes: 600,
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toEqual({
+      kind: 'shape',
+      item: 'PROD-1',
+      severity: 'likely-over-gate-sizing',
+      threshold: 'both',
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+    // The point of the field-by-field mapper: no `criterionIndex` is invented on
+    // the way out, and no other member's fields ride along.
+    expect(mapped.advisories[0]).not.toHaveProperty('criterionIndex');
+    expect(mapped.advisories[0]).not.toHaveProperty('phrase');
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
+
+  it('an UNESTIMATED column crosses the wire as null, not as absent or zero', () => {
+    // A card over one ceiling with the other column empty is the ordinary shape
+    // — the gate's "every leaf carries an estimate" limb is a different finding
+    // — so `null` has to survive the mapper AND the schema.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'shape',
+          item: 'PROD-1',
+          severity: 'likely-over-gate-sizing',
+          threshold: 'story_points',
+          storyPoints: 21,
+          estimateMinutes: null,
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toMatchObject({ storyPoints: 21, estimateMinutes: null });
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
+
+  it('the two `kind: "shape"` variants stay DISJOINT — neither parses as the other', () => {
+    // The union is plain, not discriminated, so the guarantee that a sizing
+    // advisory does not silently validate as a criterion one (and lose its
+    // fields) rests on their REQUIRED fields being disjoint. Asserted directly,
+    // because the day it stops holding the failure is a stripped payload rather
+    // than an error.
+    const sizing = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-over-gate-sizing',
+      threshold: 'both',
+      storyPoints: 13,
+      estimateMinutes: 600,
+    };
+    const ordering = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-ordering-violation',
+      criterionIndex: 2,
+      phrase: 'once it lands',
+    };
+    const envelope = (advisories: unknown[]) => ({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: null,
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr' as const,
+      sessionBranch: null,
+      advisories,
+    });
+
+    expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
+    expect(dispatchPromptSchema.parse(envelope([ordering])).advisories[0]).toEqual(ordering);
+  });
 });
 
 describe('the work-loop job handle (ADR Amendment 6 Q3)', () => {

@@ -11,6 +11,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
@@ -71,6 +72,7 @@ function summarize(
   const shapes = advisories.filter(isOrderingAdvisory);
   const straddles = advisories.filter(isRepoStraddleAdvisory);
   const subsumed = advisories.filter(isSubsumptionAdvisory);
+  const oversized = advisories.filter(isSizingAdvisory);
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +
@@ -87,6 +89,19 @@ function summarize(
         `says "${s.phrase}", which is state that exists only AFTER this card's own PR has ` +
         'merged — and your boundary ends at PR opened. That criterion and everything below it ' +
         'belongs to a follow-on card; build what is above the line and report the split.',
+    );
+  }
+  // THE ESTIMATION GATE (MOTIR-3110). The claimer is the party this lands on:
+  // it has just been handed a card whose own sizing says it is more than one
+  // run, and the four prior instances all reached exactly this moment green.
+  for (const s of oversized) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): this card is sized ${s.storyPoints ?? '—'} ` +
+        `story points / ${s.estimateMinutes ?? '—'} estimated minutes, over the estimation ` +
+        `gate (${s.threshold === 'both' ? 'both ceilings' : s.threshold === 'story_points' ? '13+ points is its literal SPLIT signal' : 'a coding_agent run must fit in 60 minutes'}). ` +
+        'Read the card for a split it has already worked out — four cards over this gate each ' +
+        'carried the correct remedy in their own description — and SPLIT it rather than ' +
+        'starting a run the size says will not finish.',
     );
   }
   // The REPO-STRADDLE advisory (MOTIR-2177). The claimer is about to create ONE

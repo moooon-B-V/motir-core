@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ESTIMATION_GATE_ESTIMATE_MINUTES,
+  ESTIMATION_GATE_STORY_POINTS,
   MAX_SUBSUMPTION_QUERY_PATHS,
   POST_MERGE_CRITERION_PHRASES,
   SUBSUMPTION_EXEMPT_PHRASES,
@@ -12,6 +14,7 @@ import {
   hasCriterionPathTokens,
   isOrderingCheckExempt,
   isSubsumptionCheckExempt,
+  overGateSizing,
   resolvePathRepo,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
@@ -669,5 +672,107 @@ describe('isSubsumptionCheckExempt — the named opt-out (criterion 5)', () => {
 
   it('does not fire on a phrase embedded in a longer word', () => {
     expect(isSubsumptionCheckExempt('the boundary contracts of the module')).toBe(false);
+  });
+});
+
+describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', () => {
+  /** A card the gate has nothing to say about, so each case varies ONE thing. */
+  const rightSized = {
+    executor: 'coding_agent',
+    hasChildren: false,
+    storyPoints: 3,
+    estimateMinutes: 45,
+  } as const;
+
+  it('says nothing about a right-sized card — the direction that can go quiet', () => {
+    // Listed first deliberately: a check is only worth having if it is silent on
+    // the ordinary card, and a guard whose negative branch was never observed is
+    // a tautology.
+    expect(overGateSizing(rightSized)).toBeNull();
+  });
+
+  it('reports the POINTS ceiling on its own, AT the threshold and not below it', () => {
+    expect(overGateSizing({ ...rightSized, storyPoints: ESTIMATION_GATE_STORY_POINTS })).toEqual({
+      threshold: 'story_points',
+      storyPoints: 13,
+      estimateMinutes: 45,
+    });
+    // 13 is the SPLIT SIGNAL itself, so the comparison is `>=`. The value below
+    // it is the largest legal size and must stay silent.
+    expect(
+      overGateSizing({ ...rightSized, storyPoints: ESTIMATION_GATE_STORY_POINTS - 1 }),
+    ).toBeNull();
+  });
+
+  it('reports the MINUTES ceiling on its own, ABOVE it and not on it', () => {
+    expect(
+      overGateSizing({ ...rightSized, estimateMinutes: ESTIMATION_GATE_ESTIMATE_MINUTES + 1 }),
+    ).toEqual({ threshold: 'estimate_minutes', storyPoints: 3, estimateMinutes: 61 });
+    // 60 is the CEILING — "must be ≤ 60 minutes" — so a card sitting exactly on
+    // it is inside the gate. The two thresholds are deliberately not the same
+    // comparison, and this pins which is which.
+    expect(
+      overGateSizing({ ...rightSized, estimateMinutes: ESTIMATION_GATE_ESTIMATE_MINUTES }),
+    ).toBeNull();
+  });
+
+  it('a card over BOTH is ONE finding that names both — MOTIR-3068, verbatim', () => {
+    // The fixture the whole check exists for: `storyPoints: 13`,
+    // `estimateMinutes: 600`, `executor: coding_agent`, childless — which
+    // `validate_work_item` answered `valid: true` with nothing in `advisories`
+    // (`notes.html` #323, the FOURTH prose discharge of this gate).
+    expect(overGateSizing({ ...rightSized, storyPoints: 13, estimateMinutes: 600 })).toEqual({
+      threshold: 'both',
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+  });
+
+  it('EXEMPTS a human executor — its minutes are human work, not agent run time', () => {
+    expect(
+      overGateSizing({ ...rightSized, executor: 'human', storyPoints: 13, estimateMinutes: 600 }),
+    ).toBeNull();
+    // A `manual` card takes `executor: 'human'` from the type→executor default
+    // map, so testing the executor covers the type; an untyped card carrying no
+    // executor at all is not yet subject to the rule, so it is silent too.
+    expect(
+      overGateSizing({ ...rightSized, executor: null, storyPoints: 13, estimateMinutes: 600 }),
+    ).toBeNull();
+    expect(overGateSizing({ ...rightSized, executor: undefined, storyPoints: 21 })).toBeNull();
+  });
+
+  it('EXEMPTS a card with children, whatever its own columns hold', () => {
+    // POSITION, not kind: a container is sized by rollup, so its own columns
+    // describe a subtree rather than a run. The mirror case — a childless `bug`
+    // — is the MOTIR-3068 fixture above, and it fires.
+    expect(
+      overGateSizing({ ...rightSized, hasChildren: true, storyPoints: 13, estimateMinutes: 600 }),
+    ).toBeNull();
+  });
+
+  it('treats an unestimated column as unestimated, never as zero or as over', () => {
+    // The gate's "every leaf MUST carry a non-null estimate" limb is a DIFFERENT
+    // finding this check deliberately does not make: a null crosses no ceiling,
+    // and it must not suppress the other column either.
+    expect(overGateSizing({ ...rightSized, storyPoints: null, estimateMinutes: null })).toBeNull();
+    expect(overGateSizing({ ...rightSized, storyPoints: null, estimateMinutes: 600 })).toEqual({
+      threshold: 'estimate_minutes',
+      storyPoints: null,
+      estimateMinutes: 600,
+    });
+    expect(overGateSizing({ ...rightSized, storyPoints: 13, estimateMinutes: null })).toEqual({
+      threshold: 'story_points',
+      storyPoints: 13,
+      estimateMinutes: null,
+    });
+  });
+
+  it('pins the two thresholds against the gate the planner writes down', () => {
+    // A drift guard in the same spirit as POST_MERGE_CRITERION_PHRASES' — these
+    // two numbers are quoted from `plan-rules/kind-leaf-deepen.md` (the `13+`
+    // split signal, the ≤ 60-minute run ceiling), so a silent edit here is a red
+    // test rather than a check that quietly stops matching the rule.
+    expect(ESTIMATION_GATE_STORY_POINTS).toBe(13);
+    expect(ESTIMATION_GATE_ESTIMATE_MINUTES).toBe(60);
   });
 });
