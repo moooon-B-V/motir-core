@@ -214,7 +214,7 @@ export function DiscoveryOnboarding({
       generating ? (
         // 7.4 generation entry (MOTIR-1396) — runs the job + reveals proposals
         // live, then hands off to /plans/:id; Back returns to the baseline.
-        <GenerationFlow onExit={() => setGenerating(false)} />
+        <GenerationFlow onExit={() => setGenerating(false)} projectKey={projectKey} />
       ) : (
         <GenerationHandoff
           onBack={back}

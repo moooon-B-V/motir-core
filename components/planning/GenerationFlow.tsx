@@ -32,6 +32,10 @@ import { usePlanGeneration } from '@/lib/hooks/usePlanGeneration';
 // hands off to.
 
 export interface GenerationFlowProps {
+  /** The project whose committed roadmap LEVEL the canvas renders behind the
+   *  proposals (MOTIR-3083). Absent during a pre-project discovery run, where
+   *  there is no committed tree to show and the proposals stand alone. */
+  projectKey?: string;
   /** Leave the generation flow — back to the revisable pre-plan baseline / loop. */
   onExit: () => void;
 }
@@ -39,7 +43,7 @@ export interface GenerationFlowProps {
 const DISCOVERY_HREF = '/direction';
 const TOP_UP_HREF = '/settings/organization/billing';
 
-export function GenerationFlow({ onExit }: GenerationFlowProps) {
+export function GenerationFlow({ onExit, projectKey }: GenerationFlowProps) {
   const t = useTranslations('aiPlanning.generation');
   const router = useRouter();
   const { phase, planId, items, version, start, stop } = usePlanGeneration();
@@ -162,7 +166,12 @@ export function GenerationFlow({ onExit }: GenerationFlowProps) {
               {items.length > 0 ? ` · ${t('generatingCount', { count: items.length })}` : ''}
             </span>
           </div>
-          <PlanReviewCanvas items={items} version={version} ariaLabel={t('canvasAria')} />
+          <PlanReviewCanvas
+            items={items}
+            projectKey={projectKey ?? ''}
+            version={version}
+            ariaLabel={t('canvasAria')}
+          />
         </div>
       }
       chat={

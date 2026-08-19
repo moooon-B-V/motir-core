@@ -12,6 +12,23 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
+// ⚠️ NO UI CALLS THIS ANY MORE (MOTIR-3084). MOTIR-1370's proposal edit modal —
+// this route's only consumer — was REMOVED: manual editing of a proposal is not
+// needed, because a proposal is READ (the canvas peek) and changed by
+// re-planning. The route and `plansService.updateProposal` behind it are KEPT
+// deliberately rather than left silently uncalled:
+//
+//   • it is an inventoried permission surface (`docs/decisions/permission-inventory.md`
+//     row R11, `ai:view_plan`), so removing it is a permission-model change, not
+//     a component deletion;
+//   • `tests/integration/planning/contextualPlanningConfirmGate.test.ts` drives it
+//     as the confirm gate's write;
+//   • its generation-time twin `aiGenerationService.patchProposal` is a SEPARATE
+//     method and is unaffected either way.
+//
+// Removing it is a defensible follow-up and a distinct change. If you are here
+// because nothing calls it: that is expected, and this comment is the record.
+//
 // PATCH /api/plans/[id]/items/[itemId] — edit a proposed `add` of a `planned`
 // plan (Subtask 7.21.6 / MOTIR-1370, calling the MOTIR-1336 substrate). Patches
 // the add's proposed fields (title/kind/priority/type/description + leaf sizing

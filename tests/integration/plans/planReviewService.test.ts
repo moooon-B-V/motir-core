@@ -158,6 +158,88 @@ describe('planReviewService.getPlanReview', () => {
     expect(decision!.at).not.toBeNull();
   });
 
+  // ── The COMMITTED parent (MOTIR-3083) ──────────────────────────────────────
+  // The canvas opens a LEVEL at this parent and the breadcrumb names it, so the
+  // review model has to carry it. Before this it carried no field that could:
+  // a proposal under a committed item drew at the top level, indistinguishable
+  // from a genuine root.
+
+  it('resolves the COMMITTED parent a proposal will be created under', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await seedItem(fx, 'Payouts epic');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Payouts plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: parent.id, proposedFields: { title: 'Seller ledger' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items[0]!;
+
+    expect(item.parentNodeId).toBe(parent.id);
+    expect(item.parentIdentifier).toBe(parent.identifier);
+    expect(item.parentTitle).toBe('Payouts epic');
+    expect(item.parentKind).toBe('task');
+  });
+
+  it('leaves the parent fields NULL for a root and for an intra-plan parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Fresh tree' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A proposed epic', kind: 'epic' } }],
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: `planItem:${first.items[0]!.id}`,
+          proposedFields: { title: 'A proposed story', kind: 'story' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const root = review.items.find((i) => i.title === 'A proposed epic')!;
+    const child = review.items.find((i) => i.title === 'A proposed story')!;
+
+    // A genuine root: nothing to name.
+    expect(root.parentIdentifier).toBeNull();
+    // An intra-plan parent already HAS a node in the proposed set, so it needs no
+    // resolution — the canvas draws it, the breadcrumb does not.
+    expect(child.parentNodeId).toBe(root.nodeId);
+    expect(child.parentIdentifier).toBeNull();
+  });
+
+  it('DEGRADES to the root rendering when the parent has been archived', async () => {
+    // Never throw over a parent that no longer resolves: an unreadable parent is
+    // the same rendering a genuine root gets.
+    const fx = await makeWorkItemFixture();
+    const parent = await seedItem(fx, 'Doomed parent');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Orphan plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: parent.id, proposedFields: { title: 'Orphaned proposal' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.workItem.delete({ where: { id: parent.id } });
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const item = review.items[0]!;
+
+    expect(item.parentIdentifier).toBeNull();
+    expect(item.parentTitle).toBeNull();
+  });
+
   it('throws PlanNotFoundError for a missing plan', async () => {
     const fx = await makeWorkItemFixture();
     await expect(

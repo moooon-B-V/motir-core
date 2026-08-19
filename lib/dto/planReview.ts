@@ -42,6 +42,26 @@ export interface PlanReviewItemDto {
   nodeId: string;
   /** The resolved parent node id (drill placement), or null for a root. */
   parentNodeId: string | null;
+  /**
+   * The COMMITTED parent this proposal will be created under — resolved from the
+   * same batched target read, and non-null only when `parentRef` names a real
+   * work item rather than another proposal in this plan (MOTIR-3083).
+   *
+   * It is what the canvas opens a LEVEL at and what the breadcrumb names. Before
+   * this the review model carried no field that could name the parent at all, so
+   * a proposal under a committed item drew at the top level indistinguishable
+   * from a genuine root — `isRoot` is true both for "no parent" and for "a parent
+   * outside the rendered set", which is correct for a partial subtree and wrong
+   * for this. The distinction lives here, in the plan's own model, rather than in
+   * that shared predicate.
+   *
+   * All three are null for a root, for an intra-plan (`planItem:`) parent, and
+   * for a parent that has been archived or hard-deleted — the last case degrades
+   * to the root rendering rather than failing the read.
+   */
+  parentIdentifier: string | null;
+  parentTitle: string | null;
+  parentKind: string | null;
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`. */
@@ -55,9 +75,34 @@ export interface PlanReviewItemDto {
   priority: string | null;
   /** The `add`'s proposed work-item TYPE (`code`/`design`/…) — `null` as above. */
   type: string | null;
-  /** The `add`'s proposed DESCRIPTION (Markdown) — `null` as above. The inline
-   *  edit form seeds from these three; the compact canvas node never renders them. */
+  /** The `add`'s proposed DESCRIPTION (Markdown) — `null` as above. */
   descriptionMd: string | null;
+  /**
+   * EVERY remaining `PlanItemProposedFields` value that `materialize` writes onto
+   * the created work item (MOTIR-3084). All `null` for a `modify` / `remove`,
+   * which describe an existing item rather than propose a new one.
+   *
+   * They are here because the review surface is a stop on the seam and was
+   * missing from it: `explanationMd` is carried on the proposal, diffed, and
+   * materialized, and NOTHING in the review surface read it — a reviewer
+   * approved a second content body they were never shown. `targetRepo` is the
+   * same failure with a sharper consequence: it routes dispatch, and it was
+   * invisible at the one moment a person could still correct it.
+   *
+   * ⚠️ This list is not a place to be conservative. `tests/dto/planReviewFieldParity.test.ts`
+   * holds it against `PlanItemProposedFields` and goes RED when the two diverge —
+   * which is the durable half of this fix, because the four fields above are only
+   * today's instance. `planningProvenance` is the proof: it was added to the
+   * proposal and not to this model while the card to fix that was in the backlog.
+   */
+  explanationMd: string | null;
+  explanationSource: string | null;
+  storyPoints: number | null;
+  estimateMinutes: number | null;
+  targetRepo: string | null;
+  targetRepoRole: string | null;
+  executor: string | null;
+  planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;
   /** The target's current status key — null for a proposed `add` (none yet). */
   status: string | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */
