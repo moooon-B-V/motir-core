@@ -357,6 +357,13 @@ describe('the batch path — validate_work_item scans a whole subtree in ONE que
         targetRepos: s.targetRepos ?? ['motir-core'],
         id: s.id ?? null,
         createdAt: s.createdAt ?? null,
+        // Right-sized and childless (MOTIR-3110) — this helper's subject is
+        // about the SUBSUMPTION check, so it supplies the values that emit no
+        // sizing advisory rather than leaving the family to fire into these
+        // assertions.
+        storyPoints: 3,
+        estimateMinutes: 45,
+        hasChildren: false,
       })),
       fx.ctx,
     );

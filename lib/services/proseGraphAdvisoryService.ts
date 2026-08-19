@@ -13,6 +13,7 @@ import {
   hasCriterionPathTokens,
   isOrderingCheckExempt,
   isSubsumptionCheckExempt,
+  overGateSizing,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
@@ -101,6 +102,21 @@ export interface ProseAdvisorySubject {
    */
   id?: string | null;
   createdAt?: Date | null;
+  /**
+   * The card's two sizing columns and whether it HOLDS children — read ONLY by
+   * the ESTIMATION-GATE check (MOTIR-3110), which compares them against the
+   * gate's two ceilings for a childless `coding_agent` leaf.
+   *
+   * Required for the same reason `targetRepos` is: every caller has to decide
+   * what it knows. `null` on either number is a real answer (unestimated, which
+   * crosses no ceiling), and `hasChildren` has no defensible default — guessing
+   * `false` would report a container's rollup sizing as a leaf's run time, and
+   * guessing `true` would mute the check for every caller that forgot it, which
+   * is exactly the *"addressed to nobody"* failure MOTIR-2079 exists to end.
+   */
+  storyPoints: number | null;
+  estimateMinutes: number | null;
+  hasChildren: boolean;
 }
 
 /**
@@ -217,6 +233,8 @@ export async function buildProseVsGraphAdvisories(
     if (ordering) advisories.push(ordering);
     const straddle = repoStraddleAdvisory(s.subject, repoCandidates);
     if (straddle) advisories.push(straddle);
+    const sizing = sizingAdvisory(s.subject);
+    if (sizing) advisories.push(sizing);
     const subsumed = subsumptionAdvisory(s.subject, subsumption);
     if (subsumed) advisories.push(subsumed);
     for (const [id, severity] of s.refs) {
@@ -310,6 +328,42 @@ function repoStraddleAdvisory(
     repo: found.repo,
     reason: found.reason,
     criterionIndex: found.criterionIndex,
+  };
+}
+
+/**
+ * THE ESTIMATION-GATE advisory for ONE subject (MOTIR-3110) — the card's own
+ * sizing columns read against the gate's two ceilings.
+ *
+ * The cheapest check in the family: pure, no reference resolution, no DB read,
+ * no prose parsing and no candidate set — two integers and an enum. Like
+ * {@link orderingAdvisory} it fires on a card that names nothing and has no
+ * edges, which is exactly the MOTIR-3068 fixture: a `bug` at 13 SP / 600 min
+ * whose body had already NAMED the gate, quoted the threshold and chosen the
+ * split axis, and which was `ready: true` and claimable anyway because the
+ * output of that analysis went into a field the plan does not read
+ * (`notes.html` #323).
+ *
+ * NO exemption predicate, and unlike {@link repoStraddleAdvisory} that is not a
+ * knowingly-accepted false positive either: the two exemptions this check has —
+ * a non-`coding_agent` executor and a card that HOLDS children — are the gate's
+ * own scope, applied inside {@link overGateSizing} where the numbers are.
+ */
+function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
+  const found = overGateSizing({
+    executor: subject.executor,
+    hasChildren: subject.hasChildren,
+    storyPoints: subject.storyPoints,
+    estimateMinutes: subject.estimateMinutes,
+  });
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-over-gate-sizing',
+    threshold: found.threshold,
+    storyPoints: found.storyPoints,
+    estimateMinutes: found.estimateMinutes,
   };
 }
 
@@ -519,6 +573,19 @@ export async function buildDispatchProseAdvisories(
      * failure MOTIR-2079 exists to end.
      */
     createdAt?: Date | string | null;
+    /**
+     * The ESTIMATION-GATE check's two sizing columns (MOTIR-3110).
+     *
+     * `undefined` and `null` mean DIFFERENT things here, unlike on `createdAt`:
+     * `null` is a real observation (the column is unestimated, which crosses no
+     * ceiling) and `undefined` means the caller's row shape does not carry it —
+     * `ReadyItemDispatchDto` does not — in which case this function READS them,
+     * for the same reason the filing instant is read rather than skipped. A
+     * check that fired for `dispatch_prompt` and not for `claim_next_ready`
+     * would be the *"addressed to nobody"* failure in a new costume.
+     */
+    storyPoints?: number | null;
+    estimateMinutes?: number | null;
   },
   ctx: ServiceContext,
 ): Promise<WorkItemProseAdvisoryDto[]> {
@@ -544,7 +611,27 @@ export async function buildDispatchProseAdvisories(
   // Context refs, so a card with no path in its criteria can still be subsumed.
   const namesNoFile =
     isSubsumptionCheckExempt(item.descriptionMd) || bodyFilePaths(item.descriptionMd).length === 0;
-  if (namesNothing && wellOrdered && namesNoPath && namesNoFile) return [];
+  // The ESTIMATION-GATE check's own clear-ness (MOTIR-3110), and the FIFTH scan
+  // — it reads no prose at all, so a body that names nothing can still be over
+  // the gate. That is the MOTIR-3068 shape and the reason this term exists: a
+  // card whose four string scans are clean and whose sizing is 13 SP / 600 min
+  // would otherwise return `[]` here, one line before the check that catches it.
+  //
+  // `hasChildren: false` is not an assumption — it is the WIDER question, asked
+  // first because the answer is free. Children only ever SUPPRESS the finding,
+  // so a card that is not over the gate with children ignored is not over it
+  // with children counted either, and the child-count read below is skipped
+  // entirely. Only a card that WOULD fire pays for the row.
+  const sizingCandidate =
+    item.storyPoints === undefined || item.estimateMinutes === undefined
+      ? executor === 'coding_agent'
+      : overGateSizing({
+          executor,
+          hasChildren: false,
+          storyPoints: item.storyPoints,
+          estimateMinutes: item.estimateMinutes,
+        }) !== null;
+  if (namesNothing && wellOrdered && namesNoPath && namesNoFile && !sizingCandidate) return [];
 
   // The SUBSUMPTION check's `since`, when the caller's row shape carries it.
   // `ReadyItemDispatchDto` does not, so it is read below — inside the batch that
@@ -562,12 +649,20 @@ export async function buildDispatchProseAdvisories(
       ancestors: await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
       blockerLinks: await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
       rows:
-        suppliedCreatedAt === null && !namesNoFile
+        (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate
           ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
           : [],
     }),
   );
   const createdAt = suppliedCreatedAt ?? rows[0]?.createdAt ?? null;
+  // The row is read ONLY when `sizingCandidate` (above), so its absence means
+  // the check could not fire — the fallbacks below are the values that emit
+  // nothing, not a guess about a card nobody looked at.
+  const storyPoints =
+    item.storyPoints !== undefined ? item.storyPoints : (rows[0]?.storyPoints ?? null);
+  const estimateMinutes =
+    item.estimateMinutes !== undefined ? item.estimateMinutes : (rows[0]?.estimateMinutes ?? null);
+  const hasChildren = rows[0]?.hasChildren ?? false;
   const exemptIds = new Set<string>([item.id]);
   for (const a of ancestors) exemptIds.add(a.id);
   for (const l of blockerLinks) exemptIds.add(l.toId);
@@ -583,6 +678,9 @@ export async function buildDispatchProseAdvisories(
         targetRepos,
         id: item.id,
         createdAt,
+        storyPoints,
+        estimateMinutes,
+        hasChildren,
       },
     ],
     ctx,
