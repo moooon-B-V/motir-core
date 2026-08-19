@@ -41,14 +41,25 @@ import { codeGraphRefresh } from '@/lib/jobs/definitions/codeGraphRefresh';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
-/** The probe window. The documented MINIMUM is 1s and a case at 1s DOES pass —
- *  but only just: the burst below is sent one awaited round-trip at a time, so a
- *  single >1s hiccup anywhere in that loop expires the window mid-burst and
- *  splits one expected run into two (measured: 1 failure in 6 local runs at
- *  `1s`). 3s buys the loop two orders of magnitude more slack than it needs and
- *  costs two seconds a case — the right trade for a spec that must never flake,
- *  since a flaky spec on `main` taxes every open PR's merge-with-main CI. */
-const PERIOD = '3s';
+/** The probe window, in ms — the string form is DERIVED from it so the value the
+ *  scheduler is given and the value {@link stallDiagnosis} compares against
+ *  cannot drift apart.
+ *
+ *  The documented MINIMUM is 1s and a case at 1s DOES pass — but only just: the
+ *  burst below is sent one awaited round-trip at a time, so a single >1s hiccup
+ *  anywhere in that loop expires the window mid-burst (measured: 1 failure in 6
+ *  local runs at `1s`). 3s costs two seconds a case.
+ *
+ *  ⚠️ AND 3s IS NOT ENOUGH EITHER, WHICH IS WHY THIS FILE NO LONGER RELIES ON IT
+ *  (MOTIR-3125). The comment here used to claim 3s bought "two orders of
+ *  magnitude more slack than it needs"; a CI shard running 4 932 tests over
+ *  4 253 s of test time expired the window anyway. Widening it again would be a
+ *  probability reduction on a shared file — the same move, already made once,
+ *  already failed once. What changed instead is that a stall is now DETECTED and
+ *  NAMED rather than tolerated, so the next occurrence reports what happened
+ *  instead of a bare value mismatch. */
+const PERIOD_MS = 3_000;
+const PERIOD = `${PERIOD_MS / 1000}s`;
 /** Period + scheduler slack: the run lands ~1.2–1.5s after the window closes. */
 const SETTLE_MS = 8_000;
 
@@ -174,14 +185,79 @@ afterAll(() => {
  *  shape too — but the server does not then preserve the array's order, so
  *  "the LATEST event won" becomes a coin flip (it was, at 4 of 6). Sending
  *  serially is also what a webhook-driven producer actually does. */
+/** The widest gap between two consecutive sends of one burst, 1-based. */
+interface SendGap {
+  ms: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * The message for a burst whose own send loop stalled past the debounce window —
+ * or `null` when it did not (MOTIR-3125).
+ *
+ * ⚠️ WHY THIS EXISTS AT ALL. Every assertion in this file carries an unstated
+ * precondition: that all of a burst's events reached the scheduler INSIDE one
+ * debounce window. When the runner stalls past `PERIOD` that precondition fails,
+ * and the file used to report the consequence rather than the cause — a bare
+ * `expected 5 to be 6`, which reads exactly like the scheduler changing its
+ * behaviour. Naming the stall converts an environmental failure into one that
+ * explains itself.
+ *
+ * ⚠️ AND THE STALL DOES NOT ALWAYS PRESENT AS TWO RUNS, which is the trap that
+ * cost this its diagnosis once already. The header above used to say a hiccup
+ * "splits one expected run into two", so a reader greps for a LENGTH mismatch.
+ * That is only true when the stall falls in the MIDDLE of a burst. When it falls
+ * between the last two events, the tail event opens its own window whose run
+ * lands after `SETTLE_MS` and is never observed at all — so `toHaveLength(1)`
+ * passes and only the payload assertion fails. Both presentations are the same
+ * mechanism, and this check sees both because it watches the SENDS rather than
+ * the runs.
+ *
+ * PURE and exported so its two directions are asserted directly, with synthetic
+ * gaps, rather than by stalling a real runner for three seconds per case.
+ */
+export function stallDiagnosis(fn: string, worst: SendGap | null): string | null {
+  if (!worst || worst.ms < PERIOD_MS) return null;
+  return (
+    `the runner stalled ${worst.ms} ms between events ${worst.from} and ${worst.to} of the ` +
+    `\`${fn}\` burst, which meets or exceeds the ${PERIOD_MS} ms debounce PERIOD — so the window ` +
+    'closed MID-BURST and this run measured a split burst rather than the scheduler coalescing ' +
+    'one. That is an ENVIRONMENTAL failure of the precondition, not a regression in the ' +
+    'scheduler: re-run it. Do not widen PERIOD to make it rarer (MOTIR-3125).'
+  );
+}
+
+/**
+ * Send a burst, wait for it to settle, and return the runs it produced.
+ *
+ * REFUSES rather than measures when its own send loop stalled past the window —
+ * see {@link stallDiagnosis}. `injectStallMs` exists only for the self-test
+ * below, which proves the diagnosis is WIRED into this loop and not merely
+ * defined beside it; nothing else passes it.
+ */
 async function burst(
   fn: string,
   events: Record<string, unknown>[],
+  injectStallMs = 0,
 ): Promise<{ key: string; n: number }[]> {
   const before = runs.length;
-  for (const data of events) {
+  let previousAt = 0;
+  let worst: SendGap | null = null;
+  for (const [index, data] of events.entries()) {
+    if (injectStallMs > 0 && index === 1) {
+      await new Promise((r) => setTimeout(r, injectStallMs));
+    }
     await client.send({ name: `debounce-probe/${fn}`, data });
+    const sentAt = Date.now();
+    if (index > 0) {
+      const gap = sentAt - previousAt;
+      if (!worst || gap > worst.ms) worst = { ms: gap, from: index, to: index + 1 };
+    }
+    previousAt = sentAt;
   }
+  const stalled = stallDiagnosis(fn, worst);
+  if (stalled) throw new Error(stalled);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
   return runs.slice(before).filter((r) => r.fn === fn);
 }
@@ -241,6 +317,23 @@ describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)
     expect(seen[0]?.n).toBe(6);
   }, 60_000);
 
+  it('NAMES a stall past the window instead of reporting its consequence (MOTIR-3125)', async () => {
+    // The WIRING proof. `stallDiagnosis` is asserted directly below with
+    // synthetic gaps; this case stalls a REAL send loop, so it also proves the
+    // check runs inside `burst` rather than merely existing beside it.
+    //
+    // Before this, the same stall surfaced as `expected 5 to be 6` from the case
+    // above — which reads like the scheduler changed its behaviour, and cost a
+    // diagnosis on PR #2151. Now the burst refuses and says what happened.
+    await expect(
+      burst(
+        'stall-probe',
+        Array.from({ length: 3 }, (_, i) => ({ key: 'acme/stall', n: i + 1 })),
+        PERIOD_MS + 500,
+      ),
+    ).rejects.toThrow(/stalled \d+ ms between events 1 and 2 of the `stall-probe` burst/);
+  }, 60_000);
+
   it('the shipped `code-graph-refresh` key names only fields its payload REQUIRES', () => {
     // The tie between the three measurements above and the job that depends on
     // them. `CodeGraphRefreshData` makes all three fields non-optional, so the
@@ -272,3 +365,37 @@ type CodeGraphRefreshKeyFields = {
     import('@/lib/jobs/types').CodeGraphRefreshData[K]
   >;
 };
+
+describe('stallDiagnosis — the precondition every case above carries silently', () => {
+  it('is SILENT when every gap fits inside the window', () => {
+    expect(stallDiagnosis('coalesce', null)).toBeNull();
+    expect(stallDiagnosis('coalesce', { ms: 0, from: 1, to: 2 })).toBeNull();
+    expect(stallDiagnosis('coalesce', { ms: PERIOD_MS - 1, from: 4, to: 5 })).toBeNull();
+  });
+
+  it('REFUSES at the boundary and above, naming the gap and the two events', () => {
+    // At exactly PERIOD the window has closed, so the boundary belongs on the
+    // refusing side — a burst that measured exactly the window is not one whose
+    // coalescing can be trusted.
+    expect(stallDiagnosis('unresolvable', { ms: PERIOD_MS, from: 5, to: 6 })).toContain(
+      'stalled 3000 ms between events 5 and 6',
+    );
+
+    const message = stallDiagnosis('unresolvable', { ms: 4113, from: 5, to: 6 });
+    expect(message).toContain('stalled 4113 ms between events 5 and 6');
+    expect(message).toContain('`unresolvable` burst');
+    // The two things a reader needs and a value mismatch never gave them: that
+    // this is environmental, and what NOT to do about it.
+    expect(message).toContain('ENVIRONMENTAL');
+    expect(message).toContain('re-run it');
+    expect(message).toContain('Do not widen PERIOD');
+  });
+
+  it('reports the WIDEST gap — the one that decides whether the window survived', () => {
+    // `burst` keeps the max rather than the last, because a burst is only
+    // trustworthy if EVERY gap fit; one long pause anywhere spoils it.
+    expect(stallDiagnosis('per-key', { ms: PERIOD_MS + 1, from: 2, to: 3 })).toContain(
+      'between events 2 and 3',
+    );
+  });
+});
