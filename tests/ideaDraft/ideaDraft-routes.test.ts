@@ -18,6 +18,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { truncateAuthTables, truncateRateLimitCounters } from '@/tests/helpers/db';
+import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
 import { PENDING_IDEA_COOKIE } from '@/lib/onboarding/pendingIdea';
 
 // Import the handlers AFTER the mock is registered.
@@ -29,6 +30,14 @@ const ALLOWED = 'https://motir.co';
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
+  // ⚠️ PIN THE STORE DEADLINE (MOTIR-3067). The per-IP window counts through the SHARED
+  // Postgres store, whose production deadline is 250 ms for one increment — and
+  // `consumeSharedRateLimit` FAILS OPEN when that expires, serving the call this
+  // suite expects to be refused. On a CI shard running thousands of tests against
+  // one database that is a real outcome, and it presents as a refusal assertion
+  // failing on a diff that touched no rate-limiting code. See
+  // `tests/helpers/rateLimitStore.ts`.
+  pinSharedRateLimitStoreDeadline();
   cookieStore.clear();
   process.env['MOTIR_MARKETING_ORIGIN'] = ALLOWED;
 });

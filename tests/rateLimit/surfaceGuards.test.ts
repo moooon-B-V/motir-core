@@ -31,6 +31,7 @@ import {
   ALIGNED_WINDOW_MS,
   waitForWindowHeadroom,
 } from '@/tests/helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
 
 // The three SURFACE guards (Subtask 8.5.9 / MOTIR-1165): which requests each one
 // limits, what it keys on, and the axis it must NOT key on.
@@ -79,11 +80,24 @@ const BUDGET_ENVS = [
 
 const WINDOW_ENVS = BUDGET_ENVS.map((name) => `${name}_WINDOW_MS`);
 
+//
+// ── AND THE STORE DEADLINE IS PINNED TOO (MOTIR-3067) ────────────────────────
+// The window is one of two unstated preconditions a refusal assertion carries.
+// The other is that the counter was REACHABLE inside the store's deadline —
+// `createPostgresRateLimitStore()`'s production 250 ms — because
+// `consumeSharedRateLimit` fails OPEN when it is not, and every `enforce*` guard
+// below reads that decision. The 25 accumulating cases here therefore each
+// assert, silently, that a shared CI Postgres answered one INSERT in under a
+// quarter of a second. `beforeEach` now states that precondition instead:
+// `tests/helpers/rateLimitStore.ts` for the sizing,
+// `tests/rateLimit/storeDeadline.test.ts` for the guard.
 const ENVS = [...BUDGET_ENVS, ...WINDOW_ENVS, RATE_LIMIT_DISABLE_ENV];
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
   __resetSharedRateLimitStoreForTest();
+  // AFTER the reset — the reset drops exactly the override this installs.
+  pinSharedRateLimitStoreDeadline();
   for (const key of ENVS) delete process.env[key];
   // Pin EVERY window, so no case silently inherits the shipped 60 s default.
   for (const key of WINDOW_ENVS) process.env[key] = String(ALIGNED_WINDOW_MS);

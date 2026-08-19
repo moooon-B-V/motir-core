@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from './helpers/db';
+import { pinSharedRateLimitStoreDeadline } from './helpers/rateLimitStore';
 
 // Action-wiring tests for the Account › Profile security controls (Subtask
 // 8.8.23). They prove the TRANSPORT layer — `actions.ts` — resolves the
@@ -48,6 +49,14 @@ function actAs(user: { id: string; email: string }) {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
+  // ⚠️ PIN THE STORE DEADLINE (MOTIR-3067). The change-password throttle counts through the SHARED
+  // Postgres store, whose production deadline is 250 ms for one increment — and
+  // `consumeSharedRateLimit` FAILS OPEN when that expires, serving the call this
+  // suite expects to be refused. On a CI shard running thousands of tests against
+  // one database that is a real outcome, and it presents as a refusal assertion
+  // failing on a diff that touched no rate-limiting code. See
+  // `tests/helpers/rateLimitStore.ts`.
+  pinSharedRateLimitStoreDeadline();
 });
 
 afterEach(() => {

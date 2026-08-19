@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
 
 // attachmentsService.uploadAttachment (Subtask 2.3.7) against a REAL Postgres.
 // The Blob adapter is the ONE mocked external (no network); every gate + the
@@ -68,6 +69,14 @@ beforeEach(async () => {
   await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   await truncateRateLimitCounters();
+  // ⚠️ PIN THE STORE DEADLINE (MOTIR-3067). The upload throttle counts through the SHARED
+  // Postgres store, whose production deadline is 250 ms for one increment — and
+  // `consumeSharedRateLimit` FAILS OPEN when that expires, serving the call this
+  // suite expects to be refused. On a CI shard running thousands of tests against
+  // one database that is a real outcome, and it presents as a refusal assertion
+  // failing on a diff that touched no rate-limiting code. See
+  // `tests/helpers/rateLimitStore.ts`.
+  pinSharedRateLimitStoreDeadline();
   for (const key of UPLOAD_BUDGET_ENVS) delete process.env[key];
 });
 

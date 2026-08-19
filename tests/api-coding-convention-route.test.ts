@@ -50,6 +50,9 @@ const { truncateAuthTables, truncateRateLimitCounters } = await import('./helper
 const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
 const { ALIGNED_HEADROOM_MS, ALIGNED_WINDOW_MS, waitForWindowHeadroom } =
   await import('./helpers/rateLimitWindow');
+// Dynamic + top-level for the same reason as the line above: this file needs the
+// module before its `vi.mock` factories run.
+const { pinSharedRateLimitStoreDeadline } = await import('./helpers/rateLimitStore');
 
 const BASE = 'http://localhost:3000/api/ai/coding-convention';
 
@@ -226,9 +229,17 @@ describe('POST /api/ai/coding-convention/refresh', () => {
     // BOTH the `toBe(429)` and the `toHaveBeenCalledTimes(1)` assertions fail —
     // reading exactly like a real regression in the route's refuse-before-submit
     // ordering. Same class as MOTIR-2101 / -2224 / -2598 / -2647.
+    //
+    // ⚠️ AND the STORE DEADLINE is pinned, which is the other half of the same
+    // shape (MOTIR-3067). The reset below rebuilds the PRODUCTION store, with a
+    // 250 ms budget for one counter increment that `consumeSharedRateLimit`
+    // fails OPEN on — so on a loaded runner the second request is served with a
+    // full budget and this case goes red in a way indistinguishable from the
+    // window straddle described above.
     await signInAtProject();
     await truncateRateLimitCounters();
     __resetSharedRateLimitStoreForTest();
+    pinSharedRateLimitStoreDeadline();
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
