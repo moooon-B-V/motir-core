@@ -866,3 +866,184 @@ describe('the REPO-STRADDLE advisory — a criterion discharged outside the card
     ]);
   });
 });
+
+describe('THE ESTIMATION GATE advisory — a card whose own sizing says it is more than one run', () => {
+  /**
+   * The MOTIR-3068 shape, parameterised: a childless `coding_agent` card whose
+   * body is entirely CLEAN — no reference token, no post-merge phrase, no
+   * repo-qualified path, no file path at all. Every other check in the family is
+   * silent on it, which is the point: the four cards that got past this gate did
+   * so with nothing else wrong with them.
+   */
+  async function makeSizedItem(
+    fx: WorkItemFixture,
+    title: string,
+    sizing: { storyPoints?: number | null; estimateMinutes?: number | null },
+    fields: { type?: WorkItemTypeDto; executor?: ExecutorDto } = {
+      type: 'code',
+      executor: 'coding_agent',
+    },
+    placement: { kind?: 'task' | 'subtask'; parentId?: string } = {},
+  ) {
+    const { kind = 'task', parentId } = placement;
+    return workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind,
+        title,
+        descriptionMd: '## Acceptance criteria\n\n- the thing is built and covered.',
+        ...sizing,
+        ...fields,
+        ...(parentId ? { parentId } : {}),
+      },
+      fx.ctx,
+    );
+  }
+
+  it('MOTIR-3068 REGRESSION: 13 points / 600 minutes, childless, coding_agent — ONE advisory naming both', async () => {
+    // The card `motir run MOTIR-3068` claimed. It was `todo`, `ready: true`,
+    // `validate_work_item` `valid: true`, and claimable — and the only thing
+    // between it and a 101-file pull request was a sentence in its own
+    // description asking not to be dispatched (`notes.html` #323).
+    const fx = await makeWorkItemFixture();
+    const card = await makeSizedItem(fx, 'The faint-ink sweep', {
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-over-gate-sizing',
+        threshold: 'both',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+    ]);
+  });
+
+  it('fires on each ceiling INDEPENDENTLY', async () => {
+    const fx = await makeWorkItemFixture();
+    const points = await makeSizedItem(fx, 'Points only', {
+      storyPoints: 13,
+      estimateMinutes: 45,
+    });
+    const minutes = await makeSizedItem(fx, 'Minutes only', {
+      storyPoints: 3,
+      estimateMinutes: 90,
+    });
+
+    expect(await buildDispatchProseAdvisories(points, fx.ctx)).toMatchObject([
+      { severity: 'likely-over-gate-sizing', threshold: 'story_points', storyPoints: 13 },
+    ]);
+    expect(await buildDispatchProseAdvisories(minutes, fx.ctx)).toMatchObject([
+      { severity: 'likely-over-gate-sizing', threshold: 'estimate_minutes', estimateMinutes: 90 },
+    ]);
+  });
+
+  it('says NOTHING about a right-sized card — the direction that can go quiet', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSizedItem(fx, 'Right-sized', { storyPoints: 3, estimateMinutes: 45 });
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([]);
+  });
+
+  it('EXEMPTS a human / manual executor — its minutes are human work', async () => {
+    const fx = await makeWorkItemFixture();
+    const human = await makeSizedItem(
+      fx,
+      'Flip the GHCR package to public',
+      { storyPoints: 13, estimateMinutes: 600 },
+      { type: 'manual', executor: 'human' },
+    );
+    expect(await buildDispatchProseAdvisories(human, fx.ctx)).toEqual([]);
+  });
+
+  it('EXEMPTS a card WITH children, whatever its own columns hold', async () => {
+    // POSITION, not kind. The container's own numbers describe a subtree sized
+    // by rollup, and the childless child beside it is the one the gate reaches —
+    // asserted together so the exemption cannot be read as "the check is off".
+    const fx = await makeWorkItemFixture();
+    const container = await makeSizedItem(fx, 'Container', {
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+    const child = await makeSizedItem(
+      fx,
+      'Its childless child',
+      { storyPoints: 13, estimateMinutes: 600 },
+      { type: 'code', executor: 'coding_agent' },
+      { kind: 'subtask', parentId: container.id },
+    );
+
+    expect(await buildDispatchProseAdvisories(container, fx.ctx)).toEqual([]);
+    expect(await buildDispatchProseAdvisories(child, fx.ctx)).toHaveLength(1);
+  });
+
+  it('⚠️ READINESS IS UNTOUCHED — byte-identical whether or not it is emitted', async () => {
+    // The invariant every member of this channel carries, and the one this
+    // member most needs: a legitimately large card mid-re-plan must stay
+    // claimable, or a missed split is traded for a stuck board.
+    const fx = await makeWorkItemFixture();
+    const oversized = await makeSizedItem(fx, 'Oversized', {
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+    const clean = await makeSizedItem(fx, 'Clean', { storyPoints: 3, estimateMinutes: 45 });
+
+    expect(await buildDispatchProseAdvisories(oversized, fx.ctx)).toHaveLength(1);
+    expect(await buildDispatchProseAdvisories(clean, fx.ctx)).toEqual([]);
+
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(oversized.identifier)).toEqual(await readinessOf(clean.identifier));
+    expect((await readinessOf(oversized.identifier)).ready).toBe(true);
+    expect((await readinessOf(oversized.identifier)).openBlockers).toEqual([]);
+  });
+
+  it('reaches the AGENT through dispatch_prompt — prompt, DTO and human summary', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSizedItem(fx, 'Oversized', { storyPoints: 13, estimateMinutes: 600 });
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toMatchObject([{ severity: 'likely-over-gate-sizing' }]);
+    expect(dto.prompt).toContain('THIS CARD IS SIZED PAST THE ESTIMATION GATE');
+    expect(dto.prompt).toContain('13 story points / 600 estimated minutes');
+    // …and it still dispatches, in the same workflow mode.
+    expect(dto.workflowMode).toBe('per_item_pr');
+
+    const res = await runDispatchPrompt({ key: card.identifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker');
+    expect(text).toContain('over the estimation gate');
+  });
+
+  it('reaches the PLANNER through claim_next_ready — the caller with no sizing on its row', async () => {
+    // `ReadyItemDispatchDto` carries neither `storyPoints` nor `estimateMinutes`,
+    // so this path proves the LAZY read: a check that fired for dispatch_prompt
+    // and not for claim_next_ready would be MOTIR-2079's "addressed to nobody"
+    // in a new costume.
+    const fx = await makeWorkItemFixture();
+    const card = await makeSizedItem(fx, 'Oversized', { storyPoints: 13, estimateMinutes: 600 });
+
+    const res = await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker — the claim stands)');
+    expect(text).toContain('over the estimation gate');
+    const payload = res.structuredContent as {
+      item: { key: string } | null;
+      advisories: WorkItemProseAdvisoryDto[];
+    };
+    expect(payload.item?.key).toBe(card.identifier);
+    expect(payload.advisories).toMatchObject([
+      { kind: 'shape', severity: 'likely-over-gate-sizing', threshold: 'both' },
+    ]);
+    // The claim still happened — the advisory is not a gate on this path either.
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(row.status).toBe('in_progress');
+  });
+});

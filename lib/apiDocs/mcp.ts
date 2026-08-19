@@ -474,9 +474,18 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the question, not for which tree it is asked over. The projected mode is
     // documented where somebody would look for it — `validate_plan`'s own line
     // below, and the `AI planning` section of `docs/mcp.md`.
+    //
+    // Re-pinned again for MOTIR-3110, summary UNCHANGED for the same reason one
+    // rung over: the tool's `advisories` channel gained a third `shape` severity
+    // (`likely-over-gate-sizing`). The summary names the QUESTION the tool
+    // answers — finishability — and advisories have never been part of it,
+    // precisely because they are the half that does not gate. A reader choosing
+    // this tool from a one-line catalogue is choosing the verdict; the advisory
+    // channel and every severity in it is documented where somebody would look,
+    // in `docs/mcp.md`'s `validate_work_item` section and its severity table.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: 'eb927e172e76',
+    descriptionFingerprint: 'edf9b0c94837',
   },
   validate_plan: {
     summary:

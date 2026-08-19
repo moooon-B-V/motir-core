@@ -1947,17 +1947,26 @@ export const workItemRepository = {
       targetRepo: string | null;
       targetRepos: string[];
       createdAt: Date;
+      storyPoints: number | null;
+      estimateMinutes: number | null;
+      hasChildren: boolean;
     }>
   > {
     if (ids.length === 0) return [];
     // `type` / `executor` ride along for the prose advisory's ORDERING exemption
     // (MOTIR-2175), `targetRepo` + `targetRepos` for the REPO-STRADDLE check's
-    // carried side (MOTIR-2177, widened to the SET in MOTIR-2728), and `createdAt`
+    // carried side (MOTIR-2177, widened to the SET in MOTIR-2728), `createdAt`
     // for the SUBSUMPTION check's `since` (MOTIR-2903 — "merged AFTER this card was
-    // filed" is half that rule) — the same rows, a few columns wider, rather than
-    // more reads.
+    // filed" is half that rule), and the two sizing columns plus a live child
+    // count for the ESTIMATION-GATE check (MOTIR-3110) — the same rows, a few
+    // columns wider, rather than more reads.
+    //
+    // The child count is FILTERED to non-archived children, so an item whose
+    // only children were archived reads as the leaf it now is — the same live
+    // slice `findSubtreeMembersForValidity` walks, rather than a second opinion
+    // about what a child is.
     const client = tx ?? db;
-    return client.workItem.findMany({
+    const rows = await client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
       select: {
         id: true,
@@ -1967,8 +1976,19 @@ export const workItemRepository = {
         targetRepo: true,
         targetRepos: true,
         createdAt: true,
+        estimateMinutes: true,
+        // `Decimal(6, 2)` on the wire; every other reader of this column maps it
+        // with `Number(...)` (`lib/mappers/workItemMappers.ts`), so it is mapped
+        // HERE rather than leaking a Decimal into a pure numeric comparison.
+        storyPoints: true,
+        _count: { select: { children: { where: { archivedAt: null } } } },
       },
     });
+    return rows.map(({ _count, storyPoints, ...row }) => ({
+      ...row,
+      storyPoints: storyPoints === null ? null : Number(storyPoints),
+      hasChildren: _count.children > 0,
+    }));
   },
 
   /**

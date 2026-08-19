@@ -5995,6 +5995,15 @@ async function computeSubtreeProseAdvisories(
       // set, and `createdAt` is its `since`.
       id: member.id,
       createdAt: row?.createdAt ?? null,
+      // The ESTIMATION-GATE check's three inputs (MOTIR-3110), from the same
+      // batched read again — including the LIVE child count, so a member is
+      // judged a leaf by POSITION rather than by kind. A member whose row is
+      // missing (deleted between the two reads) reads as unestimated and
+      // childless, which emits nothing: the check never invents a finding out of
+      // an absent row.
+      storyPoints: row?.storyPoints ?? null,
+      estimateMinutes: row?.estimateMinutes ?? null,
+      hasChildren: row?.hasChildren ?? false,
     };
   });
 

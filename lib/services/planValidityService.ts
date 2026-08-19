@@ -91,6 +91,29 @@ function sortBlockers(blockers: SprintBlockerDto[]): SprintBlockerDto[] {
  * edges) and the forest has no single subject. Per-card coverage is the
  * `validateProjectedWorkItem` call above.
  */
+/**
+ * One projected SIZING column (MOTIR-3110) — the plan's value where the plan
+ * sets one, else the stored one.
+ *
+ * Sparse-patch semantics, identical to the projected body and `type` above: an
+ * `add`'s `proposedFields` is the ONLY shape there is (absent ⇒ `null`), while a
+ * `modify`'s patch counts only when the KEY is present — `'storyPoints' in patch`
+ * — so an explicit `null` reads as *the plan clears this estimate* and an absent
+ * key leaves the stored number standing.
+ */
+function projectedSizing(
+  proj: Projection,
+  nodeId: string,
+  field: 'storyPoints' | 'estimateMinutes',
+  stored: number | null,
+): number | null {
+  const proposal = proj.proposalByRef.get(nodeId);
+  if (proposal) return proposal.proposedFields?.[field] ?? null;
+  const patch = proj.patchByWorkItemId.get(nodeId);
+  if (patch && field in patch) return patch[field] ?? null;
+  return stored;
+}
+
 async function projectedProseAdvisories(
   proj: Projection,
   memberIds: ReadonlySet<string>,
@@ -150,6 +173,25 @@ async function projectedProseAdvisories(
       // both, so an existing card being re-planned is still checked.
       id: stored?.id ?? null,
       createdAt: stored?.createdAt ?? null,
+      // The ESTIMATION-GATE check (MOTIR-3110), projected. Sizing has BOTH a
+      // proposed and a patched form — an `add` carries `proposedFields`, a
+      // `modify` may re-scope the stored numbers — so the plan's value wins
+      // wherever the plan sets one, with the same sparse-patch semantics the
+      // body and `type` use above. This is the earliest moment an over-sized
+      // card can be seen at all: the author sealing the plan, before the card
+      // has a key.
+      storyPoints: projectedSizing(proj, node.id, 'storyPoints', stored?.storyPoints ?? null),
+      estimateMinutes: projectedSizing(
+        proj,
+        node.id,
+        'estimateMinutes',
+        stored?.estimateMinutes ?? null,
+      ),
+      // Children come from the PROJECTED adjacency, never the stored row: a plan
+      // that `add`s a child under a leaf makes it a container, and a plan that
+      // `remove`s a container's last child makes it a leaf. Both are exactly the
+      // questions the gate asks, and only the projection can answer them.
+      hasChildren: (proj.childrenByParent.get(node.id)?.length ?? 0) > 0,
     };
   });
 

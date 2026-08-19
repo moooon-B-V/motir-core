@@ -8,6 +8,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
@@ -80,6 +81,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const shapes = result.advisories.filter(isOrderingAdvisory);
   const straddles = result.advisories.filter(isRepoStraddleAdvisory);
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
+  const oversized = result.advisories.filter(isSizingAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -135,6 +137,29 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'consumer, two coordinated PRs, legitimately one card — is reported here and is an ' +
         'accepted false positive; and the bare-SYMBOL tell (a symbol whose repo you happen to ' +
         "know) is invisible to this check, so gate 1's prose still applies.",
+    );
+  }
+  // The SIZING member of the shape family (MOTIR-3110) — THE ESTIMATION GATE,
+  // and this surface is the one the gate's four misses each passed through
+  // green. MOTIR-3068 was `valid: true` at 13 SP / 600 min with the split it
+  // needed written out in its own description (`notes.html` #323); the number
+  // was in a column nothing read, so this block reads it.
+  if (oversized.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards are sized OVER the estimation gate — a ` +
+        'coding_agent leaf splits at 13+ story points and its run must fit in 60 minutes:',
+      ...oversized.map(
+        (a) =>
+          `  ${a.item} is ${a.storyPoints ?? '—'} points / ${a.estimateMinutes ?? '—'} minutes ` +
+          `(over: ${a.threshold === 'both' ? 'both ceilings' : a.threshold === 'story_points' ? 'story points' : 'estimate minutes'})` +
+          ` (${a.severity})`,
+      ),
+      "SPLIT the card before it is dispatched — 13+ is the gate's literal split signal, and a " +
+        'run longer than an hour is a card doing more than one thing. Writing "expect this to ' +
+        'split" into the description is NOT the remedy: that is the exact shape this check ' +
+        'exists to catch, four times over. A card with CHILDREN is sized by rollup and is never ' +
+        'reported here, and neither is a human executor — its minutes are human work.',
     );
   }
   // The SUBSUMPTION family (MOTIR-2903) — and this surface is the one whose
@@ -251,12 +276,16 @@ export function registerValidateWorkItem(
         'SEPARATE, NEVER-BLOCKING channel with two families: a `reference` advisory names an ' +
         'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
         "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +
-        'criteria, else `advisory`); a `shape` advisory (`kind: "shape"`) names a card whose own ' +
-        'acceptance criterion is mis-shaped — `likely-ordering-violation` when the criterion reads ' +
-        'on post-merge state (with the matched phrase), or `likely-repo-straddle` when it names a ' +
+        'criteria, else `advisory`); a `shape` advisory (`kind: "shape"`) names a card that ' +
+        'contradicts ITSELF — `likely-ordering-violation` when a criterion reads ' +
+        'on post-merge state (with the matched phrase), `likely-repo-straddle` when it names a ' +
         "path in a repo that is not the card's `targetRepo` (with the path, that repo, and " +
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
-        'name two or more) — both with the 1-based criterion index to cut at. Advisories ' +
+        'name two or more) — both with the 1-based criterion index to cut at — or ' +
+        '`likely-over-gate-sizing` when a CHILDLESS coding_agent card is sized over the estimation ' +
+        'gate, at 13+ story points or more than 60 estimated minutes (with `threshold`, the ' +
+        'observed `storyPoints` and `estimateMinutes`, and no criterion index, because the remedy ' +
+        'is to SPLIT the card rather than cut it at a line). Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +

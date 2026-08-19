@@ -17,6 +17,7 @@ import type {
   PlanHistoryEventDto,
   PlanItemChangeDto,
   PlanItemChangeField,
+  PlanParentCrumbDto,
   PlanReviewDto,
   PlanReviewItemDto,
 } from '@/lib/dto/planReview';
@@ -150,6 +151,65 @@ export const planReviewService = {
     );
     const targetById = new Map(targets.map((t) => [t.id, t]));
 
+    // …AND the committed parents' OWN ancestors (bug MOTIR-3152), because the
+    // breadcrumb the canvas opens with is the whole CHAIN down to the level, not
+    // its last link. The read above resolves the parent; walking UP from it is a
+    // second question and needs a second read.
+    //
+    // ONE batched read PER TREE LEVEL, not one per item: the ids of each round's
+    // parents are collected and fetched together, and the loop stops when a round
+    // adds nothing new. The tree is depth-capped (Story 1.4), so a plan of thirty
+    // proposals under one parent still costs at most a handful of round trips —
+    // the same "never an N+1" property the target read above has.
+    //
+    // A `findAncestors` per parent would be the obvious alternative and is the
+    // one this deliberately avoids: it is one query PER PARENT, and a plan may
+    // legitimately propose under many.
+    const ancestorById = new Map(targets.map((t) => [t.id, t]));
+    let frontier = Array.from(
+      new Set(
+        committedParentIds
+          .map((id) => targetById.get(id)?.parentId)
+          .filter((id): id is string => !!id),
+      ),
+    );
+    // A hard bound as well as the natural one: a cycle in `parentId` is not
+    // representable through the API, but this loop must terminate on a corrupt
+    // row rather than hang the plan page.
+    for (let depth = 0; depth < 16 && frontier.length > 0; depth++) {
+      const unseen = frontier.filter((id) => !ancestorById.has(id));
+      if (unseen.length === 0) break;
+      const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findByIdsInWorkspace(unseen, ctx.workspaceId, tx),
+      );
+      for (const row of rows) ancestorById.set(row.id, row);
+      frontier = Array.from(
+        new Set(rows.map((r) => r.parentId).filter((id): id is string => !!id)),
+      );
+    }
+
+    /**
+     * The committed ancestor path down to `parentId`, ROOT FIRST and the parent
+     * itself LAST. `[]` when there is no committed parent, and a chain that runs
+     * out (an archived / hard-deleted ancestor the read did not return) simply
+     * STOPS there — the crumbs above it are lost, the ones below it are not, and
+     * nothing throws. That is the same degrade-rather-than-fail contract the
+     * parent fields themselves carry.
+     */
+    const trailFor = (parentId: string | null): PlanParentCrumbDto[] => {
+      const trail: PlanParentCrumbDto[] = [];
+      let cursor = parentId;
+      const guard = new Set<string>();
+      while (cursor && !guard.has(cursor)) {
+        guard.add(cursor);
+        const row = ancestorById.get(cursor);
+        if (!row) break;
+        trail.unshift({ id: row.id, identifier: row.identifier, title: row.title });
+        cursor = row.parentId;
+      }
+      return trail;
+    };
+
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
     // Resolve node ids first, so `hasChildren` can be computed across the forest.
@@ -188,6 +248,7 @@ export const planReviewService = {
         parentIdentifier: committedParent?.identifier ?? null,
         parentTitle: committedParent?.title ?? null,
         parentKind: committedParent?.kind ?? null,
+        parentTrail: committedParent ? trailFor(committedParent.id) : [],
         blockedByNodeIds: item.blockedByRefs.map(resolveRef),
         identifier: item.op === 'add' ? null : (target?.identifier ?? null),
         title:

@@ -1243,3 +1243,189 @@ describe('planValidityService — the projection invariant behind the walks’ d
     expect(new Set(identifiers).size).toBe(identifiers.length);
   });
 });
+
+describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE, projected', () => {
+  // MOTIR-3110's earliest moment. Four cards have now been sealed over this gate
+  // by an author who had already worked out the split and written it into the
+  // card's own description (`notes.html` #323) — and a plan is where that author
+  // is standing. Every sizing input has a PROPOSED form as well as a stored one,
+  // so the projection must read the plan's numbers rather than the row's.
+
+  it("reads an `add`'s PROPOSED sizing — the card has no row and no key yet", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'A 13-pointer',
+        kind: 'subtask',
+        executor: 'coding_agent',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+      parentRef: story.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.blockers).toEqual([]);
+    expect(res.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: `planItem:${itemIdByTitle(p, 'A 13-pointer')}`,
+        severity: 'likely-over-gate-sizing',
+        threshold: 'both',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+    ]);
+  });
+
+  it("reads a `modify`'s RE-SCOPE, in both directions", async () => {
+    // Sparse-patch semantics both ways: a patch that pushes a right-sized card
+    // over the gate fires, and a patch that brings an over-sized one back under
+    // it goes quiet — which is what makes the advisory a live reading of the
+    // PROPOSED tree rather than of the stored row.
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Right-sized today',
+        parentId: story.id,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 3,
+        estimateMinutes: 45,
+      },
+      fx.ctx,
+    );
+
+    const growPlan = await freshPlan(fx);
+    await addProposal(fx, growPlan, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { storyPoints: 13, estimateMinutes: 600 },
+    });
+    await plansService.markPlanned(growPlan, fx.ctx);
+    const grown = await planValidityService.validateProjectedWorkItem(
+      growPlan,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(grown.advisories).toMatchObject([
+      { item: child.identifier, severity: 'likely-over-gate-sizing', threshold: 'both' },
+    ]);
+
+    // The mirror: the stored row is now the over-sized one, and the SPLIT the
+    // plan proposes is what clears the finding.
+    await adminDb.workItem.update({
+      where: { id: child.id },
+      data: { storyPoints: 13, estimateMinutes: 600 },
+    });
+    const shrinkPlan = await freshPlan(fx);
+    await addProposal(fx, shrinkPlan, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { storyPoints: 5, estimateMinutes: 55 },
+    });
+    await plansService.markPlanned(shrinkPlan, fx.ctx);
+    const shrunk = await planValidityService.validateProjectedWorkItem(
+      shrinkPlan,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(shrunk.advisories).toEqual([]);
+  });
+
+  it('falls through to the STORED sizing when the plan touches neither number', async () => {
+    // The third arm of the sparse patch: an absent key leaves the row's own
+    // number standing, so a re-titled card is still measured.
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Oversized already',
+        parentId: story.id,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+      fx.ctx,
+    );
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: child.id,
+      patch: { title: 'Renamed, not resized' },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories).toMatchObject([
+      { item: child.identifier, severity: 'likely-over-gate-sizing' },
+    ]);
+  });
+
+  it('a projected CHILD makes its parent a container, and silences the parent', async () => {
+    // `hasChildren` comes from the PROJECTED adjacency, not the stored row: a
+    // plan that adds a child under an over-sized leaf has turned it into a
+    // container sized by rollup, and only the projection can see that.
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const leaf = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Oversized leaf today',
+        parentId: story.id,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+      fx.ctx,
+    );
+
+    // Before the plan, it is a leaf and it fires.
+    const live = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(live.advisories).toMatchObject([{ item: leaf.identifier }]);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'The first slice',
+        kind: 'subtask',
+        executor: 'coding_agent',
+        storyPoints: 3,
+        estimateMinutes: 45,
+      },
+      parentRef: leaf.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories).toEqual([]);
+  });
+});

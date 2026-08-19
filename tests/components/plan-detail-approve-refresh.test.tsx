@@ -119,6 +119,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         parentIdentifier: null,
         parentTitle: null,
         parentKind: null,
+        parentTrail: [],
         blockedByNodeIds: [],
         identifier: null,
         title: 'A proposed story',

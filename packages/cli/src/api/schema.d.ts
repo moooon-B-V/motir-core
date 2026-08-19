@@ -1247,6 +1247,14 @@ export interface components {
                 reason?: string;
             } | {
                 /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                threshold: string;
+                storyPoints: number | null;
+                estimateMinutes: number | null;
+            } | {
+                /** @constant */
                 kind: "subsumption";
                 item: string;
                 severity: string;
