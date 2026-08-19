@@ -57,6 +57,20 @@ const WORK_ITEM_DETAIL = {
   sprintId: null,
   targetRepo: 'motir-core',
   targetRepos: ['motir-core'],
+  // Story MOTIR-2732 · MOTIR-3041 — the REFERENCES the two name fields above
+  // resolve to. Populated rather than empty here: this fixture is the one that
+  // proves the validators accept a REAL body, so an empty array would leave the
+  // element shape unexercised.
+  targetRepositories: [
+    {
+      ref: 'cmrepo1',
+      name: 'motir-core',
+      role: 'web',
+      label: null,
+      state: 'connected',
+      primary: true,
+    },
+  ],
   executor: 'coding_agent',
   planningSource: 'mcp',
   planningHarness: null,

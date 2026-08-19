@@ -84,8 +84,16 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('approvePlan — the ROLE is recorded on the materialized item', () => {
-  it('carries `targetRepoRole` from the proposal onto the work item', async () => {
+describe('approvePlan — the ROLE resolves to a REFERENCE on the materialized item', () => {
+  // ⚠️ REWRITTEN by MOTIR-3040 (§A3's RETIRE branch). This block used to assert
+  // that the role was COPIED onto `work_item.targetRepoRole` and deliberately NOT
+  // resolved — "the set is proposed AFTER this transaction commits, and its rows
+  // start `proposed`, never established, which is exactly why the role has to be
+  // stored." Both halves of that changed: the rows are proposed BEFORE materialize
+  // now, and a `proposed` row is a legal thing to point AT. So the role resolves
+  // here, to a reference, and the column is gone.
+
+  it('resolves each proposal’s role to its project repository ROW', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       { op: 'add', proposedFields: { title: 'The web half', kind: 'task', targetRepoRole: 'web' } },
@@ -94,13 +102,15 @@ describe('approvePlan — the ROLE is recorded on the materialized item', () => 
 
     await plansService.approvePlan(planId, fx.ctx);
 
+    const set = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
     const items = await itemsByTitle(fx);
-    expect(items.get('The web half')!.targetRepoRole).toBe('web');
-    expect(items.get('The API half')!.targetRepoRole).toBe('api');
-    // …and NOT resolved to a repo name here. It cannot be: the set is proposed
-    // AFTER this transaction commits, and its rows start `proposed`, never
-    // established (ADR §5.3) — which is exactly why the role has to be stored.
-    expect(items.get('The web half')!.targetRepo).toBeNull();
+    const refOf = async (title: string) =>
+      (await adminDb.workItemRepo.findMany({ where: { workItemId: items.get(title)!.id } })).map(
+        (r) => r.projectRepoId,
+      );
+
+    expect(await refOf('The web half')).toEqual([set.find((r) => r.role === 'web')!.id]);
+    expect(await refOf('The API half')).toEqual([set.find((r) => r.role === 'api')!.id]);
   });
 
   it('records the role AND keeps the NAME as the pin when a proposal carries both (§5.4)', async () => {
@@ -125,7 +135,12 @@ describe('approvePlan — the ROLE is recorded on the materialized item', () => 
 
     const row = (await itemsByTitle(fx)).get('Both pins')!;
     expect(row.targetRepo).toBe('acme-api');
-    expect(row.targetRepoRole).toBe('api');
+    // ONE reference, from the settled NAME — the role no longer lands anywhere on
+    // the item, so "both pins" resolves to exactly one thing rather than two.
+    const refs = await adminDb.workItemRepo.findMany({ where: { workItemId: row.id } });
+    expect(refs).toHaveLength(1);
+    const set = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
+    expect(refs[0]!.projectRepoId).toBe(set.find((r) => r.name === 'acme-api')!.id);
   });
 
   it('treats an explicit `null` role as UNPINNED, not as an error', async () => {
@@ -135,7 +150,9 @@ describe('approvePlan — the ROLE is recorded on the materialized item', () => 
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    expect((await itemsByTitle(fx)).get('No role')!.targetRepoRole).toBeNull();
+    const row = (await itemsByTitle(fx)).get('No role')!;
+    expect(row.targetRepo).toBeNull();
+    expect(await adminDb.workItemRepo.findMany({ where: { workItemId: row.id } })).toEqual([]);
   });
 
   it('exposes the role on the plan READ-BACK, for both an `add` and a `modify`', async () => {
@@ -160,43 +177,62 @@ describe('approvePlan — the ROLE is recorded on the materialized item', () => 
   });
 });
 
-describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
-  it('RE-PINS an existing item', async () => {
+describe('approvePlan — a `modify` patch re-pins and unpins by role', () => {
+  // ⚠️ REWRITTEN by MOTIR-3040. A `modify` carrying a role still RE-PINS the card;
+  // what changed is where the pin lands — a REFERENCE to the project's repository
+  // row, not a copy of the role on the item.
+
+  it('RE-PINS an existing item, moving its REFERENCE', async () => {
     const fx = await makeWorkItemFixture();
-    const existing = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Moving layer' },
+    const api = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'acme-api' },
       fx.ctx,
     );
-    await adminDb.workItem.update({
-      where: { id: existing.id },
-      data: { targetRepoRole: 'api' },
-    });
+    const shared = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'shared', name: 'acme-shared' },
+      fx.ctx,
+    );
+    const existing = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Moving layer',
+        targetRepositories: [api.id],
+      },
+      fx.ctx,
+    );
     const planId = await plannedPlan(fx, [
       { op: 'modify', workItemId: existing.id, patch: { targetRepoRole: 'shared' } },
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
+
     expect(
-      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
-    ).toBe('shared');
+      (await adminDb.workItemRepo.findMany({ where: { workItemId: existing.id } })).map(
+        (r) => r.projectRepoId,
+      ),
+    ).toEqual([shared.id]);
   });
 
-  it('UNPINS on an explicit null, and LEAVES the role alone when the patch omits it', async () => {
-    // The distinction the sparse-patch contract rests on, mirrored exactly from
-    // the shipped `targetRepo` patch: absent ≠ null.
+  it('UNPINS on an explicit null, and LEAVES the pin alone when the patch omits it', async () => {
+    // The distinction the sparse-patch contract rests on: absent ≠ null. It now
+    // governs the REFERENCE rather than the role column.
     const fx = await makeWorkItemFixture();
+    const web = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'acme-web' },
+      fx.ctx,
+    );
     const cleared = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Cleared' },
+      { projectId: fx.projectId, kind: 'task', title: 'Cleared', targetRepositories: [web.id] },
       fx.ctx,
     );
     const untouched = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Untouched' },
+      { projectId: fx.projectId, kind: 'task', title: 'Untouched', targetRepositories: [web.id] },
       fx.ctx,
     );
-    await adminDb.workItem.updateMany({
-      where: { id: { in: [cleared.id, untouched.id] } },
-      data: { targetRepoRole: 'web' },
-    });
     const planId = await plannedPlan(fx, [
       { op: 'modify', workItemId: cleared.id, patch: { targetRepoRole: null } },
       { op: 'modify', workItemId: untouched.id, patch: { title: 'Renamed only' } },
@@ -204,12 +240,16 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    expect(
-      (await adminDb.workItem.findUniqueOrThrow({ where: { id: cleared.id } })).targetRepoRole,
-    ).toBe(null);
+    // An explicit null CLEARS the reference…
+    expect(await adminDb.workItemRepo.findMany({ where: { workItemId: cleared.id } })).toEqual([]);
+    // …and a patch that never mentions the repository leaves it exactly alone.
     const kept = await adminDb.workItem.findUniqueOrThrow({ where: { id: untouched.id } });
     expect(kept.title).toBe('Renamed only');
-    expect(kept.targetRepoRole).toBe('web');
+    expect(
+      (await adminDb.workItemRepo.findMany({ where: { workItemId: untouched.id } })).map(
+        (r) => r.projectRepoId,
+      ),
+    ).toEqual([web.id]);
   });
 
   it('does NOT record the role in the revision diff — the feed reports the repo, once that is a fact', async () => {
@@ -316,10 +356,11 @@ describe('approvePlan — the distinct roles FEED the repo-set derivation (ADR �
 
     const set = await readSet(fx);
     expect(set.map((r) => r.role)).toEqual(['web']);
-    // …but the modify's role IS applied to its target.
-    expect(
-      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
-    ).toBe('infra');
+    // …but the modify's role IS applied to its target — as a REFERENCE now, and
+    // only when the project actually has a row of that role. This project's set
+    // is the single `web` row the derivation produced, so an `infra` role resolves
+    // to nothing: honest, and exactly §5.3's "matches no row → no pin".
+    expect(await adminDb.workItemRepo.findMany({ where: { workItemId: existing.id } })).toEqual([]);
   });
 });
 
@@ -431,16 +472,14 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
     expect(err).toBeInstanceOf(PlanItemUnknownTargetRepoRoleError);
     expect((err as PlanItemUnknownTargetRepoRoleError).proposalLabel).toContain(existing.id);
     // Nothing about the target moved, and nothing was appended.
-    expect(
-      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
-    ).toBeNull();
+    expect(await adminDb.workItemRepo.findMany({ where: { workItemId: existing.id } })).toEqual([]);
     const planItemCount = await adminDb.planItem.count({ where: { planId: plan.id } });
     expect(planItemCount).toBe(0);
   });
 });
 
 describe('approvePlan — a plan with NO roles behaves exactly as before', () => {
-  it('falls through to `default-web` and stores no role', async () => {
+  it('falls through to `default-web`, and its items pin nothing', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       { op: 'add', proposedFields: { title: 'Plain', kind: 'task' } },
@@ -450,7 +489,11 @@ describe('approvePlan — a plan with NO roles behaves exactly as before', () =>
     await plansService.approvePlan(planId, fx.ctx);
 
     const items = await itemsByTitle(fx);
-    expect([...items.values()].every((r) => r.targetRepoRole === null)).toBe(true);
+    // No role means no reference — the derivation still proposes the default row,
+    // but nothing pins the items to it, exactly as before.
+    for (const row of items.values()) {
+      expect(await adminDb.workItemRepo.findMany({ where: { workItemId: row.id } })).toEqual([]);
+    }
     const set = await readSet(fx);
     expect(set).toHaveLength(1);
     expect(set[0]!.role).toBe('web');

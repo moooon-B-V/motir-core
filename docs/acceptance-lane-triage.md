@@ -115,6 +115,19 @@ motir-ai boundary mock, the code-health fixture and the GitHub provisioning mock
 
 ---
 
+## In-flight members added since the 2026-08-13 measurement
+
+The count above was taken when the lane held no in-flight member. A story still
+in review legitimately sits in the lane while its receipt is being accepted, and
+owes its disposition at the moment it freezes — the rule is the same one, applied
+on time rather than retroactively.
+
+| Spec                                      | Story      | State     | Disposition when the receipt freezes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------- | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `acceptance-repository-reference.spec.ts` | MOTIR-2732 | in review | **PROMOTE → main lane.** Nothing it asserts needs a cloud-on flag: repository ROWS, a link with a destination, a `repository`/`transferred` delivery through the real webhook, and the two-repository hold are all plain product behaviour. The rename step in particular is a REGRESSION test in a way a receipt is not — a reference that stops surviving a rename is the whole story failing silently, and it belongs on every pull request rather than in a clip nobody re-runs. Promote alongside `acceptance-repository-set.spec.ts` (MOTIR-2725), whose flow it extends rather than duplicates: that one proves the SET holds a card open, this one proves the set's elements are objects. |
+
+---
+
 ## Standing count
 
 |                                                  |       |

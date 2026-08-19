@@ -6,6 +6,12 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
+// The PROJECT's repository set (MOTIR-3044), mocked beside the workspace grant
+// list for the same reason: these cases drive a SYNTHETIC ProjectContext with no
+// rows behind it, so the real set read would 404 on the project id and prove
+// nothing about the envelope they are here for. The real read is covered against
+// Postgres in `tests/ai/projectRepoContext.test.ts`.
+vi.mock('@/lib/ai/projectRepoContext', () => ({ resolveProjectRepoContext: vi.fn() }));
 vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/repositories/workItemRepository');
 // …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
@@ -22,6 +28,7 @@ import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
@@ -89,6 +96,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(resolveTenantOrg).mockResolvedValue(mockOrg);
   vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+  vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
   vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_1' } as PlanDto);
 });
 

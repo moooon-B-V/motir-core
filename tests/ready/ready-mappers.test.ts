@@ -44,7 +44,6 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     sessionBranch: null,
     targetRepo: null,
     targetRepos: [],
-    targetRepoRole: null,
     planningSource: null,
     planningHarness: null,
     planningModel: null,

@@ -182,6 +182,22 @@ const workItemDtoExtras = {
    *  set; the DISPATCH shape below stays single-valued, because a dispatch routes
    *  an agent into ONE checkout (ADR §2). */
   targetRepos: z.array(z.string()),
+  /** The same repositories as RESOLVED REFERENCES (MOTIR-3041) — `ref` is the
+   *  identity an agent pins with (`targetRepositories` on the write tools), `name`
+   *  is what it resolves to, and `state` is what tells a `proposed` row from a
+   *  repository that exists. Additive: the two name fields above are unchanged. */
+  targetRepositories: z
+    .array(
+      z.object({
+        ref: z.string(),
+        name: z.string(),
+        role: z.string(),
+        label: z.string().nullable(),
+        state: z.string(),
+        primary: z.boolean(),
+      }),
+    )
+    .optional(),
   planningSource: z.string().nullable(),
   planningHarness: z.string().nullable(),
   planningModel: z.string().nullable(),
@@ -237,6 +253,7 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     sessionBranch: dto.sessionBranch,
     targetRepo: dto.targetRepo,
     targetRepos: dto.targetRepos,
+    ...(dto.targetRepositories === undefined ? {} : { targetRepositories: dto.targetRepositories }),
     planningSource: dto.planningSource,
     planningHarness: dto.planningHarness,
     planningModel: dto.planningModel,

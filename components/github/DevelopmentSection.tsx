@@ -6,6 +6,7 @@ import {
   CircleQuestionMark,
   CircleX,
   ExternalLink,
+  FolderGit2,
   GitMerge,
   GitPullRequestArrow,
   GitPullRequestClosed,
@@ -134,8 +135,28 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
  */
 function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
   const t = useTranslations('github');
-  const unknown = delivery.state === 'unknown';
-  const Glyph = unknown ? CircleQuestionMark : CircleDashed;
+  // FIVE states, four of which reach this row (design MOTIR-3038 panel 2c;
+  // `delivered` has a real pull-request row of its own). Each says something
+  // different about what the reader should do next, so each gets its own copy
+  // and its own glyph — a state that only differed in shade would be the false
+  // "No pull request yet" row MOTIR-3036 fixed, wearing a new costume.
+  const { state } = delivery;
+  const unknown = state === 'unknown';
+  const Glyph =
+    state === 'unknown'
+      ? CircleQuestionMark
+      : state === 'unestablished'
+        ? FolderGit2
+        : CircleDashed;
+  const title =
+    state === 'unknown'
+      ? 'development.mergedBranchUnknown'
+      : state === 'unestablished'
+        ? 'development.repositoryNotCreated'
+        : state === 'excluded'
+          ? 'development.repositorySkipped'
+          : 'development.noPullRequestYet';
+  const pillKey = `development.repoState.${state}` as const;
   return (
     <li className="mt-2 flex items-center gap-2.5 rounded-(--radius-control) border border-dashed border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
       <Glyph className="h-[17px] w-[17px] shrink-0 text-(--el-icon-muted)" aria-hidden />
@@ -147,16 +168,20 @@ function AwaitingRepoRow({ delivery }: { delivery: RepoDelivery }) {
             Secondary is 6.51:1 on the same fill and still reads as quieter than
             a real pull-request title beside it. */}
         <div className="truncate font-sans text-[13.5px] font-medium text-(--el-text-secondary)">
-          {t(unknown ? 'development.mergedBranchUnknown' : 'development.noPullRequestYet')}
+          {t(title)}
         </div>
         <div className="truncate font-sans text-xs text-(--el-text-identifier)">
           {delivery.repo}
         </div>
       </div>
       <span className="flex shrink-0 items-center gap-1.5">
-        <Pill {...(unknown ? { severity: 'warning' as const } : { tone: 'neutral' as const })}>
+        <Pill
+          {...(unknown || state === 'unestablished'
+            ? { severity: 'warning' as const }
+            : { tone: 'neutral' as const })}
+        >
           <Glyph className="h-3 w-3" aria-hidden />
-          {t(unknown ? 'development.repoState.unknown' : 'development.repoState.awaiting')}
+          {t(pillKey)}
         </Pill>
       </span>
       {/* Keeps the pill column aligned with the linked rows, which end in a

@@ -14,6 +14,7 @@ import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
 import type { ComponentDto } from './components';
+import type { ProjectRepoRoleDto, ProjectRepoStateDto } from './projectRepos';
 import type { CustomFieldWithValueDto } from './customFieldValues';
 
 export type WorkItemKindDto = 'epic' | 'story' | 'task' | 'bug' | 'subtask';
@@ -70,6 +71,31 @@ export type ExecutorDto = 'coding_agent' | 'human';
  * (descriptionMd / explanationMd) and the explanation provenance enum so the
  * UI can render the "AI-drafted — review me" badge.
  */
+/**
+ * One repository an item ships in, as the `project_repository` row it REFERENCES
+ * (Story MOTIR-2732 · MOTIR-3041).
+ *
+ * The reference is the identity; the name is what it resolves to. Everything else
+ * here is a fact about the ROW that a bare name could never carry, and that the
+ * surfaces need in order to say what a reader is looking at: a repository that
+ * does not exist yet is not the same as one whose pull request is late.
+ */
+export interface WorkItemRepositoryDto {
+  /** The `project_repository` row id — stable across a rename, and across the row
+   *  being edited before it is established. */
+  ref: string;
+  /** The REALIZED repository's own name once the row is realized, else the row's
+   *  authored intent (ADR §A4's resolved-name rule). */
+  name: string;
+  role: ProjectRepoRoleDto;
+  /** The free-form label that distinguishes two rows of a repeated role. */
+  label: string | null;
+  /** The establish state — a `proposed` row names no repository that exists. */
+  state: ProjectRepoStateDto;
+  /** Element 0 — the repository a dispatch routes to (ADR §2). */
+  primary: boolean;
+}
+
 export interface WorkItemDto {
   id: string;
   projectId: string;
@@ -167,6 +193,24 @@ export interface WorkItemDto {
    * anywhere may present the field as required.
    */
   targetRepos: string[];
+  /**
+   * The item's repositories as RESOLVED REFERENCES (Story MOTIR-2732 · MOTIR-3041,
+   * ADR "Amendment 2026-08-18" §A4) — one entry per `project_repository` row the
+   * item points at, in set order, element 0 the primary.
+   *
+   * ADDITIVE beside the two name fields, which keep their shape and meaning: they
+   * are the NAMES these references resolve to. That is what makes a repository
+   * RENAME change every display and nothing about what any card points at.
+   *
+   * ⚠️ **ABSENT (not `[]`) when the read did not load them** — the reserved-hole
+   * convention, and the distinction a consumer needs: *"this card has no
+   * repositories"* and *"this read did not ask"* are different answers, and an
+   * empty array collapses them. `toWorkItemDto` maps a bare row and cannot join,
+   * so the surfaces that publish this field (the item detail, `/api/v1`, the MCP
+   * item payload) pass the resolved rows in; a read that does not need them pays
+   * no join. Never infer emptiness from absence.
+   */
+  targetRepositories?: WorkItemRepositoryDto[];
   /**
    * Work-item PROVENANCE (Story MOTIR-1685) — how the item was PLANNED and how it
    * was IMPLEMENTED, each a `source · harness · model` triple. All six nullable:
@@ -933,6 +977,29 @@ export interface CreateWorkItemInput {
    */
   targetRepos?: string[];
   /**
+   * The repository REFERENCES this item's work ships in (Story MOTIR-2732 ·
+   * MOTIR-3039, ADR `docs/decisions/work-item-repository-set.md` "Amendment
+   * 2026-08-18") — the `project_repository` row ids, ORDERED, element 0 the
+   * PRIMARY that dispatch routes to.
+   *
+   * The reference-native form of the two fields above, and the AUTHORED state
+   * once §A7's expand → contract sequence completes: `targetRepo` and
+   * `targetRepos` are the NAMES these references resolve to, which is why a
+   * repository rename changes what a card displays and nothing about what it
+   * points at. An element that is not one of THIS project's repository rows is
+   * rejected with `UnknownProjectRepoRefError` (422) — the FIRST one, all-or-
+   * nothing, exactly as an unknown name is; duplicates collapse (first occurrence
+   * wins).
+   *
+   * ⚠️ MUTUALLY EXCLUSIVE with BOTH `targetRepo` and `targetRepos` (§3.4, widened
+   * to three): they describe one field, so supplying two of them raises
+   * `ConflictingTargetRepoInputError` (422) rather than silently picking a winner.
+   *
+   * A project with NO repository set has no rows to name, so its callers keep
+   * sending names — §A7's compatibility rung, unchanged.
+   */
+  targetRepositories?: string[];
+  /**
    * Work-item PROVENANCE (Story MOTIR-1685) — stamp how the item was planned
    * and/or implemented at create time. The stamper subtasks (MOTIR-1689/1691)
    * supply `planning` with a server-set `source`; omitting it leaves all six
@@ -1089,6 +1156,21 @@ export interface UpdateWorkItemInput {
    * list and must never describe a different repository than its first element.
    */
   targetRepos?: string[];
+  /**
+   * Patch the repository REFERENCES (Story MOTIR-2732 · MOTIR-3039): replace them
+   * wholesale with this ordered list of `project_repository` row ids, or clear
+   * them with `[]`.
+   *
+   * Same validation, same de-duplication, same all-or-nothing rule and the same
+   * mutual exclusion — now three-way — as the create shape; the patch surface is
+   * never looser than the create one. A REORDER is a real change for the same
+   * reason it is on the name path: element 0 is where dispatch routes.
+   *
+   * The references are the AUTHORED state, so a patch through this field and a
+   * patch through `targetRepos` reach the same place; what differs is whether the
+   * caller is naming a ROW (stable across a rename) or a NAME (not).
+   */
+  targetRepositories?: string[];
 }
 
 /**

@@ -243,7 +243,9 @@ describe('3 — the migration’s assembled result, over a seeded fixture', () =
     });
     await adminDb.workItem.update({
       where: { id: rolePinned.id },
-      data: { targetRepo: null, targetRepos: [], targetRepoRole: 'web' },
+      // ⚠️ `targetRepoRole` retired by MOTIR-3040 (§A3). This row is now simply
+      // the UNPINNED shape, which is what the backfill assertion below reads.
+      data: { targetRepo: null, targetRepos: [] },
     });
     await adminDb.workItem.update({
       where: { id: unpinned.id },
@@ -282,8 +284,6 @@ describe('3 — the migration’s assembled result, over a seeded fixture', () =
       ),
     );
     expect(rows.map((r) => r!.targetRepos)).toEqual([['motir-core'], [], []]);
-    // The role column is untouched by the backfill (ADR §1.3).
-    expect(rows[1]!.targetRepoRole).toBe('web');
   });
 });
 

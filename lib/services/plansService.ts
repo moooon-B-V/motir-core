@@ -18,6 +18,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
@@ -407,6 +408,65 @@ async function assertProposalsPersistable(
  *  pre-MOTIR-1884 behaviour (absent ≠ explicit null). */
 type ResolvedRepoPins = ReadonlyMap<string, string | null>;
 
+/**
+ * The project's repository rows, keyed the two ways a PROPOSAL can name one
+ * (Story MOTIR-2732 · MOTIR-3033).
+ *
+ * A proposal pins either a settled NAME (`project-repository-set.md` §5.4) or a
+ * portable ROLE (§5.2). Both have to become the same thing — a reference to the
+ * `project_repository` row — so both lookups are built once, before the
+ * transaction, from one read.
+ *
+ * The ROLE map holds ONLY roles carried by exactly ONE row. §5.3 is explicit that
+ * a repeated role resolves to nothing rather than to an arbitrary pick, counted
+ * over rows in ANY state so the verdict is a property of the SET and not of which
+ * row was established first. A role with two rows is therefore simply absent here,
+ * and the item lands unrouted — the honest answer, and the one the reference model
+ * makes rarer rather than more common (MOTIR-3045 lets a planner pin the ROW).
+ */
+interface ProposalRepoRefs {
+  byName: ReadonlyMap<string, string>;
+  byRole: ReadonlyMap<string, string>;
+}
+
+async function resolveProposalRepoRefs(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<ProposalRepoRefs> {
+  const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
+  const rows = await projectRepoSetService.listByProject(projectId, ctx);
+  const byName = new Map<string, string>();
+  const roleCounts = new Map<string, number>();
+  for (const row of rows) {
+    // The RESOLVED name, same rule as everywhere else (§A4): the realized
+    // repository's own once it is realized, else the row's authored intent.
+    const name = (row.realizedRepo?.name ?? row.name).trim().toLowerCase();
+    if (name.length > 0 && !byName.has(name)) byName.set(name, row.id);
+    roleCounts.set(row.role, (roleCounts.get(row.role) ?? 0) + 1);
+  }
+  const byRole = new Map<string, string>();
+  for (const row of rows) {
+    if (roleCounts.get(row.role) === 1) byRole.set(row.role, row.id);
+  }
+  return { byName, byRole };
+}
+
+/** The reference a single proposal resolves to, or `null` when it names nothing
+ *  this project has — a NAME first (it is the settled, unambiguous pin), then the
+ *  ROLE, which is what a plan written before the repositories existed carries. */
+function proposalRepoRef(
+  pinnedName: string | null,
+  role: string | null,
+  refs: ProposalRepoRefs,
+): string | null {
+  if (pinnedName !== null) {
+    const byName = refs.byName.get(pinnedName.trim().toLowerCase());
+    if (byName !== undefined) return byName;
+  }
+  if (role !== null) return refs.byRole.get(role) ?? null;
+  return null;
+}
+
 /** The authored `targetRepo` a proposal carries, or `undefined` when it carries
  *  none (an `add` without the field, a `modify` whose patch omits it). */
 function authoredTargetRepo(item: PlanItem): string | null | undefined {
@@ -601,6 +661,7 @@ async function materialize(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
+  repoRefs: ProposalRepoRefs,
 ): Promise<string[]> {
   const project = await projectRepository.findById(plan.projectId, tx);
   if (!project) throw new ProjectNotFoundError(plan.projectId);
@@ -754,23 +815,49 @@ async function materialize(
       // `null` exactly as it did before the field existed (the shipped resolver's
       // single-repo fallback still serves those projects unchanged).
       targetRepo: repoPins.get(item.id) ?? null,
-      // The PORTABLE half of the same pin (MOTIR-1912) — validated against the
-      // role vocabulary before the transaction opened, and RECORDED here rather
-      // than resolved: `proposeRepositorySet` runs AFTER this transaction commits
-      // and writes rows in state `proposed`, so on the onboarding path there is no
-      // ESTABLISHED row for a role to resolve against at materialize (ADR §5.3
-      // would make every role resolve to `null`). Storing it is what lets the
-      // resolution happen at the moment a row actually becomes established
-      // (MOTIR-1913). Independent of `targetRepo`: a proposal carrying BOTH keeps
-      // the settled NAME as its pin (§5.4) and still records the role, so the two
-      // never disagree about where the item ships.
-      targetRepoRole: (pf.targetRepoRole ??
-        null) as Prisma.WorkItemUncheckedCreateInput['targetRepoRole'],
+      // ⚠️ `targetRepoRole` IS GONE FROM `work_item` (Story MOTIR-2732 ·
+      // MOTIR-3040, ADR "Amendment 2026-08-18" §A3's RETIRE branch). The role was
+      // the PORTABLE stand-in a plan recorded because a NAME is meaningless before
+      // the repository exists — and a row REFERENCE is not, so the proposal's role
+      // is resolved to a reference above (`proposalRepoRef`) and nothing is stored
+      // on the item. `PlanItemProposedFields.targetRepoRole` still exists and is
+      // still how a plan pins before any row exists; it simply no longer survives
+      // onto the work item as a second way to say where a card ships.
       position,
       backlogRank,
     };
 
     const created = await workItemRepository.create(data, tx);
+
+    // THE REPOSITORY REFERENCE (Story MOTIR-2732 · MOTIR-3033). This path builds
+    // its create-input by hand and calls the repository directly, bypassing
+    // `workItemsService` — which is exactly why the reference had to be written
+    // here explicitly and why the column it replaces was never written at all: two
+    // writers existed for one fact and only one of them was exercised by the
+    // work-item tests.
+    //
+    // Resolved from the row set proposed BEFORE this transaction (§A3), so a card
+    // planned before its repositories existed points at one from birth. A proposal
+    // naming nothing this project has resolves to `null` and the item lands with
+    // no reference — unrouted and honest, never a guess.
+    const createdRef = proposalRepoRef(
+      repoPins.get(item.id) ?? null,
+      pf.targetRepoRole ?? null,
+      repoRefs,
+    );
+    if (createdRef !== null) {
+      await workItemRepoRepository.createMany(
+        [
+          {
+            workspaceId: ctx.workspaceId,
+            workItemId: created.id,
+            projectRepoId: createdRef,
+            position: 0,
+          },
+        ],
+        tx,
+      );
+    }
     planItemToWorkItem.set(item.id, created.id);
     await planItemRepository.setWorkItemId(item.id, created.id, tx);
     // The `created` revision is recorded in Pass 3, after the body's intra-plan
@@ -966,7 +1053,7 @@ async function materialize(
   // modify + remove against existing targets (locked + re-read inside the tx).
   for (const item of items) {
     if (item.op === 'modify') {
-      await applyModify(item, ctx, resolveRef, tx, repoPins);
+      await applyModify(item, ctx, resolveRef, tx, repoPins, repoRefs);
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -983,7 +1070,71 @@ async function materialize(
     }
   }
 
+  // THE CONTAINER ROLLUP, ONCE PER CONTAINER (Story MOTIR-2732 · MOTIR-3033, ADR
+  // §A6). A plan creates a whole tree in one transaction and a parent is created
+  // BEFORE its children, so recomputing per insert would be both quadratic and
+  // wrong-order: every container would derive its set from the children that
+  // happened to exist at the moment it was written.
+  //
+  // So it runs here, after every add and every modify has landed, over the
+  // DISTINCT ancestors of everything this pass touched — each container derived
+  // exactly once no matter how many of its descendants moved. Inside the same
+  // transaction, so a plan and the repository sets it implies commit together.
+  await recomputeContainersForTouched(touchedWorkItemIds, ctx.workspaceId, tx);
+
   return touchedWorkItemIds;
+}
+
+/**
+ * Recompute the derived repository set of every CONTAINER above `touchedIds`,
+ * each one ONCE (MOTIR-3033).
+ *
+ * The ancestor chains are collected first and de-duplicated, then walked deepest
+ * -first so a parent derives from children that have already been derived — an
+ * epic's set is the union of its stories', and a story's is only correct once its
+ * own subtasks have been rolled up.
+ *
+ * Locked per container, exactly as the service-path rollup is: a plan approve is
+ * one transaction, but it is not the only writer, and a rollup is a
+ * read-derive-write either way.
+ */
+async function recomputeContainersForTouched(
+  touchedIds: readonly string[],
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  if (touchedIds.length === 0) return;
+  // depth → the containers at that depth, so the walk can go deepest-first.
+  const byDepth = new Map<string, number>();
+  for (const id of touchedIds) {
+    const ancestors = await workItemRepository.findAncestors(id, workspaceId, tx);
+    // `findAncestors` returns ROOT→self, so the LAST entry is the immediate
+    // parent: index from the end to get a depth that compares across chains.
+    ancestors.forEach((a, i) => {
+      const depth = ancestors.length - 1 - i;
+      const seen = byDepth.get(a.id);
+      if (seen === undefined || depth < seen) byDepth.set(a.id, depth);
+    });
+  }
+  const ordered = [...byDepth.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+  for (const containerId of ordered) {
+    await workItemRepository.lockById(containerId, tx);
+    const refs = await workItemRepoRepository.listDerivedRefsForContainer(
+      containerId,
+      workspaceId,
+      tx,
+    );
+    await workItemRepoRepository.deleteByWorkItem(containerId, tx);
+    await workItemRepoRepository.createMany(
+      refs.map((projectRepoId, position) => ({
+        workspaceId,
+        workItemId: containerId,
+        projectRepoId,
+        position,
+      })),
+      tx,
+    );
+  }
 }
 
 /** A single `modify` materialize: patch the target (same id), one revision. */
@@ -993,6 +1144,7 @@ async function applyModify(
   resolveRef: (ref: string) => string,
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
+  repoRefs: ProposalRepoRefs,
 ): Promise<void> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -1065,22 +1217,46 @@ async function applyModify(
       diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
     }
   }
-  // RE-PIN / UNPIN the repo ROLE (MOTIR-1912) — the same sparse contract as the
-  // name above: the key PRESENT is what distinguishes "leave it alone" from
-  // "unpin it", and the value was validated against the vocabulary before the
-  // transaction opened. Deliberately NOT recorded in the revision `diff`: a role
-  // is planner plumbing that has not yet resolved to anything the reader can act
-  // on, and the resolution that follows writes `targetRepo`, which IS diffed — so
-  // the History feed reports the repo an item moved to, once that is a fact,
-  // rather than announcing an intention twice. Same judgement (and same reason —
-  // no renderer disposition, no invented label) the shipped `explanationSource`
-  // metadata column is given on the `add` path.
-  if (patch.targetRepoRole !== undefined) {
-    const nextRole = patch.targetRepoRole ?? null;
-    if (nextRole !== current.targetRepoRole) {
-      update.targetRepoRole = nextRole as Prisma.WorkItemUncheckedUpdateInput['targetRepoRole'];
+
+  // …and the REFERENCE moves with it (MOTIR-3033). A `modify` that re-pins an
+  // existing leaf changes where that card ships, so it changes its ancestors'
+  // unions too — the recompute is not run here but ONCE at the end of the pass,
+  // over every touched item's chain, which is what keeps a plan that re-pins six
+  // subtasks of one story from deriving that story six times.
+  //
+  // Written whenever the pin key is PRESENT, including when the NAME did not
+  // change: a card whose project only just gained its repository rows resolves to
+  // a reference for the first time here, with `targetRepo` identical on both
+  // sides — the same case the service path's update handles ahead of its own
+  // empty-diff return.
+  if (repoPins.has(item.id) || (item.patch as PlanItemPatch | null)?.targetRepoRole !== undefined) {
+    const patched = (item.patch as PlanItemPatch | null) ?? null;
+    const nextRef = proposalRepoRef(
+      repoPins.get(item.id) ?? null,
+      patched?.targetRepoRole ?? null,
+      repoRefs,
+    );
+    await workItemRepoRepository.deleteByWorkItem(current.id, tx);
+    if (nextRef !== null) {
+      await workItemRepoRepository.createMany(
+        [
+          {
+            workspaceId: ctx.workspaceId,
+            workItemId: current.id,
+            projectRepoId: nextRef,
+            position: 0,
+          },
+        ],
+        tx,
+      );
     }
   }
+  // RE-PIN / UNPIN the repo ROLE (MOTIR-1912) — the same sparse contract as the
+  // name above. ⚠️ The ROLE no longer lands on the work item at all (MOTIR-3040,
+  // §A3's RETIRE branch): a `modify` carrying `targetRepoRole` re-pins the card by
+  // resolving that role to a REFERENCE — done above, beside the name — and there
+  // is no column left for it to also be recorded in. The plan keeps the field;
+  // the work item does not.
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);
   }
@@ -1632,6 +1808,54 @@ export const plansService = {
     // after the commit below.
     const repoRoles = resolveProposedRepoRoles(preItems);
 
+    // PROPOSE the project's repository set BEFORE the tree is materialized (Story
+    // MOTIR-2732 · MOTIR-3033, ADR `work-item-repository-set.md` "Amendment
+    // 2026-08-18" §A3, answer (b)).
+    //
+    // It used to run AFTER the commit, and §5.3 of `project-repository-set.md`
+    // recorded that ordering as forced. The reading that settled it: this call's
+    // ONLY derivation input is `repoRoles`, computed from the pre-transaction
+    // proposal snapshot three lines above — nothing in it reads a created work
+    // item. So the rows CAN exist first, and once they do a materialized card can
+    // point at one from birth instead of carrying a role for a later pass to
+    // resolve.
+    //
+    // ⚠️ It does NOT move INSIDE the transaction, and that is the other half of
+    // §A3: `proposeRepositorySet` makes a `server-only` cross-boundary read and
+    // writes each row in its OWN transaction (ADR `project-repository-set.md`
+    // §4.2's "rows are INDEPENDENT and nothing is rolled back"). Before, not
+    // within.
+    //
+    // Still BEST-EFFORT, for the reason §4.3 gives: establishing repositories is
+    // not worth failing a plan approval over. A failure leaves the items with no
+    // reference — honestly unrouted, the same signal §5.3's second outcome emits —
+    // and the role→item mapping survives on the plan (`plan_item.workItemId` plus
+    // its `proposedFields.targetRepoRole`), so a repair is reconstructable.
+    //
+    // The cost §A3 accepts, stated here because this is where it happens: a
+    // rolled-back approve (the in-transaction status re-read rejecting) now leaves
+    // `proposed` rows behind. They are editable, the proposer refuses to touch a
+    // set that already has rows, and the approve that wins the race writes the
+    // same set from the same plan.
+    await import('@/lib/services/projectRepoProposalService')
+      .then(({ projectRepoProposalService }) =>
+        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, {
+          itemRoles: repoRoles,
+        }),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
+          err,
+        );
+      });
+
+    // The project's repository ROWS, read AFTER the propose so a first-onboarding
+    // plan sees the rows it just caused. This is what turns a proposal's pin — a
+    // NAME (§5.4's settled case) or a ROLE (§5.2's portable one) — into the
+    // reference a materialized card stores.
+    const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
+
     const { row, items, firstOnboarding, projectKey, touchedWorkItemIds } =
       await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -1648,7 +1872,14 @@ export const plansService = {
           // proposal set — nothing has been written yet, so a rejection here rolls
           // back a transaction that touched no work-item row.
           await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
-          const touchedWorkItemIds = await materialize(proposals, fresh, ctx, tx, repoPins);
+          const touchedWorkItemIds = await materialize(
+            proposals,
+            fresh,
+            ctx,
+            tx,
+            repoPins,
+            repoRefs,
+          );
           // Read the project ONCE, before `markOnboardingRan` writes: its
           // pre-write `onboardingRanAt` gates the rename below, and its
           // `identifier` (the tenant projectKey) + the first-onboarding signal both
@@ -1776,26 +2007,6 @@ export const plansService = {
     // chance to establish a repo). Imported LAZILY for the same reason: the E2E
     // plan seeds import plansService in the Playwright Node process, where
     // `server-only` does not resolve.
-    await import('@/lib/services/projectRepoProposalService')
-      .then(({ projectRepoProposalService }) =>
-        // `itemRoles` — ADR §0.1.1's PRIMARY signal, wired in by MOTIR-1912: the
-        // distinct roles this plan's `add` proposals pin, in the plan's own order.
-        // A `web` + `api` plan therefore proposes TWO rows (each `plan-item-role`),
-        // which is the first point in the tree where a multi-repo project can be
-        // proposed at all. An EMPTY list — a plan that pins nothing, which is every
-        // plan a producer older than MOTIR-1885 writes — leaves the ladder to fall
-        // through to `preplan-platform` / `default-web` exactly as before.
-        projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, {
-          itemRoles: repoRoles,
-        }),
-      )
-      .catch((err: unknown) => {
-        console.warn(
-          `[plansService.approvePlan] repository-set proposal failed for project ${plan.projectId}; skipping (the set stays empty and editable)`,
-          err,
-        );
-      });
-
     return toPlanWithItemsDto(row, items);
   },
 
