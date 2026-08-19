@@ -13,6 +13,17 @@ MOTIR-2730 (E2E)
 > `notes.html` #197 is the case where an enumerated list was mistaken for the sweep
 > itself, and #304 is the case where the sweep ran outward only.
 
+> **⚠️ Amended 2026-08-18 (MOTIR-3037, Story MOTIR-2732) — a work item's repositories are
+> REFERENCES to the project's repository rows, and every NAME on every surface is DERIVED
+> from one.** §1's storage decision is REVERSED (an ordered array of names becomes a join
+> table of references, `work_item_repository`); §1.3's singular `targetRepoRole` is
+> SUPERSEDED (the column retires entirely, and MOTIR-1913's resolution pass with it); §1.2,
+> §2, §3 and §4 are KEPT, with §4's "every repository name in the set" re-read as "every
+> repository REFERENCE in the set" and given a fifth delivery state for a row that is not
+> established yet. Nothing published is removed. **Read "Amendment 2026-08-18" below before
+> building to §1.1 or §1.3** — both are answered there on their own terms rather than around
+> them.
+
 ## Context
 
 `work_item.targetRepo` is one nullable `String` and `work_item.targetRepoRole` one
@@ -62,6 +73,13 @@ repository dispatch routes to (§2). An empty array and a null pin are the same 
 _this card does not say where it ships_, which is legitimate, common, and the default.
 
 #### 1.1 Why an array and not a join table
+
+> **⚠️ REVERSED 2026-08-18 (MOTIR-3037) — the element is now a REFERENCE and the storage a join
+> table.** The measurement below is accurate and was taken against the wrong table: the foreign key
+> it declines is the one `target-repo-attribution.md` §1 declines to `github_repo`, and the one
+> taken is to `project_repository`, whose row survives a disconnect by design. The shape chosen is
+> also neither of the (B)/(C) rejected here. **Read "Amendment 2026-08-18 · §A1" below**, which
+> answers each of the three objections rather than setting them aside.
 
 The card's own recommendation was (A), and the price of choosing (B) or (C) was stated
 as: _name what integrity the chosen shape provides that the alternatives do not,
@@ -115,6 +133,13 @@ distinguishable_ rather than rendering N equal chips — the asymmetry is real, 
 dispatch, and a reader must be able to see it and correct it.
 
 #### 1.3 `targetRepoRole` stays SINGULAR in this story — deliberately, with the reason recorded
+
+> **⚠️ SUPERSEDED 2026-08-18 (MOTIR-3037) — `work_item.targetRepoRole` retires entirely**, and
+> MOTIR-1913's resolution pass with it. The argument below is sound and its premise moved: a set
+> mixing "a NAME, no role" with "a ROLE, no name" has no representation in two parallel scalar
+> arrays — and it has an obvious one in a table of references, where the element is the ROW and
+> both states are the same state. The deferral this section filed, **MOTIR-2978**, survives as the
+> container ROLLUP rather than as a widened role. **Read "Amendment 2026-08-18 · §A3".**
 
 MOTIR-2726 proposed `targetRepoRoles ProjectRepoRole[]` beside the names. It is not
 taken here, and the two facets are not made into parallel index-aligned arrays, because
@@ -250,6 +275,12 @@ the contract an agent reads** — an agent never opens this ADR — so the same 
 appear in `docs/mcp.md`'s work-item section and in the two tool parameter descriptions.
 
 ### 4. Completion — the rule, in one sentence
+
+> **⚠️ Amended 2026-08-18 (MOTIR-3037) — "every repository NAME in the item's `targetRepos` set"
+> reads as "every repository REFERENCE in the item's set", and a reference to a row that is not
+> established yet gets its own delivery meaning.** The rule, the three-gate order, the visible hold
+> and the transaction are otherwise unchanged. **Read "Amendment 2026-08-18 · §A5"** for the five
+> delivery states and which of them hold the item.
 
 > **A merge completes a work item only when, for EVERY repository name in the item's
 > `targetRepos` set, the item has a linked change request that is merged onto that
@@ -400,6 +431,599 @@ the amendments were applied when this ADR merged, not deferred:
   in, it is simply still singular). No criterion falsified.
 - **MOTIR-2417 / MOTIR-2730** — no criterion falsified; §4's sentence is what
   MOTIR-2730's step 4 drives and MOTIR-2417's item 2 asserts.
+
+## Amendment 2026-08-18 (MOTIR-3037, Story MOTIR-2732) — the set is a set of REFERENCES, and every name is DERIVED
+
+**Card:** MOTIR-3037 · **Story:** MOTIR-2732 · **Read on `origin/main` @ `d3346bad`.**
+
+This ADR decided WHAT a repository set is one week before a screenshot asked what a
+repository IS. A card names its repository as a **word**, on a page where that repository
+is a first-class object with an `id`, a `role`, a `label`, an establish `state` and a page
+of its own — so there is nothing to click, because there is nothing being referred to, only
+a string that happens to match. This amendment changes the element from a name to a
+**reference to the project's `project_repository` row**, and makes every name the product
+displays a **read projection** of one.
+
+### A0. What is reversed, and what is untouched
+
+| §         | Verdict                                                                                                                                                                                 |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §1        | **REVERSED.** The ordered `String[]` of names becomes the join table `work_item_repository` (§A2).                                                                                      |
+| §1.1      | **ANSWERED** (§A1) — the rejection was correct against the table it was measured on, and this is not that table, nor is the chosen shape either of the (B)/(C) it rejected.             |
+| §1.2      | **KEPT verbatim.** Order is meaningful, element 0 is the primary, and the author who did not think about order still produces a first element.                                          |
+| §1.3      | **SUPERSEDED.** `work_item.targetRepoRole` retires entirely, and MOTIR-1913's resolution pass with it (§A3). The deferral it filed, MOTIR-2978, survives as the container ROLLUP (§A6). |
+| §2        | **KEPT.** Dispatch reads the primary; the primary is now the first REFERENCE, resolved to a name (§A4).                                                                                 |
+| §3        | **KEPT and extended.** Still additive, nothing published is removed, and the reference is ADDED beside the names (§A4).                                                                 |
+| §4        | **KEPT.** "Every repository name in the item's set" is re-read as "every repository REFERENCE", and a row that is not established yet gets a delivery meaning it did not have (§A5).    |
+| §4.1–§4.4 | **KEPT.** The third gate, its position, its visible hold and its transaction are unchanged.                                                                                             |
+
+### A1. Answering §1.1 on its own terms
+
+§1.1 is not overturned by preference. Three things, in order:
+
+**1. The foreign key §1.1 declined is not the foreign key this takes.** Its reason is
+quoted from `target-repo-attribution.md` §1, which rejected an FK **to `github_repo`** —
+the workspace's _connected_ set — because "disconnecting a repo would either cascade the
+attribution away or block the disconnect", and "a pin should survive a repo being briefly
+disconnected". That is a true statement about `github_repo` and it is not a statement about
+`project_repository`. A disconnect does not delete a `ProjectRepo` row: the relation is
+`githubRepo GithubRepo? @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)`
+(`prisma/schema.prisma` :5053ff), so a disconnect nulls the mirror and **leaves the row, its
+role, its label and its authored name standing**. The property §1.1 was protecting is
+therefore _preserved by_ the reference rather than broken by it — a card pinned to a
+disconnected repository still points at the same planning row, and says so.
+
+**2. §1.1 measured what the column HAS; the defect is what it FAILS AT.** The costing asked
+_"name what integrity the chosen shape provides that the alternatives do not, measured
+against what the column has on `origin/main` today"_, measured no FK, no index, no join, and
+concluded correctly that a join table bought nothing. What no rung asked was what the column
+cannot do — and `ProjectRepo.name`'s own comment had already written the answer down:
+
+> The INTENDED repo name, editable per row until the row is established … the authoritative
+> checkout name is the realized repo's own `name`, which is what the read layer prefers
+> (**a rename on the host must not silently re-point a dispatch**).
+
+A `work_item.targetRepo` holding a NAME is re-pointed by exactly that rename, silently, and
+nothing in the product notices. §1.1's inventory is an accurate description of a column
+nothing depended on referentially, taken one week before something did.
+
+**3. The chosen shape is neither of the two §1.1 rejected.** §1.1's **(B)** was _"a join
+table **with the scalar dropped**"_, fatal because `/api/v1` publishes the scalar and §8
+forbids removing a published field. §1.1's **(C)** was _"a join table plus the scalar kept
+as a **denormalized primary**"_, fatal because it means "two writable representations of one
+fact … only safe under a single-writer rule, and a single-writer rule that nothing enforces
+is a convention, not a decision." This amendment takes a third shape:
+
+> **The join table is the only WRITABLE representation. Every name the product publishes —
+> `targetRepo`, `targetRepos`, the dispatch payload's `targetRepo` — is a READ PROJECTION of
+> it, computed on read and stored nowhere.**
+
+Against (B): nothing published is dropped, so §8 is satisfied by construction (§A4).
+Against (C): there is no second _writable_ representation, and the single-writer rule §1.1
+correctly refused to accept as a convention is replaced by a structural exclusion — after §A7's
+contract step the surviving name column is written ONLY for a project that has no repository set
+at all, i.e. exactly where no row exists to reference, so the two representations can never both
+describe one item (§A7, asserted by MOTIR-3039 and MOTIR-3040 AC 5).
+
+**The cost, re-priced honestly.** One workspace-scoped table and its RLS policies — the
+convention `project_repository_collaborator` already follows, one table over; one join on the
+work-item detail read, which since MOTIR-2725 already loads the item's repository set to
+render per-repository delivery, so the read gains a join and not a query; and `position` as a
+plain `Int` rather than the free ordering a Postgres array gave. What §1.1's rung 2 said about
+scalar arrays being this schema's idiom stays true — it is simply not the deciding property
+when the element has an owner one table away.
+
+### A2. The element shape
+
+```prisma
+model WorkItemRepo {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  workItemId    String   @map("work_item_id")
+  projectRepoId String   @map("project_repo_id")
+  position      Int
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  projectRepo ProjectRepo @relation(fields: [projectRepoId], references: [id], onDelete: Cascade)
+
+  @@unique([workItemId, projectRepoId])
+  @@unique([workItemId, position])
+  @@index([workspaceId])
+  @@index([projectRepoId])
+  @@map("work_item_repository")
+}
+```
+
+- **Ordered by `position`, ascending; position 0 is the PRIMARY.** §1.2's rule about what
+  order means is unchanged.
+- **`position Int`, not the fractional-index `String @db.Text`** this schema uses on
+  `work_item.position` / `project_repository.position`. A fractional index buys a cheap
+  insert-between on a list a user re-orders one element at a time; a repository set is
+  REPLACED wholesale by one service write and has no incremental re-order, so the ordinal is
+  both sufficient and assertable (`@@unique([workItemId, position])` makes a gap or a
+  collision a database error rather than a rendering question).
+- **Duplicates COLLAPSE at the write layer**, first occurrence winning, exactly as §1.2's
+  name-level rule already does. `@@unique([workItemId, projectRepoId])` is the backstop, not
+  the rule — a caller that sends the same row twice gets a two-element set silently reduced
+  to one, not a 422, because that is what the name path does today and the change must not
+  make an existing call fail.
+- **A reference to a row in another PROJECT is rejected with a typed error** at the write
+  layer (`ForeignProjectRepoError` → 422 / a self-correctable MCP tool error). The foreign
+  key cannot see this: `project_repository.projectId` and `work_item.projectId` are two
+  columns and nothing relates them, so the check is the same write-layer check
+  `target-repo-attribution.md`'s 2026-07-30 amendment already applies to a NAME ("a pin
+  naming a sibling project's repo is now the typed error it always should have been"), moved
+  from a string comparison onto an id.
+- **`onDelete: Cascade` on both parents.** On `workItem`, for the obvious reason. On
+  `projectRepo`, because a row removed from the project's set is a repository the project no
+  longer has, and a card cannot go on referring to it; `Restrict` would make the set
+  **uneditable** the moment any card pinned a row, which `project-repository-set.md` §4.4
+  ("the set is a durable property of the project, editable and completable afterwards")
+  forbids. The pin's survival across a _disconnect_ — the property §1.1 was defending — is a
+  different edge and is preserved by `ProjectRepo.githubRepoId`'s existing `SetNull` (§A1).
+- **RLS:** workspace-scoped, `workspace_id` carried on the row, policies written per the
+  new-table convention and asserted by a cross-tenant test that fails without them
+  (MOTIR-3039 AC 4). This is the policy work §1.1 correctly priced as the array shape's
+  saving; it is now spent, deliberately.
+
+### A3. Question 2 — what a plan pins before any row exists: **(b)**, and the reading that decided it
+
+MOTIR-3037 asked which of **(a)** keep the role as the pre-row stand-in, **(b)** propose the
+repository rows BEFORE materialize, or **(c)** both inside one transaction, and named the one
+reading that would settle it. Here is the reading, and what it showed.
+
+**The derivation input does NOT depend on the materialized items — (b)'s precondition holds.**
+In `lib/services/plansService.ts`'s `approvePlan`:
+
+```
+:1504   const repoPins  = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
+:1515   const repoRoles = resolveProposedRepoRoles(preItems);          // ← the derivation signal
+:1518   await withWorkspaceContext( … )                                 // ← the materialize transaction
+…
+:1670   projectRepoProposalService.proposeRepositorySet(plan.projectId, ctx, { itemRoles: repoRoles })
+```
+
+`repoRoles` is computed from `preItems` — the **pre-transaction proposal snapshot** — three
+lines above the transaction that creates the work items, and it is the whole of what
+`proposeRepositorySet` is given (`options.itemRoles`; the rest of its input is the project's
+slug and the pre-plan signals). Nothing in the derivation reads a created work item. So the
+ordering `project-repository-set.md` §5.3 recorded is not forced by the input, and the rows
+CAN exist before the tree does.
+
+**(c) is refuted by the same reading, one level down.** Two things inside
+`proposeRepositorySet` forbid the materialize transaction, and neither is about the input:
+
+- `lib/services/projectRepoProposalService.ts:128` — `readPreplanSignals` is a `server-only`
+  cross-boundary read (`GET /v1/preplan` into motir-ai). A network call inside an open
+  database transaction is the side-effects-outside-tx rule's exact prohibition, and it is
+  the reason `plansService`'s own comment gives for the current placement.
+- `:148` — the `addRow` loop writes **each row in its own transaction**, which
+  `project-repository-set.md` §4.2 fixes deliberately: "rows are INDEPENDENT … there is no
+  compensating delete, no transaction spanning repo creation, and no all-or-nothing gate."
+  Nesting that inside materialize would invert a decision, not implement one.
+
+**(b) is taken.** `proposeRepositorySet` moves from _after the commit_ to **before
+`withWorkspaceContext`**, still best-effort (the same `catch` + warn), still passed
+`itemRoles: repoRoles`, which is already in scope at that point. Materialize then resolves
+each proposal's pin — a row reference where the plan carried one, a ROLE where it did not —
+against rows that now exist, and writes `work_item_repository` rows.
+
+**Why a `proposed` row is a legal target — the hinge of the whole decision.**
+`project-repository-set.md` §5.2 argued the role into existence like this: at generation the
+repositories do not exist, so "a name pinned at generation is stale the moment the user edits
+a row, and meaningless before the row is created at all. A **role** is stable across both."
+Every word of that is true of a NAME. **A row REFERENCE is stable across both as well** — the
+row exists before the repository does, its `id` does not move when its `name` is edited, and
+it survives the repository being renamed on the host, which is the defect this story exists
+for. And it is strictly _more_ precise than a role: §5.3's third outcome — more than one row
+carries the role, so the pin resolves to `null` and always will (§1.2's legitimate repeated
+role) — **cannot arise** when the pin names the row. The role's entire reason to exist is
+discharged by the reference, and its one residual weakness disappears with it.
+
+**What retires, what stays:**
+
+| Thing                                                                                             | Verdict                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `work_item.targetRepoRole` (`schema.prisma:1729`)                                                 | **RETIRES** — dropped in MOTIR-3039's migration.                                                                                                                                                                                                                                            |
+| `PlanItemProposedFields.targetRepoRole` / `PlanItemPatch.targetRepoRole`                          | **STAYS.** Generation still runs before any row exists, so a fresh project's plan still pins a ROLE. An established project's plan may instead pin the ROW (§5.4's settled case, now expressible unambiguously). MOTIR-3045 adds the row pin and keeps the two mutually exclusive per node. |
+| `projectRepoPinService.resolvePins` (MOTIR-1913) and its call site `projectRepoSetService.ts:794` | **RETIRE.** Under a reference, establishing a row makes every card pointing at it resolve to a name **on the next read** — the name is derived (§A4), so there is nothing left for a pass to write.                                                                                         |
+| `lib/projectRepos/roleResolution.ts`                                                              | **STAYS**, as the role→row rule the backfill (§A7) and materialize both apply. What retires is the standing pass that _wrote a name_, not the rule that _picks a row_.                                                                                                                      |
+
+**What (b) costs, stated here rather than discovered later.**
+
+1. **A rolled-back approve leaves `proposed` rows behind.** The in-transaction gate re-reads
+   the plan's status under the plan lock and can reject after the propose has already run.
+   Bounded, and acceptable: the rows are `proposed`, editable, and guarded by the proposer's
+   own "a project whose set has any row is left completely alone", and the approve that wins
+   the race writes the same set from the same plan. §4.4 already says the set is editable
+   afterwards; this makes a losing approve leave the same artifact a winning one would.
+2. **A FAILED propose leaves that plan's items with no reference, and there is no longer a
+   pass to fill them in.** The item is honestly unrouted — the same signal §5.3's second
+   outcome already emits and the code-index loop already renders — but where the old shape
+   self-healed when a row was later established, this one does not. **The record is not
+   destroyed:** materialize sets `plan_item.workItemId` (`plansService.ts:763`) and the
+   proposal's `proposedFields.targetRepoRole` is retained, so the role→item mapping survives
+   on the plan and a repair is reconstructable from it at any time. Retiring the pass is what
+   buys the column's removal, and carrying both — a column, a background pass, and a
+   validator standing in for a foreign key — is the state this story exists to end.
+
+### A4. Question 3 — what the public shapes carry, and WHICH name is the resolved one
+
+**Additive on all three**, exactly as §3 prescribes; `public-api-conventions.md` §8 is
+unchanged and no amendment to it is owed.
+
+| Surface                                                    | Change                                                                                                                    | Kind         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `targetRepo: string \| null` (v1 read, MCP item, DTO)      | **KEPT** — now the DERIVED name of the primary reference                                                                  | none         |
+| `targetRepos: string[]` (v1 read, MCP item, DTO)           | **KEPT** — now the DERIVED ordered names                                                                                  | none         |
+| `targetRepositories` (v1 read, MCP item, DTO)              | **ADD** — `{ id, name, role, label, state, primary }[]`, in set order: the references themselves                          | **additive** |
+| v1 / MCP WRITE shapes                                      | **ACCEPT** optional `targetRepositories: string[]` (row ids) beside the existing name fields                              | **additive** |
+| MCP DISPATCH shape (`lib/mcp/payloads/workItems.ts`)       | **UNCHANGED** — single-valued; its `targetRepo` is the primary's resolved name, with the same clone-url/branch companions | none         |
+| `lib/api/v1/ready/schema.ts` · `lib/dto/ready.ts`          | **UNCHANGED** — §3.3's answer is unaffected                                                                               | none         |
+| `V1_CONTRACT_VERSION` (`lib/api/v1/contractVersion.ts:82`) | **`1.10.0` → `1.11.0`** — obligatory for an additive change under Amendment 8                                             | —            |
+
+**The resolved name is the REALIZED repository's own `name`, falling back to the row's
+authored `name` when the row is not realized yet.** This is stated to agree, in writing, with
+`ProjectRepo.name`'s comment ("the authoritative checkout name is the realized repo's own
+`name`, which is what the read layer prefers"), and it is not new machinery: it is exactly
+what `lib/projectRepos/names.ts:115`'s `toProjectRepoPinNames` already computes —
+`normalizeTargetRepo(realized?.name ?? row.name)` — and that function **already returns
+`rowId`**, so the write path's name→row resolution is a projection of a function that ships
+today.
+
+**The write side is a THREE-way mutual exclusion**, extending §3.4's rule rather than
+replacing it: a write may carry `targetRepo`, or `targetRepos`, or `targetRepositories`, and
+**never two of them**; a write carrying more than one is rejected with the typed 422 §3.4
+already names, and over MCP as a self-correctable tool error. A silent precedence rule is
+rejected here for the same reason §3.4 rejected it. A name that arrives on a write is
+RESOLVED to a row through the project's pin domain (`toProjectRepoPinNames` — every row, in
+any state, per its own doc comment on why authoring uses the wider domain); a name that
+resolves to no row is the existing `UnknownTargetRepoError`, unchanged.
+
+**A container's set is not writable at all** on any of these surfaces — §A6.
+
+#### A4.1 The PLANNING-JOB ENVELOPE — a FOURTH shape, and it sits BESIDE `context.code`
+
+The three surfaces above are the ones a customer's client reads. There is a fourth that only
+Motir reads, and MOTIR-3044 is told to take its shape from here rather than decide it: the
+planning-job envelope crossing the 7.1 boundary into `motir-ai`.
+
+**Decision: the project's repository set rides as its OWN key, `context.repositories`, BESIDE
+`context.code` — never merged into it.**
+
+They are two different lists answering two different questions at two different SCOPES, and the
+substitution of one for the other is the defect MOTIR-3044 exists to end:
+
+| field                  | scope         | what it is                                                                                                                             |
+| ---------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `context.code`         | **workspace** | the connected repo GRANT list (`{ provider, repoRef, defaultBranch }`), for code-graph reads (MOTIR-1598 / MOTIR-1599). **Untouched.** |
+| `context.repositories` | **project**   | the `project_repository` rows: `{ ref, name, role, label, state }`, in set order                                                       |
+
+Merging them would produce one list that is wrong about both. A workspace grant carries no role
+and no establish state; it has no entry at all for a repository the plan is about to ASK FOR,
+which is most of them at the moment a tree is generated; and it is not scoped to the project
+whose tree is being planned.
+
+- **The element is §A4's, minus `primary`.** A published `targetRepositories` element carries
+  `primary` because a work ITEM has an ordered set with a dispatch target; the PROJECT's set has
+  no primary, so the envelope element does not invent one.
+- **ABSENT, never `{ repos: [] }`** — the reserved-hole convention `code` and `discovery` already
+  follow. _"This project records no repositories"_ and _"nobody asked"_ must stay tellable apart,
+  and an empty list collapses them into the answer a motir-ai predating the field would give.
+- **Optional in BOTH directions**, so the two repositories' halves merge in either order.
+- **Unestablished rows are INCLUDED, carrying their state** — filtering them would blind the
+  planner to every repository the plan itself proposed.
+- **The `ref` is the load-bearing field, and it is why this is not a nicety.** §1.2 lets a role
+  REPEAT — two services are two `api` rows — and §5.3 makes a repeated role resolve to `null`
+  rather than guess. So a planner that can only emit a ROLE cannot say _the billing API_ rather
+  than _the search API_, and every card on such a project lands unpinned with nothing reporting
+  it. The row's identity is what makes it sayable; MOTIR-3045 pins by it.
+
+**Not a `/api/v1` change.** This is the internal 7.1 boundary, so §8's additive rules and
+`V1_CONTRACT_VERSION` are not engaged by it — the version bump in §A4 is for the published
+shapes alone.
+
+#### A4.2 The ACTIVITY renderer and the repo-straddle ADVISORY — the two seams a shape table cannot answer
+
+§A4 and §A4.1 describe SHAPES. Two of MOTIR-3041's five seams are not shape questions, and each
+asks something the implementation would otherwise decide in a comment.
+
+**The activity renderer records NAMES, and an old entry renders verbatim.**
+`lib/activity/renderers.ts` registers `targetRepo: textField()` and `targetRepos: listField()` —
+the diff renders the strings it stored. Under references the diff **keeps storing the resolved
+NAMES**, not the row ids, and no history entry is migrated. Three reasons, the second decisive:
+
+- A cuid tells a reader nothing, and History is read by people auditing why a dispatch went to the
+  wrong checkout.
+- **A history entry is a record of what was true THEN.** Rendering a reference's CURRENT name would
+  make an old entry assert something that was not true when it was written — which is the opposite
+  of an audit, and strictly worse than the stale-name problem it would be fixing.
+- Old entries then need no special case: they already hold names, and they keep rendering exactly
+  as they do today.
+
+So the rename property (§A1 point 2) deliberately does NOT reach into History. A rename changes
+every LIVE surface and changes nothing about the record of what was decided. That asymmetry is the
+decision, not an oversight — and it is the answer to MOTIR-3041's _"the card should say which of
+those the renderer does for old entries."_
+
+**The repo-straddle advisory keeps comparing NAMES, and the resolution becomes explicit.**
+`lib/workItems/proseVsGraph.ts` matches a path in a card's PROSE against the card's repository.
+Prose contains names, so the comparison stays a name comparison — what changes is only where the
+card's side of it comes from: the references, resolved ONCE through §A4's rule, rather than read
+off a column. Stated so the resolution is a call the reader can see rather than an incidental
+property of whichever field the advisory happened to read.
+
+### A5. Question 4 — what the classifier compares, and what a `proposed` row DELIVERS
+
+`classifyRepoDelivery(expected, linked)` (`lib/workItems/repoDelivery.ts`) keeps its shape
+and its purpose — ONE derivation shared by the completion gate and the rendered panel, so the
+two can never disagree — and its `expected` side becomes the item's ordered **references**
+rather than strings. Per reference:
+
+| Row state (`project_repository.state`)                                | Delivery state      | Holds the item? | What the reader's next action is                       |
+| --------------------------------------------------------------------- | ------------------- | --------------- | ------------------------------------------------------ |
+| `created` / `connected`, realized, merged onto its own default branch | `delivered`         | no              | nothing                                                |
+| `created` / `connected`, realized, no such merge                      | `awaiting`          | **yes**         | open (or merge) the pull request                       |
+| `created` / `connected`, realized, merged with a null `base_ref`      | `unknown`           | **yes**         | say which branch that merge landed on                  |
+| `proposed` / `creating`                                               | **`unestablished`** | **yes**         | **create the repository, on the establish step**       |
+| `failed`                                                              | **`unestablished`** | **yes**         | retry, connect an existing repository, or skip the row |
+| `skipped`                                                             | **`excluded`**      | **no**          | nothing — the project is deliberately code-less there  |
+
+Five states, and that is the whole enumeration.
+
+- **The established rows behave exactly as they do today**, comparing `linked` facts against
+  the **realized** repository's name (case-insensitively, per the function's existing note
+  that the two sides come from different tables and a git host is case-insensitive).
+- **`unestablished` is deliberately not `awaiting`.** They hold the item identically and they
+  are not the same statement: `awaiting` says a pull request has not been opened and points a
+  reader at GitHub; `unestablished` says the repository does not exist yet and points a
+  reader at the establish step. Collapsing them is what produces the false "No pull request
+  yet" row MOTIR-3036 reports, so that bug's cause is named here and its fix belongs to the
+  surface card.
+- **`failed` reads as `unestablished`, not as its own state**, because §4.1 makes `failed`
+  **resumable, not terminal** — the reader's next action is the same establish-step action.
+  The row's `failureReason` is what distinguishes them on the surface, and it already exists.
+- **`skipped` must NOT hold**, or `project-repository-set.md` §4.3 — "a skipped or failed row
+  leaves the project **explicitly code-less for that role**", a state the product models and
+  renders — becomes unreachable, and a card would wait forever for work the user declined.
+  `excluded` abstains: it appears in neither shortfall list.
+- **An ARCHIVED repository is not a sixth state.** A merge that landed before the archive
+  still landed, so archival changes nothing about _delivery_. It changes _dispatch_, where
+  `lib/projectRepos/roleResolution.ts` already refuses by name (MOTIR-1959) — a different
+  question, asked at a different moment.
+
+`RepoSetShortfall` gains a third list, `unestablished`, beside `outstanding` and
+`unknownBase`; `hasRepoSetShortfall` is true when **any** of the three is non-empty, and the
+comment posted by §4.2's visible hold names all three, split the same way — a gate that held
+on one list while the note printed another would be the two-rules failure `repoDelivery.ts`
+exists to prevent.
+
+#### A5.1 — the `expected` side is RESOLVED, not read off `targetRepos`
+
+⚠️ **Recorded after the fact, from the acceptance flow (MOTIR-3043), because it was decided by
+omission and the omission was a defect.**
+
+§A4 makes `work_item.targetRepos` a **stored projection** of the references, written when the
+item is written. Nothing rewrites it when a repository is renamed on the host — the row's
+realized name changes, and the projection keeps the old word. So a gate that classifies off
+that column compares a name **no pull request will ever report again**, matches nothing, and
+holds the card open for a repository that is delivered.
+
+The panel did not have this problem: it resolved through the references and showed the new
+name. That is the failure at its most misleading — the surface says `delivered`, the gate says
+outstanding, and §A5's opening promise (_"ONE derivation shared by the completion gate and the
+rendered panel, so the two can never disagree"_) was true about the CLASSIFIER and false about
+what each side handed it.
+
+**The rule, stated so it cannot be re-omitted:** every caller of `classifyRepoDelivery` builds
+its `expected` side by RESOLVING the item's references at read time — `resolveExpectedRepos`
+(`lib/workItems/expectedRepos.ts`) — never from `targetRepos` directly. The stored names remain
+the FALLBACK, and only the fallback: they are what a project with no `project_repository` set
+still pins with (§5's compatibility rung), which is the one case that has no reference to
+resolve.
+
+The read requires a transaction, and that is not incidental: the join table is RLS-gated on a
+GUC bound only on a transaction, so an unbound read returns `[]` — indistinguishable from _"this
+card carries no repositories"_, which would complete the card rather than hold it. The worse of
+the two failures, silently.
+
+**Why no unit test could see it.** Both sides were right about their own half — the classifier
+compares what it is given, and each caller passed something defensible. The disagreement only
+exists across a rename, and a rename only happens through a webhook that no unit test drives.
+It took the browser flow, which is the argument for that flow existing at all.
+
+### A6. A container's set is the UNION of its leaves' — MATERIALIZED, and NOT writable
+
+§1.3's deferral, MOTIR-2978, resolves to this rather than to a widened role. Recorded here
+because MOTIR-2978 and MOTIR-3033 both build to it and neither may decide it alone.
+
+- **A container's references are the de-duplicated UNION of its non-archived descendants'
+  leaf references.** `ONE SUBTASK = ONE REPO = ONE PR` is untouched and is not weakened
+  anywhere by this amendment: a leaf's set has at most one element and is authored; a
+  container's is derived and may have many.
+- **Ordered by the project's own repository-set order** (`project_repository.position`), not
+  by first appearance in a tree walk. The project's order is stable, project-wide, and
+  independent of child order — so a re-parent that changes nothing about which repositories a
+  story spans does not churn the order it renders in.
+- **MATERIALIZED, not computed on read.** The completion gate reads the expected set on the
+  delivery path, inside the resolve transaction under the item's row lock (§4.3); an ancestor
+  walk there would be a subtree query per delivery AND a second implementation of the union.
+  Recomputed on every mutation that can change it — a leaf's set changing, a re-parent, an
+  archive, an unarchive, a delete — and **once per container per materialize**, after the adds
+  pass, inside the same transaction (MOTIR-3033).
+- **An ARCHIVED descendant contributes nothing.** A parent is not waiting on work that has
+  been archived out of it, and §4's "has every repository merged?" would otherwise be
+  unanswerable for a story whose archived child pinned a repository nothing will ever ship to.
+- **A concurrent recompute SERIALIZES on the container's own row lock.** The rollup is a
+  read-derive-write over a set of children, which is the shape a lost update lives in: two children
+  of one story updated at the same time each recompute the parent, and the later write can be
+  derived from a snapshot taken before the earlier one landed. So the recompute takes the
+  CONTAINER's row lock (`SELECT … FOR UPDATE`) inside the mutating transaction and re-reads its
+  descendants UNDER that lock — never from the caller's snapshot. This is `CLAUDE.md`'s
+  lock-before-read-derived-update rule, named here because a rollup is exactly the case it exists
+  for and because MOTIR-2978's AC 3 asserts the outcome without prescribing the mechanism.
+- **A direct write to a container's set is REJECTED with a typed error** —
+  `ContainerRepoSetNotWritableError` → 422 / a self-correctable MCP tool error — on all three
+  write surfaces. **Not silently ignored**, for the reason §3.4 gives for rejecting a silent
+  precedence rule: the losing value would be a decision the caller believed they had
+  recorded, and the next rollup would erase it with no signal. This is MOTIR-2978's
+  "chosen disposition".
+
+### A7. The migration, and the back-compat contract — an EXPAND → CONTRACT sequence across four cards
+
+A column replacement cannot land in one commit here: every child of MOTIR-2732 is a
+separate commit gated by its own lint/typecheck/build, so a commit that DROPS a column
+its siblings still read does not compile. The sequence below is therefore part of the
+decision, not an implementation detail, and each step names the card that owns it.
+
+**Step 1 — EXPAND (MOTIR-3039).** Add `work_item_repository` with its RLS policies and its
+truncate-helper registration, and BACKFILL it. From this commit on, the references are the
+AUTHORED state: `workItemsService.create` / `update` write them, and the legacy
+`targetRepo` / `targetRepos` columns are maintained by **that same single service write** as
+a derived projection of the references — output, never input, and never independently
+writable. §3.4's "the singular or the set, never both" carries over and grows a third arm
+(§A4).
+
+The backfill, per work item, in this order:
+
+1. **Names first.** Each element of `targetRepos` — or the scalar `targetRepo` when the
+   array is empty — resolves through the project's PIN domain
+   (`lib/projectRepos/names.ts`'s `toProjectRepoPinNames`: every row, in any state, which is
+   the domain an authored pin was validated against, and which already returns the `rowId`)
+   to a row, producing one reference per element **in the stored order**.
+2. **Then the role.** An item with no name pin but a `targetRepoRole` resolves through
+   `lib/projectRepos/roleResolution.ts`'s rule, counting rows carrying that role **in any
+   state** exactly as §5.3 requires: exactly one → a reference to it; zero or more than one →
+   none. Referencing an unestablished row is legal now (§A3), so this recovers items the old
+   model could only leave `null` until a pass ran.
+3. **Everything else is counted, not dropped.** The count of unresolvable pins, split by
+   reason (no row of that name in the project; an ambiguous role; neither a role nor a name),
+   is reported in MOTIR-3039's PR body. Never guessed across projects, never matched on a
+   substring.
+
+**Step 2 — MOVE THE READS (MOTIR-3041).** Every read seam resolves through the reference:
+`targetRepo` and `targetRepos` become the DERIVED names on the wire, `targetRepositories` is
+added, and `V1_CONTRACT_VERSION` moves (§A4). After this commit nothing READS the legacy
+columns.
+
+**Step 3 — MOVE THE LAST WRITER (MOTIR-3033).** `plansService.materialize` is the one write
+path that bypasses `workItemsService` entirely, which is why it has its own card. It writes
+references, and stops writing `targetRepoRole`. After this commit nothing WRITES the legacy
+columns except step 1's derived projection.
+
+**Step 4 — CONTRACT (MOTIR-3040).** With no reader and no writer left,
+`projectRepoPinService.resolvePins`, its call site at `projectRepoSetService.ts:794`, the two
+`workItemRepository` role queries that serve it, and the columns `targetRepos` and
+`targetRepoRole` are all removed, along with step 1's derived write of `targetRepo`. This is
+the commit MOTIR-3040 AC 5 — "no repository fact is writable from two places after this card"
+— is true of, and it is why that card must run AFTER MOTIR-3033 and MOTIR-3041 (§A8 wires the
+two edges the sequence owes).
+
+**What survives step 4: `work_item.targetRepo`, as the COMPATIBILITY-RUNG pin — and the two
+representations are MUTUALLY EXCLUSIVE BY PROJECT.** This is the one place the reference model
+does not reach, and it is a rung `target-repo-attribution.md`'s 2026-07-30 amendment already
+installed rather than a residue this migration leaves:
+
+> A project with **no** repository set validates and resolves its pins against the WORKSPACE's
+> connected repos — "the compatibility rung, and it answers only for a MISSING set, never
+> underneath one that exists."
+
+Such a project has no `project_repository` row for a pin to point at, so the reference model has
+nothing to say about it. The rule is therefore:
+
+- **A project WITH a repository set** — its work items carry REFERENCES, and `work_item.targetRepo`
+  is never written for them. After step 4 the column is not written by any path that runs for such
+  a project.
+- **A project WITHOUT one** — its work items carry NO references and keep writing
+  `work_item.targetRepo` exactly as they do today, validated against the workspace's connected
+  repos exactly as today. Nothing about those projects changes, which is what "dispatch is
+  unchanged for every existing card" means for them.
+
+The two are never both populated for one item, and which applies is decided by
+`projectRepoSetService.getRepoNameDomains(...).hasSet` — a property of the project, read in one
+place, and **assertable**: MOTIR-3039 asserts that a write in a set-bearing project leaves the
+column null, and that a write in a setless one writes no reference. That is the difference from
+§1.1's rejected (C), which had two representations of the same fact for the same row and only a
+convention keeping them in step.
+
+**A project that GAINS a set later keeps its old cards on the name.** The read ladder resolves
+references first and falls back to the column, so those cards render and dispatch exactly as
+before; they simply do not become links until someone re-pins them. Converting them is an
+establishment-flow question — creating or connecting rows to point at — which Story MOTIR-2732
+puts out of scope, and it is named here so it is a known gap rather than a discovered one.
+
+**Why the backfill does not simply give every project a set.** It would make the tail empty and
+the feature universal, and it would also **narrow every such project's future validation domain**
+from the workspace's connected repositories to whatever the migration happened to write — a
+behaviour change to authoring, made by a data migration, for projects nobody asked to establish.
+That is the establishment flow wearing a migration's clothes.
+
+**No card's resolved dispatch repository changes**, at any step. Asserted directly by
+MOTIR-3039 over a fixture holding pinned, role-pinned, unpinned and unresolvable rows — not
+inferred from the rules above — and re-asserted by MOTIR-3040 after the contract.
+
+### A8. Binding on MOTIR-2732's cards
+
+The inward half of the close-out (`notes.html` #304) — whose acceptance criteria does this
+amendment settle, and whose does it falsify? Walked over MOTIR-3037's `blocks` closure, card
+by card. **Nothing below is falsified; every entry is an answer a card no longer has to
+re-derive.**
+
+- **MOTIR-3039** (schema + backfill + write path) — AC 1's "ordered set of references,
+  enforced by the database, with element 0 the primary" is §A2's model verbatim; AC 2's
+  cross-project rejection is §A2's `ForeignProjectRepoError` (and §A2 says why the FK cannot
+  supply it); AC 3's unresolvable tail is §A7; AC 5's duplicate disposition is §A2's
+  _collapse, first wins_; AC 6's dispatch invariance is §A7's last paragraph.
+- **MOTIR-3040** (the resolution pass) — AC 1 asks which branch. **The RETIRE branch**, per
+  §A3's table: the pass, its call site at `projectRepoSetService.ts:794`, the two
+  `workItemRepository` role queries that serve it, and the columns all go. AC 5's "no
+  repository fact is writable from two places" is §A7's step 4 plus §A1's point 3.
+  **⚠️ This card is §A7's CONTRACT step, so it owes two dependency edges the plan did not
+  have** — it cannot drop `targetRepoRole` while `plansService.materialize` still writes it,
+  nor `targetRepos` while a read seam still reads it. **`MOTIR-3040 blocked_by MOTIR-3033`
+  and `MOTIR-3040 blocked_by MOTIR-3041`**, wired by this card rather than left as a build
+  order somebody has to rediscover (`plan-rules/core.md` gate 4: an absent edge and a
+  considered exclusion are the same absent edge).
+- **MOTIR-3041** (read seams) — §A4 gives the shape of the THREE published seams (DTO,
+  `/api/v1`, MCP), the resolved-name source, the `V1_CONTRACT_VERSION` bump, and the write-side
+  three-way exclusion AC 5 asks about. **§A4.2 answers the other two**, which are not shape
+  questions: the activity renderer stores NAMES and renders an old entry verbatim (AC 1's fourth
+  seam, and the card's own "say which of those the renderer does for old entries"), and the
+  advisory keeps comparing names with the resolution made explicit. AC 3's rename assertion is the
+  property §A1 point 2 exists for — **and §A4.2 bounds it: History is deliberately outside it.**
+- **MOTIR-2978** (the container rollup) — §A6 is its specification, including AC 4's "chosen
+  disposition" for a direct write (rejected, typed), AC 2's archive case, and **AC 3's
+  concurrency**, whose mechanism §A6 now names (the container's row lock, re-reading descendants
+  under it) rather than leaving the card to assert an outcome with no prescribed means.
+- **MOTIR-3033** (`materialize` writes the set) — §A6's "once per container per materialize,
+  after the adds pass, inside the same transaction" is its AC 5; §A3 removes its own open
+  question about whether the role still rides along (it does not).
+- **MOTIR-3042** (the surfaces) — AC 2's "a `proposed` row reads as proposed rather than as
+  awaiting a pull request" is §A5's `unestablished`, and AC 3's shared derivation is
+  `repoDelivery.ts` keeping its single-derivation contract.
+- **MOTIR-3038** (the design) — §A5 supplies the five delivery STATES and what each MEANS,
+  which is all a decision card can supply: **this ADR has no design deliverable in it**, and
+  none of it decides what the Development section renders. AC 4 asks for five states _"each
+  with its exact copy"_, and **the copy is the design's to author** — as MOTIR-3038's own body
+  puts it, _"MOTIR-3037 names what the `proposed` case means; draw what it decided."_ Read this
+  row as the vocabulary being settled, never as the rows being specified.
+- **MOTIR-3044** (the planning envelope) — **§A4.1** is the decision its card is told to read
+  off this amendment: the set rides as `context.repositories`, BESIDE `context.code` and never
+  merged into it. AC 1's "reference, name, role, label, establish state" is that section's
+  element, with §A4's resolved-name rule deciding what `name` holds.
+- **MOTIR-3045** (the planner sees the repositories) — AC 6/7's row-pin-or-role-pin is §A3's
+  table: the role stays on the PLAN, the row pin is added, the two are exclusive per node.
+  AC 8's "two repositories of the same role can be pinned unambiguously" is the §5.3 third
+  outcome that §A3 shows the reference dissolves.
+- **MOTIR-3031 / MOTIR-3043** (the gates) — no criterion falsified; §A5's five states and
+  §A6's rollup are what they assert over.
+
+**Out of this story, and named so it is not lost:** the false "No pull request yet" row
+(**MOTIR-3036**) has its cause in §A5 and its fix on the surface card; the null-`base_ref`
+trap (**MOTIR-3034**) is untouched by this amendment — `unknown` keeps exactly the meaning
+§4 gave it.
 
 ## Consequences
 

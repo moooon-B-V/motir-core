@@ -14,7 +14,7 @@
 
 import { expect, test } from '@playwright/test';
 
-import { resetDatabase, db } from './_helpers/db-reset';
+import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   seedPlansReview,
@@ -32,6 +32,7 @@ test.beforeEach(async () => {
 
 test.afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 test('Plans: nav → list → stale detail → approve-anyway → decline', async ({ page }) => {
@@ -149,4 +150,61 @@ test('Plans: empty state shows the generate-your-first-plan CTA', async ({ page 
   await expect(
     page.getByText(/Generate your first plan to see proposed work here\./),
   ).toBeVisible();
+});
+
+// MOTIR-3073 — a project that ALREADY HAS CODE must land on its new items, not on
+// the code-hosting step. The defect: `proposeRepositorySet`'s only gate asked "has
+// this project's set been proposed before?", which is always false for a project
+// that arrived through the migrate path (that path records its repository on the
+// onboarding run and never writes the set table). So approval proposed a starter
+// repo, the step took the canvas the approved plan's items belong on, and the row
+// it created became the project's whole repo-pin domain.
+//
+// Guarded on ABSENCE (CLAUDE.md § E2E): the assertion is that the hosting step's
+// heading is NOT there. Asserting some other thing IS there would pass while the
+// step rendered beside it.
+test('Plans: approving on a project that already has code shows the items, not the hosting step', async ({
+  page,
+}) => {
+  const seed = await seedPlansReview('plans-review-has-code@example.com');
+
+  // The project ARRIVED with its code — the migrate path's record, which is the
+  // project-scoped signal the proposer's gate reads.
+  // `adminDb`: `migrate_onboarding` is RLS-bound to the active workspace GUC, which
+  // a spec's own client does not set — seeding goes through the superuser client.
+  await adminDb.migrateOnboarding.create({
+    data: {
+      workspaceId: seed.workspaceId,
+      projectId: seed.projectId,
+      step: 'done',
+      status: 'completed',
+      connectedRepoRef: 'acme/existing-app',
+      codeGraphReady: true,
+    },
+  });
+
+  await signIn(page, seed.email, PLANS_SEED_PASSWORD);
+  await page.goto(`/plans/${seed.declinePlan.id}`);
+  await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
+
+  const approveResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/plans/${seed.declinePlan.id}/approve`) &&
+      r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: /Approve.*to your backlog/ }).click();
+  expect((await approveResponse).status()).toBe(200);
+
+  // Approved, WITHOUT re-navigating — the surface the user is left looking at is
+  // the one under test.
+  await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
+
+  // The hosting step is ABSENT …
+  await expect(page.getByText('Motir will host your code')).toHaveCount(0);
+  // … and the canvas is still showing the plan's own items.
+  await expect(page.getByText(seed.declineProposal)).toBeVisible();
+
+  // And nothing was provisioned: the visible half of this defect was a screen, the
+  // durable half was a row that should never have existed.
+  expect(await adminDb.projectRepo.count({ where: { projectId: seed.projectId } })).toBe(0);
 });

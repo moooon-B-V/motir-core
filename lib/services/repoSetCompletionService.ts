@@ -2,6 +2,7 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -146,7 +147,10 @@ export const repoSetCompletionService = {
           ? EMPTY_SHORTFALL
           : repoSetShortfall(
               classifyRepoDelivery(
-                item.targetRepos,
+                // Through the REFERENCES — see `resolveExpectedRepos`. Same
+                // reason as the sync's own site: a renamed repository leaves the
+                // stored projection naming something that no longer exists.
+                await resolveExpectedRepos(workItemId, item.targetRepos, tx),
                 await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
               ),
             );

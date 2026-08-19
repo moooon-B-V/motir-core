@@ -36,6 +36,7 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { watchersService } from '@/lib/services/watchersService';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import { autoRelateWorkItemMentions, writeWorkItemLink } from '@/lib/workItems/autoRelateMentions';
 import { embeddingDocumentChanged } from '@/lib/workItems/embeddingDocument';
@@ -93,6 +94,7 @@ import {
   toWorkItemListItemDto,
   toWorkItemTreeRowDto,
   toArchivedWorkItemDto,
+  toWorkItemRepositoryDtos,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
@@ -163,6 +165,7 @@ import type {
   WorkItemValidityDto,
   WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
+  WorkItemRepositoryDto,
 } from '@/lib/dto/workItems';
 import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -184,13 +187,20 @@ import {
   type BlockerReadinessState,
 } from '@/lib/workItems/blockerReadiness';
 import {
+  resolveAuthoredRepoPinsInProject,
+  resolveAuthoredRepoRefsInProject,
   resolveAuthoredTargetRepoInProject,
-  resolveAuthoredTargetReposInProject,
-  resolveItemDispatchRepo,
+  resolveDispatchRepoForItem,
+  type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
-import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
+import {
+  ConflictingTargetRepoInputError,
+  ContainerRepoSetNotWritableError,
+} from '@/lib/workItems/errors';
+import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
@@ -207,10 +217,13 @@ import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 function assertSingleTargetRepoInput(
   targetRepo: string | null | undefined,
   targetRepos: readonly (string | null | undefined)[] | null | undefined,
+  targetRepositories?: readonly (string | null | undefined)[] | null | undefined,
 ): void {
-  if (targetRepo !== undefined && targetRepos !== undefined) {
-    throw new ConflictingTargetRepoInputError();
-  }
+  const supplied =
+    (targetRepo !== undefined ? 1 : 0) +
+    (targetRepos !== undefined ? 1 : 0) +
+    (targetRepositories !== undefined ? 1 : 0);
+  if (supplied > 1) throw new ConflictingTargetRepoInputError();
 }
 
 /** A validated single pin, as the one-element set it means (`null` → `[]`). The
@@ -218,6 +231,141 @@ function assertSingleTargetRepoInput(
  *  valid set without knowing the set exists. */
 function toRepoSet(pin: string | null): string[] {
   return pin === null ? [] : [pin];
+}
+
+/**
+ * REPLACE one item's repository REFERENCES with `refs`, in order (Story
+ * MOTIR-2732 · MOTIR-3039, ADR `work-item-repository-set.md` "Amendment
+ * 2026-08-18" §A2).
+ *
+ * Delete-then-insert rather than a per-element diff, because a repository set is
+ * authored as a whole: element 0 is the primary, so `[a, b]` → `[b, a]` is a
+ * different decision and not two no-ops, and `@@unique([workItemId, position])`
+ * makes any interleaved patch fight itself. That is also why `position` is a plain
+ * ordinal — there is no incremental re-order to keep cheap.
+ *
+ * Positions are written CONTIGUOUS from 0, which the unique index then enforces:
+ * a gap is a database error rather than something a reader has to interpret.
+ *
+ * Runs inside the caller's transaction (both repository calls require `tx`), so a
+ * failed write leaves neither the row nor its references behind.
+ */
+async function writeRepoRefs(
+  workItemId: string,
+  workspaceId: string,
+  refs: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await workItemRepoRepository.deleteByWorkItem(workItemId, tx);
+  await workItemRepoRepository.createMany(
+    refs.map((projectRepoId, position) => ({ workspaceId, workItemId, projectRepoId, position })),
+    tx,
+  );
+}
+
+/**
+ * Recompute the DERIVED repository set of every ANCESTOR of `itemId` (Story
+ * MOTIR-2732 · MOTIR-2978, ADR "Amendment 2026-08-18" §A6).
+ *
+ * A container never authors its repositories — they are the union of its
+ * non-archived leaf descendants' — so every write that can move a leaf's set, or
+ * move a leaf, owes this call inside its own transaction.
+ *
+ * **Locked, and this is the part that is not optional.** A rollup is a
+ * read-derive-write over a row several children can move at once: two children of
+ * one story updated concurrently each derive the parent, and the later write can
+ * be derived from a snapshot taken before the earlier one landed — a lost update
+ * that leaves a repository off the parent silently. So each ancestor's row is
+ * locked (`SELECT … FOR UPDATE`) BEFORE its descendants are read, and the
+ * descendants are re-read under that lock rather than taken from the caller's
+ * snapshot (`CLAUDE.md`'s lock-before-read-derived-update rule, named by §A6
+ * because MOTIR-2978's AC 3 asserts the outcome without prescribing the means).
+ *
+ * Ancestors arrive ROOT→self from `findAncestors` and are locked in that order,
+ * which is what stops two concurrent recomputes on overlapping chains from
+ * deadlocking: every caller takes the same rows in the same direction.
+ *
+ * The walk is naturally short — the tree is depth-capped at 4 — so this is a
+ * fixed-length parent walk, not an unbounded recursion.
+ */
+async function recomputeAncestorRepoSets(
+  itemId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const ancestors = await workItemRepository.findAncestors(itemId, workspaceId, tx);
+  for (const ancestor of ancestors) {
+    await workItemRepository.lockById(ancestor.id, tx);
+    const refs = await workItemRepoRepository.listDerivedRefsForContainer(
+      ancestor.id,
+      workspaceId,
+      tx,
+    );
+    await writeDerivedRepoSet(ancestor.id, workspaceId, refs, tx);
+  }
+}
+
+/**
+ * A container's derived set, written as BOTH halves of the one fact (Story
+ * MOTIR-2732 · MOTIR-2978).
+ *
+ * ⚠️ The name projection is not optional here, and leaving it out is invisible.
+ * `work_item.targetRepos` is a STORED projection of the references (ADR §A4), and
+ * a leaf gets it written by its own create/update — but a container never
+ * authors its set, so the rollup is the only writer it has. Writing only the join
+ * rows leaves every container with an empty `targetRepos`, and the completion
+ * gate reads exactly that column: the story that spans two repositories would
+ * complete on its first merge, which is the outcome this whole capability exists
+ * to prevent. Caught by MOTIR-3031's gate, which is the seam no unit test on
+ * either card could see.
+ *
+ * Names are RESOLVED through the same rule every reader uses (`toWorkItemRepositoryDtos`
+ * — the realized repository's own name, else the row's authored intent), so the
+ * projection cannot say something different from what the panel shows.
+ */
+async function writeDerivedRepoSet(
+  containerId: string,
+  workspaceId: string,
+  refs: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await writeRepoRefs(containerId, workspaceId, refs, tx);
+  const rows = await workItemRepoRepository.listByWorkItem(containerId, tx);
+  const names = toWorkItemRepositoryDtos(rows).map((r) => r.name);
+  await workItemRepository.update(
+    containerId,
+    { targetRepos: names, targetRepo: primaryTargetRepo(names) },
+    tx,
+  );
+}
+
+/**
+ * Recompute a CONTAINER's own derived set and then its ancestors' — the shape
+ * every MOVE needs (MOTIR-2978, §A6).
+ *
+ * A re-parent, an archive and a delete each change TWO chains: the one the item
+ * joined and the one it left. `recomputeAncestorRepoSets` covers the chain from
+ * an item upward; the chain it LEFT starts at the old parent, which is itself a
+ * container whose set just changed — so that side needs the old parent included,
+ * not merely walked past.
+ *
+ * A container that is now childless derives the EMPTY set, which is correct and
+ * not a special case: an empty set and "this card does not say where it ships"
+ * are one state (ADR §1).
+ */
+async function recomputeContainerAndAncestors(
+  containerId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await workItemRepository.lockById(containerId, tx);
+  const refs = await workItemRepoRepository.listDerivedRefsForContainer(
+    containerId,
+    workspaceId,
+    tx,
+  );
+  await writeDerivedRepoSet(containerId, workspaceId, refs, tx);
+  await recomputeAncestorRepoSets(containerId, workspaceId, tx);
 }
 
 /** Ordered list equality — a REORDER counts as a change, because element 0 is the
@@ -846,13 +994,29 @@ export const workItemsService = {
     // PRIMARY — `targetRepos[0] ?? null` — so exactly ONE of the two fields may be
     // supplied; both is `ConflictingTargetRepoInputError` (422), never a silent
     // precedence rule that drops a repository the caller believed they recorded.
-    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos);
-    const targetRepos =
-      input.targetRepos !== undefined
-        ? await resolveAuthoredTargetReposInProject(input.targetRepos, input.projectId, ctx)
-        : toRepoSet(
-            await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
-          );
+    //
+    // ⚠️ The REFERENCE model (Story MOTIR-2732 · MOTIR-3039, ADR "Amendment
+    // 2026-08-18"): whichever of the three fields arrives, resolution produces
+    // BOTH the `project_repository` row ids — the AUTHORED state, written to
+    // `work_item_repository` inside the transaction below — and the NAMES, which
+    // the legacy columns carry as a DERIVED projection until §A7's contract step
+    // retires them. One resolution, so the two can never name different
+    // repositories; and `targetRepositories` joins the mutual exclusion rather
+    // than layering a precedence rule over it.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos, input.targetRepositories);
+    const repoPins: ResolvedRepoPins =
+      input.targetRepositories !== undefined
+        ? await resolveAuthoredRepoRefsInProject(input.targetRepositories, input.projectId, ctx)
+        : input.targetRepos !== undefined
+          ? await resolveAuthoredRepoPinsInProject(input.targetRepos, input.projectId, ctx)
+          : await resolveAuthoredRepoPinsInProject(
+              toRepoSet(
+                await resolveAuthoredTargetRepoInProject(input.targetRepo, input.projectId, ctx),
+              ),
+              input.projectId,
+              ctx,
+            );
+    const targetRepos = repoPins.names;
     const targetRepo = primaryTargetRepo(targetRepos);
 
     // Initial status (Subtask 2.2.4): a new item lands in the project's
@@ -1051,6 +1215,18 @@ export const workItemsService = {
       };
 
       const row = await workItemRepository.create(data, tx);
+
+      // The repository REFERENCES (MOTIR-3039), in the SAME transaction as the
+      // row: an item and where it ships commit or roll back together. Empty for
+      // an unpinned item, and empty for a project with no repository set — that
+      // project's pin lives in `targetRepo` alone (§A7's compatibility rung).
+      await writeRepoRefs(row.id, workspaceId, repoPins.refs, tx);
+
+      // The container ROLLUP (MOTIR-2978, §A6): a new leaf can add a repository
+      // its ancestors did not have, so every ancestor's derived set is recomputed
+      // in the SAME transaction — an item and where its parents ship commit or
+      // roll back together.
+      await recomputeAncestorRepoSets(row.id, workspaceId, tx);
 
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
@@ -1258,6 +1434,7 @@ export const workItemsService = {
       'executor',
       'targetRepo',
       'targetRepos',
+      'targetRepositories',
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
@@ -1292,18 +1469,44 @@ export const workItemsService = {
     // exclusive here exactly as they are on create (ADR §3.4). Whichever arrives,
     // BOTH columns are written together — the scalar is the set's primary and is
     // never left describing a different repository than element 0.
-    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos);
-    let nextTargetRepos: string[] | undefined;
-    if (patch.targetRepo !== undefined || patch.targetRepos !== undefined) {
+    //
+    // ⚠️ The REFERENCE model (MOTIR-3039) patches through the same slot, and
+    // `targetRepositories` joins the mutual exclusion as a THIRD arm. One
+    // resolution yields the row ids (the authored state) and the names (the
+    // derived projection), so a patch can never move one without the other.
+    assertSingleTargetRepoInput(patch.targetRepo, patch.targetRepos, patch.targetRepositories);
+    let nextRepoPins: ResolvedRepoPins | undefined;
+    if (
+      patch.targetRepo !== undefined ||
+      patch.targetRepos !== undefined ||
+      patch.targetRepositories !== undefined
+    ) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
-      nextTargetRepos =
-        patch.targetRepos !== undefined
-          ? await resolveAuthoredTargetReposInProject(patch.targetRepos, pre.projectId, ctx)
-          : toRepoSet(
-              await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
-            );
+      // A CONTAINER's repositories are DERIVED (MOTIR-2978, §A6) — the union of
+      // its non-archived leaf descendants' — so a value supplied for one is
+      // erased by the next recompute. REFUSED rather than ignored, on the same
+      // reasoning §3.4 refuses a silent precedence rule: the dropped value is a
+      // decision the caller believed they had recorded. Checked here, ahead of
+      // the transaction, so a container write never takes the row lock.
+      const children = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findChildren(id, tx),
+      );
+      if (children.length > 0) throw new ContainerRepoSetNotWritableError();
+      nextRepoPins =
+        patch.targetRepositories !== undefined
+          ? await resolveAuthoredRepoRefsInProject(patch.targetRepositories, pre.projectId, ctx)
+          : patch.targetRepos !== undefined
+            ? await resolveAuthoredRepoPinsInProject(patch.targetRepos, pre.projectId, ctx)
+            : await resolveAuthoredRepoPinsInProject(
+                toRepoSet(
+                  await resolveAuthoredTargetRepoInProject(patch.targetRepo, pre.projectId, ctx),
+                ),
+                pre.projectId,
+                ctx,
+              );
     }
+    const nextTargetRepos: string[] | undefined = nextRepoPins?.names;
     const nextTargetRepo: string | null | undefined =
       nextTargetRepos === undefined ? undefined : primaryTargetRepo(nextTargetRepos);
 
@@ -1555,6 +1758,25 @@ export const workItemsService = {
         diff.executor = { from: current.executor, to: nextExecutor };
       }
 
+      // The repository REFERENCES (MOTIR-3039), written BEFORE the empty-diff
+      // early return and compared on their OWN value rather than on the names.
+      //
+      // Both details are load-bearing. A card in a project that had NO repository
+      // set holds only a name; once the set exists, re-sending that same name
+      // resolves to a ROW for the first time — the names are identical, the
+      // revision diff is legitimately empty, and the reference is nonetheless new.
+      // Gating this on `diff` (or on `sameRepoSet`) would silently drop exactly the
+      // write that migrates such a card onto the reference model.
+      if (nextRepoPins !== undefined) {
+        const currentRefs = (await workItemRepoRepository.listByWorkItem(id, tx)).map(
+          (r) => r.projectRepoId,
+        );
+        if (!sameRepoSet(nextRepoPins.refs, currentRefs)) {
+          await writeRepoRefs(id, ctx.workspaceId, nextRepoPins.refs, tx);
+          await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+        }
+      }
+
       if (Object.keys(diff).length === 0) {
         return {
           dto: toWorkItemDto(current),
@@ -1565,6 +1787,18 @@ export const workItemsService = {
       }
 
       const row = await workItemRepository.update(id, update, tx);
+
+      // The container ROLLUP across a RE-PARENT (MOTIR-2978, §A6): a move changes
+      // TWO chains — the one the item joined and the one it left — and only the
+      // first is reachable by walking up from the item now that the row has moved.
+      // So the OLD parent is recomputed by id, INCLUDING itself, before the new
+      // chain is walked.
+      if (parentChanged) {
+        if (current.parentId !== null) {
+          await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        }
+        await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+      }
 
       // Link-on-write (Subtask 5.2.3): a body edit re-resolves the
       // embeds-are-attachments linkage — newly-referenced editor uploads
@@ -2502,6 +2736,11 @@ export const workItemsService = {
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
 
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
+
+      // The container ROLLUP (MOTIR-2978, §A6): an ARCHIVED descendant contributes
+      // nothing to its ancestors' union — a parent is not waiting on work archived
+      // out of it — so archiving is a recompute trigger like any set change.
+      await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
       await workItemRevisionsService.recordRevision(
         {
           workItemId: id,
@@ -2550,6 +2789,9 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
+
+      // …and unarchiving puts it back, which is the same trigger in reverse.
+      await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
       await workItemRevisionsService.recordRevision(
         {
           workItemId: id,
@@ -2648,6 +2890,16 @@ export const workItemsService = {
 
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
+
+      // 6. The container ROLLUP (MOTIR-2978, §A6). The deleted rows' references
+      //    went with them (the join table cascades on `work_item`), so the union
+      //    the ancestors derive has already shrunk — but nothing has RE-DERIVED it
+      //    yet, and a stored derived set does not update itself. Recomputed from
+      //    the surviving parent upward, INCLUDING it: the parent's own set just
+      //    changed and there is no longer a child to walk up from.
+      if (root.parentId !== null) {
+        await recomputeContainerAndAncestors(root.parentId, ctx.workspaceId, tx);
+      }
       return root.parentId;
     });
 
@@ -2805,6 +3057,16 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
         tx,
       );
+      // The container ROLLUP across a MOVE (MOTIR-2978, §A6) — both chains, the
+      // one left and the one joined, for the same reason the patch path does it.
+      // Gated on `parentChanged`: a pure REORDER moves no repository anywhere.
+      if (parentChanged) {
+        if (current.parentId !== null) {
+          await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        }
+        await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+      }
+
       return {
         dto: toWorkItemDto(row),
         // A pure REORDER changes no parent's child SET, so it derives nothing.
@@ -4147,8 +4409,15 @@ export const workItemsService = {
         ? null
         : (ancestors.find((a) => a.id === readiness.blockedByAncestorId) ?? null);
 
+    const itemRepositories = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepoRepository.listByWorkItem(item.id, tx),
+    );
+
     return {
-      item: toWorkItemDto(item),
+      // The resolved repository REFERENCES (MOTIR-3041) ride the detail shape,
+      // which is the read that can guarantee the join — the same place
+      // `repoDelivery` already lives, and for the same reason.
+      item: toWorkItemDto(item, itemRepositories),
       ancestors,
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
@@ -4209,7 +4478,18 @@ export const workItemsService = {
     // `issueCount` — 1+N on a `no-store` payload fetched on every row click, for
     // a field the picker never reads. (It also re-asserts `project:browse`,
     // which `getIssueDetail` has already done in this same call.)
-    const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
+    // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-3066). Arm 0 is the ACCESS
+    // GATE, and it rejects on the ordinary 404 path — a foreign, unknown or
+    // deleted key. `Promise.all` would reject the moment it does and return,
+    // leaving the four sibling arms running with nobody awaiting them; each is a
+    // `withWorkspaceServiceContext` INTERACTIVE TRANSACTION, so each abandoned arm
+    // holds locks past the point where the caller believes the peek is over. In
+    // the test suite that is what the next test's `TRUNCATE … CASCADE` reset
+    // deadlocked against (`40P01`, killing a `beforeEach` in an innocent file);
+    // in production it is a pool connection and a row lock held after the 404 has
+    // been sent, on a path that runs on every row click. Settling all five costs
+    // nothing on the happy path and makes the refusal path bounded.
+    const [detail, members, sprintRows, componentRows, estimationConfig] = await allSettledOrThrow([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -4329,16 +4609,58 @@ export const workItemsService = {
    * `github_pull_request` policy is workspace-keyed, so an unbound read returns
    * no rows for an item that has them.
    */
+  /**
+   * The item's repositories as RESOLVED REFERENCES (Story MOTIR-2732 ·
+   * MOTIR-3041) — the join rows, in set order, mapped to what they point at.
+   *
+   * A separate read rather than a join on every work-item query, for the reason
+   * `listRepoDelivery` beside it is one: only the surfaces that PUBLISH the field
+   * need it, and `toWorkItemDto` maps a bare row. Read inside a workspace context
+   * because the join table is RLS-gated on a GUC bound only on a transaction — a
+   * singleton read would return an empty list, which is indistinguishable from
+   * "this card has no repositories" and is the worse of the two failures.
+   */
+  async listRepositories(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRepositoryDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepoRepository.listByWorkItem(workItemId, tx),
+    );
+    return toWorkItemRepositoryDtos(rows);
+  },
+
+  /**
+   * ⚠️ The expectation it classifies is the item's REFERENCES when it has any
+   * (Story MOTIR-2732 · ADR §A5), not the name strings — because two of the five
+   * delivery states are properties of the ROW, not of the pull requests: a
+   * `proposed` row names a repository that does not exist yet, and a `skipped`
+   * row names one that never will. Classified off names alone both read as
+   * `awaiting`, which tells the reader to wait for a pull request against a
+   * repository nothing will ever open one against.
+   *
+   * The name list stays the FALLBACK, and is not dead: it is what a project with
+   * no `project_repository` set still pins with (ADR §5's compatibility rung).
+   */
   async listRepoDelivery(
     workItemId: string,
     targetRepos: readonly string[],
     ctx: ServiceContext,
   ): Promise<RepoDelivery[]> {
+    // An item with NO repositories at all — the common case on a card that pins
+    // none — is answered without touching the database. `targetRepos` is the
+    // read projection of the references (ADR §A4), so an empty projection means
+    // an empty reference list; there is nothing for either query to find.
     if (targetRepos.length === 0) return [];
-    const facts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
-    );
-    return classifyRepoDelivery(targetRepos, facts);
+    // ⚠️ Through the SHARED resolver the completion gate uses, not a second copy
+    // of the same rule. Two derivations of one fact is the defect this story
+    // fixes one level up, and a panel that resolved names differently from the
+    // gate would be the same bug wearing this story's own clothes.
+    const { expected, facts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      expected: await resolveExpectedRepos(workItemId, targetRepos, tx),
+      facts: await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+    }));
+    return classifyRepoDelivery(expected, facts);
   },
 
   /**
@@ -5139,7 +5461,10 @@ async function buildReadyDispatchDto(
     // MOTIR-1775 · MOTIR-1783, narrowing MOTIR-1804's workspace-only scope).
     // Read here, alongside the other dispatch decorations, because it is only
     // needed for the ONE item being dispatched (never for the list read).
-    resolveItemDispatchRepo(row.targetRepo, row.projectId, ctx),
+    resolveDispatchRepoForItem(
+      { id: row.id, targetRepo: row.targetRepo, projectId: row.projectId },
+      ctx,
+    ),
   ]);
   const blockerRows = (
     await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

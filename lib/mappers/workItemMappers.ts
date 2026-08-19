@@ -6,6 +6,7 @@ import type {
   WorkItemSubtreeRow,
   WorkItemTreeRow,
 } from '@/lib/repositories/workItemRepository';
+import type { WorkItemRepoWithRow } from '@/lib/repositories/workItemRepoRepository';
 import type {
   ArchivedWorkItemDto,
   RoadmapNodeDto,
@@ -18,6 +19,7 @@ import type {
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
   WorkItemTreeRowDto,
+  WorkItemRepositoryDto,
 } from '@/lib/dto/workItems';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
@@ -30,8 +32,43 @@ import { storedAssetUrl } from '@/lib/blob/referencedUrls';
  * Full detail-view DTO. The nullable dates are normalized to wire-safe ISO
  * strings here; `position` is already a fractional-index string on the row.
  */
-export function toWorkItemDto(row: WorkItem): WorkItemDto {
+/**
+ * The resolved REPOSITORIES of a work item (Story MOTIR-2732 · MOTIR-3041) — the
+ * `work_item_repository` rows joined to what they point at.
+ *
+ * The NAME follows ADR §A4's rule: the REALIZED repository's own once the row is
+ * realized, else the row's authored intent. Stated per row rather than borrowed
+ * from `toProjectRepoNames`, for the reason `roleResolution.ts` gives for the same
+ * choice — that helper de-duplicates by name, which would collapse two rows whose
+ * realized repositories happen to share a bare name, and telling those apart is
+ * what a reference is for.
+ */
+export function toWorkItemRepositoryDtos(
+  rows: readonly WorkItemRepoWithRow[],
+): WorkItemRepositoryDto[] {
+  return rows.map((r, i) => ({
+    ref: r.projectRepoId,
+    name: r.projectRepo.githubRepo?.name ?? r.projectRepo.name,
+    role: r.projectRepo.role,
+    label: r.projectRepo.label,
+    state: r.projectRepo.state,
+    primary: i === 0,
+  }));
+}
+
+/**
+ * `repositories` is OPTIONAL and ABSENT means "not loaded", never "none" — a bare
+ * row cannot be joined from here, so a read that needs the references passes them
+ * in and one that does not pays no join (see `WorkItemDto.targetRepositories`).
+ */
+export function toWorkItemDto(
+  row: WorkItem,
+  repositories?: readonly WorkItemRepoWithRow[],
+): WorkItemDto {
   return {
+    ...(repositories === undefined
+      ? {}
+      : { targetRepositories: toWorkItemRepositoryDtos(repositories) }),
     id: row.id,
     projectId: row.projectId,
     parentId: row.parentId,

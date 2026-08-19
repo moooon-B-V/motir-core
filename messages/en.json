@@ -1167,7 +1167,9 @@
     "repositoryDelivery": {
       "delivered": "Delivered",
       "awaiting": "Awaiting",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "unestablished": "Not created",
+      "excluded": "Skipped"
     }
   },
   "comments": {
@@ -5198,8 +5200,13 @@
       "mergedBranchUnknown": "Merged — branch not recorded",
       "repoState": {
         "awaiting": "Awaiting",
-        "unknown": "Unknown"
-      }
+        "unknown": "Unknown",
+        "delivered": "Delivered",
+        "unestablished": "Not created",
+        "excluded": "Skipped"
+      },
+      "repositoryNotCreated": "Repository not created yet",
+      "repositorySkipped": "Skipped for this project"
     }
   },
   "aiPlanning": {

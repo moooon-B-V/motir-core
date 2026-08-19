@@ -148,6 +148,21 @@ const inputSchema = {
         "MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: " +
         'supplying both is rejected rather than silently resolved.',
     ),
+  targetRepositories: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Optional: EVERY repository this item ships in, as REFERENCES to the ' +
+        "project's repository ROWS — their ids, ORDERED, the FIRST being the " +
+        'PRIMARY the CLI is dispatched into. Prefer this over targetRepos when you ' +
+        'have the ids: a reference survives the repository being renamed, and it ' +
+        'can name one of two rows that share a role, which a name cannot. The names ' +
+        "you read back are what these resolve to. An id outside THIS item's " +
+        'project is rejected (the error lists the project\'s rows as "id (name)"); ' +
+        'duplicates collapse; `[]` is the empty set. MUTUALLY EXCLUSIVE with BOTH ' +
+        'targetRepo and targetRepos — they are the same field in three forms, so ' +
+        'supplying two is rejected rather than silently resolved.',
+    ),
   // Planning provenance (MOTIR-1685): an item created through this tool is
   // stamped `planningSource = mcp` server-side; the agent MAY self-report the
   // harness + model it planned with. Both open free-text (recorded as-is, no
@@ -183,6 +198,7 @@ interface CreateWorkItemArgs {
   executor?: Executor | null;
   targetRepo?: string | null;
   targetRepos?: string[];
+  targetRepositories?: string[];
   plannedWithHarness?: string;
   plannedWithModel?: string;
 }
@@ -244,6 +260,9 @@ export async function runCreateWorkItem(
       // the per-element validation AND the refusal when both fields arrive — the
       // scalar is the set's first element, so the two can disagree.
       ...(args.targetRepos !== undefined ? { targetRepos: args.targetRepos } : {}),
+      ...(args.targetRepositories !== undefined
+        ? { targetRepositories: args.targetRepositories }
+        : {}),
       // Planning provenance (MOTIR-1685): server-set `source: 'mcp'` for anything
       // created through this agent tool surface; the harness/model are the agent's
       // self-reported values (null when not supplied). The source is fixed here —
