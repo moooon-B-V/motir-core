@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Activity } from 'lucide-react';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -119,7 +120,14 @@ export async function loadCodeHealthSurfaces(
   }
 
   const readConventions = async (): Promise<ConventionSurfaceDTO[]> => {
-    const surfaces = await Promise.all(
+    // MOTIR-3077 — DANGEROUS bucket, repaired. Every arm here opens its own
+    // transaction, and `readRepoConvention` rethrows a PROJECT-GATE error
+    // (`NotProjectAdminError` / `ProjectNotFoundError` from `assertCanManage`)
+    // rather than absorbing it — deliberately, per the note above, and an
+    // ORDINARY path: a non-admin reaching an admin-only page. Under
+    // `Promise.all` that refusal returned while the sibling repos' reads kept
+    // running unobserved.
+    const surfaces = await allSettledOrThrow(
       repoRefs.map((repoKey) => readRepoConvention(projectId, svcCtx, repoKey)),
     );
     return surfaces.filter((c): c is ConventionSurfaceDTO => c !== null && c.convention !== null);
@@ -130,7 +138,9 @@ export async function loadCodeHealthSurfaces(
   // been: ONE audit read at the full page size, no summary pass, no second trip.
   if (repoRefs.length === 1) {
     const repoKey = repoRefs[0]!;
-    const [audit, conventions] = await Promise.all([
+    // MOTIR-3077 — DANGEROUS bucket, repaired: the audit arm rethrows the
+    // project-gate error while `readConventions()` holds N open transactions.
+    const [audit, conventions] = await allSettledOrThrow([
       readRepoAudit(projectId, svcCtx, repoKey),
       readConventions(),
     ]);
@@ -142,8 +152,12 @@ export async function loadCodeHealthSurfaces(
     };
   }
 
-  const [audits, conventions] = await Promise.all([
-    Promise.all(
+  // MOTIR-3077 — DANGEROUS bucket, repaired, and this is the site the empirical
+  // probe caught: `tests/code-health-page.test.ts`'s project-gate case left one
+  // backend `idle in transaction` on a `workspace_membership` SELECT. A rejected
+  // audit arm abandoned both the other repos' audits and every convention read.
+  const [audits, conventions] = await allSettledOrThrow([
+    allSettledOrThrow(
       repoRefs.map((repoKey) => readRepoAudit(projectId, svcCtx, repoKey, SUMMARY_FINDINGS_LIMIT)),
     ),
     readConventions(),

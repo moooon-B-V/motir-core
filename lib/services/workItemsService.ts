@@ -3266,6 +3266,9 @@ export const workItemsService = {
       sprintId = activeSprint.id;
     }
 
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The tenant gate and `report:view` are both awaited above; neither the
+    // tree-level read nor the status list refuses.
     const [rows, statuses] = await Promise.all([
       withWorkspaceServiceContext(project.workspaceId, (tx) =>
         workItemRepository.findProjectTreeLevel(
@@ -5446,6 +5449,10 @@ async function buildReadyDispatchDto(
   row: ReadyCandidateRow,
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
+  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+  // The row comes from the ready query, so the item exists; none of the four
+  // arms refuses (`resolveDispatchRepoForItem` returns `null` rather than
+  // throwing).
   const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
     row.parentId
       ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

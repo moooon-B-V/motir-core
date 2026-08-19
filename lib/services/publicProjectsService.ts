@@ -175,6 +175,9 @@ async function computeStats(
   workspaceId: string,
   excludeIds: readonly string[],
 ): Promise<PublicProjectStatsDto> {
+  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+  // `computeStats` runs after `resolvePublicProject`'s anonymous gate, and
+  // all three arms are bounded counts with no refusal path.
   const [byCategory, publicRequests, upvotes] = await Promise.all([
     // Bound (MOTIR-2789): this count JOINS `workflow_status` to resolve each item's
     // category, and that table has no public arm — so unbound the join matched nothing
@@ -384,6 +387,9 @@ export const publicProjectsService = {
   ): Promise<PublicProjectOverviewDto> {
     const { project, isMember, canManage } = await resolvePublicProject(identifier, actorUserId);
     const hiddenIds = await resolveHiddenIds(project, isMember);
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // `resolvePublicProject` gated this read above; neither the workspace read
+    // nor `computeStats` refuses.
     const [workspace, stats] = await Promise.all([
       // `workspace` has no public arm either; the project's own workspace is known here.
       withWorkspaceServiceContext(project.workspaceId, (tx) =>
@@ -469,6 +475,9 @@ export const publicProjectsService = {
       return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
     }
 
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The gate and the default-board lookup are both awaited above; all three
+    // arms are peer reads of a board already resolved.
     const [columns, mappings, statuses] = await Promise.all([
       withWorkspaceServiceContext(workspaceId, (tx) =>
         boardColumnRepository.findByBoard(board.id, workspaceId, tx),
@@ -772,6 +781,11 @@ export const publicProjectsService = {
 
     // The upvote tally spans every account (system context); the viewer's own
     // voted flag is their single row (user context), only when signed in.
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // Every gate is awaited above (the project, the item, the privacy exclusion),
+    // and neither arm refuses; the signed-out branch is a resolved `false`. This
+    // site is NOT in the card's own scan: its arms open `withSystemContext` /
+    // `withUserContext`, which that pattern does not name — see the PR body.
     const [voteCount, voted] = await Promise.all([
       withSystemContext((tx) => publicRequestVoteRepository.countByWorkItem(item.id, tx)),
       actorUserId

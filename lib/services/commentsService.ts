@@ -528,6 +528,10 @@ export const commentsService = {
     const hasMore = window.length > pageSize;
 
     const pageComments = roots.flatMap((root) => [root, ...root.replies]);
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The view gate (`resolveGatedWorkItem`) is awaited above, so the refusal
+    // path is already spent; these three are peer reads of a page whose
+    // visibility is settled.
     const [mentionRows, authors, totalCount] = await Promise.all([
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         commentMentionRepository.findByCommentIds(
