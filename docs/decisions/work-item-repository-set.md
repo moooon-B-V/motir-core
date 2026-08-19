@@ -684,6 +684,47 @@ resolves to no row is the existing `UnknownTargetRepoError`, unchanged.
 
 **A container's set is not writable at all** on any of these surfaces — §A6.
 
+#### A4.1 The PLANNING-JOB ENVELOPE — a FOURTH shape, and it sits BESIDE `context.code`
+
+The three surfaces above are the ones a customer's client reads. There is a fourth that only
+Motir reads, and MOTIR-3044 is told to take its shape from here rather than decide it: the
+planning-job envelope crossing the 7.1 boundary into `motir-ai`.
+
+**Decision: the project's repository set rides as its OWN key, `context.repositories`, BESIDE
+`context.code` — never merged into it.**
+
+They are two different lists answering two different questions at two different SCOPES, and the
+substitution of one for the other is the defect MOTIR-3044 exists to end:
+
+| field                  | scope         | what it is                                                                                                                             |
+| ---------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `context.code`         | **workspace** | the connected repo GRANT list (`{ provider, repoRef, defaultBranch }`), for code-graph reads (MOTIR-1598 / MOTIR-1599). **Untouched.** |
+| `context.repositories` | **project**   | the `project_repository` rows: `{ ref, name, role, label, state }`, in set order                                                       |
+
+Merging them would produce one list that is wrong about both. A workspace grant carries no role
+and no establish state; it has no entry at all for a repository the plan is about to ASK FOR,
+which is most of them at the moment a tree is generated; and it is not scoped to the project
+whose tree is being planned.
+
+- **The element is §A4's, minus `primary`.** A published `targetRepositories` element carries
+  `primary` because a work ITEM has an ordered set with a dispatch target; the PROJECT's set has
+  no primary, so the envelope element does not invent one.
+- **ABSENT, never `{ repos: [] }`** — the reserved-hole convention `code` and `discovery` already
+  follow. _"This project records no repositories"_ and _"nobody asked"_ must stay tellable apart,
+  and an empty list collapses them into the answer a motir-ai predating the field would give.
+- **Optional in BOTH directions**, so the two repositories' halves merge in either order.
+- **Unestablished rows are INCLUDED, carrying their state** — filtering them would blind the
+  planner to every repository the plan itself proposed.
+- **The `ref` is the load-bearing field, and it is why this is not a nicety.** §1.2 lets a role
+  REPEAT — two services are two `api` rows — and §5.3 makes a repeated role resolve to `null`
+  rather than guess. So a planner that can only emit a ROLE cannot say _the billing API_ rather
+  than _the search API_, and every card on such a project lands unpinned with nothing reporting
+  it. The row's identity is what makes it sayable; MOTIR-3045 pins by it.
+
+**Not a `/api/v1` change.** This is the internal 7.1 boundary, so §8's additive rules and
+`V1_CONTRACT_VERSION` are not engaged by it — the version bump in §A4 is for the published
+shapes alone.
+
 ### A5. Question 4 — what the classifier compares, and what a `proposed` row DELIVERS
 
 `classifyRepoDelivery(expected, linked)` (`lib/workItems/repoDelivery.ts`) keeps its shape
@@ -890,9 +931,10 @@ re-derive.**
   with its exact copy"_, and **the copy is the design's to author** — as MOTIR-3038's own body
   puts it, _"MOTIR-3037 names what the `proposed` case means; draw what it decided."_ Read this
   row as the vocabulary being settled, never as the rows being specified.
-- **MOTIR-3044** (the planning envelope) — AC 1's "reference, name, role, label, establish
-  state" is §A4's `targetRepositories` element shape, with §A4's resolved-name rule deciding
-  what `name` holds.
+- **MOTIR-3044** (the planning envelope) — **§A4.1** is the decision its card is told to read
+  off this amendment: the set rides as `context.repositories`, BESIDE `context.code` and never
+  merged into it. AC 1's "reference, name, role, label, establish state" is that section's
+  element, with §A4's resolved-name rule deciding what `name` holds.
 - **MOTIR-3045** (the planner sees the repositories) — AC 6/7's row-pin-or-role-pin is §A3's
   table: the role stays on the PLAN, the row pin is added, the two are exclusive per node.
   AC 8's "two repositories of the same role can be pinned unambiguously" is the §5.3 third
