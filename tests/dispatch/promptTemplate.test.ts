@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   assembleDispatchPrompt,
   branchSlug,
+  FINDINGS_POLICY_TOKENS,
   NO_INJECTIONS,
+  parseFindingsPolicy,
   type DispatchPromptSource,
 } from '@/lib/dispatch/promptTemplate';
 import { splitPlanBody } from '@/lib/markdown/planBody';
@@ -65,6 +67,21 @@ function outcomeSection(prompt: string): string {
   const at = prompt.indexOf('REPORTING THE OUTCOME');
   expect(at, 'the prompt carries a REPORTING THE OUTCOME section').toBeGreaterThan(-1);
   return prompt.slice(at);
+}
+
+/**
+ * The outcome section UP TO the third branch (MOTIR-3020).
+ *
+ * The section grew a sibling — FOUND A DEFECT, which is about something other
+ * than this card — and an assertion written about the two card-outcome branches
+ * must keep its original subject rather than silently widen to text it was never
+ * written about. Used where the claim is "the agent is offered X and not Y for
+ * ITS OWN card"; the whole-section helper is still right for anything else.
+ */
+function cardOutcomeBranches(prompt: string): string {
+  const section = outcomeSection(prompt);
+  const third = section.indexOf('FOUND A DEFECT');
+  return third === -1 ? section : section.slice(0, third);
 }
 
 describe('splitPlanBody — the plan-body section parser', () => {
@@ -569,7 +586,11 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     // The intuitive word for "this card cannot proceed" is `blocked`, and an
     // agent offered both will reach for it — where it would change a label and
     // nothing else, leaving the card ready and pickable (MOTIR-2425).
-    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    // Scoped to the CARD-OUTCOME branches: the claim is about which STATUS the
+    // agent is offered for its own card, and the FOUND A DEFECT branch that now
+    // follows names the `blocked_by` EDGE — a different word in a different role,
+    // and the one thing a filed bug must not create.
+    const outcome = cardOutcomeBranches(assembleDispatchPrompt(source()).prompt);
     expect(outcome).toContain('status planning');
     expect(outcome).toContain('in-progress');
     expect(outcome.toLowerCase()).not.toContain('blocked');
@@ -597,10 +618,22 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     expect(outcome).toContain('`--detach`');
   });
 
-  it('states that a plan is PROPOSALS and the agent must not write cards', () => {
-    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
-    expect(outcome).toContain('do not create or edit work items yourself');
-    expect(outcome).toContain('PROPOSALS');
+  it('bans RESTRUCTURING the plan, and no longer bans creation at all', () => {
+    // ⚠️ THIS REPLACES an assertion that pinned the opposite (MOTIR-3020). The
+    // old text forbade creating any work item, justified as *"A plan is
+    // PROPOSALS awaiting a human's approval; writing the cards would be doing
+    // the approving"* — a sentence that misdescribes the mechanism, since
+    // `create_work_item` is a direct write entering no proposal pipeline. The
+    // half that was load-bearing survives and is what is asserted here; the
+    // justification must be gone from the WHOLE prompt, not merely reworded.
+    const { prompt } = assembleDispatchPrompt(source());
+    const outcome = outcomeSection(prompt);
+    expect(outcome).toContain('Do NOT RESTRUCTURE THE PLAN');
+    for (const forbidden of ['no archiving', 're-parenting', 're-scoping']) {
+      expect(outcome).toContain(forbidden);
+    }
+    expect(prompt).not.toContain('PROPOSALS');
+    expect(prompt).not.toContain('do not create or edit work items yourself');
   });
 
   it('gives the no-retry rule its REASON, not a bare prohibition', () => {
@@ -619,7 +652,10 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     // forgotten.
     const { prompt } = assembleDispatchPrompt(source());
     expect(prompt.indexOf('REPORTING THE OUTCOME')).toBeGreaterThan(prompt.indexOf('GIT WORKFLOW'));
-    expect(prompt.trimEnd().endsWith('Do not pick up other work.')).toBe(true);
+    // The section's own last line, which MOTIR-3020 moved: the third branch now
+    // closes it, and its final instruction is the one that matters most about a
+    // side-finding — that it is not an ending.
+    expect(prompt.trimEnd().endsWith('report its own outcome as above.')).toBe(true);
   });
 
   it('a MANUAL item gets NEITHER — it has no branch, no commit and no session', () => {
@@ -843,5 +879,188 @@ describe('the MULTI-REPOSITORY session-lineage workflow', () => {
   it('opens no pull request in any repository', () => {
     expect(built().prompt).toContain('Do NOT open a pull request in any repository.');
     expect(built().prompt).not.toContain('TITLE carries');
+  });
+});
+
+// ── the FOUND A DEFECT branch and the per-run findings policy (MOTIR-3020) ───
+//
+// `docs/decisions/run-findings-protocol.md` Q1 (the policy's shape) and Q3 (the
+// bug's parent) are what this asserts against.
+
+/** The third branch's text alone — an assertion about it must not be satisfiable
+ *  by the two card-outcome branches above it. */
+function defectBranch(prompt: string): string {
+  const at = prompt.indexOf('FOUND A DEFECT');
+  expect(at, 'the prompt carries a FOUND A DEFECT branch').toBeGreaterThan(-1);
+  return prompt.slice(at);
+}
+
+const VARIANTS: { name: string; over: Partial<DispatchPromptSource> }[] = [
+  { name: 'per_item_pr', over: { sessionBranch: null } },
+  { name: 'session_lineage', over: { sessionBranch: 'motir/auto-20260819' } },
+];
+
+describe('assembleDispatchPrompt — FOUND A DEFECT', () => {
+  it('instructs: reproduce first, file a bug with the evidence, then carry on', () => {
+    const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
+    expect(branch).toContain('REPRODUCE IT FIRST');
+    expect(branch).toContain('create_work_item');
+    expect(branch).toContain("kind:      'bug'");
+    expect(branch).toContain('THE REPRODUCTION');
+    expect(branch).toContain('THE EVIDENCE');
+    expect(branch).toContain('Carry on with your card');
+  });
+
+  it('says explicitly that filing does NOT end the run or change its own outcome', () => {
+    // The one thing an agent gets wrong unprompted: it has just found something
+    // broken, and treats that as a reason to stop.
+    const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
+    expect(branch).toContain('This is NOT');
+    expect(branch).toContain('an ending');
+    expect(branch).toContain('does not finish your card');
+    expect(branch).toContain('does not fail it');
+  });
+
+  it('names the parent as a KEY, leaving nothing for the agent to choose', () => {
+    // ADR Q3: the in-flight card's PARENT, which is already on the dispatch
+    // payload — so the text states the key rather than a rule to apply.
+    const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
+    expect(branch).toContain('parentKey: PROD-2');
+    expect(branch).toContain('not a choice');
+    expect(branch).toContain('do not invent one');
+  });
+
+  it('falls back to the card ITSELF when it has no parent — never the project root', () => {
+    const branch = defectBranch(assembleDispatchPrompt(source({ parent: null })).prompt);
+    expect(branch).toContain('parentKey: PROD-7');
+    expect(branch).toContain('which has no parent of its own');
+  });
+
+  it('requires the relates_to trace and forbids the bug blocking anything', () => {
+    const branch = defectBranch(assembleDispatchPrompt(source()).prompt);
+    expect(branch).toContain('relates_to');
+    expect(branch).toContain('BLOCKS NOTHING');
+    expect(branch).toContain('No blocked_by edge, no sprint, no estimate');
+  });
+
+  it('the WHAT TO DO step and the outcome protocol agree, read out of ONE prompt', () => {
+    // ⚠️ The drift this closes: `WHAT_TO_DO.code` step 5 told the agent to "log
+    // anything else you find as a separate work item" while the outcome protocol
+    // two sections later forbade creating any work item — both in every shipped
+    // `code` prompt. Asserted from a SINGLE assembled string so the two texts
+    // cannot disagree again without failing here.
+    const { prompt } = assembleDispatchPrompt(source({ type: 'code' }));
+    const step = prompt.slice(prompt.indexOf('WHAT TO DO'), prompt.indexOf('ACCEPTANCE CRITERIA'));
+    expect(step).toContain('FOUND A DEFECT');
+    // The exact instruction that contradicted the protocol is gone — and it is
+    // the PHRASE that has to go, not the word: the step still says "auto-loaded"
+    // two lines up, and an assertion on `log` alone would fail on that.
+    expect(step).not.toContain('log anything else you find as a separate work item');
+    expect(step).toContain('whether this run may file it');
+    // And what it points at actually exists in the same prompt.
+    expect(prompt).toContain('FOUND A DEFECT — your card is fine');
+  });
+});
+
+describe('assembleDispatchPrompt — the per-run findings policy', () => {
+  it('renders the FULL protocol when no policy is supplied', () => {
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).toContain('FOUND A DEFECT');
+    expect(prompt).toContain('motir plan --detach PROD-7');
+  });
+
+  it('renders the FULL protocol for an explicitly-permissive policy, identically', () => {
+    // The default is a VALUE, not a separate code path: an omitted policy and an
+    // all-true one must produce the same bytes, or "omitted means full" is a
+    // second implementation of the same claim.
+    const omitted = assembleDispatchPrompt(source()).prompt;
+    const explicit = assembleDispatchPrompt(
+      source({ findingsPolicy: { logBug: true, replan: true } }),
+    ).prompt;
+    expect(explicit).toBe(omitted);
+  });
+
+  describe.each(VARIANTS)('on $name', ({ over }) => {
+    it('with bug filing DISABLED renders no branch at all, and says comment instead', () => {
+      const { prompt } = assembleDispatchPrompt(
+        source({ ...over, findingsPolicy: { logBug: false, replan: true } }),
+      );
+      // Empty in, nothing out: no instructions, no `create_work_item`, no trace.
+      expect(prompt).not.toContain('create_work_item');
+      expect(prompt).not.toContain('REPRODUCE IT FIRST');
+      expect(prompt).not.toContain('BLOCKS NOTHING');
+      // But the finding still reaches a human — a disabled policy was never
+      // asking the agent to forget what it saw.
+      expect(prompt).toContain('without bug filing');
+      expect(prompt).toContain('Comment the finding on PROD-7 instead');
+      // The other switch is untouched.
+      expect(prompt).toContain('motir plan --detach PROD-7');
+    });
+
+    it('with re-planning DISABLED renders no submit step, and leaves the card in progress', () => {
+      const { prompt } = assembleDispatchPrompt(
+        source({ ...over, findingsPolicy: { logBug: true, replan: false } }),
+      );
+      expect(prompt).not.toContain('motir plan --detach');
+      expect(prompt).not.toContain('status planning');
+      expect(prompt).toContain('leave the card In Progress');
+      expect(prompt).toContain('without re-planning');
+      // The other switch is untouched.
+      expect(prompt).toContain('create_work_item');
+    });
+
+    it('with BOTH disabled keeps the FINISHED branch whole', () => {
+      const { prompt } = assembleDispatchPrompt(
+        source({ ...over, findingsPolicy: { logBug: false, replan: false } }),
+      );
+      expect(prompt).toContain('FINISHED — the work is done');
+      expect(prompt).toContain('status implemented');
+      expect(prompt).not.toContain('create_work_item');
+      expect(prompt).not.toContain('motir plan --detach');
+    });
+  });
+
+  it('DETERMINISM holds per policy — and two policies differ, so the switch is not inert', () => {
+    // ⚠️ BOTH HALVES. The module's contract (MOTIR-881) is byte-identical output
+    // for an unchanged input; the policy is now part of that input. Asserting
+    // only the first half would pass just as well against a switch that renders
+    // the same text whatever it is handed, and every disabled-branch assertion
+    // above would then be vacuous.
+    const full = source({ findingsPolicy: { logBug: true, replan: true } });
+    const none = source({ findingsPolicy: { logBug: false, replan: false } });
+    expect(assembleDispatchPrompt(full).prompt).toBe(assembleDispatchPrompt(full).prompt);
+    expect(assembleDispatchPrompt(none).prompt).toBe(assembleDispatchPrompt(none).prompt);
+    expect(assembleDispatchPrompt(full).prompt).not.toBe(assembleDispatchPrompt(none).prompt);
+  });
+});
+
+describe('parseFindingsPolicy — the shared wire vocabulary', () => {
+  it.each([undefined, null, '', '   '])('%o means the full protocol', (raw) => {
+    expect(parseFindingsPolicy(raw)).toEqual({
+      policy: { logBug: true, replan: true },
+      unknown: null,
+    });
+  });
+
+  it.each([
+    ['log-bug', { logBug: false, replan: true }],
+    ['replan', { logBug: true, replan: false }],
+    ['log-bug,replan', { logBug: false, replan: false }],
+    [' replan , log-bug ', { logBug: false, replan: false }],
+    ['log-bug,,replan', { logBug: false, replan: false }],
+  ])('%s disables what it names', (raw, expected) => {
+    expect(parseFindingsPolicy(raw)).toEqual({ policy: expected, unknown: null });
+  });
+
+  it('REFUSES an unrecognised capability rather than ignoring it', () => {
+    // The lie this parameter exists to remove: an operator who typed the CLI
+    // flag's spelling on the wire must not be handed the full protocol while
+    // believing they narrowed it.
+    expect(parseFindingsPolicy('no-log-bug')).toEqual({ policy: null, unknown: 'no-log-bug' });
+    expect(parseFindingsPolicy('log-bug,nonsense')).toEqual({ policy: null, unknown: 'nonsense' });
+  });
+
+  it('names both capabilities in the vocabulary it publishes', () => {
+    expect([...FINDINGS_POLICY_TOKENS]).toEqual(['log-bug', 'replan']);
   });
 });

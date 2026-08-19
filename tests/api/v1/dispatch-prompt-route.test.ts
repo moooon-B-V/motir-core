@@ -136,6 +136,104 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     expect(await stateOf(caller, item.id)).toEqual(before);
   });
 
+  // ── the per-run findings policy (MOTIR-3020) ──────────────────────────────
+  //
+  // The parameter that carries an operator's per-run policy to the ONE surface
+  // the agent actually reads. `docs/decisions/run-findings-protocol.md` Q1.
+
+  it('renders the COMPLETE protocol when `findingsPolicy` is absent', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'no policy');
+
+    const body = await prompt(caller, item.identifier);
+
+    expect(body.prompt).toContain('FOUND A DEFECT');
+    expect(body.prompt).toContain('motir plan --detach');
+  });
+
+  it('removes the branch the policy names, from the prompt itself', async () => {
+    // Asserted on the PROMPT TEXT, because that is the whole contract: a
+    // parameter that changed a field and not the text would change nothing about
+    // what the agent does.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'no bugs please');
+
+    const body = await prompt(caller, item.identifier, '?findingsPolicy=log-bug');
+
+    expect(body.prompt).not.toContain('create_work_item');
+    expect(body.prompt).toContain('Comment the finding on');
+    expect(body.prompt).toContain('motir plan --detach');
+  });
+
+  it('removes both when both are named', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'quiet run');
+
+    const body = await prompt(caller, item.identifier, '?findingsPolicy=log-bug,replan');
+
+    expect(body.prompt).not.toContain('create_work_item');
+    expect(body.prompt).not.toContain('motir plan --detach');
+    expect(body.prompt).toContain('leave the card In Progress');
+  });
+
+  it('REFUSES an unknown capability with 422 rather than rendering the full protocol', async () => {
+    // The refusal is the point. Ignoring `no-log-bug` would hand the caller a
+    // 200 and a prompt they believe is narrowed — the exact lie this parameter
+    // exists to remove.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'typo');
+
+    const res = await req(caller, item.identifier, '?findingsPolicy=no-log-bug');
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('INVALID_FINDINGS_POLICY');
+    // It TEACHES: the vocabulary is in the message, so a caller can fix it.
+    expect(body.error).toContain('log-bug');
+    expect(body.error).toContain('replan');
+  });
+
+  it('stays a READ under a policy — the row is untouched', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'still a read');
+    const before = await stateOf(caller, item.id);
+
+    await prompt(caller, item.identifier, '?findingsPolicy=log-bug,replan');
+
+    expect(await stateOf(caller, item.id)).toEqual(before);
+  });
+
+  it('the MCP tool takes the SAME parameter and renders the same text', async () => {
+    // Two transports, one vocabulary, one parser. A policy that narrowed the v1
+    // prompt and not the MCP one would be a contract that depends on how it was
+    // fetched.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'both doors');
+
+    const viaHttp = await prompt(caller, item.identifier, '?findingsPolicy=log-bug');
+    const viaMcp = await runDispatchPrompt(
+      { key: item.identifier, findingsPolicy: 'log-bug' },
+      caller.ctx,
+    );
+
+    expect(viaMcp.isError).toBeFalsy();
+    const payload = viaMcp.structuredContent as { prompt: string };
+    expect(payload.prompt).toBe(viaHttp.prompt);
+  });
+
+  it('the MCP tool REFUSES an unknown capability too', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'mcp typo');
+
+    const result = await runDispatchPrompt(
+      { key: item.identifier, findingsPolicy: 'nonsense' },
+      caller.ctx,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('nonsense');
+  });
+
   it('treats an EMPTY `sessionBranch` as no seed rather than as a bad request', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     const item = await makeItem(caller, 'no seed');
