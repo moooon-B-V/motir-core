@@ -244,6 +244,44 @@ open-in-new-tab remain as escapes.
 | **Unresolvable target card** | Log the would-be publish set and **exit 0 without publishing.** **No fallback constant.** The acceptance uploader falls back to its dogfood story, which is right for a receipt better attached somewhere than nowhere; a design attached to the **wrong** card is worse than one attached to none — it makes another card look designed when it is not, and the design gate that reads it would pass on a lie. |
 | **`continue-on-error`**      | **Forbidden on this step.** MOTIR-2499 removed it from the acceptance publish after it rewrote a failing step's conclusion to `success` for days while two stories silently lost their receipts. Both cases that justified it are handled inside the script (above), so the only remaining meaning of red is _a publish that should have happened did not_. Guarded by `tests/ci-design-guards-lane.test.ts`.   |
 
+### 6a. A CONTAINER-RUN branch is skipped, and a server refusal stays fatal (MOTIR-3105)
+
+Three decisions in this document and its neighbours are individually right and
+collectively guarantee a failure:
+
+|                                                                     |                                                                        |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `motir run <parent>` names its branch `parent/MOTIR-<story>-<slug>` | so the status sync links the PR to the card being completed (`run.md`) |
+| `resolveTargetKey` prefers the branch ref over the PR title         | the branch is the more reliable signal (§6)                            |
+| the service refuses a non-leaf — `DESIGN_EVIDENCE_NOT_A_LEAF`       | §3: a story has MANY designs, one per design subtask                   |
+
+So **every parent-run PR carrying a `design/**` change fails this job, and cannot
+succeed however the change got there.\*\* Observed on PR #2145.
+
+**DECIDED: skip on the branch REF, before the request; keep the server's refusal
+FATAL.** The uploader recognises the container-run prefixes (`parent/`, and the
+pre-2026-08-04 `story/`), logs what it would have published and where the design
+belongs instead, and exits 0.
+
+**Why the ref and not the 422.** Treating the refusal as a skip would also
+swallow a `design/*` branch that genuinely targets the wrong card — and that is
+exactly the class §6's `continue-on-error` prohibition exists to keep visible.
+Red here must go on meaning _a publish that should have happened did not_. The
+ref is knowable before the request, so the impossible case costs nothing and the
+real one keeps its teeth.
+
+**Two alternatives rejected.** _Skip unless the branch is `design/_`* is narrower
+than the problem and would silently stop publishing from any other branch that
+legitimately carries an asset. *Derive the leaf from the changed paths* is the
+precise answer and needs a `design/<area>/<surface>` → design-subtask mapping the
+repository does not keep; it is not ruled out, it is unbuilt.
+
+**This is not a licence to put design assets on a parent branch.** The parent
+flow already routes a `design` child to its own `design/MOTIR-<n>-<slug>` branch
+and its own PR (`run.md` step 5a), and step 6 says the parent→main PR contains
+only the code/test child commits. An asset reaching a parent branch is a
+mis-placed commit; the skip's log line says so.
+
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
 **This record ships the ARTIFACT, not the GATE.** Story 9.2 keeps the runtime

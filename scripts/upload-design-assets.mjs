@@ -121,6 +121,45 @@ export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
   return { base, source: 'event-base' };
 }
 
+/**
+ * Branch prefixes a CONTAINER run produces (MOTIR-3105).
+ *
+ * `motir run <parent>` executes a story / task / bug whose children are all
+ * leaves, and names its branch after the PARENT — deliberately, so the status
+ * sync links the pull request to the card being completed. `parent/*` is the
+ * current name; `story/*` is the pre-2026-08-04 one, still swept so an
+ * in-flight branch is never treated differently.
+ */
+const CONTAINER_RUN_PREFIXES = ['parent/', 'story/'];
+
+/**
+ * Does this branch ref belong to a CONTAINER run — one whose key can never name
+ * a leaf, and therefore can never be a legal design-result target?
+ *
+ * ⚠️ Answered from the REF rather than from the server's refusal, and that is
+ * the whole design of this check. Three shipped facts collide here: a
+ * container run always names its branch after a story; `resolveTargetKey`
+ * prefers the branch ref; and `designEvidenceService` refuses a non-leaf
+ * (`DESIGN_EVIDENCE_NOT_A_LEAF`) because a story has MANY designs, one per
+ * design subtask, and rolling them onto one panel would lose which card
+ * produced which (`docs/decisions/design-result.md` §3). Every one of those is
+ * correct; together they guarantee a failure this job can never resolve.
+ *
+ * So the impossible case is skipped BEFORE the request, and a server refusal
+ * stays FATAL. That split is the point: MOTIR-2499 removed a
+ * `continue-on-error` from this pipeline after it reported success for days
+ * while receipts were lost, and the property it bought — red here means a
+ * publish that should have happened did not — must survive this fix. Treating
+ * the 422 itself as a skip would have thrown it away, because a `design/*`
+ * branch that genuinely targets the wrong card would then fail silently.
+ *
+ * @param {string | undefined} ref
+ */
+export function isContainerRunRef(ref) {
+  const value = (ref ?? '').trim();
+  return CONTAINER_RUN_PREFIXES.some((prefix) => value.startsWith(prefix));
+}
+
 /** Which asset kind a path is, or null when it is not a publishable artifact. */
 export function classifyDesignPath(filePath) {
   if (filePath.endsWith('.mock.html')) return 'mock';
@@ -450,6 +489,22 @@ export async function main(env = process.env, log = console, deps = {}) {
       `No MOTIR key in the branch ref or PR title — NOT publishing. Would have published: ${assets
         .map((a) => `${a.kind}:${a.sourcePath}`)
         .join(', ')}`,
+    );
+    return 0;
+  }
+
+  // MOTIR-3105. A container-run branch names a story, and a design result
+  // attaches to the card that PRODUCED it. Nothing here can succeed, so say what
+  // is happening and exit clean rather than fail a code PR on an impossible
+  // target. `run.md`'s parent flow already routes a `design` child to its OWN
+  // `design/MOTIR-<n>-<slug>` branch, so a design asset reaching this branch is
+  // a mis-placed commit, not a publish to attempt.
+  if (source === 'branch' && isContainerRunRef(env['DESIGN_PR_REF'])) {
+    log.log(
+      `${targetKey} came from a container-run branch (${env['DESIGN_PR_REF']}), which names a ` +
+        `story — a design result attaches to the card that produced it, so there is nothing to ` +
+        `publish. Put the design child on its own design/MOTIR-<n>-<slug> branch. Would have ` +
+        `published: ${assets.map((a) => `${a.kind}:${a.sourcePath}`).join(', ')}`,
     );
     return 0;
   }

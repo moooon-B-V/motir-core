@@ -13,6 +13,7 @@ import {
   parseHunkRanges,
   parseWorkItemKey,
   publishDesignResult,
+  isContainerRunRef,
   resolveDiffBase,
   resolveTargetKey,
   splitNoteSections,
@@ -117,6 +118,31 @@ describe('collectChangedDesignFiles', () => {
     const out = collectChangedDesignFiles({ base: 'base', git: () => '', exists, cwd: ROOT });
     expect(out.assets).toEqual([]);
     expect(out.notes).toEqual([]);
+  });
+});
+
+describe('isContainerRunRef — a container run can never be a publish target (MOTIR-3105)', () => {
+  it('recognises both container-run prefixes, current and legacy', () => {
+    expect(isContainerRunRef('parent/MOTIR-3000-agent-attachments')).toBe(true);
+    expect(isContainerRunRef('story/MOTIR-1703-ci-optimization')).toBe(true);
+  });
+
+  it('leaves every branch that CAN name a leaf alone', () => {
+    for (const ref of [
+      'design/MOTIR-2669-design-result',
+      'subtask/MOTIR-2666-design-asset-source',
+      'docs/MOTIR-2695-embedding-residency-adr',
+      'main',
+      '',
+      undefined,
+    ]) {
+      expect(isContainerRunRef(ref), `${ref} must stay publishable`).toBe(false);
+    }
+  });
+
+  it('does not match a prefix that merely CONTAINS one', () => {
+    // `parent` as a slug word, not as the run prefix.
+    expect(isContainerRunRef('design/MOTIR-42-parent-panel')).toBe(false);
   });
 });
 
@@ -464,7 +490,7 @@ describe('publishDesignResult', () => {
   });
 });
 
-describe('main — the two ways it exits 0 WITHOUT publishing', () => {
+describe('main — the ways it exits 0 WITHOUT publishing', () => {
   const logger = () => {
     const lines: string[] = [];
     return { log: (m: string) => lines.push(m), lines };
@@ -510,6 +536,48 @@ describe('main — the two ways it exits 0 WITHOUT publishing', () => {
     expect(said).toContain('NOT publishing');
     // The operator can see what was skipped without re-running anything.
     expect(said).toContain('mock:design/a/x.mock.html');
+  });
+
+  it('a CONTAINER-RUN branch publishes nothing and does not fail the build (MOTIR-3105)', async () => {
+    const log = logger();
+    const publish = vi.fn();
+    const requestOidc = vi.fn();
+    const code = await main(
+      { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'parent/MOTIR-3000-agent-attachments' },
+      log as never,
+      { collect: () => oneMock, publish, requestOidc },
+    );
+
+    expect(code).toBe(0);
+    expect(publish).not.toHaveBeenCalled();
+    // Skipped BEFORE the credential is even requested — there is nothing this
+    // job could do with one.
+    expect(requestOidc).not.toHaveBeenCalled();
+    const said = log.lines.join(' ');
+    expect(said).toContain('names a story');
+    // Actionable, not merely quiet: it says where the design belongs instead.
+    expect(said).toContain('design/MOTIR-<n>-<slug>');
+    expect(said).toContain('mock:design/a/x.mock.html');
+  });
+
+  it('a LEAF branch is untouched by that skip — the publish still runs', async () => {
+    // The property most at risk from a fix aimed at silencing the container
+    // case: a real design branch must still publish, and a real failure must
+    // still be able to go red (MOTIR-2499).
+    const log = logger();
+    const publish = vi.fn(async () => ({ id: 'ev-1' }));
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: 'base',
+        DESIGN_PR_REF: 'design/MOTIR-2669-design-result',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      { collect: () => oneMock, requestOidc: async () => null, publish },
+    );
+
+    expect(code).toBe(0);
+    expect(publish).toHaveBeenCalledOnce();
   });
 
   it('no OIDC and no PAT → publishing is opt-in (a fork PR must not fail the build)', async () => {
