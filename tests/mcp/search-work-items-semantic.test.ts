@@ -47,7 +47,9 @@ import type { SemanticSearchResponse } from '@/lib/dto/ai';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables } from '../helpers/db';
+import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
+import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import {
   ALIGNED_HEADROOM_MS,
   ALIGNED_WINDOW_MS,
@@ -148,6 +150,18 @@ beforeEach(async () => {
     'TRUNCATE TABLE "work_item_embedding", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
+  // The `ai:chat` ceiling this tool applies is counted through the SHARED
+  // Postgres store, and `consumeSharedRateLimit` fails OPEN when one increment
+  // outlives the store's 250 ms production deadline — so on a loaded CI shard
+  // the call the refusal case expects to be REFUSED is served instead, and the
+  // assertion goes red on a diff that touched no rate-limiting code. Pinning the
+  // test-time deadline states that precondition rather than assuming it
+  // (`tests/rateLimit/storeDeadline.test.ts` is the guard that derives this
+  // requirement from the tree; MOTIR-3067).
+  await truncateRateLimitCounters();
+  __resetSharedRateLimitStoreForTest();
+  // AFTER the reset — the reset drops exactly the override this installs.
+  pinSharedRateLimitStoreDeadline();
   vi.clearAllMocks();
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.example.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
