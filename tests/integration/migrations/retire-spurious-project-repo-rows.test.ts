@@ -10,7 +10,6 @@ import {
 import type { ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
-import { UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -452,22 +451,45 @@ describe('retire_spurious_project_repo_rows — the LIVE MOTIR row, and what rem
     });
   });
 
-  it('restores the real repositories as PINNABLE — the write that has been failing', async () => {
-    // AC 4's second half, proved as BEHAVIOUR rather than deduced. With the stray
-    // row present the project's own set IS the pin domain and `motir-core` is not
-    // in it; with the set empty `resolveDomains` falls through to the workspace
-    // rung and the connected repositories are nameable again.
+  it('leaves the real repositories PINNABLE — before the migration AND after', async () => {
+    // AC 4's second half, proved as BEHAVIOUR rather than deduced.
+    //
+    // ⚠️ THE "BEFORE" HALF CHANGED UNDER THIS TEST, and the change was correct.
+    // It used to assert that `motir-core` was REJECTED while the stray row
+    // stood — true when this migration shipped (#2140), because the project's
+    // own set WAS the whole pin domain. MOTIR-3086 (#2144) then made `hasSet`
+    // stop being an all-or-nothing switch: for a project that arrived with its
+    // own code the domain is now the set FIRST and the workspace UNDER it, so no
+    // row can subtract a repository. The pin therefore resolves on both sides of
+    // the migration, and asserting a rejection kept `main` red until this was
+    // updated.
+    //
+    // What the migration is FOR survives that, and is what this now asserts: it
+    // removes a row the project should never have had, so the set stops
+    // CLAIMING a repository the project does not ship in. The pin working is
+    // MOTIR-3086's guarantee; the set being true is this migration's.
     const fx = await makeWorkItemFixture();
     await connectWorkspaceRepo(fx.workspaceId, 'motir-core');
     const live = await seedLiveShape(fx);
 
+    // Before: nameable, because the union rung rescues it — not because the set
+    // is right.
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
-    ).rejects.toBeInstanceOf(UnknownTargetRepoError);
+    ).resolves.toBe('motir-core');
+    // …while the set still claims the repository the project never needed.
+    expect(await projectRepoSetService.getRepoNameDomains(fx.projectId, fx.ctx)).toMatchObject({
+      hasSet: true,
+    });
 
     await runMigration();
 
+    // After: the row is gone, the set makes no false claim, and the pin still
+    // works — now through the workspace rung rather than in spite of the set.
     expect(await survives(live)).toBe(false);
+    expect(await projectRepoSetService.getRepoNameDomains(fx.projectId, fx.ctx)).toMatchObject({
+      hasSet: false,
+    });
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
     ).resolves.toBe('motir-core');
