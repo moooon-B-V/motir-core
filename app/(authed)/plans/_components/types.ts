@@ -17,18 +17,15 @@ export interface PlanRowView {
    *  one state with no requester to name (`design/ai-planning/design-notes.md`
    *  Part III §3). */
   origin: PlanOriginDto;
-  /** WHICH motir-ai job produced it, or null. The row reads this — NOT
-   *  `authorSource === 'native'` — to know Motir wrote the plan: the generator
-   *  path deliberately records no author (MOTIR-2996), so every Motir generation
-   *  carries a null `authorSource`. */
-  sourceJobId: string | null;
   /** WHO ASKED — resolved to a display NAME server-side, batched across the page
    *  (`planRowView.ts`), because the DTO carries only an id and the row must stay
    *  presentational. Null on a cadence plan and on any plan predating the
    *  column. */
   createdByName: string | null;
-  /** WHO WROTE it. `mcp` + a harness is an agent; the Motir case is read off
-   *  `sourceJobId` above. */
+  /** WHO WROTE it, and the ONLY field the row reads for it (MOTIR-2996): `mcp` +
+   *  a harness is an agent, `native` is Motir. Null is the *unattributed* state —
+   *  a plan predating the column, which now means exactly that rather than
+   *  doubling as *Motir generated it*. */
   authorSource: PlanAuthorSourceDto | null;
   authorHarness: string | null;
   /** The resolved display title — the plan's summary/idea, falling back to its

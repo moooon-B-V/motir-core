@@ -21,6 +21,7 @@ import { definePayload, derived, exempt } from '@/lib/mcp/payloads/define';
 import {
   addCommentPayload,
   claimNextReadyPayload,
+  claimWorkItemPayload,
   getWorkItemPayload,
   listReadyPayload,
   mcpCommentSchema,
@@ -31,6 +32,7 @@ import {
   presentMcpReadyRow,
   presentMcpWorkItem,
   presentMcpWorkItemChild,
+  presentMcpWorkItemClaim,
   presentMcpWorkItemRow,
   searchWorkItemsPayload,
   workItemWritePayload,
@@ -645,6 +647,48 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
       advisories: [],
     });
     expect(claimNextReadyPayload.probes[0]!.select(emptyClaim as never)).toEqual([]);
+  });
+
+  it('the KEYED claim payload probes ITSELF against WorkItemClaim (MOTIR-2961)', () => {
+    // The whole payload IS the shared resource here — `claim_work_item` returns
+    // v1's `WorkItemClaim` unchanged, because both surfaces call one service
+    // method and there is nothing an agent needs that a client does not. So the
+    // probe selects the payload rather than a part of it, and DRIVING it is what
+    // makes that claim a check instead of a comment: a field added to the v1
+    // schema and forgotten on the MCP mapper fails here.
+    const claim = presentMcpWorkItemClaim({
+      key: 'PROD-7',
+      title: 'A card somebody else took',
+      outcome: 'taken',
+      claimed: false,
+      status: { key: 'in_progress', category: 'in_progress' },
+      assignee: { id: 'user-1', name: 'Yue' },
+      transitionedBy: { id: 'user-1', name: 'Yue' },
+      transitionedAt: '2026-08-19T00:00:00.000Z',
+    });
+    const built = derived(claimWorkItemPayload, claim);
+    for (const probe of claimWorkItemPayload.probes) {
+      const parts = probe.select(built as never);
+      expect(parts).toEqual([claim]);
+      for (const part of parts) {
+        expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
+      }
+    }
+
+    // And the REFUSAL that names nobody still satisfies the resource — the
+    // MOTIR-2958 shape, where a sibling flipped the status and never assigned,
+    // so both actor fields are absent and `category` can be unknown.
+    const bare = presentMcpWorkItemClaim({
+      key: 'PROD-8',
+      title: 'A card at a status no workflow defines',
+      outcome: 'not_claimable',
+      claimed: false,
+      status: { key: 'open', category: null },
+      assignee: null,
+      transitionedBy: null,
+      transitionedAt: null,
+    });
+    expect(sharedResourceSchema('WorkItemClaim').safeParse(bare).success).toBe(true);
   });
 });
 

@@ -68,7 +68,6 @@ export function planReview(
     // state, so every pre-existing case keeps asserting a header without one and
     // each attribution state opts in explicitly.
     origin: 'user',
-    sourceJobId: null,
     createdByName: null,
     authorSource: null,
     authorHarness: null,
