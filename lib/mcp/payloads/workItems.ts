@@ -2,9 +2,12 @@ import { z } from 'zod/v4';
 import {
   commentSchema,
   dependencyEdgesSchema,
+  attachmentSchema,
+  presentAttachment,
   presentComment,
   workItemChildSchema,
   workItemKeySchema,
+  workItemRefSchema,
   workItemSummarySchema,
 } from '@/lib/api/v1/workItems/schema';
 import { readyItemSchema } from '@/lib/api/v1/ready/schema';
@@ -15,6 +18,8 @@ import type {
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
+import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
 import { definePayload } from './define';
 
@@ -479,11 +484,114 @@ export function presentMcpComment(dto: CommentDTO): McpComment {
   };
 }
 
+/**
+ * An ATTACHMENT, as `attach_file` returns it — v1's attachment shape verbatim.
+ *
+ * No widening at all, deliberately. The v1 projection already carries everything
+ * an agent needs to report what it attached (the id, the filename, the size, the
+ * authenticated content path), and the two fields the PANEL's DTO has on top —
+ * `isImage` / `isPdf` — are a presentation split, not data. A payload that
+ * widened here would make the two doors describe one row differently.
+ */
+export const mcpAttachmentSchema = attachmentSchema;
+export type McpAttachment = z.infer<typeof mcpAttachmentSchema>;
+
+/** Map one `AttachmentDTO` through v1's own presenter — one shape, one mapper. */
+export function presentMcpAttachment(dto: AttachmentDTO, workItemKey: string): McpAttachment {
+  return presentAttachment(dto, workItemKey);
+}
+
+/** The `attach_file` confirmation. */
+export const attachFilePayload = definePayload({
+  schema: mcpAttachmentSchema as unknown as z.ZodType<McpAttachment & Record<string, unknown>>,
+  probes: [{ resource: 'Attachment', select: (p) => [p] }],
+});
+
 /** The `add_comment` confirmation. */
 export const addCommentPayload = definePayload({
   schema: mcpCommentSchema as unknown as z.ZodType<McpComment & Record<string, unknown>>,
   // No probe: `CommentThread` is the registered component and requires
   // `replies`, which a just-created comment has none of. The derivation is the
   // `.extend` off `commentSchema` plus `presentComment` — v1's own mapper.
+  probes: [],
+});
+
+/**
+ * One row of the plan-tree BREADTH projection — the shape `skeleton` returns
+ * (Story MOTIR-3098 · Subtask MOTIR-3100).
+ *
+ * A declared NARROWING of v1's {@link workItemRefSchema}: `.pick`ing the five
+ * fields `aiBoundaryService.readPlanTree` actually projects, so the shared half
+ * cannot drift (a `kind` or `parentKey` that changes type on one surface breaks
+ * the type here), and `.extend`ing the two anchors the MCP row carries that no
+ * v1 shape does.
+ *
+ * `readPlanTree` reads `WorkItemSummaryDto` and drops `priority`, `assigneeId`,
+ * `estimateMinutes`, `storyPoints` and `archived` on the way out — deliberately,
+ * because this read exists to be CHEAP over a whole project. Widening it to
+ * satisfy the full ref would change the two internal routes MOTIR-3100 is
+ * explicitly not allowed to touch, so the narrowing is the honest description,
+ * and it carries no probe for the same reason `searchWorkItemsPayload` does not.
+ *
+ * The two extensions are not decoration. `id` is the real work-item cuid that
+ * `add_plan_items`' `parentRef` / `blockedByRefs` take (they refuse a
+ * `<KEY>-<n>` key), and `revision` is the `baseRevision` a `modify` / `remove`
+ * proposal anchors on. Both ride the row for the reason MOTIR-1531 folded them
+ * onto the internal read: without them an agent orienting over the tree needs a
+ * `get_work_item` per target before it can propose anything about one.
+ */
+export const mcpSkeletonRowSchema = workItemRefSchema
+  .pick({ key: true, kind: true, title: true, status: true, parentKey: true })
+  .extend({
+    id: z.string(),
+    revision: z.string().nullable(),
+  });
+export type McpSkeletonRow = z.infer<typeof mcpSkeletonRowSchema>;
+
+/** Map one plan-tree skeleton row. A pass-through — the projection is the DTO. */
+export function presentMcpSkeletonRow(item: PlanTreeSkeletonItem): McpSkeletonRow {
+  return {
+    key: item.key,
+    kind: item.kind,
+    title: item.title,
+    status: item.status,
+    parentKey: item.parentKey,
+    id: item.id,
+    revision: item.revision,
+  };
+}
+
+/**
+ * The `skeleton` response — the whole project's tree shape, plus the four
+ * numbers that make its COMPLETENESS legible.
+ *
+ * `total` / `returned` / `truncated` / `limit` travel together on purpose. A
+ * skeleton that silently stops at N reads as "this is the whole project", which
+ * is the one way this tool can actively mislead an agent that is about to
+ * propose work — so the bound is reported whether or not it bit.
+ */
+export const skeletonPayload = definePayload({
+  schema: z
+    .object({
+      project: z.object({ projectId: z.string(), projectKey: z.string() }),
+      items: z.array(mcpSkeletonRowSchema),
+      total: z.number().int(),
+      returned: z.number().int(),
+      truncated: z.boolean(),
+      limit: z.number().int(),
+    })
+    .catchall(z.unknown()) as unknown as z.ZodType<
+    {
+      project: { projectId: string; projectKey: string };
+      items: McpSkeletonRow[];
+      total: number;
+      returned: number;
+      truncated: boolean;
+      limit: number;
+    } & Record<string, unknown>
+  >,
+  // No probe: the row is a NARROWING of `WorkItemRef` (see above), so it cannot
+  // satisfy that component and must not claim to. The derivation is proven at
+  // the TYPE level instead — `.pick` off the base breaks when the base does.
   probes: [],
 });

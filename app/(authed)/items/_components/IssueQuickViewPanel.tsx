@@ -381,7 +381,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         >
           {data.identifier}
         </Link>
-        <StatusValue category={data.statusCategory} label={data.statusLabel} />
+        <StatusValue
+          statusKey={data.status}
+          category={data.statusCategory}
+          label={data.statusLabel}
+        />
         {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
           chip (2.9.6) — the archived state stays legible after the main column
           (which scrolls independently) is scrolled past the notice below. Neutral
@@ -563,7 +567,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               />
             }
           >
-            <StatusValue category={view.statusCategory} label={view.statusLabel} />
+            <StatusValue
+              statusKey={view.status}
+              category={view.statusCategory}
+              label={view.statusLabel}
+            />
           </EditableRailField>
 
           {/* Repositories (Story MOTIR-2725 · MOTIR-2416) — SECOND in the rail,

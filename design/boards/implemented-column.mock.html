@@ -3525,10 +3525,17 @@
       :root {
         --el-status-implemented: var(--color-accent);
       }
-      /* Sienna is the ONE palette where that collides: it re-maps
-   --el-status-blocked onto --color-accent, so sienna needs its own
-   --el-status-implemented step (the same per-palette follow-up --el-status-planning
-   needed in citrine and candy). */
+      /* ⚠️ AMENDED BY MOTIR-3003, on the measurement. This asset originally named
+         SIENNA as the one palette where the pink collides — true of the base
+         palette read on its own, and wrong across the ten. The shipped guard
+         (tests/theme/statusHueSeparation.test.ts, ΔE2000 >= 10 over every
+         palette x theme) reports FIVE: amber (vs in_review), candy (vs
+         planning), citrine (vs in_progress), graphite (vs in_progress) and
+         sienna (vs blocked, which re-maps onto --color-accent there). Each now
+         carries its own override in theme.css — amber takes its unspent red,
+         the other four take the ink step — measured at ΔE 15.9-33.7, with
+         citrine/dark exactly on the floor at 10.0. The BASE stays pink
+         (ΔE 33.2 / 26.2). */
 
       /* ── One CORRECTION to the shipped markup, drawn because a design draws the
    TARGET (MOTIR-3080) ──────────────────────────────────────────────────────

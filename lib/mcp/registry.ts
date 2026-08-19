@@ -32,10 +32,16 @@ import {
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
+import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
+import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
+import {
+  SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
+  registerSearchWorkItemsSemantic,
+} from './tools/searchWorkItemsSemantic';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
@@ -97,10 +103,13 @@ export const MCP_TOOL_NAMES = [
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
+  ATTACH_FILE_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
+  SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
+  SKELETON_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -205,8 +214,18 @@ export function registerMcpTools(
   registerCreateWorkItem(target, resolveContext);
   registerTransitionStatus(target, resolveContext);
   registerAddComment(target, resolveContext);
+  // The general attachment door (MOTIR-3058) — the agent-facing half of
+  // MOTIR-3057's `/api/v1` route, over the same service path.
+  registerAttachFile(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
+  // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,
+  // never over it. `search_work_items` is a `contains` predicate, so it cannot
+  // see a card that says the same thing in different words; that is the failure
+  // MOTIR-3079 recorded, and this is the read that answers the question the
+  // substring match only appears to. Its shape is `plan-tree-embeddings.md`
+  // Amendment 2's: text in, Motir embeds it, keys and scores out.
+  registerSearchWorkItemsSemantic(target, resolveContext);
   // Identity (added by 7.9.1, consumed by the CLI's auth commands).
   registerWhoami(target, resolveContext);
   // Project enumeration (MOTIR-1879) — the token's reachable projects, so a
@@ -219,6 +238,13 @@ export function registerMcpTools(
   // project's repo set, where onboarding stopped. list_projects answers "which
   // projects"; this answers "what state is one in". Read-only by design.
   registerGetProjectState(target, resolveContext);
+  // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
+  // call, over the same `aiBoundaryService.readPlanTree` the internal
+  // `plan-tree` / `skeleton` routes serve. A third consumer, not a refactor.
+  // It answers "what is already here?", which is the question an agent must
+  // settle before it proposes anything; `search_work_items` answers it only as
+  // a paging loop over flat rows the caller then re-parents itself.
+  registerSkeleton(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

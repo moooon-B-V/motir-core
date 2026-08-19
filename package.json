@@ -33,6 +33,7 @@
     "db:stamp:onboarding": "tsx --tsconfig tsconfig.node.json scripts/stamp-onboarding-ran.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

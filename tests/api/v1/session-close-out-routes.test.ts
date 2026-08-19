@@ -26,8 +26,8 @@ import { truncateAuthTables } from '../../helpers/db';
 // Three properties carry the card:
 //
 //   • The integration write is ATOMIC. `markIntegrated` moves the item to
-//     `in_review` AND stamps its branch in one transaction; a route that
-//     decomposed that would leave an item in review with no lineage on a crash,
+//     `implemented` AND stamps its branch in one transaction; a route that
+//     decomposed that would leave a delivered item with no lineage on a crash,
 //     and every dependent inheriting the branch would inherit nothing. Asserted
 //     by failing the write mid-flight and reading the row back.
 //   • PARTIAL SUCCESS is a real outcome. A mixed branch returns both kinds in
@@ -73,7 +73,7 @@ async function makeItem(caller: V1ProjectCaller, title: string) {
   );
 }
 
-/** An item moved to `in_progress`, the only status `in_review` is legal from. */
+/** An item moved to `in_progress`, the only status `implemented` is legal from. */
 async function readyToIntegrate(caller: V1ProjectCaller, title: string) {
   const item = await makeItem(caller, title);
   await workItemsService.updateStatus(item.id, 'in_progress', caller.ctx);
@@ -91,7 +91,7 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
     vi.restoreAllMocks();
   });
 
-  it('moves the item to in_review and records the branch', async () => {
+  it('moves the item to implemented and records the branch', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['integration'] });
     const item = await readyToIntegrate(caller, 'integrate me');
 
@@ -101,10 +101,12 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
     const body = (await res.json()) as V1IntegrationResult;
     expect(() => integrationResultSchema.parse(body)).not.toThrow();
     expect(body.key).toBe(item.identifier);
-    expect(body.status).toBe('in_review');
+    // `implemented` since MOTIR-2999: the integration write reports finished
+    // work, and CI is what makes the card reviewable.
+    expect(body.status).toBe('implemented');
     expect(body.sessionBranch).toBe('session/MOTIR-1');
     expect(await stateOf(caller, item.id)).toEqual({
-      status: 'in_review',
+      status: 'implemented',
       sessionBranch: 'session/MOTIR-1',
     });
   });
@@ -163,9 +165,9 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
     expect(body.implementationModel).toBeNull();
   });
 
-  it('refuses an item with no legal path to in_review, leaving the branch unset', async () => {
-    // The workflow decides, not this route: `todo → in_review` is illegal on the
-    // default workflow. The error has a deliberate row in the v1 status map.
+  it('refuses an item with no legal path to implemented, leaving the branch unset', async () => {
+    // The workflow decides, not this route: `todo → implemented` is illegal on
+    // the default workflow. The error has a deliberate row in the v1 status map.
     const caller = await createV1ProjectCaller({ scopes: ['integration'] });
     const item = await makeItem(caller, 'still todo');
 
@@ -491,7 +493,7 @@ describe('POST /api/v1/sessions/complete', () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as V1SessionCloseOut).results).toEqual([]);
     expect(await stateOf(theirs, hidden.id)).toEqual({
-      status: 'in_review',
+      status: 'implemented',
       sessionBranch: 'session/shared-name',
     });
   });

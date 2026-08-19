@@ -35,6 +35,7 @@ import {
 import {
   ensureSessionBranchOnOrigin,
   execCommand,
+  workReachedRemote,
   GitError,
   openSessionPr,
   pushSessionBranchIfAhead,
@@ -408,6 +409,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         clock,
         runAgentFn,
         ownerId,
+        run,
         onIntegrated: (key) => repo?.keys.push(key),
       });
       records.push(record);
@@ -474,11 +476,14 @@ interface DispatchOneInput {
   onIntegrated: (key: string) => void;
   /** Claimed for this owner before the agent launches (MOTIR-2427). */
   ownerId: string;
+  /** The loop's git runner — the push check (MOTIR-3004) uses it. */
+  run: CommandRunner;
 }
 
 /** Run ONE item through the single-dispatch pipeline and record how it ended. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId } = input;
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId, run } =
+    input;
 
   await ensureInProgress(client, item.key, item.status?.key, ownerId);
 
@@ -550,10 +555,24 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
 
   // The server kept this item off the session lineage — a target with no repo
   // checkout to branch in. Its prompt told the agent to open a pull request of
-  // its own, so In Review is the truthful status.
-  await client.transitionStatus({ key: item.key, status: 'in_review' });
-  info(`${item.key}: In Review via its own pull request in ${formatDuration(durationMs)}.`);
-  return { ...base, outcome: 'in_review', sessionBranch: null, detail: 'own pull request' };
+  // its own, so Implemented is the truthful status: built, pushed, waiting on CI.
+  //
+  // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004) — checked here for the same reason the
+  // single-item path checks it, and with the loop's own git runner.
+  if (workReachedRemote(target.cwd, item.key, null, run) === 'nothing') {
+    info(`${item.key}: agent exited 0 but nothing reached the remote — left In Progress.`);
+    return {
+      ...base,
+      outcome: 'failed',
+      sessionBranch: null,
+      detail: 'nothing reached the remote',
+    };
+  }
+  await client.transitionStatus({ key: item.key, status: 'implemented' });
+  info(
+    `${item.key}: Implemented via its own pull request in ${formatDuration(durationMs)} — CI decides when it is reviewable.`,
+  );
+  return { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' };
 }
 
 // ── the end-of-run close-out ────────────────────────────────────────────────

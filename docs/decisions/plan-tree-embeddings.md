@@ -281,6 +281,13 @@ service bearer + job token, never a cookie, never CORS-exposed.
 
 #### 6.2 Who computes the vector — `motir-ai` does, for both sides
 
+> **⚠️ ANSWERED FOR A SECOND CALLER — see Amendment 2 (2026-08-19).** This section
+> decides the question for `motir-ai`, the only caller that existed. An **MCP agent**
+> holds a Motir PAT and no provider credential, so it cannot bring a vector at all;
+> Amendment 2 decides that `motir-core` embeds ITS query through the very seam this
+> section mandates below, and states who pays, what bounds the spend, and what the
+> tool answers when the embedding path is unavailable.
+
 **`motir-core` stores embeddings; it does not produce them.** It has no provider
 credential, no gateway token, and no embedding seam — verified: `LLM_GATEWAY`,
 `EMBEDDING` and `embeddings` appear **nowhere** in this repo's `lib/` or `app/`. So
@@ -464,3 +471,148 @@ crowding out real ones inside the caller's `limit` — i.e. a PRECISION complain
 on production traffic, not a tidiness argument. That evidence would belong to the caller
 (MOTIR-2691's GATE 1), and the fix would still more likely be a larger `limit` plus a
 caller-side threshold than a producer-side default.
+
+## Amendment 2 (2026-08-19) — an **MCP** caller does not bring a vector. `motir-core` embeds the query through the seam it already owns, and the tool is bounded by the AI rate limit, not by a credit ledger
+
+**§6.2 answered _"who computes the vector"_ for one caller — `motir-ai`, which owns
+`embed()`, the metered gateway and the model pin. MOTIR-3098 adds a SECOND caller with
+none of that: an agent on `/api/mcp` holding a Motir PAT and nothing else. This amendment
+answers the question for that caller.** §6.1's route is untouched; what is decided here is
+the shape of the MCP tool over it (MOTIR-3101).
+
+### The decision
+
+**The MCP semantic-search tool takes TEXT. `motir-core` embeds it by calling
+`motir-ai`'s `POST /v1/embeddings` — the same `motirAiClient.embedTexts` seam the WRITE
+path has called since MOTIR-2696 — and then ranks against its own vectors.**
+
+### Why this does not bend §6.2's line, and why the line is the wrong thing to test
+
+§6.2's constraint is stated precisely, and it is worth quoting rather than paraphrasing:
+_"`motir-core` stores embeddings; it does not produce them. It has no provider
+credential, no gateway token, and no embedding seam."_ The sentence forbids a
+**credential in the open repo** and a **second metering identity**. It does not forbid a
+**service call**, because §6.2's own next paragraph mandates exactly one:
+
+> _"the write path calls `motir-ai` over the existing `motirAiClient` service seam, at a
+> new `POST /v1/embeddings` (`serviceAuth`, the same guard as every other core → ai
+> call), which embeds through the already-metered gateway and returns the vector."_
+
+So the thing Option B was described as "gaining" — a dependency on `motir-ai` for
+embedding — `motir-core` has held since MOTIR-2696 and MOTIR-2720 shipped. Reading a
+query through that seam adds **no new hop kind, no new credential, no new model pin and
+no new accounting path**; it adds one more caller to a function with one caller.
+
+**And it settles the model question by construction, which is the load-bearing part.**
+`model` is a HARD ranking filter (§6.1): rows embedded under another model are excluded,
+so a caller that guesses wrong gets an empty result indistinguishable from _"nothing
+similar exists"_. When the same seam embeds both the row and the query, the two
+**physically cannot** be on different models — which is §6.2's stated reason for
+centralising in the first place, applied one caller further out. The tool never asks the
+caller for a `model` and never lets it supply one.
+
+### The rejected options
+
+**Option A — the agent supplies the vector and the model, exactly as the internal route
+takes them.** It preserves §6.2 by touching nothing, and it is rejected because it ships a
+tool almost no caller can use. An MCP client is defined by holding a **Motir** token; the
+requirement here would be a **provider** credential plus the exact string
+`text-embedding-3-small` plus 1536 dimensions. An agent that has all three has already
+solved the hard part. Worse, the failure when it does not is **silent and
+mis-signalling**: a wrong model returns `results: []`, which reads as _"nothing like this
+exists"_ — the precise false negative MOTIR-3079 recorded and this story exists to
+remove. Shipping the answer that produces the bug on a misconfiguration is not a neutral
+choice between two correct designs.
+
+**Option C — `motir-core` gains its own embedding seam and gateway credential.** Rejected,
+for the two reasons §6.2 already gives and this amendment does not weaken: it puts an LLM
+credential in the open-source repo that every self-hoster inherits, and it creates a
+second metering identity for one tenant's spend. Nothing in MOTIR-3098 changes that
+calculus; the MCP caller is served without it.
+
+### Who pays, and what bounds the spend
+
+**Who pays: the Motir deployment's own gateway account — the same payer as the write
+path, and NOT a per-workspace credit debit.** This is stated plainly because the card
+asked and because the code says so rather than the intention: `embedTexts(input: string[])`
+sends `{ input }` under `serviceAuth` and carries **no tenant** — no `workspaceId`, no
+actor, no `Tenant` bag — so nothing on this path reaches a `CreditLedger` today. Calling
+it "metered" would be true of the gateway and false of the customer's balance, and the
+distinction matters to whoever reads this next.
+
+**What bounds it: the existing `ai:chat` rate limit, keyed on user + workspace
+(`enforceAiRateLimit(ctx, 'ai:chat')` — `DEFAULT_AI_RATE_LIMIT` = 30 per minute,
+env-configurable).** Three things follow, and all three are the point:
+
+- **It is a real ceiling on a read tool.** `search_work_items` is a database query and is
+  bounded only by the transport's `mcp:call` budget (300/min). A semantic search costs a
+  provider call, so it cannot sit under that budget alone — an agent in a loop is a bill,
+  not an outage (`lib/rateLimit/aiGuard.ts`'s own framing).
+- **It shares ONE counter with the browser's planning chat**, because the key is
+  `(scope, workspaceId, userId)` and the scope is the same. That is deliberate: a tenant
+  gets one AI allowance across every door, and an agent cannot spend it twice by changing
+  surfaces. It also means a looping agent will throttle its own user's chat, which is a
+  visible symptom rather than a silent invoice.
+- **Not `ai:generate` (10/min), and not a new scope.** `ai:generate` is the tighter
+  budget MOTIR-2597 minted for calls that submit a MODEL JOB — an expansion costs several
+  chat turns. One embedding of a short query costs a fraction of one chat turn, so
+  charging it against the generation budget would let a handful of searches block a real
+  plan expansion: the wrong failure, in the wrong direction. A third scope was considered
+  and rejected as unearned — it needs its own env var, its own default and its own
+  operational story, to express a bound that is already expressed.
+
+**A consequence worth stating: this tool is NOT `MCP_BILLABLE_TOOLS`.** That list
+(`lib/mcp/rateLimitGate.ts`) is derived and asserted from the filesystem against calls
+that reach `submitJob`, and semantic search reaches none — it calls `embedTexts` directly.
+The guard in `tests/rateLimit/surfaceGuards.test.ts` is therefore correct to leave it out,
+and the rate limit above is applied by the tool itself rather than by that gate. Anyone
+tempted to "fix" the omission should read this paragraph first: the two mechanisms bound
+two different costs.
+
+### The degraded answer — THREE states, kept apart in the payload
+
+§6.1 already separates two of them and the MCP surface must not collapse them. Embedding
+the query adds a third, and it is the one an agent will meet first on a self-hosted or
+misconfigured deployment. **The tool reports an explicit `outcome` discriminator; a caller
+must never have to infer the state from an empty array.**
+
+| `outcome`         | condition                                | what it means to the agent                                                |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
+| `ranked`          | results returned                         | candidates found — read each through a keyed tool (§2)                    |
+| `nothing-similar` | `results: []`, `coverage.embedded > 0`   | the project IS indexed and nothing is close. A real answer.               |
+| `not-indexed`     | `results: []`, `coverage.embedded === 0` | the project has no vectors. **NOT evidence that nothing exists.**         |
+| `unavailable`     | the query could not be embedded          | `motir-ai` is unconfigured or unreachable. **The search did not happen.** |
+
+- **`coverage: { embedded, total }` crosses to the MCP caller verbatim**, two integers, as
+  §6.1 pins it. `nothing-similar` and `not-indexed` are computed from it server-side so
+  the agent cannot get the arithmetic wrong, and both are still reported alongside the raw
+  numbers.
+- **`unavailable` is a SUCCESSFUL tool result carrying a readable message, not an
+  `isError`, and not an empty ranked list.** §6.1's _"degradation is a 200, never a 5xx"_
+  holds — a planning turn must not fail because a candidate-finder had nothing to offer —
+  but a caller that cannot distinguish _"I searched and found nothing"_ from _"I could not
+  search"_ has been handed the MOTIR-3079 failure with extra steps. `motir-ai`'s own
+  `retrievalTools.ts` argues the same way: answer with a readable message rather than
+  withhold the tool.
+- **The fallback is the CALLER's move, as §6.1 says.** The message on `not-indexed` and
+  `unavailable` names `search_work_items` as the substring search to fall back to, and
+  says plainly that it is a substring match — so the agent knows what it is getting.
+
+### §2 binds the MCP surface, unchanged
+
+**`key`, `title`, `score` — and nothing else.** No `descriptionMd`, no `explanationMd`, no
+comment, no acceptance criterion. The MCP tool is a candidate-FINDER: it names cards, and
+the agent reads each one through `get_work_item` / `search_work_items` against the real
+record. That §2 is a schema invariant and not a rendering convention is why MOTIR-3102
+asserts it on the payload's SHAPE (the absence of the keys) rather than by grepping the
+text block. Adding a fourth content field is a change to this ADR.
+
+### What this does NOT decide
+
+- **A UI-facing semantic search.** Amendment 1's Consequences already reserve that as its
+  own decision. This amendment covers the MCP boundary only; a browser query would embed
+  under a session, which is a different actor and a different budget question.
+- **A per-tenant credit debit for embeddings.** Naming the payer above is a report of the
+  shipped path, not a decision to keep it. If embeddings ever join the `CreditLedger`, the
+  write path and this read path join it together — they call the same seam, and splitting
+  them would recreate the second-accounting-path problem §6.2 rejected.

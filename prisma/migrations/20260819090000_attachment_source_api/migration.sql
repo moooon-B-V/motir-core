@@ -1,0 +1,15 @@
+-- AlterEnum: a file uploaded through the GENERAL public-API door — the
+-- `/api/v1` attachment route and the MCP tool in front of it (Story MOTIR-3000
+-- · MOTIR-3056; docs/decisions/attachment-api-door.md §2).
+--
+-- Additive and non-breaking: no existing row changes source, and no backfill is
+-- owed. Every prior row keeps the member it was written with.
+--
+-- ⚠️ NO LISTING CHANGE ACCOMPANIES THIS ONE, and that is deliberate rather than
+-- an omission. `attachmentRepository.listByWorkItem` and `countByWorkItem`
+-- filter with `source NOT IN (...)` — a DENYLIST — so `api` is listed and
+-- counted by default, which is exactly the intent: unlike `acceptance_video`,
+-- `acceptance_trace` and `design_asset`, an `api` upload is an ORDINARY
+-- attachment a reviewer must see on the card. The regression to guard against
+-- is a later edit ADDING it to an exclusion.
+ALTER TYPE "attachment_source" ADD VALUE 'api';

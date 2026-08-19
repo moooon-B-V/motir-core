@@ -2,7 +2,8 @@
 
 import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
-import { Pill, type PillProps } from '@/components/ui/Pill';
+import { Pill } from '@/components/ui/Pill';
+import { StatusPill } from '@/components/issues/StatusPill';
 import { cn } from '@/lib/utils/cn';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -15,14 +16,12 @@ import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
 // read-only or editable. Keeping these here (not in issueColumns) lets the
 // inline-edit module import the display without an import cycle.
 
-// Lifecycle category → Pill status tone — the same mapping the detail page's
-// ChildList uses (todo→planned, in_progress→in-progress, done→done). All AA-safe
-// (finding #35); an unclassifiable status falls back to a neutral Pill.
-export const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status→chip mapping MOVED to `components/issues/StatusPill` (MOTIR-3103).
+// It used to live here as a per-CATEGORY record that six other surfaces imported
+// and re-indexed themselves; `implemented` shares the `in_progress` category with
+// three other statuses, so the tone had to become key-first — and a rule six
+// files index is a rule six files can disagree about. One component now owns the
+// tone AND the glyph that goes with it.
 
 /** Initial-letter avatar — mirrors the detail rail / ChildList avatar. */
 export function Avatar({ name }: { name: string }) {
@@ -36,19 +35,20 @@ export function Avatar({ name }: { name: string }) {
   );
 }
 
-/** The STATUS cell value — a `Pill` by lifecycle category (neutral fallback). */
+/** The STATUS cell value — the shared chip, so a row renders the same status the
+ *  same way the detail page and the public project page do. `statusKey` is what
+ *  lets a status carry its OWN tone rather than its category's (MOTIR-3103); a
+ *  caller that genuinely has no key still gets the category chip. */
 export function StatusValue({
+  statusKey,
   category,
   label,
 }: {
+  statusKey?: string | null;
   category: StatusCategoryDto | null;
   label: string;
 }) {
-  return category ? (
-    <Pill status={STATUS_TONE[category]}>{label}</Pill>
-  ) : (
-    <Pill tone="neutral">{label}</Pill>
-  );
+  return <StatusPill statusKey={statusKey} category={category} label={label} />;
 }
 
 /** The ASSIGNEE cell value — avatar + name, or the muted "Unassigned" empty. */

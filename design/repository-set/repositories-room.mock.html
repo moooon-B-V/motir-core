@@ -1,0 +1,2099 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Repositories — a project's two registries, drawn apart (MOTIR-3126)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE REPOSITORIES ROOM, RENDERING BOTH
+      REGISTRIES: the Motir-hosted set a row can be taken over from, and the
+      workspace-connected repositories the project already owns. Story MOTIR-1775
+      · bug MOTIR-3126. Layout source of truth for the same card's implementation.
+
+      ── THE DEFECT THIS DRAWS THE FIX FOR ──
+      `/settings/project/repositories` reads `project_repository` and nothing else,
+      so on a project whose repositories are workspace-CONNECTED it renders
+      "This project has no repositories yet" beside five indexed, pinnable repos.
+      Panel 1 reproduces that render beside the target.
+
+      ── GROUNDED, NOT INVENTED ──
+      Which repositories a project HAS was decided by
+      docs/decisions/project-repository-set.md's 2026-08-19 amendment (MOTIR-3086)
+      and implemented as a layered ladder in lib/workItems/dispatchRepo.ts:
+        · no set                        → the workspace's connected repositories
+        · a set, project born in Motir  → the set alone
+        · a set, project arrived WITH code → the set FIRST, connected under it
+      Every panel below renders that answer for one project shape. The ONE thing
+      this asset decides is that the two registries are drawn as TWO sections
+      rather than one merged list — because only a Motir-hosted row can be taken
+      over (MOTIR-1939), so a merged list would offer a meaningless action on half
+      its rows.
+
+      ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
+      Both halves already ship and both were RENDERED before anything was drawn,
+      never reasoned from source (notes.html #73):
+        · the room's island — RepositoriesRoom + TakeoverRow — bundled from its
+          own source with the real compiled globals.css and screenshotted in both
+          its branches; its empty card is reproduced verbatim in panel 1.
+        · the connected-repository list — the shipped one from
+          app/(authed)/settings/workspace/github/page.tsx: a Card over a
+          `flex flex-col gap-1` list whose rows are a FolderGit2 glyph, the
+          owner/name pair, and a mono default-branch chip. Mirrored element for
+          element rather than restyled.
+      The token, primitive and icon layers are the ones takeover.mock.html
+      generated from @motir/design-system/theme.css and lucide-react, so no value
+      is retyped and the two assets of this area cannot drift apart. The ONLY raw
+      values authored anywhere below are the non-semantic board backdrop and the
+      panel scaffolding — never a card, pill, state fill, border or text colour.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      svg.i.lg {
+        width: 18px;
+        height: 18px;
+      }
+      svg.i.xl {
+        width: 20px;
+        height: 20px;
+      }
+      svg.gh {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: currentColor;
+      }
+      svg.gh.lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ═══ SHIPPED PRIMITIVES — classes mirror the cva recipes ═══ */
+      /* Button (packages/design-system/src/components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      /* Card */
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+      }
+      /* Pill */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-progress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* Input + FormField */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .field > label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .helper {
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-helper);
+        margin: 0;
+      }
+      .helper.xs {
+        font-size: 12px;
+      }
+      /* SectionLabel */
+      .eyebrow {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      /* Spinner */
+      .spin {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+      }
+      .link {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      /* QuietAction — the shipped RepositoryRow affordance */
+      .quiet {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      /* Combobox trigger */
+      .combo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .combo.disabled {
+        opacity: 0.6;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .listbox .opt .sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .listbox .grp {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      /* Modal */
+      .modal {
+        border-radius: var(--radius-modal);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 34rem;
+      }
+      .modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .modal-head h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .scrim {
+        border-radius: var(--radius-card);
+        background: var(--el-canvas);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
+
+      /* ═══ THE SHIPPED REPOSITORY ROW — mirrored from RepositoryRow.tsx ═══
+         A FLEX pair (min-w-0 flex-1 main + shrink-0 aside) at
+         p-(--spacing-card-padding). Verified by rendering the real component. */
+      .rows {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        min-width: 0;
+      }
+      /* state fills — every one a palette token, never an invented hue */
+      .row.created {
+        background: var(--el-success-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row.yours {
+        background: var(--el-notice-info-bg);
+        border-color: var(--el-border-soft);
+      }
+      .row.needsyou {
+        background: var(--el-warning-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row.failed {
+        background: var(--el-danger-surface);
+        border-color: var(--el-border-soft);
+      }
+      .row-main {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .row-head {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .row-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .row-state.ok svg {
+        color: var(--el-success);
+      }
+      .row-state.info svg {
+        color: var(--el-info);
+      }
+      .row-state.wait svg {
+        color: var(--el-warning);
+      }
+      .row-state.bad {
+        color: var(--el-danger-surface-text);
+      }
+      .row-state.bad svg {
+        color: var(--el-danger);
+      }
+      .repo-link {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .repo-link .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 14px;
+        color: var(--el-link);
+      }
+      .repo-link .name.plain {
+        color: var(--el-text);
+      }
+      .repo-link .ghm {
+        color: var(--el-icon-muted);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .row-aside {
+        display: flex;
+        flex: none;
+        flex-direction: column;
+        gap: 4px;
+        align-self: flex-start;
+      }
+      .alert {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-danger-surface-text);
+      }
+      .alert svg {
+        color: var(--el-danger);
+        margin-top: 2px;
+      }
+
+      /* ═══ THE ROOM — /settings/project/repositories ═══ */
+      .settings {
+        display: grid;
+        grid-template-columns: 15rem 1fr;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        overflow: hidden;
+        min-height: 460px;
+      }
+      .set-rail {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-right: 1px solid var(--el-sidebar-border);
+        background: var(--el-sidebar-bg);
+        padding: 20px 12px;
+      }
+      .set-rail .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .set-rail .grp > .h {
+        padding: 6px var(--spacing-control-x) 2px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .rail-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rail-row svg {
+        color: var(--el-icon-muted);
+      }
+      .rail-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .rail-row.active svg {
+        color: var(--el-icon-active);
+      }
+      .set-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 28px;
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .pane-head p {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+
+      /* callouts — every fill a palette token */
+      .note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .note svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .note .door {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+      }
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .banner.warn {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      .banner.warn svg {
+        color: var(--el-warning);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner.info {
+        background: var(--el-notice-info-bg);
+        color: var(--el-text-strong);
+      }
+      .banner.info svg {
+        color: var(--el-info);
+        margin-top: 2px;
+        flex: none;
+      }
+      .banner b {
+        font-weight: 600;
+      }
+
+      /* the COSTS block — the ADR's three real costs, before the commit */
+      .costs {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 14px 16px;
+      }
+      .costs > .h {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .costs ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .costs li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .costs li svg {
+        color: var(--el-icon-muted);
+        margin-top: 2px;
+        flex: none;
+      }
+      .costs li b {
+        font-weight: 600;
+      }
+      .costs li .sub {
+        display: block;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* IdentityHeader — mirrored from gitSettingsPrimitives.tsx (rendered) */
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .identity .av {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        width: 40px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-avatar-fallback);
+        color: var(--el-text-inverted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .identity .who {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        flex: 1;
+      }
+      .identity .top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .identity .login {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .identity .cap {
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* GrantRow — mirrored from gitSettingsPrimitives.tsx (rendered) */
+      .grant {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .grant .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        width: 36px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-card-icon-bg);
+        color: var(--el-card-icon-fg);
+      }
+      .grant .body {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .grant .body strong {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .grant .body p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* the DOOR strip + host-surface repros */
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        gap: 12px;
+        align-items: stretch;
+      }
+      .flow .arrow {
+        color: var(--el-icon-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .frame {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .frame .fcap {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .frame p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .lands {
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-accent);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+        padding: 14px 16px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      /* the DOOR itself, haloed so the reader SEES it */
+      .halo {
+        position: relative;
+        border-radius: var(--radius-control);
+        outline: 2px solid var(--el-accent);
+        outline-offset: 3px;
+      }
+      .doortag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      /* the step canvas (repository-set step repro) */
+      .shell {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-canvas);
+        overflow: hidden;
+      }
+      .step-pane {
+        padding: 24px;
+        background:
+          radial-gradient(circle at 1px 1px, rgba(15, 15, 15, 0.06) 1px, transparent 0) 0 0 / 22px
+            22px,
+          var(--el-canvas);
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 30rem;
+      }
+      .step h3 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--el-text);
+      }
+      /* the billing card repro */
+      .bill {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        overflow: hidden;
+      }
+      .bill .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        padding: 14px 16px;
+      }
+      .bill .head strong {
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .bill .body {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .opts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .opt-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .opt-card h5 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .opt-card .cons {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        flex: 1;
+      }
+      .opt-card .cost {
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+
+      /* galleries */
+      .gallery {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+      .twoup {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      .state {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: 16px;
+      }
+      .state > .cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .state > .cap span {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      figcaption {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      @media (max-width: 980px) {
+        .flow,
+        .twoup,
+        .opts {
+          grid-template-columns: 1fr;
+        }
+        .settings {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the two registries, drawn apart ═══ */
+      /* SectionLabel (packages/design-system/src/components/ui/SectionLabel.tsx) */
+      .seclabel {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .section > .hint {
+        margin: 0;
+        max-width: 68ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* The CONNECTED list — mirrored element for element from the shipped
+         `/settings/workspace/github` pane (app/(authed)/settings/workspace/
+         github/page.tsx): a Card holding a `flex flex-col gap-1` list whose
+         every row is icon + owner/name + a mono default-branch chip. */
+      .connected {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .connected ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .connected li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .connected li svg {
+        color: var(--el-icon-muted);
+      }
+      .connected .repo {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .connected .repo .owner {
+        color: var(--el-text-muted);
+      }
+      .connected .repo .nm {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .connected .branch {
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+      .connected > footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      /* The room's empty state — the shipped EmptyState primitive
+         (packages/design-system/src/components/ui/EmptyState.tsx): a Card,
+         centred, muted icon over a serif title over the copy. */
+      .emptystate {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+      }
+      a.btn {
+        text-decoration: none;
+      }
+      .emptystate .glyph {
+        color: var(--el-icon-muted);
+      }
+      .emptystate .glyph svg {
+        width: 48px;
+        height: 48px;
+      }
+      .emptystate h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .emptystate p {
+        margin: 0;
+        max-width: 60ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-subtitle);
+      }
+      .summary {
+        font-size: 14px;
+        color: var(--el-text-helper);
+      }
+      /* the shape ladder — which registries answer, per project shape */
+      table.shapes {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin: 0 0 14px;
+      }
+      table.shapes th,
+      table.shapes td {
+        border: 1px solid var(--el-border);
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text-secondary);
+      }
+      table.shapes th {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      table.shapes td b {
+        color: var(--el-text);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-mail" viewBox="0 0 24 24">
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </symbol>
+        <symbol id="i-badge-check" viewBox="0 0 24 24">
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <symbol id="i-circle-check-big" viewBox="0 0 24 24">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <symbol id="i-refresh-cw" viewBox="0 0 24 24">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </symbol>
+        <symbol id="i-triangle-alert" viewBox="0 0 24 24">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 24 24">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </symbol>
+        <symbol id="i-folder-git-2" viewBox="0 0 24 24">
+          <path d="M18 19a5 5 0 0 1-5-5v8" />
+          <path
+            d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"
+          />
+          <circle cx="13" cy="12" r="2" />
+          <circle cx="20" cy="19" r="2" />
+        </symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6" /></symbol>
+        <symbol id="i-loader-circle" viewBox="0 0 24 24">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </symbol>
+        <symbol id="i-external-link" viewBox="0 0 24 24">
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <symbol id="i-info" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </symbol>
+        <symbol id="i-building-2" viewBox="0 0 24 24">
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 24 24">
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </symbol>
+        <symbol id="i-arrow-up" viewBox="0 0 24 24">
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <path d="m21 21-4.34-4.34" />
+          <circle cx="11" cy="11" r="8" />
+        </symbol>
+        <symbol id="i-ellipsis" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24">
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24">
+          <rect x="14" y="3" width="5" height="18" rx="1" />
+          <rect x="5" y="3" width="5" height="18" rx="1" />
+        </symbol>
+        <symbol id="i-coins" viewBox="0 0 24 24">
+          <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48" />
+          <path d="M15 6h1v4" />
+          <path d="m6.134 14.768.866-.5 2 3.464" />
+          <circle cx="16" cy="8" r="6" />
+        </symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </symbol>
+        <symbol id="i-shield-check" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol id="i-circle-alert" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" x2="12" y1="8" y2="12" />
+          <line x1="12" x2="12.01" y1="16" y2="16" />
+        </symbol>
+        <symbol id="i-skip-forward" viewBox="0 0 24 24">
+          <path d="M21 4v16" />
+          <path
+            d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z"
+          />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="i-arrow-up-right" viewBox="0 0 24 24">
+          <path d="M7 7h10v10" />
+          <path d="M7 17 17 7" />
+        </symbol>
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <symbol id="i-columns-3" viewBox="0 0 24 24">
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </symbol>
+        <symbol id="i-users" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <circle cx="9" cy="7" r="4" />
+        </symbol>
+        <symbol id="i-sliders-horizontal" viewBox="0 0 24 24">
+          <path d="M10 5H3" />
+          <path d="M12 19H3" />
+          <path d="M14 3v4" />
+          <path d="M16 17v4" />
+          <path d="M21 12h-9" />
+          <path d="M21 19h-5" />
+          <path d="M21 5h-7" />
+          <path d="M8 10v4" />
+          <path d="M8 12H3" />
+        </symbol>
+        <symbol id="i-hand-coins" viewBox="0 0 24 24">
+          <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" />
+          <path
+            d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"
+          />
+          <path d="m2 16 6 6" />
+          <circle cx="16" cy="9" r="2.9" />
+          <circle cx="6" cy="5" r="3" />
+        </symbol>
+        <symbol id="i-key-round" viewBox="0 0 24 24">
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </symbol>
+        <!-- The GitHub mark, verbatim from components/icons/GithubMark.tsx -->
+        <symbol id="i-github" viewBox="0 0 24 24">
+          <path
+            fill-rule="evenodd"
+            clip-rule="evenodd"
+            d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="board">
+      <header>
+        <h1>Repositories — a project's TWO registries, drawn apart</h1>
+        <p>
+          <b>The room is a liar today.</b> On the live MOTIR project
+          <code class="k">/settings/project/repositories</code> renders one card that says
+          <i>"This project has no repositories yet"</i> while five repositories are connected,
+          indexed and pinnable on every card. It reads <code class="k">project_repository</code> and
+          nothing else, so the workspace-connected registry — the one that answers for every project
+          that arrived WITH code — is invisible to it. This asset draws what the room must show
+          instead.
+        </p>
+        <p>
+          <b>Nothing here is a new product decision.</b>
+          <code class="k">docs/decisions/project-repository-set.md</code>'s amendment (MOTIR-3086)
+          already decided WHICH repositories a project has, as a layered ladder in
+          <code class="k">lib/workItems/dispatchRepo.ts</code>. The resolver applies it and the
+          surfaces never learned it. So the panels below render exactly the ladder's answer, per
+          project shape — and the ONE thing this asset decides is that the two registries are drawn
+          as TWO sections rather than one merged list, because only one of them can be taken over.
+        </p>
+        <p>
+          <b>Drawn against SHIPPED reality.</b> The room's island (<code class="k"
+            >RepositoriesRoom</code
+          >
+          · <code class="k">TakeoverRow</code>) was RENDERED headless from its own source and the
+          real compiled <code class="k">globals.css</code> before anything was drawn — both its
+          empty branch (the false sentence, reproduced in panel 1) and its row branch. The
+          connected-repository list is the shipped one from
+          <code class="k">/settings/workspace/github</code>, mirrored element for element rather
+          than redrawn. Nothing shipped is reinvented (notes.html #73).
+        </p>
+      </header>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           THE LADDER — which registry answers, per project shape
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        The ladder · <b>Four project shapes, four answers</b> — the resolver's, not this asset's
+      </div>
+      <p class="panel-note">
+        <b>The room renders the ladder's answer and nothing of its own.</b> A section is ABSENT when
+        its registry contributes nothing — never present-and-empty-stated, which is the shape that
+        produced the defect. The empty state is reached by exactly one row of this table.
+      </p>
+      <table class="shapes">
+        <thead>
+          <tr>
+            <th>Project shape</th>
+            <th>What the resolver answers with</th>
+            <th>What the room renders</th>
+            <th>Panel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Arrived with code</b>, empty set — <i>MOTIR today</i></td>
+            <td>the workspace's connected repositories</td>
+            <td><b>Your own repositories</b> alone; no hosted section</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <td><b>Arrived with code</b>, non-empty set</td>
+            <td>the set FIRST, the connected repositories under it</td>
+            <td>both sections, hosted first</td>
+            <td>2</td>
+          </tr>
+          <tr>
+            <td><b>Born in Motir</b>, non-empty set</td>
+            <td>the set alone — a complete statement of its repositories</td>
+            <td><b>Hosted by Motir</b> alone; no yours section</td>
+            <td>3</td>
+          </tr>
+          <tr>
+            <td><b>No set, nothing connected</b></td>
+            <td>nothing — and this is the ONLY shape for which that is true</td>
+            <td>the empty state, with a way out</td>
+            <td>4</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 1 — ARRIVED WITH CODE, EMPTY SET
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1 · <b>Arrived with code, empty set</b> — the common shape, and the one that ships
+        broken
+      </div>
+      <p class="panel-note">
+        <b>Left: what ships today</b>, reproduced from a headless render of the real island. One
+        card, a false sentence, nothing pressable — no list, no link, no way to reach the
+        repositories the project actually has. <b>Right: the target.</b> The same page, answering
+        the question it was asked.
+      </p>
+      <div class="panel flow">
+        <div class="frame">
+          <div class="fcap">shipped today — the defect, rendered</div>
+          <div class="emptystate">
+            <span class="glyph">
+              <svg class="i" style="width: 48px; height: 48px">
+                <use href="#i-folder-git-2" />
+              </svg>
+            </span>
+            <h4>Repositories</h4>
+            <p>
+              This project has no repositories yet. Motir sets them up when you approve a plan, and
+              they appear here.
+            </p>
+          </div>
+          <p>
+            Five repositories exist, all <code class="k">indexed</code>, all pinnable. The sentence
+            is false and the page offers nothing to do about it.
+          </p>
+        </div>
+        <div class="arrow">
+          <svg class="i lg"><use href="#i-arrow-right" /></svg>
+        </div>
+        <div class="frame" style="flex: 1.6">
+          <div class="fcap">target — the connected registry, named and sourced</div>
+          <div class="section">
+            <div class="seclabel">Your own repositories</div>
+            <p class="hint">
+              Connected to this workspace through the Motir GitHub app. They're already yours —
+              nothing to move, and Motir never bills their CI.
+            </p>
+            <div class="connected">
+              <ul>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">moooon-B-V/</span><span class="nm">motir-core</span>
+                  </span>
+                  <span class="branch">main</span>
+                </li>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">moooon-B-V/</span><span class="nm">motir-ai</span>
+                  </span>
+                  <span class="branch">main</span>
+                </li>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">moooon-B-V/</span><span class="nm">motir-gateway</span>
+                  </span>
+                  <span class="branch">main</span>
+                </li>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">moooon-B-V/</span><span class="nm">motir-meta</span>
+                  </span>
+                  <span class="branch">main</span>
+                </li>
+              </ul>
+              <footer>
+                <span>Connected for the whole workspace, not for this project alone.</span>
+                <a class="link" href="#">Choose which repositories Motir can see</a>
+              </footer>
+            </div>
+          </div>
+          <p>
+            No takeover control on any row — <b>an absence, not a disabled button</b>: these are the
+            user's own repositories and there is nothing to move. The one affordance is the
+            workspace pane that owns connecting, which the room already links to.
+          </p>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 2 — ARRIVED WITH CODE, NON-EMPTY SET
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 2 · <b>Arrived with code, non-empty set</b> — both registries, in the whole page
+      </div>
+      <p class="panel-note">
+        <b>Two sections, never one merged list.</b> A Motir-hosted row can be taken over; a
+        connected repository cannot, because it is already yours. Merging them would offer a
+        meaningless action on half the rows and lose the provenance that makes each half legible.
+        Hosted goes FIRST, which is the resolver's own order — a repository the project planned
+        outranks one it inherited from the installation.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Work</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-workflow" /></svg>
+                Workflow
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-columns-3" /></svg>
+                Boards
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head">
+              <div class="eyebrow">Project settings</div>
+              <h3>Repositories</h3>
+              <p>
+                Where Acme booking's code lives. Motir hosts the repositories it created for you —
+                move any of them to your own GitHub whenever you want.
+              </p>
+              <p class="summary">0 moving · 1 hosted by Motir · 3 yours</p>
+            </div>
+
+            <div class="section">
+              <div class="seclabel">Hosted by Motir</div>
+              <p class="hint">
+                Motir created these and pays for their CI. Move any of them to your own GitHub
+                whenever you want.
+              </p>
+              <div class="rows">
+                <div class="row created">
+                  <div class="row-main">
+                    <div class="row-head">
+                      <span class="pill pill-neutral mono">api</span>
+                      <span class="row-state ok">
+                        <svg class="i"><use href="#i-circle-check-big" /></svg>
+                        Created
+                      </span>
+                    </div>
+                    <div class="repo-link">
+                      <svg class="gh ghm"><use href="#i-github" /></svg>
+                      <a class="name" href="#">motir-projects/acme-booking-api</a>
+                      <svg class="i sm" style="color: var(--el-icon-muted)">
+                        <use href="#i-external-link" />
+                      </svg>
+                    </div>
+                    <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
+                    <div class="actions">
+                      <button class="btn btn-secondary btn-sm" type="button">
+                        <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+                        Move to my GitHub
+                      </button>
+                    </div>
+                  </div>
+                  <div class="row-aside">
+                    <button class="icon-btn" type="button" aria-label="Repository actions">
+                      <svg class="i"><use href="#i-ellipsis" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="seclabel">Your own repositories</div>
+              <p class="hint">
+                Connected to this workspace through the Motir GitHub app. They're already yours —
+                nothing to move, and Motir never bills their CI.
+              </p>
+              <div class="connected">
+                <ul>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span>
+                    </span>
+                    <span class="branch">main</span>
+                  </li>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">design-tokens</span>
+                    </span>
+                    <span class="branch">main</span>
+                  </li>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">acme-infra</span>
+                    </span>
+                    <span class="branch">trunk</span>
+                  </li>
+                </ul>
+                <footer>
+                  <span>Connected for the whole workspace, not for this project alone.</span>
+                  <a class="link" href="#">Choose which repositories Motir can see</a>
+                </footer>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>The summary line counts the truth, across both registries.</b>
+        <code class="k">1 hosted by Motir · 3 yours</code> — the same sentence the room already
+        renders, now fed by the whole domain instead of by one table. A count that silently omits
+        one registry is the header-level form of the very defect this card fixes.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 3 — BORN IN MOTIR
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 · <b>Born in Motir</b> — the set alone, and the yours section is ABSENT
+      </div>
+      <p class="panel-note">
+        A project with no code of its own is answered by its set alone — the resolver layers nothing
+        under it, because that set IS a complete statement of the project's repositories. So the
+        room shows one section and <b>does not draw an empty "your own repositories" heading</b>: a
+        present-and-empty section asserts an absence the project never had.
+      </p>
+      <div class="panel">
+        <div class="set-pane" style="padding: 0; gap: 14px">
+          <div class="section">
+            <div class="seclabel">Hosted by Motir</div>
+            <p class="hint">
+              Motir created these and pays for their CI. Move any of them to your own GitHub
+              whenever you want.
+            </p>
+            <div class="rows">
+              <div class="row created">
+                <div class="row-main">
+                  <div class="row-head">
+                    <span class="pill pill-neutral mono">web</span>
+                    <span class="row-state ok">
+                      <svg class="i"><use href="#i-circle-check-big" /></svg>
+                      Created
+                    </span>
+                  </div>
+                  <div class="repo-link">
+                    <svg class="gh ghm"><use href="#i-github" /></svg>
+                    <a class="name" href="#">motir-projects/acme-booking-web</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
+                  <div class="actions">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="i sm"><use href="#i-arrow-up-right" /></svg>
+                      Move to my GitHub
+                    </button>
+                  </div>
+                </div>
+                <div class="row-aside">
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="row yours">
+                <div class="row-main">
+                  <div class="row-head">
+                    <span class="pill pill-neutral mono">shared</span>
+                    <span class="row-state info">
+                      <svg class="i"><use href="#i-badge-check" /></svg>
+                      Yours
+                    </span>
+                  </div>
+                  <div class="repo-link">
+                    <svg class="gh ghm"><use href="#i-github" /></svg>
+                    <a class="name" href="#">acme-inc/design-tokens</a>
+                    <svg class="i sm" style="color: var(--el-icon-muted)">
+                      <use href="#i-external-link" />
+                    </svg>
+                  </div>
+                  <p class="helper">
+                    You already own this one — nothing to move, and Motir never bills its CI.
+                  </p>
+                </div>
+                <div class="row-aside">
+                  <button class="icon-btn" type="button" aria-label="Repository actions">
+                    <svg class="i"><use href="#i-ellipsis" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>A taken-over row stays in the HOSTED section, reading <code class="k">Yours</code>.</b>
+        It is a <code class="k">project_repository</code> row and the takeover saga's history lives
+        on it; moving it into the connected section on completion would lose that. The two sections
+        answer <i>"which registry is this row in"</i>, never <i>"who owns it"</i> — ownership is the
+        row's own state word, which is exactly where MOTIR-1939 already put it.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 4 — GENUINELY EMPTY
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <b>Genuinely empty</b> — the one shape the empty state is true for
+      </div>
+      <p class="panel-note">
+        No set, and nothing connected to the workspace. The copy is rewritten because the old
+        sentence stated only half of how a project gets repositories — approving a plan — and that
+        half is what made it false everywhere else. Both routes are named, and the one the user can
+        take right now is a button rather than a sentence.
+      </p>
+      <div class="panel">
+        <div class="emptystate">
+          <span class="glyph">
+            <svg class="i" style="width: 48px; height: 48px">
+              <use href="#i-folder-git-2" />
+            </svg>
+          </span>
+          <h4>Repositories</h4>
+          <p>
+            No repositories are connected to this project yet. Connect the code you already have on
+            GitHub, or approve a plan and Motir will create them for you.
+          </p>
+          <div style="margin-top: 4px">
+            <a class="btn btn-secondary btn-sm" href="#">Connect a repository</a>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>The empty state now has an action, and it points at the surface that owns the act.</b>
+        Connecting is workspace-level (<code class="k">/settings/workspace/github</code>), so the
+        room links there rather than growing a connect flow of its own — the same hand-off its rows
+        already make.
+      </div>
+    </div>
+  </body>
+</html>

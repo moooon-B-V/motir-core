@@ -304,6 +304,14 @@ export const CLI_STEPS: readonly CliStep[] = [
         tone: 'info',
         text: 'Want Motir to launch the agent for you? `motir next --agent "<your agent command>"` runs it on the prompt, and `motir auto` drains the whole ready set unattended. Motir is **BYOK**: you bring your own agent and your own model key, and Motir never reads either.',
       },
+      {
+        // MOTIR-3011 — the promotion nobody is standing at. Three actors move a
+        // card and one of them is a webhook that fires after the terminal has
+        // exited; a reader who is not told that diagnoses it as a stuck run.
+        kind: 'callout',
+        tone: 'info',
+        text: 'A card the CLI dispatched lands at **Implemented**, not In Review: the code is committed, pushed and its pull request is open, and nothing has compiled it yet. **CI moves it to In Review** when the checks on that commit go green — server-side, minutes after your terminal has exited, with nothing to wait for locally. A red build leaves the card at Implemented with a comment naming the failed check; push a fix to the same branch and the card promotes itself. Merging closes it — and for a `motir auto` run, one merge closes **every** card that branch carries.',
+      },
     ],
   },
 ];

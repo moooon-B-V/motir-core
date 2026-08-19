@@ -54,6 +54,12 @@ export type GithubPullRequestWithContext = GithubPullRequest & {
   checkRuns: GithubCheckRun[];
 };
 
+/** A PR row with just its check rows — enough to derive the CI verdict, which is
+ *  all the MOTIR-3006 promotion reads. */
+export type GithubPullRequestWithChecks = GithubPullRequest & {
+  checkRuns: GithubCheckRun[];
+};
+
 /** A PR row with its repo AND the parent installation — the workspace-tenancy
  *  chain the explicit-link service validates (installation → repo → PR), plus
  *  the check rows the returned DTO needs (MOTIR-1596). */
@@ -281,6 +287,27 @@ export const githubPullRequestRepository = {
     return client.githubPullRequest.findMany({
       where: { workItemId },
       include: { repo: true, checkRuns: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+  },
+
+  /**
+   * Every change request whose HEAD REF is this branch, with its check rows —
+   * the SESSION-BRANCH arm of the CI-green latch (MOTIR-3006).
+   *
+   * A session pull request carries no `work_item_id` (its branch deliberately
+   * names no card), so a card integrated onto that branch cannot be reached from
+   * the link column. The branch is the join, and it is the same join the merge
+   * close-out uses.
+   */
+  async listByHeadRefWithChecks(
+    headRef: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<GithubPullRequestWithChecks[]> {
+    const client = tx ?? db;
+    return client.githubPullRequest.findMany({
+      where: { headRef },
+      include: { checkRuns: true },
       orderBy: { updatedAt: 'desc' },
     });
   },

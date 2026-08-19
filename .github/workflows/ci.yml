@@ -70,6 +70,52 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
 
+  # ── The whole-tree STRUCTURAL GUARDS (MOTIR-3144) ────────────────────────────
+  #
+  # These specs parse `lib/` + `app/` through the TypeScript compiler API and
+  # assert structural facts: no service arrives unbound, a bare `$transaction`
+  # cannot enclose a policy-gated statement, a second rate-limit counter cannot
+  # appear. They are lint, in the shape of tests.
+  #
+  # They used to run inside `test` — sharded, database-backed and
+  # `--coverage`-instrumented — where they competed for CPU with the suites that
+  # make that job slow. `bare-transaction-guard` cost 8.1 s alone on a quiet box
+  # and blew a 120 s hook budget on `Vitest (2/3)` TWICE in a row, with zero
+  # assertion failures, on a branch that had not grown the scan by one file.
+  # That is a contention multiplier above 14x, so no budget measured on a quiet
+  # box was ever going to hold. Three earlier cards raised a budget or made a
+  # scan faster (MOTIR-2815, MOTIR-3067, and this card's own first instance);
+  # each fixed one guard and left the environment for the next one to find.
+  #
+  # Here the whole lane is ~18 s, deterministic, and its cost is a function of
+  # the tree rather than of what else happens to be running.
+  #
+  # No Postgres and no `prisma generate`, deliberately: nothing in the lane
+  # opens a database, and adding either would put it back in the cost class it
+  # was moved out of. `tests/ci-structural-guards-lane.test.ts` guards this job's
+  # presence, its config, and the completeness of the lane's membership.
+  structural-guards:
+    name: Structural guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-structural-guards
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-structural-guards.outputs.cache-hit != 'true'
+        env:
+          HUSKY: '0'
+      - run: pnpm test:guards
+
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
@@ -1001,6 +1047,7 @@ jobs:
     needs:
       [
         lint,
+        structural-guards,
         typecheck,
         design-system,
         design-guards,

@@ -369,7 +369,12 @@ test('a repository is a link you can follow, and a rename does not break the car
       expectOutcome: 'deferred_incomplete_repo_set',
     });
     await page.goto(`/items/${twoRepo.identifier}`);
-    await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
+    // Held, not completed — the hold is this chapter's claim. The status it
+    // holds AT is `Implemented` since MOTIR-2999: the pull request is open and
+    // no build has reported, so the card is delivered and not yet reviewable.
+    // (This story's receipt has not frozen — it is still in review — so the
+    // spec records today's product rather than owing a disposition.)
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
 
     await deliver(page, {

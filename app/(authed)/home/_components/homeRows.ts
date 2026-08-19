@@ -32,6 +32,9 @@ export interface HomeRowView {
   assigneeName: string | null;
   /** Whether an AGENT is executing it — the assignee-avatar badge. */
   agent: boolean;
+  /** The workflow status KEY — what the chip resolves its per-status tone from
+   *  (MOTIR-3103); the category below is the fallback. */
+  status: string;
   /** Human status label (the project's workflow label, or the raw key). */
   statusLabel: string;
   /** Lifecycle category → the Pill tone; null when unclassifiable. */
@@ -78,6 +81,7 @@ export function toHomeRowViews(
       role: resolveRole(row, tab),
       assigneeName: row.assigneeId ? (nameByUserId.get(row.assigneeId) ?? null) : null,
       agent: row.executor === 'coding_agent',
+      status: row.status,
       statusLabel: status?.label ?? row.status,
       statusCategory: status?.category ?? null,
     };
