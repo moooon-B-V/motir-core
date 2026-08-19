@@ -1226,6 +1226,12 @@ export interface components {
             targetRepo: string | null;
             targetRepoCloneUrl: string | null;
             targetRepoDefaultBranch: string | null;
+            targetRepos: {
+                name: string;
+                cloneUrl: string | null;
+                defaultBranch: string | null;
+                delivery: ("delivered" | "awaiting" | "unknown" | "unestablished" | "excluded") | null;
+            }[];
             /** @enum {string} */
             workflowMode: "per_item_pr" | "session_lineage";
             sessionBranch: string | null;

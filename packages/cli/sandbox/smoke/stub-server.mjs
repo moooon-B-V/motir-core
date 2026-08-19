@@ -226,6 +226,9 @@ function dispatchPrompt(key, query) {
     targetRepo: 'demo-repo',
     targetRepoCloneUrl: null,
     targetRepoDefaultBranch: null,
+    // MOTIR-3131 — the repository SET, of which `targetRepo` is element 0. The
+    // smoke loop runs a one-repository card, so this is the one-element form.
+    targetRepos: [{ name: 'demo-repo', cloneUrl: null, defaultBranch: null, delivery: 'awaiting' }],
     workflowMode: branch ? 'session_lineage' : 'per_item_pr',
     sessionBranch: branch,
     advisories: [],

@@ -78,7 +78,22 @@
  *   changed, so its deliverable may already be in the repository. Additive — a
  *   new member of a union on a field clients are required to tolerate unknown
  *   members of, with every existing member byte-identical.
- * - `1.12.0` — MOTIR-2961 adds `POST /api/v1/work-items/{key}/claim`: an ATOMIC
+ * - `1.11.0` — MOTIR-3041 adds `targetRepositories` — the item's repository set
+ *   as REFERENCES to the project's `project_repository` rows — beside the
+ *   derived names, on the work-item detail response, the MCP item shape and the
+ *   DTO. Additive; the names it publishes are read projections of the same
+ *   references. (Logged retroactively by MOTIR-3131: the bump shipped with
+ *   MOTIR-2732 and the line for it did not.)
+ * - `1.12.0` — MOTIR-3131 adds `targetRepos` to the DISPATCH PROMPT: EVERY
+ *   repository the item ships in, ordered with the primary first, each with its
+ *   clone URL, its default branch and its per-repository delivery state. The
+ *   payload described a repository where the card has a set, so a launcher could
+ *   not resolve a checkout, a prompt could not instruct a second worktree, and a
+ *   run could not say that one of two repositories had already shipped.
+ *   Additive: one new field, the three scalars unchanged in value, the assembled
+ *   `prompt` text byte-identical. See `docs/decisions/work-item-repository-set.md`
+ *   § *Amendment 2026-08-19* §B1.
+ * - `1.13.0` — MOTIR-2961 adds `POST /api/v1/work-items/{key}/claim`: an ATOMIC
  *   claim of one work item BY KEY — lock the row, re-assert the to-do category,
  *   assign and transition, in one transaction. Every dispatch path except
  *   `claim_next_ready`'s "give me whatever is next" was serialising claimants
@@ -86,4 +101,4 @@
  *   the same card. Additive: one new operation and one new resource
  *   (`WorkItemClaim`); no declared shape changed.
  */
-export const V1_CONTRACT_VERSION = '1.12.0';
+export const V1_CONTRACT_VERSION = '1.13.0';

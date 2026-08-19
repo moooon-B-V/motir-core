@@ -152,6 +152,26 @@ export type V1DispatchAdvisory = z.infer<typeof dispatchAdvisorySchema>;
  * what it may do. It is always PRESENT — `[]` when there are none — so a client
  * never branches on absence.
  */
+/**
+ * The per-repository DELIVERY state (`lib/workItems/repoDelivery.ts`) — what one
+ * repository of an item's set has to show for itself. `null` for a repository
+ * the card does not carry (the unpinned card whose project has exactly one).
+ */
+export const dispatchRepoDeliverySchema = z
+  .enum(['delivered', 'awaiting', 'unknown', 'unestablished', 'excluded'])
+  .nullable();
+
+/** ONE repository of the dispatch set (MOTIR-3131). */
+export const dispatchRepoSchema = z.object({
+  /** The bare repository NAME the CLI keys `<root>/<name>` on. */
+  name: z.string(),
+  /** Its HTTPS clone URL, or `null` when Motir does not know one. */
+  cloneUrl: z.string().nullable(),
+  /** Its default branch — never guessed as `"main"`. */
+  defaultBranch: z.string().nullable(),
+  delivery: dispatchRepoDeliverySchema,
+});
+
 export const dispatchPromptSchema = z.object({
   key: workItemKeySchema,
   /** The full multi-section prompt text, ready to hand to a coding agent. */
@@ -170,6 +190,13 @@ export const dispatchPromptSchema = z.object({
   targetRepoCloneUrl: z.string().nullable(),
   /** The resolved repo's default branch — never guessed as `"main"`. */
   targetRepoDefaultBranch: z.string().nullable(),
+  /**
+   * EVERY repository the item ships in (MOTIR-3131) — ordered, primary first,
+   * each with its coordinates and its delivery state. Always present; `[]` when
+   * Motir cannot say. The scalar `targetRepo` above is a PROJECTION of this
+   * array (`targetRepos[0]?.name ?? null`), never independently writable state.
+   */
+  targetRepos: z.array(dispatchRepoSchema),
   workflowMode: dispatchWorkflowModeSchema,
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: z.string().nullable(),
@@ -192,6 +219,12 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     targetRepo: dto.targetRepo,
     targetRepoCloneUrl: dto.targetRepoCloneUrl,
     targetRepoDefaultBranch: dto.targetRepoDefaultBranch,
+    targetRepos: dto.targetRepos.map((repo) => ({
+      name: repo.name,
+      cloneUrl: repo.cloneUrl,
+      defaultBranch: repo.defaultBranch,
+      delivery: repo.delivery,
+    })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {

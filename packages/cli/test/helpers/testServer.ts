@@ -385,7 +385,7 @@ export function v1Activity(
  * decision is expressible.
  */
 export function v1DispatchPrompt(key: string, over: Record<string, unknown> = {}) {
-  return {
+  const body = {
     key,
     prompt: `Prompt for ${key}`,
     // MOTIR-2445 — the parent, promoted out of the prompt's prose. The client
@@ -398,7 +398,26 @@ export function v1DispatchPrompt(key: string, over: Record<string, unknown> = {}
     sessionBranch: null,
     advisories: [],
     ...over,
-  };
+  } as Record<string, unknown>;
+  // MOTIR-3131 — the repository SET, DERIVED from whatever the caller pinned
+  // rather than defaulted to `[]`, so a fixture can never assert the one thing
+  // the server promises is impossible: `targetRepos[0]?.name ?? null` differing
+  // from `targetRepo`. An override still wins, which is how the multi-repo
+  // fixtures say what they mean.
+  if (!('targetRepos' in over)) {
+    body.targetRepos =
+      body.targetRepo === null
+        ? []
+        : [
+            {
+              name: body.targetRepo,
+              cloneUrl: body.targetRepoCloneUrl ?? null,
+              defaultBranch: body.targetRepoDefaultBranch ?? null,
+              delivery: 'awaiting',
+            },
+          ];
+  }
+  return body;
 }
 
 /** The integration record — the item's new status and its stamped provenance. */

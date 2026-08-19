@@ -231,6 +231,9 @@ describe('the dispatch-prompt schema', () => {
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
+      // MOTIR-3131 — the presenter maps the repository SET too; these fixtures
+      // exercise the ADVISORY branch and carry an empty one.
+      targetRepos: [],
       workflowMode: 'per_item_pr',
       sessionBranch: null,
       advisories: [
@@ -255,6 +258,9 @@ describe('the dispatch-prompt schema', () => {
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
+      // MOTIR-3131 — the presenter maps the repository SET too; these fixtures
+      // exercise the ADVISORY branch and carry an empty one.
+      targetRepos: [],
       workflowMode: 'per_item_pr',
       sessionBranch: null,
       advisories: [
@@ -285,6 +291,9 @@ describe('the dispatch-prompt schema', () => {
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
+      // MOTIR-3131 — the presenter maps the repository SET too; these fixtures
+      // exercise the ADVISORY branch and carry an empty one.
+      targetRepos: [],
       workflowMode: 'per_item_pr',
       sessionBranch: null,
       advisories: [
@@ -340,6 +349,9 @@ describe('the dispatch-prompt schema', () => {
       targetRepo: 'motir-core',
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
+      // MOTIR-3131 — the presenter maps the repository SET too; these fixtures
+      // exercise the ADVISORY branch and carry an empty one.
+      targetRepos: [],
       workflowMode: 'per_item_pr',
       sessionBranch: null,
       advisories: [

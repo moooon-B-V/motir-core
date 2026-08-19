@@ -16,6 +16,7 @@ import type {
 import type {
   PlanHistoryEventDto,
   PlanItemChangeDto,
+  PlanItemChangeField,
   PlanReviewDto,
   PlanReviewItemDto,
 } from '@/lib/dto/planReview';
@@ -46,7 +47,12 @@ function buildChanges(
   target: WorkItem | undefined,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
-  const changes: PlanItemChangeDto[] = [];
+  // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
+  // compile error until it is added to `PLAN_ITEM_CHANGE_FIELDS` — which is what
+  // `plan-change-field-labels.test.tsx` then demands copy for. MOTIR-1532 added
+  // two of these and their labels never followed (MOTIR-3151); nothing on this
+  // path could have noticed.
+  const changes: (PlanItemChangeDto & { field: PlanItemChangeField })[] = [];
   if (patch.title !== undefined && patch.title !== target?.title) {
     changes.push({ field: 'title', from: target?.title ?? null, to: patch.title });
   }

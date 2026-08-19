@@ -562,9 +562,12 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[0]?.query.get('sessionBranch')).toBeNull();
     expect(server.v1Calls[1]?.query.get('sessionBranch')).toBe('motir/auto-1');
     expect(server.v1Calls[2]?.query.get('sessionBranch')).toBeNull();
-    // The two repo-plumbing fields the payload carries are NOT on the view
+    // The two SCALAR repo-plumbing fields the payload carries are NOT on the view
     // model: nothing routes on them, and a field with no reader is dropped at
-    // the adapter rather than carried in case someone wants it later.
+    // the adapter rather than carried in case someone wants it later. The SET is
+    // carried (MOTIR-3133) precisely because something does read it — the
+    // launcher resolves a checkout per element — and its own `delivery` is
+    // dropped by the same rule.
     expect(Object.keys(bare).sort()).toEqual([
       'advisories',
       'key',
@@ -573,6 +576,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
       'prompt',
       'sessionBranch',
       'targetRepo',
+      // MOTIR-3133 — the whole set, of which `targetRepo` is element 0's name.
+      'targetRepos',
       'workflowMode',
     ]);
   });
