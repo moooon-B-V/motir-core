@@ -485,6 +485,137 @@ the fact would answer _not paused_ for a project whose real `planned` proposal s
 
 ---
 
+## AMENDMENT 2 — a plan whose PRODUCER died is reconciled, not gated around (MOTIR-3064, 2026-08-19)
+
+AMENDMENT 1 closed the orphan with **no producer** and said, in its own _What this does NOT
+do_, that the other half was filed separately:
+
+> _"It does not reach an empty plan left by a **crashed generation job** — that row carries a
+> `sourceJobId`, so it still gates, and it still pauses cadence for good. […] the fix is a
+> terminal plan state on job failure, which is job lifecycle, not a gate predicate."_
+
+This is that card. The diagnosis held; the shape of the fix took one correction.
+
+### Why it could not be another exclusion
+
+AMENDMENT 1's exclusion works because a plan with `sourceJobId IS NULL` can be judged **from
+the row**. This one cannot. A plan whose job died is byte-for-byte what a healthy generation
+looks like between `submitPlanEditJob`'s `createPlan` and motir-ai's first append: same status,
+same producer, same zero items. The discriminator is not in the plan table at all — it is
+whether the job behind it is still alive. So `findUndecidedByProject` is **unchanged by this
+card, deliberately**: a gate that guessed at liveness would be exactly the count-keyed rule
+AMENDMENT 1 rejected, wearing a different hat.
+
+### The decision: a reconciling SWEEP, because the callback does not exist
+
+The card offered two shapes — _(1)_ write a terminal status on job failure, or _(2)_ a
+reconciling sweep — and asked for one, with reasons. **Chosen: (2).** The reasoning is that
+(1) is not a smaller version of (2); it is not available at all:
+
+- **There is no failure callback to hang it on.** motir-ai's inbound seams into core are the
+  SUCCESS path — `aiGenerationService.appendProposals` and `patchProposal`, both resolved by
+  `sourceJobId`. Nothing in core is called when a job fails. Core learns a job's outcome by
+  ASKING (`resolveJobState` → `GET /v1/jobs/:id`) or by holding an SSE stream open. So (1)
+  means a NEW inbound route on the AI boundary, which is a larger change than (2), not a
+  smaller one.
+- **And it would still miss the case that matters most.** `motir-ai/src/jobs/worker.ts` marks
+  a job `failed` only when the HANDLER throws. A worker process that dies mid-job writes
+  nothing anywhere — its own row stays `running` — so a failure callback has nobody to fire it.
+  The card said as much in advance (_"(2) is likely necessary regardless"_), and reading the
+  producer confirms it. A sweep that ASKS covers both halves; a callback covers one.
+
+`abandonedPlanService.reconcileAbandoned` runs hourly at `:10`, ten minutes ahead of
+`autoPlanCadenceTick` at `:20`, so a plan freed this hour unpauses that project in the SAME
+hour's tick. It selects `generating` plans that have a producer, hold **no** proposals, and are
+past a 15-minute grace; asks motir-ai about each one's job; and declines only the ones whose
+producer is provably gone.
+
+Three of those conjuncts are load-bearing and none is a performance tweak:
+
+- **The 15-minute grace is a CORRECTNESS bound.** The window between `createPlan` and the first
+  append is exactly the shape the sweep selects, and the grace keeps it out of that window
+  entirely — so the reconciler can never be asking about a submit that happened a moment ago.
+- **Empty-only is the card's AC 5**, and it is the same line AMENDMENT 1 drew: a PARTIAL plan is
+  a real proposal a person can read and decline, so nothing here may touch it.
+- **Unreachable is not death.** `resolveJobState` reports a motir-ai outage as
+  `reachable: false`; the sweep terminates nothing on that arm and asks again next tick. The one
+  unreachable-shaped answer that IS evidence is `MOTIR_AI_JOB_NOT_FOUND` — a 404 is motir-ai
+  answering that no such job exists.
+
+**And there is a second bound, for the failure the ASK cannot see.** A worker that dies mid-job
+leaves its row `running` forever, so the question has no answer and the plan would gate forever
+with it. After **24 hours** an empty plan behind a non-terminal, reachable job is treated as
+abandoned anyway. This is `planTargetLockSweep`'s argument applied to the row that crash
+strands — _"the only signal left is the passage of time"_ — and the number is picked by the
+asymmetry: cutting off a genuinely long generation destroys work, while a day of a paused
+cadence costs a project some suggestions.
+
+### The terminal state is `declined` with a NULL decider, not a new `failed` member
+
+The card named the trade honestly: a new enum member _"costs a migration and a display switch
+in every plan surface"_, while `declined` _"costs nothing and is arguably a lie about who
+decided."_ Both halves survive scrutiny; the second is smaller than it looks and the first is
+larger.
+
+- **`PlanStatus` is a PUBLIC vocabulary, not an internal flag.** A new member reaches v1's
+  `planStatusSchema` (`lib/api/v1/workLoop/schema.ts`), the `get_plan_status` MCP tool
+  description, `PlanStatusDto`, and four display switches — `PlanRow`'s icon + square + pill,
+  `planRowView`'s `PlanWhenKey`, `PlanReviewRail`, `PlanHistoryEventDto`'s `kind` — plus the
+  i18n catalogue and its zh-parity gate. That is a product decision about what people are shown,
+  and it is larger than this defect. It is owed its own card if it is ever wanted.
+- **Nothing downstream would branch on it.** Every consumer of this row asks _is it decided?_
+  — `plansService`, `planReviewService` and `planRowView` all test `approved || declined`, and
+  the gate this card exists for tests `generating || planned`. A third terminal member would
+  need adding to each of those predicates to mean anything, and would then mean the same thing.
+- **The honesty lives in the ACTOR, and the table already has the idiom.** `Plan.createdById`
+  is NULL ⟺ _nobody asked_ — the cadence case, documented in `schema.prisma` as _"NULL is a
+  MEANING"_. `decidedById: null` on a declined plan is the same convention one column over:
+  _nobody decided_. The sweep therefore writes `status: 'declined'` and `decidedAt`, and leaves
+  the decider null.
+- **The failure is not lost.** `sourceJobId` still points at the job, whose status and error
+  stay readable through `resolveJobState`; each reconciliation is logged with the job's reported
+  state and the reason it was judged abandoned.
+
+**One consequence, stated rather than discovered later:** `getOutcome` attaches the `job` block
+only while the plan is `generating`, so once the sweep declines a plan the job's failure reason
+stops riding that read. That is the right trade and it costs nothing in practice — the client
+polling a live submit sees `generating` plus `job.failure` immediately, long before the grace
+elapses. The sweep is for the long tail where nobody is polling, and there the useful answer is
+_this is over_, which `declined` gives.
+
+### RLS: the scan needs an arm, and so does `plan_item`
+
+The discovery read is cross-workspace, so it runs under `withSystemContext`, and this card adds
+the `FOR SELECT` `app.system_admin` arm to `plan` — the same shape MOTIR-916 added to `project`
+and MOTIR-2787 to `plan_target_lock`, and for the same reason: without it the scan returns zero
+rows and raises nothing, which for a sweep is indistinguishable from _nothing is abandoned_.
+
+`plan_item` gets one too, and that direction is the surprising one. The emptiness test is a
+correlated `NOT EXISTS` in the SAME statement, so an RLS-hidden proposal row makes it vacuously
+true and a PARTIAL plan read as empty. A blind spot here does not narrow the scan — it **widens**
+it, onto exactly the plans AC 5 forbids touching. (The write is guarded independently: it
+re-reads the plan and re-counts its items under the plan's own workspace context before acting,
+which is also what makes a late append safe. But a predicate saved only by its guard means
+something other than what it says.)
+
+Both arms are `FOR SELECT` only. Every write the sweep makes runs under
+`withWorkspaceServiceContext` bound to that plan's own workspace, so `WITH CHECK` is untouched
+and the tenant-root write refusal stays exactly as strong as it was.
+
+### What this does NOT do
+
+- It still does not expire or auto-decline a plan **with proposals in it**, at any age or in any
+  status. AMENDMENT 1's line holds: that is a decision somebody owes.
+- It does not release planning-target locks. `plansService` does that on approve/decline through
+  a best-effort helper that needs an acting user this sweep does not have, and its own documented
+  fallback is already the right one — _"the lease will expire and the sweep will clear it"_
+  (`planTargetLockSweep`, every ten minutes). Two recovery paths for one lease is how they drift.
+- It does not give motir-ai a stale-job reaper. A worker that dies leaves `running` on ITS side
+  too, and that row is still wrong; this card makes core stop _depending_ on the answer, which is
+  the harm it owns. Fixing the producer's own bookkeeping is a motir-ai card.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -493,6 +624,9 @@ the fact would answer _not paused_ for a project whose real `planned` proposal s
   a device-minted CLI token has neither path — deliberately. **The empty plan a
   `work_item:edit`-only token can still open no longer pauses that project's auto-plan cadence**
   (AMENDMENT 1, MOTIR-3051): a plan with no producer and no proposals is not a pending proposal.
+- **An empty plan whose PRODUCER died is reconciled out of `generating`, hourly** (AMENDMENT 2,
+  MOTIR-3064): the sweep asks motir-ai what became of the job and writes `declined` with a NULL
+  decider — nobody decided it. `PlanStatus` gains no member, and the gate predicate is unchanged.
 - **Neither tool is billable.** Authoring a plan never draws on the owner's generation
   allowance.
 - **The materialize pin is lifted, and the safety property is now held by the WRITE SEAMS
