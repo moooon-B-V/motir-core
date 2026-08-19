@@ -42,7 +42,17 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 // prove nothing about the boundary contract they are here for. The gate is
 // covered against real Postgres in `tests/integration/ai/planPermissionGate.test.ts`.
 vi.mock('@/lib/services/projectAccessService', () => ({
-  projectAccessService: { assertPermission: vi.fn(), assertCanEdit: vi.fn() },
+  // `assertCanBrowse` joined the mock with Story MOTIR-2732 · MOTIR-3044: this
+  // route now resolves the PROJECT's repository set into the job envelope
+  // (`context.repositories`), and that read is browse-gated like every other
+  // project read. A mock that stubs only the two methods the route USED to reach
+  // does not fail as "unauthorized" — it fails as `assertCanBrowse is not a
+  // function`, which reads as a broken route rather than an incomplete double.
+  projectAccessService: {
+    assertPermission: vi.fn(),
+    assertCanBrowse: vi.fn(),
+    assertCanEdit: vi.fn(),
+  },
 }));
 
 const { GET } = await import('@/app/api/ai/plan/generate/[jobId]/stream/route');
