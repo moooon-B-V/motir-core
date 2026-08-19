@@ -160,6 +160,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   whoami: 'read',
   list_projects: 'read',
   get_project_state: 'read',
+  skeleton: 'read',
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',

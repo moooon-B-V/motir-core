@@ -54,6 +54,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // evaluates `project:browse` per row. The map names what the filter asks.
   list_projects: 'project:browse',
   get_project_state: 'project:browse',
+  // `aiBoundaryService.readPlanTree` calls `workItemsService.listWorkItems`,
+  // which asserts `project:browse` by name, and the tool resolves its
+  // `projectKey` through `projectsService.getByKey` (`assertCanBrowse`) first.
+  skeleton: 'project:browse',
   // `sprintsService.listByProject` asserts `project:browse` by name.
   list_sprints: 'project:browse',
   validate_sprint: 'project:browse',

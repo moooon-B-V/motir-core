@@ -244,6 +244,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // Resource-targeting: the key names tenant A's project, so a non-member
         // must read its state as not-found rather than learn A's setup.
         get_project_state: { projectKey: 'PROD' },
+        // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
+        // read tenant A's tree as not-found rather than receive its SHAPE. A
+        // partial skeleton would be the worst possible leak here: it names every
+        // card A has.
+        skeleton: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
@@ -627,6 +632,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // loop asserts every `read` tool actually EXECUTES, and an unconfigured
         // project is exactly the well-formed "nothing configured" answer.
         get_project_state: { projectKey: 'PROD' },
+        skeleton: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },

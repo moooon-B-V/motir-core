@@ -35,6 +35,7 @@ import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/se
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
 import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/getProjectState';
+import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
@@ -98,6 +99,7 @@ export const MCP_TOOL_NAMES = [
   WHOAMI_TOOL_NAME,
   LIST_PROJECTS_TOOL_NAME,
   GET_PROJECT_STATE_TOOL_NAME,
+  SKELETON_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
@@ -215,6 +217,13 @@ export function registerMcpTools(
   // project's repo set, where onboarding stopped. list_projects answers "which
   // projects"; this answers "what state is one in". Read-only by design.
   registerGetProjectState(target, resolveContext);
+  // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
+  // call, over the same `aiBoundaryService.readPlanTree` the internal
+  // `plan-tree` / `skeleton` routes serve. A third consumer, not a refactor.
+  // It answers "what is already here?", which is the question an agent must
+  // settle before it proposes anything; `search_work_items` answers it only as
+  // a paging loop over flat rows the caller then re-parents itself.
+  registerSkeleton(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-

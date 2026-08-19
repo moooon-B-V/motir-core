@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **39 tools**.
+`initialize` handshake and registers **40 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1656,6 +1656,59 @@ not-found (404-not-403, no existence leak).
 **No per-repo cost.** The index state comes from ONE ledger query joined against
 the repo list in memory, so the call's query count is invariant to how many
 repositories the grant covers.
+
+#### `skeleton`
+
+**Orient before proposing.** The whole project's tree SHAPE in ONE read — every
+live work item's key, kind, title, status and parent — so an agent can answer
+_does this already exist?_ before it proposes anything. It REPLACES paging
+`search_work_items` fifty flat rows at a time and re-parenting them client-side;
+it is not a second way to list items, and it deliberately carries no
+descriptions, no assignees and no filters.
+
+It is the same read `motir-ai`'s planner calls, under the same name
+(`aiBoundaryService.readPlanTree`, served internally at `plan-tree` / `skeleton`),
+so an agent that has read one tool surface finds the same concept called the same
+thing on the other.
+
+**Input**
+
+| Field        | Type             | Required | Notes                                                                                             |
+| ------------ | ---------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `projectKey` | string           | yes      | Project key, e.g. `"ACME"`.                                                                       |
+| `limit`      | integer (1–5000) | no       | Row bound; default **and maximum 5000** — the whole tree. Pass a smaller number for a cheap peek. |
+
+**Output** — `structuredContent`:
+
+| Field       | Type             | Notes                                                                |
+| ----------- | ---------------- | -------------------------------------------------------------------- |
+| `project`   | object           | `{ projectId, projectKey }`.                                         |
+| `items`     | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision }` — see below. |
+| `total`     | integer          | Live work items in the project, **before** the bound is applied.     |
+| `returned`  | integer          | Rows in `items`.                                                     |
+| `truncated` | boolean          | Whether the bound bit.                                               |
+| `limit`     | integer          | The bound actually applied.                                          |
+
+`parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
+makes the response a TREE rather than a list — the hierarchy is rebuildable from
+this one call. `id` is the real work-item cuid `add_plan_items` takes for
+`parentRef` / `blockedByRefs` (it refuses a `<KEY>-<n>` key), and `revision` is
+the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
+so orienting and proposing do not cost a `get_work_item` per target.
+
+**The bound announces itself, always.** `total` / `returned` / `truncated` /
+`limit` are on every response, not only a truncated one. A skeleton that quietly
+stopped at N would read as _"this is the whole project"_, and an agent that
+believes it has seen everything proposes work that already exists two levels
+down — which is the exact failure this tool was built to prevent.
+
+**Access + tenancy.** `projectKey` selects **within** the token's workspace, it
+does not choose one. Another tenant's key is a plain not-found — never a partial
+tree, and never proof the project exists. (The internal route this shares a read
+with takes no project at all, because a job token is scoped to exactly one; a PAT
+is not, which is the whole reason this tool takes a key.)
+
+**Read-only**, and no `motir-ai` round-trip.
 
 #### `mark_integrated`
 
