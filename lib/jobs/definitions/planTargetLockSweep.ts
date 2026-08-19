@@ -10,8 +10,12 @@ import { defineJob } from '../defineJob';
 // crashes, a machine that vanishes mid-job (MOTIR-2783 shows a `running` job row
 // whose machine is gone is never re-claimed), a redeploy, a user who closes the
 // tab and never comes back. `PlanStatus` has no `failed` member, so a plan whose
-// job died sits at `generating` forever and NOTHING downstream ever learns the
-// session is over. The only signal left is the passage of time, which is what
+// job died sits at `generating` until something goes and asks — which
+// MOTIR-3064's abandoned-plan sweep now does, hourly, and only for a plan with no
+// proposals in it. That does not make this one a backstop: it reconciles the
+// PLAN, on a cadence set by the pause it lifts, while a stranded lease holds an
+// item NOBODY can plan and has to come back in minutes whatever the plan row
+// says. The only signal left HERE is still the passage of time, which is what
 // this reads.
 //
 // And the failure it recovers is the one the story calls worse than the race the

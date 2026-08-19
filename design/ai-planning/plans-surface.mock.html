@@ -455,17 +455,39 @@
         padding: 14px 16px;
         box-shadow: var(--sh-subtle);
       }
+      /* MOTIR-3074 — the status tag is an OVERLINE on its own line ABOVE the title,
+         not a shrink-0 pill beside it. Plan titles are GENERATED: long by default and
+         routinely carrying an unbreakable token, so on a shared row the title wrapped
+         to five lines while `align-items: center` held the one-line tag against the
+         middle of the block, and the tag read as an annotation on line 3 of the
+         sentence. Stacked, the title owns the full rail width at every length. */
       .hdrtop {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        min-width: 0;
       }
+      .hdrtop .pill {
+        align-self: flex-start;
+        max-width: 100%;
+      }
+      /* The guard, owed wherever the tag sits: a flex/grid item's automatic minimum
+         size is its longest unbreakable word, and the rail is a fixed 22rem track.
+         `overflow-wrap: anywhere` — NOT `break-word`, which does not feed its break
+         opportunities into that min-content size. */
       .hdrcard h4 {
         margin: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
         font-size: 15px;
         font-weight: 600;
         color: var(--text);
+      }
+      /* The long-title case, drawn at the SHIPPED rail width rather than the
+         gallery's full width — the collision only exists in a 22rem column. */
+      .hdrcard.at-rail-width {
+        max-width: 352px;
       }
       .hdrcard .sum {
         margin: 6px 0 0;
@@ -1270,6 +1292,178 @@
         color: var(--faint);
         font-size: 12px;
       }
+
+      /* ===== Part V (MOTIR-3082) — the plan-review DETAIL surfaces ========== */
+      /* Panel E — the level's nodes keep the real component's FIXED footprint
+         (NODE_W/NODE_H) and clamp the title to two lines, exactly as the shipped
+         PlanItemNode does. Without this a long title reflows the card and the
+         level stops looking like the roadmap. */
+      .lvl {
+        width: 220px;
+        min-height: 76px;
+      }
+      .lvl .ttl {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* A same-level dependency edge, as a positioned element rather than SVG:
+         the mock's edge <svg> uses preserveAspectRatio="none", so its viewBox is
+         stretched to the frame width and coordinates authored in node-space land
+         somewhere else. */
+      .lvledge {
+        position: absolute;
+        height: 1.5px;
+        background: var(--border-strong);
+      }
+      .lvledge::after {
+        content: '';
+        position: absolute;
+        right: -1px;
+        top: -3.5px;
+        border-left: 7px solid var(--border-strong);
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+      }
+      .lvlcap {
+        position: absolute;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      /* The View button — the canvas detail-surface door (MOTIR-1351/1352),
+         placed LEFT of MOTIR-1370's edit pencil so the pair reads View · Edit. */
+      .viewbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .viewbtn svg {
+        width: 13px;
+        height: 13px;
+      }
+      .viewbtn.is-selected {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      /* A SELECTED node — the accent ring the shipped canvas already uses for
+         selection (roadmap panel 1). Selection is what reveals View. */
+      .node.selected {
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+      /* Panel F — the peek. The SHIPPED work-item peek shell, reused: Modal
+         size="xl", .qv-head / .qv-body / .qv-main + .qv-rail. */
+      .qvm {
+        width: 720px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 18px 48px rgb(24 22 20 / 14%);
+        overflow: hidden;
+      }
+      .qvhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .qvhead .sp {
+        flex: 1;
+      }
+      .qvbody {
+        display: grid;
+        grid-template-columns: 1fr 232px;
+        min-height: 268px;
+      }
+      .qvmain {
+        padding: 16px 18px;
+        border-right: 1px solid var(--hair);
+      }
+      .qvtitle {
+        margin: 0 0 12px;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 19px;
+        color: var(--text);
+      }
+      .qvsec {
+        display: block;
+        margin: 14px 0 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .qvsec:first-of-type {
+        margin-top: 0;
+      }
+      .qvdesc {
+        font-size: 13px;
+        line-height: 1.62;
+        color: var(--secondary);
+      }
+      .qvdesc p {
+        margin: 0 0 8px;
+      }
+      .qvdesc ul {
+        margin: 0 0 8px;
+        padding-left: 18px;
+      }
+      .qvdesc code {
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: var(--mutedfill);
+        font-size: 12px;
+      }
+      .qvrail {
+        padding: 14px 16px;
+        background: var(--soft);
+      }
+      .rf {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--hair);
+        font-size: 12px;
+      }
+      .rf:last-child {
+        border-bottom: 0;
+      }
+      .rf .lbl {
+        width: 78px;
+        flex: none;
+        color: var(--faint);
+      }
+      .rf .val {
+        color: var(--strong);
+      }
+      .rf .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+      }
+      .aidraft {
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: none;
+      }
     </style>
   </head>
   <body>
@@ -1957,8 +2151,8 @@
               <div class="list" style="display: grid; gap: 14px">
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Stripe Connect payouts</h4>
                     <span class="pill planned">Planned</span>
+                    <h4>Stripe Connect payouts</h4>
                   </div>
                   <p class="sum">Marketplace sellers get paid out through Stripe Connect.</p>
                   <div class="hdrmeta">
@@ -1986,8 +2180,8 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Email digest &amp; weekly summaries</h4>
                     <span class="pill approved">Approved</span>
+                    <h4>Email digest &amp; weekly summaries</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>8</b> items</span>
@@ -2013,8 +2207,8 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
                     <span class="pill planned">Planned</span>
+                    <h4>Fill the ready set — expansion of “Marketplace payouts”</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>6</b> items</span>
@@ -2049,16 +2243,55 @@
 
                 <div class="hdrcard">
                   <div class="hdrtop">
-                    <h4>Crypto wallet checkout</h4>
                     <span class="pill declined">Declined</span>
+                    <h4>Crypto wallet checkout</h4>
                   </div>
                   <div class="hdrmeta">
                     <span><b>11</b> items</span>
                   </div>
                 </div>
+
+                <!-- The case the placement is FOR: a generated title, at the real
+                     rail width, carrying a SCREAMING_CASE constant and a cuid. -->
+                <div class="hdrcard at-rail-width">
+                  <div class="hdrtop">
+                    <span class="pill approved">Approved</span>
+                    <h4>
+                      Mirror the sweep-is-not-its-grep-pattern limb into SHARED_PLANNING_RULES
+                      (motir-ai) — supersedes plan cmszanri500bfi3phws7wdiu8
+                    </h4>
+                  </div>
+                  <div class="hdrmeta">
+                    <span><b>6</b> items</span>
+                    <span class="attrib"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="11" width="18" height="10" rx="2" />
+                        <circle cx="12" cy="5" r="2" />
+                        <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                      >written by <b class="harness">Claude Code</b></span
+                    >
+                  </div>
+                </div>
               </div>
 
               <div class="note-box">
+                <b>The status tag is an OVERLINE, above the title (MOTIR-3074).</b> Plan titles are
+                GENERATED — long by default, and routinely carrying an unbreakable token (a
+                <code>SCREAMING_CASE</code> constant, a repo name, a cuid). Beside the title, a
+                <code>shrink-0</code> tag took a third of a 22rem rail: the title wrapped to five
+                lines, the vertically-centred tag landed inside its text column, and the title's own
+                longest word pushed the rail past its track (measured: 7px of overflow at the
+                shipped width). On its own line the title owns the full width and a five-line title
+                reads exactly like a one-line one — and the state stays the first thing read, which
+                is what the tag is for. The title additionally carries <code>min-w-0</code> +
+                <code>overflow-wrap: anywhere</code>, which is owed whatever the placement.<br /><br />
                 <b>The header SPELLS the roles; the row does not.</b> The row is scanned, and an
                 avatar in front of a name already reads as “this person's” — so it says
                 <code>Mara · via Claude Code</code>. The header is read once, by the person about to
@@ -2224,7 +2457,9 @@
                         <path d="M12 5v14M5 12h14" /></svg
                       >add</span
                     >
-                    <!-- Edit a proposed add (MOTIR-1370) — opens the edit modal below. -->
+                    <!-- Edit a proposed add (MOTIR-1370) — REMOVED by Part V §3; this
+                         pencil and the modal below it are the record of what shipped, not a
+                         live specification. The live per-item affordance is View (panel F). -->
                     <button
                       class="editbtn"
                       aria-label="Edit proposed item"
@@ -2533,10 +2768,14 @@
       <div class="panel">
         <div class="panel-cap">
           <span class="n">B</span>
-          <h2>Edit a proposed <code>add</code> — the inline-edit modal (MOTIR-1370)</h2>
+          <h2>
+            <s>Edit a proposed <code>add</code> — the inline-edit modal (MOTIR-1370)</s> ·
+            <strong style="color: var(--danger)">SUPERSEDED by Part V</strong>
+          </h2>
           <span class="note"
-            >opened by the Edit pencil on an <code>add</code> node · only an <code>add</code> is
-            editable · patches the proposal, no work item until approve</span
+            >REMOVED 2026-08-19 — manual editing of a proposal is not needed: a proposal is READ
+            (panel F) and changed by re-planning, not by hand. Kept here as the record of what
+            shipped, not as a live specification.</span
           >
         </div>
         <div
@@ -2967,6 +3206,273 @@
                   <path d="M12 5v14M5 12h14" /></svg
                 >Top up credits
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- ============================================================= -->
+      <!-- PANEL E — a proposal renders AT ITS PARENT'S LEVEL (MOTIR-3082) -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">E</span>
+          <h2>A proposed card is a NORMAL card on the roadmap — only its style differs</h2>
+          <span class="note"
+            >the shipped drill-down level: breadcrumb + the parent's real children, dependency or
+            not · the proposal sits among them in `add` style · nothing else changes</span
+          >
+        </div>
+        <div class="frame">
+          <div class="viewport" style="height: 330px">
+            <!-- The SHIPPED roadmap breadcrumb (design/roadmap "MULTI-LEVEL CHAINS
+                 — DRILL-DOWN"): the committed ancestor path down to this level.
+                 THIS is what names the parent — not a badge on the node. -->
+            <div class="ovl" style="top: 14px; left: 16px">
+              <span class="crumb"
+                ><span class="dot"></span>MOTIR-2200 · The Motir agent loop
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                MOTIR-3070 · The plan review surface is narrower…</span
+              >
+            </div>
+
+            <span class="lvlcap" style="left: 44px; top: 66px"
+              >Existing children of MOTIR-3070 — already in the tree</span
+            >
+
+            <!-- SIBLINGS: the focused parent's REAL children, ordinary committed
+                 nodes. They are here because they are the parent's children, NOT
+                 because anything depends on them. -->
+            <div class="node lvl" style="left: 44px; top: 90px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3082</div>
+                  <div class="ttl">The plan-review detail surfaces</div>
+                </div>
+                <span class="pill" style="background: var(--sky); color: var(--info)"
+                  >in review</span
+                >
+              </div>
+            </div>
+
+            <div class="node lvl" style="left: 292px; top: 90px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3083</div>
+                  <div class="ttl">The plan canvas renders the level</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+
+            <!-- A same-level blocked_by edge between two committed siblings, in
+                 the shipped edge language. Unchanged. -->
+            <div class="lvledge" style="left: 264px; top: 126px; width: 28px"></div>
+
+            <span class="lvlcap" style="left: 540px; top: 66px; color: var(--accent)"
+              >Proposed by this plan</span
+            >
+
+            <!-- THE PROPOSAL: same node, same footprint, same level. The ONLY
+                 difference is the `add` style Panel B already specifies. -->
+            <div class="node lvl add" style="left: 540px; top: 90px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">A proposal READ view</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+
+            <div
+              style="
+                position: absolute;
+                left: 44px;
+                top: 190px;
+                max-width: 690px;
+                font-size: 11.5px;
+                line-height: 1.65;
+                color: var(--muted);
+              "
+            >
+              <strong style="color: var(--strong)">Nothing here is new.</strong> This is the shipped
+              roadmap level — the breadcrumb walks the committed ancestors, the parent's children
+              fill the canvas whether or not anything depends on them, and same-level
+              <code>blocked_by</code> edges draw as they always do. The proposal is one more card at
+              that level wearing the <code>add</code> style Panel B already specifies. <br /><br />
+              <strong style="color: var(--strong)"
+                >So "root or parented?" stops being a question the reader has to ask.</strong
+              >
+              A proposal under a committed parent is drawn INSIDE that parent's level, among its
+              siblings, with the parent named in the breadcrumb. A genuine root is drawn at the top
+              level, where there is no breadcrumb to walk. The two cases look different because they
+              ARE in different places — no badge, no chip, no extra signal to learn.
+              <br /><br />
+              <span style="color: var(--faint)"
+                >Edge case — a parent that is archived or hard-deleted: the level cannot be opened,
+                so the proposal falls back to the top level and the breadcrumb has nothing to walk.
+                That is the honest rendering, and it is the same one a genuine root gets.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL F — the proposal READ view + its DOOR (MOTIR-3082)       -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">F</span>
+          <h2>Read a proposal — the SHIPPED quick view, editing disabled</h2>
+          <span class="note"
+            >the door: select → View · the body: the same Modal size="xl" + IssueQuickViewPanel a
+            normal card gets, read-only · no full page to defer to, so nothing is deferred</span
+          >
+        </div>
+        <div class="frame">
+          <!-- F1 — THE DOOR, drawn on the node (the access-path rule). -->
+          <div class="viewport" style="height: 132px">
+            <div class="node add selected" style="left: 44px; top: 26px; width: 250px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">A proposal READ view</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+                <!-- View, on EVERY op. There is no edit affordance: the proposal
+                     edit modal is REMOVED (Part V §3) — a proposal is read, and
+                     changed by re-planning, not by hand. -->
+                <button class="viewbtn is-selected" aria-label="View proposal" title="View">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="2.6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div
+              style="
+                position: absolute;
+                left: 316px;
+                top: 44px;
+                max-width: 400px;
+                font-size: 11.5px;
+                line-height: 1.6;
+                color: var(--muted);
+              "
+            >
+              A selected node reveals <strong style="color: var(--strong)">View</strong> — the same
+              select → View → peek the roadmap canvas already ships (MOTIR-1351/1352), on every op.
+              <strong style="color: var(--strong)">There is no edit affordance</strong>: the
+              proposal edit modal is removed. A <code>modify</code> / <code>remove</code> peeks its
+              LIVE target, i.e. the shipped work-item quick view, unchanged.
+            </div>
+          </div>
+
+          <!-- F2 — THE PEEK for an `add`. -->
+          <div style="display: flex; justify-content: center; padding: 18px 0 4px">
+            <div class="qvm" role="dialog" aria-modal="true" aria-labelledby="p4-title">
+              <div class="qvhead">
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+                <!-- No identifier and no status pill: a proposal has neither until
+                     it materializes. The `new` the node shows, shown here too. -->
+                <span style="font-size: 12px; color: var(--faint)">new · not yet created</span>
+                <span class="sp"></span>
+                <!-- No "Open full page →": there IS no page for a proposal. -->
+                <button class="editbtn" aria-label="Close">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div class="qvbody">
+                <div class="qvmain">
+                  <h2 class="qvtitle" id="p4-title">A proposal READ view</h2>
+                  <span class="qvsec">Description</span>
+                  <div class="qvdesc">
+                    <p>
+                      A detail surface for one proposal showing both bodies as rendered Markdown,
+                      plus sizing, repo pin and executor — the shipped work-item quick view, with
+                      editing disabled.
+                    </p>
+                    <ul>
+                      <li>Composes the shipped peek shell; adds no second interaction model.</li>
+                      <li>Read-only — no fields, no save, no destructive action, no edit path.</li>
+                    </ul>
+                  </div>
+                  <span class="qvsec">Why this matters<span class="aidraft">AI-drafted</span></span>
+                  <div class="qvdesc">
+                    <p>
+                      The second content body is carried on the proposal, diffed, and written onto
+                      the created work item — and no code path in the review surface reads it. A
+                      reviewer approves a rationale they were never shown.
+                    </p>
+                    <p>
+                      The work-item peek can defer this to a full page. A proposal has no full page,
+                      so this one renders it inline.
+                    </p>
+                  </div>
+                </div>
+                <div class="qvrail">
+                  <div class="rf">
+                    <span class="lbl">Type</span
+                    ><span class="val"
+                      ><span class="pill" style="background: var(--t-subtask-soft)">Subtask</span> ·
+                      Code</span
+                    >
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Priority</span><span class="val">High</span>
+                  </div>
+                  <div class="rf"><span class="lbl">Points</span><span class="val">5</span></div>
+                  <div class="rf">
+                    <span class="lbl">Estimate</span><span class="val">120 min</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Repository</span
+                    ><span class="val mono">moooon-B-V/motir-core</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Executor</span><span class="val">Coding agent</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Parent</span><span class="val mono">MOTIR-3070</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

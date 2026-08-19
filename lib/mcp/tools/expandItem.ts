@@ -191,7 +191,8 @@ export function registerExpandItem(server: McpServer, resolveContext: McpContext
         '`jobId` an `expand_item` call returned. Reports the plan status ' +
         '(generating / planned / approved / declined), how many proposals it bundles, and — ' +
         'while it is still generating — whether the job is running or FAILED (a failed job ' +
-        'leaves its plan generating forever, so the plan status alone cannot tell you). ' +
+        'writes no terminal plan state of its own — a background reconciler declines an ' +
+        'empty one within the hour, so the plan status alone cannot tell you NOW). ' +
         'A pure read. The proposal count is NOT a count of created work items: nothing ' +
         'reaches the tree until the plan is approved in Motir.',
       inputSchema: planStatusInputSchema,

@@ -646,7 +646,7 @@ export interface paths {
         };
         /**
          * Read what became of a submitted planning job
-         * @description Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many PROPOSALS it bundles, and — while it is still generating — whether the producing job is alive or already FAILED. That last distinction is the point of this endpoint: a failed job leaves its plan `generating` forever, so the plan status alone cannot tell you to stop polling. `job.reachable: false` means motir-ai could not be asked, not that the job died. A pure read; the proposal count is NOT a count of created work items.
+         * @description Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many PROPOSALS it bundles, and — while it is still generating — whether the producing job is alive or already FAILED. That last distinction is the point of this endpoint: a failed job writes no terminal plan state of its own — a background reconciler declines an empty one within the hour, so the plan status alone cannot tell you to stop polling NOW. `job.reachable: false` means motir-ai could not be asked, not that the job died. A pure read; the proposal count is NOT a count of created work items.
          *
          *     Requires the `project:browse` permission.
          */

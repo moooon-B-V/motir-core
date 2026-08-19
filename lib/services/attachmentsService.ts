@@ -404,6 +404,10 @@ export const attachmentsService = {
     const rows = window.slice(0, ATTACHMENT_PAGE_SIZE);
     const hasMore = window.length > ATTACHMENT_PAGE_SIZE;
 
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The view gate (`resolveGatedWorkItem`) is awaited above, so neither arm
+    // can refuse on an ordinary path — a rejection here is a fault that fails
+    // the whole read, not a 404 one arm reaches while the other reads on.
     const [uploaders, totalCount] = await Promise.all([
       userRepository.findByIds([...new Set(rows.map((r) => r.uploaderUserId))]),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

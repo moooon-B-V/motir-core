@@ -252,6 +252,10 @@ export const workspaceInvitesService = {
     // The helper's constraint — `workspaceId` must come from the layer above, never
     // from caller input — holds: it is read out of the server-stored verification row
     // this method just validated, not off the request.
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // Missing, expired and unparseable are all returned above, so this only
+    // runs for a token already known good, and `findById` resolves to `null`
+    // for a deleted inviter rather than rejecting.
     const [workspace, inviter] = await Promise.all([
       withWorkspaceServiceContext(payload.workspaceId, (tx) =>
         workspaceRepository.findByIdInTx(payload.workspaceId, tx),
@@ -289,6 +293,10 @@ export const workspaceInvitesService = {
 
     // Bound + actorless for the reason given on `validateInvite` above; unbound this
     // reported every live invite as 'used'.
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // Missing, expired and unparseable are all returned above, so this only
+    // runs for a token already known good, and `findById` resolves to `null`
+    // for a deleted inviter rather than rejecting.
     const [workspace, inviter] = await Promise.all([
       withWorkspaceServiceContext(payload.workspaceId, (tx) =>
         workspaceRepository.findByIdInTx(payload.workspaceId, tx),

@@ -358,6 +358,14 @@ export const projectRepoSetService = {
    * set whose repositories are all still proposed HAS been planned, and answering
    * it with the workspace's single connected repo would hand back a repository the
    * project deliberately did not choose.
+   *
+   * ⚠️ `hasSet` IS NOT A SWITCH BETWEEN THE TWO REGISTRIES (MOTIR-3086). It reads
+   * like one — "rows? then the set; no rows? then the workspace" — and the ladder
+   * in `dispatchRepo.ts` did exactly that until a project that arrived WITH CODE
+   * added its first row and lost every repository it already had. `hasSet` is the
+   * FACT that the project has planned repositories, and it is what makes the set
+   * answer FIRST; whether anything is layered UNDER it is a second question, asked
+   * and answered there. Do not re-derive an all-or-nothing switch from this flag.
    */
   async getRepoNameDomains(
     projectId: string,

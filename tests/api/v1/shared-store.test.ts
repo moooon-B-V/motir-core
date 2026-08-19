@@ -29,6 +29,7 @@ import {
   sleep,
   waitForWindowBoundary,
 } from '../../helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '../../helpers/rateLimitStore';
 
 // `/api/v1` counts through the SHARED store (Subtask 8.5.10 — MOTIR-2037).
 //
@@ -51,6 +52,27 @@ import {
 // agreeing, which is what a second `createPostgresRateLimitStore()` stands in
 // for. Fly runs `machine_count: 2` today, so this is the deployed topology, not
 // a hypothetical one.
+//
+// ── THE STORE DEADLINE IS PINNED BY DEFAULT, AND OPTING OUT IS SAID (MOTIR-3067)
+// Counting through the real store means inheriting its production deadline —
+// 250 ms for one increment — and `consumeRateLimit` FAILS OPEN when that
+// expires. Every case here that spends a budget and then asserts a 429, or reads
+// the row back, is therefore asserting that a shared CI Postgres answered in
+// under a quarter of a second. MOTIR-2658 already found that untrue for the
+// atomicity batch and pinned a deadline for it; the rest of the file kept the
+// default until MOTIR-3067.
+//
+// So `beforeEach` installs the SAME Postgres adapter with a test-time deadline,
+// and the THREE cases whose subject is store RESOLUTION rather than counting
+// drop back to the default explicitly, each saying why:
+//
+//   'writes the token’s count to the shared counter TABLE — no wiring step required'
+//   'resolves the same store object the app-level limiters use'
+//   'MOTIR_RATE_LIMIT_STORE=memory keeps the count in the process, writing no row'
+//
+// Each of those makes ONE counted call, so the deadline exposure is a twelfth of
+// the atomicity batch's — and an override would answer the question they exist
+// to ask. Silence is not what puts them outside the pin; these three lines are.
 
 const ME = 'http://localhost:3000/api/v1/me';
 
@@ -93,6 +115,11 @@ beforeEach(async () => {
   // shared store's memo cleared so it re-reads the environment.
   __useDefaultRateLimitStoreForTest();
   __resetSharedRateLimitStoreForTest();
+  // …and then the ONE thing a fresh process does not have: a deadline sized for
+  // a test runner rather than a live request (MOTIR-3067). Installed AFTER the
+  // reset, which drops exactly this override. The three resolution cases above
+  // undo it deliberately.
+  pinSharedRateLimitStoreDeadline();
   delete process.env[RATE_LIMIT_STORE_ENV];
 });
 
@@ -114,6 +141,12 @@ describe('the wrapper counts through the SHARED store by default', () => {
     // window cell the row must be in, so a boundary crossing between the request
     // and the read would look exactly like a missing row.
     budget(10, ALIGNED_WINDOW_MS);
+    // ⚠️ BACK TO THE DEFAULT, deliberately (MOTIR-3067). The claim is *no wiring
+    // step required* — that a process which installs nothing still counts into
+    // the shared table. `beforeEach`'s deadline pin IS a wiring step, so leaving
+    // it in place would make this assertion true of the override rather than of
+    // the default and prove nothing about production.
+    __resetSharedRateLimitStoreForTest();
     const caller = await createV1Caller();
     await waitForWindowBoundary(ALIGNED_WINDOW_MS);
     const windowStart = currentWindowStart(ALIGNED_WINDOW_MS);
@@ -134,6 +167,10 @@ describe('the wrapper counts through the SHARED store by default', () => {
     // auth / public-write / AI guards share the counter (they keep their own
     // budgets — sharing a store is not sharing a ceiling).
     budget(10, ALIGNED_WINDOW_MS);
+    // Same reason as the case above (MOTIR-3067): with an override installed the
+    // two surfaces would trivially resolve the same object, and the identity
+    // this case asserts is one about the DEFAULTS.
+    __resetSharedRateLimitStoreForTest();
     const shared = sharedRateLimitStore();
     const caller = await createV1Caller();
     await waitForWindowBoundary(ALIGNED_WINDOW_MS);
@@ -479,6 +516,11 @@ describe('the single-instance escape hatch', () => {
     // The self-hoster running one process: per-process and shared are the same
     // thing there, and this is the arm that lets them skip the write.
     process.env[RATE_LIMIT_STORE_ENV] = 'memory';
+    // This reset was already here, and it doubles as the third MOTIR-3067
+    // opt-out: it drops `beforeEach`'s deadline pin, which is required — the
+    // point is that the ENV picks the backend, and an override would pick it
+    // first. Nothing is lost by it either, since the in-process Map has no
+    // deadline to miss.
     __resetSharedRateLimitStoreForTest();
     budget(2, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
