@@ -9,6 +9,16 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 // exists to close. The stub replaces the network hop and nothing else: the
 // route, the service, the Plan row it opens and the response it shapes are all
 // real, against real Postgres.
+// The attachment upload writes a blob. Mocking the STORE (never the service) is
+// what lets the general door be DRIVEN here rather than excused: the gates, the
+// row write and the link/revision transaction all run for real, and only the
+// bytes stop at the boundary this suite has no business crossing.
+vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/blob/uploader')>()),
+  putPrivateAttachment: vi.fn(async (pathname: string) => ({ pathname })),
+  deleteAttachmentBlob: vi.fn(async () => {}),
+}));
+
 vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
   submitJob: vi.fn(async () => ({ jobId: 'job_drift_guard' })),
@@ -191,6 +201,24 @@ describe('every operation’s REAL response validates against its declared schem
     });
   }
 
+  /**
+   * A `multipart/form-data` request carrying one file part — the only
+   * non-JSON body in the v1 surface (MOTIR-3057).
+   *
+   * The content-type header is deliberately NOT set: `FormData` makes the
+   * runtime write it, boundary and all, and a hand-written one would not match
+   * the body it labels.
+   */
+  function upload(path: string, filename: string, type: string, bytes: string): Request {
+    const form = new FormData();
+    form.set('file', new File([bytes], filename, { type }));
+    return new Request(`${ORIGIN}${path}`, {
+      method: 'POST',
+      headers: caller.headers,
+      body: form,
+    });
+  }
+
   /** Create a work item through the REAL route, returning its key. */
   async function createItem(title: string): Promise<string> {
     const { POST } = await import('@/app/api/v1/projects/[projectKey]/work-items/route');
@@ -318,6 +346,12 @@ describe('every operation’s REAL response validates against its declared schem
       'createWorkItemComment',
       () => import('@/app/api/v1/work-items/[key]/comments/route'),
       send(`/api/v1/work-items/${key}/comments`, 'POST', { bodyMd: 'A comment.' }),
+      { key },
+    );
+    await drive(
+      'uploadWorkItemAttachment',
+      () => import('@/app/api/v1/work-items/[key]/attachments/route'),
+      upload(`/api/v1/work-items/${key}/attachments`, 'findings.png', 'image/png', 'PNGBYTES'),
       { key },
     );
     await drive(
