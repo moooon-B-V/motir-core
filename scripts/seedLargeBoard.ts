@@ -414,6 +414,47 @@ function gcd(a: number, b: number): number {
 }
 
 /**
+ * Split the board-shaped issues into the ACTIVE SPRINT and a backlog slice,
+ * KEEPING THE PROMISE that the sprint inherits the full column spread.
+ *
+ * The slice itself is the stride: every `backlogSliceEvery`-th issue in creation
+ * order stays out of the sprint, so a representative set is provably out of
+ * scope. {@link coprimeStride} then stops that stride from RESONATING with the
+ * status round-robin, which is what would send one status to the backlog every
+ * single time (MOTIR-2427).
+ *
+ * ⚠️ COPRIMALITY IS NOT ENOUGH ON A SMALL FIXTURE, which is what MOTIR-2999
+ * found. A status that holds exactly ONE card loses its whole column the moment
+ * the stride happens to take that card — no resonance required, just arithmetic
+ * on a handful of issues. It is the ordinary shape of the E2E fixtures (~8 spread
+ * cards over the whole workflow), and adding an eighth status re-dealt them so
+ * that the one Cancelled card landed in the slice: `board-scrum-at-scale-interaction`
+ * then failed on a column that legitimately had nothing in it, which reads as a
+ * product defect and is a seed defect. So the invariant is ENFORCED rather than
+ * inferred: any status left with no sprint card takes its first backlogged card
+ * back. The slice shrinks by at most one card per status, and only when it has to.
+ */
+export function partitionSprintScope(
+  rows: readonly { id: string; status: string }[],
+  backlogSliceEvery: number,
+): { sprintIds: string[]; backlogIds: string[] } {
+  const sprintIds: string[] = [];
+  const backlogIds: string[] = [];
+  rows.forEach((r, i) => (i % backlogSliceEvery === 0 ? backlogIds : sprintIds).push(r.id));
+
+  const statusOf = new Map(rows.map((r) => [r.id, r.status]));
+  const covered = new Set(sprintIds.map((id) => statusOf.get(id)!));
+  for (let i = 0; i < backlogIds.length; i++) {
+    const status = statusOf.get(backlogIds[i]!)!;
+    if (covered.has(status)) continue;
+    sprintIds.push(...backlogIds.splice(i, 1));
+    covered.add(status);
+    i--;
+  }
+  return { sprintIds, backlogIds };
+}
+
+/**
  * A backlog stride that cannot RESONATE with the status round-robin (MOTIR-2427).
  *
  * ⚠️ The board seed assigns statuses `spreadIdx % statusCount` in creation order,
@@ -504,12 +545,10 @@ export async function seedLargeScrumSprint(
   //    slice is provably out of scope.
   const rows = await client.workItem.findMany({
     where: { projectId, workspaceId },
-    select: { id: true },
+    select: { id: true, status: true },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
-  const sprintIds: string[] = [];
-  const backlogIds: string[] = [];
-  rows.forEach((r, i) => (i % backlogSliceEvery === 0 ? backlogIds : sprintIds).push(r.id));
+  const { sprintIds, backlogIds } = partitionSprintScope(rows, backlogSliceEvery);
 
   // Associate the in-sprint set (raw UPDATE — preserves the Done-age backdating).
   await rawUpdateIn(sprintIds, Prisma.sql`"sprintId" = ${active.id}`, client);

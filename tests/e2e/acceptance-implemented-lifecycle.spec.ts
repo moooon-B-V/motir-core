@@ -50,6 +50,14 @@ import type { Page } from '@playwright/test';
 // has already been made against committed state, so the clip cannot be the
 // thing that decides whether the test passed.
 
+// ⚠️ THIS SPEC OUTRUNS THE LANE'S 90s DEFAULT, ON PURPOSE. The recipe is six
+// steps and each is paced for a viewer, so the recording alone is ~65s; a CI
+// runner's setup on top of that crossed 90s and timed the test out mid-board-read.
+// The precedent is `child-panel-graph.spec.ts`, which configures its own budget
+// the same way. Raising it does NOT slow a green run — a `timeout` is a ceiling,
+// not a wait — and the pacing is the deliverable here, not overhead to trim.
+test.describe.configure({ timeout: 300_000 });
+
 const EMAIL = 'e2e-implemented-lifecycle@example.com';
 
 interface Tenant {
@@ -254,7 +262,6 @@ test('a card reaches In Review only when CI is green, and one merge closes every
 
       await showBoard(page, implementedColumn.id, card.identifier);
       await beat();
-      await beat();
     },
   );
 
@@ -299,7 +306,6 @@ test('a card reaches In Review only when CI is green, and one merge closes every
     await page.goto(`/items/${card.identifier}`);
     await expect(page.getByText('CI failed', { exact: false }).first()).toBeVisible();
     await expect(page.getByText('needs another pass', { exact: false }).first()).toBeVisible();
-    await beat();
     await beat();
   });
 
@@ -381,7 +387,6 @@ test('a card reaches In Review only when CI is green, and one merge closes every
         .getByTestId(`board-column-${doneColumn.id}`)
         .getByTestId(`board-card-${branchCards[1]!.identifier}`),
     ).toBeVisible();
-    await beat();
     await beat();
   });
 
