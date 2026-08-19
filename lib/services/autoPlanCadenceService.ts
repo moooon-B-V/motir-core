@@ -188,6 +188,9 @@ export const autoPlanCadenceService = {
       };
     }
 
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // `assertCanBrowse` and `getPendingPlan` are both awaited above, and
+    // neither `countByPlan` nor `staleCountFor` has a refusal path of its own.
     const [itemCount, staleCount] = await Promise.all([
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         planItemRepository.countByPlan(pending.id, tx),

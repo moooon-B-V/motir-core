@@ -68,10 +68,16 @@ export default defineConfig({
     // React flush passive effects synchronously inside RTL's act scopes, which
     // REMOVES the effect-ordering race class MOTIR-1736/1737 hit — see that file
     // for the mechanism and the contract it imposes on component tests.
+    // `inFlightProbe` is LAST and is a no-op unless `MOTIR_INFLIGHT_PROBE=1`
+    // (MOTIR-3077): it registers one `afterEach` that reads `pg_stat_activity`
+    // for work this worker started and did not wait for. Off by default — it
+    // costs a round trip per test and its import is dynamic, so an ordinary run
+    // does not even construct the admin client.
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
       './tests/helpers/inngestSetup.ts',
       './tests/helpers/actEnvironment.ts',
+      './tests/helpers/inFlightProbe.ts',
     ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
     // `sequence.concurrent` stays false so test()s WITHIN a file still run

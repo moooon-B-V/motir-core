@@ -380,6 +380,10 @@ async function mintForGrant(grant: {
   // Read the identity + workspace the CLI prints its confirmation from. The
   // workspace read binds the RLS context (`findByIdInTx`); the db-singleton variant
   // returns null under the non-bypass app role.
+  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+  // The grant is validated above and `findById` resolves to `null` for a
+  // missing user rather than rejecting, so the transaction-opening arm has
+  // no sibling that can abandon it.
   const [user, workspace] = await Promise.all([
     userRepository.findById(grant.userId),
     withWorkspaceContext({ userId: grant.userId, workspaceId: grant.workspaceId }, (tx) =>
