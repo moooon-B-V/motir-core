@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **46 tools**.
+`initialize` handshake and registers **47 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -520,6 +520,65 @@ claimed the last one — or check there is unblocked work to start). Requires
 
 **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
 Always present, `[]` when there are none, on BOTH arms.
+
+#### `claim_work_item`
+
+ATOMICALLY **claim ONE NAMED work item** for dispatch. Same lock as
+`claim_next_ready`, for the caller that was **handed a card** rather than asking
+for whatever is next: in one transaction the row is locked, its status is
+re-checked against the **to-do CATEGORY**, and — if that holds — the item is
+**assigned to you** and moved to **In Progress**. The claim **IS** the dispatch
+status flip, so do NOT call `transition_status` afterwards.
+
+**Which dispatch path uses which.** They are not alternatives; they answer
+different questions, and both go through the same service method as the v1
+route:
+
+| You are… | Use | Where it is served |
+| --- | --- | --- |
+| asking for whatever is next | `claim_next_ready` | MCP only |
+| handed a specific card by key | `claim_work_item` | MCP **and** `POST /api/v1/work-items/{key}/claim` |
+
+`packages/cli` (`motir run` / `next` / `batch` / `auto`) speaks **v1**, not MCP —
+it retired its MCP transport in 11.5.6 — which is why the keyed claim's primary
+surface is the route and this tool is a second CALLER of the same service method.
+There is one lock and one implementation behind both.
+
+**The to-do CATEGORY, not the `todo` key.** The claimable set is `todo` **and**
+`blocked`. That is load-bearing rather than incidental: a deliberately forced
+dispatch of a card whose dependencies are unmet targets a card sitting at
+`blocked`, and keying on the literal `todo` would refuse exactly the case the
+force exists for.
+
+| Input | Type   | Required | Notes                                 |
+| ----- | ------ | -------- | ------------------------------------- |
+| `key` | string | yes      | Work item identifier, e.g. `"ACME-7"`. |
+
+**Output** — `structuredContent`: v1's `WorkItemClaim` resource —
+`{ key, title, outcome, claimed, status: { key, category }, assignee, transitionedBy, transitionedAt }`.
+
+**A refusal is a RESULT, not an error**, and it discriminates — the whole point
+of the tool. `outcome` is one of four:
+
+- **`claimed`** — it was in the to-do category; it is yours, In Progress, and
+  assigned to you.
+- **`mine`** — already In Progress **and already assigned to you**. This is a
+  RESUME of your own interrupted run, not a lost race. Proceed — and read what
+  is already committed on its branch before redoing anything.
+- **`taken`** — In Progress and held by somebody else. `assignee` names them
+  when the holder assigned it; `transitionedBy` + `transitionedAt` name them
+  from the status history **even when nobody was assigned**, which is the common
+  case for a session that flipped the status and never wrote the label.
+- **`not_claimable`** — outside the to-do category: `implemented`, `in_review`,
+  `planning`, `done`, `cancelled`, an archived row, or any custom status. A
+  claim never re-opens finished work, which is a hole the CLI's own
+  assign-then-transition pair left open.
+
+Requires `work_item:edit` (it assigns and flips status).
+
+> ⚠️ **A server-side claim cannot see the DISK.** A session that dies mid-run
+> leaves a working tree behind and no status change at all. The lock and a
+> worktree pre-flight answer different questions, and a runbook needs both.
 
 #### `dispatch_prompt`
 

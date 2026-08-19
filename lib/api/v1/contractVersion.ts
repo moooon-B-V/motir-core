@@ -78,5 +78,12 @@
  *   changed, so its deliverable may already be in the repository. Additive — a
  *   new member of a union on a field clients are required to tolerate unknown
  *   members of, with every existing member byte-identical.
+ * - `1.12.0` — MOTIR-2961 adds `POST /api/v1/work-items/{key}/claim`: an ATOMIC
+ *   claim of one work item BY KEY — lock the row, re-assert the to-do category,
+ *   assign and transition, in one transaction. Every dispatch path except
+ *   `claim_next_ready`'s "give me whatever is next" was serialising claimants
+ *   with an assignment its own code calls an advisory, so two runs could start
+ *   the same card. Additive: one new operation and one new resource
+ *   (`WorkItemClaim`); no declared shape changed.
  */
-export const V1_CONTRACT_VERSION = '1.11.0';
+export const V1_CONTRACT_VERSION = '1.12.0';

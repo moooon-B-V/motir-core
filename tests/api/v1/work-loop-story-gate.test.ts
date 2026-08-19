@@ -100,6 +100,11 @@ const WORK_LOOP_MIRRORS = {
   appendPlanTurn: 'append_plan_turn',
   submitPlanSession: 'submit_plan_session',
   getWorkItemActivity: 'get_work_item_activity',
+  // MOTIR-2961 — the keyed claim. Its PRIMARY surface is the route (the CLI
+  // speaks v1, not MCP), and `claim_work_item` is a second CALLER of the one
+  // service method rather than a second implementation — so this pairing is the
+  // strongest kind: not two things kept in step, but one thing seen twice.
+  claimWorkItem: 'claim_work_item',
 } as const;
 
 /**
@@ -134,11 +139,12 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     expect(WORK_LOOP_OPERATIONS.map((op) => op.operationId).sort()).toEqual(
       [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
-    // …and the story's own audit named ten, plus the one later operation that
-    // deliberately has no counterpart. A count that drifted from the plan is
-    // worth failing on.
-    expect(Object.keys(MIRRORS)).toHaveLength(10);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(11);
+    // …and the story's own audit named ten, plus MOTIR-2961's keyed claim,
+    // plus the one operation that deliberately has no counterpart. A count that
+    // drifted from the plan is worth failing on — a later operation joins these
+    // numbers deliberately, never silently.
+    expect(Object.keys(MIRRORS)).toHaveLength(11);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(12);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

@@ -1090,6 +1090,61 @@ export const workItemRepository = {
   },
 
   /**
+   * The post-lock CLAIM STATE read (MOTIR-2961) — everything a keyed claim
+   * decides on, for a row the caller ALREADY holds a lock on.
+   *
+   * ⚠️ **THE LOCK AND THIS READ ARE TWO STATEMENTS ON PURPOSE, AND MERGING THEM
+   * IS A REAL BUG.** The obvious shape is one `SELECT … JOIN workflow_status …
+   * FOR UPDATE OF w`, and it silently returns ZERO ROWS under exactly the
+   * concurrency it exists to handle. Under READ COMMITTED a `FOR UPDATE` that
+   * WAITS on a concurrent writer re-evaluates its plan against the new row
+   * version (EvalPlanQual) — and the join predicate here is
+   * `ws."key" = w."status"`, i.e. it reads the very column the winner just
+   * changed. The waiter therefore wakes up, re-checks, fails the join, and
+   * concludes the item does not exist at the exact moment somebody is holding
+   * it. So the LOCK filters on `id` alone (`lockById` — an immutable predicate
+   * no writer can invalidate) and the mutable state is read AFTER it, where the
+   * lock guarantees a stable answer.
+   *
+   * ⚠️ The workflow join is a **LEFT** join, so `statusCategory` is `null` for an
+   * item sitting at a status its project's workflow does not define. An INNER
+   * join would return NO ROW for such an item, which the caller can only read as
+   * "it does not exist" — a 404 for a card that is plainly there. `null` is the
+   * honest answer and it is also the safe one: an unknown category is not the
+   * to-do category, so the claim refuses rather than guessing.
+   *
+   * `tx` REQUIRED — a claim state read outside the lock that guards it would be
+   * a snapshot of the past.
+   */
+  async findClaimStateById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    status: string;
+    statusCategory: string | null;
+    assigneeId: string | null;
+    archivedAt: Date | null;
+  } | null> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        status: string;
+        statusCategory: string | null;
+        assigneeId: string | null;
+        archivedAt: Date | null;
+      }>
+    >`
+      SELECT w."status",
+             ws."category" AS "statusCategory",
+             w."assigneeId",
+             w."archivedAt"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."id" = ${id}`;
+    return rows[0] ?? null;
+  },
+
+  /**
    * The triage QUEUE read (Subtask 6.11.3, per docs/decisions/triage-model.md
    * §2) — the ONE read that INVERTS the `notInTriageSql` exclusion: it returns
    * ONLY triage-marked items for a project, never the planned tree. The ACTIVE

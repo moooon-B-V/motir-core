@@ -115,6 +115,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   list_ready: true,
   next_ready: true,
   claim_next_ready: true,
+  // MOTIR-2961 — the KEYED claim.
+  claim_work_item: true,
   create_work_item: true,
   update_work_item: true,
   transition_status: true,

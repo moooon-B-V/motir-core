@@ -974,6 +974,11 @@ export default defineConfig({
         'app/api/v1/work-items/[key]/attachments/route.ts',
         'lib/mcp/tools/attachFile.ts',
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts',
+        // MOTIR-2961 — the KEYED CLAIM. Gated for the same reason the
+        // attachment door above is: it is a thin adapter over one service
+        // method that owns a LOCK, and a gate or a decision re-implemented in
+        // the route would appear here as an uncovered branch.
+        'app/api/v1/work-items/[key]/claim/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
         'app/api/v1/work-items/[key]/activity/route.ts',
@@ -1437,6 +1442,11 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/claim/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

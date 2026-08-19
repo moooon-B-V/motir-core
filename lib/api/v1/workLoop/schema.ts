@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
-import { commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import { actorRefSchema, commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
+import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
@@ -223,6 +224,84 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
         severity: advisory.severity,
       };
     }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The KEYED CLAIM (MOTIR-2961)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What a claim attempt resolved to.
+ *
+ * A CLOSED enum, unlike `advisorySeveritySchema` above, and deliberately: an
+ * advisory is a thing a client may ignore, so an unknown member is safe there.
+ * This value decides whether the caller may START WORK, and a client that met a
+ * fifth outcome it did not know would have to guess which of "go" and "stop" it
+ * meant. Adding a member here is therefore a §8 event with a version bump, not
+ * a quiet extension.
+ */
+export const workItemClaimOutcomeSchema = z.enum(['claimed', 'mine', 'taken', 'not_claimable']);
+
+/**
+ * The result of claiming ONE work item by key.
+ *
+ * ⚠️ **A REFUSAL IS A 200, NOT AN ERROR** — the shape follows the same rule
+ * `POST /api/v1/sessions/complete` states for its per-item outcomes: a partial
+ * result is a real result. Three of the four outcomes are things a dispatcher
+ * routinely meets on the happy path (it resumed its own work, a sibling was
+ * faster, the card is finished), and turning two of them into HTTP failures
+ * would make a client parse an error body to learn it may simply proceed.
+ * Genuine failures keep their own statuses: an unknown or cross-workspace key is
+ * the usual 404, a malformed one a 422.
+ *
+ * ⚠️ **`assignee` and `transitionedBy` are BOTH here because either can be the
+ * only one that names the holder.** The assignee column is a LABEL a dispatcher
+ * writes for its teammates and nothing guarantees it was written: the incident
+ * this endpoint exists for (MOTIR-2958) is a session that flipped the status and
+ * never assigned, so the loser reads `assignee: null` on a card somebody is
+ * plainly working on. `transitionedBy` comes from the status-change history and
+ * answers the question the column cannot.
+ */
+export const workItemClaimSchema = z.object({
+  key: workItemKeySchema,
+  /** The item's title, so a refusal is legible without a second call. */
+  title: z.string(),
+  outcome: workItemClaimOutcomeSchema,
+  /** `outcome === "claimed"`, as its own boolean — the happy-path branch a
+   *  client can take without knowing the vocabulary. */
+  claimed: z.boolean(),
+  /** The status AFTER this call: the new one on a claim, the untouched one on
+   *  every refusal. `category` is what the claim decision was made on, and is
+   *  `null` for a status the project's workflow does not define — an unknown
+   *  category is never claimable, so `null` reads as "not available" rather
+   *  than as a missing field. */
+  status: z.object({ key: z.string(), category: z.string().nullable() }),
+  /** Who the item is assigned to now — the caller on a claim, the holder on a
+   *  refusal, `null` when nobody was ever assigned. */
+  assignee: actorRefSchema.nullable(),
+  /** Who performed the status transition that put the item where it is. */
+  transitionedBy: actorRefSchema.nullable(),
+  /** When that transition happened, or `null` for an item whose status has
+   *  never moved. */
+  transitionedAt: z.string().datetime().nullable(),
+});
+export type V1WorkItemClaim = z.infer<typeof workItemClaimSchema>;
+
+/** Map the claim result to the wire — field by field, never a spread. */
+export function presentWorkItemClaim(dto: WorkItemClaimDto): V1WorkItemClaim {
+  return {
+    key: dto.key,
+    title: dto.title,
+    outcome: dto.outcome,
+    claimed: dto.claimed,
+    status: { key: dto.status.key, category: dto.status.category },
+    assignee: dto.assignee === null ? null : { id: dto.assignee.id, name: dto.assignee.name },
+    transitionedBy:
+      dto.transitionedBy === null
+        ? null
+        : { id: dto.transitionedBy.id, name: dto.transitionedBy.name },
+    transitionedAt: dto.transitionedAt,
   };
 }
 
