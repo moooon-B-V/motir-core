@@ -16,6 +16,7 @@ same primitives — no Pencil→code gap.
 | **Per-board settings (entry + page)** | **`per-board-settings.mock.html`** (HTML mockup) | EXTENDS the 3.6.1 board-config page + the 3.7.1 switcher — makes board SETTINGS **per-board**. The 3.6 admin only configures the project DEFAULT board, and every entry point links there with NO board context; with many boards per project (3.7) each board has its OWN config, so settings must target the SELECTED board. That gap is unspecified (== no design), so the 3.7.7 design gate produces this. Multi-panel: board-scoped settings page (header names the board + switcher) · switcher open (change which board) · manage menu "Board settings" item · cross-links carrying `?board=` · states + permissions. Gates 3.7.8. See "Per-board settings (Story 3.7)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Scrum board (sprint view)**         | **`scrum.mock.html`** (HTML mockup)              | EXTENDS the board surface — the SCRUM variant: the same 3.2/3.3 board scoped to a board's active sprint, under a **sprint header** (name + state · goal-with-reveal · dates + time remaining · committed/completed/remaining points · complete-sprint entry point) + **per-column point totals**. The 3.2.1 board mockup drew the Kanban surface only — the sprint header / points / no-active-sprint state / complete-sprint affordance were unspecified (== no design), so the 4.5.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. Multi-panel: full scrum board · sprint-header anatomy (Tooltip reveal) · no-active-sprint EmptyState (→ Backlog) · edge states ("—" unestimated · "Ended" overdue · loading skeleton) · column-header slot coexistence. Gates 4.5.3. See "Scrum board (Story 4.5)" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Board filtering (toolbar Filter)**  | **`board-filter.mock.html`** (HTML mockup)       | EXTENDS the board surface — wires the permanently-DISABLED `[Filter]` seam (`page.tsx` `filterComingSoon`) into a working board filter, and points the 3.8.4 over-cap banner's "Refine filter" CTA at it. REUSES the shipped /items filter primitives verbatim (`IssueFilterBar` quick popover · `IssueAdvancedFilter`/`FilterConditionBuilder` builder · `SavedFilterDropdown` + `IssueAppliedFilterBar` picker + applied name-chip) — anchored on the BOARD toolbar, board-scoped + URL-addressable. The board mocks draw `[Filter]` only as a disabled seam; the enabled affordance + the on-board composition + the active-filter summary + the filtered/filtered-EMPTY states + coexistence with the 3.3 group-by Segmented and the 3.8 banner are unspecified (== no design), so the 6.15.1 design gate produces this. CHROME over the reused board — it does NOT redraw columns / cards / drag / swimlanes / WIP. **Also adds the NET-NEW Work type facet to the shared `IssueFilterBar`** (the `WorkItemType` field was reachable only via `[Advanced]`; owned by subtask 6.15.5 — benefits `/items` too). Multi-panel: closed · quick-Filter popover open (incl. the Work type facet) · Saved dropdown open · active (summary + re-projected board) · filtered-EMPTY · over-cap coexistence. Gates 6.15.3 / 6.15.5. See "Board filtering (Story 6.15)" below. |
+| **Implemented column + status chip**  | **`implemented-column.mock.html`** (HTML mockup) | EXTENDS the board surface — the **eighth** default-workflow status (`implemented`, between In Progress and In Review) and the chip it renders as. The board mocks are drawn at six columns and predate `planning` (MOTIR-2425), and the shipped status chip is keyed on the lifecycle CATEGORY, so a new `in_progress`-category status renders byte-identically to In Progress / Planning / In Review — unspecified (== no design), so the MOTIR-3002 design gate produces this. Multi-panel: the board at eight columns · the fold, measured · the chip today · the chip as specified (`--el-status-implemented` + the `CircleEllipsis` glyph) · the three surfaces (list · detail picker · board) · CI at Implemented. Gates MOTIR-3003. See "Implemented — the eighth board column" below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 The board is a **pure consumer** of the Story-3.1 board API
 (`GET …/board` → `BoardProjectionDto`; `GET …/board/columns/[id]/cards` → the
@@ -1232,3 +1233,256 @@ aria-multiselectable="true"` with `role="option" aria-selected`; the empty
 - **next-intl en + zh** — every new string (the summary copy, the filtered-empty
   EmptyState, the over-cap CTA) is keyed; the `filterComingSoon` key is dropped
   when the seam is enabled (6.15.3).
+
+---
+
+# Implemented — the eighth board column (Story MOTIR-2999 · MOTIR-3002)
+
+Design reference for the **`implemented` status**: a new default-workflow status
+between In Progress and In Review, the board column it arrives in, and the status
+chip it renders as on every surface a status is shown. Asset:
+**`implemented-column.mock.html`** (+ `implemented-column.png`). It is the source
+of truth for **MOTIR-3003** (the status, its edges and the backfill), and the
+chip/dot half binds any card that renders the new status.
+
+It **EXTENDS** `design/boards/board.mock.html` (3.2.1) and
+`design/boards/board-scale.mock.html` (3.8.1). It redraws neither: no column,
+card, lane, load behaviour or drag affordance changes here. What is new is one
+column, one chip tone, and one token.
+
+## ⚠️ It is the EIGHTH column, not the seventh — the card's premise is one status stale
+
+MOTIR-3002 says _"a seventh column arrives"_ and _"the existing mock is drawn at
+six."_ Both were true when `board.mock.html` was drawn and are not true now.
+`lib/workflows/defaultWorkflow.ts` ships **seven** statuses today — `todo ·
+blocked · in_progress · planning · in_review · done · cancelled` — because
+MOTIR-2425 added `planning` (in the `in_progress` category, for the same
+structural reason `implemented` needs: a card must leave the pickable set), and
+`prisma/migrations/20260807220000_add_planning_default_status/migration.sql`
+gave it a board column on every existing project. So `implemented` is the
+**eighth** status and the **eighth** column, and the card's criterion "the mock
+renders the board at SEVEN columns" is amended on the record to EIGHT. Nothing
+else in the card changes: every other criterion reads the same at eight.
+
+## Where `implemented` goes — slot 4, before Planning
+
+Both placements satisfy MOTIR-2999's "positioned between `in_progress` and
+`in_review`". The **fold decides**, and the measurement is in panel 1: slot 4 is
+the last column a laptop shows, and slot 5 is off-screen at every laptop width.
+
+- **`implemented` is inserted immediately after `in_progress`, before
+  `planning`.** The happy path (`in_progress → implemented → in_review`) is the
+  path every card walks, so it takes the visible slot; `planning` is an
+  exceptional off-ramp whose own review surface is the plan queue, not the board.
+- **Nothing existing is reordered.** This is ONE insert. Position:
+  **`in_progress.position || 'F'`** — exactly the shape `planning` used
+  (`in_progress.position || 'V'`), and `'a2' < 'a2F' < 'a2V'` lexicographically,
+  so the new row sorts between them with no write to any other status. In the
+  seed, `implemented` is inserted into `STATUS_ORDER` directly after
+  `in_progress` and the positions generate themselves.
+- A project whose statuses were reordered gets a well-ordered row, not
+  necessarily the same literal key a fresh project would have — the same
+  documented, invisible divergence the `planning` migration accepted.
+
+## The fold — MEASURED, in this asset
+
+| Viewport                    | Rail  | Content width | Columns fully visible | Implemented (slot 4) |
+| --------------------------- | ----- | ------------- | --------------------- | -------------------- |
+| 1280 × 800                  | 240px | 976px         | 3                     | 63px sliver          |
+| 1366 × 768                  | 240px | 1062px        | 3                     | 149px sliver         |
+| 1440 × 900                  | 240px | 1136px        | 3                     | 223px sliver         |
+| 1512 × 982                  | 240px | 1208px        | 4                     | **FULL**             |
+| 1920 × 1080                 | 240px | 1616px        | 5                     | **FULL**             |
+| 1440 × 900 · rail collapsed | 56px  | 1320px        | 4                     | **FULL**             |
+
+Read off a Chromium render of panel 1's frame set to each content width, with
+every column's `getBoundingClientRect()` compared to the frame's box — not
+derived. The inputs are the shipped ones: a column is `w-72` (288px, `shrink-0`)
+in a `gap-4` row (`app/(authed)/boards/_components/BoardColumn.tsx` ·
+`app/(authed)/boards/_components/BoardContainer.tsx`), inside the shell's
+`lg:px-8` gutters beside a 240px rail — 56px collapsed —
+(`components/ui/AppLayout.tsx` · `app/(authed)/layout.tsx`). Each column costs
+**304px**; the count that fits is `floor((content + 16) / 304)`.
+
+**What gives: nothing, and that is the finding.** The board is already a
+horizontally-scrolling row, and six columns did not fit a laptop either — the
+eighth column adds scroll distance, not a new failure mode. What it does change
+is which statuses a reader sees without scrolling, which is a placement decision
+(above), not a layout one. The board's existing answers to a long board are
+unchanged and are enough: the rail collapses, the board scrolls and snaps
+(`snap-x snap-proximity`), and Epic 6's board filter narrows it.
+
+**The invariant for the build card:** `implemented` occupies slot 4. A later
+status inserted before it moves it to slot 5, which the table above says is
+off-screen on every laptop — so that insert is a fold decision, not a position
+string.
+
+## The chip — one new tone, `--el-status-implemented`
+
+**The defect first.** The shipped status chip is keyed on the lifecycle
+**CATEGORY**, not the status: `STATUS_TONE` in
+`app/(authed)/items/_components/issueCellPrimitives.tsx` maps
+`todo → planned · in_progress → in-progress · done → done` onto `Pill`'s three
+status tones. `implemented` is in the `in_progress` category, so **without a new
+tone it renders byte-identically to In Progress, Planning AND In Review** — four
+statuses, one chip. Panel 2 draws that from the real component. It is exactly
+what MOTIR-2999's criterion rules out.
+
+**The recipe is already written down.** `packages/design-system/theme.css`'s
+`--el-status-*` block says: _"The status DOT uses the hue at full strength; a
+status CHIP bg = `color-mix(var(--el-status-X) 14%, var(--el-surface))` with
+`--el-text-strong`."_ The shipped `Pill`'s `priority` variant already renders
+exactly that. So the chip is not a new invention — it is the documented
+per-status recipe, spent on one new tone.
+
+| Element                          | Colour                                                                           | Shape                                  |
+| -------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
+| Implemented chip fill            | `color-mix(in srgb, var(--el-status-implemented) 14%, var(--el-surface))`        | `--radius-badge`, `--spacing-chip-x/y` |
+| Implemented chip ink             | `--el-text-strong` (AA on the tint — finding #35)                                | —                                      |
+| Implemented chip border          | `transparent` (as every other `Pill` tone)                                       | —                                      |
+| Implemented chip glyph           | `currentColor` (`CircleEllipsis`, `h-3 w-3`, `aria-hidden`)                      | —                                      |
+| Status DOT (picker / filter)     | `var(--el-status-implemented)` at full strength                                  | `rounded-full`, 10px                   |
+| Column header, card, count badge | unchanged — `--el-surface` / `--el-border` / `--el-count-bg` / `--el-count-text` | `--radius-card` / `--radius-badge`     |
+
+**The token.** `--el-status-implemented` is a new Tier-3 token mapped to
+`var(--color-accent)` — pink. It is the one saturated Tier-0 hue no other STATUS
+spends (`todo` stone · `blocked` warning · `in_progress` info · `planning`
+accent-teal · `in_review` primary · `done` success · `cancelled` steel), and
+sharing a hue ACROSS families is the system's own convention — `--el-type-epic`
+is also `--color-accent`. Riding a Tier-0 var means every palette re-skins it
+with no per-palette block, exactly as the `--el-status-*` block's header
+prescribes.
+
+> **⚠️ ONE palette needs an override: `sienna`.** It re-maps
+> `--el-status-blocked` onto `--color-accent`, so `implemented` and `blocked`
+> would collide there. Give `[data-palette='sienna']` its own
+> `--el-status-implemented` (and its dark companion) — the same per-palette
+> follow-up `--el-status-planning` needed in `citrine` and `candy`. Every other
+> palette is clean: `--color-accent` is spent on no status in any of them.
+
+**And the glyph is what carries it, not the hue.** The Implemented chip renders
+`CircleEllipsis` — the SAME glyph the shipped CI-running pill uses
+(`components/github/DevelopmentSection.tsx`, `CI_META.running`), which is
+literally what a card at Implemented is waiting for. In Review stays unglyphed. A
+14% tint is a subtle mark by construction, and finding #35 forbids resting a
+state on colour alone; the glyph makes the distinction survive any tint strength,
+any palette, and any colour vision. **A glyph on this ramp means "a machine is
+still working."**
+
+**The dot** is `statusDotColor` (`lib/workflows/statusColor.ts`), which resolves
+by status KEY and falls back to the CATEGORY. Without a `STATUS_KEY_EL` entry for
+`implemented` the option dot is `--el-status-in-progress` and is indistinguishable
+from In Progress — the exact collapse MOTIR-1273 un-did for `in_review` and
+MOTIR-2425 re-avoided for `planning`. **`STATUS_KEY_EL.implemented →
+'--el-status-implemented'` is owed alongside the token.**
+
+## The three surfaces (panel 4)
+
+- **The list row** — `StatusValue` renders the chip, so the `/items` Status cell
+  takes the new tone with no further work. Drawn on the real `IssueListTable`.
+- **The detail page's status control** — `StatusPicker` is a `Combobox` over the
+  LEGAL targets under the `restricted` policy. Drawn open at `implemented`,
+  showing exactly the edges MOTIR-2999 asks for: In Review, In Progress, Blocked,
+  Done, Cancelled.
+- **The board** — a board card carries **no** status chip, because the COLUMN is
+  the status. The one status-derived chip a board card does carry is "Awaiting
+  acceptance" (`app/(authed)/boards/_components/BoardCard.tsx`), and that belongs
+  to In Review. So on the board the Implemented chip appears where the board's own
+  status chip appears: the quick view a card opens, and the column header the card
+  sits under.
+
+> **⚠️ A defect this asset found and does NOT fix: `MOTIR-3080`.** Rendering the
+> real `StatusPicker` measured its status dot at **2 × 18px**, not 10 × 10 — the
+> dot is a bare `<span>` inside `Combobox`'s icon wrapper, and only the WRAPPER is
+> blockified, so the dot stays `display: inline` and its box never applies. The
+> mock corrects it in one stylesheet rule (a design draws the target); the fix
+> belongs to MOTIR-3080, not to this story.
+
+## CI at Implemented — the board shows nothing, deliberately
+
+The card asks whether a board card at Implemented surfaces anything about checks.
+**It does not**, and the reason is a boundary, not an oversight: `BoardCardDto`
+(`lib/dto/boards.ts`) carries no CI field, and adding one is a change to the board
+PROJECTION — outside MOTIR-2999's own stated scope, which ends at "one card's
+status lifecycle". The board already answers the operator's question
+structurally: a card in Implemented is built and waiting on checks; a card in In
+Review is green.
+
+**What that leaves unanswered is a RED build.** MOTIR-2999 leaves a failed card at
+`implemented`, so "checks running" and "checks failed" share a column. The verdict
+is one click away — the item's Development section renders the shipped CI pill, and
+`lib/services/changeRequestCiFeedback.ts` already posts the per-head-sha comment
+saying which check failed. **Surfacing failure ON the board is a board-projection
+card and is not this story's** (see below).
+
+## What this asset does NOT specify (named, so nobody infers it)
+
+1. **Re-toning the whole status ramp.** The per-status chip recipe applied to all
+   eight statuses would also un-collapse In Progress / Planning / In Review from
+   each other, which is a real improvement and a change to every status chip on
+   every surface. This asset spends the recipe on ONE tone, because that is what
+   MOTIR-2999's criterion needs. Panel 3 draws the whole ramp under the recipe so
+   the option is visible and costed — it is a separate card, owned by nobody yet.
+2. **A CI signal on the board card.** Needs a projection field; see above.
+3. **The `sienna` palette override**, which is a one-line follow-up on the token
+   card if `implemented` ships before it.
+4. **Swimlanes, scrum and the board-config admin** — an eighth status reaches all
+   three through the same column mapping, and none of their layouts change.
+
+## How this asset was produced (reproduce it, don't cite it)
+
+Nothing here was redrawn from a reading of the code. Every column, card, chip,
+list row and picker is the **real component's own markup**, and the stylesheet is
+Tailwind's **real compiled output** — so the asset cannot drift from what the app
+renders. The harness is temporary by construction (a design PR ships `design/**`
+only), so it is reproduced here rather than cited:
+
+1. **Dump the markup.** A throwaway spec under `tests/components/` renders
+   `BoardColumn` (once per status), `StatusValue`, `StatusPicker` (closed and
+   `autoOpen`), `IssueListTable` and `Pill` through the repo's own
+   `renderWithIntl` helper (`tests/helpers/renderWithIntl.tsx`) and
+   `writeFileSync`s `container.innerHTML` per state. The open `Combobox` listbox
+   is PORTALED, so that one dumps `document.body.innerHTML`. Fixture shapes are
+   the ones `tests/components/board-column.test.tsx` and
+   `tests/components/issue-list-view.test.tsx` already use, including their
+   `next/navigation` + edit-action mocks and the happy-dom pointer/ResizeObserver
+   shims.
+2. **Run it under a throwaway Vitest config** — `environment: 'happy-dom'`, no
+   `globalSetup` (the root config provisions a Postgres per worker), and the `@`
+   - `server-only` aliases copied from the root config. Some imported modules read
+     env at import time, so it runs with placeholder `DATABASE_URL` / auth secrets;
+     no database is touched.
+3. **Compile the real CSS.** `@import 'tailwindcss' source(none);` +
+   `@source` the assembled page + `@import '@motir/design-system/theme.css'`,
+   through `@tailwindcss/postcss`. ~100KB carrying the Tier-0, dark-flip and
+   Tier-3 layers verbatim, inlined into the mock — the mock's stylesheet IS
+   Tailwind's real output, so no token is ever retyped.
+4. **Assemble, `prettier --write`, then render** — the PNG is exported AFTER the
+   format pass, full-page, light theme, `deviceScaleFactor: 2`, viewport 1200.
+
+The only edits made to the dumped markup are the two the panels name: the
+Implemented row's status cell carries the SPECIFIED chip rather than today's, and
+the status dot is corrected per MOTIR-3080. Both are called out in the mock at the
+point of use.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the new
+  `--el-status-implemented` (mapped to a Tier-0 `--color-*`, never a literal), the
+  14% `color-mix` chip tint over `--el-surface` with `--el-text-strong` ink, and
+  the reused `--el-status-*` ramp for the dots. No raw hex, `rgb()`, named colour
+  or fixed `rounded-*` / `p-*` / `h-*` appears in the product markup of the mock.
+- **Shape** via element-semantic tokens — `--radius-badge` + `--spacing-chip-x/y`
+  for the chip, `--radius-card` for the column and the open menu,
+  `--radius-control` + `--spacing-control-x/y` + `--height-control` for the picker
+  trigger and its option rows. `rounded-full` only on the genuinely-circular
+  status dot and avatar.
+- **Not colour-alone** (finding #35): Implemented pairs its tint with the
+  `CircleEllipsis` glyph and its label; the glyph is `aria-hidden`, so the
+  accessible name stays the status label.
+- **AA**: every chip carries `--el-text-strong` on a 14% tint over `--el-surface`
+  — the measured-safe pairing; no `--el-text-muted` on a tinted surface anywhere
+  in the product markup.
+- **The picker** keeps the shipped `role="combobox"` / `role="listbox"` /
+  `role="option"` structure and its `aria-activedescendant`; the eighth status
+  adds an option, not a control.
