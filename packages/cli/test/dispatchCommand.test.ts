@@ -667,3 +667,62 @@ describe('motir done', () => {
     await expect(doneCommand(undefined, {})).rejects.toThrow(CliError);
   });
 });
+
+describe('a MULTI-REPOSITORY card — one agent, every repository named (MOTIR-3133)', () => {
+  /** A two-repository payload, primary first. */
+  const twoRepos = (over: Partial<DispatchPrompt> = {}) =>
+    dispatchPrompt({
+      targetRepo: 'motir-core',
+      targetRepos: [
+        { name: 'motir-core', cloneUrl: null, defaultBranch: 'main' },
+        { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk' },
+      ],
+      ...over,
+    });
+
+  it('launches ONE agent, in the PRIMARY’s checkout — identical to a card pinning only it', async () => {
+    // The decision this asserts is the whole design (ADR §B2): N dispatches
+    // would hand each agent the same card and force each to guess which half is
+    // its own, which is the straddle the repo-straddle advisory exists to warn
+    // about, reproduced by the tool meant to fix it.
+    setup({ prompt: twoRepos(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(runAgentMock).toHaveBeenCalledOnce();
+    expect(runAgentMock.mock.calls[0]?.[0].cwd).toBe(join(harness.root, 'motir-core'));
+  });
+
+  it('names both repositories, their resolved paths and which one is the cwd, before the agent starts', async () => {
+    setup({ prompt: twoRepos(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(harness.stderr).toContain('2 — this item ships in every one of them');
+    expect(harness.stderr).toContain('motir-core  (the working directory)');
+    expect(harness.stderr).toContain('motir-ai  (a sibling checkout)');
+    expect(harness.stderr).toContain(join(harness.root, 'motir-ai'));
+  });
+
+  it('WARNS about the missing checkout, runs anyway, and reports it after a clean exit', async () => {
+    // Warning, not refusal — and the post-condition still fires for the element
+    // that had nowhere to happen, which is the failure that otherwise exits 0.
+    setup({ prompt: twoRepos(), repos: ['motir-core'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(runAgentMock).toHaveBeenCalledOnce();
+    expect(harness.stderr).toContain('no checkout here yet');
+    expect(harness.stderr).toContain('motir link add motir-ai <path>');
+    expect(harness.stderr).toContain('Suspect dispatch');
+    expect(harness.stderr).toContain('"motir-ai" still has no checkout');
+  });
+
+  it('behaves exactly as today against a server that sends no targetRepos', async () => {
+    // The version-skew rule: the CLI ships separately and is routinely pointed
+    // at an older self-hosted Motir. Absent must read as "one repository".
+    setup({ prompt: dispatchPrompt(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(runAgentMock.mock.calls[0]?.[0].cwd).toBe(join(harness.root, 'motir-core'));
+    expect(harness.stderr).not.toContain('ships in every one of them');
+    expect(harness.stderr).not.toContain('motir-ai');
+  });
+});

@@ -468,6 +468,20 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
     prompt: body.prompt,
     parentKey: body.parentKey,
     targetRepo: body.targetRepo,
+    // MOTIR-3133 — the SET, carried because the launcher resolves a checkout per
+    // element. `delivery` is dropped for the same reason the scalar coordinates
+    // are: nothing in `packages/cli/src` reads it (the run's own report of what
+    // has shipped is MOTIR-3136). Absent from an older server stays absent, so
+    // the single-repository path is what runs.
+    ...(body.targetRepos === undefined
+      ? {}
+      : {
+          targetRepos: body.targetRepos.map((repo) => ({
+            name: repo.name,
+            cloneUrl: repo.cloneUrl,
+            defaultBranch: repo.defaultBranch,
+          })),
+        }),
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,
     advisories: body.advisories as DispatchAdvisory[],

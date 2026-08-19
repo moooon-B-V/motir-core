@@ -98,6 +98,30 @@ export function resolveDispatchTarget(
   };
 }
 
+/**
+ * Decide where to run EVERY repository of an item's set (Story MOTIR-2731 ·
+ * MOTIR-3133) — one {@link DispatchTarget} per repository, in the payload's
+ * order, primary first.
+ *
+ * Each element is resolved by {@link resolveDispatchTarget}, unchanged, so the
+ * routing matrix is applied per repository rather than re-derived for a set:
+ * the override map, the `<root>/<name>` convention and the three outcomes all
+ * behave exactly as they do for a single-repository card. Only element 0's `cwd`
+ * is ever used to launch the agent — one dispatch, one agent process; the others
+ * are places it works, not places it is launched in.
+ *
+ * An EMPTY set returns `[]`. The caller falls back to the scalar in that case,
+ * which is also what happens against a server too old to send `targetRepos`.
+ */
+export function resolveDispatchTargets(
+  rootDir: string,
+  config: LinkConfig,
+  repos: readonly string[],
+  opts: ResolveDispatchTargetOptions = {},
+): DispatchTarget[] {
+  return repos.map((repo) => resolveDispatchTarget(rootDir, config, repo, opts));
+}
+
 export interface SuspectDispatch {
   repoName: string;
   expectedPath: string;
@@ -255,8 +279,45 @@ export interface DispatchSummaryInput {
   title: string | null;
   dispatch: DispatchPrompt;
   target: DispatchTarget;
+  /**
+   * Every repository of the item's set, resolved (MOTIR-3133) — element 0 is
+   * `target`. Absent, empty or of length ONE renders exactly today's two lines:
+   * this block exists only where a card actually ships in more than one place.
+   */
+  targets?: DispatchTarget[];
   /** The agent about to run, or null in `--print` mode. */
   agent: { command: string; source: AgentSource } | null;
+}
+
+/**
+ * The REPOSITORIES block — one line per repository, in set order, with the
+ * primary marked as the working directory.
+ *
+ * ⚠️ A MISSING CHECKOUT IS A WARNING HERE, NOT A REFUSAL, and it is the same
+ * doctrine {@link renderDispatchAdvisories} sets out one function down: the
+ * operator is the one who knows whether that repository's half is already
+ * merged, or whether their checkout simply lives somewhere the convention does
+ * not predict. Refusing would convert a resumable card into a blocked one over a
+ * fact the tool is not the authority on. So the line names the repository, the
+ * path that was expected and the `motir link add` fix, the dispatch proceeds,
+ * and the exit code is untouched. (ADR `work-item-repository-set.md`
+ * § *Amendment 2026-08-19* §B6(a).)
+ */
+export function renderRepositoriesBlock(targets: DispatchTarget[]): string[] {
+  if (targets.length <= 1) return [];
+  const lines = [`Repos:      ${targets.length} — this item ships in every one of them:`];
+  targets.forEach((t, i) => {
+    const where = i === 0 ? 'the working directory' : 'a sibling checkout';
+    lines.push(`            - ${t.targetRepo ?? '(unpinned)'}  (${where})`);
+    lines.push(`                ${t.repoPath ?? t.cwd}  (${t.repoSource ?? 'root'})`);
+    if (t.reason === 'bootstrap_root') {
+      lines.push(
+        `                ⚠ no checkout here yet. This is NOT a blocker — the dispatch`,
+        `                  proceeds. If it lives elsewhere: motir link add ${t.targetRepo ?? ''} <path>`,
+      );
+    }
+  });
+  return lines;
 }
 
 /**
@@ -272,6 +333,10 @@ export function renderDispatchSummary(input: DispatchSummaryInput): string {
     `Repo:       ${dispatch.targetRepo ?? 'not pinned (Motir cannot say)'}`,
     `Path:       ${target.cwd}`,
     `            ${cwdReasonLabel(target)}`,
+    // MOTIR-3133 — every OTHER repository the card ships in, and where each one
+    // resolved to. Nothing is emitted for a one-repository or unpinned card, so
+    // the two lines above are still the whole answer for every card that exists.
+    ...renderRepositoriesBlock(input.targets ?? []),
     `Workflow:   ${workflowLabel(dispatch.workflowMode, dispatch.sessionBranch)}`,
   ];
   lines.push(

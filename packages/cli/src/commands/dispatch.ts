@@ -18,7 +18,9 @@ import {
   renderDispatchSummary,
   renderSessionOutcomes,
   resolveDispatchTarget,
+  resolveDispatchTargets,
   type AgentSource,
+  type DispatchTarget,
 } from '../dispatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
@@ -154,12 +156,23 @@ async function deliver(input: DeliverInput): Promise<void> {
   const { client, link, serverUrl, projectKey } = session;
 
   const agent = resolveAgent(opts);
-  const target = resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
+  // MOTIR-3133 — one target per repository the card ships in, resolved by the
+  // SAME rule, in the payload's order. The agent's cwd is element 0's — one
+  // dispatch, one agent process, standing in the primary's checkout exactly as
+  // it does today. An older server sends no `targetRepos`, and the empty set
+  // falls straight back to the single-repository resolve.
+  const targets = resolveDispatchTargets(
+    link.dir,
+    link.config,
+    (dispatch.targetRepos ?? []).map((repo) => repo.name),
+  );
+  const target = targets[0] ?? resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
   const summary = renderDispatchSummary({
     key,
     title,
     dispatch,
     target,
+    targets,
     agent: agent ? { command: agent.parsed.command, source: agent.source } : null,
   });
 
@@ -222,14 +235,24 @@ async function deliver(input: DeliverInput): Promise<void> {
   }
   removeExclude(serverUrl, projectKey, key);
 
-  const suspect = checkBootstrapCheckout(target);
+  // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
+  // second half had no checkout to happen in is exactly the run that otherwise
+  // exits 0 with half the work missing.
+  const suspects = suspectCheckouts(targets, target);
   info('');
   info(renderAgentSuccess(key, dispatch));
-  if (suspect) {
+  for (const suspect of suspects) {
     info('');
     info(suspect.message);
     info(`Hint: ${suspect.hint}`);
   }
+}
+
+/** The bootstrap post-condition, over the whole set — falling back to the
+ *  primary alone when the server sent no set (MOTIR-3133). */
+function suspectCheckouts(targets: DispatchTarget[], primary: DispatchTarget) {
+  const over = targets.length > 0 ? targets : [primary];
+  return over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
 }
 
 // ── motir next ──────────────────────────────────────────────────────────────

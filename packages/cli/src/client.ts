@@ -406,6 +406,17 @@ export interface DispatchPrompt {
    */
   parentKey: string | null;
   targetRepo: string | null;
+  /**
+   * EVERY repository the item ships in (MOTIR-3131), ordered, primary first —
+   * `targetRepos[0]?.name ?? null === targetRepo`, always.
+   *
+   * OPTIONAL on the wire for the same reason `advisories` is: the CLI is
+   * published separately from the server and is routinely pointed at a
+   * self-hosted Motir older than itself. A server predating MOTIR-3131 sends no
+   * such key, and absent must read as "this card ships in one place" — the
+   * single-repository path — rather than as a crash.
+   */
+  targetRepos?: { name: string; cloneUrl: string | null; defaultBranch: string | null }[];
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
   /**

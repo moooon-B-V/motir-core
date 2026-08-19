@@ -12,7 +12,13 @@ import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
-import { checkBootstrapCheckout, cwdReasonLabel, resolveDispatchTarget } from '../dispatch.js';
+import {
+  checkBootstrapCheckout,
+  cwdReasonLabel,
+  renderRepositoriesBlock,
+  resolveDispatchTarget,
+  resolveDispatchTargets,
+} from '../dispatch.js';
 import {
   batchExitCode,
   classifySnapshotItem,
@@ -363,11 +369,21 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   }
 
   await ensureInProgress(client, entry.key, entry.statusKey, ownerId);
-  const target = resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
+  // MOTIR-3133 — the same per-repository resolution `deliver()` makes, from the
+  // same function, rendered by the same block. Batch prints its own lines rather
+  // than going through `deliver()`, and a second rendering of these facts is
+  // exactly how the two would drift.
+  const targets = resolveDispatchTargets(
+    link.dir,
+    link.config,
+    (dispatch.targetRepos ?? []).map((repo) => repo.name),
+  );
+  const target = targets[0] ?? resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
 
   info('');
   info(`── ${entry.key} — ${entry.title ?? ''}`);
   info(`   ${target.cwd}  (${cwdReasonLabel(target)})`);
+  for (const line of renderRepositoriesBlock(targets)) info(`   ${line.trimStart()}`);
   info('   its own branch off origin/main, its own pull request');
 
   const started = clock();
@@ -393,7 +409,9 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
 
   // A bootstrap dispatch that did not produce its checkout is a FAILED dispatch,
   // not a success with a warning: the prompt's whole job was to create it.
-  const suspect = checkBootstrapCheckout(target);
+  const suspect = (targets.length > 0 ? targets : [target])
+    .map((t) => checkBootstrapCheckout(t))
+    .find((s) => s !== null);
   if (suspect) {
     info(`${entry.key}: ${suspect.message}`);
     info(`Hint: ${suspect.hint}`);

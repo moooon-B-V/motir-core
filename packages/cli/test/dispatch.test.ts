@@ -6,8 +6,10 @@ import {
   renderAgentSuccess,
   renderDispatchAdvisories,
   renderDispatchSummary,
+  renderRepositoriesBlock,
   renderSessionOutcomes,
   resolveDispatchTarget,
+  resolveDispatchTargets,
   workflowLabel,
 } from '../src/dispatch.js';
 import { resolveAgent, notReadyError } from '../src/commands/dispatch.js';
@@ -449,5 +451,138 @@ describe('summary + outcome rendering', () => {
 
   it('says so when a branch has no recorded items', () => {
     expect(renderSessionOutcomes('story/PROD-9', [])).toContain('No work items');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PER-REPOSITORY resolution (Story MOTIR-2731 · MOTIR-3133)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The CLI is the only participant that knows where anything actually IS. The
+// server knows a repository is called `motir-ai`; the prompt tells the agent to
+// work in a sibling directory; and between those two facts sits a link config
+// that can put that repository anywhere on the machine, or nowhere. The moment
+// before the agent starts is the only cheap moment to find that out — everything
+// after it is an agent failing in a directory that does not exist, or quietly
+// doing one repository's half and reporting success.
+//
+// Two properties, and the second is the one that costs if it breaks:
+//
+//   * a set is resolved ELEMENT BY ELEMENT through the existing single-repo
+//     rule, so the routing matrix is applied rather than re-derived;
+//   * a card with fewer than two repositories renders EXACTLY today's summary —
+//     every card in the tenant pins one, and none of them should be able to tell
+//     that this shipped.
+
+describe('resolveDispatchTargets — the routing matrix, applied per repository', () => {
+  it('answers identically to the single-repo resolver, for every outcome', () => {
+    // Not "looks the same": the same function, run both ways over the same
+    // matrix, compared. A set-aware copy of the rule is the thing this avoids.
+    const config: LinkConfig = { ...LINK, repos: { 'motir-ai': '/elsewhere/ai' } };
+    const exists = only(`${ROOT}/motir-core`, '/elsewhere/ai');
+    const repos = ['motir-core', 'motir-ai', 'motir-gateway'];
+
+    const set = resolveDispatchTargets(ROOT, config, repos, { exists });
+
+    expect(set).toEqual(repos.map((repo) => resolveDispatchTarget(ROOT, config, repo, { exists })));
+    expect(set.map((t) => t.reason)).toEqual(['repo_checkout', 'repo_checkout', 'bootstrap_root']);
+    expect(set.map((t) => t.repoSource)).toEqual(['convention', 'override', 'convention']);
+  });
+
+  it('preserves the payload ORDER — element 0 is the primary, and its cwd is the agent’s', () => {
+    const exists = only(`${ROOT}/motir-ai`, `${ROOT}/motir-core`);
+    const set = resolveDispatchTargets(ROOT, LINK, ['motir-ai', 'motir-core'], { exists });
+    expect(set.map((t) => t.targetRepo)).toEqual(['motir-ai', 'motir-core']);
+    expect(set[0]!.cwd).toBe(`${ROOT}/motir-ai`);
+  });
+
+  it('returns [] for an empty set — the shape an older server produces', () => {
+    // Not a special case in the resolver, and deliberately so: the CALLER falls
+    // back to the scalar, which is the single path a pre-MOTIR-3131 server and a
+    // genuinely unpinned card both take.
+    expect(resolveDispatchTargets(ROOT, LINK, [], { exists: none })).toEqual([]);
+  });
+});
+
+describe('the REPOSITORIES block', () => {
+  const twoRepos = (exists: (p: string) => boolean) =>
+    resolveDispatchTargets(ROOT, LINK, ['motir-core', 'motir-ai'], { exists });
+
+  it('renders nothing at all for zero or one repository', () => {
+    expect(renderRepositoriesBlock([])).toEqual([]);
+    expect(
+      renderRepositoriesBlock(resolveDispatchTargets(ROOT, LINK, ['motir-core'], { exists: none })),
+    ).toEqual([]);
+  });
+
+  it('leaves the one-repo and unpinned SUMMARY byte-identical to today’s', () => {
+    // The back-compatibility claim, stated as an equality rather than intended:
+    // `motir next --print | pbcopy` still pipes the prompt alone, and the
+    // stderr summary a person sees for an ordinary card has not moved.
+    const exists = only(`${ROOT}/motir-core`);
+    const one = { key: 'PROD-7', title: 'A card', agent: null };
+    const target = resolveDispatchTarget(ROOT, LINK, 'motir-core', { exists });
+    expect(
+      renderDispatchSummary({
+        ...one,
+        dispatch: prompt({
+          targetRepos: [{ name: 'motir-core', cloneUrl: null, defaultBranch: null }],
+        }),
+        target,
+        targets: resolveDispatchTargets(ROOT, LINK, ['motir-core'], { exists }),
+      }),
+    ).toBe(renderDispatchSummary({ ...one, dispatch: prompt(), target }));
+
+    const unpinnedTarget = resolveDispatchTarget(ROOT, LINK, null, { exists });
+    expect(
+      renderDispatchSummary({
+        ...one,
+        dispatch: prompt({ targetRepo: null, targetRepos: [] }),
+        target: unpinnedTarget,
+        targets: [],
+      }),
+    ).toBe(
+      renderDispatchSummary({
+        ...one,
+        dispatch: prompt({ targetRepo: null }),
+        target: unpinnedTarget,
+      }),
+    );
+  });
+
+  it('names every repository, its resolved path, how it resolved, and which one is the cwd', () => {
+    const block = renderRepositoriesBlock(twoRepos(only(`${ROOT}/motir-core`, `${ROOT}/motir-ai`)));
+    const text = block.join('\n');
+    expect(text).toContain('2 — this item ships in every one of them');
+    expect(text).toContain('motir-core  (the working directory)');
+    expect(text).toContain('motir-ai  (a sibling checkout)');
+    expect(text).toContain(`${ROOT}/motir-core  (convention)`);
+    expect(text).toContain(`${ROOT}/motir-ai  (convention)`);
+  });
+
+  it('WARNS about a missing checkout, names the expected path and the fix — and does not refuse', () => {
+    // The disposition ADR §B6(a) records, and the one an operator can act on:
+    // they are the ones who know whether that repository's half is already
+    // merged, or whether their checkout simply lives somewhere else.
+    const text = renderRepositoriesBlock(twoRepos(only(`${ROOT}/motir-core`))).join('\n');
+    expect(text).toContain('no checkout here yet');
+    expect(text).toContain('NOT a blocker');
+    expect(text).toContain(`${ROOT}/motir-ai`);
+    expect(text).toContain('motir link add motir-ai <path>');
+  });
+});
+
+describe('the bootstrap post-condition, over the whole set', () => {
+  it('reports a NON-PRIMARY repository whose checkout never appeared', () => {
+    // The failure this catches is the quiet one: the agent exits 0 having done
+    // the primary's half in a real checkout, and the second repository's work
+    // never had anywhere to happen.
+    const targets = resolveDispatchTargets(ROOT, LINK, ['motir-core', 'motir-ai'], {
+      exists: only(`${ROOT}/motir-core`),
+    });
+    const suspects = targets.map((t) => checkBootstrapCheckout(t, { exists: none }));
+    expect(suspects[0]).toBeNull();
+    expect(suspects[1]?.repoName).toBe('motir-ai');
+    expect(suspects[1]?.message).toContain('motir-ai');
   });
 });
