@@ -373,21 +373,42 @@ describe('guard: the cross-package import boundary, in the shape the ADR leaves 
 });
 
 describe('guard: the story’s own files are covered by the job that is meant to cover them', () => {
-  it('is NOT on a branch prefix the coverage job skips', () => {
+  it('is NOT excluded from the coverage job by the changed-paths gate', () => {
     // `lib/apiDocs/sandbox.ts` reached `main` at 50% branch coverage because a
     // `docs/*`-shaped path filter skipped the job that was meant to gate it
     // (MOTIR-2317). This story touches runtime code under `app/` and `lib/`, so
-    // it must NOT be branched under a prefix `ci.yml` excludes — the assertion
-    // reads the workflow rather than trusting the branch name.
+    // the lane that gates it must run for such a diff.
+    //
+    // MOTIR-3148 changed the MECHANISM and this assertion got STRONGER for it.
+    // The old one read the workflow for branch-prefix `startsWith` expressions
+    // and asserted they existed and were spelled findably — i.e. it asserted
+    // the presence of the very mechanism MOTIR-2317 was filed about, and could
+    // only ever say "a reader could look this up". The gate now computes the
+    // exclusion from the DIFF, so the property itself is directly assertable:
+    // a change under `app/` or `lib/` must not be excluded.
     const ci = read('.github/workflows/ci.yml');
-    const skipped = [...ci.matchAll(/startsWith\(\s*(?:github\.head_ref|head_ref)[^)]*\)/g)].map(
-      (match) => match[0]!,
+    const changes = ci.slice(ci.indexOf('\n  changes:\n'));
+    expect(changes, 'ci.yml has a `changes` job').not.toBe('');
+
+    // The `case` patterns that leave `app` false — the exclusion set.
+    const excluded = (/case "\$f" in\n\s*([^\n]*?)\)\s*;;/.exec(changes)?.[1] ?? '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    expect(excluded, 'the exclusion set is readable').not.toEqual([]);
+    // Documentation and design assets are excluded — that is the saving.
+    expect(excluded).toEqual(expect.arrayContaining(['docs/*', 'design/*']));
+    // This story's runtime trees are NOT, which is the claim being made.
+    for (const tree of ['app/', 'lib/', 'packages/']) {
+      expect(
+        excluded.some((pattern) => tree.startsWith(pattern.replace(/\*$/, ''))),
+        `${tree} must not be excluded from the coverage lane`,
+      ).toBe(false);
+    }
+    // And the coverage lane must actually READ the gate, or the set above is
+    // a fact about a job nothing consults.
+    expect(ci.slice(ci.indexOf('\n  coverage:\n'))).toContain(
+      "needs.changes.outputs.app == 'true'",
     );
-    // The prefixes that skip a test lane are a fact about the workflow; this
-    // asserts they are still spelled where a reader can find them, so the
-    // criterion above stays checkable rather than becoming folklore.
-    expect(ci).toMatch(/design\//);
-    expect(ci).toMatch(/docs\//);
-    expect(skipped.length).toBeGreaterThan(0);
   });
 });

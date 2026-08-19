@@ -114,6 +114,35 @@ describe('PlanItemNode', () => {
     expect(badge.getAttribute('title')).toContain('Parent removed');
   });
 
+  // MOTIR-3151 — the SIZING rows. `buildChanges` has emitted `storyPoints` /
+  // `estimateMinutes` since MOTIR-1532, and neither had a message in the
+  // `planReview` catalog, so `DiffLine`'s `t(`field_${first.field}`)` rendered
+  // the KEY PATH. `DiffLine` shows `changes[0]` only, so a patch that changes
+  // ONLY the sizing put the leak first; one that also changed the title hid it.
+  // Guarded on the ABSENCE of the key path as well as the presence of the word —
+  // a label that renders `planReview.field_storyPoints` is the defect, and a
+  // present-only assertion would pass on it.
+  it.each([
+    ['storyPoints', '3', '5', 'Story points'] as const,
+    ['estimateMinutes', '30', '90', 'Estimate'] as const,
+  ])('labels a %s-only re-scope with a word, not a message key', (field, from, to, label) => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_size',
+          identifier: 'PROD-21',
+          title: 'Seller onboarding',
+          status: 'todo',
+          changes: [{ field, from, to }],
+        })}
+      />,
+    );
+    const line = screen.getByTestId('diff-line');
+    expect(line.textContent).not.toContain(`field_${field}`);
+    expect(line.textContent).toContain(label);
+  });
+
   // ⚠️ EDITING IS REMOVED (MOTIR-3084). MOTIR-1370's inline-edit pencil and its
   // modal are gone: a proposal is READ (the canvas peek) and changed by
   // re-planning, not hand-corrected. Guarded on ABSENCE, on every op — the

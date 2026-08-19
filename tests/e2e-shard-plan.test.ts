@@ -56,13 +56,27 @@ const runnableSpecs = readdirSync(E2E_DIR)
   .sort();
 
 /** The `e2e:` job body from ci.yml (job ids sit at exactly two spaces). */
-function e2eJobBody(): string {
+function jobBody(jobId: string): string {
   const lines = CI_YML.split('\n');
-  const start = lines.findIndex((l) => /^ {2}e2e:\s*$/.test(l));
-  expect(start, 'ci.yml has an `e2e:` job').toBeGreaterThan(-1);
+  const start = lines.findIndex((l) => new RegExp(`^ {2}${jobId}:\\s*$`).test(l));
+  expect(start, `ci.yml has a \`${jobId}:\` job`).toBeGreaterThan(-1);
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => /^ {2}[A-Za-z0-9_-]+:\s*$/.test(l));
   return (end === -1 ? rest : rest.slice(0, end)).join('\n');
+}
+
+/**
+ * The E2E legs live in TWO jobs since MOTIR-3148 — `e2e` carries the bulk and
+ * @a11y legs on every pull request, `e2e-at-scale` carries the volume legs on
+ * push-to-`main` and on an opted-in PR. Every assertion below is about the
+ * PARTITION across both, so reading one job would let a leg go missing from
+ * the other and still pass: that is precisely the "a spec silently stops being
+ * covered" failure this file exists to prevent (`notes.html` #267 — a card
+ * that moves work between lanes must compare the lanes, not just the selector
+ * that routes into one of them).
+ */
+function e2eJobBody(): string {
+  return `${jobBody('e2e')}\n${jobBody('e2e-at-scale')}`;
 }
 
 describe('E2E bulk-leg shard plan (MOTIR-2617)', () => {

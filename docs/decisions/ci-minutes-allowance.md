@@ -1001,6 +1001,70 @@ dogfooding is the correct call. Three independent reasons, each sufficient:
    concrete reason the project repos must not live in `moooon-B-V`, on top of the ones
    `project-repository-set.md` already gives.
 
+##### §J.4 — RE-TESTED 2026-08-19 (MOTIR-3149) and UPHELD, against a live starvation incident
+
+§J was written as a forward-looking exclusion. On 2026-08-19 it was tested by the case most
+likely to overturn it — **`motir-core`'s own CI was measurably starved** — and it holds on every
+axis. Recorded here because the next person to hit a slow lane will have the same idea, and
+the honest answer is that the idea was tried with numbers.
+
+**What was measured.** At 17:28Z the `moooon-B-V` GitHub plan was `free`: **20 jobs running, 90
+queued**, the ceiling pinned exactly at 20 while one `ci.yml` run wants 37 jobs. Push-to-`main`
+runs waited **35 and 58 minutes** for their first job, and `deploy` sits behind every gate, so a
+starved run is an unshipped merge. Two changes landed instead of a substrate change:
+
+|                                  | ceiling     | jobs / run          | main lag to first job       | jobs queued                                                   |
+| -------------------------------- | ----------- | ------------------- | --------------------------- | ------------------------------------------------------------- |
+| before                           | 20 (`free`) | 37                  | 1 · 5 · **35** · **58** min | **90**                                                        |
+| after MOTIR-3147 (plan → `team`) | 60          | 37                  | 4 · 10 min                  | draining                                                      |
+| after MOTIR-3148 (fan-out cut)   | 60          | ~19 on a typical PR | **2 min**                   | **0**, on three samples ~15 min apart at 33 / 34 / 45 running |
+
+**So the starvation is gone without touching the substrate**, and the two levers that removed it
+cost **$4/month** and one workflow diff. That is the decision: **option (a), nothing further.**
+
+**And the fleet is rejected on §J's own three reasons, not merely on cost** — each still
+sufficient, none weakened by the incident:
+
+1. **The failure-domain argument is the one the incident STRENGTHENS.** The lever that fixed
+   this was a GitHub plan tier. Had `motir-core` been on the fleet, the same saturation would
+   have been the fleet's admission gate (§6 is explicit that Motir's own cap, not GitHub, is the
+   binding constraint), and the fix would have required shipping a change to the fleet — through
+   the CI that was blocked.
+2. **The weight argument got heavier, then lighter, and is unchanged in kind.** 37 jobs / 179
+   job-minutes measured at run 32294917081, against the starter's ~39 minutes §J compares it to.
+3. **The per-org spending-limit argument is untouched** — `moooon-B-V` still needs a real limit
+   and `motir-projects` still needs $0.
+
+**A fourth reason, new, and it corrects `ci-runner-fleet.md` §8.** §8 prices the parity runner
+off _"GitHub's `ubuntu-latest` on a **private** repository … because every Motir-created
+repository is private."_ True of a Motir-created repo — and **false of `motir-core`**, which is
+`public`. So for the one repository anybody is ever tempted to move, the fleet's cost basis is
+understated: matching a public repo's larger hosted runner is roughly **2× $0.00195/min**. The
+same fact removes the benefit entirely, because **public-repo GitHub-hosted minutes are free** —
+moving `motir-core` converts **$0** into real Fly spend that §9 can neither cap nor alert on.
+
+**And §O already forbade the mechanism.** Routing `motir-core` to the fleet means setting
+`MOTIR_RUNNER` in `moooon-B-V` — the seam §N.1 relies on being _unset_ — so that its jobs carry
+the label §O binds the provisioning listener to. §O names that outcome exactly: pulling Motir's
+own matrix onto the fleet is _"the precise outcome §J exists to prevent, arriving through the
+back door."_ Option (b) is not a §J amendment; it is a dismantling of the guard built to stop it.
+
+**Not owed, with their triggers, so this is a decision and not a shrug:** a deploy-only `main`
+run and a merge queue were both weighed and are **not taken** — they address release LATENCY,
+and the measured complaint was contention, which is now zero. Re-open either if `main`'s
+created→deployed time becomes the binding problem; neither needs this section changed.
+
+> **⚠️ One criterion this pass could not satisfy as written, recorded rather than quietly
+> dropped.** MOTIR-3149 asked for the created→first-job delay across _"at least 5 push-to-`main`
+> runs."_ Only 3 post-change samples exist, and the shortfall is structural, not impatience:
+> **most push-to-`main` runs never start a job at all.** MOTIR-3106 deliberately keeps one
+> _pending_ run per concurrency group, so a merge landing during another merge's run cancels the
+> older pending one with **zero jobs** — 10 of the 20 most recent `main` runs. "Lag to first job"
+> is undefined for those, so the sample can never be filled on demand. **The queue-depth
+> measurement is the sound one** and it answers the question more directly: nothing waiting for a
+> runner means no run can be starved of one, which is a statement about the mechanism rather
+> than a sample of the symptom.
+
 #### §K — What SURVIVES the substrate change — verified against shipped code, not assumed
 
 The change is far narrower than it looks, because the shipped meter is already

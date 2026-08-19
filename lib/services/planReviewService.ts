@@ -16,6 +16,7 @@ import type {
 import type {
   PlanHistoryEventDto,
   PlanItemChangeDto,
+  PlanItemChangeField,
   PlanParentCrumbDto,
   PlanReviewDto,
   PlanReviewItemDto,
@@ -47,7 +48,12 @@ function buildChanges(
   target: WorkItem | undefined,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
-  const changes: PlanItemChangeDto[] = [];
+  // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
+  // compile error until it is added to `PLAN_ITEM_CHANGE_FIELDS` — which is what
+  // `plan-change-field-labels.test.tsx` then demands copy for. MOTIR-1532 added
+  // two of these and their labels never followed (MOTIR-3151); nothing on this
+  // path could have noticed.
+  const changes: (PlanItemChangeDto & { field: PlanItemChangeField })[] = [];
   if (patch.title !== undefined && patch.title !== target?.title) {
     changes.push({ field: 'title', from: target?.title ?? null, to: patch.title });
   }
@@ -84,6 +90,18 @@ function buildChanges(
   ) {
     // Descriptions are long prose — surface only THAT it changed, not the text.
     changes.push({ field: 'description', from: null, to: 'updated' });
+  }
+  // …and the SECOND body (MOTIR-3111). Same treatment as the description above —
+  // long prose, so the cell says only that it moved. It is listed because the
+  // explanation is the half a reviewer reads to decide whether a proposed
+  // re-shape is right: a `modify` that silently rewrote the WHY while the review
+  // surface showed nothing would defeat the point of putting the plan in front of
+  // a person at all.
+  if (
+    patch.explanationMd !== undefined &&
+    patch.explanationMd !== (target?.explanationMd ?? null)
+  ) {
+    changes.push({ field: 'explanation', from: null, to: 'updated' });
   }
   const added = patch.blockedByAdd?.length ?? 0;
   const removed = patch.blockedByRemove?.length ?? 0;

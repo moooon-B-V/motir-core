@@ -1,6 +1,7 @@
 import type { RateLimitStore } from '@/lib/api/v1/rateLimit';
 import { createPostgresRateLimitStore } from '@/lib/rateLimit/postgresStore';
 import { __setSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
+import { TEST_RATE_LIMIT_STORE_TIMEOUT_MS } from './rateLimitStoreDeadline';
 
 // THE TEST-TIME STORE DEADLINE — the one definition, for the same reason
 // `rateLimitWindow.ts` next door is the one definition of the window phase
@@ -34,22 +35,11 @@ import { __setSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 // handing them a generous one would delete the coverage. They are named in
 // `tests/rateLimit/storeDeadline.test.ts`'s `DEADLINE_IS_THE_SUBJECT` map.
 
-/**
- * The deadline a test hands the shared store.
- *
- * Sized against the runner, not the request. Two bounds fix it:
- *
- *  - **Below `testTimeout`** (15 s, `vitest.config.ts`). A store that genuinely
- *    hangs must fail on THIS deadline — which names the store in the error —
- *    rather than on the test timeout, which names nothing.
- *  - **Far above any honest increment.** One `INSERT … ON CONFLICT DO UPDATE`
- *    against a warm local pool measures in single-digit milliseconds; the
- *    250 ms production budget is ~40x that and still loses on a loaded shared
- *    runner, so the margin has to be an order of magnitude, not a factor of two.
- *
- * 10 s satisfies both with room on each side.
- */
-export const TEST_RATE_LIMIT_STORE_TIMEOUT_MS = 10_000;
+// The deadline itself lives in `rateLimitStoreDeadline.ts`, which imports
+// nothing — so a structural guard can read the number without dragging the
+// Prisma client in behind it (MOTIR-3144). Re-exported here so every existing
+// importer of this helper keeps working unchanged.
+export { TEST_RATE_LIMIT_STORE_TIMEOUT_MS };
 
 /**
  * The real Postgres store, with a test-time deadline instead of the production
