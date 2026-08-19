@@ -56,6 +56,12 @@ export default defineConfig({
       // that actual file. A design PR that restructures it can break this spec,
       // which is precisely what this lane is for.
       'tests/design-assets-uploader.test.ts',
+      // `design-ink-contrast` (MOTIR-3014) is the ink-contrast guard pointed at
+      // `design/**`. It is the spec this lane most obviously exists for: the
+      // asset it rules on is only ever edited by a `design/*` PR, and the code
+      // guard it extends (`tests/theme/inkContrastLint.test.ts`) is in the root
+      // config, which such a PR skips.
+      'tests/design-ink-contrast.test.ts',
     ],
   },
   resolve: {
