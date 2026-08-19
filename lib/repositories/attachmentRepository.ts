@@ -7,6 +7,30 @@ import { db } from '@/lib/db';
 // RLS policy's `app.workspace_id` GUC is bound; the orphan-GC (5.2.7) runs its
 // reads + deletes under withSystemContext instead (the policy's
 // `app.system_admin` hatch, added in the 5.2.1 migration).
+/**
+ * The sources a LIFECYCLE owns, which the generic attachments panel never lists.
+ *
+ * Each of these is linked to its work item only so the orphan-GC spares it; the
+ * rows are rendered by the panel that owns their lifecycle — the acceptance
+ * panel for a recording and its trace, the Design result panel for a published
+ * design asset. A `.zip` Playwright trace in the general attachments panel is
+ * noise to the reviewer that panel is for, and it inherits affordances its
+ * lifecycle never intended (panel delete, which would strand
+ * `AcceptanceEvidence.traceAttachmentId`).
+ *
+ * ⚠️ ONE CONSTANT, USED BY BOTH QUERIES (MOTIR-3085). The list and the count
+ * carried this predicate independently and had already drifted:
+ * `acceptance_trace` was documented in `schema.prisma` as excluded and was in
+ * neither array, so every story with a trace-carrying recording showed it. A
+ * denylist written twice is a denylist that will disagree with itself; written
+ * once, the badge cannot contradict the list it labels.
+ */
+export const LIFECYCLE_OWNED_SOURCES: readonly AttachmentSource[] = [
+  'acceptance_video',
+  'acceptance_trace',
+  'design_asset',
+];
+
 export const attachmentRepository = {
   async create(
     data: Prisma.AttachmentUncheckedCreateInput,
@@ -50,14 +74,9 @@ export const attachmentRepository = {
     const { take = 50, cursor } = options;
     const client = tx ?? db;
     return client.attachment.findMany({
-      // `acceptance_video` rows (MOTIR-1629) are linked to their story only to
-      // shield the current video from the orphan-GC; they are owned by the
-      // AcceptanceEvidence lifecycle and rendered in the acceptance panel, NOT
-      // the generic attachments panel — so exclude them here.
-      // `design_asset` rows (MOTIR-2666) are the same shape one artifact class
-      // over: owned by the DesignEvidence lifecycle, rendered in the Design
-      // result panel, linked to the item only so the GC spares the current set.
-      where: { workItemId, source: { notIn: ['acceptance_video', 'design_asset'] } },
+      // The lifecycle-owned sources never reach this panel — see
+      // LIFECYCLE_OWNED_SOURCES for which and why.
+      where: { workItemId, source: { notIn: [...LIFECYCLE_OWNED_SOURCES] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -67,10 +86,10 @@ export const attachmentRepository = {
   /** The panel's total count ("Show more (N)" + the header badge, 5.2.2). */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? db;
-    // Mirror listByWorkItem: acceptance videos and design assets never count
-    // toward the panel.
+    // The SAME predicate the listing uses, from the same constant — the badge
+    // and the list cannot disagree.
     return client.attachment.count({
-      where: { workItemId, source: { notIn: ['acceptance_video', 'design_asset'] } },
+      where: { workItemId, source: { notIn: [...LIFECYCLE_OWNED_SOURCES] } },
     });
   },
 

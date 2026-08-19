@@ -115,7 +115,23 @@ export interface V1Operation {
   /** Path, query and request-header parameters. */
   parameters: readonly V1Parameter[];
   /** The request body, for the verbs that take one. */
-  requestBody?: { schema: z.ZodType; description: string };
+  requestBody?: {
+    schema: z.ZodType;
+    description: string;
+    /**
+     * The media type the body is sent as. Defaults to `application/json`, which
+     * every operation but the attachment upload uses.
+     *
+     * ⚠️ It is a DECLARATION, not a parser: the emitter names this media type in
+     * the document and the ROUTE is what actually reads the body. A
+     * `multipart/form-data` operation therefore describes its parts with a
+     * `z.object` whose file field is `z.string()` + the binary format the
+     * emitter stamps — OpenAPI's own way of saying "bytes" — because Zod has no
+     * file type and inventing one here would put a schema in the document that
+     * no validator on either side could run.
+     */
+    contentType?: 'application/json' | 'multipart/form-data';
+  };
   /** The success status and what it carries. */
   response: { status: V1SuccessStatus; body: V1ResponseBody; description: string };
   /**

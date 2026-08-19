@@ -262,7 +262,12 @@ function operationObject(operation: V1Operation): JsonObject {
             required: true,
             description: operation.requestBody.description,
             content: {
-              'application/json': {
+              // JSON unless the operation says otherwise (MOTIR-3057's upload is
+              // the first that does). Keyed off the declaration rather than
+              // guessed from the schema: a `multipart/form-data` body and a JSON
+              // body can have the same Zod shape, and only the operation knows
+              // which wire form it accepts.
+              [operation.requestBody.contentType ?? 'application/json']: {
                 schema: toOpenApiSchema(operation.requestBody.schema, 'input'),
               },
             },

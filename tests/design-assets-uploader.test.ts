@@ -14,6 +14,7 @@ import {
   parseHunkRanges,
   parseWorkItemKey,
   publishDesignResult,
+  resolveDiffBase,
   resolveTargetKey,
   splitNoteSections,
 } from '../scripts/upload-design-assets.mjs';
@@ -117,6 +118,60 @@ describe('collectChangedDesignFiles', () => {
     const out = collectChangedDesignFiles({ base: 'base', git: () => '', exists, cwd: ROOT });
     expect(out.assets).toEqual([]);
     expect(out.notes).toEqual([]);
+  });
+});
+
+describe('resolveDiffBase — the PR measures from where IT diverged (MOTIR-3104)', () => {
+  // ⚠️ THE BUG THIS REPLACES, stated so the test cannot be "simplified" back
+  // into it: the job diffed `github.event.pull_request.base.sha` against a
+  // MERGE-COMMIT checkout, so every design change the base branch made between
+  // the event snapshot and the merge was attributed to the PR. It fired on a
+  // story PR touching no design file at all — and on a `subtask/*` branch the
+  // same thing does not fail, it publishes ANOTHER card's design onto this one.
+
+  it('prefers the merge commit’s FIRST PARENT — the base it was actually merged with', () => {
+    const git = vi.fn(() => 'mergeSha baseTip prHead\n');
+    expect(resolveDiffBase({ base: 'eventBase', git, cwd: ROOT })).toEqual({
+      base: 'baseTip',
+      source: 'merge-parent',
+    });
+    // Parent 1, never parent 2: parent 2 is the PR head, and diffing HEAD
+    // against itself reports nothing at all.
+    expect(git).toHaveBeenCalledWith(['rev-list', '--parents', '-n', '1', 'HEAD'], ROOT);
+  });
+
+  it('falls back to the merge BASE when HEAD is not a merge commit', () => {
+    const git = vi.fn((args: string[]) => {
+      if (args[0] === 'rev-list') return 'headSha parentSha\n'; // two fields — not a merge
+      if (args[0] === 'merge-base') return 'forkPoint\n';
+      return '';
+    });
+    expect(resolveDiffBase({ base: 'eventBase', git, cwd: ROOT })).toEqual({
+      base: 'forkPoint',
+      source: 'merge-base',
+    });
+  });
+
+  it('falls back to the supplied base when there is no shared history to walk', () => {
+    // The depth-1 clone this job runs in: the base object is present but its
+    // ancestry is not, so `merge-base` has nothing to compute from. Degrading
+    // to today's behaviour is right; degrading SILENTLY is what this returns a
+    // source for.
+    const git = vi.fn((args: string[]) => {
+      if (args[0] === 'rev-list') return 'headSha parentSha\n';
+      throw new Error('fatal: refusing to work with shallow history');
+    });
+    expect(resolveDiffBase({ base: 'eventBase', git, cwd: ROOT })).toEqual({
+      base: 'eventBase',
+      source: 'event-base',
+    });
+  });
+
+  it('survives an unreadable HEAD rather than taking the whole job down with it', () => {
+    const git = vi.fn(() => {
+      throw new Error('fatal: bad revision');
+    });
+    expect(resolveDiffBase({ base: 'eventBase', git, cwd: ROOT }).source).toBe('event-base');
   });
 });
 

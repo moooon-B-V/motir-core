@@ -215,6 +215,72 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
     expect(violations(scanMock('fixture.mock.html', html)).map((f) => f.line)).toEqual([2, 3]);
   });
 
+  it('reads a DESCENDANT rule, and a CHILD and COMPOUND one (MOTIR-3122)', () => {
+    // The blind spot this widening closes. `.zoomctl .pct { color: faint }`
+    // paints `80%` on screen in EVERY render, and the bare-selector map could
+    // not see it — 299 such rules over ~775 text-carrying elements, plus 391
+    // MUTED violations on the arm that is actually enforced.
+    expect(
+      counted(
+        scan(
+          `<div class="zoomctl"><span class="pct">80%</span></div>`,
+          `.zoomctl .pct { color: var(--el-text-faint); }`,
+        ),
+      ).map((f) => f.via),
+      'descendant',
+    ).toEqual(['stylesheet']);
+    expect(
+      counted(
+        scan(
+          `<div class="panel"><p class="cap">x</p></div>`,
+          `.panel > .cap { color: var(--el-text-faint); }`,
+        ),
+      ).map((f) => f.via),
+      'child combinator',
+    ).toEqual(['stylesheet']);
+    expect(
+      counted(scan(`<p class="seam sm">x</p>`, `.seam.sm { color: var(--el-text-faint); }`)).map(
+        (f) => f.via,
+      ),
+      'compound',
+    ).toEqual(['stylesheet']);
+    // …and the muted arm sees the same shape, which is what took it 0 -> 391.
+    expect(
+      violations(
+        scan(
+          `<div class="bg-(--el-surface)"><p class="note">x</p></div>`,
+          `.panel .note { color: var(--el-text-muted); }`,
+        ),
+      ),
+      'an unmatched ancestor must NOT match',
+    ).toEqual([]);
+    expect(
+      violations(
+        scan(
+          `<div class="panel bg-(--el-surface)"><p class="note">x</p></div>`,
+          `.panel .note { color: var(--el-text-muted); }`,
+        ),
+      ).map((f) => f.surface),
+    ).toEqual(['--el-surface']);
+  });
+
+  it('still ABSTAINS on a state, pseudo-element, attribute or tag rule', () => {
+    // The original warrant, unchanged and still load-bearing: a state rule
+    // paints in one render and not another, so reading one would be a false
+    // positive nobody can act on. A widening that swallowed these would trade a
+    // blind spot for a false-positive engine.
+    const abstains = (style: string, label: string) =>
+      expect(
+        counted(scan(`<div class="zoomctl"><span class="pct">80%</span></div>`, style)),
+        label,
+      ).toEqual([]);
+    abstains(`.zoomctl:hover .pct { color: var(--el-text-faint); }`, ':hover');
+    abstains(`.zoomctl .pct:focus { color: var(--el-text-faint); }`, ':focus');
+    abstains(`.zoomctl .pct::before { color: var(--el-text-faint); }`, '::before');
+    abstains(`.zoomctl[data-open] .pct { color: var(--el-text-faint); }`, 'attribute');
+    abstains(`div.zoomctl span { color: var(--el-text-faint); }`, 'tag');
+  });
+
   it('never rules on markup inside a <style> or a comment', () => {
     // The stylesheet quotes the utility class to DECLARE it
     // (`.text-\(--el-text-muted\) { … }`), and every mock in the tree does. A

@@ -88,28 +88,25 @@ function missingNotes(paths: string[]): string[] {
     .sort();
 }
 
-// ── The one place judgement lives ───────────────────────────────────────────
-// Two areas predate the rule and have never had notes. They are LISTED rather
-// than exempted by a predicate, with the card that fixes them, and the table is
-// asserted TIGHT in both directions below — an unlisted area fails, and a listed
-// area that has since gained notes fails too, so the list cannot rot into a mute
-// button. (Same treatment `design-asset-addresses.test.ts` gives its `KNOWN`
-// table, for the same reason.)
+// ── The one place judgement lives, and it is now EMPTY ──────────────────────
+// An area may be listed here rather than exempted by a predicate, with a reason
+// and the card that closes it, and the table is asserted TIGHT in both
+// directions below — an unlisted finding fails, and a listed area that has since
+// gained notes fails too, so the list cannot rot into a mute button. (Same
+// treatment `design-asset-addresses.test.ts` gives its `KNOWN` table, for the
+// same reason.)
 //
-// Writing the two specs is design authoring, not a render: `design/auth` is a
-// twelve-screen Pencil set and `design/typography` a token specimen, and
-// reverse-engineering either into a notes file inside this card would be a
-// change nobody reviews (`notes.html` #27). MOTIR-3107 owns them.
-const KNOWN_MISSING_NOTES: { area: string; why: string }[] = [
-  {
-    area: 'design/auth',
-    why: 'The 2.0 auth set: a Pencil `.pen` source plus twelve PNG exports, drawn before the three-file rule existed. Its notes are a design deliverable, not a render — MOTIR-3107.',
-  },
-  {
-    area: 'design/typography',
-    why: 'The mono/technical type specimen (`mono-technical.mock.html` + its export), landed as a specimen rather than a surface and never given a spec — MOTIR-3107.',
-  },
-];
+// It shipped with two rows, both of them debt this guard inherited rather than
+// created: `design/auth` (a twelve-screen Pencil set) and `design/typography` (a
+// type specimen), each a design-AUTHORING job rather than a render, which is why
+// MOTIR-3069 filed them as MOTIR-3107 instead of folding them into a card whose
+// diff was seven PNGs (`notes.html` #27). MOTIR-3107 wrote both specs, so both
+// rows are gone and every one of the tree's areas now carries its notes.
+//
+// EMPTY IS THE INTENDED RESTING STATE. Adding a row is a deliberate act with a
+// written reason and a card that removes it again — not a way to land an
+// incomplete area.
+const KNOWN_MISSING_NOTES: { area: string; why: string }[] = [];
 
 // ── The real tree ───────────────────────────────────────────────────────────
 
@@ -153,8 +150,10 @@ describe('a design surface ships all THREE files (MOTIR-3069)', () => {
   });
 
   it('holds `KNOWN_MISSING_NOTES` tight — a row that no longer fires fails', () => {
-    // The half that stops the table becoming a mute button: when MOTIR-3107
-    // lands either notes file, its row must go with it.
+    // The half that stops the table becoming a mute button: an area that gains
+    // its notes must lose its row in the same diff. It is what deleted both of
+    // MOTIR-3107's rows, and with the table empty it is dormant rather than
+    // vacuous — it fires again the moment anyone adds a row.
     const findings = new Set(missingNotes(TREE).map((finding) => areaOf(finding.split(' ')[0]!)));
     for (const row of KNOWN_MISSING_NOTES) {
       expect(findings.has(row.area), `${row.area} now has ${NOTES} — drop its row`).toBe(true);

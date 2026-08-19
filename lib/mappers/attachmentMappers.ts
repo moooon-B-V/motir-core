@@ -43,9 +43,11 @@ export function toAttachmentDto(row: Attachment, uploadersById: Map<string, User
     filename: row.originalFilename,
     mimeType: row.mimeType,
     sizeBytes: row.sizeBytes,
-    // acceptance_video rows are excluded from the panel read (MOTIR-1629), so a
-    // row reaching this mapper is always editor|panel.
-    source: row.source as 'editor' | 'panel',
+    // The lifecycle-owned sources (acceptance_video / design_asset) are excluded
+    // from the panel read, so a row reaching this mapper is editor | panel |
+    // api. `api` joined in MOTIR-3057 and is an ORDINARY attachment — listed,
+    // counted, and attributed to its uploader like any other.
+    source: row.source as AttachmentDTO['source'],
     // The authenticated content path (private blob served via the auth'd route),
     // NOT a raw blob URL. The DTO field keeps its name; its value is the path.
     blobUrl: attachmentContentPath(row.id),

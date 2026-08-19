@@ -18,7 +18,7 @@ import { truncateAuthTables } from '../helpers/db';
 //
 // Real Postgres, the real webhook service, the real provider seam — no mocks (the
 // motir-core convention). Covers: the default-branch merge still completing
-// (regression guard), the non-default merge HOLDING at In Review with the reason
+// (regression guard), the non-default merge HOLDING at Implemented with the reason
 // on the item, a repo whose default is `master` behaving identically (the branch
 // name is read from the MIRRORED row, never hard-coded), the real #1687/#1688
 // payload shapes replayed against each other, and redelivery idempotency.
@@ -27,7 +27,7 @@ const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-trunk';
 const REPO_PROVIDER_ID = '9101';
 
-/** A workspace + project + a work item already `in_review` (its PR is open), plus
+/** A workspace + project + a work item already `implemented` (its PR is open), plus
  *  a mirrored installation + repo whose default branch is `defaultBranch`. */
 async function makeScenario(email: string, defaultBranch = 'main') {
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
@@ -96,14 +96,14 @@ function prPayload(opts: {
   };
 }
 
-/** Open the PR (so the item sits at In Review, as it does in reality) and then
+/** Open the PR (so the item sits at Implemented, as it does in reality) and then
  *  merge it into `baseRef`. Returns the merge delivery's result. */
 async function openThenMergeInto(identifier: string, baseRef: string, number = 1688) {
   const opened = await githubWebhookService.handleEvent(
     'pull_request',
     prPayload({ action: 'opened', identifier, baseRef, number }),
   );
-  expect(opened).toMatchObject({ outcome: 'transitioned', toStatus: 'in_review' });
+  expect(opened).toMatchObject({ outcome: 'transitioned', toStatus: 'implemented' });
   return githubWebhookService.handleEvent(
     'pull_request',
     prPayload({ action: 'closed', identifier, baseRef, number, state: 'closed', merged: true }),
@@ -154,7 +154,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
     expect(await commentsOn(s.item.id)).toHaveLength(0);
   });
 
-  it('merged into a NON-default branch → held at In Review, never Done, with the base ref on the item', async () => {
+  it('merged into a NON-default branch → held at Implemented, never Done, with the base ref on the item', async () => {
     const s = await makeScenario('trunk-stacked@example.com');
 
     const merged = await openThenMergeInto(s.item.identifier, 'subtask/ACME-9-sibling-work');
@@ -164,10 +164,10 @@ describe('the trunk gate — a merge completes an item only on the default branc
       outcome: 'deferred_non_default_base',
       workItemId: s.item.id,
     });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     // The reason lands on the item, naming the base that swallowed the merge — the
-    // one fact that turns "why is this still In Review?" into a one-minute answer.
+    // one fact that turns "why is this still open?" into a one-minute answer.
     const comments = await commentsOn(s.item.id);
     expect(comments).toHaveLength(1);
     expect(comments[0]!.bodyMd).toContain('subtask/ACME-9-sibling-work');
@@ -185,7 +185,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
     // `workflow_status` write would leave no revision to read).
     const hops = await statusHops(s.item.id);
     expect(hops).not.toContain('done');
-    expect(hops.at(-1)).toBe('in_review');
+    expect(hops.at(-1)).toBe('implemented');
   });
 
   it('reads the default branch from the MIRRORED repo row — a `master` repo behaves identically', async () => {
@@ -201,7 +201,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
     const s2 = await makeScenario('trunk-master2@example.com', 'master');
     const onMain = await openThenMergeInto(s2.item.identifier, 'main', 3002);
     expect(onMain).toMatchObject({ outcome: 'deferred_non_default_base' });
-    expect(await statusOf(s2.item.id)).toBe('in_review');
+    expect(await statusOf(s2.item.id)).toBe('implemented');
     expect((await commentsOn(s2.item.id))[0]!.bodyMd).toContain('master');
   });
 
@@ -215,7 +215,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
       1688,
     );
     expect(strandedResult).toMatchObject({ outcome: 'deferred_non_default_base' });
-    expect(await statusOf(stranded.item.id)).toBe('in_review');
+    expect(await statusOf(stranded.item.id)).toBe('implemented');
 
     // The umbrella PR that DID reach the trunk, same day, same repo shape.
     const landed = await makeScenario('trunk-1687@example.com');
@@ -249,7 +249,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
     for (const r of [first, second, third]) {
       expect(r).toMatchObject({ outcome: 'deferred_non_default_base' });
     }
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
     // A redelivery describes the SAME merge event — one note, not three.
     expect(await commentsOn(s.item.id)).toHaveLength(1);
   });
@@ -275,7 +275,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
     );
 
     expect(merged).toMatchObject({ outcome: 'deferred_non_default_base' });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
     expect((await commentsOn(s.item.id))[0]!.bodyMd).toContain('subtask/ACME-9-sibling-work');
   });
 

@@ -32,9 +32,9 @@ beforeAll(() => {
 });
 
 const statusByKey: StatusByKey = new Map([
-  ['done', { label: 'Done', category: 'done' }],
-  ['in_progress', { label: 'In progress', category: 'in_progress' }],
-  ['todo', { label: 'To do', category: 'todo' }],
+  ['done', { key: 'done', label: 'Done', category: 'done' }],
+  ['in_progress', { key: 'in_progress', label: 'In progress', category: 'in_progress' }],
+  ['todo', { key: 'todo', label: 'To do', category: 'todo' }],
 ]);
 
 function issue(over: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDto {

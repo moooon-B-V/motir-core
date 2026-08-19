@@ -89,6 +89,31 @@ function basenameOf(sourcePath: string): string {
  */
 const LEAF_KINDS = new Set(['task', 'bug', 'subtask']);
 
+/**
+ * ⚠️ LEAF is a position in the tree, not a kind (MOTIR-3146).
+ *
+ * `LEAF_KINDS` answers *"is this a kind that CAN be a leaf?"*, and only `subtask`
+ * makes those two questions the same: `lib/issues/parentRules.ts` has
+ * `bug → [subtask]` and `task → [bug, subtask]`, so a `bug` or a `task` may hold
+ * children and be a CONTAINER. Reading the kind alone let one through — a
+ * `parent/MOTIR-<bug>-…` pull request from the parent-run form, whose branch
+ * carries the container's key by design — and the publish proceeded into a 500
+ * instead of the clean no-op MOTIR-3124 built for exactly this case.
+ *
+ * So the check is structural: a target is publishable when it has NO CHILDREN.
+ * The kind test stays as the cheap first pass (an `epic` / `story` needs no
+ * query); the child read settles the rest.
+ */
+async function isLeafPosition(item: WorkItem, ctx: ServiceContext): Promise<boolean> {
+  if (!LEAF_KINDS.has(item.kind)) return false;
+  if (item.kind === 'subtask') return true; // the only kind nothing may parent to
+  const children = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => workItemRepository.findChildren(item.id, tx),
+  );
+  return children.length === 0;
+}
+
 /** Resolve + validate the design target is a visible LEAF (RLS-scoped). */
 async function resolveTarget(workItemId: string, ctx: ServiceContext): Promise<WorkItem> {
   const item = await withWorkspaceContext(
@@ -96,7 +121,9 @@ async function resolveTarget(workItemId: string, ctx: ServiceContext): Promise<W
     (tx) => workItemRepository.findById(workItemId, tx),
   );
   if (!item) throw new DesignEvidenceNotFoundError(workItemId);
-  if (!LEAF_KINDS.has(item.kind)) throw new DesignEvidenceNotALeafError(item.kind);
+  if (!(await isLeafPosition(item, ctx))) {
+    throw new DesignEvidenceNotALeafError(item.kind, !LEAF_KINDS.has(item.kind));
+  }
   // Attaching a design result to an item is editing that item; the project is
   // resolved from the ITEM, never from the actor's active project (the gate
   // MOTIR-2365 added to the acceptance resolver after a token-minting endpoint

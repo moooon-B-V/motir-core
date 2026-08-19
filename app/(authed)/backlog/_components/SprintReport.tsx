@@ -319,7 +319,7 @@ function ReportIssueRow({
       <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
       <span className="shrink-0">
         {status ? (
-          <StatusValue category={status.category} label={status.label} />
+          <StatusValue statusKey={status.key} category={status.category} label={status.label} />
         ) : (
           <StatusValue category={null} label={item.status} />
         )}

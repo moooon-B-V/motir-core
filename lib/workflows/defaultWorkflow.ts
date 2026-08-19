@@ -3,7 +3,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 
 // The v1 default per-project workflow (Story 2.2 · Subtask 2.2.2) — the typed
 // constant `workflowsService.seedDefaultWorkflow` writes into every new
-// project. Seven statuses spanning the full lifecycle, including a non-terminal
+// project. Eight statuses spanning the full lifecycle, including a non-terminal
 // `blocked` and a terminal `cancelled` (the two most common admin-added
 // statuses in real Jira/Linear installs) so every project exercises the
 // multi-terminal-status + non-linear-graph paths from day one — not only after
@@ -13,6 +13,13 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 // before assuming it is decoration: its CATEGORY is what stops an unattended run
 // re-dispatching a card whose plan is being reconsidered, and `blocked` cannot
 // do that job.
+//
+// MOTIR-3003 added the eighth, `implemented`, for the same structural reason one
+// rung further along the loop: an agent's process exiting 0 proves only that the
+// process ended, so the card it just pushed must NOT claim a human should look at
+// it until CI says the build is green. Its note beside the row below carries the
+// reasoning, and where it sits in the order was decided by measurement — see
+// `design/boards/design-notes.md` ("Implemented — the eighth board column").
 //
 // `position` is the SAME opaque fractional-index sort key `work_item.position`
 // uses (finding #43): allocated here via `keyForAppend` (the Story-1.4 helper),
@@ -36,6 +43,26 @@ const STATUS_ORDER: ReadonlyArray<Omit<DefaultStatusSpec, 'position'>> = [
   // captures "blocked" including external blockers).
   { key: 'blocked', label: 'Blocked', category: 'todo', isInitial: false },
   { key: 'in_progress', label: 'In Progress', category: 'in_progress', isInitial: false },
+  // ⚠️ THE CATEGORY IS THE MECHANISM HERE TOO (MOTIR-3003), for the reason the
+  // `planning` note below states in full: readiness is derived from the
+  // `is_blocked_by` EDGES and never from the status, so what actually takes a
+  // card out of the pickable set is its CATEGORY. A card whose pull request is
+  // open and whose checks are still running must not be handed to the next run,
+  // and `in_progress` is where it would stay if this status were anywhere else.
+  //
+  // It is also the honest word. Between "the agent stopped" and "a human should
+  // look at this" there is a real state that Motir could not express: the branch
+  // is pushed, the pull request is open, and NOTHING has been compiled, linted or
+  // tested. In Review is a promise to a person; `implemented` is the fact.
+  //
+  // ⚠️ ORDER: immediately after `in_progress`, BEFORE `planning`, and that is a
+  // MEASURED decision rather than a preference (`design/boards/implemented-column.mock.html`,
+  // panel 1). A board column is 288px in a 16px-gap row beside a 240px rail, so
+  // slot 4 is the last column a laptop shows in full (from 1512px; a 63–223px
+  // sliver below that) and slot 5 is off-screen at every laptop width measured.
+  // The path every card walks takes the visible slot; `planning` — an exceptional
+  // off-ramp with its own review surface — takes the one after it.
+  { key: 'implemented', label: 'Implemented', category: 'in_progress', isInitial: false },
   // ⚠️ THE CATEGORY IS THE MECHANISM (MOTIR-2425). When an agent finds a card it
   // cannot implement it submits a re-plan, and the card must stop being handed
   // out until a human has acted on that plan.
@@ -70,7 +97,7 @@ export const DEFAULT_STATUSES: ReadonlyArray<DefaultStatusSpec> = (() => {
 })();
 
 /**
- * The keys of the seven default statuses (Subtask 2.2.10). A status whose `key`
+ * The keys of the eight default statuses (Subtask 2.2.10). A status whose `key`
  * is in here is a PROTECTED default: it can be recolored but NOT renamed,
  * recategorized, reordered, or deleted (finding #49). Used by the service gates
  * and by the editor UI to render the "Default" badge + lock the affordances.
@@ -97,7 +124,11 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 // a matching backfill migration for existing default-workflow projects.
 // MOTIR-2425 adds `planning` and FIVE more edges (two in, three out), bringing
 // the total to TWENTY-TWO — with a backfill that adds the status, its edges and
-// a board column to every existing default-workflow project.
+// a board column to every existing default-workflow project. MOTIR-3003 adds
+// `implemented` and SEVEN more (two in, five out), bringing the total to
+// TWENTY-NINE — again with a backfill of the status, its edges and a board
+// column. Each of the seven is justified beside it below; the tally is amended
+// here rather than left stale, which is the convention this comment exists for.
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
@@ -156,4 +187,31 @@ export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   ['planning', 'todo'],
   ['planning', 'in_progress'],
   ['planning', 'cancelled'],
+  // ── Implemented (MOTIR-3003) ───────────────────────────────────────────────
+  // IN, two:
+  //   • `in_progress → implemented` — the forward path a run takes when its agent
+  //     finishes and its pull request is open.
+  //   • `blocked → implemented`     — the inverse of the block edge below, so a
+  //     card that stalled while its checks were pending can come back.
+  ['in_progress', 'implemented'],
+  ['blocked', 'implemented'],
+  // OUT, five:
+  //   • `implemented → in_review`   — what CI GREEN does, server-side, from the
+  //     shared CI-feedback consumer. This is the edge the whole story is for.
+  //   • `implemented → in_progress` — rework: the reviewer or the author reopens
+  //     it (a red build, or a change of mind before review starts).
+  //   • `implemented → blocked`     — an open pull request can still stall on
+  //     something external, exactly as `in_review` can (7.8.11's reasoning).
+  //   • `implemented → cancelled`   — cancellation is legal from any
+  //     non-terminal state; this one is no different.
+  //   • `implemented → done`        — a project with no review gate closes
+  //     straight from here, the same latitude MOTIR-1625 gave `in_progress`, and
+  //     for the same second reason: the MOTIR-1615 rollup moves a parent to
+  //     `done` from wherever it is, and without this edge a parent sitting at
+  //     `implemented` would strand.
+  ['implemented', 'in_review'],
+  ['implemented', 'in_progress'],
+  ['implemented', 'blocked'],
+  ['implemented', 'cancelled'],
+  ['implemented', 'done'],
 ];

@@ -1,4 +1,4 @@
-import type { Attachment, Prisma, WorkItem } from '@/generated/prisma/client';
+import type { Attachment, AttachmentSource, Prisma, WorkItem } from '@/generated/prisma/client';
 import {
   withSystemContext,
   withWorkspaceContext,
@@ -76,7 +76,8 @@ export interface UploadAttachmentResult {
 export interface AttachmentDiffItem {
   attachmentId: string;
   name: string;
-  source: 'editor' | 'panel';
+  /** `api` joined in MOTIR-3057 — a general-door upload is an ordinary attachment. */
+  source: 'editor' | 'panel' | 'api';
 }
 
 /**
@@ -174,10 +175,11 @@ function attachmentsDiffCell(
   const item: AttachmentDiffItem = {
     attachmentId: row.id,
     name: row.originalFilename,
-    // Only editor/panel uploads appear in a body diff; an acceptance_video row
-    // (MOTIR-1629) is never embedded in a description/comment, so it never
-    // reaches this diff cell.
-    source: row.source as 'editor' | 'panel',
+    // Only editor/panel/api uploads reach a body diff; the lifecycle-owned rows
+    // (acceptance_video / acceptance_trace / design_asset) are never embedded in
+    // a description or comment and are never linked through the panel path, so
+    // they never reach this cell.
+    source: row.source as AttachmentDiffItem['source'],
   };
   return { attachments: { [op]: [item] } };
 }
@@ -323,6 +325,23 @@ export const attachmentsService = {
     workItemId: string,
     file: File,
     ctx: ServiceContext,
+    /**
+     * How this row ENTERED the system (MOTIR-3057). Defaults to `'panel'`, so
+     * the shipped browser caller is unchanged; the `/api/v1` door passes
+     * `'api'`.
+     *
+     * ⚠️ It is a parameter rather than a second method because the whole point
+     * of the general door is that there is ONE upload implementation — the
+     * gates, the blob write and the link/revision transaction below are exactly
+     * what the panel already runs. A second method here would be the "second
+     * upload path" `docs/decisions/attachment-api-door.md` §1 forbids, arrived
+     * at one refactor later.
+     *
+     * Only `panel` and `api` are admissible: `editor` rows are LINKED by the
+     * link-on-write parse rather than by an upload, and the three
+     * lifecycle-owned sources are written by their own publishers.
+     */
+    source: Extract<AttachmentSource, 'panel' | 'api'> = 'panel',
   ): Promise<AttachmentDTO> {
     const pre = await resolveGatedWorkItem(workItemId, ctx);
     if (!pre.caps.canCreate) throw new AttachmentForbiddenError('create');
@@ -342,8 +361,8 @@ export const attachmentsService = {
         // Present by construction: uploadAttachment just inserted this row in
         // THIS workspace and returned its id.
         const created = (await attachmentRepository.findById(uploaded.id, tx))!;
-        const linked: Attachment = { ...created, workItemId, source: 'panel' };
-        await attachmentRepository.linkToWorkItem([created.id], workItemId, 'panel', tx);
+        const linked: Attachment = { ...created, workItemId, source };
+        await attachmentRepository.linkToWorkItem([created.id], workItemId, source, tx);
         await workItemRevisionsService.recordRevision(
           {
             workItemId,

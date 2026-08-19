@@ -106,6 +106,10 @@ const DERIVED_TOOLS = new Set<string>([
   'change_kind',
   'move_to_parent',
   'add_comment',
+  // MOTIR-3058 — the general attachment door. Derives from v1's own
+  // `attachmentSchema` through `presentAttachment`; the payload is that shape
+  // verbatim, with no widening at all.
+  'attach_file',
   // 11.6.4 — project / sprint / backlog / identity (MOTIR-2230)
   'list_projects',
   'whoami',
@@ -134,6 +138,14 @@ const DERIVED_TOOLS = new Set<string>([
   'append_plan_turn',
   'submit_plan_session',
   'get_work_item_activity',
+  // MOTIR-3100 — the plan-tree breadth projection. Its row is a declared
+  // NARROWING of `WorkItemRef` (`.pick` of the five fields the projection
+  // carries, `.extend`ed with the cuid and revision a plan proposal anchors on),
+  // so it derives and carries no probe — the same shape as the search row.
+  // Its sibling `search_work_items_semantic` is EXEMPT, not derived: a
+  // `{ key, title, score }` ranking is not a work-item representation and ADR §2
+  // forbids it from becoming one.
+  'skeleton',
 ]);
 
 describe('toolOk totality — a payload must come from a constructor', () => {

@@ -12,7 +12,7 @@ import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
 import type { ActivityEntryDto, ActivityEntryPartDto, ActivityValueDto } from '@/lib/dto/activity';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import { STATUS_TONE } from '../../_components/issueCellPrimitives';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // One History feed row (Story 5.5 · Subtask 5.5.4), per
 // `design/work-items/activity-history.mock.html` panels 1–2: comment-row-
@@ -124,7 +124,7 @@ export function ActivityEntryRow({
     if (value.key === 'blocked') return <Pill severity="warning">{label}</Pill>;
     const category = statusCategories[value.key];
     return category ? (
-      <Pill status={STATUS_TONE[category]}>{label}</Pill>
+      <StatusPill statusKey={value.key} category={category} label={label} />
     ) : (
       <Pill tone="neutral">{label}</Pill>
     );
