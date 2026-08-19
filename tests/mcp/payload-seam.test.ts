@@ -132,6 +132,14 @@ const DERIVED_TOOLS = new Set<string>([
   'append_plan_turn',
   'submit_plan_session',
   'get_work_item_activity',
+  // MOTIR-3100 — the plan-tree breadth projection. Its row is a declared
+  // NARROWING of `WorkItemRef` (`.pick` of the five fields the projection
+  // carries, `.extend`ed with the cuid and revision a plan proposal anchors on),
+  // so it derives and carries no probe — the same shape as the search row.
+  // Its sibling `search_work_items_semantic` is EXEMPT, not derived: a
+  // `{ key, title, score }` ranking is not a work-item representation and ADR §2
+  // forbids it from becoming one.
+  'skeleton',
 ]);
 
 describe('toolOk totality — a payload must come from a constructor', () => {

@@ -491,6 +491,13 @@ export default defineConfig({
         // Story 7.9 · MOTIR-1837 — the plan CONTENT read (the proposals behind
         // that outcome's count); `tests/mcp/get-plan` drives it.
         'lib/mcp/tools/getPlan.ts',
+        // Story MOTIR-3098 · Subtask MOTIR-3102 — the two DISCOVERY reads, the
+        // surface an agent uses to answer *does this already exist?* Both are
+        // new in this story, so there is no pre-existing number to pin blind:
+        // GATED, not report-only. Their shared payload code is already gated
+        // through `lib/mcp/payloads/workItems.ts` above.
+        'lib/mcp/tools/skeleton.ts',
+        'lib/mcp/tools/searchWorkItemsSemantic.ts',
         // Story 7.9 · MOTIR-1842 — the dependency-EDGE projection both LIST
         // reads attach; `tests/mcp/dependency-edges` drives it.
         'lib/mcp/dependencyEdges.ts',
@@ -1827,6 +1834,9 @@ export default defineConfig({
         'lib/mcp/tools/deleteWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/expandItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/dependencyEdges.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3098's two discovery reads (MOTIR-3102).
+        'lib/mcp/tools/skeleton.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/searchWorkItemsSemantic.ts': { branches: 90, functions: 90, lines: 90 },
         // These four gate on functions + lines only: each carries DEFENSIVE
         // branches unreachable under shipped invariants, so a 90% BRANCH bar
         // would fail on un-coverable code.

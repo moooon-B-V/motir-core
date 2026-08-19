@@ -48,6 +48,11 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import {
+  ALIGNED_HEADROOM_MS,
+  ALIGNED_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '../helpers/rateLimitWindow';
 
 const MODEL = 'text-embedding-3-small';
 const TARGET_TITLE = 'Board columns remember their collapsed state';
@@ -292,6 +297,61 @@ describe('search_work_items_semantic — the has-this-shipped gate', () => {
     } finally {
       await client.close();
     }
+  });
+
+  it('OVER BUDGET it refuses with RATE_LIMITED and names the substring fallback (MOTIR-3102)', async () => {
+    // The `ai:chat` ceiling Amendment 2 pins. It is applied by the TOOL, not by
+    // `rateLimitGate`'s billable wrapper — that list is derived from calls
+    // reaching `submitJob` and this reaches none — so it is exercised here.
+    const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await seedItem({ fx, title: TARGET_TITLE, embedding: oneHot(0) });
+    vi.stubEnv('MOTIR_AI_RATE_LIMIT', '1');
+    vi.stubEnv('MOTIR_AI_RATE_LIMIT_WINDOW_MS', String(ALIGNED_WINDOW_MS));
+    // The counted calls must not straddle a window boundary, which would reset
+    // the counter mid-test and turn a real refusal into a pass.
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+
+    const first = await callSemantic(fx.ctx, { projectKey: 'ACME', query: QUERY });
+    expect(first.isError).toBeFalsy();
+
+    const refused = await callSemantic(fx.ctx, { projectKey: 'ACME', query: QUERY });
+    expect(refused.isError).toBe(true);
+    const text = textOf(refused);
+    expect(text).toContain('RATE_LIMITED');
+    // The refusal has to leave the agent somewhere to go, or it reads as "there
+    // is no answer" — the failure this whole story is about, wearing a 429.
+    expect(text).toContain('search_work_items');
+  });
+
+  it('a vector of the WRONG DIMENSION is a real error, not a non-answer', async () => {
+    // The one embed failure that is NOT "I could not search": motir-ai answered,
+    // with a vector this store cannot rank. Degrading that to `unavailable` would
+    // hide a genuine contract break behind a soothing message.
+    const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    vi.mocked(embedTexts).mockResolvedValue({
+      model: MODEL,
+      dimensions: 3,
+      embeddings: [[0.1, 0.2, 0.3]],
+    });
+
+    const res = await callSemantic(fx.ctx, { projectKey: 'ACME', query: QUERY });
+
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/DIMENSION/i);
+  });
+
+  it('an explicit `limit` bounds the ranking (the default is 10)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ACME' });
+    await seedItem({ fx, title: TARGET_TITLE, embedding: oneHot(0) });
+    await seedItem({ fx, title: DECOY_TITLE, embedding: oneHot(0) });
+
+    const payload = payloadOf(
+      await callSemantic(fx.ctx, { projectKey: 'ACME', query: QUERY, limit: 1 }),
+    );
+
+    expect(payload.outcome).toBe('ranked');
+    expect(payload.results).toHaveLength(1);
+    expect(payload.coverage).toEqual({ embedded: 2, total: 2 });
   });
 
   it('is registered beside — never over — the substring search, and gated on project:browse', () => {
