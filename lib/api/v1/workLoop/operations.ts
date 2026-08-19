@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import type { ZodType } from 'zod/v4';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import {
+  approvePlanBodySchema,
   dispatchPromptSchema,
   implementationReportBodySchema,
   implementationReportSchema,
@@ -283,6 +284,53 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       description: 'The plan and its proposals.',
     },
     errorStatuses: [404],
+  }),
+
+  // ── Automatic plan approval (MOTIR-3021) ────────────────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/plans/{planId}/approval',
+    operationId: 'approvePlan',
+    summary: 'Approve a plan on behalf of the work item that produced it',
+    description:
+      'APPROVE a `planned` plan without a browser session — the entrance `motir auto ' +
+      '--auto-approve-replan` drives. Its proposals become work items: an `add` creates, a ' +
+      '`modify` applies to the same item, a `remove` archives. ⚠️ THIS IS BOUNDED, and the ' +
+      'bound is the point: `workItemKey` names the card the approval is made for, and the ' +
+      'plan must be ANCHORED to it — the plan-change session that submitted it names that ' +
+      'key. Every other plan (a cadence plan, an onboarding generation, one submitted from ' +
+      'the web panel) is refused here and keeps the human decision it was written under. ' +
+      'It calls the same service the in-app approve does, so the confirmation gate, the ' +
+      're-validation and the one-shot concurrency guard are identical; a plan that has ' +
+      'already been approved or declined answers 409, exactly as it does in the app.',
+    permission: 'ai:view_plan',
+    parameters: [
+      {
+        name: 'planId',
+        in: 'path',
+        required: true,
+        description: 'The plan to approve.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: approvePlanBodySchema,
+      description: 'The work item this approval is made on behalf of.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planSchema },
+      description:
+        'The approved plan and its proposals, each now carrying the `workItemKey` it ' +
+        'materialized into.',
+    },
+    // 404: no such plan, or one in another tenant. 422: a missing `workItemKey`,
+    // a plan not anchored to it, or a proposal the confirmation gate rejected
+    // before any write — including the malformed-set refusals the browser route
+    // answers 400 for, which take 422 here because this API's status vocabulary
+    // is closed and has no 400 (`lib/api/v1/errors.ts` says why on the row).
+    // 409: already decided, or a target that moved under the proposal.
+    errorStatuses: [404, 409, 422],
   }),
 
   // ── The planning conversation (Subtask 11.7.6 — MOTIR-2240) ─────────────

@@ -121,6 +121,14 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     '`mark_integrated` when it has a branch, and the per-item-PR path this serves is the ' +
     'CLI runner’s. It takes `mark_integrated`’s scope (the same actor, the same §3 row) ' +
     'without duplicating its tool.',
+  approvePlan:
+    'MOTIR-3021 · `docs/decisions/run-findings-protocol.md` Q2 — approval is deliberately NOT ' +
+    'an MCP tool, and that absence is the sharpest bound in the design rather than an ' +
+    'oversight. MCP is the AGENT’s surface, and the agent whose card was refused is the one ' +
+    'party that must never approve its own re-plan; the approving party is the OPERATOR’s ' +
+    'loop, which speaks /api/v1. It takes `ai:view_plan` — the key `plansService.approvePlan` ' +
+    'itself asserts and the one this map already records as gating the plan DECISIONS — so ' +
+    'no permission is invented here either.',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,11 +142,11 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     expect(WORK_LOOP_OPERATIONS.map((op) => op.operationId).sort()).toEqual(
       [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
-    // …and the story's own audit named ten, plus the one later operation that
-    // deliberately has no counterpart. A count that drifted from the plan is
+    // …and the story's own audit named ten, plus the two later operations that
+    // deliberately have no counterpart. A count that drifted from the plan is
     // worth failing on.
     expect(Object.keys(MIRRORS)).toHaveLength(10);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(11);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(12);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

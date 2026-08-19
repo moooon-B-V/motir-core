@@ -161,9 +161,22 @@ is not `planned` (`PlanNotInExpectedStatusError`), and a second concurrent
 approve observes `approved` and 409s. This endpoint adds nothing; it must not
 re-derive the check.
 
-**B3 — approving an already-approved or declined plan is the same no-op the
-session route produces**, not an error. A loop that retried once must not turn a
-completed approval into a failed run.
+**B3 — approving an already-approved or declined plan answers the same 409 the
+session route answers.**
+
+> **⚠️ CORRECTED 2026-08-19, before it was built (MOTIR-3021).** This bound was
+> written as _"the same no-op the session route produces"_, taken from
+> MOTIR-3019's own text and not verified. It is false: the session route maps
+> `PlanNotInExpectedStatusError` to **409**
+> (`app/api/plans/[id]/approve/route.ts`), which is the atomic one-shot guard —
+> the loser of two concurrent approves observes `approved` and is refused. There
+> is no no-op anywhere on that path.
+>
+> Mirroring the 409 is also the right answer, not merely the true one: two
+> entrances answering ONE condition two different ways is exactly what "no second
+> approval implementation" exists to prevent. What the loop does with a 409
+> _because the plan was already approved_ is the loop's decision (MOTIR-3023),
+> and it is a different question from what the endpoint says.
 
 **B4 — cross-workspace refusal is indistinguishable from an unknown plan.** A
 plan in another workspace and a plan id that does not exist return the same

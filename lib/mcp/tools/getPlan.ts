@@ -31,9 +31,18 @@ import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 //
 // The same PROPOSAL GATE its siblings carry applies, and for a sharper reason:
 // this tool hands back titles, kinds and sizing that read exactly like work
-// items. They are not. `plansService.approvePlan` — a human decision made in
-// Motir — is the only path from a proposal to a `work_item` row, and an `add`'s
-// `workItemId` stays `null` until then.
+// items. They are not. `plansService.approvePlan` is the only path from a
+// proposal to a `work_item` row, and an `add`'s `workItemId` stays `null` until
+// then.
+//
+// ⚠️ AMENDED 2026-08-19 (MOTIR-3021). This used to read "a human decision made
+// in Motir", and the ONLY-PATH half is still exactly true — approve remains the
+// single proposal→row write. What is no longer true is that it happens only in
+// the app: `POST /api/v1/plans/{planId}/approval` is a bounded public entrance
+// an operator's `motir auto --auto-approve-replan` drives
+// (`docs/decisions/run-findings-protocol.md` Q2). It is deliberately NOT an MCP
+// tool — MCP is the AGENT's surface, and an agent must never approve its own
+// re-plan — so nothing about THIS tool's reach changed.
 
 export const GET_PLAN_TOOL_NAME = 'get_plan';
 

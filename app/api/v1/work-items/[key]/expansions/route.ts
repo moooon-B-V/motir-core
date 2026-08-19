@@ -17,9 +17,15 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // an address to come back to.
 //
 // ── NOTHING here creates a work item ────────────────────────────────────────
-// `plansService.approvePlan` — a human decision made in Motir, not on this
-// surface — is the only path from a proposal to a `work_item` row, and an
-// `add`'s `workItemId` stays null until then. The suite asserts the work-item
+// `plansService.approvePlan` — not this endpoint — is the only path from a
+// proposal to a `work_item` row, and an `add`'s `workItemId` stays null until
+// then.
+//
+// ⚠️ AMENDED 2026-08-19 (MOTIR-3021): this said "a human decision made in Motir".
+// Approve has a bounded entrance of its own on this API now
+// (`POST /api/v1/plans/{planId}/approval`), driven by `motir auto
+// --auto-approve-replan` and limited to the plan a run's own refused card
+// produced. Nothing about THIS route changed — submitting still creates nothing. The suite asserts the work-item
 // table is unchanged across a whole submit-and-read cycle.
 //
 // ── It SPENDS CREDITS, which is why the scope is a write ────────────────────

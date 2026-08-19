@@ -19,15 +19,24 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
   deleteAttachmentBlob: vi.fn(async () => {}),
 }));
 
+const { jobSeq } = vi.hoisted(() => ({ jobSeq: { n: 0 } }));
+
 vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
-  submitJob: vi.fn(async () => ({ jobId: 'job_drift_guard' })),
+  // ⚠️ A DISTINCT job id PER SUBMIT, which is what the real planner returns and
+  // what this suite now depends on: a plan binds to its job through
+  // `sourceJobId`, and the plan-change session that submitted it binds through
+  // `lastJobId` — so two submits sharing one id make the plan→conversation
+  // lookup `approvePlan`'s anchor check walks ambiguous, and it resolves to
+  // whichever session was found first (MOTIR-3021).
+  submitJob: vi.fn(async () => ({ jobId: `job_drift_guard_${++jobSeq.n}` })),
 }));
 import { z } from 'zod/v4';
 import { V1_OPERATIONS, findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
+import { plansService } from '@/lib/services/plansService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { v1RouteFiles } from '../../helpers/v1RouteAudit';
@@ -187,6 +196,27 @@ describe('every operation’s REAL response validates against its declared schem
     const record = { operationId, status, body };
     driven.set(operationId, record);
     return record;
+  }
+
+  /**
+   * Call a route WITHOUT recording it as a driven operation — for the calls that
+   * SET UP another operation's preconditions rather than being the thing under
+   * test. Recording them would be wrong twice: an operation would be marked
+   * exercised by a request made for a different purpose, and a second record for
+   * an already-driven id would overwrite the one that matters.
+   */
+  async function handlerFor(
+    load: () => Promise<Record<string, unknown>>,
+    method: string,
+    request: Request,
+    params: Record<string, string> = {},
+  ): Promise<Response> {
+    const mod = await load();
+    const handler = mod[method] as (
+      req: Request,
+      args?: { params: Promise<Record<string, string>> },
+    ) => Promise<Response>;
+    return handler(request, { params: Promise.resolve(params) });
   }
 
   function get(path: string): Request {
@@ -532,6 +562,44 @@ describe('every operation’s REAL response validates against its declared schem
       () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
       send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', {}),
       { projectKey: pk },
+    );
+
+    // ── Automatic plan approval (MOTIR-3021) ────────────────────────────────
+    // DRIVEN, not excused. It needs a shape the project-wide thread above does
+    // not have: the endpoint only approves a plan ANCHORED to the card it is
+    // approving for, so this opens a SECOND, anchored conversation on `key` and
+    // submits it. The plan then has to reach `planned` — the route approves a
+    // decided plan, and only a planner's appends close one — so the two service
+    // calls that a real planner's job would make are made here directly. Both
+    // are seeding; the ROUTE and its response are entirely real.
+    const anchored = { targetKeys: [key] };
+    await handlerFor(
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/turns/route'),
+      'POST',
+      send(`/api/v1/projects/${pk}/plan-session/turns`, 'POST', {
+        body: 'this card cannot be built as written',
+        ...anchored,
+      }),
+      { projectKey: pk },
+    );
+    const anchoredSubmit = await handlerFor(
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
+      'POST',
+      send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', anchored),
+      { projectKey: pk },
+    );
+    const anchoredPlanId = ((await anchoredSubmit.json()) as { planId: string }).planId;
+    await plansService.addProposals(
+      anchoredPlanId,
+      [{ op: 'add', proposedFields: { title: 'the corrected card', kind: 'task' } }],
+      caller.ctx,
+    );
+    await plansService.markPlanned(anchoredPlanId, caller.ctx);
+    await drive(
+      'approvePlan',
+      () => import('@/app/api/v1/plans/[planId]/approval/route'),
+      send(`/api/v1/plans/${anchoredPlanId}/approval`, 'POST', { workItemKey: key }),
+      { planId: anchoredPlanId },
     );
 
     // ── The activity read (Story 11.7) ──────────────────────────────────────

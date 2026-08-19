@@ -49,6 +49,7 @@ import {
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
+  PlanNotAnchoredError,
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
@@ -1785,6 +1786,64 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'generating');
+  },
+
+  /**
+   * Approve a plan ON BEHALF OF the work item whose refusal produced it
+   * (MOTIR-3021) — the BOUNDED entrance an unattended run drives, and the only
+   * thing standing between `--auto-approve-replan` and "approve any pending plan
+   * in this workspace".
+   *
+   * ⚠️ IT ADDS A BOUND, NEVER A SECOND APPROVAL. Everything that decides whether
+   * a proposal may become a row — the confirmation gate, the `ai:view_plan`
+   * assertion, the one-shot status guard, the re-validation — happens in
+   * {@link plansService.approvePlan}, which this delegates to unchanged. What
+   * lives here is the one question that entrance cannot ask: *is this the plan
+   * this card caused?*
+   *
+   * ⚠️ ANCHORING IS DERIVED, NOT STORED, and the chain is one the plan decisions
+   * already walk: `plan.sourceJobId` → the plan-change session that submitted
+   * that job (`findByProjectAndLastJobId`, workspace-scoped) → its `targetKeys`.
+   * A `motir plan --detach <KEY>` thread is anchored at that key, so the plan its
+   * submit produces is reachable from the card and from nothing else.
+   *
+   * ⚠️ NO SESSION MEANS NO. A cadence plan, an onboarding generation and a plan
+   * submitted from the web panel all resolve to no session — and every one of
+   * them is a plan a person is expected to decide on. Treating "unanchored" as
+   * "unrestricted" would invert the bound at exactly the plans it most protects.
+   *
+   * The key match is case-insensitive because a caller types `motir-42` as
+   * readily as `MOTIR-42`, and the identifier is not case-bearing anywhere else
+   * on this API.
+   */
+  async approvePlanForWorkItem(
+    planId: string,
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    // Read-then-refuse in the SAME shape the plain approve uses: a plan in
+    // another workspace and one that never existed are one answer (§4).
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+
+    const wanted = workItemKey.trim().toUpperCase();
+    const session = plan.sourceJobId
+      ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          planChangeSessionRepository.findByProjectAndLastJobId(
+            plan.projectId,
+            plan.sourceJobId!,
+            ctx.workspaceId,
+            tx,
+          ),
+        )
+      : null;
+    const anchored = (session?.targetKeys ?? []).some((key) => key.toUpperCase() === wanted);
+    if (!anchored) throw new PlanNotAnchoredError(planId, workItemKey);
+
+    return plansService.approvePlan(planId, ctx);
   },
 
   /**

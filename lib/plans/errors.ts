@@ -260,3 +260,32 @@ export class PlanTargetImmutableError extends Error {
     this.name = 'PlanTargetImmutableError';
   }
 }
+
+/**
+ * An automated approval named a plan that is not ANCHORED to the work item it
+ * claims to be approving on behalf of (MOTIR-3021,
+ * `docs/decisions/run-findings-protocol.md` Q2 bound B1). → 422
+ *
+ * ⚠️ THIS IS THE BOUND, and it is what keeps the public approval entrance from
+ * being "approve any pending plan in the workspace". An unattended loop may
+ * approve the plan its own refused card CAUSED, and nothing else — every other
+ * plan (a cadence plan, an onboarding generation, one submitted from the web
+ * panel) keeps the human gate it was written under.
+ *
+ * A plan is anchored to a card when its `sourceJobId` resolves to the
+ * plan-change session that submitted it AND that session's `targetKeys` name the
+ * card. A plan with no resolvable session is therefore never approvable here —
+ * refused, deliberately, rather than treated as unanchored-so-allowed.
+ */
+export class PlanNotAnchoredError extends Error {
+  readonly code = 'PLAN_NOT_ANCHORED' as const;
+  constructor(
+    readonly planId: string,
+    readonly workItemKey: string,
+  ) {
+    super(
+      `Plan ${planId} is not anchored to ${workItemKey}. Automatic approval is limited to the plan a run's own refused card produced; approve any other plan in Motir.`,
+    );
+    this.name = 'PlanNotAnchoredError';
+  }
+}
