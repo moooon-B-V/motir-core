@@ -32,6 +32,22 @@ export interface PlanItemChangeDto {
   to: string | null;
 }
 
+/**
+ * One crumb on the COMMITTED ancestor path a proposal's parent sits on — the
+ * breadcrumb the plan canvas opens with (bug MOTIR-3152).
+ *
+ * `PlanReviewItemDto` carried the IMMEDIATE parent only, so the canvas could
+ * synthesise exactly one crumb and every ancestor above it was missing. The
+ * design (`design/ai-planning/design-notes.md` Part V §2 panel E) asks for *"the
+ * committed ancestor path down to the focused level, exactly as the roadmap draws
+ * it"* — which is a CHAIN, and a chain has to be carried rather than invented.
+ */
+export interface PlanParentCrumbDto {
+  id: string;
+  identifier: string;
+  title: string;
+}
+
 /** A proposed operation, enriched for the canvas + review rail. */
 export interface PlanReviewItemDto {
   /** The PlanItem id — the stable review key. */
@@ -62,6 +78,17 @@ export interface PlanReviewItemDto {
   parentIdentifier: string | null;
   parentTitle: string | null;
   parentKind: string | null;
+  /**
+   * The COMMITTED ancestor path down to `parentNodeId` — ROOT FIRST, the parent
+   * itself LAST (bug MOTIR-3152). This is what the canvas breadcrumb walks: the
+   * roadmap names a level by its whole chain, and the three fields above can only
+   * name its last link.
+   *
+   * `[]` in exactly the cases the three fields above are null: a root proposal, an
+   * intra-plan (`planItem:`) parent, and an archived / hard-deleted parent — the
+   * last degrading to the root rendering rather than failing the read.
+   */
+  parentTrail: PlanParentCrumbDto[];
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`. */

@@ -25,6 +25,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     parentIdentifier: null,
     parentTitle: null,
     parentKind: null,
+    parentTrail: [],
     blockedByNodeIds: [],
     identifier: null,
     title: 'A proposed item',
