@@ -270,48 +270,41 @@ describe('the ARCHIVED refusal covers the whole set (§B5)', () => {
   });
 });
 
-describe('the ENVELOPE changed and the GRAMMAR did not', () => {
-  it('assembles a byte-identical prompt for an unpinned, a one-repo AND a two-repo card', async () => {
-    // The boundary with MOTIR-3132, asserted rather than intended. The set
-    // travels in the payload; the `GIT WORKFLOW` section is that card's, and if
-    // this test ever goes red because the prompt gained a second worktree, the
-    // change landed in the wrong commit.
+describe('the ENVELOPE changed and the GRAMMAR did not (MOTIR-3131)', () => {
+  it('leaves the one-repo and unpinned GIT WORKFLOW exactly as it shipped', async () => {
+    // MOTIR-3131 changed the PAYLOAD. The prompt's `GIT WORKFLOW` section is
+    // MOTIR-3132's, and it moves ONLY for a card with two or more repositories —
+    // so the shapes every existing card has must still render the shipped
+    // single-pull-request text, stated as the literal it must not drift from.
     const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
     await connectRepo(caller, 'motir-core');
     await connectRepo(caller, 'motir-ai');
     const unpinned = await card(caller, 'grammar unpinned');
     const one = await card(caller, 'grammar one', ['motir-core']);
-    const two = await card(caller, 'grammar two', ['motir-core', 'motir-ai']);
 
-    const [a, b, c] = await Promise.all([
+    const [a, b] = await Promise.all([
       payload(caller, unpinned.identifier),
       payload(caller, one.identifier),
-      payload(caller, two.identifier),
     ]);
 
-    // The prompt renders the item's own key and title — the key in BOTH cases
-    // (`worktreeDir` lowercases it) — so compare the parts that could carry a
-    // repository at all: the whole text with key and title masked.
-    const shape = (body: V1DispatchPrompt, key: string, title: string) =>
-      body.prompt
-        .split(key)
-        .join('<KEY>')
-        .split(key.toLowerCase())
-        .join('<key>')
-        .split(title)
-        .join('<TITLE>')
-        .split(title.replace(/\s+/g, '-'))
-        .join('<slug>');
-
-    expect(shape(b!, one.identifier, one.title)).toBe(shape(c!, two.identifier, two.title));
+    for (const body of [a!, b!]) {
+      expect(body.prompt).toContain(
+        'This item has no session lineage, so it ships as ONE pull request of its own.',
+      );
+      expect(body.prompt).toContain(
+        '6. STOP at the open pull request. Do not merge it and do not delete the branch.',
+      );
+      // ONE worktree instruction, not N.
+      expect(body.prompt.match(/git worktree add/g)).toHaveLength(1);
+      expect(body.prompt).not.toContain('Repositories (');
+    }
     // The unpinned card's worktree line is `../<repo>-…` — generic, and that is
-    // the ONE documented difference `worktreeDir` renders. Everything else is
-    // the same grammar.
+    // the ONE documented difference `worktreeDir` renders for it.
     expect(a!.prompt).toContain('<repo>-');
     expect(b!.prompt).toContain('motir-core-');
-    expect(c!.prompt).toContain('motir-core-');
-    // Nothing in the prompt names the SECOND repository — that is MOTIR-3132's.
-    expect(c!.prompt).not.toContain('motir-ai');
+    // Neither names the OTHER connected repository: a card's prompt is about the
+    // card's own repositories, never the project's.
+    expect(b!.prompt).not.toContain('motir-ai');
   });
 });
 

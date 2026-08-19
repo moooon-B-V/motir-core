@@ -560,3 +560,172 @@ describe('assembleDispatchPrompt — ONE CARD, ONE COMMIT (MOTIR-2406)', () => {
     expect(prompt).toContain('one-liner');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The MULTI-REPOSITORY grammar (Story MOTIR-2731 · MOTIR-3132)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The instruction this replaces was not vague — it was COMPLETE, and wrong for
+// one shape of card. `perItemPrWorkflow` names a worktree, a branch, a commit
+// convention and a stopping point, so an agent handed a two-repository card
+// follows it exactly, opens one pull request and exits 0. The card then sits at
+// In Review forever, held by a completion gate waiting on a repository nothing
+// ever told anyone to open a pull request against, and the run that caused it
+// looks green.
+//
+// So the property under test is a pair:
+//
+//   * fewer than two repositories renders EXACTLY today's text — asserted
+//     against the source with and without the field, byte for byte, because
+//     "every existing card is unaffected" is the whole back-compatibility claim
+//     and it is cheap to prove rather than intend;
+//   * two or more renders one worktree, one branch and one pull request PER
+//     repository, sharing ONE branch name, every pull-request title carrying the
+//     key, and a closing line that says the item completes only when all of them
+//     have merged.
+
+/** Two repositories, primary first, with different default branches — so a
+ *  block that branched from a hardcoded `main` is visible. */
+const TWO_REPOS = [
+  { name: 'motir-core', defaultBranch: 'main' },
+  { name: 'motir-ai', defaultBranch: 'trunk' },
+];
+
+describe('the repository COUNT axis — fewer than two changes nothing', () => {
+  it('renders byte-identically with no field, an empty set, and a one-element set', () => {
+    const base = assembleDispatchPrompt(source()).prompt;
+    expect(assembleDispatchPrompt(source({ targetRepos: [] })).prompt).toBe(base);
+    expect(
+      assembleDispatchPrompt(
+        source({ targetRepos: [{ name: 'motir-core', defaultBranch: 'main' }] }),
+      ).prompt,
+    ).toBe(base);
+  });
+
+  it('renders byte-identically for an UNPINNED card and for a SESSION-LINEAGE card', () => {
+    const unpinned = source({ targetRepo: null });
+    expect(assembleDispatchPrompt({ ...unpinned, targetRepos: [] }).prompt).toBe(
+      assembleDispatchPrompt(unpinned).prompt,
+    );
+    const lineage = source({ sessionBranch: 'motir/auto-1' });
+    expect(
+      assembleDispatchPrompt({
+        ...lineage,
+        targetRepos: [{ name: 'motir-core', defaultBranch: 'main' }],
+      }).prompt,
+    ).toBe(assembleDispatchPrompt(lineage).prompt);
+  });
+
+  it('renders NO GIT WORKFLOW at all for a manual item, however many repositories it names', () => {
+    // A manual item has no branch and no pull request; instructing N of them
+    // would be a lie the CLI could act on, and the repository count does not
+    // make it less of one.
+    const manual = assembleDispatchPrompt(
+      source({ type: 'manual', executor: 'human', targetRepos: TWO_REPOS }),
+    );
+    expect(manual.prompt).not.toContain('GIT WORKFLOW');
+    expect(manual.prompt).not.toContain('git worktree add');
+    expect(manual.workflowMode).toBe('per_item_pr');
+    expect(manual.sessionBranch).toBeNull();
+  });
+});
+
+describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
+  const built = () => assembleDispatchPrompt(source({ targetRepos: TWO_REPOS })).prompt;
+
+  it('renders one worktree, one branch and one pull request PER repository, in set order', () => {
+    const prompt = built();
+    expect(prompt.match(/git worktree add/g)).toHaveLength(2);
+    expect(prompt).toContain('git worktree add ../motir-core-prod-7 -b');
+    expect(prompt).toContain('git worktree add ../motir-ai-prod-7 -b');
+    // Each block ENTERS its own repository first, so every worktree path is the
+    // same `../<repo>-<key>` the single-repository grammar renders.
+    expect(prompt).toContain('1. cd . && git fetch origin');
+    expect(prompt).toContain('1. cd ../motir-ai && git fetch origin');
+    // Set order, primary first — the primary is the one the agent stands in.
+    expect(prompt.indexOf('motir-core  (your working directory)')).toBeLessThan(
+      prompt.indexOf('motir-ai  (a sibling checkout)'),
+    );
+  });
+
+  it('branches each repository from ITS OWN default branch, never a hardcoded main', () => {
+    const prompt = built();
+    expect(prompt).toContain('-b subtask/PROD-7-add-the-ready-set-filter-bar origin/main');
+    expect(prompt).toContain('-b subtask/PROD-7-add-the-ready-set-filter-bar origin/trunk');
+    expect(prompt).toContain('open a pull request against trunk whose');
+  });
+
+  it('uses the SAME branch name in every repository', () => {
+    const branch = `subtask/PROD-7-${branchSlug('Add the ready-set filter bar')}`;
+    const names = [...built().matchAll(/-b (\S+) origin\//g)].map((m) => m[1]);
+    expect(names).toEqual([branch, branch]);
+  });
+
+  it('puts the KEY in every pull-request TITLE — the reference the completion gate reads', () => {
+    // The one instruction whose omission fails silently: the gate counts merges
+    // against the item's LINKED pull requests, so a title without the key is
+    // invisible to it and the card is held by work that has actually shipped.
+    const prTitleSteps = built()
+      .split('\n')
+      .filter((l) => l.includes('TITLE carries'));
+    expect(prTitleSteps).toHaveLength(2);
+    for (const step of prTitleSteps) expect(step).toContain('PROD-7');
+  });
+
+  it('says the item completes only when EVERY pull request has merged, and never instructs a merge', () => {
+    const prompt = built();
+    expect(prompt).toContain('STOP at the 2 open pull requests.');
+    expect(prompt).toContain('EVERY one of them has merged');
+    expect(prompt).not.toContain('squash-merge');
+    expect(prompt).not.toContain('git branch -d');
+  });
+
+  it('names every repository in CONTEXT, marks the working directory, and asserts no absolute path', () => {
+    const prompt = built();
+    expect(prompt).toContain('- Repositories (2) — this item ships in EVERY one of them:');
+    expect(prompt).toContain('- motir-core — the PRIMARY, and your working directory.');
+    expect(prompt).toContain('- motir-ai — expected as a sibling of it, at ../motir-ai.');
+    // The server cannot know where a person keeps their checkouts; the run does.
+    expect(prompt).not.toMatch(/^\s*-\s+\/[A-Za-z]/m);
+    // The single-repository line is GONE for this card, not printed beside it.
+    expect(prompt).not.toContain('- Repo: motir-core');
+  });
+
+  it('carries NO delivery state — the prompt instructs, the run informs', () => {
+    // Delivery is the one fact that DIFFERS between two dispatches of an
+    // unchanged card, and the prompt is a pure function of server state. Putting
+    // it here would make a resumed run read as a different card (MOTIR-3136 owns
+    // telling the person).
+    // Scoped to the CONTEXT block that names the repositories: the word
+    // "awaiting" legitimately appears in the outcome protocol, about a PLAN
+    // awaiting approval, which is a different fact entirely.
+    const repoBlock = built()
+      .split('\n')
+      .filter((l) => l.includes('motir-core') || l.includes('motir-ai'))
+      .join('\n');
+    for (const state of ['delivered', 'awaiting', 'unestablished', 'excluded']) {
+      expect(repoBlock).not.toContain(state);
+    }
+  });
+});
+
+describe('the MULTI-REPOSITORY session-lineage workflow', () => {
+  const built = () =>
+    assembleDispatchPrompt(source({ targetRepos: TWO_REPOS, sessionBranch: 'motir/auto-1' }));
+
+  it('instructs the same session branch in every repository and exactly ONE mark_integrated', () => {
+    const { prompt, workflowMode, sessionBranch } = built();
+    expect(workflowMode).toBe('session_lineage');
+    expect(sessionBranch).toBe('motir/auto-1');
+    expect(prompt.match(/origin\/motir\/auto-1/g)).toHaveLength(2);
+    expect(prompt.match(/Integrate the commit into motir\/auto-1/g)).toHaveLength(2);
+    // ONE call for the item, not one per repository: `work_item.sessionBranch`
+    // is a scalar, which is the same reason the branch name is shared.
+    expect(prompt.match(/mark_integrated/g)).toHaveLength(1);
+  });
+
+  it('opens no pull request in any repository', () => {
+    expect(built().prompt).toContain('Do NOT open a pull request in any repository.');
+    expect(built().prompt).not.toContain('TITLE carries');
+  });
+});

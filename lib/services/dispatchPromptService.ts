@@ -198,6 +198,13 @@ export const dispatchPromptService = {
       projectName: project.name,
       projectKey: project.identifier,
       targetRepo,
+      // The SET the multi-repository GIT WORKFLOW is rendered from (MOTIR-3132)
+      // — the same resolution the payload publishes, never a second one. Fewer
+      // than two elements renders exactly today's text.
+      targetRepos: targetRepos.map((repo) => ({
+        name: repo.name,
+        defaultBranch: repo.defaultBranch,
+      })),
       // The lineage this item inherits from its integrated dependencies
       // (`getReadiness` is the single source — it ignores a terminal blocker's
       // stale branch and collapses the one integrated lineage). An item that was

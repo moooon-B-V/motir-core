@@ -92,6 +92,22 @@ export interface DispatchPromptSource {
   projectKey: string;
   /** The RESOLVED target repo (MOTIR-1804), or null when Motir cannot say. */
   targetRepo: string | null;
+  /**
+   * EVERY repository the item ships in (Story MOTIR-2731 · MOTIR-3132) —
+   * ordered, the PRIMARY first, which is the repository the agent's process is
+   * launched in. `targetRepos[0]?.name ?? null === targetRepo`, always.
+   *
+   * Omitted, empty, or of length ONE renders the prompt EXACTLY as it renders
+   * today: the multi-repository grammar exists only where a card actually has
+   * more than one repository, so every item that exists is unaffected by
+   * construction rather than by inspection.
+   *
+   * The default branch travels WITH the name because the multi-repository blocks
+   * branch from `origin/<default>` per repository; the single-repository
+   * grammar's hardcoded `origin/main` is left exactly as it is (changing it
+   * would move text this card promises not to move).
+   */
+  targetRepos?: { name: string; defaultBranch: string | null }[];
   /** The inherited session branch, or null for the per-item-PR workflow. */
   sessionBranch: string | null;
   /**
@@ -448,12 +464,34 @@ function contextSection(
   if (src.estimateMinutes !== null) sizing.push(`~${src.estimateMinutes} min`);
   if (sizing.length > 0) facts.push(`- Sizing: ${sizing.join(' · ')}`);
 
-  facts.push(
-    src.targetRepo
-      ? `- Repo: ${src.targetRepo} — do the work in this repository's checkout.`
-      : '- Repo: not pinned. Motir cannot say which repository this item belongs to;' +
-          ' work in the checkout you were invoked from.',
-  );
+  const repoSet = multiRepoSet(src);
+  if (repoSet) {
+    // MOTIR-3132 — the agent is standing in ONE checkout and owes work in all of
+    // them, so the set is named here rather than left to be discovered in the
+    // GIT WORKFLOW section. The paths are the CLI's `<root>/<name>` convention
+    // and are stated as an expectation, never as a fact: this text is assembled
+    // server-side and cannot know where a person keeps their checkouts. The run
+    // resolves and prints the real ones (MOTIR-3133).
+    facts.push(`- Repositories (${repoSet.length}) — this item ships in EVERY one of them:`);
+    repoSet.forEach((repo, i) => {
+      facts.push(
+        i === 0
+          ? `    - ${repo.name} — the PRIMARY, and your working directory.`
+          : `    - ${repo.name} — expected as a sibling of it, at ../${repo.name}.`,
+      );
+    });
+    facts.push(
+      '    The run names each repository\u2019s actual resolved path before you start. If one',
+      '    is missing or elsewhere, say so in your outcome report — do not work around it.',
+    );
+  } else {
+    facts.push(
+      src.targetRepo
+        ? `- Repo: ${src.targetRepo} — do the work in this repository's checkout.`
+        : '- Repo: not pinned. Motir cannot say which repository this item belongs to;' +
+            ' work in the checkout you were invoked from.',
+    );
+  }
   facts.push(src.parent ? `- Parent: ${refLine(src.parent)}` : '- Parent: none (top-level item)');
   facts.push(
     src.blockerKeys.length > 0
@@ -489,6 +527,143 @@ function acceptanceSection(criteria: string[]): string[] {
     'The card names no explicit acceptance criteria. Satisfy everything the',
     'description asks for — and nothing beyond it.',
   ];
+}
+
+/**
+ * The repository SET, but ONLY when it is one this grammar has anything extra to
+ * say about. Fewer than two repositories is today's world, and this returns
+ * `null` for it so every caller reads one condition rather than three.
+ */
+function multiRepoSet(
+  src: DispatchPromptSource,
+): { name: string; defaultBranch: string | null }[] | null {
+  const repos = src.targetRepos ?? [];
+  return repos.length >= 2 ? repos : null;
+}
+
+/** The branch a card takes — the SAME name in every repository it ships in. */
+function cardBranch(src: DispatchPromptSource): string {
+  return `${branchPrefix(src.type)}/${src.key}-${branchSlug(src.title)}`;
+}
+
+/** How to reach a repository from the agent's working directory (the primary's
+ *  checkout): itself, or a sibling under the workspace root. */
+function siblingDir(repo: string, index: number): string {
+  return index === 0 ? '.' : `../${repo}`;
+}
+
+/**
+ * The per-repository steps of a MULTI-repository `per_item_pr` workflow — one
+ * block per repository, in set order, primary first.
+ *
+ * Every block is complete on its own: enter the repository, branch, work,
+ * commit, push, open a pull request whose TITLE carries the key. The key in the
+ * title is the load-bearing part and the one an agent would most plausibly drop
+ * — the completion gate counts merges against the item's LINKED pull requests,
+ * so a pull request without it is invisible to the gate and the card is held
+ * forever by work that has actually shipped.
+ */
+function multiRepoPrBlocks(src: DispatchPromptSource, repos: ReturnType<typeof multiRepoSet>) {
+  const branch = cardBranch(src);
+  const lines: string[] = [];
+  (repos ?? []).forEach((repo, i) => {
+    // Every step is relative to the repository's OWN checkout, which step 1
+    // enters — so the worktree path is the same `../<repo>-<key>` the
+    // single-repository grammar renders, for every element of the set.
+    const wt = worktreeDir(repo.name, src.key);
+    lines.push(
+      '',
+      `${repo.name}${i === 0 ? '  (your working directory)' : '  (a sibling checkout)'}`,
+      '',
+      `  1. cd ${siblingDir(repo.name, i)} && git fetch origin`,
+      `  2. git worktree add ${wt} -b ${branch} origin/${repo.defaultBranch ?? 'main'}`,
+      `  3. cd ${wt}, install dependencies, and do THIS repository's half of the work here.`,
+      '  4. Stage with explicit `git add <path>` — never `-A`.',
+      `  5. Commit with a Conventional Commits subject that carries ${src.key}.`,
+      `  6. Push the branch and open a pull request against ${repo.defaultBranch ?? 'main'} whose`,
+      `     TITLE carries ${src.key}.`,
+    );
+  });
+  return lines;
+}
+
+/**
+ * The MULTI-repository `per_item_pr` GIT WORKFLOW: one worktree, one branch and
+ * one pull request PER REPOSITORY, and the item completes only when every one of
+ * them has merged.
+ *
+ * ONE branch NAME across all of them, deliberately. It is what makes the set
+ * legible as halves of one change rather than two unrelated pushes that happen
+ * to share a key — `gh pr list --head <branch>` finds them all — and one level
+ * up it is what lets the item record a single `sessionBranch`, which is a scalar.
+ */
+function multiRepoPerItemPrWorkflow(
+  src: DispatchPromptSource,
+  repos: NonNullable<ReturnType<typeof multiRepoSet>>,
+): string[] {
+  return [
+    `This item ships in ${repos.length} repositories, so it needs ONE pull request in`,
+    'EACH of them. It has no session lineage, so they are pull requests of its own.',
+    '',
+    `The branch name is the SAME in every repository: ${cardBranch(src)}`,
+    ...multiRepoPrBlocks(src, repos),
+    '',
+    `STOP at the ${repos.length} open pull requests. Do not merge any of them and do not`,
+    'delete any branch. This item is not complete until EVERY one of them has merged —',
+    'a single merged pull request leaves it held, waiting on the others.',
+    '',
+    'If one repository turns out to need no change at all, say so in the outcome report',
+    'rather than opening an empty pull request; that is a fact about the card, and',
+    'somebody has to decide what it means.',
+  ];
+}
+
+/**
+ * The MULTI-repository `session_lineage` GIT WORKFLOW: the SAME session branch
+ * in every repository, integrated in each, and exactly ONE `mark_integrated`.
+ *
+ * One call, not one per repository: `mark_integrated` reports THE ITEM's
+ * lineage, and the item has one — `work_item.sessionBranch` is a scalar, which
+ * is the same reason the branch name is shared.
+ */
+function multiRepoSessionLineageWorkflow(
+  src: DispatchPromptSource,
+  repos: NonNullable<ReturnType<typeof multiRepoSet>>,
+  sessionBranch: string,
+): string[] {
+  const branch = cardBranch(src);
+  const lines: string[] = [
+    `This item inherits the session branch ${sessionBranch}, and it ships in`,
+    `${repos.length} repositories. The lineage is the SAME branch name in each of them:`,
+    'the work it depends on is integrated there and awaiting ONE human review, so this',
+    'work joins that lineage in every repository instead of opening pull requests.',
+    '',
+    `Your working branch is the same in each too: ${branch}`,
+  ];
+  repos.forEach((repo, i) => {
+    const wt = worktreeDir(repo.name, src.key);
+    lines.push(
+      '',
+      `${repo.name}${i === 0 ? '  (your working directory)' : '  (a sibling checkout)'}`,
+      '',
+      `  1. cd ${siblingDir(repo.name, i)} && git fetch origin`,
+      `  2. git worktree add ${wt} -b ${branch} origin/${sessionBranch}`,
+      `  3. cd ${wt}, install dependencies, and do THIS repository's half of the work here.`,
+      '  4. Stage with explicit `git add <path>` — never `-A`.',
+      `  5. Commit with a Conventional Commits subject that carries ${src.key}.`,
+      `  6. Integrate the commit into ${sessionBranch} and push that branch.`,
+    );
+  });
+  lines.push(
+    '',
+    `Then report it ONCE: call the mark_integrated tool with key ${src.key} and`,
+    `sessionBranch ${sessionBranch}. One call for the item, not one per repository —`,
+    'the item records a single session branch, which is why the name is shared.',
+    '',
+    'Do NOT open a pull request in any repository. The session branch has one review',
+    'surface per repository, and a human opens and merges them.',
+  );
+  return lines;
 }
 
 /** The per-item-PR GIT WORKFLOW: branch from `origin/main`, one PR, stop. */
@@ -685,6 +860,25 @@ const MANUAL_CLOSING = [
  * body with no acceptance criteria, an unknown repo, a manual item). See the
  * module header for the three axes that vary and where each is decided.
  */
+/**
+ * WHICH `GIT WORKFLOW` variant this item gets — a 2×2 over the lineage and the
+ * repository COUNT (`docs/decisions/dispatch-prompt-assembly.md`, *What varies,
+ * and who decides*).
+ *
+ * Fewer than two repositories takes the shipped single-repository text, byte for
+ * byte: that is the whole back-compatibility promise of MOTIR-3132, and putting
+ * the choice in one function is what makes it checkable rather than asserted.
+ */
+function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): string[] {
+  const repos = multiRepoSet(src);
+  if (sessionBranch !== null) {
+    return repos
+      ? multiRepoSessionLineageWorkflow(src, repos, sessionBranch)
+      : sessionLineageWorkflow(src, sessionBranch);
+  }
+  return repos ? multiRepoPerItemPrWorkflow(src, repos) : perItemPrWorkflow(src);
+}
+
 export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDispatchPrompt {
   const injections = src.injections ?? NO_INJECTIONS;
   const { body, acceptanceCriteria, contextRefs } = splitPlanBody(src.descriptionMd);
@@ -717,12 +911,7 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   let closing = MANUAL_CLOSING;
   if (!manual) {
     closing = [
-      ...section('GIT WORKFLOW', [
-        ...(sessionBranch !== null
-          ? sessionLineageWorkflow(src, sessionBranch)
-          : perItemPrWorkflow(src)),
-        ...commitContract(src),
-      ]),
+      ...section('GIT WORKFLOW', [...gitWorkflow(src, sessionBranch), ...commitContract(src)]),
       '',
       // LAST, deliberately. The protocol is what the agent does at the end of
       // the work, and the last thing in a prompt is the thing it is holding when
