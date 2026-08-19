@@ -1,5 +1,6 @@
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import type { ProjectRepoName } from '@/lib/projectRepos/names';
+import { projectHasItsOwnCode } from '@/lib/projectRepos/ownCode';
 import { UnknownProjectRepoRefError } from './errors';
 import {
   listConnectedRepoNames,
@@ -24,16 +25,46 @@ import type { ServiceContext } from './serviceContext';
 // assumes one project per workspace's repos. MOTIR-1780 gave a project its own
 // repository SET, so the domain becomes:
 //
-//   the PROJECT's set          ← whenever the project has one
-//   the workspace's connected repos ← only for a project that has NO set
+//   the PROJECT's set               ← whenever the project has one
+//   the workspace's connected repos ← for a project that has NO set, AND
+//                                     UNDER the set for a project that arrived
+//                                     WITH CODE OF ITS OWN (MOTIR-3086)
 //
 // The second rung is the compatibility path the ADR names explicitly
 // (`docs/decisions/project-repository-set.md`, "Consequences"): every project
 // that predates the table — including Motir's own — has an empty set, and
-// dispatch must keep routing them exactly as it did yesterday. It is a fallback
-// for a MISSING set, never a second guess layered under a real one: a project
-// that HAS planned its repositories is answered by that plan alone, even when the
-// plan resolves to nothing.
+// dispatch must keep routing them exactly as it did yesterday.
+//
+// ⚠️ THIS HEADER USED TO END: "It is a fallback for a MISSING set, never a second
+// guess layered under a real one: a project that HAS planned its repositories is
+// answered by that plan alone, even when the plan resolves to nothing." That
+// sentence is AMENDED, not deleted, and the amendment is narrow (ADR amendment
+// 2026-08-19 · MOTIR-3086):
+//
+//   * It is still exactly right for a project BORN IN MOTIR. Such a project's
+//     repositories are the ones its set names, so the set is a complete statement
+//     and layering anything under it would answer with a repository the project
+//     deliberately did not choose — including the sibling project's repo that
+//     workspace-wide validation used to accept.
+//   * It was WRONG for a project that ARRIVED WITH CODE, because the premise it
+//     rests on — that the set is a complete statement of a project's
+//     repositories — is one that project's set is structurally incapable of
+//     making. "I already have code" sends the user to the GitHub CONNECT flow,
+//     which is workspace-level and writes NO set row (`GithubRepo` is keyed on
+//     `workspace_id` and has no `project_id`). So for such a project the set is a
+//     statement about the repositories Motir was asked to PLAN, and answering
+//     "which repositories does this project have?" by it alone answers a
+//     different question. That is what the defect looked like from outside: add
+//     one hosted repository and the four the project already had stopped being
+//     pinnable and stopped being dispatchable, because from the resolver's point
+//     of view there had never been a list — only a fallback, which then correctly
+//     stepped aside.
+//
+// So the rung is CONDITIONED, not unconditional: it is layered under the set
+// exactly when the project has code the set cannot describe, which is the same
+// PROJECT-scoped signal MOTIR-3073's proposer gates on
+// (`lib/projectRepos/ownCode.ts`). A project with no code of its own is answered
+// by its set alone, byte-identically to before.
 //
 // Two domains, one snapshot (see `projectRepoSetService.getRepoNameDomains`):
 //
@@ -50,8 +81,33 @@ import type { ServiceContext } from './serviceContext';
 // every caller MUST invoke these OUTSIDE its write transaction.
 
 /**
+ * De-duplicate a merged domain by NAME, case-insensitively, FIRST occurrence
+ * winning — the same rule (and the same reason) `listConnectedRepoNames` and
+ * `toProjectRepoNames` each apply within their own list: two names differing only
+ * in case are one checkout identity as far as dispatch is concerned.
+ *
+ * Order is MEANINGFUL (element 0 is the primary a set-less pin resolves to), so
+ * the SET goes first and the workspace rung follows: a repository the project
+ * planned outranks one it merely inherited from the installation, and a repo named
+ * by both is answered by its set row, which is the entry that knows its `rowId`.
+ */
+function mergeDomainsByName(
+  first: readonly ConnectedRepoName[],
+  second: readonly ConnectedRepoName[],
+): ConnectedRepoName[] {
+  const byName = new Map<string, ConnectedRepoName>();
+  for (const entry of [...first, ...second]) {
+    const key = entry.name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, entry);
+  }
+  return [...byName.values()];
+}
+
+/**
  * The repo-name DOMAINS for a project, with the scope ladder already applied:
- * the project's own set when it has one, else the workspace's connected repos.
+ * the project's own set when it has one, the workspace's connected repos when it
+ * has none — and BOTH, set first, when it has a set AND code of its own the set
+ * cannot describe (MOTIR-3086; see the module header for why that case exists).
  */
 async function resolveDomains(
   projectId: string,
@@ -74,7 +130,29 @@ async function resolveDomains(
   projectRows: ProjectRepoName[] | null;
 }> {
   const domains = await projectRepoSetService.getRepoNameDomains(projectId, ctx);
-  if (domains.hasSet) {
+  if (!domains.hasSet) {
+    const connected = await listConnectedRepoNames(ctx);
+    return {
+      scope: 'workspace',
+      dispatchable: connected,
+      pinnable: connected,
+      projectRows: null,
+    };
+  }
+  // ⚠️ `hasSet` is NO LONGER AN ALL-OR-NOTHING SWITCH, and that is the fix
+  // (MOTIR-3086 AC 3). It used to select between "the set" and "the workspace",
+  // so the very FIRST row a project ever gained flipped its whole repo list from
+  // one registry to the other — and for a project whose repositories live only in
+  // the other registry, that first row did not join a list, it BECAME the list.
+  // It now selects between "the set ALONE" and "the set FIRST, the workspace
+  // under it", so no row can subtract a repository from the domain. The FACT it
+  // names is unchanged and still worth having: a set with rows is a project that
+  // has planned its repositories, and its plan still comes first.
+  //
+  // The second question is only asked when the answer can matter — i.e. when the
+  // set is about to be the sole answer. A set-less project already gets the
+  // workspace rung above, so it needs no onboarding-run read.
+  if (!(await projectHasItsOwnCode(projectId, ctx))) {
     return {
       scope: 'project',
       dispatchable: domains.dispatchable,
@@ -84,10 +162,17 @@ async function resolveDomains(
   }
   const connected = await listConnectedRepoNames(ctx);
   return {
-    scope: 'workspace',
-    dispatchable: connected,
-    pinnable: connected,
-    projectRows: null,
+    // Still `'project'`: the domain IS this project's repositories — the ones it
+    // planned plus the ones it arrived with — so `UnknownTargetRepoError`'s
+    // project-scoped wording ("This project's repositories: …") stays true, and
+    // the workspace-scoped wording would now be the misleading one.
+    scope: 'project',
+    dispatchable: mergeDomainsByName(domains.dispatchable, connected),
+    pinnable: mergeDomainsByName(domains.pinnable, connected),
+    // The ROWS are still only the set's — the union adds no `project_repository`
+    // row and must not pretend otherwise. What that costs is handled where refs
+    // are built, in `resolveAuthoredRepoPinsInProject`.
+    projectRows: domains.pinnable,
   };
 }
 
@@ -192,7 +277,21 @@ export async function resolveAuthoredRepoPinsInProject(
   const refs: string[] = [];
   for (const name of names) {
     const rowId = byName.get(name.toLowerCase());
-    if (rowId !== undefined) refs.push(rowId);
+    // ⚠️ ALL-OR-NOTHING, and the alignment is the reason (MOTIR-3086). Before the
+    // union every matched name had a row by construction, so `refs` and `names`
+    // always described the same repositories in the same order. A project with
+    // code of its own can now match a name the workspace rung supplied, which has
+    // no `project_repository` row to point at — and skipping it would leave
+    // `refs[0]` naming the row of a DIFFERENT repository than `names[0]`, which is
+    // the primary every dispatch surface routes on.
+    //
+    // So such a pin is expressed as NAMES, which is not a degraded answer: it is
+    // §A7's compatibility rung, the same one that project's pins were on before it
+    // gained its first row. Recording a project's own repositories as rows is what
+    // would promote it onto the reference model — see the ADR amendment's
+    // "what this does NOT fix".
+    if (rowId === undefined) return { refs: [], names, scope };
+    refs.push(rowId);
   }
   return { refs, names, scope };
 }

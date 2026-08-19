@@ -1,9 +1,9 @@
 import { getPreplanState } from '@/lib/ai/motirAiClient';
-import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { ProjectRepoNameTakenError } from '@/lib/projectRepos/errors';
+import { projectHasItsOwnCode } from '@/lib/projectRepos/ownCode';
 import { deriveRepoSetProposal, type ProposedRepoRow } from '@/lib/projectRepos/proposal';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectRepoDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
@@ -144,6 +144,12 @@ export const projectRepoProposalService = {
     // Keyed on the FIELD, not on `kind === 'migrate'`: any future onboarding path
     // that connects an existing repository records it in the same place, and this
     // gate covers it the day it ships without an edit here.
+    //
+    // The predicate itself now lives in `lib/projectRepos/ownCode.ts` because the
+    // repo-domain resolver asks the SAME question — whether the set can be a
+    // complete statement of the project's repositories (MOTIR-3086). Two copies of
+    // it is how the proposer and the resolver would come to disagree about which
+    // projects arrived with code.
     if (await projectHasItsOwnCode(projectId, ctx)) {
       return { proposed: false, reason: 'project_has_code' };
     }
@@ -208,25 +214,6 @@ export const projectRepoProposalService = {
     return { proposed: true, rows, created };
   },
 };
-
-/**
- * Does this project ALREADY have a codebase of its own (MOTIR-3073)?
- *
- * Reads the project's onboarding run and asks whether it names a connected
- * repository. That row is the ONLY project-scoped record of a repository this
- * project did not get from the repo set itself — see the gate's comment for why
- * the installation mirror and the index ledger, both workspace-scoped, must not
- * be used here.
- *
- * ABSENT is the answer for a project with no run at all (seeded, or created
- * straight in Motir), which is exactly the project this proposer is for.
- */
-async function projectHasItsOwnCode(projectId: string, ctx: ServiceContext): Promise<boolean> {
-  const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId, tx),
-  );
-  return (run?.connectedRepoRef ?? null) !== null;
-}
 
 /**
  * Read ADR §0.1's secondary signals — `platform` and `designStarter` — from the
