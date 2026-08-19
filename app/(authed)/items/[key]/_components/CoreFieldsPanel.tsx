@@ -11,7 +11,7 @@ import type {
   WorkItemKindDto,
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
-import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { LabelDto } from '@/lib/dto/labels';
@@ -21,7 +21,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import type { Locale } from '@/lib/i18n/locales';
 import { Input } from '@/components/ui/Input';
 import { DatePicker } from '@/components/ui/DatePicker';
-import { Pill, type PillProps } from '@/components/ui/Pill';
+import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
@@ -49,6 +49,7 @@ import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // The issue detail metadata rail (Story 2.4 · Subtasks 2.4.2 + 2.4.4). Per the
 // mockup `design/work-items/detail.png`: a stack of field cards that DISPLAY the
@@ -136,11 +137,10 @@ function ExecutorIndicator({ executor }: { executor: ExecutorDto }) {
   );
 }
 
-const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status chip's tone + glyph live in `components/issues/StatusPill`
+// (MOTIR-3103). This file used to keep its own copy of the category map —
+// one of five — which is how `implemented` could share a chip with three
+// other statuses in every one of them at once.
 
 // Priority chip presentation now lives in the shared `PRIORITY_META` (reused by
 // the issue-list row, 2.5.3) — imported above.
@@ -314,7 +314,11 @@ export function CoreFieldsPanel({
             disabled={isPending || readOnly}
           />
         ) : statusMeta ? (
-          <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
+          <StatusPill
+            statusKey={statusMeta.key}
+            category={statusMeta.category}
+            label={statusMeta.label}
+          />
         ) : (
           <Pill tone="neutral">{eff.status}</Pill>
         )}

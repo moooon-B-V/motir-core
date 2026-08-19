@@ -51,6 +51,7 @@ const ROWS: ArchivedRowData[] = [
     identifier: 'PROD-49',
     title: 'OAuth callback drops the state param',
     kind: 'bug',
+    status: 'in_review',
     statusLabel: 'In Review',
     statusCategory: 'in_progress',
     archivedByName: 'Dana Kim',
@@ -61,6 +62,7 @@ const ROWS: ArchivedRowData[] = [
     identifier: 'PROD-28',
     title: 'SAML SSO (dropped from Q3 scope)',
     kind: 'story',
+    status: 'todo',
     statusLabel: 'To Do',
     statusCategory: 'todo',
     archivedByName: null,
@@ -292,6 +294,7 @@ describe('toArchivedRows', () => {
     expect(row).toMatchObject({
       identifier: 'PROD-49',
       kind: 'bug',
+      status: 'in_review',
       statusLabel: 'In Review',
       statusCategory: 'in_progress',
       archivedByName: 'Dana Kim',

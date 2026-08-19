@@ -118,20 +118,28 @@ export function pullRequestPayload(args: {
   };
 }
 
-/** A minimal terminal `check_suite` delivery (the CI feedback path — 7.10.6):
- *  the aggregate conclusion for a commit, linked to its PR by number. */
+/** A minimal `check_suite` delivery (the CI feedback path — 7.10.6): the
+ *  aggregate for a commit, linked to its PR by number.
+ *
+ *  Terminal by default — `{ status: 'completed', conclusion }` — which is every
+ *  existing caller, byte for byte. A suite that has NOT finished is expressed by
+ *  passing `status: 'in_progress'` with a `null` conclusion (MOTIR-3009): the
+ *  lifecycle story needs the state where checks are RUNNING, because "a card
+ *  does not move while the build is still going" is a claim only a non-terminal
+ *  aggregate can make. */
 export function checkSuitePayload(args: {
-  conclusion: 'success' | 'failure';
+  conclusion: 'success' | 'failure' | null;
   headSha: string;
   prNumber: number;
   headBranch: string;
+  status?: 'queued' | 'in_progress' | 'completed';
 }): Record<string, unknown> {
   return {
     action: 'completed',
     installation: { id: Number(E2E_INSTALLATION_ID) },
     repository: { id: Number(E2E_REPO.providerRepoId) },
     check_suite: {
-      status: 'completed',
+      status: args.status ?? 'completed',
       conclusion: args.conclusion,
       head_sha: args.headSha,
       head_branch: args.headBranch,

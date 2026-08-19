@@ -150,6 +150,13 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '4. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
     '   one. Naming the route in prose is not enough — the reader must see the door.',
     '5. Stop at the asset. A design is reviewed before anything is built on it.',
+    '6. CONFIRM the design result reached the work item — CI publishes it from the',
+    '   design-asset guards job, and that step is SKIPPED when the guards fail. Look',
+    '   for "Published N design artifact(s)" in the job log, or the result on the',
+    '   card. If it is not there, publish it yourself: POST the design-evidence',
+    '   upload-token route, PUT each file, then POST the register route. The',
+    '   REPOSITORY stays the source of truth — the published result is the card’s',
+    '   view of the asset, never a replacement for committing the three files.',
   ],
   test: [
     '1. Read the card description above and the behaviour under test.',
@@ -504,8 +511,9 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
     '   other worktrees, or unrelated local edits, cannot ride along in your commit.',
     `4. Commit with a Conventional Commits subject that carries ${src.key}.`,
     `5. Push the branch and open a pull request against main whose TITLE carries`,
-    `   ${src.key} (that reference is what moves this work item to In Review, and`,
-    '   moves it to Done when a human merges).',
+    `   ${src.key} (that reference is what LINKS the pull request to this work`,
+    '   item: it moves the item to Done when a human merges, and it is how the CI',
+    '   verdict on your commits finds the card).',
     '6. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
 }
@@ -603,12 +611,30 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     '',
     ...modelSelfReport(),
     '',
-    'FINISHED — the work is done and committed:',
+    'FINISHED — the work is done, committed, PUSHED, and its pull request is open:',
     '',
-    `  Move ${src.key} to In Review with the transition_status tool`,
-    `  (key ${src.key}, status in_review). This is REQUIRED, not a courtesy: it is`,
-    '  the only positive confirmation the run gets, and without it a finished card',
-    '  is indistinguishable from an agent that died quietly.',
+    '  IN THIS ORDER, and the order is the point:',
+    '',
+    '    1. commit',
+    '    2. push the branch',
+    '    3. open the pull request',
+    `    4. move ${src.key} to Implemented with the transition_status tool`,
+    `       (key ${src.key}, status implemented)`,
+    '',
+    '  Implemented means THE CODE IS ON THE REMOTE — not "I finished typing".',
+    '  Transitioning before the push would make the card assert built work that',
+    '  exists only in a worktree this run is about to delete. Pushing first makes',
+    '  the failure honest instead: if you die after the push, the branch is there',
+    '  and the card still reads in progress, which is what an interrupted run is.',
+    '',
+    '  The transition is REQUIRED, not a courtesy: it is the only positive',
+    '  confirmation the run gets, and without it a finished card is',
+    '  indistinguishable from an agent that died quietly.',
+    '',
+    '  Do NOT set In Review. You do not own that status — CI does. It is written',
+    '  when the checks on your pushed commit go green, by the webhook, server-side',
+    '  and after you have exited. Setting it yourself asserts a green run that has',
+    '  not happened yet.',
     '',
     'THE CARD IS WRONG — its premise is false, a precondition it names has not',
     'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
@@ -727,7 +753,7 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
       // LAST, deliberately. The protocol is what the agent does at the end of
       // the work, and the last thing in a prompt is the thing it is holding when
       // it starts acting. Placing it earlier would leave the git workflow as the
-      // final word, which is how "set the card to In Review" becomes the step
+      // final word, which is how "set the card to Implemented" becomes the step
       // that gets forgotten.
       ...section('REPORTING THE OUTCOME — say which one happened', outcomeProtocol(src)),
     ];

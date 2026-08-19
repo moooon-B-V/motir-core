@@ -7,7 +7,7 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 // 3.1.2). No DB — buildDefaultBoard is a pure function of its input, exactly
 // like the defaultWorkflow constant. The snapshot pins the seven-column default
 // projected from the seven default statuses (2.2.2, plus MOTIR-2425's
-// `planning`).
+// `planning`, then MOTIR-3003's `implemented`).
 
 // The seven default statuses as the DTOs the service feeds buildDefaultBoard —
 // derived from the SAME DEFAULT_STATUSES constant createProject seeds, with
@@ -37,6 +37,7 @@ describe('buildDefaultBoard', () => {
       'To Do',
       'Blocked',
       'In Progress',
+      'Implemented',
       'Planning',
       'In Review',
       'Done',
@@ -47,6 +48,7 @@ describe('buildDefaultBoard', () => {
       ['todo'],
       ['blocked'],
       ['in_progress'],
+      ['implemented'],
       ['planning'],
       ['in_review'],
       ['done'],
@@ -58,19 +60,21 @@ describe('buildDefaultBoard', () => {
 
   it('orders columns by status.position regardless of input order (defensive sort)', () => {
     const shuffled = [
-      defaultStatusDtos[5]!, // done
+      defaultStatusDtos[6]!, // done
       defaultStatusDtos[0]!, // todo
       defaultStatusDtos[2]!, // in_progress
-      defaultStatusDtos[6]!, // cancelled
-      defaultStatusDtos[3]!, // planning
+      defaultStatusDtos[7]!, // cancelled
+      defaultStatusDtos[4]!, // planning
       defaultStatusDtos[1]!, // blocked
-      defaultStatusDtos[4]!, // in_review
+      defaultStatusDtos[5]!, // in_review
+      defaultStatusDtos[3]!, // implemented
     ];
     const spec = buildDefaultBoard(shuffled);
     expect(spec.columns.map((c) => c.statusKeys[0])).toEqual([
       'todo',
       'blocked',
       'in_progress',
+      'implemented',
       'planning',
       'in_review',
       'done',
@@ -85,7 +89,7 @@ describe('buildDefaultBoard', () => {
     expect(input.map((s) => s.key)).toEqual(snapshot);
   });
 
-  it('matches the canonical seven-column default (snapshot)', () => {
+  it('matches the canonical eight-column default (snapshot)', () => {
     // Snapshot the meaningful projection — name, type, and each column's label
     // + mapped keys. The opaque fractional-index `position` is an
     // implementation detail of the workflow seed (asserted to mirror the status
@@ -116,6 +120,12 @@ describe('buildDefaultBoard', () => {
             "name": "In Progress",
             "statusKeys": [
               "in_progress",
+            ],
+          },
+          {
+            "name": "Implemented",
+            "statusKeys": [
+              "implemented",
             ],
           },
           {

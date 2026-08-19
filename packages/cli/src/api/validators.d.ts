@@ -66,3 +66,4 @@ export declare const operation_submitWorkItemExpansion: ValidateFunction;
 export declare const operation_transitionWorkItem: ValidateFunction;
 export declare const operation_updateSprint: ValidateFunction;
 export declare const operation_updateWorkItem: ValidateFunction;
+export declare const operation_uploadWorkItemAttachment: ValidateFunction;

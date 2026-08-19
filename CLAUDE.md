@@ -592,8 +592,35 @@ MUST land all three, with a shared basename:
 
 A design surface shipped with only notes + HTML (no `.png`), or HTML + PNG (no
 notes), is **incomplete** — do not open the design PR / mark the subtask done
-until all three are committed. (The `motir-meta` `MOTIR.md` design-reference rule
-carries the same definition-of-done for the planner side.)
+until all three are committed. (The `motir-meta` `MOTIR.md` design-reference
+rule carries the same definition-of-done for the planner side.)
+
+**How the `.png` reaches the board.** The "tenant-visible face" above is not a
+wish — CI publishes the note, the mock and the screenshot onto the work item from
+a step in `ci.yml`'s **design-asset guards** job, and the item page renders them
+in its **Design result** panel. Two things follow, and the second is the one that
+bites:
+
+- **You still commit all three files.** The published result is the card's VIEW
+  of the asset; the repository stays the source of truth.
+- **⚠️ That publish step SHARES a job with the guards and runs AFTER them, so a
+  failing guard skips it silently** — and the script also exits 0 without
+  publishing on a fork (no credential) or a branch whose name yields no work-item
+  key. In every case the run looks perfect: files written, commit landed, push
+  accepted, pull request opened. The only symptom is an empty card, on a surface
+  the run never opens. So **confirm the result arrived** before calling a design
+  card done: look for `Published N design artifact(s)` in the job log, or read
+  the card. If it is absent, publish it yourself through the design-evidence
+  routes — the token a dispatched run carries already holds the permission they
+  assert. (The dispatched `design` step list says so too; see
+  `lib/dispatch/promptTemplate.ts`.)
+
+**A design asset does NOT go through the general attachment door.** `attach_file`
+and `POST /api/v1/work-items/{key}/attachments` exist for a deliverable that has
+no lifecycle of its own — a research findings document, a review's notes. A
+design result has its own publisher and its own panel, and `text/html` is refused
+by the general door anyway, so routing one through it would split the three-file
+set across two surfaces (`docs/decisions/attachment-api-door.md` §3).
 
 **Re-export the `.png` with `node scripts/render-design-mock.mjs <mock.html>`,
 AFTER `prettier --write` on the mock.** It recovers the viewport width from the

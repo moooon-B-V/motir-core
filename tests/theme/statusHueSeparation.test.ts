@@ -3,7 +3,7 @@ import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { statusElVar } from '@/lib/workflows/statusColor';
 import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
-import { contrast, deltaE2000, lab } from './colorMetrics';
+import { contrast, deltaE2000, flattenColorMix, lab } from './colorMetrics';
 
 // MOTIR-2073 — the status ramp must be PERCEPTIBLY separated, not merely unequal.
 //
@@ -87,7 +87,12 @@ const KNOWN_TOO_CLOSE: string[] = [];
 function hueOf(ctx: ThemeContext, token: string): string {
   const { value, unresolved } = resolveToken(rules, ctx, token);
   expect(unresolved, `${ctx.palette}/${ctx.theme} ${token} must resolve`).toEqual([]);
-  return value.toLowerCase();
+  // A status hue may be expressed as a `color-mix` of two other status tokens
+  // (MOTIR-3003's `--el-status-implemented` is a desaturated `in_review`, so it
+  // tracks whatever a palette does to the brand hue). The resolver substitutes
+  // the vars and leaves the wrapper; fold it, or every metric below throws on a
+  // value it should be measuring.
+  return flattenColorMix(value).toLowerCase();
 }
 
 const CONTEXTS: ThemeContext[] = PALETTE_IDS.flatMap((palette) =>

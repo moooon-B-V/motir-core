@@ -1353,12 +1353,21 @@ is also `--color-accent`. Riding a Tier-0 var means every palette re-skins it
 with no per-palette block, exactly as the `--el-status-*` block's header
 prescribes.
 
-> **⚠️ ONE palette needs an override: `sienna`.** It re-maps
-> `--el-status-blocked` onto `--color-accent`, so `implemented` and `blocked`
-> would collide there. Give `[data-palette='sienna']` its own
-> `--el-status-implemented` (and its dark companion) — the same per-palette
-> follow-up `--el-status-planning` needed in `citrine` and `candy`. Every other
-> palette is clean: `--color-accent` is spent on no status in any of them.
+> **⚠️ FIVE palettes need an override — AMENDED by MOTIR-3003, on the
+> measurement.** This asset first named `sienna` alone, which is what the base
+> palette shows when read on its own and is wrong across the ten. The shipped
+> guard `tests/theme/statusHueSeparation.test.ts` holds every pair of status hues
+> at ΔE2000 ≥ 10 in all ten palettes × both themes, and it reports FIVE
+> collisions for `--color-accent`: **amber** (vs `in_review`), **candy** (vs
+> `planning`), **citrine** (vs `in_progress`), **graphite** (vs `in_progress`)
+> and **sienna** (vs `blocked`, which re-maps onto `--color-accent` there).
+> Each now carries its own `--el-status-implemented`, declared in BOTH themes so
+> the light value cannot cascade into dark: amber takes its unspent red, the
+> other four take the ink step. Measured nearest-neighbour distances:
+> amber 21.2 / 33.7 · candy 20.0 / 16.2 · citrine 17.8 / **10.0** · graphite
+> 15.9 / 11.8 · sienna 21.1 / 22.6 — and the base stays pink at 33.2 / 26.2.
+> Citrine's dark figure sits exactly on the floor, so a palette change that moves
+> either hue needs re-measuring rather than nudging.
 
 **And the glyph is what carries it, not the hue.** The Implemented chip renders
 `CircleEllipsis` — the SAME glyph the shipped CI-running pill uses

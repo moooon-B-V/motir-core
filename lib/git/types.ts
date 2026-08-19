@@ -83,10 +83,19 @@ export interface NormalizedChangeRequest {
 
 /** The canonical, provider-agnostic lifecycle signal a change request maps to —
  *  consumed by the status sync (MOTIR-892) to drive the linked work item's
- *  `workflow_status`. Opened → in review; merged → done; closed-unmerged → back
- *  to todo (the work did NOT complete). The concrete project workflow status is
- *  the consumer's concern; the provider only emits this canonical signal. */
-export type ChangeRequestLifecycle = 'in_review' | 'done' | 'todo';
+ *  `workflow_status`. Opened → IMPLEMENTED; merged → done; closed-unmerged →
+ *  back to todo (the work did NOT complete). The concrete project workflow
+ *  status is the consumer's concern; the provider only emits this canonical
+ *  signal.
+ *
+ *  ⚠️ `opened` emitted `in_review` until MOTIR-3005, and the change is about who
+ *  is allowed to claim a build is reviewable. An open pull request means the code
+ *  exists and CI has not spoken for it — which is exactly `implemented`. In
+ *  Review is now written by ONE writer, the CI-feedback consumer, when the checks
+ *  go green (MOTIR-3006); a webhook that set it on `opened` would assert a green
+ *  run that has not happened, and would also drag back the card the agent just
+ *  reported as implemented (the two writers must name the same state). */
+export type ChangeRequestLifecycle = 'implemented' | 'done' | 'todo';
 
 /** A CI / pipeline conclusion, normalized across providers. */
 export type CiConclusion = 'success' | 'failure' | 'pending' | 'neutral';

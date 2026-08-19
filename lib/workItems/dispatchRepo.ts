@@ -1,9 +1,7 @@
-import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import type { ProjectRepoName } from '@/lib/projectRepos/names';
-import { projectHasItsOwnCode } from '@/lib/projectRepos/ownCode';
+import { resolveEffectiveRepoDomain } from '@/lib/projectRepos/effectiveDomain';
 import { UnknownProjectRepoRefError } from './errors';
 import {
-  listConnectedRepoNames,
   matchAuthoredTargetRepo,
   matchAuthoredTargetRepos,
   normalizeTargetRepo,
@@ -66,6 +64,16 @@ import type { ServiceContext } from './serviceContext';
 // (`lib/projectRepos/ownCode.ts`). A project with no code of its own is answered
 // by its set alone, byte-identically to before.
 //
+// ⚠️ THE LADDER ABOVE NO LONGER LIVES IN THIS FILE — it is
+// `lib/projectRepos/effectiveDomain.ts`'s `resolveEffectiveRepoDomain`, and
+// `resolveDomains` below is a four-line adapter onto it (MOTIR-3126). The reason
+// it moved is worth keeping beside the reason it exists: while the ladder was a
+// PRIVATE function of the dispatch module, no page could ask what it had decided,
+// so `/settings/project/repositories` answered "which repositories does this
+// project have?" from `project_repository` alone and told Motir's own project —
+// five connected repositories, an empty set — that it had none. The history above
+// stays here because it is dispatch's; the DEFINITION is shared.
+//
 // Two domains, one snapshot (see `projectRepoSetService.getRepoNameDomains`):
 //
 //   * DISPATCH domain — established, realized rows. It names a checkout that must
@@ -81,33 +89,18 @@ import type { ServiceContext } from './serviceContext';
 // every caller MUST invoke these OUTSIDE its write transaction.
 
 /**
- * De-duplicate a merged domain by NAME, case-insensitively, FIRST occurrence
- * winning — the same rule (and the same reason) `listConnectedRepoNames` and
- * `toProjectRepoNames` each apply within their own list: two names differing only
- * in case are one checkout identity as far as dispatch is concerned.
+ * The repo-name DOMAINS for a project, with the scope ladder already applied.
  *
- * Order is MEANINGFUL (element 0 is the primary a set-less pin resolves to), so
- * the SET goes first and the workspace rung follows: a repository the project
- * planned outranks one it merely inherited from the installation, and a repo named
- * by both is answered by its set row, which is the entry that knows its `rowId`.
- */
-function mergeDomainsByName(
-  first: readonly ConnectedRepoName[],
-  second: readonly ConnectedRepoName[],
-): ConnectedRepoName[] {
-  const byName = new Map<string, ConnectedRepoName>();
-  for (const entry of [...first, ...second]) {
-    const key = entry.name.toLowerCase();
-    if (!byName.has(key)) byName.set(key, entry);
-  }
-  return [...byName.values()];
-}
-
-/**
- * The repo-name DOMAINS for a project, with the scope ladder already applied:
- * the project's own set when it has one, the workspace's connected repos when it
- * has none — and BOTH, set first, when it has a set AND code of its own the set
- * cannot describe (MOTIR-3086; see the module header for why that case exists).
+ * ⚠️ THE LADDER ITSELF LIVES IN `lib/projectRepos/effectiveDomain.ts` NOW, and
+ * this is the adapter onto it (MOTIR-3126). It used to be implemented here, as a
+ * private function — which is exactly why no PAGE could render what dispatch had
+ * decided, and why `/settings/project/repositories` told a project with five
+ * connected repositories that it had none. The behaviour is unchanged; what moved
+ * is where the one definition lives.
+ *
+ * What this drops on the floor is the two registries kept SEPARATELY, which the
+ * reader returns and dispatch has no use for: a name is a name once it is being
+ * resolved to a checkout.
  */
 async function resolveDomains(
   projectId: string,
@@ -129,50 +122,12 @@ async function resolveDomains(
    */
   projectRows: ProjectRepoName[] | null;
 }> {
-  const domains = await projectRepoSetService.getRepoNameDomains(projectId, ctx);
-  if (!domains.hasSet) {
-    const connected = await listConnectedRepoNames(ctx);
-    return {
-      scope: 'workspace',
-      dispatchable: connected,
-      pinnable: connected,
-      projectRows: null,
-    };
-  }
-  // ⚠️ `hasSet` is NO LONGER AN ALL-OR-NOTHING SWITCH, and that is the fix
-  // (MOTIR-3086 AC 3). It used to select between "the set" and "the workspace",
-  // so the very FIRST row a project ever gained flipped its whole repo list from
-  // one registry to the other — and for a project whose repositories live only in
-  // the other registry, that first row did not join a list, it BECAME the list.
-  // It now selects between "the set ALONE" and "the set FIRST, the workspace
-  // under it", so no row can subtract a repository from the domain. The FACT it
-  // names is unchanged and still worth having: a set with rows is a project that
-  // has planned its repositories, and its plan still comes first.
-  //
-  // The second question is only asked when the answer can matter — i.e. when the
-  // set is about to be the sole answer. A set-less project already gets the
-  // workspace rung above, so it needs no onboarding-run read.
-  if (!(await projectHasItsOwnCode(projectId, ctx))) {
-    return {
-      scope: 'project',
-      dispatchable: domains.dispatchable,
-      pinnable: domains.pinnable,
-      projectRows: domains.pinnable,
-    };
-  }
-  const connected = await listConnectedRepoNames(ctx);
+  const domain = await resolveEffectiveRepoDomain(projectId, ctx);
   return {
-    // Still `'project'`: the domain IS this project's repositories — the ones it
-    // planned plus the ones it arrived with — so `UnknownTargetRepoError`'s
-    // project-scoped wording ("This project's repositories: …") stays true, and
-    // the workspace-scoped wording would now be the misleading one.
-    scope: 'project',
-    dispatchable: mergeDomainsByName(domains.dispatchable, connected),
-    pinnable: mergeDomainsByName(domains.pinnable, connected),
-    // The ROWS are still only the set's — the union adds no `project_repository`
-    // row and must not pretend otherwise. What that costs is handled where refs
-    // are built, in `resolveAuthoredRepoPinsInProject`.
-    projectRows: domains.pinnable,
+    scope: domain.scope,
+    dispatchable: domain.dispatchable,
+    pinnable: domain.pinnable,
+    projectRows: domain.projectRows,
   };
 }
 

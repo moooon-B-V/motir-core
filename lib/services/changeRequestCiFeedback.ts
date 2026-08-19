@@ -8,6 +8,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
+import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 
 // The provider-agnostic CI / pipeline → work-item feedback consumer (Story 7.10 ·
 // MOTIR-894, generalized for GitLab in Story 7.23 · MOTIR-1477). This is THE ONE
@@ -63,6 +64,10 @@ export type CiFeedbackResult = {
     | 'malformed';
   workItemId?: string;
   ciState?: 'passing' | 'failing' | null;
+  /** The work items a terminal GREEN promoted out of `implemented` (MOTIR-3006).
+   *  Present only when it promoted at least one — a delivery that promotes N
+   *  cards has to say N, for the same reason the merge close-out does. */
+  promoted?: string[];
 };
 
 /** The connection + repo a provider hands the shared consumer, once it has
@@ -121,10 +126,20 @@ export async function applyCiStatusFeedback(
 
     const cr = await resolveChangeRequest(repo.id, event, tx);
     if (!cr) return { kind: 'no_pull_request' as const };
-    if (!cr.workItemId) return { kind: 'no_work_item' as const };
 
-    const workItem = await workItemRepository.findById(cr.workItemId, tx);
-    if (!workItem) return { kind: 'no_work_item' as const };
+    // ⚠️ A CHANGE REQUEST WITH NO LINKED CARD IS NOT NECESSARILY A NO-OP
+    // (MOTIR-3006). A session pull request carries N cards and its head ref
+    // deliberately names none of them, so the link column is null while the
+    // delivery is about real work. The rows must still be recorded and the
+    // promotion still evaluated; what a null link costs is the COMMENT and the
+    // `ciState` flip, both of which need one card to hang on and are unchanged.
+    const workItem = cr.workItemId ? await workItemRepository.findById(cr.workItemId, tx) : null;
+    const delivered = await workItemRepository.findBySessionBranch(
+      cr.headRef,
+      repo.workspaceId,
+      tx,
+    );
+    if (!workItem && delivered.length === 0) return { kind: 'no_work_item' as const };
 
     const existing = await githubCheckRunRepository.findByKey(
       cr.id,
@@ -140,7 +155,8 @@ export async function applyCiStatusFeedback(
       kind: 'resolved' as const,
       workspaceId: repo.workspaceId,
       provider: installation.provider as GitProviderId,
-      workItemId: workItem.id,
+      /** The LINKED card — null for a session pull request, which names none. */
+      workItemId: workItem?.id ?? null,
       prId: cr.id,
       checksUrl: buildChecksUrl(cr.number),
       existing: existing
@@ -175,12 +191,20 @@ export async function applyCiStatusFeedback(
         tx,
       );
     });
-    return { event: 'ci', outcome: 'pending_recorded', workItemId: resolved.workItemId };
+    return {
+      event: 'ci',
+      outcome: 'pending_recorded',
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+    };
   }
 
   if (!resolved.actorUserId)
     // No workspace owner to author the feedback comment — nothing to attribute.
-    return { event: 'ci', outcome: 'no_work_item', workItemId: resolved.workItemId };
+    return {
+      event: 'ci',
+      outcome: 'no_work_item',
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+    };
 
   // Idempotent: a redelivery of the SAME conclusion we already recorded (and
   // commented) is a no-op — never a duplicate comment. The check set at this sha
@@ -193,7 +217,7 @@ export async function applyCiStatusFeedback(
     return {
       event: 'ci',
       outcome: 'noop',
-      workItemId: resolved.workItemId,
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
       ciState: event.conclusion === 'success' ? 'passing' : 'failing',
     };
   }
@@ -251,7 +275,7 @@ export async function applyCiStatusFeedback(
     // no "Edited" tag, no event — so a delivery that moves nothing stays silent.)
     if (existingCommentId) {
       await commentsService.editComment(existingCommentId, { bodyMd }, actorCtx);
-    } else {
+    } else if (resolved.workItemId) {
       const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
       await githubCheckRunRepository.upsert(
         {
@@ -271,13 +295,52 @@ export async function applyCiStatusFeedback(
   });
 
   // Flip the verification signal through the service (no raw work_item write).
-  await workItemsService.setCiState(resolved.workItemId, ciState, actorCtx);
+  // Only a LINKED card has one to flip: a session pull request names none, and
+  // `ciState` is a per-card signal, so there is nothing to write there. The
+  // promotion below is what that delivery is actually for.
+  if (resolved.workItemId) {
+    await workItemsService.setCiState(resolved.workItemId, ciState, actorCtx);
+  }
+
+  // ── CI GREEN PROMOTES (MOTIR-3006) ──────────────────────────────────────
+  // EDGE 1 of the latch: a terminal green moves every card this change request
+  // DELIVERS out of `implemented`. Not "the linked card" — a session pull request
+  // carries N of them and its link column names none, which is the same 1:1
+  // defect MOTIR-3007 fixes one hop later, so both call the one resolver.
+  //
+  // Runs AFTER the comment and the `ciState` write have committed, and is
+  // best-effort for the reason `notes.html` #39 states: a side effect after a
+  // durable write may never fail it. A promotion that throws would turn a
+  // recorded verdict into a delivery the host retries forever, and the retry
+  // would re-post nothing and re-promote nothing — the state is already right.
+  const promoted =
+    ciState === 'passing'
+      ? await promoteDeliveredCardsOnGreen({
+          changeRequestId: resolved.prId,
+          workspaceId: resolved.workspaceId,
+          actorUserId: resolved.actorUserId,
+        }).catch((err: unknown) => {
+          console.error('[changeRequestCiFeedback] promotion failed; the verdict still stands', {
+            changeRequestId: resolved.prId,
+            error: err instanceof Error ? err.message : 'unknown',
+          });
+          return [] as string[];
+        })
+      : [];
 
   return {
     event: 'ci',
-    outcome: event.conclusion === 'success' ? 'verified' : 'failed',
-    workItemId: resolved.workItemId,
-    ciState,
+    // A delivery with no linked card still reports the no-work-item outcome it
+    // always did — what changed is that it now RECORDS its rows and evaluates the
+    // promotion on the way there, which is the only thing a session pull request
+    // could ever have wanted from this path.
+    outcome: resolved.workItemId
+      ? event.conclusion === 'success'
+        ? 'verified'
+        : 'failed'
+      : 'no_work_item',
+    ...(resolved.workItemId ? { workItemId: resolved.workItemId, ciState } : {}),
+    ...(promoted.length > 0 ? { promoted } : {}),
   };
 }
 
@@ -288,14 +351,14 @@ async function resolveChangeRequest(
   repoId: string,
   event: NormalizedStatusEvent,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string; number: number; workItemId: string | null } | null> {
+): Promise<{ id: string; number: number; workItemId: string | null; headRef: string } | null> {
   for (const number of event.prNumbers) {
     const pr = await githubPullRequestRepository.findByRepoAndNumber(repoId, number, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
+    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId, headRef: pr.headRef };
   }
   if (event.headBranch) {
     const pr = await githubPullRequestRepository.findByRepoAndHeadRef(repoId, event.headBranch, tx);
-    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
+    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId, headRef: pr.headRef };
   }
   return null;
 }

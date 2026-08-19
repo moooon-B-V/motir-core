@@ -12,7 +12,13 @@ import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
-import { checkBootstrapCheckout, cwdReasonLabel, resolveDispatchTarget } from '../dispatch.js';
+import {
+  checkBootstrapCheckout,
+  cwdReasonLabel,
+  renderNothingPushed,
+  resolveDispatchTarget,
+} from '../dispatch.js';
+import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
 import {
   batchExitCode,
   classifySnapshotItem,
@@ -60,6 +66,11 @@ export interface BatchDeps {
   /** The agent launcher. Injected by the tests so the drain can be driven with
    *  a scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
+  /** The git runner the push check (MOTIR-3004) asks — the same seam
+   *  `motir auto` takes, and deliberately NOT on `BatchOptions`, which is the
+   *  FLAG surface (`optionRegistrationAudit` holds every field there to a
+   *  registered option). */
+  run?: CommandRunner;
 }
 
 type ResolvedAgent = NonNullable<ReturnType<typeof resolveAgent>>;
@@ -153,6 +164,7 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       agent,
       clock: deps.clock ?? Date.now,
       runAgentFn: deps.runAgentFn ?? runAgent,
+      run: deps.run ?? execCommand,
       ownerId,
     });
     info('');
@@ -172,6 +184,8 @@ export interface BatchInput {
   /** The token owner — every card this run takes is CLAIMED for them, and rows
    *  claimed by anyone else never enter the snapshot (MOTIR-2427). */
   ownerId: string;
+  /** The git runner the MOTIR-3004 push check asks; defaults to the real one. */
+  run?: CommandRunner;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
@@ -179,6 +193,7 @@ export interface BatchInput {
  *  that became ready mid-run" property can actually be asserted. */
 export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   const { session, opts, kinds, max, agent, clock, runAgentFn, ownerId } = input;
+  const gitRun = input.run ?? execCommand;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -258,6 +273,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         clock,
         runAgentFn,
         ownerId,
+        run: gitRun,
       });
       if (outcome.kind === 'skipped') {
         skipped.push(outcome.skip);
@@ -326,6 +342,9 @@ interface DispatchOneInput {
   runAgentFn: typeof runAgent;
   /** Claimed for this owner before the agent launches (MOTIR-2427). */
   ownerId: string;
+  /** The git runner the push check uses (MOTIR-3004) — the same injection seam
+   *  `motir auto` takes its runner through. */
+  run: CommandRunner;
 }
 
 type DispatchOneResult =
@@ -334,7 +353,7 @@ type DispatchOneResult =
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
-  const { session, entry, agent, clock, runAgentFn, ownerId } = input;
+  const { session, entry, agent, clock, runAgentFn, ownerId, run } = input;
   const { client, link } = session;
 
   // The prompt is fetched BEFORE the status flip, which is the opposite order to
@@ -403,10 +422,23 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  // Exit 0 means the agent completed the prompt's GIT WORKFLOW, whose last step
-  // is opening the pull request — so In Review is the truthful status, and the
-  // per-item close-out is `motir done <key>` after the human merges it.
-  await client.transitionStatus({ key: entry.key, status: 'in_review' });
+  // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004). `implemented` claims the code is on the
+  // remote; an agent that exits 0 having pushed nothing must not produce a card
+  // that says so. Refused rather than recorded — the item stays In Progress,
+  // which is what an interrupted run looks like.
+  if (workReachedRemote(target.cwd, entry.key, null, run) === 'nothing') {
+    info(renderNothingPushed(entry.key, dispatch));
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'failed', detail: 'nothing reached the remote' },
+    };
+  }
+
+  // Exit 0 AND the work is on the remote: the agent completed the prompt's GIT
+  // WORKFLOW, whose last step is opening the pull request — so Implemented is the
+  // truthful status (built, pushed, waiting on CI), and the per-item close-out is
+  // `motir done <key>` after the human merges it.
+  await client.transitionStatus({ key: entry.key, status: 'implemented' });
   // What BUILT it, recorded as its own fact (MOTIR-2421). Two calls rather than
   // one because they assert different things: the transition says where the item
   // is, this says what ran. `motir auto` gets both from `mark_integrated`, which
@@ -419,6 +451,6 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     implementationHarness: deriveAgentHarness(agent.parsed.binary),
     implementationModel: result.model,
   });
-  info(`${entry.key}: In Review via its own pull request.`);
-  return { kind: 'record', record: { ...base, outcome: 'in_review' } };
+  info(`${entry.key}: Implemented via its own pull request — CI decides when it is reviewable.`);
+  return { kind: 'record', record: { ...base, outcome: 'implemented' } };
 }

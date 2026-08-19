@@ -332,10 +332,24 @@ test('@smoke status + assignee facets narrow the list and serialize to the URL',
 
   // status=in_progress → only `a` survives (the todo sibling is pruned).
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
-  await page
-    .getByRole('listbox', { name: 'Status' })
+  const statusFacet = page.getByRole('listbox', { name: 'Status' });
+
+  // MOTIR-3080 — the facet's status dot is MEASURED, not assumed. The picker's
+  // dot rendered 2 × 18 for as long as it existed (a plain span left inline in
+  // `Combobox`'s icon slot); this dot is a DIRECT child of its flex option row,
+  // so it is blockified and has always been 10 × 10. That is the claim the bug
+  // card asks to be shown rather than argued, and it is what makes the fix's
+  // scope honest: the slot was broken, this site never was.
+  const facetDot = statusFacet
     .getByRole('option', { name: 'In Progress' })
-    .click();
+    .locator('span.rounded-full')
+    .first();
+  const facetBox = await facetDot.boundingBox();
+  expect(facetBox, 'the facet dot has a box').not.toBeNull();
+  expect(facetBox!.width, 'facet dot width').toBeCloseTo(10, 0);
+  expect(facetBox!.height, 'facet dot height').toBeCloseTo(10, 0);
+
+  await statusFacet.getByRole('option', { name: 'In Progress' }).click();
   await page.waitForURL((url) => url.searchParams.get('status') === 'in_progress');
   await expect(page.getByTestId(`issue-row-${a.identifier}`)).toBeVisible();
   await expect(page.locator('[data-testid^="issue-row-"]')).toHaveCount(1);

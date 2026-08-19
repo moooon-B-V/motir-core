@@ -20,12 +20,19 @@ export interface AttachmentDTO {
   mimeType: string;
   sizeBytes: number;
   /**
-   * How the file entered: `panel` (the Attach button / dropzone) or `editor`
-   * (a description/comment embed). Editor-sourced rows render the source
-   * indicator and their panel delete is BLOCKED (409) — remove the embed at
-   * its source instead.
+   * How the file entered: `panel` (the Attach button / dropzone), `editor`
+   * (a description/comment embed), or `api` (the general `/api/v1` attachment
+   * door and the MCP tool in front of it — MOTIR-3057). Editor-sourced rows
+   * render the source indicator and their panel delete is BLOCKED (409) —
+   * remove the embed at its source instead.
+   *
+   * ⚠️ `api` is a DATA distinction only: the panel already attributes every
+   * attachment to its uploader, so a general-door upload is legible without any
+   * component change, and none was made (MOTIR-3000; `attachment-api-door.md`
+   * §2). The lifecycle-owned sources never reach this DTO — the panel read
+   * excludes them.
    */
-  source: 'editor' | 'panel';
+  source: 'editor' | 'panel' | 'api';
   /**
    * The AUTHENTICATED content path (`/api/attachments/<id>/content`, MOTIR-1667),
    * usable directly as `<img src>` / a download href — the route authorizes the

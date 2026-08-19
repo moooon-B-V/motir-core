@@ -386,7 +386,7 @@ describe('inbound deliveries route by REPO, not by installation', () => {
   it('syncs a PR to the work item of the workspace that OWNS the repo', async () => {
     const { a, b } = await seedTwoTenants();
 
-    // One work item per tenant, each In Progress so `opened → in_review` is legal.
+    // One work item per tenant, each In Progress so `opened → implemented` is legal.
     const itemA = await workItemsService.createWorkItem(
       { projectId: a.projectId, kind: 'task', title: 'A change' },
       a.ctx,
@@ -408,7 +408,7 @@ describe('inbound deliveries route by REPO, not by installation', () => {
     // B moved; A did not. Routing by installation would have resolved the work
     // item inside whichever workspace held the installation row.
     const movedItem = await adminDb.workItem.findUnique({ where: { id: itemB.id } });
-    expect(movedItem).toMatchObject({ status: 'in_review' });
+    expect(movedItem).toMatchObject({ status: 'implemented' });
     const untouchedItem = await adminDb.workItem.findUnique({ where: { id: itemA.id } });
     expect(untouchedItem).toMatchObject({ status: 'in_progress' });
 

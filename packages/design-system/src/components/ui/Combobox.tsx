@@ -25,6 +25,28 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffec
 // gates the createPortal call so document.body is guaranteed present. Hydration-
 // safe (matches the server's `false`) and avoids setState-in-effect.
 const subscribeNoop = () => () => {};
+
+/**
+ * The LEADING-VISUAL slot, on the trigger and on every option row (MOTIR-3080).
+ *
+ * ⚠️ `inline-flex` is load-bearing, not decoration. The wrapper is a flex item of
+ * its row, so IT is blockified — but whatever a caller passes INSIDE it is not,
+ * and a plain `<span>` therefore stays `display: inline`, where width and height
+ * do not apply at all. `StatusPicker`'s 10px status dot rendered as a 2 × 18
+ * sliver for exactly that reason: three cards of palette work (MOTIR-1273 /
+ * -2073 / -2075) measured that dot's HUE while its box was two pixels wide.
+ *
+ * It survived every check because the markup was right — the classes ask for
+ * 10 × 10, `getComputedStyle` reports 10px, and only the USED value disagreed.
+ * A used value exists only in a browser, so `tests/e2e/issue-detail-flow` MEASURES
+ * it rather than asserting the element exists.
+ *
+ * Making the slot a flex CONTAINER blockifies its child, which is what the slot's
+ * contract ("a leading visual") always implied. A lucide `<svg>` is replaced and
+ * was never affected, so no existing caller's icon changes size.
+ */
+const ICON_SLOT = 'inline-flex shrink-0 items-center';
+
 function useMounted() {
   return useSyncExternalStore(
     subscribeNoop,
@@ -503,7 +525,11 @@ export function Combobox<T extends string>({
                     isActive ? 'bg-(--el-option-active-bg) text-(--el-text)' : 'text-(--el-text)',
                   )}
                 >
-                  {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
+                  {opt.icon ? (
+                    <span aria-hidden className={ICON_SLOT}>
+                      {opt.icon}
+                    </span>
+                  ) : null}
                   <span className="truncate">{opt.label}</span>
                   {opt.secondary ? (
                     // --el-text-identifier (= --color-slate, the -secondary
@@ -604,7 +630,11 @@ export function Combobox<T extends string>({
       >
         {selected ? (
           <>
-            {selected.icon ? <span aria-hidden>{selected.icon}</span> : null}
+            {selected.icon ? (
+              <span aria-hidden className={ICON_SLOT}>
+                {selected.icon}
+              </span>
+            ) : null}
             <span className="text-(--el-text) truncate">{selected.label}</span>
             {selected.secondary ? (
               // identifier (= slate, the -secondary weight): AA on the trigger surface at 12px (as above).

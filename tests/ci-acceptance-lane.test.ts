@@ -552,7 +552,14 @@ describe('the shared E2E setup composite (MOTIR-1949)', () => {
     expect(action).toContain('name: next-build'); // the pre-built .next/ (MOTIR-1706)
     expect(action).toContain('pnpm prisma migrate deploy');
     expect(action).toContain('packages.microsoft.com'); // MOTIR-1679
-    expect(action).toContain('playwright install --with-deps chromium');
+    // ⚠️ `--with-deps` is GONE, deliberately (MOTIR-3128). It bolted an apt
+    // round-trip onto a CDN download, so the browser install took both failure
+    // domains at once; the OS deps are now installed only when the probe below
+    // finds them missing. The browser download itself is what this lane needs
+    // from the step, and that is what is asserted.
+    expect(action).toContain('playwright install chromium');
+    expect(action).not.toContain('playwright install --with-deps');
+    expect(action).toContain('needs-deps');
   });
 
   it('leaves checkout and Postgres to the caller', () => {

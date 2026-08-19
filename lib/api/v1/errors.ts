@@ -152,6 +152,28 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // would erase the value with no signal to the caller.
   CONTAINER_REPO_SET_NOT_WRITABLE: 422,
   ARCHIVED_TARGET_REPO: 422,
+
+  // ── Story MOTIR-3000, the general attachment door (MOTIR-3057) ────────────
+  // Every one of these is thrown by `attachmentsService`, unchanged, on the
+  // path the BROWSER route already uses — so the two entrances answer one rule
+  // with one status. `tests/api/v1/attachments-route.test.ts` drives each
+  // through BOTH routes in the same file, which is what makes "no gate
+  // re-implemented" checkable rather than a review opinion.
+  FILE_TOO_LARGE: 413,
+  UNSUPPORTED_FILE_TYPE: 415,
+  // The per-user upload throttle inside the service — distinct from the
+  // wrapper's per-token budget, which answers 429 before the handler runs. Same
+  // status either way: from the caller's seat both mean "slow down".
+  RATE_LIMITED: 429,
+  // `attachment:create` refused on the item's project. 403, not 404: the caller
+  // could BROWSE the item to get here (a non-browsable one is already 404 via
+  // WORK_ITEM_NOT_FOUND), so no existence is revealed by saying they may not
+  // write to it.
+  ATTACHMENT_FORBIDDEN: 403,
+  // The organization's TOTAL storage cap. 402 rather than 413: the file is not
+  // too large, the account is too full, and the fix is an upgrade rather than a
+  // smaller file.
+  ENTITLEMENT_EXCEEDED: 402,
   // MOTIR-2728 — a write supplying BOTH `targetRepo` and `targetRepos`. The
   // scalar IS the set's first element, so the two can disagree; a refusal beats a
   // precedence rule that drops a repository the caller believed they recorded.

@@ -23,7 +23,9 @@
 export const V1_SUCCESS_STATUSES = [200, 201, 202, 204] as const;
 
 /** Statuses a FAILED v1 response can carry — the ADR §4 table. */
-export const V1_ERROR_STATUSES = [401, 402, 403, 404, 409, 412, 422, 429, 500, 503] as const;
+export const V1_ERROR_STATUSES = [
+  401, 402, 403, 404, 409, 412, 413, 415, 422, 429, 500, 503,
+] as const;
 
 /** A success status, as a type. */
 export type V1SuccessStatus = (typeof V1_SUCCESS_STATUSES)[number];
@@ -61,11 +63,13 @@ export const V1_STATUS_DESCRIPTIONS: Record<V1Status, string> = {
   202: 'The request was ACCEPTED and a background job was started. Nothing has been produced yet — the body carries a handle to poll, never a result.',
   204: 'The request succeeded and the response has no body.',
   401: 'Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated.',
-  402: 'The workspace owner’s AI credits are exhausted. The request was valid; it was refused for want of balance, and retrying will not help until credits are topped up.',
+  402: 'A plan entitlement is exhausted — the workspace owner’s AI credits, or the organization’s total attachment-storage cap. The request was valid; it was refused for want of headroom, and retrying will not help until the limit is lifted.',
   403: 'The token is valid but its granted scopes do not include the one this operation requires.',
   404: 'The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer.',
   409: 'The request conflicts with existing state. The body is well-formed; the state is not what the request assumed.',
   412: 'An `If-Match` precondition failed — the resource moved since the validator was issued.',
+  413: 'The uploaded file is larger than the per-file limit this organization’s plan allows. Note the SEPARATE platform ceiling on a direct upload, documented on the operation itself (docs/decisions/attachment-api-door.md §1).',
+  415: 'The uploaded file’s media type is not on the allowlist. `text/html` is deliberately absent: the three layers that make HTML safe to serve belong to the design-result lifecycle and its own publisher (design-result.md §5a).',
   422: 'The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation.',
   429: "The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills.",
   500: 'An unexpected server fault. The body carries no `code`, no stack and no driver text.',

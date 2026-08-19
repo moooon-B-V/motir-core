@@ -1,14 +1,15 @@
 # `design/repository-set/` — design notes
 
-**The area index. It now covers THREE surfaces** — the three things a project's code has to answer:
+**The area index. It now covers FOUR surfaces** — the three things a project's code has to answer:
 where it comes to live, who on the team can get into it, and what the standing _"it's yours — move
 it whenever you want"_ actually opens onto.
 
-| Surface                                                          | Asset                                                                                                   | Card                                                         | Sections |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- |
-| **The establish step** at plan approval                          | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png) | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)         | §0–§13   |
-| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                         | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | §14      |
-| **Team code access** — who else on the team can clone it         | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)             | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API) | **§15**  |
+| Surface                                                          | Asset                                                                                                               | Card                                                         | Sections |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- |
+| **The establish step** at plan approval                          | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)         | §0–§13   |
+| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | §14      |
+| **Team code access** — who else on the team can clone it         | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API) | **§15**  |
+| **The room's two registries** — hosted set + workspace-connected | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder)  | **§16**  |
 
 **Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** §0–§13 are the design
 reference for the step at plan approval that gives an approved plan somewhere for its code to live —
@@ -1513,3 +1514,186 @@ and each mutation must reconcile the island from its own response (seq-guarded p
   how a grant is revoked, and `projectRepoAccessService` has no revoke path; a control the service
   cannot honour would be a worse promise than none. When a revoke lands it belongs on this row.
 - **Org-wide or cross-project access** — `ProjectRepo` is project-scoped and so is this pane.
+
+---
+
+# 16. `repositories-room.mock.html` — THE ROOM RENDERS BOTH REGISTRIES
+
+**Story MOTIR-1775 · bug MOTIR-3126.** The design reference for what
+`/settings/project/repositories` shows when a project's repositories do **not** all live in
+`project_repository`: the Motir-hosted set and the workspace-connected repositories, drawn as **two
+sections**, with the empty state reserved for the one project shape it is true of.
+
+- **Asset of record:** [`repositories-room.mock.html`](./repositories-room.mock.html); `.png` export
+  [`repositories-room.png`](./repositories-room.png) (full-page, light theme, `deviceScaleFactor: 2`,
+  width 1200).
+- **Scope:** pixels and copy. The layering itself is already decided and already shipped — see §16.2.
+
+## 16.1 · The answer in one line
+
+**The room renders the repository DOMAIN, not one table** — and it renders it as two named sections,
+because a Motir-hosted row can be taken over and a workspace-connected repository cannot. A section
+whose registry contributes nothing is **absent**, never present-and-empty-stated; the empty state
+belongs to a project with neither.
+
+## 16.2 · What was already decided, and by whom — this asset decides ONE thing
+
+Nothing below is a new answer to _"which repositories does this project have?"_. That was decided by
+`docs/decisions/project-repository-set.md`'s **2026-08-19 amendment** (MOTIR-3086) and implemented as
+a layered ladder in `lib/workItems/dispatchRepo.ts`:
+
+| Project shape                        | The domain                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| no set                               | the workspace's connected repositories                                                                |
+| a set, project born in Motir         | the set alone                                                                                         |
+| a set, project **arrived with code** | the set FIRST, the connected repositories under it (`mergeDomainsByName`, deduped by lowercased name) |
+
+The predicate for the third rung is `projectHasItsOwnCode` (`lib/projectRepos/ownCode.ts`) — the
+project's `migrate_onboarding` run names a connected repository.
+
+**The one decision this asset makes: TWO SECTIONS, not one merged list.** The resolver merges the two
+registries because dispatch only needs a set of names. A person needs to tell them apart: the room
+exists so a Motir-hosted repository can be MOVED (§14 · MOTIR-1939), and a repository the user already
+owns has no such action. One merged list would offer a meaningless action on half its rows, and the
+alternative — offering it on none — would remove the room's whole purpose. Two sections keeps each
+half's provenance legible and each half's affordances honest.
+
+**A taken-over row stays in the HOSTED section**, reading `Yours`. It is a `project_repository` row
+and the saga's history lives on it. The sections answer _"which registry is this row in"_; ownership
+is the row's own state word, where §14.7 already put it.
+
+## 16.3 · Drawn against SHIPPED reality — what was RENDERED first
+
+Both halves ship, so both were rendered before anything was drawn (the design-against-shipped-reality
+rule; `notes.html` #73):
+
+- **The room's island** — `RepositoriesRoom` + `TakeoverRow` — bundled from its own source with the
+  real compiled `globals.css` and screenshotted in both branches. Its empty branch is what panel 1
+  reproduces on the left, verbatim: one `EmptyState` card, the false sentence, **nothing pressable**.
+- **The connected-repository list** — the shipped one from
+  `app/(authed)/settings/workspace/github/page.tsx` (lines 289–307): a `Card` over a
+  `flex flex-col gap-1` list whose every row is a `FolderGit2` glyph, an `owner/` + `name` pair, and a
+  mono default-branch chip. Mirrored element for element rather than restyled, so the two surfaces
+  that render the same fact render it the same way.
+- **The token, primitive and icon layers** are the ones `takeover.mock.html` generated from
+  `@motir/design-system/theme.css` and `lucide-react`. Reused verbatim, so this area's two room assets
+  cannot drift apart.
+
+## 16.4 · Placement and the access path
+
+**Unchanged from §14.4** — the room already has three doors (the approval step's ownership promise,
+the billing panel's `Move repositories`, and the permanent project-settings rail row) and this asset
+adds none. Panel 2 draws the rail with `Repositories` active, which is the door that is always there.
+What changes is only what the room renders once you are in it.
+
+## 16.5 · The panels
+
+| Panel                                    | Project shape             | What it draws                                                                                        |
+| ---------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Ladder table**                         | all four                  | Which registry answers, and which section the room renders — the resolver's answer, not the asset's. |
+| **1 · Arrived with code, empty set**     | MOTIR today               | The shipped defect on the left, the target on the right: the connected section, named and sourced.   |
+| **2 · Arrived with code, non-empty set** | both registries           | The WHOLE page in the settings shell — rail, header, summary, hosted section, then yours.            |
+| **3 · Born in Motir**                    | the set alone             | One section. The yours heading is **absent**, not empty — including with a taken-over row present.   |
+| **4 · Genuinely empty**                  | no set, nothing connected | The rewritten empty state, with the action it never had.                                             |
+
+### Why the empty state needed rewriting, and not just re-gating
+
+`repositoryTakeover.empty` said _"Motir sets them up when you approve a plan"_ — one of the two ways a
+project gets repositories, stated as if it were both. Gating it correctly would have left it true and
+still incomplete on the surface it is the only sentence on. It now names both routes and offers the one
+the reader can take right now.
+
+## 16.6 · Primitives — every element, and what it is
+
+| Element                   | Primitive                                          | Notes                                                                                   |
+| ------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Section heading           | `SectionLabel`                                     | The mono/uppercase/`--el-text-eyebrow` caption. One per registry.                       |
+| Section hint              | `<p>` at `--el-text-secondary`                     | One sentence of provenance, ≤ 68ch.                                                     |
+| Motir-hosted row          | **the shipped `TakeoverRow`**                      | Untouched — §14.6's row, its tints, its states and its `RowActions` strip.              |
+| Connected-repository list | **the shipped workspace-GitHub list, in a `Card`** | `FolderGit2` + `owner/`+`name` + branch chip. No action of any kind on a row.           |
+| The list's footer         | `Card` footer row                                  | Provenance sentence + the one link, to `/settings/workspace/github`.                    |
+| The empty state           | `EmptyState` + a `Button variant="secondary"`      | Icon `FolderGit2` (the sibling code-access room's choice), not the default `Inbox`.     |
+| Header summary            | the shipped `summary` line                         | `{moving} moving · {hosted} hosted by Motir · {yours} yours`, counted over BOTH halves. |
+| Settings rail + pane      | the shipped settings AREA shell                    | `PROJECT_SETTINGS_NAV` groups. Redrawn nowhere.                                         |
+
+**No new affordance is introduced anywhere on this surface.** The only pressable things added are one
+link (to a shipped pane) and one button in the empty state (to the same pane).
+
+## 16.7 · Token roles — colour (`--el-*`) and shape
+
+The hosted rows keep §14.7's three registers exactly. The connected list is deliberately **untinted**:
+a register is what a row's STATE is drawn in, and a connected repository has no state in this room — it
+is a fact, not a step. Tinting it would put it in a conversation about ownership it is not part of.
+
+| Element                          | Colour role                                                                                                      | Shape role                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| Connected list container         | `--el-card` + `--el-border`                                                                                      | `--radius-card` · `--spacing-card-padding`   |
+| Connected list row               | none (transparent)                                                                                               | `--radius-control` · `--spacing-control-x/y` |
+| Repository glyph                 | `--el-icon-muted`                                                                                                | —                                            |
+| `owner/` prefix                  | `--el-text-muted` — AA-safe here and ONLY here (4.54:1 on the white card; it fails on all three tinted surfaces) | —                                            |
+| Repository name                  | `--el-text`, `font-medium`                                                                                       | —                                            |
+| Default-branch chip              | `--el-code-bg` / `--el-code-text`                                                                                | `--radius-control` · `--spacing-chip-x/y`    |
+| Section heading                  | `--el-text-eyebrow`                                                                                              | —                                            |
+| Section hint · list footer       | `--el-text-secondary`                                                                                            | —                                            |
+| Footer link                      | `--el-link` → `--el-link-pressed`                                                                                | —                                            |
+| Empty-state glyph · title · copy | `--el-icon-muted` · `--el-text` · `--el-text-subtitle`                                                           | `--radius-card` · `--spacing-card-padding`   |
+
+## 16.8 · Copy — every string, as `en.json` keys
+
+Namespace **`repositoryTakeover`**. ⚠️ **Every key below needs a matching `zh.json` key** or the
+i18n-catalog parity gate fails the PR.
+
+| Key                     | English                                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leadConnected`         | Where {projectName}'s code lives — the repositories Motir hosts for you, and the ones you connected yourself.                                         |
+| `hostedHeading`         | Hosted by Motir                                                                                                                                       |
+| `hostedHint`            | Motir created these and pays for their CI. Move any of them to your own GitHub whenever you want.                                                     |
+| `yoursHeading`          | Your own repositories                                                                                                                                 |
+| `yoursHint`             | Connected to this workspace through the Motir GitHub app. They're already yours — nothing to move, and Motir never bills their CI.                    |
+| `yoursFoot`             | Connected for the whole workspace, not for this project alone.                                                                                        |
+| `yoursManage`           | Choose which repositories Motir can see                                                                                                               |
+| `empty` **(rewritten)** | No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you. |
+| `emptyAction`           | Connect a repository                                                                                                                                  |
+
+`lead` (the existing header sentence) is kept for a project that HAS hosted repositories, because it is
+about them; `leadConnected` replaces it when the hosted section is absent, where the old sentence
+describes something the reader cannot see. `summary` is unchanged as a STRING and changes only in what
+feeds it: a workspace-connected repository counts toward `yours`.
+
+## 16.9 · a11y
+
+- Each section is a `<section aria-labelledby>` pointing at its `SectionLabel`, so the two lists are
+  distinguishable to a screen reader by name and not by order alone. That is the whole a11y content of
+  the two-section decision.
+- The connected repositories are a real `<ul>` / `<li>`, so the count is announced. Nothing in a row is
+  focusable — there is no action, and a focus stop that leads nowhere is worse than none.
+- The branch chip is plain text beside the name, inside the same list item, so it is read as part of
+  the row rather than as an unlabelled control.
+- The empty state's action is a `<a>` styled as a button (it navigates), not a `<button>`.
+
+## 16.10 · Page state after a mutation (the enforced contract)
+
+The only mutation on this surface is still the takeover, and §14.10 governs it unchanged. The one thing
+this asset adds:
+
+**The connected section is fed by the SAME server read as the rows and refreshed by the same island
+refetch.** The rows are a client island seeded from server props, so `router.refresh()` cannot reach
+them (contract surface 3) — and a connected section that only `router.refresh()` reached would go stale
+against the very list it sits beside. It therefore rides the island's own refetch, which already runs
+after every mutation and on the takeover poll.
+
+**Whether the section is rendered at all is decided on the SERVER**, from the ladder, and is not
+re-derived on the client. The client re-reads the LIST; it never re-decides whether the list belongs on
+this project — that is the one definition this whole card exists to stop duplicating.
+
+## 16.11 · Explicitly OUT of scope here
+
+- **The ladder itself** — MOTIR-3086 decided it and it is correct. This asset renders it.
+- **Connecting a repository** — a workspace-level act at `/settings/workspace/github`. The room links
+  there and grows no connect flow of its own.
+- **The takeover flow** — §14, unchanged: not one of its panels, states or strings moves.
+- **The plan-approval establish step** — §0–§13, and `RepositorySetStep`, which already consumes the
+  connected candidates correctly.
+- **Promoting a connected repository into `project_repository`** — the ADR amendment's own "what this
+  does NOT fix". Until something does, a connected repository has no row, so it has no takeover, no
+  role chip and no position; that absence is drawn rather than papered over.

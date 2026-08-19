@@ -52,6 +52,13 @@ export const EXEMPT_TOOLS = {
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +
     'enforces it with a `reaches-cascade-delete` rule — so no v1 resource exists, by decision ' +
     'rather than by omission (MOTIR-2229).',
+  search_work_items_semantic:
+    'Returns a RANKING — `{ outcome, results: [{ key, title, score }], model, coverage, message }`. ' +
+    'The row is not a work-item representation and is forbidden from becoming one: ' +
+    '`plan-tree-embeddings.md` §2 pins it to keys, titles and scores, never prose, so it cannot ' +
+    'derive from a resource whose whole job is to describe an item. `score`, `coverage` and ' +
+    '`outcome` have no v1 counterpart at all — no v1 operation exposes semantic search ' +
+    '(MOTIR-3101).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +

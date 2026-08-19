@@ -301,7 +301,7 @@ describe('gitlabWebhookService — unresolvable deliveries against a real connec
       event: 'pull_request',
       outcome: 'transitioned',
       workItemId: item.id,
-      toStatus: 'in_review',
+      toStatus: 'implemented',
     });
   });
 });
@@ -337,13 +337,13 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
     //    redelivery wrote the status again, i.e. the locked no-op arm in
     //    `applyStatusTransition` stopped holding (mirrors the GitHub twin in
     //    `tests/github/githubWebhookService.test.ts`).
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     const mrRows = await adminDb.githubPullRequest.findMany({ where: { number: 7 } });
     expect(mrRows).toHaveLength(1);
 
     const inReviewRevs = (await statusRevisions(s.item.id)).filter(
-      (r) => (r.diff as { status?: { to?: string } }).status?.to === 'in_review',
+      (r) => (r.diff as { status?: { to?: string } }).status?.to === 'implemented',
     );
     expect(inReviewRevs).toHaveLength(1);
   });

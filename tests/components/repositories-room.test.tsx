@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { RepositoriesRoom } from '@/app/(authed)/settings/project/repositories/_components/RepositoriesRoom';
 import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import type {
+  ProjectRepoConnectCandidateDto,
+  ProjectRepoConnectedDto,
   ProjectRepoDto,
   ProjectRepoRoomViewDto,
   ProjectRepoTakeoverDto,
@@ -51,6 +53,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 /** What the SET read answers with — the rows currently rendered, so a re-read
  *  reflects reality instead of emptying the room out from under the test. */
 let currentRows: ProjectRepoDto[] = [];
+/** The other half of the same payload — the installation's repositories, which the
+ *  island maps into the connected section on every refetch (MOTIR-3126). */
+let currentCandidates: ProjectRepoConnectCandidateDto[] = [];
 
 beforeEach(() => {
   refresh.mockClear();
@@ -88,13 +93,199 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
     expect(within(yours).queryByRole('button')).toBeNull();
   });
 
-  it('renders the empty room rather than an empty list when the project has no repositories', () => {
-    renderRoom({ rows: [] });
+  it('renders the empty room rather than an empty list when the project has NEITHER registry', () => {
+    renderRoom({ rows: [], connected: [], connectedInDomain: false });
     expect(
       screen.getByText(
-        'This project has no repositories yet. Motir sets them up when you approve a plan, and they appear here.',
+        'No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you.',
       ),
     ).toBeTruthy();
+    // The empty state now has a way out — the workspace pane that owns connecting.
+    expect(screen.getByRole('link', { name: 'Connect a repository' }).getAttribute('href')).toBe(
+      '/settings/workspace/github',
+    );
+  });
+});
+
+// THE TWO REGISTRIES (MOTIR-3126 · design §16) — a project's repositories live in
+// `project_repository` OR in the workspace's connected set OR in both, and the room
+// used to read only the first. What is pinned here is one case per project shape,
+// asserted as what the reader SEES rather than as which branch ran:
+//
+//   1. Arrived with code, EMPTY set — the defect. Five repositories, and the page
+//      said the project had none. The empty state must NOT appear.
+//   2. Arrived with code, non-empty set — both sections, each named, and the
+//      takeover offered on the hosted rows only.
+//   3. Born in Motir — the set alone, and the connected heading ABSENT rather than
+//      present-and-empty.
+//   4. Neither — the one shape the empty state is true of (above).
+//
+// Plus the property the sections exist FOR: nothing in the connected list is
+// pressable, because there is nothing to move.
+
+describe('the two registries (MOTIR-3126)', () => {
+  it('renders the connected repositories — not the empty state — for a project whose set is empty', () => {
+    renderRoom({
+      rows: [],
+      connected: [
+        connectedRepo('motir-core', 'moooon-B-V'),
+        connectedRepo('motir-ai', 'moooon-B-V'),
+      ],
+      connectedInDomain: true,
+    });
+
+    expect(screen.queryByText(/No repositories are connected to this project yet/)).toBeNull();
+    const section = screen.getByRole('region', { name: 'Your own repositories' });
+    expect(within(section).getByText('motir-core')).toBeTruthy();
+    expect(within(section).getByText('motir-ai')).toBeTruthy();
+    // And no hosted section at all — an absence, never an empty-stated one.
+    expect(screen.queryByRole('region', { name: 'Hosted by Motir' })).toBeNull();
+  });
+
+  it('renders BOTH sections, with the move offered only on the hosted one', () => {
+    renderRoom({
+      rows: [hostedRow()],
+      connected: [connectedRepo('design-tokens')],
+      connectedInDomain: true,
+    });
+
+    const hosted = screen.getByRole('region', { name: 'Hosted by Motir' });
+    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+
+    expect(
+      within(hosted).getByRole('button', {
+        name: 'Move motir-projects/acme-booking-web to my GitHub',
+      }),
+    ).toBeTruthy();
+    // The whole reason the two are drawn apart: a repository the user already owns
+    // carries no action, so the section holding them has no button in it at all.
+    expect(within(yours).queryByRole('button')).toBeNull();
+    expect(within(yours).getByText('design-tokens')).toBeTruthy();
+    expect(within(yours).getByText('acme-inc/')).toBeTruthy();
+  });
+
+  it('omits the connected section entirely for a project answered by its set alone', () => {
+    renderRoom({ rows: [hostedRow()], connected: [], connectedInDomain: false });
+
+    expect(screen.getByRole('region', { name: 'Hosted by Motir' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Your own repositories' })).toBeNull();
+  });
+
+  it('renders a repository Motir knows no branch for, and one whose ref carries no owner', () => {
+    // Both are honest degradations rather than states to hide: the branch chip is
+    // simply absent when Motir does not know it (never a guessed "main"), and a
+    // ref with no `owner/` half renders the name alone rather than a stray slash.
+    renderRoom({
+      rows: [],
+      connected: [
+        { name: 'no-branch', repoRef: 'acme-inc/no-branch', defaultBranch: null },
+        { name: 'bare-ref', repoRef: 'bare-ref', defaultBranch: 'trunk' },
+      ],
+      connectedInDomain: true,
+    });
+
+    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+    expect(within(yours).getByText('no-branch')).toBeTruthy();
+    expect(within(yours).queryByText('main')).toBeNull();
+    expect(within(yours).getByText('bare-ref')).toBeTruthy();
+    expect(within(yours).getByText('trunk')).toBeTruthy();
+    expect(within(yours).queryByText('/')).toBeNull();
+  });
+
+  it('keeps the connected section TRUE across a refetch — the payload is no longer discarded', async () => {
+    // A failed mutation is the cheapest way to make the island re-read: it calls
+    // `refetch()` rather than trusting a state the server denied.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/takeover') && init?.method === 'POST') {
+        return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
+          status: 409,
+        });
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    renderRoom({
+      rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })],
+      connected: [connectedRepo('design-tokens')],
+      connectedInDomain: true,
+    });
+
+    // The workspace gains a repository between the render and the re-read — the
+    // establish view is the only thing that can tell this island about it.
+    currentCandidates = [...currentCandidates, toCandidate(connectedRepo('acme-infra'))];
+
+    await click(screen.getByRole('button', { name: /Check .* again/ }));
+
+    const yours = await screen.findByRole('region', { name: 'Your own repositories' });
+    await waitFor(() => expect(within(yours).getByText('acme-infra')).toBeTruthy());
+    expect(within(yours).getByText('design-tokens')).toBeTruthy();
+  });
+
+  it('drops a CLAIMED candidate on refetch — a repository that backs a row belongs to the section above', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/takeover') && init?.method === 'POST') {
+        return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
+          status: 409,
+        });
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    renderRoom({
+      rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })],
+      connected: [connectedRepo('design-tokens')],
+      connectedInDomain: true,
+    });
+    currentCandidates = [
+      ...currentCandidates,
+      { ...toCandidate(connectedRepo('acme-booking-web', 'motir-projects')), claimed: true },
+    ];
+
+    await click(screen.getByRole('button', { name: /Check .* again/ }));
+
+    const yours = await screen.findByRole('region', { name: 'Your own repositories' });
+    await waitFor(() => expect(within(yours).getByText('design-tokens')).toBeTruthy());
+    // It is the hosted row's own repository — showing it in both sections is the
+    // duplicate the split exists to prevent.
+    expect(within(yours).queryByText('acme-booking-web')).toBeNull();
+  });
+
+  it('never grows a connected section on a project the SERVER said does not own one', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/takeover') && init?.method === 'POST') {
+        return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
+          status: 409,
+        });
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    // Born in Motir: the ladder answers with the set alone, and the establish
+    // view's `connectCandidates` is populated for this project all the same — it
+    // is the picker's grant-2 list, not a statement about the domain.
+    renderRoom({
+      rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })],
+      connected: [],
+      connectedInDomain: false,
+    });
+    currentCandidates = [toCandidate(connectedRepo('someone-elses-repo'))];
+
+    await click(screen.getByRole('button', { name: /Check .* again/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.queryByRole('region', { name: 'Your own repositories' })).toBeNull();
+    expect(screen.queryByText('someone-elses-repo')).toBeNull();
+  });
+
+  it('the one link in the connected section hands off to the pane that owns connecting', () => {
+    renderRoom({ rows: [], connected: [connectedRepo('design-tokens')], connectedInDomain: true });
+
+    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+    expect(
+      within(yours)
+        .getByRole('link', { name: 'Choose which repositories Motir can see' })
+        .getAttribute('href'),
+    ).toBe('/settings/workspace/github');
   });
 });
 
@@ -790,6 +981,11 @@ function roomView(
     installHref: 'https://github.com/apps/motir/installations/new',
     ciPaused: false,
     otherHostedProjects: [],
+    // The DEFAULT is a project answered by its set alone (born in Motir), which is
+    // what every pre-MOTIR-3126 case in this file describes. A shape that owns the
+    // connected section says so explicitly.
+    connected: [],
+    connectedInDomain: false,
     ...overrides,
   };
 }
@@ -808,7 +1004,26 @@ function room(view: ProjectRepoRoomViewDto) {
 function renderRoom(overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] }) {
   const view = roomView(overrides);
   currentRows = view.rows;
+  currentCandidates = view.connected.map(toCandidate);
   return renderWithIntl(room(view));
+}
+
+/** A connected repository as the ESTABLISH view carries it — the shape the island
+ *  maps back on refetch, so the round trip is exercised rather than assumed. */
+function toCandidate(repo: ProjectRepoConnectedDto): ProjectRepoConnectCandidateDto {
+  const [owner = '', name = repo.name] = repo.repoRef.split('/');
+  return {
+    id: `gh-${name}`,
+    owner,
+    name,
+    repoRef: repo.repoRef,
+    defaultBranch: repo.defaultBranch ?? 'main',
+    claimed: false,
+  };
+}
+
+function connectedRepo(name: string, owner = 'acme-inc'): ProjectRepoConnectedDto {
+  return { name, repoRef: `${owner}/${name}`, defaultBranch: 'main' };
 }
 
 function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
@@ -875,7 +1090,9 @@ function defaultFetch(url: string): unknown {
   if (url.includes('/api/github/organizations')) {
     return { organizations: [{ login: 'acme-inc', avatarUrl: null }] };
   }
-  return { set: { rows: currentRows } };
+  // The ESTABLISH view, which is what this endpoint actually returns: the set AND
+  // the installation's repositories. The room used to read only the first half.
+  return { set: { rows: currentRows }, connectCandidates: currentCandidates };
 }
 
 /**

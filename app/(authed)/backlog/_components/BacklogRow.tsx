@@ -211,7 +211,7 @@ export function BacklogRowBody({
       )}
       <span className="shrink-0">
         {status ? (
-          <StatusValue category={status.category} label={status.label} />
+          <StatusValue statusKey={status.key} category={status.category} label={status.label} />
         ) : (
           <StatusValue category={null} label={item.status} />
         )}

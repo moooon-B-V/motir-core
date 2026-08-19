@@ -549,11 +549,21 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // sibling, minus the branch.)
     const WORK_LOOP_SUBRESOURCES =
       /\/(dispatch-prompt|integration|implementation|expansions|activity)\//;
+    // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
+    // the two groups above, and the reason is worth stating rather than
+    // inheriting: `…/attachments` hangs off a work item because that is what the
+    // file is attached TO, but it is the general upload door and its journey is
+    // its own suite (`tests/api/v1/attachments-route.test.ts`), where the gates
+    // are tripped through BOTH entrances so the two cannot drift. The operation
+    // is additionally DRIVEN end-to-end by the drift guard, so excluding it here
+    // hides nothing — it keeps 11.2's guard honest about what IT covers.
+    const ATTACHMENT_SUBRESOURCE = /\/attachments\//;
     const shipped = v1RouteFiles(process.cwd()).filter(
       (f) =>
         f.includes('work-items') &&
         !/\/(sprints|backlog)\//.test(f) &&
-        !WORK_LOOP_SUBRESOURCES.test(f),
+        !WORK_LOOP_SUBRESOURCES.test(f) &&
+        !ATTACHMENT_SUBRESOURCE.test(f),
     );
 
     // Enumerated rather than counted: a NEW work-item endpoint appears here as a
