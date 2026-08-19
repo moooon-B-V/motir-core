@@ -96,8 +96,9 @@ export interface Snapshot {
 
 /** How one dispatched item ended. */
 export type BatchOutcome =
-  /** Agent exited 0; its own pull request is open, so the item is In Review. */
-  | 'in_review'
+  /** Agent exited 0 and its work reached the remote; its own pull request is
+   *  open, so the item is Implemented — CI promotes it (MOTIR-3006). */
+  | 'implemented'
   /** Agent exited non-zero. The item stays In Progress — nothing was reverted. */
   | 'failed';
 
@@ -135,7 +136,7 @@ export interface BatchSummary {
 }
 
 const OUTCOME_LABEL: Record<BatchOutcome, string> = {
-  in_review: 'in review',
+  implemented: 'implemented',
   failed: 'FAILED',
 };
 
@@ -235,12 +236,13 @@ export function renderBatchSummary(summary: BatchSummary, titleWidth = 44): stri
     );
   }
 
-  const inReview = summary.records.filter((r) => r.outcome === 'in_review');
-  if (inReview.length > 0) {
+  const implemented = summary.records.filter((r) => r.outcome === 'implemented');
+  if (implemented.length > 0) {
     blocks.push(
       [
-        `In Review — each has its OWN pull request to merge (${inReview.length}):`,
-        ...inReview.map((r) => `  ${r.key} — review + merge it, then \`motir done ${r.key}\``),
+        `Implemented — each has its OWN pull request, and CI decides when it becomes`,
+        `reviewable (${implemented.length}):`,
+        ...implemented.map((r) => `  ${r.key} — review + merge it, then \`motir done ${r.key}\``),
       ].join('\n'),
     );
   }

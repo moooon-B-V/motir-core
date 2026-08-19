@@ -308,10 +308,22 @@ function collapse(source: string): string {
  * report a clean asset whose stylesheet paints the same failing pair.
  */
 
-interface ClassPaint {
-  color: Map<string, string>;
-  background: Map<string, string>;
+/**
+ * ONE structural rule the mock's stylesheet declares: the selector as a chain of
+ * compounds, plus whichever of `color` / `background` it sets to an `--el-*`
+ * token.
+ *
+ * `steps` reads left to right — `.panel > .row .cap` is
+ * `[{panel}, {row, child:false}… ]` — and `child` on a step means the step
+ * BEFORE it must be its immediate parent rather than any ancestor.
+ */
+interface StyleRule {
+  steps: Array<{ classes: string[]; child: boolean }>;
+  color: string | null;
+  background: string | null;
 }
+
+type StylePaint = StyleRule[];
 
 const COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 
@@ -324,32 +336,123 @@ function stylesheetText(html: string): string {
 }
 
 /**
- * `class → --el-* token`, for `color` and for `background`, last declaration
- * winning as the cascade does.
+ * The mock's stylesheet as an ordered list of STRUCTURAL rules — `color` and
+ * `background`, in source order, so a later declaration wins as the cascade does.
  *
- * Only a BARE single-class selector is read (`.dsCard`, not `.dsCard:hover` and
- * not `.a .b`). That is the same asymmetry `inkContrastScan.paintsUnprefixed`
- * takes for the safe side and for the same reason: a state or context rule
- * paints in one render and not another, so clearing an ink on the strength of
- * one would be a false NEGATIVE, and claiming a tint from one would be a false
- * positive nobody can act on. Both directions are declined.
+ * ── What is READ, and what still ABSTAINS (MOTIR-3122) ─────────────────────
+ * Read: any selector made only of CLASSES, in a descendant (`.a .b`), child
+ * (`.a > .b`) or compound (`.a.b`) arrangement. Those paint in EVERY render, so
+ * resolving them is not a guess — it is the same fact a bare `.a` states, one
+ * containment step further out.
+ *
+ * Abstains: a selector carrying a pseudo-class or pseudo-element (`:hover`,
+ * `:focus`, `::before`), an attribute (`[data-state]`), a tag (`table td`), or a
+ * universal. **That restriction is the original one and its warrant is
+ * unchanged:** a STATE rule paints in one render and not another, so clearing an
+ * ink on the strength of one would be a false NEGATIVE, and claiming a tint from
+ * one would be a false positive nobody can act on. Both directions are still
+ * declined.
+ *
+ * ── Why the bare-only form had to go ───────────────────────────────────────
+ * It conflated those two populations. `.zoomctl .pct { color: var(--el-text-faint) }`
+ * paints `80%` on screen every single time the page is opened, and the guard could
+ * not see it — 299 such rules over ~775 elements that carry text and claim no
+ * exemption, which is the blind spot MOTIR-3122 was filed for. A guard's blind
+ * spot reads as a verdict, and this one was reading as a clean tree.
  */
-function classPaint(css: string): ClassPaint {
-  const color = new Map<string, string>();
-  const background = new Map<string, string>();
+function stylePaint(css: string): StylePaint {
+  const rules: StylePaint = [];
   for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const inkToken = declaredToken(body!, /(?:^|[;{\s])color\s*:\s*([^;]+)/i);
-    const bgToken = declaredToken(body!, /(?:^|[;{\s])background(?:-color)?\s*:\s*([^;]+)/i);
-    if (!inkToken && !bgToken) continue;
+    const color = declaredToken(body!, /(?:^|[;{\s])color\s*:\s*([^;]+)/i);
+    const background = declaredToken(body!, /(?:^|[;{\s])background(?:-color)?\s*:\s*([^;]+)/i);
+    if (!color && !background) continue;
     for (const selector of selectors!.split(',')) {
-      const match = selector.trim().match(/^\.((?:[\w-]|\\.)+)$/);
-      if (!match) continue;
-      const name = match[1]!.replace(/\\/g, '');
-      if (inkToken) color.set(name, inkToken);
-      if (bgToken) background.set(name, bgToken);
+      const steps = parseSelector(selector);
+      if (steps) rules.push({ steps, color, background });
     }
   }
-  return { color, background };
+  return rules;
+}
+
+/**
+ * A selector as its chain of class compounds, or `null` when it names anything
+ * this scanner declines to resolve (a state, an attribute, a tag, a universal).
+ */
+function parseSelector(selector: string): StyleRule['steps'] | null {
+  const trimmed = selector.trim();
+  if (!trimmed) return null;
+  // Tokenize on whitespace and the child combinator, keeping the combinator.
+  const parts = trimmed.split(/\s*(>)\s*|\s+/).filter((p) => p !== undefined && p !== '');
+  const steps: StyleRule['steps'] = [];
+  let child = false;
+  for (const part of parts) {
+    if (part === '>') {
+      if (steps.length === 0) return null;
+      child = true;
+      continue;
+    }
+    // A compound must be classes and nothing else: `.a`, `.a.b`, `.a\(x\)`.
+    if (!/^(?:\.(?:[\w-]|\\.)+)+$/.test(part)) return null;
+    const classes = [...part.matchAll(/\.((?:[\w-]|\\.)+)/g)].map((m) => m[1]!.replace(/\\/g, ''));
+    if (classes.length === 0) return null;
+    steps.push({ classes, child });
+    child = false;
+  }
+  return steps.length ? steps : null;
+}
+
+/** Every class in `classes` is on `element`. */
+function carries(element: MockElement, classes: string[]): boolean {
+  return classes.every((c) => element.classes.includes(c));
+}
+
+/**
+ * Does `rule` match `element`, given the flat element list its `parent` indices
+ * point into?
+ *
+ * Matched right to left: the LAST compound must be the element itself, then each
+ * preceding compound is satisfied by the immediate parent (child combinator) or
+ * by the nearest ancestor that carries it (descendant). The descendant search
+ * takes the NEAREST match and does not backtrack — a deliberate simplification
+ * that can only ever FAIL to match, never match something it should not, which
+ * keeps the abstention on the safe side.
+ */
+function ruleMatches(rule: StyleRule, element: MockElement, elements: MockElement[]): boolean {
+  const last = rule.steps[rule.steps.length - 1]!;
+  if (!carries(element, last.classes)) return false;
+  let node: MockElement | undefined = element;
+  for (let i = rule.steps.length - 1; i > 0; i -= 1) {
+    const step = rule.steps[i - 1]!;
+    const asChild = rule.steps[i]!.child;
+    let ancestor: MockElement | undefined =
+      node!.parent === -1 ? undefined : elements[node!.parent];
+    if (asChild) {
+      if (!ancestor || !carries(ancestor, step.classes)) return false;
+      node = ancestor;
+      continue;
+    }
+    while (ancestor && !carries(ancestor, step.classes)) {
+      ancestor = ancestor.parent === -1 ? undefined : elements[ancestor.parent];
+    }
+    if (!ancestor) return false;
+    node = ancestor;
+  }
+  return true;
+}
+
+/** The token the stylesheet paints on `element` for one axis — last rule wins. */
+function paintedToken(
+  element: MockElement,
+  elements: MockElement[],
+  paint: StylePaint,
+  axis: 'color' | 'background',
+): string | null {
+  let token: string | null = null;
+  for (const rule of paint) {
+    if (rule[axis] === null) continue;
+    if (ruleMatches(rule, element, elements)) token = rule[axis];
+  }
+  return token;
 }
 
 /**
@@ -406,7 +509,11 @@ function disabledReason(element: MockElement): string | null {
 }
 
 /** The token this element paints as its own background, or null. */
-function ownSurface(element: MockElement, paint: ClassPaint): string | null {
+function ownSurface(
+  element: MockElement,
+  elements: MockElement[],
+  paint: StylePaint,
+): string | null {
   for (const className of element.classes) {
     const utility = className.match(/^bg-\((--el-[a-z0-9-]+)\)$/);
     if (utility) return utility[1]!;
@@ -416,11 +523,7 @@ function ownSurface(element: MockElement, paint: ClassPaint): string | null {
     const token = declaredToken(inline, /(?:^|[;\s])background(?:-color)?\s*:\s*([^;]+)/i);
     if (token) return token;
   }
-  for (const className of element.classes) {
-    const declared = paint.background.get(className);
-    if (declared) return declared;
-  }
-  return null;
+  return paintedToken(element, elements, paint, 'background');
 }
 
 /**
@@ -434,7 +537,8 @@ function ownSurface(element: MockElement, paint: ClassPaint): string | null {
  */
 function inkVia(
   element: MockElement,
-  paint: ClassPaint,
+  elements: MockElement[],
+  paint: StylePaint,
   utility: string,
   token: string,
 ): 'class' | 'stylesheet' | null {
@@ -443,10 +547,7 @@ function inkVia(
   if (inline && declaredToken(inline, /(?:^|[;\s])color\s*:\s*([^;]+)/i) === token) {
     return 'stylesheet';
   }
-  for (const className of element.classes) {
-    if (paint.color.get(className) === token) return 'stylesheet';
-  }
-  return null;
+  return paintedToken(element, elements, paint, 'color') === token ? 'stylesheet' : null;
 }
 
 /**
@@ -465,7 +566,7 @@ function inkVia(
  * negative rather than an honest gap.
  */
 export function scanMock(file: string, html: string): MockFinding[] {
-  const paint = classPaint(stylesheetText(html));
+  const paint = stylePaint(stylesheetText(html));
   const elements = parseElements(html);
   const findings: MockFinding[] = [];
 
@@ -476,11 +577,11 @@ export function scanMock(file: string, html: string): MockFinding[] {
     if (decorativeReason(element)) continue;
     if (disabledReason(element)) continue;
 
-    const mutedVia = inkVia(element, paint, MUTED_CLASS, MUTED_TOKEN);
+    const mutedVia = inkVia(element, elements, paint, MUTED_CLASS, MUTED_TOKEN);
     if (mutedVia) {
       let surface: string | null = null;
       for (let node: MockElement | undefined = element; node; ) {
-        surface = ownSurface(node, paint);
+        surface = ownSurface(node, elements, paint);
         if (surface) break;
         node = node.parent === -1 ? undefined : elements[node.parent];
       }
@@ -500,7 +601,7 @@ export function scanMock(file: string, html: string): MockFinding[] {
       }
     }
 
-    const faintVia = inkVia(element, paint, FAINT_CLASS, FAINT_TOKEN);
+    const faintVia = inkVia(element, elements, paint, FAINT_CLASS, FAINT_TOKEN);
     // `hasText` is what separates an ink from a text ink here. The muted arm
     // needs no such test because its surface walk already requires a painted
     // ancestor; the faint arm has no walk, so without this every container

@@ -14,7 +14,7 @@ import { truncateAuthTables } from '../helpers/db';
 // Story 7.23 · MOTIR-1475 — the GitLab inbound webhook MR → work-item status sync,
 // against a real Postgres (the motir-core convention). Proves GitLab MR hooks drive
 // the SAME shared status-sync state machine GitHub uses (`changeRequestStatusSync`):
-// opened → In Review, merged → Done, closed-unmerged → In Progress, attributed to
+// opened → Implemented (MOTIR-3005), merged → Done, closed-unmerged → In Progress, attributed to
 // the workspace owner (GitLab has no bound-identity table); plus the no-op paths
 // (unconnected project, no linked work item, ignored MR action, non-MR event) and
 // idempotent redelivery. Only DB is touched — a webhook has no network I/O here.
@@ -41,7 +41,7 @@ async function makeScenario(email: string) {
     { projectId: project.id, kind: 'task', title: 'A tracked change' },
     ctx,
   );
-  // Move to in_progress so an MR-opened → in_review is a legal transition.
+  // Move to in_progress so an MR-opened → implemented is a legal transition.
   await workItemsService.updateStatus(item.id, 'in_progress', ctx);
 
   // Seed a GitLab connection (the shared GithubInstallation under provider='gitlab')
@@ -171,7 +171,7 @@ afterAll(async () => {
 });
 
 describe('gitlabWebhookService — merge_request → status sync', () => {
-  it('opened → in_review, merged → done, closed-unmerged → in_progress', async () => {
+  it('opened → implemented, merged → done, closed-unmerged → in_progress', async () => {
     const s = await makeScenario('mr@example.com');
 
     const opened = await gitlabWebhookService.handleEvent(
@@ -181,9 +181,9 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     expect(opened).toMatchObject({
       event: 'pull_request',
       outcome: 'transitioned',
-      toStatus: 'in_review',
+      toStatus: 'implemented',
     });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     // The MR row is upserted, stamped provider='gitlab', linked to the work item.
     const mrRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
@@ -197,7 +197,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     expect((await latestRevision(s.item.id)).changedById).toBe(s.user.id);
 
     // A closed-unmerged MR sends the item back to in_progress (the abandoned-work
-    // target — there is no in_review → todo edge). Item is in_review from the open.
+    // target — there is no implemented → todo edge). Item is implemented from the open.
     const closed = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
       mrPayload({ action: 'close', state: 'closed', identifier: s.item.identifier }),
@@ -209,12 +209,12 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     });
     expect(await statusOf(s.item.id)).toBe('in_progress');
 
-    // Reopen → back to in_review, then a merge completes the item (→ done).
+    // Reopen → back to implemented, then a merge completes the item (→ done).
     const reopened = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
       mrPayload({ action: 'reopen', state: 'opened', identifier: s.item.identifier }),
     );
-    expect(reopened).toMatchObject({ outcome: 'transitioned', toStatus: 'in_review' });
+    expect(reopened).toMatchObject({ outcome: 'transitioned', toStatus: 'implemented' });
     const merged = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
       mrPayload({ action: 'merge', state: 'merged', identifier: s.item.identifier }),
@@ -232,8 +232,12 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     const payload = mrPayload({ action: 'open', identifier: s.item.identifier });
     await gitlabWebhookService.handleEvent('Merge Request Hook', payload);
     const again = await gitlabWebhookService.handleEvent('Merge Request Hook', payload);
-    expect(again).toMatchObject({ event: 'pull_request', outcome: 'noop', toStatus: 'in_review' });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(again).toMatchObject({
+      event: 'pull_request',
+      outcome: 'noop',
+      toStatus: 'implemented',
+    });
+    expect(await statusOf(s.item.id)).toBe('implemented');
   });
 
   it('an MR whose branch names no work item is a clean no_work_item (row still upserted)', async () => {
@@ -273,7 +277,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
   });
 
-  it('an MR merged into a NON-default target_branch is HELD at In Review, with the target on the item (MOTIR-1873)', async () => {
+  it('an MR merged into a NON-default target_branch is HELD at Implemented, with the target on the item (MOTIR-1873)', async () => {
     // The GitLab half of the trunk gate. It is not a second implementation — both
     // hosts normalize through the same seam into the same shared sync, so GitLab
     // inherits the gate and this test is what proves the wiring (a provider-shaped
@@ -283,7 +287,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
       'Merge Request Hook',
       mrPayload({ action: 'open', identifier: s.item.identifier }),
     );
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     const merged = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
@@ -300,7 +304,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
       outcome: 'deferred_non_default_base',
       workItemId: s.item.id,
     });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
     const comments = await commentsOn(s.item.id);
     expect(comments).toHaveLength(1);
     expect(comments[0]!.bodyMd).toContain('subtask/ACME-9-sibling-work');

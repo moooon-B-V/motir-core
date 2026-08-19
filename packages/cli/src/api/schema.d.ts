@@ -179,6 +179,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-items/{key}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach a file to a work item
+         * @description Upload a file and attach it to the work item, as `multipart/form-data` with a single `file` part. This is the GENERAL door: it carries no artifact kind and belongs to no lifecycle, so any deliverable a card produces — a research findings document, a review’s notes — can reach the card that commissioned it. A DESIGN asset does not use this endpoint; it has its own publisher, whose result renders in the Design result panel. ⚠️ Two size limits apply and the SMALLER one is not this API’s: the organization’s plan sets a per-file entitlement (10 MB, or 100 MB on a paid plan) and is what returns 413, while a direct upload is separately capped at roughly 4.5 MB by the serving platform and is refused before the request reaches Motir.
+         *
+         *     Requires the `work_item:edit` permission.
+         */
+        post: operations["uploadWorkItemAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/work-items/{key}/archive": {
         parameters: {
             query?: never;
@@ -1073,6 +1095,21 @@ export interface components {
                 /** @enum {string} */
                 category: "todo" | "in_progress" | "done";
             }[];
+        };
+        Attachment: {
+            id: string;
+            workItemKey: string;
+            filename: string;
+            mimeType: string;
+            sizeBytes: number;
+            /** @enum {string} */
+            source: "editor" | "panel" | "api";
+            contentPath: string;
+            uploader: {
+                id: string;
+                name: string;
+            };
+            createdAt: string;
         };
         Me: {
             user: {
@@ -3306,6 +3343,217 @@ export interface operations {
             };
             /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
             404: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation. */
+            422: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token's rate-limit budget for the current window is exhausted. Read `X-RateLimit-Reset` for when it refills. */
+            429: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description An unexpected server fault. The body carries no `code`, no stack and no driver text. */
+            500: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalErrorBody"];
+                };
+            };
+        };
+    };
+    uploadWorkItemAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The work item’s `MOTIR-<n>` key. Never its internal id (ADR §7). */
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** @description The file to attach, in a `file` part. An empty part is a 422. */
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The created attachment. */
+            201: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */
+            401: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description A plan entitlement is exhausted — the workspace owner’s AI credits, or the organization’s total attachment-storage cap. The request was valid; it was refused for want of headroom, and retrying will not help until the limit is lifted. */
+            402: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token is valid but its granted scopes do not include the one this operation requires. */
+            403: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
+            404: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file is larger than the per-file limit this organization’s plan allows. Note the SEPARATE platform ceiling on a direct upload, documented on the operation itself (docs/decisions/attachment-api-door.md §1). */
+            413: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The uploaded file’s media type is not on the allowlist. `text/html` is deliberately absent: the three layers that make HTML safe to serve belong to the design-result lifecycle and its own publisher (design-result.md §5a). */
+            415: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
                     "X-Request-Id"?: string;
@@ -6560,7 +6808,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The workspace owner’s AI credits are exhausted. The request was valid; it was refused for want of balance, and retrying will not help until credits are topped up. */
+            /** @description A plan entitlement is exhausted — the workspace owner’s AI credits, or the organization’s total attachment-storage cap. The request was valid; it was refused for want of headroom, and retrying will not help until the limit is lifted. */
             402: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -7336,7 +7584,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description The workspace owner’s AI credits are exhausted. The request was valid; it was refused for want of balance, and retrying will not help until credits are topped up. */
+            /** @description A plan entitlement is exhausted — the workspace owner’s AI credits, or the organization’s total attachment-storage cap. The request was valid; it was refused for want of headroom, and retrying will not help until the limit is lifted. */
             402: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */

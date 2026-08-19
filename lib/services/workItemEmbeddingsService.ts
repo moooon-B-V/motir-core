@@ -280,6 +280,51 @@ export const workItemEmbeddingsService = {
   },
 
   /**
+   * Embed ONE query string — the READ-path counterpart of {@link embedWorkItem}'s
+   * stage 2, and the only thing MOTIR-3101's MCP tool needed that did not exist
+   * (`docs/decisions/plan-tree-embeddings.md` Amendment 2).
+   *
+   * It calls the SAME `embedTexts` seam the write path calls, which is the whole
+   * point of Amendment 2's decision: the row and the query then physically cannot
+   * be embedded under different models, and `model` is a HARD ranking filter, so a
+   * mismatch would return an empty result indistinguishable from "nothing similar
+   * exists". Nothing new is added to this repo — no credential, no gateway token,
+   * no second metering identity.
+   *
+   * ⚠️ RETURNS `null` RATHER THAN THROWING when the query cannot be embedded — an
+   * unconfigured deployment (no `MOTIR_AI_URL` / `MOTIR_AI_SERVICE_TOKEN`, i.e.
+   * open-core with no AI backend) or an unreachable one. That is a VALUE for the
+   * same reason the skip reasons above are: the caller must be able to report
+   * "I could not search" as a distinct state from "I searched and found nothing",
+   * and an exception at this seam would collapse the two into an error or an empty
+   * list. A dimension mismatch is NOT in that class and still throws — it means
+   * motir-ai answered with a vector this store cannot rank, which is a real defect
+   * rather than an absent backend.
+   */
+  async embedQuery(query: string): Promise<{ embedding: number[]; model: string } | null> {
+    if (!motirAiConfigured()) return null;
+    let batch;
+    try {
+      batch = await embedTexts([query]);
+    } catch {
+      // Swallowed HERE and nowhere else: `embedTexts` throws a typed error on any
+      // transport failure by design, leaving the decision to the layer that knows
+      // what an absent answer means. For a background job that is "retry"; for an
+      // interactive search it is "say so".
+      return null;
+    }
+    const vector = batch.embeddings[0];
+    if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
+      throw new EmbeddingDimensionMismatchError(
+        EMBEDDING_DIMENSIONS,
+        vector?.length ?? 0,
+        batch.model,
+      );
+    }
+    return { embedding: vector, model: batch.model };
+  },
+
+  /**
    * Rank a project's items against a query vector — the storage half of ADR
    * §6.1, which MOTIR-2697's endpoint wraps in its guard, its validation and its
    * `key`/`title`/`score` DTO.
@@ -306,6 +351,7 @@ export const workItemEmbeddingsService = {
    * neither GUC can leak onto the next borrower of the pooled connection), and
    * the workspace GUC it binds is what makes the rows visible at all.
    */
+
   async rankSimilar(input: RankSimilarInput): Promise<RankSimilarResult> {
     return withWorkspaceServiceContext(input.workspaceId, async (tx) => {
       await workItemEmbeddingRepository.setEfSearch(efSearchForLimit(input.limit), tx);

@@ -85,7 +85,9 @@ describe('the v1 status vocabulary', () => {
   });
 
   it('carries the ADR §4 table exactly — including every appended condition', () => {
-    expect([...V1_ERROR_STATUSES]).toEqual([401, 402, 403, 404, 409, 412, 422, 429, 500, 503]);
+    expect([...V1_ERROR_STATUSES]).toEqual([
+      401, 402, 403, 404, 409, 412, 413, 415, 422, 429, 500, 503,
+    ]);
     expect([...V1_SUCCESS_STATUSES]).toEqual([200, 201, 202, 204]);
     // Every status a later story APPENDED as a NEW condition (ADR §8 permits
     // that; it forbids an existing condition changing status). Named
@@ -97,6 +99,16 @@ describe('the v1 status vocabulary', () => {
     // exhausted balance answers 402, and an unreachable motir-ai answers 503.
     expect(DOMAIN_ERROR_STATUS['MOTIR_AI_OUT_OF_CREDITS']).toBe(402); // 11.7.5
     expect(DOMAIN_ERROR_STATUS['MOTIR_AI_UNAVAILABLE']).toBe(503); // 11.7.5
+    // Story MOTIR-3000: the general attachment door appends TWO conditions the
+    // vocabulary had no word for — a file over the plan's per-file limit, and a
+    // media type off the allowlist. Both are NEW conditions rather than an
+    // existing one changing status, which is exactly what §8 permits, and both
+    // answer what the BROWSER upload route has always answered for that rule.
+    expect(DOMAIN_ERROR_STATUS['FILE_TOO_LARGE']).toBe(413); // MOTIR-3057
+    expect(DOMAIN_ERROR_STATUS['UNSUPPORTED_FILE_TYPE']).toBe(415); // MOTIR-3057
+    // The org's TOTAL storage cap reuses 402 — an existing status taking a
+    // second condition, not a condition changing status.
+    expect(DOMAIN_ERROR_STATUS['ENTITLEMENT_EXCEEDED']).toBe(402); // MOTIR-3057
     // …and the two motir-ai codes deliberately left OUT of the map, so the
     // absence is a decision a test holds rather than an oversight: our own bad
     // request to motir-ai is §4's bare, code-less 500.
@@ -425,8 +437,8 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 40 declarations names a GRANTABLE permission', () => {
-    expect(V1_OPERATIONS.length).toBe(40);
+  it('every one of the 41 declarations names a GRANTABLE permission', () => {
+    expect(V1_OPERATIONS.length).toBe(41);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

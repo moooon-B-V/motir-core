@@ -4,6 +4,7 @@ import { v1CursorSchema } from '@/lib/api/v1/openapi/envelopes';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import {
+  attachmentSchema,
   commentThreadSchema,
   createWorkItemBodySchema,
   relationshipSchema,
@@ -354,6 +355,34 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
   }),
   defineOperation({
     method: 'POST',
+    path: '/api/v1/work-items/{key}/attachments',
+    operationId: 'uploadWorkItemAttachment',
+    summary: 'Attach a file to a work item',
+    description:
+      'Upload a file and attach it to the work item, as `multipart/form-data` with a single `file` part. This is the GENERAL door: it carries no artifact kind and belongs to no lifecycle, so any deliverable a card produces — a research findings document, a review’s notes — can reach the card that commissioned it. A DESIGN asset does not use this endpoint; it has its own publisher, whose result renders in the Design result panel. ⚠️ Two size limits apply and the SMALLER one is not this API’s: the organization’s plan sets a per-file entitlement (10 MB, or 100 MB on a paid plan) and is what returns 413, while a direct upload is separately capped at roughly 4.5 MB by the serving platform and is refused before the request reaches Motir.',
+    permission: 'work_item:edit',
+    parameters: [keyParameter],
+    requestBody: {
+      contentType: 'multipart/form-data',
+      // Zod has no file type, so the part is declared as a string the emitter
+      // stamps `format: binary` — OpenAPI's own spelling of "bytes". The ROUTE
+      // reads the multipart body; this describes it.
+      schema: z.object({ file: z.string() }).strict(),
+      description: 'The file to attach, in a `file` part. An empty part is a 422.',
+    },
+    response: {
+      status: 201,
+      body: { kind: 'object', schema: attachmentSchema },
+      description: 'The created attachment.',
+    },
+    // 403 the project's `attachment:create` refusal · 404 an unknown or
+    // out-of-workspace key · 413 over the plan's per-file limit · 415 a
+    // disallowed media type · 422 a malformed or empty multipart body · 402 the
+    // organization's total storage cap · 429 the per-user upload throttle.
+    errorStatuses: [402, 403, 404, 413, 415, 422, 429],
+  }),
+  defineOperation({
+    method: 'POST',
     path: '/api/v1/work-items/{key}/archive',
     operationId: 'archiveWorkItem',
     summary: 'Archive a work item',
@@ -400,4 +429,5 @@ export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   WorkItemLinkGroups: workItemLinkGroupsSchema,
   CommentThread: commentThreadSchema,
   TransitionList: transitionListSchema,
+  Attachment: attachmentSchema,
 };

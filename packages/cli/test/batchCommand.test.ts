@@ -111,7 +111,7 @@ function planScripts(keys: string[]): { v1: V1Script } {
       body: v1Integration(String(req.params['key']), {
         // What the real endpoint answers for a per-item-PR item: it moves no
         // status and stamps no branch.
-        status: statuses.get(String(req.params['key'])) ?? 'in_review',
+        status: statuses.get(String(req.params['key'])) ?? 'implemented',
         sessionBranch: null,
         implementationSource: 'byok',
       }),
@@ -217,7 +217,7 @@ describe('motir batch — a whole run through the real session', () => {
     // Each item walked its own lifecycle to In Review — its own pull request.
     expect(
       v1CallsTo('POST', '/transitions').map((c) => (c.body as { status: string }).status),
-    ).toEqual(['in_progress', 'in_review', 'in_progress', 'in_review']);
+    ).toEqual(['in_progress', 'implemented', 'in_progress', 'implemented']);
     // No session branch was ever created: the integration route is scripted to
     // refuse, so calling it at all would surface here.
     expect(v1CallsTo('POST', '/integration')).toEqual([]);

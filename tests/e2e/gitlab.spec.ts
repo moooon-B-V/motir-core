@@ -194,7 +194,7 @@ test('@smoke connect flow: not-connected panel → OAuth binds the identity → 
   await expect(page.getByRole('button', { name: 'Disconnect' })).toBeVisible();
 });
 
-test('@smoke MR opened → the linked item goes In Review; merged → Done (token-authed webhooks; missing token 401s)', async ({
+test('@smoke MR opened → the linked item goes Implemented; merged → Done (token-authed webhooks; missing token 401s)', async ({
   page,
 }) => {
   const email = 'e2e-gitlab-sync@example.com';
@@ -224,8 +224,10 @@ test('@smoke MR opened → the linked item goes In Review; merged → Done (toke
   expect(unauthed.status(), 'unauthenticated webhook is rejected').toBe(401);
   expect(await statusOf(page, item.id)).toBe('in_progress');
 
-  // MR OPENED (source branch references the item key) → in_review. The 200 + result
-  // body is the committed-state signal; the page loads after it.
+  // MR OPENED (source branch references the item key) → `implemented`. Both
+  // providers compute the lifecycle separately, so this is the GitLab half of
+  // MOTIR-2999's claim, not a copy of the GitHub one. The 200 + result body is
+  // the committed-state signal; the page loads after it.
   const opened = await postGitlabWebhook(
     page.request,
     MR_EVENT,
@@ -241,11 +243,11 @@ test('@smoke MR opened → the linked item goes In Review; merged → Done (toke
   expect(await webhookResult(opened)).toMatchObject({
     event: 'pull_request',
     outcome: 'transitioned',
-    toStatus: 'in_review',
+    toStatus: 'implemented',
   });
 
   await page.goto(`/items/${item.identifier}`);
-  await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
+  await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
 
   // MR MERGED → done.
   const merged = await postGitlabWebhook(

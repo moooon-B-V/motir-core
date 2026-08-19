@@ -208,7 +208,8 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
       integratedRes,
     );
     conforms(integratedRes, 'POST', '/api/v1/work-items/{key}/integration', integrated);
-    expect(integrated.status).toBe('in_review');
+    // `mark_integrated` reports the work, it does not review it (MOTIR-2999).
+    expect(integrated.status).toBe('implemented');
     expect(integrated.sessionBranch).toBe(branch);
 
     // ── 7. CLOSE THE BRANCH OUT ─────────────────────────────────────────────

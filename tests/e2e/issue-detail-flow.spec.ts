@@ -24,7 +24,7 @@
 // "Parent work items" nav, the "Child issues" / "Relationships" section cards), never
 // brittle text.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
@@ -355,6 +355,30 @@ test('@smoke inline status: a legal transition persists; illegal targets are not
   await page.goto(`/items/${item.identifier}`);
   // Reveal the inline Status control, then open its picker.
   await page.getByRole('button', { name: 'Edit Status' }).click();
+
+  // ── MOTIR-3080: the status dot is MEASURED, not asserted to exist ────────
+  // It rendered as a 2 × 18 sliver for as long as the picker has existed: the
+  // dot is a plain `<span>` in `Combobox`'s icon slot, and a non-replaced inline
+  // box ignores width and height. Nothing caught it — the markup asks for 10 × 10
+  // and `getComputedStyle` agrees; only the USED value disagreed, and a used
+  // value exists only in a browser. So this reads the box, which is the one
+  // assertion that would have failed. (`toBeTruthy` on the element passes today
+  // and passed then.)
+  //
+  // The TRIGGER is measured first, while the control is still closed: committing
+  // a status collapses the inline editor back to its read view, so the trigger is
+  // gone by the end of the test.
+  const dotBox = async (within: Locator) => {
+    const dot = within.locator('span.rounded-full').first();
+    await expect(dot).toBeVisible();
+    const box = await dot.boundingBox();
+    expect(box, 'the dot has a box').not.toBeNull();
+    return box!;
+  };
+  const triggerBox = await dotBox(page.getByRole('combobox', { name: 'Status' }));
+  expect(triggerBox.width, 'trigger dot width').toBeCloseTo(10, 0);
+  expect(triggerBox.height, 'trigger dot height').toBeCloseTo(10, 0);
+
   await page.getByRole('combobox', { name: 'Status' }).click();
 
   // Restricted default workflow: from `todo` only in_progress / blocked /
@@ -362,6 +386,13 @@ test('@smoke inline status: a legal transition persists; illegal targets are not
   await expect(page.getByRole('option', { name: 'In Progress' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Done' })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'In Review' })).toHaveCount(0);
+
+  // …and EVERY option row's dot: the same slot, its second call site.
+  for (const name of ['In Progress', 'Blocked', 'Cancelled']) {
+    const box = await dotBox(page.getByRole('option', { name }));
+    expect(box.width, `${name} option dot width`).toBeCloseTo(10, 0);
+    expect(box.height, `${name} option dot height`).toBeCloseTo(10, 0);
+  }
 
   await page.getByRole('option', { name: 'In Progress' }).click();
 

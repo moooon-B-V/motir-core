@@ -338,6 +338,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "WorkItemDetail",
   },
+  "uploadWorkItemAttachment": {
+    method: "POST",
+    path: "/api/v1/work-items/{key}/attachments",
+    permission: "work_item:edit",
+    successStatus: 201,
+    responseComponent: "Attachment",
+  },
 } as const satisfies Record<string, V1OperationRow>;
 
 /** The `operationId`s, as a union. */

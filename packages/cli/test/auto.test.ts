@@ -245,6 +245,9 @@ class FakeGit {
   ghAvailable = true;
   commitsOnBranch = 3;
 
+  /** Whether the agent's work reached the remote (MOTIR-3004's push check). */
+  agentPushed = true;
+
   runner = (bin: string, args: string[], cwd: string): CommandResult => {
     this.log.push(`${bin} ${args.join(' ')} @${cwd}`);
     const ok = (stdout = ''): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
@@ -266,6 +269,13 @@ class FakeGit {
         return ok();
       }
       if (args[0] === 'rev-list') return ok(String(this.commitsOnBranch));
+      // The MOTIR-3004 push check: `ls-remote --heads origin *<KEY>*` for an
+      // own-pull-request item, `log --grep=<KEY>` for a session-branch one. Both
+      // answer "the agent pushed" unless a test says otherwise.
+      if (args[0] === 'ls-remote') {
+        return this.agentPushed ? ok('abc123\trefs/heads/subtask/pushed') : ok('');
+      }
+      if (args[0] === 'log') return this.agentPushed ? ok('abc123') : ok('');
     }
     if (bin === 'gh') {
       if (!this.ghAvailable) return { exitCode: 127, stdout: '', stderr: 'gh: not found' };
@@ -864,11 +874,11 @@ describe('motir auto — the close-out', () => {
     expect(text).toContain(`motir done --session ${BRANCH}`);
   });
 
-  it('names every in-review item with its recorded branch', async () => {
+  it('names every implemented item with its recorded branch', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
     const { summary } = await drive(server, new FakeGit());
     const text = renderAutoSummary(summary);
-    expect(text).toContain('In Review — awaiting your merge (2)');
+    expect(text).toContain('Implemented — CI decides when these become reviewable (2)');
     expect(text).toContain(`PROD-1 on ${BRANCH}`);
     expect(text).toContain(`PROD-2 on ${BRANCH}`);
   });
@@ -969,10 +979,12 @@ describe('the summary reports every pull-request outcome distinctly', () => {
 });
 
 describe('an item with no lineage ships as its own pull request', () => {
-  it('moves to In Review via transition_status, not mark_integrated', async () => {
+  it('moves to Implemented via transition_status, not mark_integrated', async () => {
     // The root is not a git repository, so an UNPINNED item has nowhere to open a
-    // session branch: the server hands it the per-item-PR prompt and In Review is
-    // the truthful status.
+    // session branch: the server hands it the per-item-PR prompt and Implemented
+    // is the truthful status. The MOTIR-3004 push check is INCONCLUSIVE here (no
+    // repository to ask), and an inconclusive check must not contradict the
+    // agent — only a repository that answers with nothing refuses the record.
     const server = new FakeServer([leaf('row-1', 'PROD-1', { targetRepo: null })]);
     const git = new FakeGit();
     const rootIsNotARepo: typeof git.runner = (bin, args, cwd) =>
@@ -994,10 +1006,10 @@ describe('an item with no lineage ships as its own pull request', () => {
       ownerId: OWNER,
     });
 
-    expect(summary.records[0]?.outcome).toBe('in_review');
+    expect(summary.records[0]?.outcome).toBe('implemented');
     expect(summary.records[0]?.detail).toBe('own pull request');
     expect(server.integrated).toHaveLength(0);
-    expect(server.transitions).toContainEqual({ key: 'PROD-1', status: 'in_review' });
+    expect(server.transitions).toContainEqual({ key: 'PROD-1', status: 'implemented' });
     // No repo carried a session branch, so there is nothing to close out.
     expect(summary.repos).toHaveLength(0);
   });

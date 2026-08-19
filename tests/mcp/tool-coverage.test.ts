@@ -4,7 +4,10 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { buildMcpServer } from '@/lib/mcp/registry';
+import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { SKELETON_ITEM_CAP, SKELETON_TOOL_NAME } from '@/lib/mcp/tools/skeleton';
+import { SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME } from '@/lib/mcp/tools/searchWorkItemsSemantic';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -371,6 +374,44 @@ describe('MCP tool branch coverage', () => {
     const text = JSON.stringify(res.content);
     expect(text).toContain('already done');
     expect(text).toContain('failed');
+    await client.close();
+  });
+
+  it('the DISCOVERY reads are registered with exactly the permission each card pinned (MOTIR-3102)', () => {
+    // The registry guard for Story MOTIR-3098's two tools. Both are `project:browse`
+    // and NEITHER is `ai:plan` — the semantic search spends a provider call but
+    // starts no model JOB, so `plan-tree-embeddings.md` Amendment 2 bounds it with
+    // the `ai:chat` RATE LIMIT (a ceiling) rather than with a permission (a
+    // capability). Pinned here so a later "it costs money, surely it needs
+    // ai:plan" edit has to argue with a failing test.
+    expect(MCP_TOOL_NAMES).toContain(SKELETON_TOOL_NAME);
+    expect(MCP_TOOL_NAMES).toContain(SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME);
+    expect(TOOL_PERMISSIONS[SKELETON_TOOL_NAME]).toBe('project:browse');
+    expect(TOOL_PERMISSIONS[SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME]).toBe('project:browse');
+    // And the substring search it sits BESIDE is still there, unchanged.
+    expect(MCP_TOOL_NAMES).toContain('search_work_items');
+    expect(TOOL_PERMISSIONS['search_work_items']).toBe('project:browse');
+  });
+
+  it('skeleton — an explicit `limit` is honoured and reported alongside the untruncated default', async () => {
+    const fx = await makeWorkItemFixture();
+    for (const title of ['a', 'b']) {
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title },
+        fx.ctx,
+      );
+    }
+    const client = await connectClient(fx.ctx);
+
+    const bounded = await call(client, SKELETON_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+      limit: 1,
+    });
+    expect(struct(bounded)).toMatchObject({ truncated: true, returned: 1, total: 2, limit: 1 });
+
+    const whole = await call(client, SKELETON_TOOL_NAME, { projectKey: fx.projectIdentifier });
+    expect(struct(whole)).toMatchObject({ truncated: false, returned: 2, total: 2 });
+    expect(struct(whole).limit).toBe(SKELETON_ITEM_CAP);
     await client.close();
   });
 

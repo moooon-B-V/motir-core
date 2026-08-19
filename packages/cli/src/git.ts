@@ -146,6 +146,54 @@ export function sessionBranchHasCommits(
   return Number.parseInt(res.stdout.trim(), 10) > 0;
 }
 
+/**
+ * Did the work this run is about to RECORD actually reach the remote? (MOTIR-3004)
+ *
+ * `implemented` means "the code is on the remote and the pull request is open",
+ * not "the agent exited 0". A CLI writer that transitions on exit alone makes the
+ * card assert built work that may exist only in a worktree the run is about to
+ * delete — so every recording path asks this first, and the two workflow arms ask
+ * it in the shape their own work takes:
+ *
+ *  • SESSION LINEAGE — the card's commit lands ON the session branch, so the
+ *    question is whether a commit naming this key is on `origin/<branch>`. The
+ *    prompt requires the subject to carry the key, which is what makes this
+ *    answerable without a per-card ref.
+ *  • PER-ITEM PR — the card gets a branch of its own, so the question is whether
+ *    the remote carries a branch naming this key. The key goes to git AS THE
+ *    PATTERN rather than being filtered here: the remote does the matching, and
+ *    nothing on this side has to reproduce the branch-naming convention.
+ *
+ * ⚠️ THREE-VALUED, and the third value is the point. `unknown` is not `nothing`:
+ * a checkout that is not a git repository at all (an unpinned item with no local
+ * repo, an agent working in a cloud sandbox) leaves the CLI with no evidence
+ * either way, and a check with no evidence must not contradict the agent. Only a
+ * repository that ANSWERS, with nothing for this card, is grounds to refuse the
+ * record.
+ */
+export type RemoteWorkVerdict = 'pushed' | 'nothing' | 'unknown';
+
+export function workReachedRemote(
+  cwd: string,
+  key: string,
+  sessionBranch: string | null,
+  run: CommandRunner = execCommand,
+): RemoteWorkVerdict {
+  if (run('git', ['fetch', 'origin'], cwd).exitCode !== 0) return 'unknown';
+  if (sessionBranch !== null) {
+    const found = run(
+      'git',
+      ['log', '-1', '--format=%H', `--grep=${key}`, `origin/${sessionBranch}`],
+      cwd,
+    );
+    if (found.exitCode !== 0) return 'unknown';
+    return found.stdout.trim().length > 0 ? 'pushed' : 'nothing';
+  }
+  const refs = run('git', ['ls-remote', '--heads', 'origin', `*${key}*`], cwd);
+  if (refs.exitCode !== 0) return 'unknown';
+  return refs.stdout.trim().length > 0 ? 'pushed' : 'nothing';
+}
+
 /** One commit on a session branch — the agent's own narrative for its card. */
 export interface SessionCommit {
   /** The subject line, as the agent wrote it. */

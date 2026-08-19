@@ -1,8 +1,14 @@
-import { defineConfig } from 'vitest/config';
+import { defaultExclude, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { TEST_DB_WORKERS } from './tests/helpers/parallelDb';
+// MOTIR-3144 — the structural-guard lane's membership. Imported rather than
+// restated so this config's `exclude` and that config's `include` cannot drift.
+// ⚠️ Spelling `defaultExclude` back in is required: supplying `exclude` REPLACES
+// Vitest's default, so omitting it would put `node_modules` and `dist` back into
+// the run.
+import { STRUCTURAL_GUARD_SPECS } from './tests/helpers/structuralGuardLane';
 
 // Load .env into process.env before Vitest evaluates the test files. Next.js
 // does this automatically at runtime; Vitest does not. Without this load,
@@ -51,6 +57,27 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // MOTIR-3144 — the whole-tree structural guards run in their OWN job
+    // (`vitest.guards.config.ts`, `structural-guards` in `ci.yml`), not here.
+    //
+    // They parse `lib/` + `app/` through the TypeScript compiler API and touch
+    // no database. Inside this run they were competing for CPU with the suites
+    // that make it slow, under v8 coverage instrumentation, on a 15 s
+    // `testTimeout` sized for a query — and they timed out for reasons that had
+    // nothing to do with what they check. `bare-transaction-guard` cost 8.1 s
+    // alone and blew a 120 s hook budget on CI twice in a row.
+    //
+    // ⚠️ This is an EXCLUDE, not a duplicate. Unlike the design-asset lane —
+    // whose specs stay in this list because that lane exists to run them on
+    // MORE branches — the point here is that these stop executing in the
+    // sharded job. The one list lives in `vitest.guards.config.ts` so the two
+    // cannot drift, and `tests/ci-structural-guards-lane.test.ts` fails if a
+    // whole-tree guard is missing from it.
+    //
+    // Locally: `pnpm test:guards`. They contribute no coverage to any gated
+    // file (not one imports from `lib/` or `app/`), so the merged report is
+    // unchanged by their absence.
+    exclude: [...defaultExclude, ...STRUCTURAL_GUARD_SPECS],
     // Per-worker database isolation (Story 10.4.1). `globalDb` clones the
     // migrated base DB into one `…_test_wN` database PER worker before any
     // worker forks; `perWorkerDb` (FIRST setupFile — must run before
@@ -505,6 +532,13 @@ export default defineConfig({
         // Story 7.9 · MOTIR-1837 — the plan CONTENT read (the proposals behind
         // that outcome's count); `tests/mcp/get-plan` drives it.
         'lib/mcp/tools/getPlan.ts',
+        // Story MOTIR-3098 · Subtask MOTIR-3102 — the two DISCOVERY reads, the
+        // surface an agent uses to answer *does this already exist?* Both are
+        // new in this story, so there is no pre-existing number to pin blind:
+        // GATED, not report-only. Their shared payload code is already gated
+        // through `lib/mcp/payloads/workItems.ts` above.
+        'lib/mcp/tools/skeleton.ts',
+        'lib/mcp/tools/searchWorkItemsSemantic.ts',
         // Story 7.9 · MOTIR-1842 — the dependency-EDGE projection both LIST
         // reads attach; `tests/mcp/dependency-edges` drives it.
         'lib/mcp/dependencyEdges.ts',
@@ -798,6 +832,18 @@ export default defineConfig({
         'app/**/settings/project/repositories/_components/TakeoverRow.tsx',
         'app/**/settings/project/repositories/_components/TakeoverModal.tsx',
         'app/**/settings/project/repositories/_components/RepositoriesRoom.tsx',
+        // MOTIR-3126 — the room's SECOND registry. Same argument as the block
+        // above, one registry over: the surface's claims are that a
+        // workspace-connected repository is NAMED, SOURCED and carries no action,
+        // and that the empty state belongs to a project with neither registry.
+        // Every one of those is a branch, and the defect being fixed here is
+        // precisely a branch nobody could take. The reader and the section split
+        // are gated for the same reason — they are now the ONE definition the
+        // resolver and every surface share, so an unexercised branch in them is a
+        // disagreement waiting to happen.
+        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx',
+        'lib/projectRepos/effectiveDomain.ts',
+        'lib/projectRepos/roomSections.ts',
         // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
         // BACKFILL's decision table. It shipped ungated, and it is the one file
         // in that subtask whose branches ARE the safety argument: each branch is
@@ -911,6 +957,12 @@ export default defineConfig({
         'lib/api/v1/workItems/childEdges.ts',
         'lib/api/v1/workItems/schema.ts',
         'lib/api/v1/workItems/resolveKey.ts',
+        // Story MOTIR-3000: the general attachment door — the v1 route and the
+        // MCP tool in front of it. Both are thin adapters over one service
+        // path, which is exactly why they are gated: a gate re-implemented in
+        // either would show up here as an uncovered branch.
+        'app/api/v1/work-items/[key]/attachments/route.ts',
+        'lib/mcp/tools/attachFile.ts',
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
@@ -1183,6 +1235,29 @@ export default defineConfig({
         'lib/mcp/tools/authorPlan.ts',
         'app/**/plans/planRowView.ts',
         'app/**/plans/_components/PlanRow.tsx',
+
+        // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
+        // The story's decision code, in one place: what a pull request delivers
+        // (`changeRequestWorkItems`), what a green build promotes (`ciPromotion`),
+        // the workflow the whole thing is expressed in (`defaultWorkflow`, and the
+        // token map that paints it), and the one chip that tells Implemented apart
+        // from the three statuses it shares a category with (`StatusPill`).
+        // All five are new or newly-decisive in this story and all five are GATED
+        // in `thresholds` below, measured first (the sequence this block
+        // prescribes throughout).
+        //
+        // ⚠️ The story ALSO changed `changeRequestStatusSync`, `changeRequestCiFeedback`
+        // and `githubWebhookService`, which are NOT listed here. Those are large
+        // pre-existing files this story widened, and `workItemsService.ts` — the
+        // one it changed that IS gated — is already in `include` above. Adding the
+        // other three would gate this story on code no card here wrote, which is
+        // the trap the `aiBoundaryService.ts` note names: it ends with someone
+        // loosening a threshold to make a build pass.
+        'lib/services/ciPromotion.ts',
+        'lib/services/changeRequestWorkItems.ts',
+        'lib/workflows/defaultWorkflow.ts',
+        'lib/workflows/statusColor.ts',
+        'components/issues/StatusPill.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1346,6 +1421,11 @@ export default defineConfig({
         'lib/api/v1/workItems/childEdges.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/workItems/schema.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/workItems/resolveKey.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/work-items/[key]/attachments/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/api/v1/work-items/[key]/dispatch-prompt/route.ts': {
           branches: 90,
           functions: 90,
@@ -1821,6 +1901,7 @@ export default defineConfig({
         'lib/mcp/tools/listReady.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/addComment.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/attachFile.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/searchWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/listSprints.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-1879 — the project-enumeration read (tests/mcp/list-projects.test.ts
@@ -1855,6 +1936,9 @@ export default defineConfig({
         'lib/mcp/tools/deleteWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/expandItem.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/dependencyEdges.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3098's two discovery reads (MOTIR-3102).
+        'lib/mcp/tools/skeleton.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/searchWorkItemsSemantic.ts': { branches: 90, functions: 90, lines: 90 },
         // These four gate on functions + lines only: each carries DEFENSIVE
         // branches unreachable under shipped invariants, so a 90% BRANCH bar
         // would fail on un-coverable code.
@@ -1936,6 +2020,13 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/projectRepos/effectiveDomain.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/projectRepos/roomSections.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/repositorySetClient.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/repositories/RepositorySetStep.tsx': {
           branches: 90,
@@ -2274,6 +2365,31 @@ export default defineConfig({
         'lib/mcp/tools/authorPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/planRowView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanRow.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
+        // (see the `include` note above for why these five and not the three
+        // pre-existing files the story also widened). MEASURED on this branch
+        // first, with `tests/workflows/`, `tests/github/ciGreenPromotion`,
+        // `tests/github/changeRequestSessionCloseOut`,
+        // `tests/components/status-pill` and
+        // `tests/integration/implemented-lifecycle`:
+        //
+        //   lib/services/ciPromotion.ts            97.5 stmts · 94.44 branch · 100 fn · 100 lines
+        //   lib/services/changeRequestWorkItems.ts  100 · 100 · 100 · 100
+        //   lib/workflows/defaultWorkflow.ts        100 · 100 · 100 · 100
+        //   lib/workflows/statusColor.ts            100 · 100 · 100 · 100
+        //   components/issues/StatusPill.tsx        100 · 100 · 100 · 100
+        //
+        // `ciPromotion`'s one uncovered branch is the rethrow of an error that is
+        // NOT one of the three refusals a per-card skip tolerates — reachable
+        // only by injecting a fault into the shipped service, which would assert
+        // the mock rather than the code. Pinned at the 90 floor rather than at
+        // the measured number, so a later refactor has room without anyone
+        // loosening a gate to make a build pass.
+        'lib/services/ciPromotion.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/changeRequestWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workflows/defaultWorkflow.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workflows/statusColor.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/issues/StatusPill.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
