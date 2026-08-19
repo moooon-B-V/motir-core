@@ -67,6 +67,15 @@ export function mergePlanLevel(
 
   // Whatever is left is proposed and has no committed node yet: every `add`, plus
   // a `modify` / `remove` whose target is not at this level (a drifted plan).
+  //
+  // ⚠️ `viewable` is what SURFACES the View button — `ProjectRoadmapCanvas`
+  // renders the pill only for a node carrying the flag. MOTIR-3084 built the
+  // proposal peek (`ProposalQuickView`) and wired `onView` for every op, but the
+  // node it opens from was pushed without the flag, so the door existed and
+  // nothing opened it: selecting a proposed card offered no affordance at all.
+  // A committed node gets the same flag from `buildWorkItemLevel`; this is the
+  // proposed half of the same contract, and it holds for every op — an `add`
+  // peeks its proposal, a `modify` / `remove` peeks the live target it names.
   for (const item of atLevel) {
     if (!pending.has(item.nodeId)) continue;
     nodes.push({
@@ -75,6 +84,7 @@ export function mergePlanLevel(
       searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
       crumbLabel: item.identifier ?? item.title,
       drillable: item.hasChildren,
+      viewable: true,
       content: <PlanItemNode item={item} />,
     });
   }

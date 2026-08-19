@@ -20,6 +20,9 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     parentIdentifier: null,
     parentTitle: null,
     parentKind: null,
+    // The committed ANCESTOR path down to that parent (bug MOTIR-3152) — empty by
+    // default, matching the null parent above.
+    parentTrail: [],
     blockedByNodeIds: [],
     identifier: null,
     title: 'A proposed item',
