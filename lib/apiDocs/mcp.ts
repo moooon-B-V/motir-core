@@ -394,9 +394,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '138c5dd702b3',
   },
   get_work_item: {
+    // Re-pinned for MOTIR-3096, summary UNCHANGED and deliberately so: the tool
+    // gained an optional `planId` that answers the SAME question over the live
+    // tree ⊕ a plan's proposals. A reader picking a tool off this line is
+    // picking it for what it reads, not for which tree it reads.
     summary:
       'One item in full — description, status, parent and children, dependency edges, and a readiness verdict.',
-    descriptionFingerprint: '343942011390',
+    descriptionFingerprint: '901407c6b4d0',
   },
   get_work_item_activity: {
     summary:
@@ -419,9 +423,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'b597b28346fd',
   },
   search_work_items: {
+    // Re-pinned for MOTIR-3096, summary UNCHANGED — same reasoning as
+    // `get_work_item`'s. The projected mode is documented in `docs/mcp.md`'s
+    // AI-planning section, where somebody would look for it.
     summary:
       "Search a project's items with the same filter grammar the advanced filter builder writes.",
-    descriptionFingerprint: '50c0482ec3fd',
+    descriptionFingerprint: 'fa9850f5a29c',
   },
   whoami: {
     summary:
@@ -443,14 +450,28 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '1b0f1e472431',
   },
   validate_sprint: {
+    // Re-pinned for MOTIR-3095, summary UNCHANGED — same reasoning as
+    // `validate_work_item` below: the optional `planId` changes which tree the
+    // question is asked over, not what the question is.
     summary:
       'Is this sprint finishable? Names every in-sprint item still gated by work outside it.',
-    descriptionFingerprint: '76934cb8bc30',
+    descriptionFingerprint: '4089eae0592b',
   },
   validate_work_item: {
+    // Re-pinned for MOTIR-3095, summary UNCHANGED and deliberately so: the tool
+    // gained an optional `planId` that asks the SAME question over a plan being
+    // authored, and a reader choosing a tool from this line is choosing it for
+    // the question, not for which tree it is asked over. The projected mode is
+    // documented where somebody would look for it — `validate_plan`'s own line
+    // below, and the `AI planning` section of `docs/mcp.md`.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '677e882f5e83',
+    descriptionFingerprint: 'eb927e172e76',
+  },
+  validate_plan: {
+    summary:
+      'Is the plan you are authoring finishable? Run it before `final: true` — nobody else will.',
+    descriptionFingerprint: '5cbef9b17d5d',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

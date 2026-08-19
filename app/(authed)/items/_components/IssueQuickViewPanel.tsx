@@ -56,6 +56,13 @@ import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { Locale } from '@/lib/i18n/locales';
 import type { QuickViewData } from '@/lib/dto/quickView';
+import {
+  QuickViewBody,
+  QuickViewHeader,
+  QuickViewMain,
+  QuickViewRail,
+  QuickViewRailField,
+} from '@/components/workItems/QuickViewSurface';
 
 // The bot/person glyph for the Executor rail row (mirrors the detail rail's
 // ExecutorIndicator, condensed) — a faint value glyph, not a coloured chip.
@@ -114,20 +121,6 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
       {t('openFullPage')}
       <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
     </Link>
-  );
-}
-
-/** A rail field — uppercase caption over its value. */
-function RailField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <dt className="text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-        {label}
-      </dt>
-      <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
-        {children}
-      </dd>
-    </div>
   );
 }
 
@@ -290,10 +283,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   if (props.state === 'notfound') {
     return (
       <>
-        <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
+        <QuickViewHeader>
           <span className="flex-1" />
           <QuickViewCloseButton variant="icon" onClose={props.onClose} />
-        </header>
+        </QuickViewHeader>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
           <span className="mb-1.5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-secondary)">
             <SearchX className="h-7 w-7" aria-hidden />
@@ -316,15 +309,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   if (props.state === 'loading') {
     return (
       <>
-        <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
+        <QuickViewHeader>
           <Sk className="h-[18px] w-[18px] rounded-(--radius-control)" />
           <Sk className="h-3.5 w-16" />
           <Sk className="h-5 w-20 rounded-(--radius-badge)" />
           <span className="flex-1" />
           <OpenFullPageLink identifier={props.peekKey} />
           <QuickViewCloseButton variant="icon" onClose={props.onClose} />
-        </header>
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">
+        </QuickViewHeader>
+        <QuickViewBody>
           <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7" role="status" aria-live="polite">
             <span className="sr-only">{t('quickViewLoadingAria')}</span>
             <Sk className="mb-6 h-7 w-2/3" />
@@ -346,7 +339,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               </div>
             ))}
           </dl>
-        </div>
+        </QuickViewBody>
       </>
     );
   }
@@ -378,7 +371,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     // this modal, so without this the composed `EstimateBadge` silently falls
     // back to a read-only default and is inert on every peek surface.
     <EstimationConfigProvider config={data.estimation} canEdit={data.estimation.canEdit}>
-      <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
+      <QuickViewHeader>
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         <Link
           href={`/items/${data.identifier}`}
@@ -425,11 +418,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         />
         <OpenFullPageLink identifier={data.identifier} />
         <QuickViewCloseButton variant="icon" onClose={props.onClose} />
-      </header>
+      </QuickViewHeader>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">
+      <QuickViewBody>
         {/* Main — title + the FULL description (scrollable). */}
-        <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7">
+        <QuickViewMain>
           <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
             <WorkItemTitle
               title={data.title}
@@ -529,13 +522,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               ),
             })}
           </p>
-        </div>
+        </QuickViewMain>
 
         {/* Rail — the detail page's FULL core-field set (8.8.8), condensed and
             read-only, in detail.png order. The rail scrolls independently inside
             the fixed-height modal; built-in fields always render (muted "None"
             when empty), custom fields split valued / "Show more". */}
-        <dl className="flex min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
+        <QuickViewRail>
           {/* Not a field error — the whole payload is behind, so the notice sits
               ABOVE rows that may all have moved (design panel 9). */}
           {edit.stale ? <RailStaleNotice /> : null}
@@ -589,7 +582,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               READ-ONLY here, exactly as on the detail rail: the design chose an
               editable bounded picker for BOTH surfaces, and it ships once, as
               the shared control, rather than twice. */}
-          <RailField label={t('repositories')}>
+          <QuickViewRailField label={t('repositories')}>
             {/* `?? []` at the DESERIALIZATION boundary, not as blanket
                 defensiveness: this payload arrives over HTTP from
                 `/api/work-items/peek`, and a server that predates MOTIR-2416
@@ -597,7 +590,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 deploy — or a mid-deploy window — must show the empty set, which
                 is a real state, rather than throw. */}
             <RepositorySetField delivery={view.repoDelivery ?? []} compact />
-          </RailField>
+          </QuickViewRailField>
 
           {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph
               follows the Estimate/Due grammar (NOT the coloured type chip — the
@@ -699,10 +692,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           >
             <AssigneeValue name={view.assigneeName} />
           </EditableRailField>
-          <RailField label={t('reporter')}>
+          <QuickViewRailField label={t('reporter')}>
             <Avatar name={data.reporterName} />
             <span className="truncate">{data.reporterName}</span>
-          </RailField>
+          </QuickViewRailField>
           <EditableRailField
             label={t('parent')}
             fieldKey="parent"
@@ -927,14 +920,14 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               `PATCH /api/work-items/[id]/estimate` and the project's configured
               scale deck — never a free-text number, which could hold a value the
               scale does not contain. */}
-          <RailField label={t('storyPoints')}>
+          <QuickViewRailField label={t('storyPoints')}>
             <EstimateBadge
               itemId={view.id}
               storyPoints={view.storyPoints}
               estimateMinutes={view.estimateMinutes}
               forceStoryPoints
             />
-          </RailField>
+          </QuickViewRailField>
 
           <EditableRailField
             label={t('estimate')}
@@ -1036,8 +1029,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               {t('updated')} {formatDate(data.updatedAt, locale)}
             </span>
           </div>
-        </dl>
-      </div>
+        </QuickViewRail>
+      </QuickViewBody>
     </EstimationConfigProvider>
   );
 }

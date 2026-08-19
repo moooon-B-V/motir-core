@@ -61,13 +61,22 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
   // to "no step" and the permanent door (MOTIR-1764) still leads back.
   let repoView: ProjectRepoEstablishViewDto | null = null;
   let projectKey: string | null = null;
-  if (review.status === 'approved') {
+  // The project KEY is read for every plan, not only an approved one: the canvas
+  // renders the committed roadmap LEVEL a proposal lands in (MOTIR-3083) and that
+  // per-level read is keyed by it. The repository-set read stays scoped to an
+  // approved plan — it is the establish step's, and a `planned` plan has nothing
+  // to establish.
+  try {
+    const project = await projectsService.assertProjectInWorkspace(
+      review.projectId,
+      ctx.workspaceId,
+    );
+    projectKey = project.identifier;
+  } catch (err) {
+    console.error('[plans/[id]] could not resolve the project:', err);
+  }
+  if (review.status === 'approved' && projectKey) {
     try {
-      const project = await projectsService.assertProjectInWorkspace(
-        review.projectId,
-        ctx.workspaceId,
-      );
-      projectKey = project.identifier;
       repoView = await projectRepoEstablishService.getEstablishView(review.projectId, ctx);
     } catch (err) {
       console.error('[plans/[id]] could not read the project repository set:', err);
@@ -99,6 +108,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
       <div className="h-[calc(100dvh_-_8.5rem_-_var(--shell-bottom-clearance,1.5rem))] min-h-[34rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
         <PlanDetail
           initialReview={review}
+          projectKey={projectKey ?? ''}
           ariaLabel={t('canvasAria')}
           repositorySet={
             repoView && projectKey && repoView.set.rows.length > 0

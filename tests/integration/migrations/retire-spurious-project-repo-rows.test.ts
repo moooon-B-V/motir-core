@@ -451,45 +451,39 @@ describe('retire_spurious_project_repo_rows — the LIVE MOTIR row, and what rem
     });
   });
 
-  it('leaves the real repositories PINNABLE — before the migration AND after', async () => {
+  it('leaves the real repositories PINNABLE — before the migration and after it', async () => {
     // AC 4's second half, proved as BEHAVIOUR rather than deduced.
     //
-    // ⚠️ THE "BEFORE" HALF CHANGED UNDER THIS TEST, and the change was correct.
-    // It used to assert that `motir-core` was REJECTED while the stray row
-    // stood — true when this migration shipped (#2140), because the project's
-    // own set WAS the whole pin domain. MOTIR-3086 (#2144) then made `hasSet`
-    // stop being an all-or-nothing switch: for a project that arrived with its
-    // own code the domain is now the set FIRST and the workspace UNDER it, so no
-    // row can subtract a repository. The pin therefore resolves on both sides of
-    // the migration, and asserting a rejection kept `main` red until this was
-    // updated.
+    // ⚠️ THE PRECONDITION MOVED, and MOTIR-3086 is why. This case used to open by
+    // asserting that the stray row made `motir-core` UNPINNABLE — because the
+    // scope ladder chose between two registries on `hasSet`, so the first row a
+    // project ever gained did not join its repo list, it BECAME the list.
+    // MOTIR-3086 (#2144) removed exactly that: a set now EXTENDS the workspace's
+    // connected repositories instead of replacing them, so no row can subtract a
+    // repository from the domain — which is the root cause this migration was
+    // sweeping up after.
     //
-    // What the migration is FOR survives that, and is what this now asserts: it
-    // removes a row the project should never have had, so the set stops
-    // CLAIMING a repository the project does not ship in. The pin working is
-    // MOTIR-3086's guarantee; the set being true is this migration's.
+    // The two cards were each green on their own base and red together
+    // (#2144 was reproduced at `fbe5e2cd`, before #2140 added this file). What
+    // the migration is FOR is unchanged and still asserted below: the spurious
+    // row is deleted. What is no longer true is that its presence hides a real
+    // repository, so asserting a rejection here would now pin the defect rather
+    // than the fix.
     const fx = await makeWorkItemFixture();
     await connectWorkspaceRepo(fx.workspaceId, 'motir-core');
     const live = await seedLiveShape(fx);
 
-    // Before: nameable, because the union rung rescues it — not because the set
-    // is right.
+    // BEFORE: pinnable already — the stray row no longer costs the project its
+    // own code (MOTIR-3086).
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
     ).resolves.toBe('motir-core');
-    // …while the set still claims the repository the project never needed.
-    expect(await projectRepoSetService.getRepoNameDomains(fx.projectId, fx.ctx)).toMatchObject({
-      hasSet: true,
-    });
 
     await runMigration();
 
-    // After: the row is gone, the set makes no false claim, and the pin still
-    // works — now through the workspace rung rather than in spite of the set.
+    // AFTER: the row is gone — the migration's actual subject — and the
+    // repository is still nameable, now through the workspace rung alone.
     expect(await survives(live)).toBe(false);
-    expect(await projectRepoSetService.getRepoNameDomains(fx.projectId, fx.ctx)).toMatchObject({
-      hasSet: false,
-    });
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
     ).resolves.toBe('motir-core');

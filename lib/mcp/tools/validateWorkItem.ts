@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isOrderingAdvisory,
@@ -16,6 +17,7 @@ import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
 import { conditionField } from './sprintRef';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
+import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
 
 // `validate_work_item` (Story 7.8 · Subtask 7.8.23) — is a work item FINISHABLE?
 // The single-item analogue of `validate_sprint`, with the target's SUBTREE
@@ -28,20 +30,39 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 // out-of-subtree `done` case: `loose` (default) accepts a done dependency
 // anywhere; `tight` requires it to be IN the subtree, else it is reported.
 //
-// A thin READ adapter over `workItemsService.validateWorkItem` — no business
-// logic here; the subtree walk + the validity rule live in the service. READ
-// scope (`lib/mcp/scopes.ts`), like `validate_sprint` / `get_work_item`.
+// `planId` (MOTIR-3095) switches the same question onto the PROJECTED tree —
+// the project's live tree ⊕ that plan's `PlanItem` delta — so an agent can
+// validate a subtree it has PROPOSED before anybody reviews it. The target may
+// then be a `planItem:<id>` temp-ref as well as a committed key, which is the
+// case an authoring agent usually has. OMITTING `planId` never reaches the
+// projection at all, so an existing caller's result is unchanged by
+// construction rather than by test:
+// `docs/decisions/agent-authored-plans.md` AMENDMENT 3, Q5–Q8.
+//
+// A thin READ adapter over `workItemsService.validateWorkItem` /
+// `planValidityService.validateProjectedWorkItem` — no business logic here; the
+// subtree walk + the validity rule live in the service, and the projected mode
+// runs the SAME rule over a different node set. READ scope
+// (`lib/mcp/scopes.ts`), like `validate_sprint` / `get_work_item`: the plan is
+// read through `plansService.getPlan`, which asserts browse on the same
+// project, so the projected reach is the reach of the two calls it replaces.
 
 export const VALIDATE_WORK_ITEM_TOOL_NAME = 'validate_work_item';
 
 const inputSchema = {
-  key: workItemKeyField,
+  key: workItemKeyField.describe(
+    'The work item to validate — the project key, a dash, the number (e.g. "ACME-7"), ' +
+      'case-insensitive. With `planId`, this may instead be a `planItem:<id>` temp-ref ' +
+      'naming an `add` in that plan (case-SENSITIVE, as `add_plan_items` returned it).',
+  ),
   condition: conditionField,
+  planId: planIdField,
 };
 
 interface ValidateWorkItemArgs {
   key: string;
   condition?: ValidityCondition;
+  planId?: string;
 }
 
 /**
@@ -140,17 +161,26 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   return lines;
 }
 
-/** Human-readable summary for the dual-content text block. */
-function summarize(result: WorkItemValidityDto): string {
+/** Human-readable summary for the dual-content text block.
+ *
+ * `planId` is present ⟺ the verdict was computed over the PROJECTION, and the
+ * text says so: the same `{ key, valid, blockers, advisories }` shape means two
+ * different things depending on which tree it was computed over, and a reader
+ * watching the session has only this block to tell them apart. */
+function summarize(result: WorkItemValidityDto, planId?: string): string {
+  const over = planId
+    ? ` once plan ${planId} materializes (nothing was created — approving the plan in Motir is ` +
+      'still the only path from a proposal to a work item)'
+    : '';
   if (result.valid) {
     return [
-      `Work item ${result.key} is VALID — its whole subtree can be finished within itself.`,
+      `Work item ${result.key} is VALID — its whole subtree can be finished within itself${over}.`,
       ...advisoryLines(result),
     ].join('\n');
   }
   return [
-    `Work item ${result.key} is INVALID — ${result.blockers.length} item(s) in its subtree are ` +
-      'gated by out-of-subtree, unsatisfied work:',
+    `Work item ${result.key} is INVALID${over} — ${result.blockers.length} item(s) in its ` +
+      'subtree are gated by out-of-subtree, unsatisfied work:',
     ...result.blockers.map(
       (b) =>
         `  ${b.item} is blocked by ${b.blockedBy} (${b.blockerStatus}, ` +
@@ -166,10 +196,26 @@ export async function runValidateWorkItem(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
+    // `conditionField` fills the default (`loose`) when omitted, and both
+    // service params default too — so no `??` on either path (it would add a
+    // never-taken branch).
+    if (args.planId !== undefined) {
+      // PROJECTED. No project lookup here: `buildProjection` resolves the
+      // project FROM the plan (and asserts browse on it), and a `planItem:<id>`
+      // target has no project-key prefix to derive one from anyway.
+      const projected = await planValidityService.validateProjectedWorkItem(
+        args.planId,
+        normalizeProjectedTarget(args.key),
+        ctx,
+        args.condition,
+      );
+      return toolOk(
+        summarize(projected, args.planId),
+        exempt('validate_work_item', projected as unknown as Record<string, unknown>),
+      );
+    }
     const identifier = normalizeIdentifier(args.key);
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
-    // `conditionField` fills the default (`loose`) when omitted, and the service
-    // param defaults too — so no `??` here (it would add a never-taken branch).
     const result = await workItemsService.validateWorkItem(
       project.id,
       identifier,
@@ -212,7 +258,13 @@ export function registerValidateWorkItem(
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
         'name two or more) — both with the 1-based criterion index to cut at. Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
-        'Read-only.',
+        'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
+        'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
+        'subtree you have PROPOSED before anybody reviews it. ' +
+        TEMP_REF_HELP +
+        ' Use `validate_plan` for the whole plan at once — do not loop this call per root, ' +
+        'because an edge between two sibling roots is valid there and a false positive here. ' +
+        'Read-only, projected or not: it creates nothing and persists nothing.',
       inputSchema,
     },
     async (args, extra) => runValidateWorkItem(args, resolveContext(extra)),
