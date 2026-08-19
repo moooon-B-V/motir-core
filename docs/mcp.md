@@ -1549,6 +1549,84 @@ committed tree:
 > is a decision, not an omission (`docs/decisions/agent-authored-plans.md`
 > AMENDMENT 3, Q6).
 
+##### The PROJECTED mode on the two READS
+
+`get_work_item` and `search_work_items` take the same optional **`planId`** and
+answer over the projection — the project's live tree **⊕** that plan's proposals
+— so an agent can ask _"what does the tree look like WITH what I just
+proposed"_ in one call, instead of fetching `get_plan` and merging it against a
+search by hand on every turn.
+
+**A proposal is never mixed into a work item's array.** It rides its own —
+`proposals` on a search, `proposedChildren` on a projected detail — and each row
+additionally carries `proposal: true` and `key: null`, because a proposal has no
+key until the plan is approved and **none is ever invented for it**. Two locks,
+so a caller that flattens the arrays still cannot confuse the two.
+
+**`get_work_item({ key, planId })`** answers under a `projection` key, and the
+ordinary `children` array comes back EMPTY — a keyless proposal cannot sit in the
+array committed children use, and nothing about that array is widened:
+
+| `projection.…`      | What it holds                                                                  |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `target`            | the card itself — a proposal (addressed by `planItem:<id>`) or a committed row |
+| `parent`            | the projected parent, or null                                                  |
+| `committedChildren` | committed children, minus any the plan removes                                 |
+| `proposedChildren`  | children **this plan** proposes under the target                               |
+| `blockedBy`         | the projected dependency edges — committed and proposed, each self-marked      |
+
+A caller branches on `projection` being present, exactly as it does on a search.
+
+| Field              | What it holds                                                                  |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `target`           | the card itself — a proposal (addressed by `planItem:<id>`) or a committed row |
+| `parent`           | the projected parent, or null                                                  |
+| `children`         | COMMITTED children only, minus any the plan removes                            |
+| `proposedChildren` | children **this plan** proposes under the target                               |
+| `blockedBy`        | the projected dependency edges — committed and proposed, each self-marked      |
+
+`key` may be a committed identifier **or** a `planItem:<id>` temp-ref, which is
+what an authoring agent usually holds. A committed row the plan `modify`s
+carries the patch verbatim as `pendingPatch` — _this is the row as it stands,
+and this is what the plan would change about it_ — and one the plan `remove`s
+comes back with `status: "removed_by_plan"` rather than as a not-found.
+
+**`search_work_items({ projectKey, filter, planId })`** keeps `items` as the
+filtered committed page (minus anything the plan removes) and adds:
+
+```jsonc
+{
+  "items": [ /* committed rows, exactly as without planId */ ],
+  "total": 42,
+  "nextCursor": null,
+  "projection": {
+    "planId": "cm…",
+    "filterAppliesTo": "items",
+    "removedIds": ["cmq…"],
+    "modifiedIds": ["cmr…"]
+  },
+  "proposals": [
+    { "proposal": true, "key": null, "tempRef": "planItem:ck_pdf",
+      "planItemId": "ck_pdf", "title": "Invoice PDF", "kind": "subtask", … }
+  ]
+}
+```
+
+> **⚠️ THE FILTER DOES NOT REACH PROPOSALS, and `projection.filterAppliesTo`
+> says so on every response.** The FilterAST compiles to parameterized SQL over
+> `work_item` rows, through the one registry that makes it injection-safe. A
+> proposal is not such a row, so the choice was between reimplementing the whole
+> grammar in memory — a second compiler, guaranteed to drift from the one the
+> `/items` page uses — and saying plainly what the filter covers. Motir says it:
+> `items` is filtered, `proposals` is the plan's **whole** `add` set. That answer
+> is the same every time, rather than an accident of which fields a given
+> proposal happens to carry.
+
+> **Omitting `planId` is not a mode.** Neither read builds a projection without
+> it, and the response has no `projection` / `proposals` key at all — so a call
+> without it is byte-identical to what it returned before this existed. Both
+> modes are read-only.
+
 #### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
 
 Changing a plan in Motir is not a one-shot prompt: it is a **persisted,

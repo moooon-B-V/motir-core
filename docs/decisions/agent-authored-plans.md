@@ -752,6 +752,26 @@ Fields a proposal genuinely does not have — `status` history, `commentCount`, 
 `sprintId` — are `null`, never defaulted to a plausible value. `0` comments and _no comment
 thread_ are different facts and only one of them is true.
 
+#### ⚠️ AMENDED WHILE BUILDING IT (MOTIR-3096, 2026-08-19): the discriminator is STRUCTURAL as well as per-row.
+
+The paragraph above describes a proposal as a marked row _inside_ the read's existing array,
+and that is not what shipped — for a reason that only became visible at the keyboard, so it is
+recorded here rather than quietly applied. The MCP **payload seam** (ADR Amendment 7) requires
+`search_work_items`' `items` and `get_work_item`'s `children` to satisfy the shared `/api/v1`
+resource shapes, and a keyless proposal cannot: `derived()` validates it, and it would fail.
+
+So proposals ride their **own arrays** — `proposals` on the search envelope,
+`proposedChildren` on the projected detail — beside the committed ones. **That is strictly
+stronger than what Q7 asked for**, in the direction Q7 wanted:
+
+- Every existing reader of `items` / `children` is untouched **by construction**, not by care.
+- A caller cannot mix the two by accident, because they never arrive mixed.
+- A caller that flattens the arrays anyway **still** cannot lose the distinction, because each
+  row carries `proposal` and a null `key` exactly as specified above.
+
+The per-row marking is therefore unchanged and is not weakened by the array split — it is the
+second of two locks, not a replacement for the first.
+
 ---
 
 ### Q8 — which PERMISSION does a projected call name?

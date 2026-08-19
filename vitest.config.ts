@@ -457,6 +457,13 @@ export default defineConfig({
         // `tests/mcp/validate-plan.test.ts`: 100 / 100 / 100 each.
         'lib/mcp/tools/validatePlan.ts',
         'lib/mcp/tools/planRef.ts',
+        // Subtask MOTIR-3096 — the PROJECTION itself, lifted out of
+        // `planValidityService` when the projected READS became its second
+        // consumer. Gated on its own because it is now the ONE place a plan is
+        // merged into a live tree: a regression here changes what BOTH the
+        // validity verdicts and the reads answer, and blended into the validity
+        // service's number it would be invisible.
+        'lib/services/planProjectionService.ts',
         // The PROSE-vs-GRAPH advisory beside those rules (MOTIR-1969) — the pure
         // reference/severity extractor and the service that resolves + gates it.
         'lib/workItems/proseVsGraph.ts',
