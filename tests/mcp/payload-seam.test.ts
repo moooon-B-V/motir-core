@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod/v4';
-import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { workItemRefSchema } from '@/lib/api/v1/workItems/schema';
 import { buildOperationRegistry, mergeResourceComponents } from '@/lib/api/v1/openapi/registry';
 import { defineOperation } from '@/lib/api/v1/openapi/operation';
@@ -9,6 +9,7 @@ import {
   MIGRATING_TOOLS,
   isExemptTool,
   isMigratingTool,
+  type ExemptToolName,
 } from '@/lib/mcp/payloads/exemptions';
 import {
   MCP_UNREACHABLE_RESOURCES,
@@ -81,58 +82,86 @@ import { toolOk } from '@/lib/mcp/toolResult';
 // No DB, no I/O — a pure model check, like `scopes.test.ts`.
 
 /**
- * The tools that DERIVE their payload from a shared schema.
+ * Every registered tool that is NOT exempt — i.e. exactly the set that must
+ * DERIVE its payload from a shared schema.
  *
- * Enumerated here rather than read off the code because there is nothing to read
- * off: `derived` is called at the tool, and no value records which tools call
- * it. That makes this list the ONE place the seal could rot — so it is checked
- * against `MCP_TOOL_NAMES` from both directions below (every tool is in exactly
- * one column, and the two columns SUM to the registry), which is what would
- * catch a stale entry here.
+ * ⚠️ THE KEY TYPE IS THE GUARANTEE (MOTIR-3121). A tool added to
+ * `MCP_TOOL_NAMES` and not written into {@link EXEMPT_TOOLS} widens
+ * `DerivedToolName`, which makes the literal below incomplete — a COMPILE error
+ * here, named by `tsc` in seconds, exactly like `TOOL_PERMISSIONS`. That is what
+ * this file's own header asks for (*"a COMPILE error rather than a runtime
+ * assertion someone can skip"*), and until MOTIR-3121 this one list was the
+ * exception: it was a bare `Set<string>`, so a new tool rotted it silently and
+ * the seal failed later, in a suite nobody had a reason to run for a
+ * tool-registration change.
+ *
+ * ── AND IT IS STILL AN INDEPENDENT RESTATEMENT, WHICH IS THE POINT ──────────
+ * The docblock this replaces said the list was written by hand *"because there
+ * is nothing to read off"*. That stopped being true at 11.6.6 (MOTIR-2232):
+ * `lib/mcp/payloads/registry.ts`'s `TOOL_PAYLOADS` is precisely that value, and
+ * its own header says so. But deriving this list FROM it is the one fix to
+ * refuse — the partition assertions below would then compare `TOOL_PAYLOADS` to
+ * itself and pass forever. So the totality comes from the REGISTRY and the
+ * EXEMPTIONS (two files this list does not otherwise touch), and what the tests
+ * below compare it against is the payload map. Independent, and total.
  */
-const DERIVED_TOOLS = new Set<string>([
+type DerivedToolName = Exclude<McpToolName, ExemptToolName>;
+
+const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   // 11.6.2 — the proving tool
-  'get_work_item',
+  get_work_item: true,
   // 11.6.3 — the work-item family (MOTIR-2229)
-  'search_work_items',
-  'list_ready',
-  'next_ready',
-  'claim_next_ready',
-  'create_work_item',
-  'update_work_item',
-  'transition_status',
-  'archive_work_item',
-  'unarchive_work_item',
-  'change_kind',
-  'move_to_parent',
-  'add_comment',
+  search_work_items: true,
+  list_ready: true,
+  next_ready: true,
+  claim_next_ready: true,
+  create_work_item: true,
+  update_work_item: true,
+  transition_status: true,
+  archive_work_item: true,
+  unarchive_work_item: true,
+  change_kind: true,
+  move_to_parent: true,
+  add_comment: true,
   // 11.6.4 — project / sprint / backlog / identity (MOTIR-2230)
-  'list_projects',
-  'whoami',
-  'list_sprints',
-  'create_sprint',
-  'update_sprint',
-  'start_sprint',
-  'complete_sprint',
-  'move_to_sprint',
-  'move_to_backlog',
+  list_projects: true,
+  whoami: true,
+  list_sprints: true,
+  create_sprint: true,
+  update_sprint: true,
+  start_sprint: true,
+  complete_sprint: true,
+  move_to_sprint: true,
+  move_to_backlog: true,
   // 11.6.5 — the work-loop family (MOTIR-2231)
-  'dispatch_prompt',
-  'mark_integrated',
-  'complete_session',
-  'expand_item',
-  'get_plan_status',
-  'get_plan',
+  dispatch_prompt: true,
+  mark_integrated: true,
+  complete_session: true,
+  expand_item: true,
+  get_plan_status: true,
+  get_plan: true,
   // MOTIR-2988 — the plan-AUTHORING door. `create_plan` derives through the very
   // same definition `get_plan` does; `add_plan_items` through a `.extend` of it
   // carrying the append's own `planItemIds`.
-  'create_plan',
-  'add_plan_items',
-  'open_plan_session',
-  'append_plan_turn',
-  'submit_plan_session',
-  'get_work_item_activity',
-]);
+  create_plan: true,
+  add_plan_items: true,
+  open_plan_session: true,
+  append_plan_turn: true,
+  submit_plan_session: true,
+  get_work_item_activity: true,
+};
+
+/** The runtime view the assertions below walk. */
+const DERIVED_TOOLS = new Set<string>(Object.keys(DERIVED_TOOL_NAMES));
+
+// The totality itself, asserted the way `lib/mcp/scopes.ts`'s is — with a
+// deliberately incomplete literal. If this line ever STOPS erroring, the key
+// type has been widened to something that no longer names every derived tool
+// and the compile-time guarantee above is gone; the unnecessary
+// `@ts-expect-error` then fails `pnpm typecheck`, which is the assertion.
+// @ts-expect-error an incomplete map is a COMPILE error — that is the point.
+const INCOMPLETE_IS_A_COMPILE_ERROR: Record<DerivedToolName, true> = { get_work_item: true };
+void INCOMPLETE_IS_A_COMPILE_ERROR;
 
 describe('toolOk totality — a payload must come from a constructor', () => {
   it('REFUSES a bare object literal (@ts-expect-error is the assertion)', () => {
