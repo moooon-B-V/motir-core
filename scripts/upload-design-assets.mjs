@@ -170,12 +170,21 @@ export function splitNoteSections(content) {
  * The design NOTE for this publish: the `##` section(s) the PR changed, whole,
  * de-duplicated, in file order.
  *
+ * ⚠️ ONE hunk can touch MANY sections, and EVERY one of them is published
+ * (MOTIR-3145). The near-total case is a notes file the PR ADDED: `git diff -U0`
+ * renders it as a single `@@ -0,0 +1,N @@` hunk covering the whole file, so a
+ * range→section mapping that stopped at the first overlap collapsed a 25-section
+ * deliverable to its opening section — worst exactly on the card whose
+ * deliverable IS the note.
+ *
  * ⚠️ A hunk landing ABOVE the first `##` — in the file title or the surface
  * index table — contributes NOTHING. That region is an INDEX, and a design card
  * that adds a surface always adds both a table row and the section describing
  * it, so the section carries the meaning. If a PR changed ONLY that region, this
  * returns `{ noteMd: null, reason: 'above-first-section' }` rather than falling
- * back to the whole file (docs/decisions/design-result.md §1).
+ * back to the whole file (docs/decisions/design-result.md §1). Sections tile the
+ * file contiguously from the first `##` to EOF, so a range matching NO section is
+ * exactly a range above the first one.
  */
 export function extractChangedNoteSections({
   notePath,
@@ -195,9 +204,14 @@ export function extractChangedNoteSections({
   const touched = new Set();
   let aboveFirst = false;
   for (const range of ranges) {
-    const index = sections.findIndex((s) => range.end >= s.startLine && range.start <= s.endLine);
-    if (index === -1) aboveFirst = true;
-    else touched.add(index);
+    let matched = false;
+    sections.forEach((section, index) => {
+      if (range.end >= section.startLine && range.start <= section.endLine) {
+        touched.add(index);
+        matched = true;
+      }
+    });
+    if (!matched) aboveFirst = true;
   }
 
   if (touched.size === 0) {
@@ -274,7 +288,9 @@ export class NotALeafError extends Error {
  * The note ships TWICE and both are required: inline as `noteMd` (what the panel
  * renders, capped server-side at 64 KiB) and as a `note_file` asset carrying the
  * COMPLETE text — which is what makes that cap a rendering bound rather than a
- * data-loss bound.
+ * data-loss bound. When a PR changed notes in more than one area there is a
+ * `note_file` PER AREA, each carrying its own `text`; `noteMd` is their
+ * concatenation, so the union of the files is still the complete note.
  */
 export async function publishDesignResult({
   baseUrl,
@@ -294,6 +310,14 @@ export async function publishDesignResult({
     sourcePath: a.sourcePath,
     contentType: contentTypeFor(a.kind),
   }));
+  // A `note_file` carries its OWN extracted text; `noteMd` is the fallback for a
+  // caller that passed a single note without one (and the single-note case makes
+  // the two identical anyway).
+  const noteTextBySourcePath = new Map(
+    assets
+      .filter((a) => a.kind === 'note_file' && typeof a.text === 'string')
+      .map((a) => [a.sourcePath, a.text]),
+  );
 
   const mintRes = await fetchImpl(
     `${baseUrl}/api/work-items/${targetKey}/design-evidence/upload-token`,
@@ -319,7 +343,7 @@ export async function publishDesignResult({
   for (const target of targets) {
     const body =
       target.kind === 'note_file'
-        ? Buffer.from(noteMd ?? '', 'utf8')
+        ? Buffer.from(noteTextBySourcePath.get(target.sourcePath) ?? noteMd ?? '', 'utf8')
         : readFileBuffer(path.join(cwd, target.sourcePath));
     const put = await fetchImpl(target.token, {
       method: 'PUT',
@@ -355,15 +379,32 @@ export async function publishDesignResult({
 }
 
 /**
- * Assemble the publish set from a diff: the changed artifacts plus, when the PR
- * changed a `design-notes.md` section, the note in BOTH its forms.
+ * Assemble the publish set from a diff: the changed artifacts plus, for EVERY
+ * `design-notes.md` whose sections the PR changed, that note in BOTH its forms.
+ *
+ * ⚠️ EVERY note, not the first (MOTIR-3145). A PR that touches two areas
+ * legitimately describes two surfaces and the card is where both belong. The
+ * inline `noteMd` — what the panel renders, capped server-side — is the notes
+ * CONCATENATED in collection order; each note additionally ships as its OWN
+ * `note_file` asset carrying only its own text, so `sourcePath` stays a true
+ * statement about the bytes behind it and the cap stays a rendering bound.
+ *
+ * @param {{
+ *   collected: { assets: Array<{ kind: string, sourcePath: string }> },
+ *   noteResults?: Array<{ noteMd: string | null, notePath: string }>,
+ * }} args
  */
-export function buildPublishSet({ collected, noteResult }) {
+export function buildPublishSet({ collected, noteResults = [] }) {
+  const published = noteResults.filter((r) => r?.noteMd);
+  /** @type {Array<{ kind: string, sourcePath: string, text?: string }>} */
   const assets = [...collected.assets];
-  if (noteResult?.noteMd) {
-    assets.push({ kind: 'note_file', sourcePath: noteResult.notePath });
+  for (const result of published) {
+    assets.push({ kind: 'note_file', sourcePath: result.notePath, text: result.noteMd });
   }
-  return { assets, noteMd: noteResult?.noteMd ?? null };
+  return {
+    assets,
+    noteMd: published.length > 0 ? published.map((r) => r.noteMd).join('\n\n') : null,
+  };
 }
 
 /**
@@ -393,13 +434,18 @@ export async function main(env = process.env, log = console, deps = {}) {
     log.log(`${collected.deleted.length} design path(s) were deleted by this PR; not published.`);
   }
 
-  let noteResult = null;
+  // EVERY collected note is examined and every note that yields a section is
+  // published (MOTIR-3145). A `break` here used to end the loop on the first
+  // success, which both dropped later areas AND made the omission branch below
+  // unreachable — so a second area's note vanished with no log line at all,
+  // indistinguishable in the job output from a PR that only touched one area.
+  const noteResults = [];
   for (const notePath of collected.notes) {
     const extracted = extractNote({ notePath, base: baseSha });
     if (extracted.noteMd) {
-      noteResult = { ...extracted, notePath };
+      noteResults.push({ ...extracted, notePath });
       log.log(`Design note: ${extracted.sections} changed section(s) from ${notePath}.`);
-      break;
+      continue;
     }
     log.log(
       extracted.reason === 'above-first-section'
@@ -408,7 +454,7 @@ export async function main(env = process.env, log = console, deps = {}) {
     );
   }
 
-  const { assets, noteMd } = buildPublishSet({ collected, noteResult });
+  const { assets, noteMd } = buildPublishSet({ collected, noteResults });
   if (assets.length === 0) {
     log.log('Nothing to publish — this PR changed no design artifact.');
     return 0;
