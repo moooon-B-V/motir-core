@@ -72,6 +72,55 @@ export function resolveTargetKey(env = process.env) {
   return { key: null, source: 'none' };
 }
 
+/**
+ * The commit the PR's changes should be measured FROM (MOTIR-3104).
+ *
+ * ⚠️ NOT `DESIGN_BASE_SHA` directly, and the difference is a whole class of bug.
+ * `github.event.pull_request.base.sha` is the base branch's tip when the EVENT
+ * was snapshotted, while the checkout is the MERGE COMMIT — which contains
+ * everything the base branch did up to the merge. Diffing the two therefore
+ * reports every `design/**` change that landed on the base branch in that
+ * window as if this PR had made it.
+ *
+ * That is not hypothetical: it fired on PR #2145, a story PR touching no design
+ * file at all, because another card's design PR merged between the two moments.
+ * On a `subtask/*` branch it does not even fail — it publishes ANOTHER card's
+ * design onto this one, with a real evidence id under a green check.
+ *
+ * Resolution order, most trustworthy first:
+ *
+ *   1. **The merge commit's FIRST PARENT.** On a `pull_request` checkout HEAD is
+ *      GitHub's merge commit: parent 1 is the base tip it was merged with,
+ *      parent 2 is the PR head. Diffing parent 1 → HEAD asks exactly "what did
+ *      this branch change", needs no ancestry, and is therefore safe in the
+ *      depth-1 clone this job runs in — where `merge-base` may have no common
+ *      history to walk.
+ *   2. **`git merge-base <base> HEAD`**, for a non-merge checkout deep enough to
+ *      compute one (a local run, a `push` event with history).
+ *   3. **The supplied base**, the pre-MOTIR-3104 behaviour, with the caveat
+ *      LOGGED rather than silent — so a surprising publish set has a stated
+ *      reason in the job output instead of looking authoritative.
+ *
+ * @param {{ base: string, git?: (args: string[], cwd?: string) => string, cwd?: string }} args
+ * @returns {{ base: string, source: 'merge-parent' | 'merge-base' | 'event-base' }}
+ */
+export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
+  try {
+    const parents = git(['rev-list', '--parents', '-n', '1', 'HEAD'], cwd).trim().split(/\s+/);
+    // `<commit> <parent1> <parent2>` — three fields means HEAD is a merge.
+    if (parents.length === 3 && parents[1]) return { base: parents[1], source: 'merge-parent' };
+  } catch {
+    // Fall through — an unreadable HEAD is the caller's problem, not this one's.
+  }
+  try {
+    const mergeBase = git(['merge-base', base, 'HEAD'], cwd).trim();
+    if (mergeBase) return { base: mergeBase, source: 'merge-base' };
+  } catch {
+    // Shallow clone with no shared history — expected, not exceptional.
+  }
+  return { base, source: 'event-base' };
+}
+
 /** Which asset kind a path is, or null when it is not a publishable artifact. */
 export function classifyDesignPath(filePath) {
   if (filePath.endsWith('.mock.html')) return 'mock';
@@ -343,6 +392,7 @@ export async function main(env = process.env, log = console, deps = {}) {
   const {
     collect = collectChangedDesignFiles,
     extractNote = extractChangedNoteSections,
+    resolveBase = resolveDiffBase,
     requestOidc = requestGithubOidcToken,
     publish = publishDesignResult,
   } = deps;
@@ -352,7 +402,19 @@ export async function main(env = process.env, log = console, deps = {}) {
     return 0;
   }
 
-  const collected = collect({ base: baseSha });
+  // MOTIR-3104: measure from where this BRANCH diverged, never from the event's
+  // base snapshot — see `resolveDiffBase`. The source is logged because an
+  // `event-base` fallback means the publish set may include the base branch's
+  // own design changes, and a reader deserves to know that before believing it.
+  const { base: diffBase, source: diffBaseSource } = resolveBase({ base: baseSha });
+  if (diffBaseSource === 'event-base') {
+    log.log(
+      `Could not resolve a merge base; diffing against DESIGN_BASE_SHA directly. ` +
+        `The publish set may include design changes made on the base branch.`,
+    );
+  }
+
+  const collected = collect({ base: diffBase });
   if (collected.ignored.length > 0) {
     log.log(`Ignoring ${collected.ignored.length} non-artifact path(s) under design/.`);
   }
@@ -362,7 +424,7 @@ export async function main(env = process.env, log = console, deps = {}) {
 
   let noteResult = null;
   for (const notePath of collected.notes) {
-    const extracted = extractNote({ notePath, base: baseSha });
+    const extracted = extractNote({ notePath, base: diffBase });
     if (extracted.noteMd) {
       noteResult = { ...extracted, notePath };
       log.log(`Design note: ${extracted.sections} changed section(s) from ${notePath}.`);
