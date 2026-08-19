@@ -70,6 +70,40 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * WHO last changed this work item's status, and WHEN (MOTIR-2961).
+   *
+   * The same single-row walk of the `(workItemId, changedAt)` index that
+   * {@link findLatestStatusChangeAt} makes, returning the ACTOR alongside the
+   * timestamp — which is what a keyed CLAIM's typed refusal needs and the date
+   * alone cannot supply. Kept beside it rather than folded into it: the rollup
+   * compares a date and has no use for an actor, and widening its return would
+   * make every caller carry a field one of them reads.
+   *
+   * `null` when the item's status has never MOVED — a row created directly at
+   * its status (the importer's authoritative set) writes no status revision, so
+   * "nobody moved it" is a real answer and not a missing read.
+   *
+   * Takes the caller's `tx` so the claim reads it inside the transaction that
+   * holds the row lock: on a successful claim the revision it must see is the
+   * one that same transaction has just written.
+   */
+  async findLatestStatusChange(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ changedById: string; changedAt: Date } | null> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ changed_by_id: string; changed_at: Date }>>`
+      SELECT r."changedById" AS "changed_by_id", r."changedAt" AS "changed_at"
+        FROM "work_item_revision" r
+       WHERE r."workItemId" = ${workItemId}
+         AND r."diff" -> 'status' IS NOT NULL
+       ORDER BY r."changedAt" DESC
+       LIMIT 1`;
+    const row = rows[0];
+    return row ? { changedById: row.changed_by_id, changedAt: row.changed_at } : null;
+  },
+
+  /**
    * The revision history of one work item, newest first (`changedAt DESC`) by
    * default so the activity feed renders most-recent-at-top; `order: 'asc'`
    * (Subtask 5.5.1 — the Activity section's oldest-first toggle) walks the

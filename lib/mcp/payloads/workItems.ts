@@ -11,6 +11,8 @@ import {
   workItemSummarySchema,
 } from '@/lib/api/v1/workItems/schema';
 import { readyItemSchema } from '@/lib/api/v1/ready/schema';
+import { presentWorkItemClaim, workItemClaimSchema } from '@/lib/api/v1/workLoop/schema';
+import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type {
   WorkItemDependencyEdgesDto,
   WorkItemDto,
@@ -459,6 +461,32 @@ export const claimNextReadyPayload = definePayload({
     { item: McpReadyDispatch | null } & Record<string, unknown>
   >,
   probes: [{ resource: 'ReadyItem', select: (p) => (p.item ? [p.item] : []) }],
+});
+
+/**
+ * The `claim_work_item` result (MOTIR-2961) — v1's `WorkItemClaim`, unchanged.
+ *
+ * Not a widening and not a narrowing: the two surfaces call ONE service method
+ * and there is nothing an agent needs here that a client does not. Re-exporting
+ * the v1 schema rather than restating it is what makes the probe below a real
+ * check instead of a comparison of a shape against itself.
+ */
+export const mcpWorkItemClaimSchema = workItemClaimSchema;
+export type McpWorkItemClaim = z.infer<typeof mcpWorkItemClaimSchema>;
+
+/** Map the claim result for the MCP transport — through v1's own presenter, so
+ *  the two surfaces cannot drift by construction. */
+export function presentMcpWorkItemClaim(dto: WorkItemClaimDto): McpWorkItemClaim {
+  return presentWorkItemClaim(dto);
+}
+
+/** The `claim_work_item` payload. The whole payload IS the shared resource, so
+ *  the probe selects the payload itself. */
+export const claimWorkItemPayload = definePayload({
+  schema: mcpWorkItemClaimSchema.catchall(z.unknown()) as unknown as z.ZodType<
+    McpWorkItemClaim & Record<string, unknown>
+  >,
+  probes: [{ resource: 'WorkItemClaim', select: (p) => [p] }],
 });
 
 /**

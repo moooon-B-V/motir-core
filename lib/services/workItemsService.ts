@@ -28,6 +28,7 @@ import { estimationService } from '@/lib/services/estimationService';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -121,6 +122,7 @@ import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type { ExpansionNudge, ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
+import type { ClaimActorDto, WorkItemClaimDto, WorkItemClaimOutcome } from '@/lib/dto/claim';
 import {
   toReadyItemDto,
   toReadyItemDispatchDto,
@@ -870,6 +872,52 @@ async function resolveDescriptionMentionable(
  *  now written by the CI-feedback consumer alone, on a green run (MOTIR-3006). */
 const IMPLEMENTED_STATUS_KEY = 'implemented';
 const DONE_STATUS_KEY = 'done';
+
+/** Where a DISPATCHED item lands — the one status the two claim paths write. */
+const IN_PROGRESS_STATUS_KEY = 'in_progress';
+
+/**
+ * The CLAIMABLE category (MOTIR-2961) — the CATEGORY, never the literal `todo`
+ * key. It admits `todo` AND `blocked`, and that is load-bearing: `--force`
+ * exists precisely to dispatch a card whose dependencies are unmet, and such a
+ * card sits at `blocked`. Keying on the key alone would break that flag.
+ */
+const CLAIMABLE_STATUS_CATEGORY = 'todo';
+
+/** The category a claimed item lands in — the same literal `claimNextReady`
+ *  reports for the same reason: `in_progress` is a PROTECTED default key, so a
+ *  project cannot recategorise it out from under dispatch. */
+const IN_PROGRESS_STATUS_CATEGORY = 'in_progress';
+
+/**
+ * Classify a claim REFUSAL (MOTIR-2961) — a total function over every status
+ * outside the to-do category.
+ *
+ * Only `in_progress` itself can be `mine` / `taken`: those two words mean
+ * somebody is WORKING on the card, and they are told apart by WHO. Everything
+ * else — `implemented` (its pull request is already open), `in_review`,
+ * `planning`, `done`, `cancelled`, an archived row, any custom status — is
+ * `not_claimable`, because `already_claimed` would be the wrong word for a card
+ * that is finished.
+ *
+ * ⚠️ An `in_progress` card with NO assignee is `taken`, not claimable. That is
+ * the MOTIR-2958 shape exactly: the runbook path flipped the status and never
+ * assigned, so "unassigned" is evidence of nothing. The refusal still names the
+ * winner — from the status-change history rather than from the assignee column.
+ */
+function refusedClaimOutcome(
+  status: string,
+  assigneeId: string | null,
+  callerId: string,
+): Exclude<WorkItemClaimOutcome, 'claimed'> {
+  if (status !== IN_PROGRESS_STATUS_KEY) return 'not_claimable';
+  return assigneeId === callerId ? 'mine' : 'taken';
+}
+
+/** A narrowing filter that keeps `Array.filter`'s result type honest. */
+function isPresentId(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
 
 /**
  * THE CI-GREEN LATCH (MOTIR-3006) — a card that ARRIVES at `implemented` asks
@@ -5208,6 +5256,182 @@ export const workItemsService = {
     const chosen = candidates.find((r) => r.id === claimed.dto.id)!;
     const dispatch = await buildReadyDispatchDto(chosen, ctx);
     return { ...dispatch, status: { key: claimed.dto.status, category: 'in_progress' } };
+  },
+
+  /**
+   * THE KEYED CLAIM (MOTIR-2961) — lock ONE named work item, re-assert the to-do
+   * CATEGORY under that lock, and assign + flip it, all in ONE transaction.
+   *
+   * `claimNextReady` above made the path that asks "give me whatever is next"
+   * race-safe. The path that is HANDED a card by name was written as a shortcut
+   * past SELECTION, and skipping selection quietly skipped the only thing
+   * serializing two sessions dispatched on the same card. What stood in for it
+   * was `packages/cli`'s `ensureInProgress`: an unconditional assignment
+   * followed by a separate `transitionStatus`, two unlocked writes whose own
+   * comment calls the race ACCEPTED. An assignment answers "who is working on
+   * this?" for a teammate reading the board; it was never built to serialize
+   * claimants and it does not. Two sessions built MOTIR-2952 at once, and the
+   * tell was a `git status` (MOTIR-2958).
+   *
+   * ⚠️ THE REFUSAL IS A RESULT, NOT AN ERROR, and it DISCRIMINATES. A rejection
+   * that says only "not in `todo`" makes the loser read the card again to find
+   * out which of three different situations it is in — and two of them are not
+   * losses at all. So the outcome is one of four (`lib/dto/claim.ts`):
+   *
+   *   • `claimed`        — it was in the to-do category; it is now the caller's.
+   *   • `mine`           — `in_progress` AND assigned to the caller. The
+   *                        documented recovery: a run resuming a card its own
+   *                        failed agent left behind. The caller proceeds.
+   *   • `taken`          — `in_progress`, somebody else's. Named, so the loser
+   *                        can say who.
+   *   • `not_claimable`  — anything else. `implemented` / `in_review` /
+   *                        `planning` / `done` / `cancelled` / an ARCHIVED row /
+   *                        any custom status outside the to-do category.
+   *
+   * The last one closes a second, quieter hole. FIVE statuses have a legal edge
+   * into `in_progress` — `todo`, `blocked`, `in_review`, `done`, `planning` — and
+   * the CLI checks none of them, so `motir run <a-done-card>` reopens finished
+   * work and points an agent at it. Re-asserting the CATEGORY under the lock ends
+   * that, and it does so WITHOUT breaking `--force`, whose whole purpose is to
+   * dispatch a `blocked` card (see {@link CLAIMABLE_STATUS_CATEGORY}).
+   *
+   * ⚠️ NOTE WHAT THIS CANNOT SEE. A session that dies mid-run leaves a working
+   * tree behind and no status change at all. No server-side claim can observe
+   * that, so the runbook's worktree pre-flight stays regardless — the lock and
+   * the filesystem check answer different questions.
+   */
+  async claimWorkItem(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemClaimDto> {
+    // The tenant + `assertCanBrowse` gate, and the 404-not-403 answer for a key
+    // in another workspace, come from the SAME read every other keyed operation
+    // opens with — so this surface cannot disagree with `get_work_item` about
+    // what exists. The EDIT gate runs inside the transaction, in
+    // `applyStatusTransition`, on the claim arm only: refusing a claim is a read.
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+
+    // The CI-credit gate (MOTIR-1901 · `ci-minutes-allowance.md` §6.2–6.3). This
+    // is the FOURTH dispatch entry point, and `getNextReady`'s comment states
+    // the rule it exists under: a gate on some of them is a gate a caller can
+    // walk around. Deliberately BEFORE the claim transaction — a refusal must
+    // not consume a candidate, and flipping an item to `in_progress` and then
+    // refusing would strand it.
+    await ciAllowanceService.assertDispatchAllowed(ctx);
+
+    // The claim ASSIGNS, and an assignee must be a workspace member — the same
+    // pre-flight `createWorkItem` runs, ahead of the transaction so a refusal
+    // never takes a lock. In practice the actor is the token's own resolved
+    // user, so this passes; it is here because the write is real either way.
+    await assertAssigneeMember(ctx.userId, ctx.workspaceId);
+
+    const outcome = await withWorkspaceContext(ctx, async (tx) => {
+      // ⚠️ `FOR UPDATE` and NOT `SKIP LOCKED`, which is the one place this
+      // differs from `claimNextReady`'s lock rather than an oversight. There the
+      // caller holds a RANKED LIST and a locked row simply means "take the next
+      // best"; here it was handed ONE key and there is no next-best, so a
+      // claimant that skipped would answer from the state BEFORE the write it is
+      // racing. Blocking makes the loser wait for the winner's COMMIT and then
+      // read what actually happened — which is what lets the refusal below name
+      // who took it.
+      //
+      // ⚠️ AND THE LOCK FILTERS ON `id` ALONE. Under READ COMMITTED a waiting
+      // `FOR UPDATE` re-evaluates its predicate against the new row version, so
+      // a lock whose WHERE (or JOIN) reads `status` is invalidated by precisely
+      // the write it was waiting for and returns ZERO rows — the item reads as
+      // absent at the moment somebody is holding it. `id` is immutable, so the
+      // re-check always passes; the mutable state is read AFTER, under the lock
+      // (`findClaimStateById`, whose comment carries the full reasoning).
+      await workItemRepository.lockById(item.id, tx);
+      const state = await workItemRepository.findClaimStateById(item.id, tx);
+      // ONE nullability check for both reads, because they answer the same
+      // question — the row is gone — and `getWorkItemByIdentifier` above has
+      // already resolved it, so neither can miss through this method. Checking
+      // the lock's own return separately would add a branch nothing can reach.
+      /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
+      if (!state) throw new WorkItemNotFoundError(identifier);
+
+      const claimable =
+        state.archivedAt === null && state.statusCategory === CLAIMABLE_STATUS_CATEGORY;
+      if (!claimable) {
+        const held = await workItemRevisionRepository.findLatestStatusChange(item.id, tx);
+        return {
+          outcome: refusedClaimOutcome(state.status, state.assigneeId, ctx.userId),
+          status: { key: state.status, category: state.statusCategory },
+          assigneeId: state.assigneeId,
+          held,
+        };
+      }
+
+      // BOTH writes, inside the one transaction the lock is held in. The
+      // assignment is skipped when it would be a no-op (a re-claim of a card
+      // already assigned to the caller) so it writes no pointless revision.
+      if (state.assigneeId !== ctx.userId) {
+        await workItemRepository.update(item.id, { assigneeId: ctx.userId }, tx);
+      }
+      // `applyStatusTransition` validates the `todo|blocked → in_progress` edge
+      // against the project's workflow, runs the project EDIT gate, records the
+      // revision and re-locks the row under this same tx (a no-op re-lock — we
+      // already hold it). Mirrors `claimNextReady` rather than inventing a
+      // second flip.
+      const moved = await workItemsService.applyStatusTransition(
+        item.id,
+        IN_PROGRESS_STATUS_KEY,
+        ctx,
+        tx,
+      );
+      // Read AFTER the transition, in the same transaction, so it names THIS
+      // call: the revision just written is the newest status change on the row,
+      // and nothing else can write to it while we hold the lock.
+      const held = await workItemRevisionRepository.findLatestStatusChange(item.id, tx);
+      return {
+        outcome: 'claimed' as const,
+        status: { key: moved.dto.status, category: IN_PROGRESS_STATUS_CATEGORY },
+        assigneeId: ctx.userId,
+        held,
+        transition: moved.transition,
+      };
+    });
+
+    // Post-commit, exactly like `claimNextReady` and `updateStatus` (the 5.1.2
+    // rule): a side effect after a durable write never rides inside it.
+    if ('transition' in outcome && outcome.transition) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: item.id,
+        actorId: ctx.userId,
+        fromStatusKey: outcome.transition.fromStatusKey,
+        toStatusKey: outcome.transition.toStatusKey,
+        revisionId: outcome.transition.revisionId,
+      });
+    }
+
+    // ONE bounded read for at most TWO ids — the assignee and the actor of the
+    // transition — resolved together rather than one lookup each. An id that
+    // resolves to no user (a deleted account the `Restrict` FK should prevent)
+    // yields `null` rather than a cuid: §7 forbids naming a person by internal
+    // id whatever the reason.
+    const actorIds = [
+      ...new Set([outcome.assigneeId, outcome.held?.changedById].filter(isPresentId)),
+    ];
+    const users = await userRepository.findByIds(actorIds);
+    const actor = (id: string | null | undefined): ClaimActorDto | null => {
+      if (!id) return null;
+      const user = users.find((u) => u.id === id);
+      return user ? { id: user.id, name: user.name } : null;
+    };
+
+    return {
+      key: item.identifier,
+      title: item.title,
+      outcome: outcome.outcome,
+      claimed: outcome.outcome === 'claimed',
+      status: outcome.status,
+      assignee: actor(outcome.assigneeId),
+      transitionedBy: actor(outcome.held?.changedById),
+      transitionedAt: outcome.held?.changedAt.toISOString() ?? null,
+    };
   },
 
   /**
