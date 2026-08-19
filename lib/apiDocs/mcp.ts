@@ -498,6 +498,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
     descriptionFingerprint: '3b22fa8a946b',
   },
+  update_plan_item: {
+    summary:
+      'Fill in a proposal you appended — the deepen turn, while the plan is still being written.',
+    descriptionFingerprint: 'b5b5fb20ecb2',
+  },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",
     descriptionFingerprint: 'aa4e7ce9b277',

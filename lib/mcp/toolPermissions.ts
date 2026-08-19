@@ -159,6 +159,15 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // the key that gates the billable submits would be the wrong one in both
   // directions (`docs/decisions/agent-authored-plans.md` Q2).
   add_plan_items: 'ai:view_plan',
+  // The DEEPEN turn (Story MOTIR-3088 · Subtask MOTIR-3090). Same key, and by the
+  // same rule rather than by family resemblance: `plansService.deepenProposal`
+  // delegates to `editAddProposal`, whose FIRST act is
+  // `assertPermission(plan.projectId, ctx, 'ai:view_plan')`. That the answer
+  // coincides with its sibling's is a check, not the argument
+  // (`docs/decisions/agent-authored-plans.md` AMENDMENT 4 D2). Not billable — it
+  // starts no model job — and `CLI_TOKEN_GRANT` below is deliberately NOT widened
+  // for it, exactly as it was not for `add_plan_items`.
+  update_plan_item: 'ai:view_plan',
 
   // ── work_item:delete — the recoverable and the irreversible ──────────────
   // `archiveWorkItem` / `unarchiveWorkItem` / `deleteWorkItem` all assert

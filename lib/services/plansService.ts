@@ -221,8 +221,24 @@ function validateProposal(p: ProposalInput): void {
  * Apply an `UpdateProposalInput` over an `add`'s existing `proposedFields`
  * (7.21.6 · MOTIR-1370). SPARSE: only the keys PRESENT in the input change; an
  * absent key (`undefined`) is left as-is, an explicit `null` on a nullable field
- * clears it. `executor` is never touched (not in the editable set). The result is
- * re-validated by the caller (title must stay non-empty).
+ * clears it. The result is re-validated by the caller (title must stay non-empty).
+ *
+ * ⚠️ `executor` JOINED the editable set on 2026-08-19 (`agent-authored-plans.md`
+ * AMENDMENT 4 D3a · MOTIR-3089). This comment used to read "`executor` is never
+ * touched (not in the editable set)", which was true and is now the opposite of
+ * true. The reason it moved: `type` was always deepenable, `executor` is DERIVED
+ * from `type` by `defaultExecutorForType`, and `materialize` writes
+ * `pf.executor ?? null` (below) without ever consulting that map — so a
+ * titles-first proposal that gained its type on a deepen turn materialized with a
+ * null executor and nothing on the way there said so. The ADR rejects the
+ * alternative repair (seeding the default inside `materialize`) on the record.
+ *
+ * ⚠️ STILL NOT in the set, and deliberately: `targetRepo` / `targetRepoRole` (the
+ * repo pin is part of a leaf's identity and is settled at append; widening here
+ * would give an agent a re-pin the human review surface does not have) and the
+ * ref graph `parentRef` / `blockedByRefs` (which live on the PlanItem row, not in
+ * `proposedFields`, and whose mutability would let a cycle be built inside a
+ * `generating` plan that nothing catches until approve).
  */
 function mergeProposedFields(
   current: PlanItemProposedFields,
@@ -237,6 +253,10 @@ function mergeProposedFields(
   if (input.storyPoints !== undefined) next.storyPoints = input.storyPoints;
   if (input.estimateMinutes !== undefined) next.estimateMinutes = input.estimateMinutes;
   if (input.explanationMd !== undefined) next.explanationMd = input.explanationMd;
+  // AMENDMENT 4 D3a (MOTIR-3089) — the deepen turn's one widening. Sparse like
+  // every key above it: absent leaves the proposal's executor alone, an explicit
+  // `null` clears it back to unassigned.
+  if (input.executor !== undefined) next.executor = input.executor;
   return next;
 }
 
@@ -1720,9 +1740,16 @@ export const plansService = {
    * `markPlanned` closes the frontier, so the plan is `generating`, not
    * `planned`. Identical to `updateProposal` (sparse merge, non-empty title +
    * sizing re-validation, add-only, row-locked one-shot) EXCEPT the legal status
-   * is `generating`. NO WorkItem is created. Reached over the §4 job token via
-   * `aiGenerationService.patchProposal`; the user-facing `updateProposal`
+   * is `generating`. NO WorkItem is created. The user-facing `updateProposal`
    * (`planned`) is unchanged.
+   *
+   * TWO callers now, and neither is the other's fallback:
+   *   • `aiGenerationService.patchProposal` — the §4 job-token seam, which
+   *     resolves the plan by `sourceJobId`.
+   *   • `update_plan_item` (`lib/mcp/tools/authorPlan.ts`, MOTIR-3090) — the
+   *     PAT-authed door, which resolves by `planId` because an MCP-authored plan
+   *     has NO generation job and `findBySourceJobId` would throw
+   *     `NoPlanForJobError` for every one of them.
    */
   async deepenProposal(
     planId: string,
@@ -1795,6 +1822,12 @@ export const plansService = {
     // the plan to `declined` (which the in-transaction status re-read below
     // rejects), and the lifecycle has no path back to `generating`. So no pin the
     // transaction materializes can differ from one resolved here.
+    //
+    // ⚠️ THAT SECOND CLAUSE IS LOAD-BEARING — do not widen `mergeProposedFields`
+    // to carry `targetRepo` without revisiting this snapshot. The deepen turn's
+    // widening (AMENDMENT 4 D3a, MOTIR-3089) was `executor` alone, and one of the
+    // reasons the repo pin was left out is right here: a pin editable on a
+    // `planned` plan would make this pre-transaction resolution non-authoritative.
     const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
 
     // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and

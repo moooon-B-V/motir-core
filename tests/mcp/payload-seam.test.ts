@@ -132,6 +132,8 @@ const DERIVED_TOOLS = new Set<string>([
   // carrying the append's own `planItemIds`.
   'create_plan',
   'add_plan_items',
+  // MOTIR-3090 — the deepen turn, deriving through the same plan shape
+  'update_plan_item',
   'open_plan_session',
   'append_plan_turn',
   'submit_plan_session',

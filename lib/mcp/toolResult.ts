@@ -55,7 +55,14 @@ import {
   SprintNotStartableError,
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
-import { NoPlanForJobError, PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  InvalidProposalError,
+  NoPlanForJobError,
+  PlanItemNotFoundError,
+  PlanNotFoundError,
+  PlanNotGeneratingError,
+  PlanNotInExpectedStatusError,
+} from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
@@ -346,6 +353,29 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof PlanNotFoundError ||
     err instanceof NoPlanForJobError ||
     err instanceof MotirAiError
+  ) {
+    return toolError(err.code, err.message);
+  }
+  // Plan-AUTHORING refusals (MOTIR-3090). The proposal substrate's typed errors
+  // reached MCP for the first time with `add_plan_items` and were never mapped,
+  // so they fell through to the `throw` below and surfaced as an opaque JSON-RPC
+  // internal error — which an agent can only retry blindly. Each one here is
+  // ACTIONABLE and says what to do next:
+  //   · PLAN_ITEM_NOT_FOUND — that id is not a proposal in this plan (a stale
+  //     `planItemIds` entry, or an id from a different plan). 404-not-403 holds:
+  //     the service throws the same error for a cross-tenant id.
+  //   · PLAN_NOT_IN_EXPECTED_STATUS — the plan has moved on. The message NAMES the
+  //     actual status, so `final: true` already sent, or a person already decided
+  //     it, reads as TERMINAL rather than as something to retry.
+  //   · PLAN_NOT_GENERATING — the append twin of the above, from `addProposals`.
+  //   · INVALID_PROPOSAL — a grammar or sizing refusal (an `add`-only rule broken,
+  //     points outside the Fibonacci range, a negative estimate). Fixable by the
+  //     caller in one hop, which is exactly what an opaque 500 prevented.
+  if (
+    err instanceof PlanItemNotFoundError ||
+    err instanceof PlanNotInExpectedStatusError ||
+    err instanceof PlanNotGeneratingError ||
+    err instanceof InvalidProposalError
   ) {
     return toolError(err.code, err.message);
   }

@@ -184,6 +184,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // row governs nothing but the deprecated docs rendering.
   create_plan: 'work_items:write',
   add_plan_items: 'work_items:write',
+  update_plan_item: 'work_items:write',
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',
