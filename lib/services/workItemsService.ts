@@ -93,6 +93,7 @@ import {
   toWorkItemListItemDto,
   toWorkItemTreeRowDto,
   toArchivedWorkItemDto,
+  toWorkItemRepositoryDtos,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
@@ -163,6 +164,7 @@ import type {
   WorkItemValidityDto,
   WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
+  WorkItemRepositoryDto,
 } from '@/lib/dto/workItems';
 import { buildProseVsGraphAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
@@ -4371,8 +4373,15 @@ export const workItemsService = {
         ? null
         : (ancestors.find((a) => a.id === readiness.blockedByAncestorId) ?? null);
 
+    const itemRepositories = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepoRepository.listByWorkItem(item.id, tx),
+    );
+
     return {
-      item: toWorkItemDto(item),
+      // The resolved repository REFERENCES (MOTIR-3041) ride the detail shape,
+      // which is the read that can guarantee the join — the same place
+      // `repoDelivery` already lives, and for the same reason.
+      item: toWorkItemDto(item, itemRepositories),
       ancestors,
       parent: ancestors.at(-1) ?? null,
       children: childRows.map(toWorkItemSummaryDto),
@@ -4553,6 +4562,27 @@ export const workItemsService = {
    * `github_pull_request` policy is workspace-keyed, so an unbound read returns
    * no rows for an item that has them.
    */
+  /**
+   * The item's repositories as RESOLVED REFERENCES (Story MOTIR-2732 ·
+   * MOTIR-3041) — the join rows, in set order, mapped to what they point at.
+   *
+   * A separate read rather than a join on every work-item query, for the reason
+   * `listRepoDelivery` beside it is one: only the surfaces that PUBLISH the field
+   * need it, and `toWorkItemDto` maps a bare row. Read inside a workspace context
+   * because the join table is RLS-gated on a GUC bound only on a transaction — a
+   * singleton read would return an empty list, which is indistinguishable from
+   * "this card has no repositories" and is the worse of the two failures.
+   */
+  async listRepositories(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRepositoryDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepoRepository.listByWorkItem(workItemId, tx),
+    );
+    return toWorkItemRepositoryDtos(rows);
+  },
+
   async listRepoDelivery(
     workItemId: string,
     targetRepos: readonly string[],

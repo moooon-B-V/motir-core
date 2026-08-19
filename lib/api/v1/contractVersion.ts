@@ -79,4 +79,4 @@
  *   new member of a union on a field clients are required to tolerate unknown
  *   members of, with every existing member byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.10.0';
+export const V1_CONTRACT_VERSION = '1.11.0';

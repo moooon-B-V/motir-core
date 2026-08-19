@@ -380,6 +380,21 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // re-ORDER is a real change and shows as one: element 0 is the repository
   // dispatch routes to, so moving it moves where an agent runs.
   targetRepos: listField(),
+  // ⚠️ UNDER THE REFERENCE MODEL THESE STILL STORE **NAMES**, and an old entry
+  // renders VERBATIM (Story MOTIR-2732 · MOTIR-3041, ADR "Amendment 2026-08-18"
+  // §A4.2). Deliberate, and the reason is the point of a History at all:
+  //
+  //   * A cuid tells a reader nothing, and this feed is read by someone auditing
+  //     why a dispatch went to the wrong checkout.
+  //   * A history entry records what was true THEN. Rendering a reference's
+  //     CURRENT name would make an old entry assert something that was not true
+  //     when it was written — worse than the staleness it would be fixing.
+  //   * So no entry is migrated and none needs a special case: they already hold
+  //     names, and they keep rendering exactly as they did.
+  //
+  // The rename property therefore stops at the History on purpose: a rename moves
+  // every LIVE surface and moves nothing about the record of what was decided.
+  // That asymmetry is the decision, not an oversight.
   projectId: textField(),
   // -- body fields: edit recorded, content never inlined --------------------
   descriptionMd: editedField(),

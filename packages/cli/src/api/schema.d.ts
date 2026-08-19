@@ -949,6 +949,14 @@ export interface components {
             sprintId: string | null;
             targetRepo: string | null;
             targetRepos: string[];
+            targetRepositories: {
+                ref: string;
+                name: string;
+                role: string;
+                label: string | null;
+                state: string;
+                primary: boolean;
+            }[];
             executor: ("coding_agent" | "human") | null;
             planningSource: ("native" | "mcp" | "manual" | "api") | null;
             planningHarness: string | null;
@@ -1691,6 +1699,7 @@ export interface operations {
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
                     targetRepos?: string[];
+                    targetRepositories?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };
@@ -2141,6 +2150,7 @@ export interface operations {
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
                     targetRepos?: string[];
+                    targetRepositories?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };
