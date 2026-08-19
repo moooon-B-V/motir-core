@@ -1,0 +1,73 @@
+-- ===========================================================================
+-- BACKFILL the plans Motir's own generator wrote (MOTIR-2996, Epic MOTIR-2200).
+--
+-- `plan.author_source` / `author_harness` landed with MOTIR-2986 nullable, with
+-- no default and NO backfill, because at that moment their only writer was the
+-- `create_plan` MCP tool: every existing plan genuinely had no recorded author,
+-- and NULL was a MEANING (the *unattributed* state the Plans surface draws)
+-- rather than a gap.
+--
+-- MOTIR-2996 changes the premise. `aiGenerationService` and `aiPlanEditsService`
+-- now pass `native` / `Motir` at their `createPlan` call, so from this release
+-- forward a Motir-generated plan RECORDS its author. The rows written before it
+-- would otherwise be the only Motir generations in the table that read as
+-- unattributed — and the surfaces, which stop inferring in the same change,
+-- would render them as though nobody wrote them.
+--
+-- ---------------------------------------------------------------------------
+-- THE PREDICATE IS THE INFERENCE THE SURFACE WAS PERFORMING, APPLIED ONCE
+-- ---------------------------------------------------------------------------
+-- `PlanRow` and `PlanReviewRail` each read *"Motir generated this"* off
+-- `source_job_id != null`. That inference is CORRECT for every row that exists
+-- today — a motir-ai job is the only non-MCP writer of a `Plan` so far — which
+-- is exactly what makes it safe to freeze into a column here. What it is not is
+-- durable: it answers WHICH JOB, and the next producer that writes a plan
+-- without running a job (a template instantiation, an import, a hand-built
+-- plan) would read as unattributed while being nothing of the kind.
+--
+-- So the rule is mechanical and has no judgement in it:
+--
+--   `source_job_id IS NOT NULL` AND `author_source IS NULL`  ⇒  `native` / `Motir`
+--
+-- ---------------------------------------------------------------------------
+-- WHAT IS DELIBERATELY LEFT ALONE
+-- ---------------------------------------------------------------------------
+-- * `source_job_id IS NULL` — genuinely unattributed. Every plan predating both
+--   columns with no job behind it stays NULL, which is the state the surface
+--   renders as nothing at all. Inventing an author for history is the one
+--   outcome worse than showing none.
+-- * `author_source IS NOT NULL` — an MCP-authored plan already says who wrote
+--   it (`mcp · <harness> · <model>`), and an agent-authored plan never carries a
+--   `source_job_id` anyway. The arm is written regardless, because a non-null
+--   stamp means HANDS OFF whatever else is true of the row.
+-- * `author_model` — untouched, and NOT set to anything. motir-core does not
+--   know the planning LLM (`PlanningRun.model` lives in motir-ai) and
+--   `work-item-provenance.md` Decision 6 strips a native model at the read
+--   boundary, so there is no value to write and nothing that could spend one.
+--
+-- Idempotent by construction: the second run matches no rows, because the first
+-- made `author_source` non-null on every row the predicate selects.
+--
+-- ---------------------------------------------------------------------------
+-- NO SCHEMA CHANGE, SO NO DRIFT
+-- ---------------------------------------------------------------------------
+-- This is a DATA migration over columns `20260818130000_plan_authorship`
+-- already added; `prisma/schema.prisma` is unchanged by it and
+-- `prisma migrate diff` reports no difference. RLS is untouched for the same
+-- reason: no new table, no new policy, no new column.
+--
+-- `plan` carries ENABLE + FORCE ROW LEVEL SECURITY with a pure
+-- `app.workspace_id` gate and no escape hatch, so this UPDATE is CROSS-TENANT
+-- only because `migrate deploy` runs on the DDL connection — production's
+-- `DATABASE_URL_UNPOOLED` is the bypassing owner, exactly as it is for
+-- `20260805150000_clear_cancelled_manual_provenance` over `work_item`. It is
+-- deliberately NOT tenant-guarded beyond that: the rule invents nothing and
+-- claims nothing tenant-specific, so it is as correct on a self-hosted database
+-- as on ours, and on a fresh / CI / preview one it matches zero rows.
+-- ===========================================================================
+
+UPDATE "plan"
+SET "author_source" = 'native',
+    "author_harness" = 'Motir'
+WHERE "source_job_id" IS NOT NULL
+  AND "author_source" IS NULL;

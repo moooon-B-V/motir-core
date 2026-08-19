@@ -121,6 +121,23 @@ export const aiGenerationService = {
         // the service, because the cadence path shares that service and its
         // acting user is a substituted credential, not a requester.
         createdById: ctx.userId,
+        // WHO WROTE it (MOTIR-2996). Motir's own generator authored this plan,
+        // so the plan RECORDS `native · Motir` instead of leaving the surface to
+        // infer it from `sourceJobId != null` — an inference that answers WHICH
+        // JOB, and is a proxy for WHO only while a motir-ai job is the sole
+        // non-MCP writer of a `Plan`.
+        //
+        // SERVER-SET at the write seam, exactly as `create_plan` fixes `mcp`
+        // (`agent-authored-plans.md` Q3: the source is never a caller field) —
+        // note there is nothing in `input` this could be read from, and nothing
+        // should be added.
+        //
+        // `authorModel` is deliberately NOT passed: core does not know the
+        // planning LLM (`PlanningRun.model` lives in motir-ai), and
+        // `work-item-provenance.md` Decision 6 strips a native model from the
+        // read boundary anyway, so a value here would be unspendable.
+        authorSource: 'native',
+        authorHarness: 'Motir',
       },
       ctx,
     );

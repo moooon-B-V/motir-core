@@ -41,7 +41,6 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     decidedAt: null,
     decidedByName: null,
     origin: 'user',
-    sourceJobId: null,
     createdByName: null,
     authorSource: null,
     authorHarness: null,

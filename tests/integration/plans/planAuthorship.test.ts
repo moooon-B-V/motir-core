@@ -140,15 +140,18 @@ describe('Plan authorship — the `source · harness · model` triple on a Plan'
     expect(row.authorModel).toBe('claude-opus-5');
   });
 
-  it('leaves all three NULL when the caller supplies none — every shipped producer', async () => {
+  it('leaves all three NULL when the caller supplies none', async () => {
     const fx = await makeWorkItemFixture();
 
-    // This is the shape `aiGenerationService` / `aiPlanEditsService` call with:
-    // generation, augment, expand, replan, contextual and cadence all reach
-    // `createPlan` without the triple and MUST be unaffected by this change.
+    // The SERVICE default, which is what a caller that says nothing gets. It is
+    // no longer the shape any shipped producer calls with: `aiGenerationService`
+    // and `aiPlanEditsService` pass `native` / `Motir` since MOTIR-2996 (asserted
+    // in `tests/ai/aiPlanEditsService.test.ts` and below). What survives here is
+    // the invariant that the columns are OPT-IN — nothing is defaulted from the
+    // context, and a job on the row does not conjure an author.
     const created = await plansService.createPlan(
       fx.projectId,
-      { title: 'A Motir generation', sourceJobId: 'job_1' },
+      { title: 'A plan whose writer said nothing', sourceJobId: 'job_1' },
       fx.ctx,
     );
 
@@ -161,11 +164,10 @@ describe('Plan authorship — the `source · harness · model` triple on a Plan'
     expect(row.authorHarness).toBeNull();
     expect(row.authorModel).toBeNull();
 
-    // The two states the Plans surface has to tell apart (MOTIR-2985) are
-    // BOTH expressible on this row: a generation is `sourceJobId != null` with a
-    // null author (the generator path is not retrofitted here — MOTIR-2996);
-    // *unattributed* is both null. Asserted so the surface card cannot be built
-    // against an `authorSource === 'native'` that no shipped writer produces.
+    // A job on the row does NOT imply an author — the two facts stay orthogonal
+    // in the column even now that every shipped producer writes both. This is
+    // what makes the MOTIR-2996 backfill a migration rather than a service
+    // default: the write seam decides, and history is repaired once.
     expect(row.sourceJobId).toBe('job_1');
   });
 
@@ -240,27 +242,37 @@ describe('Plan attribution reaches BOTH surface reads (MOTIR-2991)', () => {
     expect(review.authorHarness).toBe('Claude Code');
     expect(review.authorModel).toBe('claude-opus-5');
     expect(review.origin).toBe('user');
-    expect(review.sourceJobId).toBeNull();
   });
 
-  it('carries `sourceJobId` so the header can tell Motir-generated from unattributed', async () => {
+  it('tells Motir-generated from unattributed off `authorSource` alone — and no longer ships the job', async () => {
     const fx = await makeWorkItemFixture();
-    // The two states are identical in the authorship columns — both are all-null
-    // — and are told apart ONLY by the job. Without this field on the DTO the
-    // header cannot distinguish them however complete the carrier is.
+    // Before MOTIR-2996 these two states were IDENTICAL in the authorship
+    // columns (both all-null) and were told apart only by `sourceJobId`, which
+    // the DTO carried for that one reader. The generator records its authorship
+    // now, so the distinction is IN the column — and the inference field is gone
+    // rather than left as a second source for the same fact.
     const generated = await plansService.createPlan(
       fx.projectId,
-      { sourceJobId: 'job_1', createdById: fx.ownerId },
+      {
+        sourceJobId: 'job_1',
+        createdById: fx.ownerId,
+        authorSource: 'native',
+        authorHarness: 'Motir',
+      },
       fx.ctx,
     );
     const legacy = await plansService.createPlan(fx.projectId, {}, fx.ctx);
 
     const a = await planReviewService.getPlanReview(generated.id, fx.ctx);
     const b = await planReviewService.getPlanReview(legacy.id, fx.ctx);
-    expect(a.authorSource).toBeNull();
+    expect(a.authorSource).toBe('native');
+    expect(a.authorHarness).toBe('Motir');
+    // Native carries no model: core does not know the planning LLM, and the read
+    // boundary strips one anyway (`work-item-provenance.md` Decision 6).
+    expect(a.authorModel).toBeNull();
     expect(b.authorSource).toBeNull();
-    expect(a.sourceJobId).toBe('job_1');
-    expect(b.sourceJobId).toBeNull();
+    expect(a).not.toHaveProperty('sourceJobId');
+    expect(b).not.toHaveProperty('sourceJobId');
   });
 
   it('reports a cadence plan as origin=cadence with no requester name', async () => {

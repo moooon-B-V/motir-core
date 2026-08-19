@@ -107,8 +107,11 @@ describe('buildPlanRowViews — the row view-model', () => {
     expect(view!.createdByName).toBe(fx.owner.name);
     expect(view!.authorSource).toBe('mcp');
     expect(view!.authorHarness).toBe('Claude Code');
-    expect(view!.sourceJobId).toBe('job_1');
     expect(view!.origin).toBe('user');
+    // …and NOT the job. `sourceJobId` left the view-model with MOTIR-2996: its
+    // only reader was the row's *Motir generated this* inference, which now
+    // reads `authorSource === 'native'` instead.
+    expect(view!).not.toHaveProperty('sourceJobId');
   });
 
   it('makes NO user query at all when no plan on the page has a requester', async () => {
