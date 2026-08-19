@@ -43,6 +43,16 @@ import type { Page } from '@playwright/test';
 // `/api/github/webhook`: the product's own answer to "the repository moved or
 // was renamed on the host". No stub, no direct mirror write.
 //
+// ⚠️ PACING vs THE LANE'S 90s PER-TEST TIMEOUT. `beat()` holds 4s and each
+// chapter holds 2.5s, so the pauses alone are the budget: 9 beats + 6 chapters
+// is 51s of deliberate screen time, and the run lands near 60s — the card's own
+// target, with real headroom under the timeout. An earlier cut ran 17 beats and
+// 89s, which passed locally with one second to spare and TIMED OUT on CI. A
+// beat is spent where the reader needs to take something in — both moments of
+// the follow, the old name and the new one across the rename, the hold and the
+// completion — and nowhere else. Adding beats here is not free; it is the
+// difference between a receipt and a red check.
+//
 // DETERMINISM: every wait is on an authoritative signal — a webhook's own 200
 // plus its result body (the route awaits the full service handling before
 // responding), a service call that has returned, or a rendered committed state.
@@ -246,7 +256,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     // Its ROLE rides beside it: the card says WHAT the repository is, not only
     // which one.
     await expect(card.getByText('web', { exact: true })).toBeVisible();
-    await beat();
   });
 
   // ── 2 — FOLLOW it. The assertion the whole story is for. ──────────────────
@@ -275,7 +284,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     await expect(page).toHaveURL(new RegExp(`peek=${oneRepo.identifier}`));
     const peek = page.getByRole('dialog');
     await expect(peek).toBeVisible();
-    await beat();
     // Scoped to the peek's RAIL: the name also appears in the Development
     // section below, which is the feature working, not a duplicate to dedupe.
     const peekRail = peek.locator('dl').first();
@@ -288,7 +296,6 @@ test('a repository is a link you can follow, and a rename does not break the car
   await chapter('Rename the repository — the card follows it', async () => {
     await page.goto(`/items/${oneRepo.identifier}`);
     await expect(repositoriesCard(page).getByRole('link', { name: E2E_REPO.name })).toBeVisible();
-    await beat();
 
     // The product's own answer to "it moved or was renamed on the host": a real
     // signed `repository` delivery through the real webhook route.
@@ -322,7 +329,6 @@ test('a repository is a link you can follow, and a rename does not break the car
       new RegExp(`/settings/project/repositories#${RENAMED}`),
     );
     await beat();
-    await beat();
   });
 
   // ── 5 — a repository that does not exist yet reads as exactly that ────────
@@ -334,7 +340,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     // could open, and a proposed row has no default branch to open one against —
     // the reader's next action is the establish step, somewhere else entirely.
     await expect(card.getByText('Not created', { exact: true }).first()).toBeVisible();
-    await beat();
     await expect(page.getByText('Repository not created yet')).toBeVisible();
     await expect(page.getByText('No pull request yet')).toHaveCount(0);
     await beat();
@@ -346,7 +351,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     const card = repositoriesCard(page);
     await expect(card.getByRole('link', { name: RENAMED })).toBeVisible();
     await expect(card.getByRole('link', { name: E2E_REPO_SECOND.name })).toBeVisible();
-    await beat();
 
     await deliver(page, {
       action: 'opened',
@@ -367,7 +371,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     await page.goto(`/items/${twoRepo.identifier}`);
     await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
     await beat();
-    await beat();
 
     await deliver(page, {
       action: 'opened',
@@ -386,7 +389,6 @@ test('a repository is a link you can follow, and a rename does not break the car
     });
     await page.goto(`/items/${twoRepo.identifier}`);
     await expect(statusCard(page).getByText('Done', { exact: true })).toBeVisible();
-    await beat();
     await beat();
   });
 });
