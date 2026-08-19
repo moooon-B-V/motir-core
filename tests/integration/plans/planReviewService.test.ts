@@ -136,6 +136,62 @@ describe('planReviewService.getPlanReview', () => {
     });
   });
 
+  it('surfaces a rewritten EXPLANATION in the change preview so the approver SEES it (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card whose WHY moved');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { explanationMd: 'The rationale as first planned.' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-explain plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { explanationMd: 'The rationale the re-scope leaves behind.' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    // Long prose, so the cell says only THAT it moved — the same treatment the
+    // description gets. It is listed at all because the explanation is the half a
+    // reviewer reads to decide whether a proposed re-shape is right; a `modify`
+    // that rewrote it invisibly would defeat the point of the review surface.
+    expect(modify.changes.find((c) => c.field === 'explanation')).toEqual({
+      field: 'explanation',
+      from: null,
+      to: 'updated',
+    });
+  });
+
+  it('says NOTHING about the explanation when the patch does not carry one (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card whose WHY stands');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { explanationMd: 'Still right.' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-title plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { title: 'A new title' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes.map((c) => c.field)).toEqual(['title']);
+  });
+
   it('resolves the decider name + an approved history event after approve', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Tiny plan' }, fx.ctx);
