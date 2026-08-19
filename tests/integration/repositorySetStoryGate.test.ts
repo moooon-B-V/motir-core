@@ -170,8 +170,12 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
 
     await open(CORE, 1);
     expect(await merge(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    // Held, NOT done — which is this test's claim. The status the hold leaves it
+    // at is `implemented` since MOTIR-2999: an opened pull request says the code
+    // is pushed, and only a green build makes it reviewable. No check ever
+    // reported here, so it is still where the delivery left it.
     expect((await adminDb.workItem.findUnique({ where: { id: item.id } }))!.status).toBe(
-      'in_review',
+      'implemented',
     );
 
     await open(AI, 2);
@@ -218,7 +222,10 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
       { repo: 'motir-ai', state: 'awaiting', primary: false },
     ]);
     // …and the gate's, which is HOLDING the card. They name the same repository.
-    expect(row!.status).toBe('in_review');
+    // `implemented` rather than `in_review` since MOTIR-2999 — the pull request
+    // is open and no build has reported, so the card is delivered but not yet
+    // reviewable. What matters to this test is that it is not `done`.
+    expect(row!.status).toBe('implemented');
     expect(delivery.filter((d) => d.state !== 'delivered').map((d) => d.repo)).toEqual([
       'motir-ai',
     ]);

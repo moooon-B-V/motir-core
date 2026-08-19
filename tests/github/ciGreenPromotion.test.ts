@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { promoteDeliveredCardsOnGreen, promoteIfCiAlreadyGreen } from '@/lib/services/ciPromotion';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -435,5 +436,121 @@ describe('idempotence — the two edges never promote twice', () => {
 
     expect(await statusOf(item.id)).toBe('in_review');
     expect(await revisionCount(item.id)).toBe(afterLatch);
+  });
+});
+
+describe('a card the promotion CANNOT move is skipped, not fatal', () => {
+  it('a project with no `in_review` loses only its own card — the siblings still promote', async () => {
+    // A workspace may hold a project on a CUSTOM workflow that has no
+    // `in_review` at all, and a run's session branch can carry cards from both.
+    // The rule is the one `completeSession` already applies to a close-out: a
+    // per-card refusal is a skip, so one unpromotable card cannot strand the
+    // rest of the run at Implemented.
+    const s = await makeScenario('ci-refused@example.com');
+    const custom = await projectsService.createProject({
+      workspaceId: s.workspace.id,
+      actorUserId: s.user.id,
+      name: 'Custom',
+      identifier: 'CUST',
+    });
+    // The custom workflow's review column is called something else, which is all
+    // it takes: the target status does not exist for this project.
+    await adminDb.workflowStatus.updateMany({
+      where: { projectId: custom.id, key: 'in_review' },
+      data: { key: 'code_review' },
+    });
+
+    const branch = 'motir/auto-20260819-050000';
+    const ordinary = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Ordinary workflow' },
+      s.ctx,
+    );
+    const refused = await workItemsService.createWorkItem(
+      { projectId: custom.id, kind: 'task', title: 'Custom workflow' },
+      s.ctx,
+    );
+    for (const item of [ordinary, refused]) {
+      await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+      await workItemsService.markIntegrated(item.id, branch, s.ctx);
+      expect(await statusOf(item.id)).toBe('implemented');
+    }
+    await openPr(branch, 23);
+    const before = await revisionCount(refused.id);
+
+    // The green still reports normally — a skipped card is not a failed webhook.
+    await ci({ conclusion: 'success', headSha: 'sha-r', prNumbers: [23] });
+
+    expect(await statusOf(ordinary.id)).toBe('in_review');
+    expect(await statusOf(refused.id)).toBe('implemented');
+    // …and it was SKIPPED, not moved somewhere else: nothing was written for it.
+    expect(await revisionCount(refused.id)).toBe(before);
+  });
+
+  it('a workflow with no EDGE to in_review is skipped the same way', async () => {
+    // The second tolerated refusal: the status exists, but this project's
+    // workflow has no `implemented → in_review` transition. Both refusals are
+    // the project's own answer about its own card, and neither is a fault of
+    // the run — so both skip rather than throw.
+    const s = await makeScenario('ci-noedge@example.com');
+    const edgeless = await projectsService.createProject({
+      workspaceId: s.workspace.id,
+      actorUserId: s.user.id,
+      name: 'Edgeless',
+      identifier: 'EDGE',
+    });
+    const from = await adminDb.workflowStatus.findFirstOrThrow({
+      where: { projectId: edgeless.id, key: 'implemented' },
+    });
+    const to = await adminDb.workflowStatus.findFirstOrThrow({
+      where: { projectId: edgeless.id, key: 'in_review' },
+    });
+    await adminDb.workflowTransition.deleteMany({
+      where: { projectId: edgeless.id, fromStatusId: from.id, toStatusId: to.id },
+    });
+
+    const branch = 'motir/auto-20260819-060000';
+    const ordinary = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Ordinary workflow' },
+      s.ctx,
+    );
+    const refused = await workItemsService.createWorkItem(
+      { projectId: edgeless.id, kind: 'task', title: 'No edge to review' },
+      s.ctx,
+    );
+    for (const item of [ordinary, refused]) {
+      await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+      await workItemsService.markIntegrated(item.id, branch, s.ctx);
+    }
+    await openPr(branch, 24);
+
+    await ci({ conclusion: 'success', headSha: 'sha-e', prNumbers: [24] });
+
+    expect(await statusOf(ordinary.id)).toBe('in_review');
+    expect(await statusOf(refused.id)).toBe('implemented');
+  });
+});
+
+describe('a row that is GONE by the time the promotion runs', () => {
+  // Both edges run AFTER their transaction has committed, so the world can have
+  // moved on: the pull request row can be deleted (a repository disconnected,
+  // an installation removed) and the card can be archived away. Neither may
+  // throw — a promotion that raises here turns a recorded verdict into a webhook
+  // GitHub retries forever, and a card's own transition into a 500.
+  it('a change request that no longer exists promotes nothing, quietly', async () => {
+    const s = await makeScenario('gone-pr@example.com');
+
+    const promoted = await promoteDeliveredCardsOnGreen({
+      changeRequestId: 'no-such-change-request',
+      workspaceId: s.workspace.id,
+      actorUserId: s.user.id,
+    });
+
+    expect(promoted).toEqual([]);
+  });
+
+  it('a work item that no longer exists latches nothing, quietly', async () => {
+    const s = await makeScenario('gone-item@example.com');
+
+    await expect(promoteIfCiAlreadyGreen('no-such-work-item', s.ctx)).resolves.toBe(false);
   });
 });

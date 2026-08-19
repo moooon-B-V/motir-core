@@ -2,7 +2,6 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
@@ -43,6 +42,16 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 // SUPERSEDED sha loses to the newer push's rows (not promoted). Re-deriving any
 // of them here would be a second opinion that could drift from the pill a person
 // reads on the Development surface.
+
+/**
+ * The refusals a promotion TOLERATES, per card.
+ *
+ * Each is a legitimate answer from a project's own workflow or permissions —
+ * a custom workflow with no `in_review`, a missing edge to it, an actor without
+ * edit rights there — and none of them says anything about the OTHER cards the
+ * same run delivered. Anything not on this list is a real fault and is rethrown.
+ */
+const SKIPPABLE = [IllegalTransitionError, UnknownStatusError, ProjectAccessDeniedError];
 
 /** The ONLY status a promotion moves a card out of. */
 const SOURCE_STATUS = 'implemented';
@@ -151,35 +160,14 @@ async function promoteEach(
       await workItemsService.updateStatus(id, TARGET_STATUS, ctx);
       promoted.push(id);
     } catch (err) {
-      if (
-        err instanceof IllegalTransitionError ||
-        err instanceof UnknownStatusError ||
-        err instanceof ProjectAccessDeniedError
-      ) {
-        console.warn('[ciPromotion] skipped a card CI green could not promote', {
-          workItemId: id,
-          error: err.message,
-        });
-        continue;
-      }
-      throw err;
+      if (!SKIPPABLE.some((kind) => err instanceof kind)) throw err;
+      console.warn('[ciPromotion] skipped a card CI green could not promote', {
+        workItemId: id,
+        // Every member of SKIPPABLE extends Error, which the `.some()` above
+        // cannot tell the compiler.
+        error: (err as Error).message,
+      });
     }
   }
   return promoted;
-}
-
-/**
- * The workspace OWNER, as the actor for a promotion nobody authored.
- *
- * A CI verdict carries no user, exactly as a CI feedback comment does not — so
- * the promotion is attributed the same way that path already attributes its
- * comment, and the activity feed reads a real status change with a legible actor
- * rather than a null one.
- */
-export async function ciPromotionActor(workspaceId: string): Promise<string | null> {
-  return withSystemContext(async (tx) => {
-    await bindWorkspaceContext(tx, workspaceId);
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
-    return owner?.userId ?? null;
-  });
 }

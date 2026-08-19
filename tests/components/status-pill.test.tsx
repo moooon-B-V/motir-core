@@ -115,6 +115,27 @@ describe('the rendered chip', () => {
     expect(chip.className).toContain('--el-chip-bg');
     expect(chip.querySelector('svg')).toBeNull();
   });
+
+  it('carries a caller\u2019s layout class through BOTH the toned and the neutral chip', () => {
+    // The callers that pass one are the dense surfaces — a relationships row and
+    // a child row both need `shrink-0` on the chip or it squeezes to nothing.
+    // It has to survive whichever branch the status resolves to.
+    render(
+      <>
+        <StatusPill
+          statusKey="implemented"
+          category="in_progress"
+          label="Implemented"
+          className="shrink-0"
+        />
+        <StatusPill statusKey="gone" category={null} label="gone" className="shrink-0" />
+      </>,
+    );
+    expect(chipFor('Implemented').className).toContain('shrink-0');
+    expect(chipFor('gone').className).toContain('shrink-0');
+    // …and it is ADDED to the tone, never a replacement for it.
+    expect(chipFor('Implemented').className).toContain('var(--el-status-implemented)');
+  });
 });
 
 describe('the list cell renders the same chip as everywhere else', () => {

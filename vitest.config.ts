@@ -1169,6 +1169,29 @@ export default defineConfig({
         'lib/mcp/tools/authorPlan.ts',
         'app/**/plans/planRowView.ts',
         'app/**/plans/_components/PlanRow.tsx',
+
+        // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
+        // The story's decision code, in one place: what a pull request delivers
+        // (`changeRequestWorkItems`), what a green build promotes (`ciPromotion`),
+        // the workflow the whole thing is expressed in (`defaultWorkflow`, and the
+        // token map that paints it), and the one chip that tells Implemented apart
+        // from the three statuses it shares a category with (`StatusPill`).
+        // All five are new or newly-decisive in this story and all five are GATED
+        // in `thresholds` below, measured first (the sequence this block
+        // prescribes throughout).
+        //
+        // ⚠️ The story ALSO changed `changeRequestStatusSync`, `changeRequestCiFeedback`
+        // and `githubWebhookService`, which are NOT listed here. Those are large
+        // pre-existing files this story widened, and `workItemsService.ts` — the
+        // one it changed that IS gated — is already in `include` above. Adding the
+        // other three would gate this story on code no card here wrote, which is
+        // the trap the `aiBoundaryService.ts` note names: it ends with someone
+        // loosening a threshold to make a build pass.
+        'lib/services/ciPromotion.ts',
+        'lib/services/changeRequestWorkItems.ts',
+        'lib/workflows/defaultWorkflow.ts',
+        'lib/workflows/statusColor.ts',
+        'components/issues/StatusPill.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2246,6 +2269,31 @@ export default defineConfig({
         'lib/mcp/tools/authorPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/planRowView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanRow.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
+        // (see the `include` note above for why these five and not the three
+        // pre-existing files the story also widened). MEASURED on this branch
+        // first, with `tests/workflows/`, `tests/github/ciGreenPromotion`,
+        // `tests/github/changeRequestSessionCloseOut`,
+        // `tests/components/status-pill` and
+        // `tests/integration/implemented-lifecycle`:
+        //
+        //   lib/services/ciPromotion.ts            97.5 stmts · 94.44 branch · 100 fn · 100 lines
+        //   lib/services/changeRequestWorkItems.ts  100 · 100 · 100 · 100
+        //   lib/workflows/defaultWorkflow.ts        100 · 100 · 100 · 100
+        //   lib/workflows/statusColor.ts            100 · 100 · 100 · 100
+        //   components/issues/StatusPill.tsx        100 · 100 · 100 · 100
+        //
+        // `ciPromotion`'s one uncovered branch is the rethrow of an error that is
+        // NOT one of the three refusals a per-card skip tolerates — reachable
+        // only by injecting a fault into the shipped service, which would assert
+        // the mock rather than the code. Pinned at the 90 floor rather than at
+        // the measured number, so a later refactor has room without anyone
+        // loosening a gate to make a build pass.
+        'lib/services/ciPromotion.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/changeRequestWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workflows/defaultWorkflow.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workflows/statusColor.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/issues/StatusPill.tsx': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
