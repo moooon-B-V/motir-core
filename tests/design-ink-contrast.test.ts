@@ -2,15 +2,17 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  FAINT_CLASS,
   MUTED_CLASS,
   SAFE_SURFACE_TOKENS,
   TINTED_SURFACE_TOKENS,
+  counted,
   formatMockFinding,
   scanMock,
   violations,
 } from './theme/inkContrastMockScan';
 
-// MOTIR-3014 — the ink-contrast guard, pointed at the DESIGN ASSETS.
+// MOTIR-3014 / MOTIR-3054 — the ink-contrast guard, pointed at the DESIGN ASSETS.
 //
 // ── Why this exists ─────────────────────────────────────────────────────────
 // `tests/theme/inkContrastLint.test.ts` scans `components/**`, `app/**`,
@@ -28,13 +30,17 @@ import {
 // and violated anyway is a rule nothing measures.
 //
 // ── What is enforced, and what is not ───────────────────────────────────────
-// `inkContrastMockScan`'s header carries both boundaries in full. One line
-// each: the UTILITY-CLASS layer (`text-(--el-text-muted)` written on the
-// element) is enforced at zero across the whole tree; the mock's own `<style>`
-// block is READ, so the surface walk is accurate, but not RULED on — it paints
-// the board chrome as well as the product surface, and nothing in the markup
-// tells them apart. The last describe below asserts that second population is
-// non-empty, so the boundary cannot quietly outlive its subject.
+// `inkContrastMockScan`'s header carries both in full. One line each: the MUTED
+// arm is enforced at zero across the whole tree, over BOTH layers a mock paints
+// in — the `text-(--el-text-muted)` utility written on the element AND the
+// mock's own `<style>` block. MOTIR-3014 shipped enforcing only the first and
+// declined the second (277 findings, 51 files) pending a decision about whether
+// a design board's own chrome owes AA; MOTIR-3054 decided it does
+// (`docs/decisions/design-board-chrome-aa.md`), swept all 277, and removed the
+// filter. The FAINT arm is COUNTED and not ruled on — 1745 findings across 101
+// files, declined for SIZE and nothing else, owned by MOTIR-3068. The last
+// describe below asserts that population is non-empty, so the one remaining
+// boundary cannot quietly outlive its subject.
 //
 // ── This spec belongs to the `design/*` lane ────────────────────────────────
 // It reads `design/**` and nothing else, so a `design/*` branch — where the
@@ -146,15 +152,31 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
     expect(found.map((f) => f.surface)).toEqual(['--el-surface']);
   });
 
-  it('does not rule on ink the stylesheet declares — it only counts it', () => {
-    // Boundary (2) in the scanner's header, asserted from both sides: the
-    // finding is SEEN (so the census is real) and does not FAIL the guard.
-    const all = scan(
-      `<div class="bg-(--el-surface)"><p class="note">x</p></div>`,
-      `.note { color: var(--el-text-muted); }`,
+  it('rules on ink the stylesheet declares, exactly as it rules on the utility class', () => {
+    // MOTIR-3054 removed the `via === 'class'` filter this fixture used to
+    // assert the other way round. The layer an ink is WRITTEN in changes
+    // nothing about the pixels it puts on screen, so it changes nothing about
+    // the verdict — and 51 of the tree's assets painted the failing pair from
+    // here rather than from a class.
+    const found = violations(
+      scan(
+        `<div class="bg-(--el-surface)"><p class="note">x</p></div>`,
+        `.note { color: var(--el-text-muted); }`,
+      ),
     );
-    expect(all.map((f) => f.via)).toEqual(['stylesheet']);
-    expect(violations(all)).toEqual([]);
+    expect(found.map((f) => f.via)).toEqual(['stylesheet']);
+    expect(found.map((f) => f.surface)).toEqual(['--el-surface']);
+  });
+
+  it('rules on ink an inline style attribute declares', () => {
+    // The third way a mock writes an ink, and 15 of the 277 sites MOTIR-3054
+    // swept were this one. It is reported as `stylesheet` rather than as a
+    // fourth `via`: what that field records is whether the ink is in the
+    // Tailwind-shaped layer a mock is supposed to be built from.
+    const found = violations(
+      scan(`<div class="bg-(--el-muted)"><p style="color: var(--el-text-muted)">x</p></div>`),
+    );
+    expect(found.map((f) => f.via)).toEqual(['stylesheet']);
   });
 
   it('takes the two exemptions 1.4.3 actually grants, and no others', () => {
@@ -219,24 +241,51 @@ describe('design ink-contrast — --el-text-muted carries no text over a TINTED 
   });
 });
 
-describe('design ink-contrast — the declined half is real, and is not shrinking silently', () => {
-  it('still finds muted ink the mocks’ own stylesheets declare', () => {
-    // Boundary (2) of the scanner's header, kept honest. That population is
-    // 277 findings across 51 files, dominated by the board chrome a mock is
-    // PRESENTED on rather than the surface it specifies — the fold
-    // measurements, the panel captions, the numbered annotations. Deciding
-    // whether a design board's own annotations owe AA is a question about what
-    // the artefact IS, and it is not this guard's to settle.
+describe('design ink-contrast — the FAINT arm is counted, and its subject still exists', () => {
+  it('still finds faint ink the mocks carry', () => {
+    // The scanner header's one remaining boundary, kept honest. That population
+    // is 1745 findings across 101 files, dominated by the uppercase micro-label
+    // idiom (`.panel-label` alone is 519), and it is declined for SIZE — not
+    // because a design board's chrome is outside the product's contract, which
+    // MOTIR-3054 settled the other way.
     //
-    // The assertion is that the population EXISTS. If a later sweep empties it,
-    // this fails — which is the intended outcome: the boundary above should be
-    // reconsidered on the day it stops having a subject, not silently kept.
-    const declined = FINDINGS.filter((finding) => finding.via === 'stylesheet');
+    // The assertion is that the population EXISTS. If MOTIR-3068 empties it,
+    // this fails — which is the intended outcome: the boundary should be
+    // deleted on the day it stops having a subject, not silently kept.
     expect(
-      declined.length,
-      'The stylesheet-declared population is empty. If a sweep cleared it, promote the ' +
-        'stylesheet layer into `violations()` and delete boundary (2) from ' +
-        '`inkContrastMockScan.ts` — the exemption has outlived its subject.',
+      counted(FINDINGS).length,
+      'The faint population is empty. If a sweep cleared it, promote the faint arm into ' +
+        '`violations()` and delete the remaining boundary from `inkContrastMockScan.ts` — ' +
+        'the decline has outlived its subject (MOTIR-3068).',
     ).toBeGreaterThan(0);
+  });
+
+  it('counts faint ink from both layers, and takes the same two exemptions', () => {
+    // The counted arm is a measurement somebody will act on, so its own
+    // classification is exercised rather than assumed. No surface walk: faint
+    // is 2.37–2.61:1 against every surface in the table, so nothing under it
+    // changes the answer.
+    const wrap = (body: string, style = '') =>
+      `<!doctype html><html><head><style>${style}</style></head><body>${body}</body></html>`;
+    const scan = (body: string, style = '') => scanMock('fixture.mock.html', wrap(body, style));
+
+    expect(counted(scan(`<p class="${FAINT_CLASS}">x</p>`)).map((f) => f.via)).toEqual(['class']);
+    expect(
+      counted(scan(`<p class="cap">x</p>`, `.cap { color: var(--el-text-faint); }`)).map(
+        (f) => f.via,
+      ),
+    ).toEqual(['stylesheet']);
+    expect(
+      counted(scan(`<div class="bg-(--el-card)"><p class="${FAINT_CLASS}">x</p></div>`)).map(
+        (f) => f.surface,
+      ),
+      'no surface rescues faint, so none is resolved',
+    ).toEqual([null]);
+    expect(counted(scan(`<p class="${FAINT_CLASS}" aria-hidden="true">x</p>`))).toEqual([]);
+    expect(counted(scan(`<p class="${FAINT_CLASS}" disabled>x</p>`))).toEqual([]);
+    expect(
+      counted(scan(`<span class="${FAINT_CLASS}"><svg aria-hidden="true"></svg></span>`)),
+      'a container that paints no text of its own is not a text finding',
+    ).toEqual([]);
   });
 });
