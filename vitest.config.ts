@@ -1,8 +1,14 @@
-import { defineConfig } from 'vitest/config';
+import { defaultExclude, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { TEST_DB_WORKERS } from './tests/helpers/parallelDb';
+// MOTIR-3144 — the structural-guard lane's membership. Imported rather than
+// restated so this config's `exclude` and that config's `include` cannot drift.
+// ⚠️ Spelling `defaultExclude` back in is required: supplying `exclude` REPLACES
+// Vitest's default, so omitting it would put `node_modules` and `dist` back into
+// the run.
+import { STRUCTURAL_GUARD_SPECS } from './tests/helpers/structuralGuardLane';
 
 // Load .env into process.env before Vitest evaluates the test files. Next.js
 // does this automatically at runtime; Vitest does not. Without this load,
@@ -51,6 +57,27 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // MOTIR-3144 — the whole-tree structural guards run in their OWN job
+    // (`vitest.guards.config.ts`, `structural-guards` in `ci.yml`), not here.
+    //
+    // They parse `lib/` + `app/` through the TypeScript compiler API and touch
+    // no database. Inside this run they were competing for CPU with the suites
+    // that make it slow, under v8 coverage instrumentation, on a 15 s
+    // `testTimeout` sized for a query — and they timed out for reasons that had
+    // nothing to do with what they check. `bare-transaction-guard` cost 8.1 s
+    // alone and blew a 120 s hook budget on CI twice in a row.
+    //
+    // ⚠️ This is an EXCLUDE, not a duplicate. Unlike the design-asset lane —
+    // whose specs stay in this list because that lane exists to run them on
+    // MORE branches — the point here is that these stop executing in the
+    // sharded job. The one list lives in `vitest.guards.config.ts` so the two
+    // cannot drift, and `tests/ci-structural-guards-lane.test.ts` fails if a
+    // whole-tree guard is missing from it.
+    //
+    // Locally: `pnpm test:guards`. They contribute no coverage to any gated
+    // file (not one imports from `lib/` or `app/`), so the merged report is
+    // unchanged by their absence.
+    exclude: [...defaultExclude, ...STRUCTURAL_GUARD_SPECS],
     // Per-worker database isolation (Story 10.4.1). `globalDb` clones the
     // migrated base DB into one `…_test_wN` database PER worker before any
     // worker forks; `perWorkerDb` (FIRST setupFile — must run before

@@ -1,7 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TEST_RATE_LIMIT_STORE_TIMEOUT_MS } from '../helpers/rateLimitStore';
+// ⚠️ From `rateLimitStoreDeadline`, NOT from `rateLimitStore` — this file is a
+// filesystem scanner in the structural-guard lane, and the helper reaches
+// `@/lib/db` transitively, which throws without a DATABASE_URL (MOTIR-3144).
+import { TEST_RATE_LIMIT_STORE_TIMEOUT_MS } from '../helpers/rateLimitStoreDeadline';
 
 // The anti-recurrence guard for MOTIR-2658 / MOTIR-3067 — the STORE-DEADLINE
 // class, sibling to the epoch-window class `tests/api/v1/rate-limit-window-alignment.test.ts`
