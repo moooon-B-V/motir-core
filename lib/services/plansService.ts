@@ -815,18 +815,14 @@ async function materialize(
       // `null` exactly as it did before the field existed (the shipped resolver's
       // single-repo fallback still serves those projects unchanged).
       targetRepo: repoPins.get(item.id) ?? null,
-      // The PORTABLE half of the same pin (MOTIR-1912) — validated against the
-      // role vocabulary before the transaction opened, and RECORDED here rather
-      // than resolved: `proposeRepositorySet` runs AFTER this transaction commits
-      // and writes rows in state `proposed`, so on the onboarding path there is no
-      // ESTABLISHED row for a role to resolve against at materialize (ADR §5.3
-      // would make every role resolve to `null`). Storing it is what lets the
-      // resolution happen at the moment a row actually becomes established
-      // (MOTIR-1913). Independent of `targetRepo`: a proposal carrying BOTH keeps
-      // the settled NAME as its pin (§5.4) and still records the role, so the two
-      // never disagree about where the item ships.
-      targetRepoRole: (pf.targetRepoRole ??
-        null) as Prisma.WorkItemUncheckedCreateInput['targetRepoRole'],
+      // ⚠️ `targetRepoRole` IS GONE FROM `work_item` (Story MOTIR-2732 ·
+      // MOTIR-3040, ADR "Amendment 2026-08-18" §A3's RETIRE branch). The role was
+      // the PORTABLE stand-in a plan recorded because a NAME is meaningless before
+      // the repository exists — and a row REFERENCE is not, so the proposal's role
+      // is resolved to a reference above (`proposalRepoRef`) and nothing is stored
+      // on the item. `PlanItemProposedFields.targetRepoRole` still exists and is
+      // still how a plan pins before any row exists; it simply no longer survives
+      // onto the work item as a second way to say where a card ships.
       position,
       backlogRank,
     };
@@ -1256,21 +1252,11 @@ async function applyModify(
     }
   }
   // RE-PIN / UNPIN the repo ROLE (MOTIR-1912) — the same sparse contract as the
-  // name above: the key PRESENT is what distinguishes "leave it alone" from
-  // "unpin it", and the value was validated against the vocabulary before the
-  // transaction opened. Deliberately NOT recorded in the revision `diff`: a role
-  // is planner plumbing that has not yet resolved to anything the reader can act
-  // on, and the resolution that follows writes `targetRepo`, which IS diffed — so
-  // the History feed reports the repo an item moved to, once that is a fact,
-  // rather than announcing an intention twice. Same judgement (and same reason —
-  // no renderer disposition, no invented label) the shipped `explanationSource`
-  // metadata column is given on the `add` path.
-  if (patch.targetRepoRole !== undefined) {
-    const nextRole = patch.targetRepoRole ?? null;
-    if (nextRole !== current.targetRepoRole) {
-      update.targetRepoRole = nextRole as Prisma.WorkItemUncheckedUpdateInput['targetRepoRole'];
-    }
-  }
+  // name above. ⚠️ The ROLE no longer lands on the work item at all (MOTIR-3040,
+  // §A3's RETIRE branch): a `modify` carrying `targetRepoRole` re-pins the card by
+  // resolving that role to a REFERENCE — done above, beside the name — and there
+  // is no column left for it to also be recorded in. The plan keeps the field;
+  // the work item does not.
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);
   }

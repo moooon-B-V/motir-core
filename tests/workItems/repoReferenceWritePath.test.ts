@@ -479,15 +479,26 @@ describe('the MIGRATION backfill', () => {
             .trim(),
         )
         .filter((s) => s.startsWith('WITH') && s.includes('INSERT INTO "work_item_repository"'))
+        // ⚠️ PASS 1 ONLY. Pass 2 resolves a ROLE and reads
+        // `work_item.targetRepoRole` — a column MOTIR-3040's LATER migration
+        // drops. In the migration SEQUENCE pass 2 runs before that drop and reads
+        // it normally; replayed here, against the FINAL schema, it raises
+        // `42703: column does not exist`. The ordering is the guarantee (§A7
+        // states it), and a test standing at the end of the sequence cannot reach
+        // a column the sequence removes — so this replays the NAME pass, which is
+        // the half still reachable, rather than pretending to cover both.
+        .filter((s) => !s.includes('targetRepoRole'))
         .map((s) => `${s};`)
     );
   }
 
-  it('reads TWO backfill passes off the shipped migration', () => {
-    expect(backfillStatements()).toHaveLength(2);
+  it('reads the REPLAYABLE backfill pass off the shipped migration', () => {
+    // One of the migration's two passes is replayable against the final schema —
+    // see the note in `backfillStatements`.
+    expect(backfillStatements()).toHaveLength(1);
   });
 
-  it('resolves names to rows, recovers a role-only pin, and leaves an unresolvable string alone', async () => {
+  it('resolves names to rows, and leaves an unresolvable string alone', async () => {
     const fx = await makeWorkItemFixture();
     const core = await addRepoRow({ fx, name: 'motir-core', role: 'web' });
     const ai = await addRepoRow({ fx, name: 'motir-ai', role: 'api' });
@@ -508,10 +519,6 @@ describe('the MIGRATION backfill', () => {
       { targetRepo: 'motir-ai', targetRepos: ['motir-ai', 'motir-core'] },
       'Two names',
     );
-    const roleOnly = await seed(
-      { targetRepo: null, targetRepos: [], targetRepoRole: 'api' },
-      'Role only',
-    );
     const unresolvable = await seed(
       { targetRepo: 'not-in-this-project', targetRepos: ['not-in-this-project'] },
       'Unresolvable',
@@ -526,9 +533,12 @@ describe('the MIGRATION backfill', () => {
       { position: 0, projectRepoId: ai.id },
       { position: 1, projectRepoId: core.id },
     ]);
-    // Pass 2 — the role, resolved to the single row carrying it. This is the item
-    // the NAME model had to leave unrouted until a background pass ran.
-    expect(await refs(roleOnly)).toEqual([{ position: 0, projectRepoId: ai.id }]);
+    // ⚠️ Pass 2 (the ROLE) is NOT exercised here any more, and it is not dead.
+    // `work_item.targetRepoRole` was dropped by MOTIR-3040's later migration, so
+    // against the FINAL schema there is no column to seed — while in the migration
+    // SEQUENCE pass 2 runs before that drop and reads it normally. The ordering is
+    // the guarantee (§A7 names it explicitly); a test at the end of the sequence
+    // cannot reach a column the sequence removes.
     // A string that resolves to no row of this project is a FINDING, not a
     // no-op: no reference is invented, and the column keeps its value so the card
     // dispatches exactly as it did.
@@ -536,30 +546,12 @@ describe('the MIGRATION backfill', () => {
     expect(await names(unresolvable)).toMatchObject({ targetRepo: 'not-in-this-project' });
   });
 
-  it('does NOT resolve an AMBIGUOUS role — two rows share it, so there is nothing to pick', async () => {
-    // ADR `project-repository-set.md` §5.3: an ambiguous role resolves to nothing
-    // rather than to an arbitrary row, counted over rows in ANY state so the
-    // verdict is a property of the SET and not of run order.
-    const fx = await makeWorkItemFixture();
-    await addRepoRow({ fx, name: 'billing-api', role: 'api' });
-    await addRepoRow({ fx, name: 'search-api', role: 'api', realized: false });
-
-    const item = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Ambiguous role', assigneeId: null },
-      fx.ctx,
-    );
-    await adminDb.workItem.update({
-      where: { id: item.id },
-      data: { targetRepo: null, targetRepos: [], targetRepoRole: 'api' },
-    });
-    await adminDb.workItemRepo.deleteMany({ where: { workItemId: item.id } });
-
-    for (const statement of backfillStatements()) {
-      await adminDb.$executeRawUnsafe(statement);
-    }
-
-    expect(await refs(item.id)).toEqual([]);
-  });
+  // The AMBIGUOUS-role case that lived here is removed for the same reason as
+  // pass 2 above: it seeded `work_item.targetRepoRole`, and MOTIR-3040's later
+  // migration drops that column, so the case is unreachable against the final
+  // schema. §5.3's rule it asserted — a role carried by two rows resolves to
+  // NOTHING — is still enforced, and is asserted where it now lives: on
+  // `proposalRepoRef` via `tests/integration/plans/materializeRepoReferences.test.ts`.
 });
 
 describe('RLS on work_item_repository', () => {

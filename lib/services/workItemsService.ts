@@ -189,7 +189,7 @@ import {
   resolveAuthoredRepoPinsInProject,
   resolveAuthoredRepoRefsInProject,
   resolveAuthoredTargetRepoInProject,
-  resolveItemDispatchRepo,
+  resolveDispatchRepoForItem,
   type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
@@ -5393,7 +5393,10 @@ async function buildReadyDispatchDto(
     // MOTIR-1775 · MOTIR-1783, narrowing MOTIR-1804's workspace-only scope).
     // Read here, alongside the other dispatch decorations, because it is only
     // needed for the ONE item being dispatched (never for the list read).
-    resolveItemDispatchRepo(row.targetRepo, row.projectId, ctx),
+    resolveDispatchRepoForItem(
+      { id: row.id, targetRepo: row.targetRepo, projectId: row.projectId },
+      ctx,
+    ),
   ]);
   const blockerRows = (
     await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

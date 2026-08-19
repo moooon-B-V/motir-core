@@ -1,0 +1,38 @@
+-- RETIRE `work_item.target_repo_role` (Story MOTIR-2732 · MOTIR-3040), the
+-- CONTRACT step of ADR `docs/decisions/work-item-repository-set.md` "Amendment
+-- 2026-08-18" §A7.
+--
+-- The column was the PORTABLE half of a repository pin: at generation the
+-- repositories do not exist, so a NAME is stale the moment a row is edited and
+-- meaningless before the row is created at all, and only a ROLE was stable across
+-- both (`project-repository-set.md` §5.2). A row REFERENCE is stable across both
+-- as well — the row exists before the repository does, its id does not move when
+-- its name is edited, and it survives a rename on the host — and it is strictly
+-- more precise: §5.3's third outcome, a role carried by two rows resolving to
+-- nothing forever, cannot arise when the pin names the row.
+--
+-- So the role's reason to exist is discharged, and MOTIR-1913's resolution pass
+-- goes with it: establishing a row now makes every card pointing at it resolve to
+-- a name on the NEXT READ, because the name is derived. There is nothing left for
+-- a pass to write.
+--
+-- ORDERING — this migration is the LAST of the sequence, deliberately (§A7):
+--   step 1  MOTIR-3039  added `work_item_repository` and backfilled it, READING
+--                       this column to recover role-only pins.
+--   step 2  MOTIR-3041  moved every read seam onto the references.
+--   step 3  MOTIR-3033  moved the last writer (`plansService.materialize`).
+--   step 4  THIS        drops the column, now that nothing reads or writes it.
+-- Dropping it earlier would have broken the backfill that needed it.
+--
+-- `PlanItemProposedFields.targetRepoRole` is UNTOUCHED: a plan still pins by role
+-- before any row exists (§5.4's settled case pins the name, §5.2's portable one
+-- pins the role), and materialize resolves that role to a reference rather than
+-- copying it onto the item. The `project_repo_role` ENUM also stays — it is
+-- `project_repository.role`'s type, which is the thing being referenced.
+--
+-- IRREVERSIBLE in the sense that matters: the role of an item whose reference the
+-- backfill could not resolve (an ambiguous role, §5.3) is not recoverable from
+-- `work_item` afterwards. It IS recoverable from the PLAN — `plan_item.work_item_id`
+-- joined to its `proposed_fields->>'targetRepoRole'` — which is why no data is
+-- copied elsewhere first.
+ALTER TABLE "work_item" DROP COLUMN "targetRepoRole";

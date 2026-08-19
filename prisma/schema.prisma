@@ -1707,27 +1707,21 @@ model WorkItem {
   // camelCase, no `@map`, matching this table's columns; unindexed (never a
   // lookup key — the completion gate reads it off a row it already has).
   //
-  // ⚠️ `targetRepoRole` below is deliberately NOT widened to a set (ADR §1.3) —
-  // two parallel Prisma scalar lists cannot represent an element whose name is
-  // known and whose role is not, the gate's expected side is NAMES, and nothing
-  // can author a multi-element role list until MOTIR-2732. Deferred as MOTIR-2978.
+  // ⚠️ §1.3's deferral of a role SET resolved by DECLINING it (MOTIR-2732 ·
+  // MOTIR-3037 §A3): no node ever carries two roles, so there was never a role
+  // list to widen. MOTIR-2978 — the card that deferral filed — became the
+  // container ROLLUP instead, and the role column below is retired outright.
   targetRepos           String[]                      @default([])
-  // The PORTABLE half of the same pin (Story MOTIR-1775 · MOTIR-1912, ADR
-  // `docs/decisions/project-repository-set.md` §5.2) — WHICH ROLE of the project's
-  // repository set this item's work belongs to, or NULL when the planner pinned
-  // none. The role exists because at generation the repositories DO NOT: the set
-  // is derived from the tree and the user may rename any row before it is
-  // created, so a NAME pinned then is stale the moment a row is edited and
-  // meaningless before the row exists at all. A role is stable across both.
-  // Recorded at materialize and RESOLVED to a `targetRepo` name later, when the
-  // role's row becomes established (MOTIR-1913) — the two columns are therefore
-  // complements, not alternatives, and `targetRepo` remains the only thing
-  // dispatch reads. The Prisma enum (not a String) because the vocabulary is
-  // ADR §1.1's fixed six and `project_repository.role` already models it that way
-  // — one spelling of the role across the two tables that must agree. camelCase,
-  // no `@map`, matching this table's columns; unindexed (the resolution pass
-  // scans a single project's items).
-  targetRepoRole        ProjectRepoRole?
+  // ⚠️ `targetRepoRole` WAS HERE AND IS RETIRED (Story MOTIR-2732 · MOTIR-3040,
+  // ADR `docs/decisions/work-item-repository-set.md` "Amendment 2026-08-18" §A3).
+  // It was the PORTABLE stand-in for a pin: at generation the repositories do not
+  // exist, so a NAME is stale or meaningless and only a role was stable. A row
+  // REFERENCE is stable across both — the row exists before the repository does,
+  // its id does not move when its name is edited, and it survives the rename on
+  // the host — so the role's reason to exist was discharged, and MOTIR-1913's
+  // resolution pass went with it. `PlanItemProposedFields.targetRepoRole` REMAINS:
+  // a plan still pins by role before any row exists; it is resolved to a reference
+  // at materialize instead of being copied onto the item.
   // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
   // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
   // webhook so "did the dispatched work actually pass?" lives in Motir, not only

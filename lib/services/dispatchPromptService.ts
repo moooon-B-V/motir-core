@@ -5,7 +5,7 @@ import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryS
 import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
+import { resolveItemDispatchRepo, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -105,7 +105,7 @@ export const dispatchPromptService = {
         : Promise.resolve(null),
       resolveBlockerKeys(item.id, ctx.workspaceId),
       workItemsService.getReadiness(item.id, ctx),
-      resolveItemDispatchRepo(item.targetRepo, projectId, ctx),
+      resolveDispatchRepoForItem({ id: item.id, targetRepo: item.targetRepo, projectId }, ctx),
       // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
       // above, not a second pass, and deliberately independent of `readiness`:
       // nothing below consults it when deciding the workflow variant, so the

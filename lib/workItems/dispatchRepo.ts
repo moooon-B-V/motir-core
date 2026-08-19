@@ -10,6 +10,9 @@ import {
   type ConnectedRepoName,
   type ResolvedDispatchRepo,
 } from './targetRepo';
+import type { Prisma } from '@/generated/prisma/client';
+import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from './serviceContext';
 
 // WHICH REPO an item belongs to, resolved against the PROJECT (Story MOTIR-1775 ·
@@ -247,10 +250,62 @@ export async function resolveAuthoredRepoRefsInProject(
  * `next_ready`, `claim_next_ready` and `dispatch_prompt` can never route
  * differently.
  */
+/**
+ * The PRIMARY repository NAME of an item, resolved from its REFERENCES — with the
+ * legacy column as the last rung (Story MOTIR-2732 · MOTIR-3040, ADR
+ * "Amendment 2026-08-18" §A7).
+ *
+ * ⚠️ This exists because MOTIR-1913's resolution pass RETIRED. That pass used to
+ * write `work_item.targetRepo` when a role's row became established, and dispatch
+ * read the column it wrote. With the pass gone nothing fills that column, so a
+ * card pinned before its repositories existed would dispatch to NOTHING — the
+ * exact end-to-end path MOTIR-3040's AC 2 asserts, and the regression this
+ * function is the fix for.
+ *
+ * The reference is now the pin, and the NAME is derived from it on read (§A4's
+ * rule: the realized repository's own name, else the row's authored intent). The
+ * column survives only as the compatibility rung — a project with NO repository
+ * set has no row to reference, so its pins are still names and still answer here.
+ */
+export async function resolveItemDispatchPin(
+  item: { id: string; targetRepo: string | null },
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  const refs = await workItemRepoRepository.listByWorkItem(item.id, tx);
+  const primary = refs[0];
+  if (primary !== undefined) {
+    const resolved = normalizeTargetRepo(
+      primary.projectRepo.githubRepo?.name ?? primary.projectRepo.name,
+    );
+    if (resolved !== null) return resolved;
+  }
+  return item.targetRepo;
+}
+
 export async function resolveItemDispatchRepo(
   pinned: string | null,
   projectId: string,
   ctx: ServiceContext,
 ): Promise<ResolvedDispatchRepo | null> {
   return resolveDispatchRepo(pinned, await listDispatchRepoNames(projectId, ctx));
+}
+
+/**
+ * The dispatch repo for ONE item, resolving its PIN from the item's references
+ * first (MOTIR-3040).
+ *
+ * The overload every dispatch surface should call. `resolveItemDispatchRepo`
+ * above takes a pinned NAME and is kept for the callers that genuinely have only
+ * a name (and for the tests that assert the three-rung ladder directly); this one
+ * takes the ITEM, so a surface cannot accidentally read a column that the
+ * reference model no longer fills.
+ */
+export async function resolveDispatchRepoForItem(
+  item: { id: string; targetRepo: string | null; projectId: string },
+  ctx: ServiceContext,
+): Promise<ResolvedDispatchRepo | null> {
+  const pinned = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    resolveItemDispatchPin(item, tx),
+  );
+  return resolveItemDispatchRepo(pinned, item.projectId, ctx);
 }
