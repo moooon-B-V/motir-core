@@ -830,6 +830,10 @@ describe('the work-loop payloads', () => {
     advisories: [],
     // MOTIR-2445 — the parent the prompt already names in prose, as a field.
     parentKey: 'PROD-2',
+    // MOTIR-3131 — the whole repository set, of which `targetRepo` is element 0.
+    targetRepos: [
+      { name: 'motir-core', cloneUrl: null, defaultBranch: null, delivery: 'awaiting' as const },
+    ],
   };
 
   it('the dispatch prompt IS the v1 resource — no widening, real probe', () => {

@@ -704,24 +704,75 @@ Code, Codex, opencode, or a human reading it — receives the same instruction,
 and the prompt grammar versions with the product rather than with your CLI
 build.
 
-**Repo routing.** The dispatch payload names the item's repo; the CLI maps that
-name to a checkout via `.motir.json` or the `<root>/<repoName>` convention and
-runs the agent **there** — so dispatching a `motir-ai` item while standing in
-`motir-core` just works. Three outcomes, and only three: the checkout exists
-(run in it), the checkout is **missing** (run at the workspace root so the
-prompt's GIT WORKFLOW can create it, then verify afterwards), or the item pins
-no repo at all (run at the root). An item is **never** run in some other
-existing checkout — dispatching into the wrong repo is worse than admitting the
-gap.
+**Repo routing.** The dispatch payload names the item's repository **SET** —
+ordered, the primary first — and the CLI maps **each** name to a checkout via
+`.motir.json` or the `<root>/<repoName>` convention. It runs the agent in the
+**primary's** checkout, so dispatching a `motir-ai` item while standing in
+`motir-core` just works. Three outcomes, and only three, **per repository**: the
+checkout exists (that is where its work happens), the checkout is **missing**
+(for the primary, the agent runs at the workspace root so the prompt's GIT
+WORKFLOW can create it, then verifies afterwards; for any other repository, the
+run WARNS and proceeds), or the item pins no repo at all (run at the root). An
+item is **never** run in some other existing checkout — dispatching into the
+wrong repo is worse than admitting the gap.
 
-|                       | `motir next` / `motir run`              | `motir auto`                                       | `motir batch`                                   |
-| --------------------- | --------------------------------------- | -------------------------------------------------- | ----------------------------------------------- |
-| Work list             | one item                                | **live** — one `next_ready` per iteration          | **frozen** — the ready set snapshotted up front |
-| Becomes ready mid-run | n/a                                     | picked up (the loop cascades the dependency graph) | **not** picked up — counted and named           |
-| Git lineage           | none — the item's own branch off `main` | ONE session branch per repo, `motir/auto-<run-id>` | **none** — each item branches off `origin/main` |
-| Pull requests         | one, opened by the agent                | ONE per repo, opened by the CLI at the end         | **one per item**, opened by the agent           |
-| Close-out             | `motir done <key>`                      | `motir done --session <branch>` (bulk)             | `motir done <key>` (per item)                   |
-| Agent required        | no (`--print` is the default)           | **yes**                                            | **yes**                                         |
+**Every repository is resolved and reported BEFORE the agent starts.** For a
+card carrying more than one, the summary lists each repository, the path it
+resolved to, and how it resolved — so the two mistakes this shape actually
+produces (a repository you have never cloned, and one that lives somewhere other
+than where the convention says) are visible in one glance rather than as an
+agent failing in a directory that does not exist.
+
+|                       | `motir next` / `motir run`                                                            | `motir auto`                                                                                                                  | `motir batch`                                        |
+| --------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Work list             | one item                                                                              | **live** — one `next_ready` per iteration                                                                                     | **frozen** — the ready set snapshotted up front      |
+| Becomes ready mid-run | n/a                                                                                   | picked up (the loop cascades the dependency graph)                                                                            | **not** picked up — counted and named                |
+| Git lineage           | none — the item's own branch off `main`, the SAME name in every repository it carries | ONE session branch per repo, `motir/auto-<run-id>` — opened in every repository a dispatched card carries, or in none of them | **none** — each item branches off `origin/main`      |
+| Pull requests         | **one per repository the item carries**, opened by the agent                          | ONE per repo, opened by the CLI at the end — including every repository a dispatched card carries                             | **one per item per repository**, opened by the agent |
+| Close-out             | `motir done <key>`                                                                    | `motir done --session <branch>` (bulk)                                                                                        | `motir done <key>` (per item)                        |
+| Agent required        | no (`--print` is the default)                                                         | **yes**                                                                                                                       | **yes**                                              |
+
+### A card that ships in more than one repository
+
+A work item can name a repository **set** rather than one repository — a change
+whose halves are written against each other, in `motir-core` and `motir-meta`,
+say. Running one is not a different command; it is the same command with more of
+everything except the agent:
+
+- **ONE agent process**, launched in the primary's checkout. The other
+  repositories are places it works, not places it is launched in. (N agents would
+  each get the whole card and have to guess which half was theirs.)
+- **ONE worktree per repository**, and **ONE branch name shared by all of them**
+  — so `gh pr list --head <branch>` finds the whole set, in every repository, and
+  the pull requests read as halves of one change rather than unrelated pushes.
+- **ONE pull request per repository**, each with the item's `MOTIR-<n>` in its
+  **title**. The key is the load-bearing part: the completion gate counts merges
+  against the item's _linked_ pull requests, so a title without it is invisible
+  to the gate and the card is held forever by work that has already shipped.
+- **The item completes only when EVERY repository's pull request has merged.**
+  One merge leaves it held at In Review — correctly. The run says so and does not
+  offer you `motir done <key>`, which could not succeed against the gate.
+
+**A partial delivery is a resting state, not an error.** The run exits 0 and
+tells you what is outstanding; re-running the card is a **RESUME**. The run names
+it as one before the agent starts — which repositories have already delivered,
+which remain — and the agent is told not to re-open a pull request in one that
+has merged. Each repository line also carries its own state:
+
+| state           | what it means, and where to look next                                      |
+| --------------- | -------------------------------------------------------------------------- |
+| `delivered`     | a pull request merged onto that repository's own default branch            |
+| `awaiting`      | no merged pull request yet — look at the host                              |
+| `unknown`       | a merge is recorded but not which branch it reached                        |
+| `unestablished` | the repository does not exist yet — establish it on the project first      |
+| `excluded`      | the project is deliberately code-less there; it does **not** hold the card |
+
+`unestablished` and `excluded` are deliberately not shades of `awaiting`: what
+differs is your next action, not the nuance.
+
+**Older servers.** A Motir that predates the repository set sends no set at all,
+and the CLI then behaves exactly as it always did — one repository, one pull
+request. See [When your server is older](#when-your-server-is-older).
 
 **All three record what BUILT each item** — the agent Motir launched, and the
 model that agent reported. `auto` and `run` record it while marking the item
@@ -840,6 +891,17 @@ given repo, the CLI creates ONE session branch there — `motir/auto-<run-id>`,
 where the run id is a timestamp like `20260729-011830` — and every item's work
 is integrated onto it. At the end the CLI surfaces **one pull request per repo**:
 the run's single human review gate.
+
+**A card that carries more than one repository gets that branch in EVERY one of
+them, or in none.** The name is the same in each — the run has one id — and the
+close-out opens a session pull request in each repository the run branched in. It
+is all-or-nothing per card on purpose: a lineage in some of a card's
+repositories and not others is the one outcome that cannot be closed out, because
+the close-out opens a pull request per _touched_ repository and a repository
+holding the work but not the branch is invisible to it. So if any repository of
+the card cannot carry the branch — its checkout does not exist — the **card**
+gets no lineage at all and ships as its own pull requests everywhere, and the run
+says which repository caused the fallback.
 
 The branch is created **remotely**
 (`git push origin refs/remotes/origin/main:refs/heads/<branch>`). The CLI never
@@ -1210,6 +1272,11 @@ consequences worth knowing:
   API only ever adds within a major version, so a newer server is compatible by
   construction — and reporting a real bug as an upgrade prompt would send you
   off to fix the wrong thing.
+- **A field the server does not send yet is a QUIET fallback, not an error.**
+  Motir before contract `1.12.0` sends no repository SET on the dispatch payload,
+  so the CLI resolves one repository, prints one `Repo:` line, and expects one
+  pull request — exactly what it always did. Nothing warns, because nothing is
+  wrong: that server has no multi-repository cards to run.
 - **If the probe cannot reach the spec, you get the original error, not a
   guess.** A failed probe is not evidence. If a command fails in a way you think
   is skew and no upgrade message appears, `curl` the spec yourself with the
@@ -1267,7 +1334,25 @@ purpose.
 **`Suspect dispatch: the agent exited 0 but "<repo>" still has no checkout at
 <path>.`** — a bootstrap dispatch did not produce its checkout. Usually the repo
 lives off-convention: `motir link add <repo> <path>` and re-run. If the agent
-genuinely failed to scaffold, `motir run <key>` re-dispatches it.
+genuinely failed to scaffold, `motir run <key>` re-dispatches it. On a card that
+ships in more than one repository this check runs for **every** one of them, so
+the name in the message is the repository that had nowhere to work — not
+necessarily the one the agent was launched in.
+
+**`⚠ no checkout here yet` in the repositories block, on a card with two or more
+repositories.** — a WARNING, not a refusal, and the dispatch proceeds. The CLI
+cannot know whether that repository's half is already merged or whether your
+checkout simply lives somewhere the `<root>/<name>` convention does not predict,
+so it tells you and lets you decide. `motir link add <repo> <path>` fixes the
+off-convention case; cloning it fixes the other. If neither applies because that
+half is genuinely done, the run's own delivery states will say `delivered`.
+
+**`No session branch possible in <path>` during `motir auto`.** — one repository
+of a card the loop is about to dispatch cannot carry the run's session branch, so
+the **card** gets no lineage and ships as its own pull requests in all of its
+repositories. It is a deliberate all-or-nothing: a lineage in some of a card's
+repositories and not others could never be closed out. Create or link the named
+checkout and re-run if you want the card on the session branch.
 
 **`motir next` says "No ready work items" but the board disagrees.** Check for
 the skip line above it: previously-failed items are held out via the exclude

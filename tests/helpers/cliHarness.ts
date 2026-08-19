@@ -290,6 +290,20 @@ export interface AgentStep {
    * agent does and the only way a test can know a run-id-stamped branch name.
    */
   integrate?: { file: string };
+  /**
+   * Do what a MULTI-REPOSITORY per-item-PR prompt tells a real agent to do
+   * (Story MOTIR-2731 · MOTIR-3141): for EVERY repository block the prompt
+   * renders, enter that repository, branch, commit `file`, push, and open a pull
+   * request whose title carries the item key.
+   *
+   * Like `integrate`, everything is READ OUT OF THE PROMPT — the repository
+   * directories, the shared branch name, each repository's base branch and the
+   * key — never supplied by the test. That is what makes the resulting
+   * assertions about `gh pr create` evidence about the prompt rather than about
+   * the fixture: an agent that could only find one block opens one pull request,
+   * which is precisely the failure the story is about.
+   */
+  perRepoPr?: { file: string };
 }
 
 export interface FakeAgent {
@@ -381,6 +395,80 @@ if (step.integrate) {
   git('add', step.integrate.file);
   git('commit', '-m', 'feat: ' + step.integrate.file);
   git('push', 'origin', branch);
+}
+
+if (step.perRepoPr) {
+  const text = (promptFile && existsSync(promptFile) ? readFileSync(promptFile, 'utf8') : stdin);
+  // The prompt renders, per repository:
+  //     <name>  (your working directory | a sibling checkout)
+  //       1. cd <dir> && git fetch origin
+  //       2. git worktree add <wt> -b <branch> origin/<base>
+  // so a block is (dir, worktree, branch, base) and there is one per repository.
+  const blocks = [];
+  const lines = text.split('\\n');
+  for (let i = 0; i < lines.length; i++) {
+    const cd = lines[i].match(/^\\s*1\\. cd (\\S+) && git fetch origin$/);
+    if (!cd) continue;
+    const add = (lines[i + 1] ?? '').match(
+      /^\\s*2\\. git worktree add (\\S+) -b (\\S+) origin\\/(\\S+)$/,
+    );
+    if (add) blocks.push({ dir: cd[1], wt: add[1], branch: add[2], base: add[3] });
+  }
+  if (blocks.length === 0) {
+    // The SINGLE-repository grammar, which fuses the fetch and the worktree onto
+    // one step and names no directory — the agent is already standing in it. The
+    // same agent has to understand both shapes, or a test using it as the
+    // one-repository CONTROL would be measuring the fixture rather than the
+    // prompt.
+    for (const line of lines) {
+      const one = line.match(
+        /^\\s*1\\. git fetch origin && git worktree add (\\S+) -b (\\S+) origin\\/(\\S+)$/,
+      );
+      if (one) blocks.push({ dir: '.', wt: one[1], branch: one[2], base: one[3] });
+    }
+  }
+  const key = (text.match(/carries ([A-Z][A-Z0-9]*-\\d+)/) ?? [])[1] ?? 'UNKNOWN';
+  if (blocks.length === 0) {
+    process.stderr.write('fake-agent: no repository block in the prompt\\n');
+    process.exit(9);
+  }
+  const run = (bin, args, cwd) => {
+    const res = spawnSync(bin, args, { cwd, encoding: 'utf8' });
+    if (res.status !== 0) {
+      process.stderr.write('fake-agent ' + bin + ' ' + args.join(' ') + ': ' + (res.stderr || '') + '\\n');
+    }
+    return res;
+  };
+  for (const b of blocks) {
+    const repoDir = join(process.cwd(), b.dir);
+    run('git', ['fetch', 'origin'], repoDir);
+    run('git', ['worktree', 'add', b.wt, '-b', b.branch, 'origin/' + b.base], repoDir);
+    const wtDir = join(repoDir, b.wt);
+    if (!existsSync(wtDir)) {
+      // The repository has no checkout to enter, so this half cannot happen here.
+      // A real agent SAYS so and finishes the halves it can — it does not abort
+      // the whole card — and the CLI's own suspect-dispatch report is what names
+      // the repository afterwards. Crashing instead would make the fixture, not
+      // the tool, decide what a half-delivered run looks like.
+      process.stderr.write('fake-agent: skipped ' + b.dir + ' — no checkout to work in\\n');
+      continue;
+    }
+    writeFileSync(join(wtDir, step.perRepoPr.file), 'work by the fake agent\\n');
+    run('git', ['add', step.perRepoPr.file], wtDir);
+    run('git', ['commit', '-m', 'feat: ' + step.perRepoPr.file + ' (' + key + ')'], wtDir);
+    run('git', ['push', 'origin', b.branch], wtDir);
+    run(
+      'gh',
+      [
+        'pr', 'create',
+        '--head', b.branch,
+        '--base', b.base,
+        '--title', 'feat: the work (' + key + ')',
+        '--body', 'Opened by the fake agent for ' + key + '.',
+      ],
+      wtDir,
+    );
+  }
 }
 
 process.exit(step.exit ?? 0);
