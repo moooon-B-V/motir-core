@@ -193,7 +193,11 @@ import {
   type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
-import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
+import {
+  classifyRepoDelivery,
+  type ExpectedRepo,
+  type RepoDelivery,
+} from '@/lib/workItems/repoDelivery';
 import {
   ConflictingTargetRepoInputError,
   ContainerRepoSetNotWritableError,
@@ -4583,16 +4587,41 @@ export const workItemsService = {
     return toWorkItemRepositoryDtos(rows);
   },
 
+  /**
+   * ⚠️ The expectation it classifies is the item's REFERENCES when it has any
+   * (Story MOTIR-2732 · ADR §A5), not the name strings — because two of the five
+   * delivery states are properties of the ROW, not of the pull requests: a
+   * `proposed` row names a repository that does not exist yet, and a `skipped`
+   * row names one that never will. Classified off names alone both read as
+   * `awaiting`, which tells the reader to wait for a pull request against a
+   * repository nothing will ever open one against.
+   *
+   * The name list stays the FALLBACK, and is not dead: it is what a project with
+   * no `project_repository` set still pins with (ADR §5's compatibility rung).
+   */
   async listRepoDelivery(
     workItemId: string,
     targetRepos: readonly string[],
     ctx: ServiceContext,
   ): Promise<RepoDelivery[]> {
+    // An item with NO repositories at all — the common case on a card that pins
+    // none — is answered without touching the database. `targetRepos` is the
+    // read projection of the references (ADR §A4), so an empty projection means
+    // an empty reference list; there is nothing for either query to find.
     if (targetRepos.length === 0) return [];
-    const facts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
-    );
-    return classifyRepoDelivery(targetRepos, facts);
+    const { refs, facts } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      refs: await workItemRepoRepository.listByWorkItem(workItemId, tx),
+      facts: await githubPullRequestRepository.listCompletionFactsByWorkItem(workItemId, tx),
+    }));
+    const expected: ExpectedRepo[] =
+      refs.length > 0
+        ? toWorkItemRepositoryDtos(refs).map((r) => ({
+            repo: r.name,
+            establishState: r.state,
+            role: r.role,
+          }))
+        : targetRepos.map((repo) => ({ repo }));
+    return classifyRepoDelivery(expected, facts);
   },
 
   /**

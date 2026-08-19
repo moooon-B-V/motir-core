@@ -1,4 +1,5 @@
-import { CircleCheck, CircleDashed, CircleQuestionMark } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleQuestionMark, FolderGit2 } from 'lucide-react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ComponentType } from 'react';
 import { Pill } from '@/components/ui/Pill';
@@ -28,7 +29,22 @@ const DELIVERY_META: Record<
   delivered: { icon: CircleCheck, className: 'text-(--el-success)' },
   awaiting: { icon: CircleDashed, className: 'text-(--el-icon-muted)' },
   unknown: { icon: CircleQuestionMark, className: 'text-(--el-warning)' },
+  // The repository does not EXIST yet — a different glyph, not a different shade
+  // of the awaiting one, because the reader's next action is somewhere else
+  // entirely (design MOTIR-3038 panel 2c).
+  unestablished: { icon: FolderGit2, className: 'text-(--el-icon-muted)' },
+  // Declined. Drawn QUIET on purpose: it is the one state that does not hold the
+  // card, so it must not read as something outstanding.
+  excluded: { icon: CircleDashed, className: 'text-(--el-icon-muted)' },
 };
+
+/** Where following a repository GOES (design MOTIR-3038 panel 2d) — the row on
+ *  the project's own settings page, anchored, NOT the host. The card points at a
+ *  ROW, and a `proposed` row has no host repository at all, so a link out to
+ *  GitHub would be dead for exactly the state this redraw exists to express. */
+function repositoryHref(name: string): string {
+  return `/settings/project/repositories#${encodeURIComponent(name)}`;
+}
 
 /** The quick view's row cap (design MOTIR-2414): three rows, then `+N more`.
  *  A BOUND, not a space saving — at three rows the field still clears the peek's
@@ -88,9 +104,38 @@ export function RepositorySetField({ delivery, compact = false }: RepositorySetF
               >
                 <Glyph className="h-[15px] w-[15px]" aria-hidden />
               </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-text)">
+              {/* The repository as a LINK (design MOTIR-3038). The name is what
+                  the reference RESOLVES to, which is why a rename changes what
+                  this shows and nothing about what the card points at. */}
+              <Link
+                href={repositoryHref(d.repo)}
+                className="min-w-0 flex-1 truncate font-mono text-[13px] text-(--el-link) underline underline-offset-2"
+              >
                 {d.repo}
-              </span>
+              </Link>
+              {/* The ROLE — a category, not an identity, so it wears the neutral
+                  chip. DETAIL ONLY: the design drops it from the compact row
+                  because the peek's rail is measured, and the role is the one
+                  thing there that the reader can get by following the link. */}
+              {!compact && d.role ? (
+                <Pill tone="neutral" className="shrink-0">
+                  {d.role}
+                </Pill>
+              ) : null}
+              {/* The establish STATE, shown only when the row is not established
+                  — an ordinary repository needs no chip saying it exists. The
+                  two do not share a severity: `unestablished` HOLDS the card and
+                  is drawn as a warning; `excluded` is a settled decision that
+                  holds nothing, and is drawn quiet. */}
+              {d.state === 'unestablished' ? (
+                <Pill severity="warning" className="shrink-0">
+                  {t(`repositoryDelivery.${d.state}`)}
+                </Pill>
+              ) : d.state === 'excluded' ? (
+                <Pill tone="neutral" className="shrink-0">
+                  {t(`repositoryDelivery.${d.state}`)}
+                </Pill>
+              ) : null}
               {/* The state word rides the row for a screen reader, so the list
                   reads "motir-core, delivered, primary" rather than a bare name
                   beside a coloured dot. */}

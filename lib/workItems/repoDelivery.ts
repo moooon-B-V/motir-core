@@ -27,7 +27,31 @@ import { repoNameKey } from './repoName';
  *   does not know which branch it merged into. Only rows written before
  *   `github_pull_request.base_ref` existed are in this state.
  */
-export type RepoDeliveryState = 'delivered' | 'awaiting' | 'unknown';
+export type RepoDeliveryState =
+  | 'delivered'
+  | 'awaiting'
+  | 'unknown'
+  /**
+   * The repository DOES NOT EXIST YET — the row is `proposed`, `creating` or
+   * `failed` (Story MOTIR-2732 · MOTIR-3042, ADR "Amendment 2026-08-18" §A5).
+   *
+   * ⚠️ Deliberately NOT `awaiting`, and the difference is the reader's next
+   * action, not a shade of meaning. `awaiting` says a pull request has not been
+   * opened and points at the host; `unestablished` says there is no repository to
+   * open one against and points at the project's establish step. Collapsing them
+   * is what produced the false "No pull request yet" row MOTIR-3036 fixed, one
+   * level down. It HOLDS the item: the work plainly has not shipped.
+   */
+  | 'unestablished'
+  /**
+   * The row was SKIPPED — the project is deliberately code-less there
+   * (`project-repository-set.md` §4.3).
+   *
+   * The ONE state that does NOT hold the item. Holding it would make §4.3
+   * unreachable: a card would wait forever for work the user explicitly
+   * declined.
+   */
+  | 'excluded';
 
 /** One repository of an item's set, with its delivery state and its position. */
 export interface RepoDelivery {
@@ -36,6 +60,11 @@ export interface RepoDelivery {
   state: RepoDeliveryState;
   /** Element 0 — the repository a dispatch routes to (ADR §2). */
   primary: boolean;
+  /** WHAT the repository is (`web` · `api` · …) — carried only when the item
+   *  points at a `project_repository` ROW, because the role is that row's
+   *  property and a bare name string has none. Optional for exactly that
+   *  reason: the compatibility rung (ADR §5) has a name and no row. */
+  role?: string | undefined;
 }
 
 /**
@@ -54,11 +83,43 @@ export interface RepoDelivery {
  * as outstanding asserts something false about a merge that may well have
  * landed. It holds the card, and the surface says which question to answer.
  */
+/**
+ * One expected repository, as the classifier now receives it (MOTIR-3042).
+ *
+ * `establishState` is what lets the four rows a NAME could never tell apart —
+ * exists / not created yet / declined — be told apart. `undefined` means the
+ * caller has only a name (a project with no repository set, §A7's compatibility
+ * rung), and the classifier then behaves exactly as it did before this field
+ * existed.
+ */
+export interface ExpectedRepo {
+  repo: string;
+  establishState?: string | undefined;
+  /** The row's role, carried straight through to the panel — see `RepoDelivery.role`. */
+  role?: string | undefined;
+}
+
+/** The row states in which a repository DOES NOT EXIST on the host yet. */
+const UNESTABLISHED_STATES = new Set(['proposed', 'creating', 'failed']);
+
 export function classifyRepoDelivery(
-  expected: readonly string[],
+  expected: readonly (string | ExpectedRepo)[],
   linked: readonly LinkedChangeRequestCompletionFact[],
 ): RepoDelivery[] {
-  return expected.map((repo, i) => {
+  return expected.map((entry, i) => {
+    const { repo, establishState, role } =
+      typeof entry === 'string'
+        ? { repo: entry, establishState: undefined, role: undefined }
+        : entry;
+    // The row's own state decides FIRST, because it decides whether a pull
+    // request could exist at all. Asking about merges for a repository that has
+    // not been created is asking the wrong question, however the answer comes
+    // out.
+    if (establishState === 'skipped')
+      return { repo, role, state: 'excluded' as const, primary: i === 0 };
+    if (establishState !== undefined && UNESTABLISHED_STATES.has(establishState)) {
+      return { repo, role, state: 'unestablished' as const, primary: i === 0 };
+    }
     const key = repo.toLowerCase();
     const merged = linked.filter((f) => f.repoName.toLowerCase() === key && f.merged);
     const state: RepoDeliveryState = merged.some(
@@ -68,7 +129,7 @@ export function classifyRepoDelivery(
       : merged.some((f) => f.baseRef === null)
         ? 'unknown'
         : 'awaiting';
-    return { repo, state, primary: i === 0 };
+    return { repo, role, state, primary: i === 0 };
   });
 }
 
@@ -83,9 +144,16 @@ export function classifyRepoDelivery(
 export interface RepoSetShortfall {
   outstanding: string[];
   unknownBase: string[];
+  /** Repositories that do not EXIST yet (§A5). Holds, like the other two —
+   *  `excluded` appears in NO list, which is how it abstains. */
+  unestablished: string[];
 }
 
-export const EMPTY_SHORTFALL: RepoSetShortfall = { outstanding: [], unknownBase: [] };
+export const EMPTY_SHORTFALL: RepoSetShortfall = {
+  outstanding: [],
+  unknownBase: [],
+  unestablished: [],
+};
 
 /** The shortfall of a classified set — empty when every repository is delivered,
  *  and empty for an EMPTY set, which is how the gate ABSTAINS on the common
@@ -94,12 +162,20 @@ export function repoSetShortfall(delivery: readonly RepoDelivery[]): RepoSetShor
   return {
     outstanding: delivery.filter((d) => d.state === 'awaiting').map((d) => d.repo),
     unknownBase: delivery.filter((d) => d.state === 'unknown').map((d) => d.repo),
+    // §A5: a repository that does not exist yet HOLDS the item — the work
+    // plainly has not shipped — but it is its own list, because the note the
+    // hold posts must send the reader to the establish step and not to GitHub.
+    unestablished: delivery.filter((d) => d.state === 'unestablished').map((d) => d.repo),
   };
 }
 
 /** Whether a shortfall HOLDS the item — either list being non-empty. */
 export function hasRepoSetShortfall(shortfall: RepoSetShortfall): boolean {
-  return shortfall.outstanding.length > 0 || shortfall.unknownBase.length > 0;
+  return (
+    shortfall.outstanding.length > 0 ||
+    shortfall.unknownBase.length > 0 ||
+    shortfall.unestablished.length > 0
+  );
 }
 
 /**

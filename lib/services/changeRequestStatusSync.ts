@@ -504,6 +504,20 @@ function incompleteRepoSetCommentBody(args: {
         `this decision (MOTIR-3034).`,
     );
   }
+  if (args.shortfall.unestablished.length > 0) {
+    // The third kind of shortfall (Story MOTIR-2732 · ADR §A5) — and the one
+    // whose answer is NOT "open a pull request". The card points at a
+    // `project_repository` row that names no repository yet, so telling the
+    // reader to merge something would send them somewhere that does not exist.
+    lines.push(
+      `Not created yet: ${list(args.shortfall.unestablished)} — ` +
+        `${args.shortfall.unestablished.length === 1 ? 'that repository is' : 'those repositories are'} ` +
+        `still proposed on the project, so there is nothing to open a ${args.noun} against. ` +
+        `Establish the ${args.shortfall.unestablished.length === 1 ? 'row' : 'rows'} in the ` +
+        `project's repository settings, or skip ${args.shortfall.unestablished.length === 1 ? 'it' : 'them'} ` +
+        `if the work does not ship there.`,
+    );
+  }
   lines.push(
     `The item completes when every repository it carries has a ${args.noun} merged onto that ` +
       `repository's own default branch. If one of them is not where this work ships, remove it ` +

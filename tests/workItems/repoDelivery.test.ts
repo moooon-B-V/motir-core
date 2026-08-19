@@ -116,12 +116,39 @@ describe('the gate’s shortfall is DERIVED from what the panel renders', () => 
     // motir-gateway: nothing at all.
   ];
 
-  it('splits the two non-delivered states so the hold can say which question to answer', () => {
+  it('splits the non-delivered states so the hold can say which question to answer', () => {
     const delivery = classifyRepoDelivery(expected, linked);
     expect(repoSetShortfall(delivery)).toEqual({
       outstanding: ['motir-gateway'],
       unknownBase: ['motir-ai'],
+      // Widened by Story MOTIR-2732 (ADR §A5): a repository that does not EXIST
+      // yet is a third kind of shortfall, and the answer to it is not "open a
+      // pull request" — it is "establish the row".
+      unestablished: [],
     });
+  });
+
+  it('holds on a repository that has no row to open a pull request against', () => {
+    const delivery = classifyRepoDelivery(
+      [{ repo: 'motir-core' }, { repo: 'motir-docs', establishState: 'proposed' }],
+      [fact('motir-core', true, 'main')],
+    );
+    expect(delivery.map((d) => d.state)).toEqual(['delivered', 'unestablished']);
+    const shortfall = repoSetShortfall(delivery);
+    expect(shortfall).toEqual({ outstanding: [], unknownBase: [], unestablished: ['motir-docs'] });
+    expect(hasRepoSetShortfall(shortfall)).toBe(true);
+  });
+
+  it('does NOT hold on a repository the project deliberately skipped', () => {
+    // `skipped` is the one state that is not a shortfall (ADR §A5). A card whose
+    // only outstanding repository was declined must be able to complete, or the
+    // project's own decision would deadlock it.
+    const delivery = classifyRepoDelivery(
+      [{ repo: 'motir-core' }, { repo: 'motir-infra', establishState: 'skipped' }],
+      [fact('motir-core', true, 'main')],
+    );
+    expect(delivery.map((d) => d.state)).toEqual(['delivered', 'excluded']);
+    expect(hasRepoSetShortfall(repoSetShortfall(delivery))).toBe(false);
   });
 
   it('holds exactly when some repository the PANEL shows is not delivered', () => {
