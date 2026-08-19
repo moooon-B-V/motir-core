@@ -277,6 +277,143 @@ describe('Auto-plan cadence — the pending-proposal gate (MOTIR-916)', () => {
   });
 });
 
+describe('Auto-plan cadence — an UNFILLABLE plan is not a pending proposal (MOTIR-3051)', () => {
+  // A `generating` plan with NO producer and NO proposals is nobody's decision.
+  //
+  // The reported path is the permission split `agent-authored-plans.md` Q2
+  // records: `create_plan` asserts `work_item:edit` and `add_plan_items` asserts
+  // `ai:view_plan`, so a grant holding the first and not the second — exactly
+  // `CLI_TOKEN_GRANT` — can OPEN a plan and is refused on its first append. Q2
+  // called that "an empty plan and nothing more". It is more than nothing: the
+  // gate below reads `generating` as undecided, so that orphan paused the
+  // project's cadence indefinitely, with no surface saying why.
+  //
+  // The same shape arrives without any permission involved. A generation job
+  // that dies before its first append leaves its plan `generating` forever —
+  // `aiPlanEditsService.resolveJobState` says so in its own doc comment
+  // ("nothing writes a terminal plan state on failure") — which is why the fix
+  // is at the GATE and not at the door.
+  //
+  // What separates the two is a PRODUCER, not a count: `sourceJobId` is set by
+  // every generator submit and null on every agent-authored plan. That
+  // distinction is load-bearing rather than decorative — see the second test.
+
+  /** The plan an agent-authored `create_plan` leaves behind: no job, no items. */
+  async function seedUnfillablePlan(fx: WorkItemFixture): Promise<string> {
+    const plan = await adminDb.plan.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, status: 'generating' },
+    });
+    return plan.id;
+  }
+
+  it('does NOT pause cadence — a plan with no producer and no proposals gates nothing', async () => {
+    const { fx, stubKey } = await makeDrainedProject();
+    await seedUnfillablePlan(fx);
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary).toMatchObject({ scanned: 1, fired: 1, skipped: 0 });
+    expect(summary.outcomes[0]).toMatchObject({ status: 'fired', itemKey: stubKey });
+  });
+
+  it('and the paused INDICATOR agrees — one predicate, two consumers', async () => {
+    const { fx } = await makeDrainedProject();
+    await seedUnfillablePlan(fx);
+
+    await expect(autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx)).resolves.toBeNull();
+    await expect(
+      autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ pending: false, planId: null });
+  });
+
+  it('an in-flight GENERATION still pauses while its plan is empty — the tick is idempotent', async () => {
+    // `autoPlanCadenceTick` is `retryPolicy: 'idempotent'` on exactly this
+    // ground: "a project that already fired now HAS an undecided plan, so the
+    // gate skips it on the re-run". Between `submitExpand`'s createPlan and
+    // motir-ai's first append that plan holds ZERO items, so a rule keyed on the
+    // COUNT alone would let an Inngest retry fire a second job at the same stub.
+    // The producer is what the gate reads.
+    const { fx } = await makeDrainedProject();
+    await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        status: 'generating',
+        sourceJobId: 'job_still_running',
+      },
+    });
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary.outcomes[0]).toMatchObject({ status: 'skipped', reason: 'pending_proposal' });
+    expect(submitJob).not.toHaveBeenCalled();
+  });
+
+  it('an unfillable plan carrying proposals still pauses — items are a decision to make', async () => {
+    // Not reachable through the MCP door today (the token refused on append is
+    // the reason the plan is empty), but the predicate must not read "no job"
+    // as "no proposal": the internal generator route appends through the same
+    // rows, and a plan with proposals in it is something a person owes an answer
+    // on however it was filled.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedUnfillablePlan(fx);
+    await adminDb.planItem.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        planId,
+        op: 'add',
+        proposedFields: { title: 'Proposed', kind: 'subtask' },
+        blockedByRefs: [],
+      },
+    });
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary.outcomes[0]).toMatchObject({ status: 'skipped', reason: 'pending_proposal' });
+  });
+
+  it('does not MASK an older plan that is genuinely waiting — the gate reads past it', async () => {
+    // `findUndecidedByProject` returns ONE row, newest first. Skipping the
+    // orphan in the caller rather than in the WHERE clause would answer "not
+    // paused" for a project whose real `planned` proposal is sitting one row
+    // down — trading a permanent pause for a stacked proposal, which is the
+    // thing the gate exists to prevent.
+    const { fx } = await makeDrainedProject();
+    const waiting = await seedPlan(fx, 'planned');
+    await seedUnfillablePlan(fx);
+
+    const pending = await autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx);
+
+    expect(pending?.id).toBe(waiting);
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+    expect(summary.outcomes[0]).toMatchObject({ status: 'skipped', reason: 'pending_proposal' });
+  });
+
+  it('is the plan the SHIPPED create_plan seam actually writes — not a hand-built row', async () => {
+    // The row `lib/mcp/tools/authorPlan.ts` leaves when the append that follows
+    // it is refused: the real service, the real transaction, the field set that
+    // adapter passes (no `sourceJobId`, `authorSource: 'mcp'`).
+    const { fx, stubKey } = await makeDrainedProject();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      {
+        title: 'Correction from a run',
+        summary: null,
+        createdById: fx.ctx.userId,
+        authorSource: 'mcp',
+        authorHarness: 'Claude Code',
+        authorModel: 'claude-opus-5[1m]',
+      },
+      fx.ctx,
+    );
+    expect(plan).toMatchObject({ status: 'generating', itemCount: 0 });
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary.outcomes[0]).toMatchObject({ status: 'fired', itemKey: stubKey });
+  });
+});
+
 describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
   /** Attach `count` proposal items to a plan, so the meta line has a size. */
   async function seedItems(

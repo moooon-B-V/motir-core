@@ -51,7 +51,9 @@ export const AUTO_PLAN_SCAN_PAGE_SIZE = 200;
 /** Why a project was passed over on a tick. Each is a normal, expected outcome
  *  — none is an error. */
 export type CadenceSkipReason =
-  /** An undecided plan is already in the review queue (the pending-proposal gate). */
+  /** An undecided plan is already in the review queue (the pending-proposal
+   *  gate). An empty plan with no producer is not one — see
+   *  `planRepository.findUndecidedByProject` (MOTIR-3051). */
   | 'pending_proposal'
   /** The ready set is at or above the project's `aiAutoPlanThreshold`. */
   | 'ready_set_healthy'
@@ -126,13 +128,20 @@ export const autoPlanCadenceService = {
    *
    * Returns the undecided plan (`generating` / `planned`) when one exists, else
    * null. WHO started that plan is deliberately not part of the predicate — see
-   * `planRepository.findUndecidedByProject`.
+   * `planRepository.findUndecidedByProject`, which also carries the ONE shape
+   * that is NOT a pending proposal: a `generating` plan with no producer and no
+   * proposals is nobody's decision, so it no longer pauses anything
+   * (MOTIR-3051). An empty plan a generation job is still producing into DOES
+   * gate — the discriminator is `sourceJobId`, and the tick's idempotent retry
+   * policy depends on it.
    *
    * ACCEPTED consequence, made legible rather than fixed: nothing expires or
    * auto-declines a `planned` plan (`declinePlan` is an explicit human action),
    * so a proposal nobody ever decides on silences cadence for that project
    * indefinitely. Declining is the release valve, and MOTIR-1740 is what makes
-   * the silence visible instead of mysterious.
+   * the silence visible instead of mysterious. The MOTIR-3051 exclusion does not
+   * reach that case and is not meant to: a plan with proposals in it is a
+   * decision somebody owes, however long they take.
    */
   async getPendingPlan(projectId: string, ctx: ServiceContext): Promise<PlanDto | null> {
     const row = await withWorkspaceContext(
