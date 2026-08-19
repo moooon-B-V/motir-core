@@ -6,8 +6,8 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
-import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import { guardSettingsPage } from '../_guard';
 
 // THE TAKE-IT-OVER ROOM (Story MOTIR-1775 · MOTIR-1939) — the surface behind the
@@ -20,6 +20,14 @@ import { guardSettingsPage } from '../_guard';
 // `router.refresh()` updates them after a takeover, while the ROWS are a client
 // island with its own refetch (which `router.refresh()` provably cannot reach).
 // Getting that split wrong is the recurring bug the contract exists to stop.
+//
+// ⚠️ THE HEADER SPEAKS FOR BOTH REGISTRIES (MOTIR-3126). The room renders the
+// project's whole repository DOMAIN — the Motir-hosted set AND the
+// workspace-connected repositories — so the lead sentence and the summary count
+// are computed over both. The old lead ("Motir hosts the repositories it created
+// for you") describes something a project with no hosted rows cannot see, so such
+// a project gets `leadConnected` instead; a summary read off the set alone would
+// report `0 yours` for a project holding four repositories of its own.
 //
 // ⚠️ THE ORG→PROJECT SCOPE GAP IS DRAWN, NOT PAPERED OVER. The billing door is
 // org-scoped while a takeover is per ROW, so the banner names the OTHER projects
@@ -58,16 +66,19 @@ export default async function ProjectRepositoriesPage() {
   // "days later" copy would hydrate differently — this repo's known relative-time
   // hydration-flake class, avoided at the root rather than patched at the leaf.
   const nowIso = new Date().toISOString();
-  const counts = summarize(view.rows);
+  const counts = summarizeRepositories(view.rows, view.connected);
+  const hasAny = view.rows.length > 0 || view.connected.length > 0;
 
   return (
     <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
         <p className="font-sans text-sm text-(--el-text-muted)">
-          {t('lead', { projectName: ctx.project.name })}
+          {view.rows.length > 0
+            ? t('lead', { projectName: ctx.project.name })
+            : t('leadConnected', { projectName: ctx.project.name })}
         </p>
-        {view.rows.length > 0 ? (
+        {hasAny ? (
           <p className="font-sans text-sm text-(--el-text-helper)">{t('summary', counts)}</p>
         ) : null}
       </header>
@@ -123,29 +134,4 @@ export default async function ProjectRepositoriesPage() {
       />
     </div>
   );
-}
-
-/**
- * The header's count of the truth — `{moving} moving · {hosted} hosted by Motir ·
- * {yours} yours`.
- *
- * Three ownerships in one set are LEGAL AT ONCE (MOTIR-711's per-row rule at set
- * scale), so the summary counts them separately rather than implying the whole
- * project is "moving" because one row is.
- */
-function summarize(rows: ProjectRepoDto[]): {
-  moving: number;
-  hosted: number;
-  yours: number;
-} {
-  let moving = 0;
-  let hosted = 0;
-  let yours = 0;
-  for (const row of rows) {
-    const takeover = row.takeover?.state ?? null;
-    if (takeover && takeover !== 'done' && takeover !== 'failed') moving += 1;
-    else if (takeover === 'done' || row.state === 'connected') yours += 1;
-    else if (row.state === 'created') hosted += 1;
-  }
-  return { moving, hosted, yours };
 }
