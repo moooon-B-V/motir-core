@@ -2728,6 +2728,13 @@ enum AttachmentSource {
   // Story-acceptance Playwright trace (MOTIR-1674) — a private diagnostic served
   // through the content route like the video; owned by the AcceptanceEvidence
   // lifecycle, excluded from the attachments panel listing.
+  //
+  // ⚠️ That exclusion was DOCUMENTED here and absent from the query for a year
+  // (MOTIR-3085): the panel's denylist was written twice, and this member was in
+  // neither copy, so every story with a trace-carrying recording listed a `.zip`
+  // nobody wanted — deletable from a panel its lifecycle never intended, which
+  // would strand `AcceptanceEvidence.traceAttachmentId`. The predicate now lives
+  // once, in `attachmentRepository.LIFECYCLE_OWNED_SOURCES`.
   acceptance_trace
   // A published DESIGN RESULT artifact (Story MOTIR-2664 · MOTIR-2666) — the
   // `*.mock.html`, its `.png` export, or the extracted `design-notes.md`

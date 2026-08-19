@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Attachment, AttachmentSource } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
+import {
+  attachmentRepository,
+  LIFECYCLE_OWNED_SOURCES,
+} from '@/lib/repositories/attachmentRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
@@ -113,42 +116,32 @@ describe('AttachmentSource.api — the general public-API door', () => {
 });
 
 describe('the denylist itself — the regression this story can silently ship', () => {
-  const repositorySource = fs.readFileSync(
-    path.join(process.cwd(), 'lib/repositories/attachmentRepository.ts'),
-    'utf8',
-  );
-
-  // Both panel queries carry `source: { notIn: [...] }`, written out
-  // independently. Read them as text: a runtime assertion cannot distinguish
-  // "listByWorkItem excludes it" from "countByWorkItem excludes it", and the
-  // failure this guards is an edit to ONE of them.
-  const exclusionArrays = [...repositorySource.matchAll(/notIn:\s*\[([^\]]*)\]/g)].map((m) =>
-    m[1]!
-      .split(',')
-      .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
-      .filter(Boolean),
-  );
-
-  it('has exactly two exclusion arrays — listByWorkItem and countByWorkItem', () => {
-    expect(exclusionArrays).toHaveLength(2);
+  // The predicate is ONE exported constant since MOTIR-3085, so this reads the
+  // value rather than the source. What it guards is unchanged and is still an
+  // ABSENCE: `api` must never join it. Adding it there produces no compile
+  // error and no runtime error — only a row nobody can see.
+  it('NEITHER query excludes `api` — adding it is the invisible-attachment regression', () => {
+    expect(LIFECYCLE_OWNED_SOURCES).not.toContain('api');
   });
 
-  it('NEITHER excludes `api` — adding it to one is the invisible-attachment regression', () => {
-    for (const arr of exclusionArrays) expect(arr).not.toContain('api');
+  it('is ONE constant, so the list and the count cannot drift apart', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'lib/repositories/attachmentRepository.ts'),
+      'utf8',
+    );
+    // Two call sites, one constant, and no literal array left to fall out of
+    // step — which is exactly how `acceptance_trace` went missing from one copy.
+    expect(source.match(/notIn:\s*\[\.\.\.LIFECYCLE_OWNED_SOURCES\]/g)).toHaveLength(2);
+    expect(source).not.toMatch(/notIn:\s*\['/);
   });
 
-  it('both carry the SAME exclusions, so the list and the count cannot drift apart', () => {
-    expect(exclusionArrays[0]).toEqual(exclusionArrays[1]);
-  });
-
-  it('the exclusions MOTIR-3056 inherited are untouched — this card neither widened nor narrowed them', () => {
-    // Deliberately pinned as-is rather than as-documented: `acceptance_trace` is
-    // documented in schema.prisma as excluded and is in neither array. That
-    // divergence is MOTIR-3085's to settle, and fixing it here would smuggle a
-    // second behaviour change into this diff. When MOTIR-3085 lands, this
-    // expectation is the one it updates.
-    for (const arr of exclusionArrays) {
-      expect(arr).toEqual(['acceptance_video', 'design_asset']);
-    }
+  it('holds exactly the lifecycle-owned sources — the three that own a panel', () => {
+    // Pinned as a set: a member ADDED here disappears from the panel, which is
+    // the change most worth making somebody say out loud.
+    expect([...LIFECYCLE_OWNED_SOURCES].sort()).toEqual([
+      'acceptance_trace',
+      'acceptance_video',
+      'design_asset',
+    ]);
   });
 });
