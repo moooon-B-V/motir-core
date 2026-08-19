@@ -1326,8 +1326,8 @@ After connecting, the row settles through the same two states as everyone else's
 **Colour.** Every value is a palette token; nothing is a raw hue.
 
 | Role                                         | Token                                                                                                      |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Page ink · secondary · muted · faint         | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-faint`                                |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Page ink · secondary · muted · faint         | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-faint`                                | — faint is correct here: this row inventories the ink SCALE; faint stays in it as the decorative rung. |
 | The state WORD                               | `--el-text-strong`                                                                                         |
 | `accepted` icon                              | `--el-success`                                                                                             |
 | `invited` icon                               | `--el-info`                                                                                                |

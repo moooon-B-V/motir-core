@@ -231,7 +231,7 @@ state, not an error.
   - **Caption row** — "June 2026" (`--el-text`, 14px/600) + prev/next-month
     `nav-btn`s (28px square, `--radius-control`, ghost → `--el-surface` hover,
     lucide `chevron-left`/`chevron-right`).
-  - **Weekday header** — Su–Sa, `--el-text-faint`, 11px/600 uppercase.
+  - **Weekday header** — Su–Sa, `--el-text-secondary`, 11px/600 uppercase.
   - **Day grid** — 6 rows × 7 cols, each cell a 36px square button at
     `--radius-control`. The grid always shows leading/trailing days from the
     adjacent months (the `is-outside` state) so every month renders 6 full rows
@@ -248,7 +248,7 @@ state, not an error.
 | **Today**                       | `--el-border-strong` ring + **bold** + a small `--el-accent` **dot** under the number         |
 | **Selected**                    | `--el-accent` **filled** circle, `--el-accent-text` ink, bold (hover → `--el-accent-pressed`) |
 | Focused (keyboard)              | 2px `--focus-ring-color` ring (roving tabindex)                                               |
-| Outside month                   | `--el-text-faint`, still clickable/navigable                                                  |
+| Outside month                   | `--el-text-secondary`, still clickable/navigable                                              |
 | Disabled (out of min/max range) | `--el-text-faint` + strikethrough, not selectable                                             |
 
 **Today and selection are NOT conveyed by colour alone** (WCAG 1.4.1 /
@@ -543,7 +543,7 @@ Identical to the List's (see that section); on the treegrid:
 - **"Load more children"** — when a parent has more children than the loaded
   page, a quiet `--el-link` row sits at the **end of that parent's loaded
   children**, at the children's indent: a `ChevronDown` glyph + **"Load more
-  children"** + a faint `--el-text-faint` count (`Showing 50 of 128`). Clicking
+  children"** + a faint `--el-text-secondary` count (`Showing 50 of 128`). Clicking
   fetches the next page (same `ORDER BY`) and **appends** — the parent never
   collapses. This is per-node paging, distinct from the **List**'s flat
   whole-result pagination (2.5.10 / 2.5.12).
@@ -672,7 +672,7 @@ vocabulary (`IssueTypeIcon` · identifier · `Pill`), not a new surface.
 
 - Colour flows only through `--el-*`: the count badge / selected-row tint /
   `Check` use `--el-accent`; status dots use the `StatusPicker` category vars
-  via their `--el-*` equivalents (todo → `--el-text-faint`, in_progress →
+  via their `--el-*` equivalents (todo → `--el-text-faint`, in_progress → (faint is correct here: a status DOT, not the label)
   `--el-info`, done → `--el-success`; a custom-coloured status like "In Review"
   carries its own colour); kind icons take their `--el-type-*` hue; result pills
   are `Pill` tones (hue in the tint, `--el-text-strong` text — finding #35
@@ -920,7 +920,7 @@ heavier child-list / relationships / activity sub-queries (those stay full-page)
 
 Colour only through `--el-*`: type hue via `--el-type-*`, status/priority via the
 `Pill` tones (hue in the tint background, `--el-text-strong` text — AA-safe,
-finding #35), `--el-link` for the identifier + "Open full page", `--el-text-faint`
+finding #35), `--el-link` for the identifier + "Open full page", `--el-text-secondary`
 meta labels. Shape through the element-semantic tokens — `--radius-modal` (panel),
 `--radius-badge` (pills), `--radius-control` (icon button + close), `--radius-btn`
 (footer buttons), `--shadow-modal`, `--height-control` / `--spacing-icon-btn` (the
@@ -1020,7 +1020,7 @@ rendered a subset of it).
 
 **Colour + shape.** New tints route through `--el-*` (`--el-tint-lavender` for
 label chips; chip text stays `--el-text-strong` for AA, finding #35); value glyphs
-are `--el-text-faint`; the audit line is `--el-text-muted` / `--el-text-secondary`.
+are `--el-text-faint`; the audit line is `--el-text-muted` / `--el-text-secondary`. (faint is correct here: value GLYPHS, as the line says; the audit text beside them is secondary)
 Shape via tokens — chips `--radius-badge`, the Show-more button `--radius-control`,
 the rail dividers a `--el-border-soft` hairline. No Tier-0 utilities, no raw
 `rounded-*`.
@@ -3381,7 +3381,7 @@ chip fits without truncation).
 ### Null type — epics & stories
 
 `type` is **`null` on containers** (epic / story); only leaves carry a work type.
-A null-type cell renders the **muted em-dash `—`** (`text-(--el-text-faint)`) —
+A null-type cell renders the **muted em-dash `—`** (`text-(--el-text-muted)`) —
 the shipped empty-cell convention used by the Due / Estimate cells in `list.mock.html`.
 No chip, no icon: the kind icon in the Title cell already says "this is a
 container," so a type chip there would be redundant. (8.8.9 must handle `null`
@@ -3401,7 +3401,7 @@ meaning never rides hue alone (every chip pairs icon + text label).
 | chip label            | `--el-text-strong`, `text-xs font-medium`                 |
 | chip icon             | `WorkItemTypeIcon` — lucide glyph in `--el-type-*` (14px) |
 | chip radius / padding | `--radius-badge` · `--spacing-chip-x/y`                   |
-| null-type cell        | `—` in `--el-text-faint` (the empty-cell convention)      |
+| null-type cell        | `—` in `--el-text-muted` (the empty-cell convention)      |
 
 ### Primitives composed (no hand-rolling)
 
@@ -3656,7 +3656,7 @@ consistent.
 - **Colour** via `--el-*` only. The chip introduces **no new token** — it reuses
   `--el-surface-soft` (rest fill), `--el-border` / `--el-border-strong` (rest /
   hover), `--el-link` (the mono key), the `--el-type-*` hue, and the status hues.
-  Archived/deleted/no-access use `--el-text-faint` / `--el-text-muted` + a dashed
+  Archived/deleted/no-access use `--el-text-faint` / `--el-text-muted` + a dashed (faint is correct here: archived / deleted / no-access are inactive states, which WCAG 1.4.3 exempts)
   `--el-border`. AA holds: link-blue key + strong/standard text on light fills,
   the strikethrough/muted states stay ≥ AA on the page surface.
 - **Shape** via element-semantic tokens — `--radius-control` (the chip + picker
