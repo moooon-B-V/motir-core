@@ -1171,3 +1171,227 @@ describe('validate_work_item (MCP) — the REPO-STRADDLE advisory reaches the au
     await client.close();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ESTIMATION-GATE ADVISORY (MOTIR-3110) — the third SHAPE member, on the
+// surface the SEALING AUTHOR reads. This is the surface whose `valid: true` +
+// empty `advisories` array is the observation the check exists to invert:
+// MOTIR-3068 was answered exactly that way at 13 SP / 600 min, the fourth card
+// to discharge this gate in prose instead of in the plan (`notes.html` #323).
+// The dispatch half is pinned in `tests/dispatch/dispatchAdvisories.test.ts`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('workItemsService.validateWorkItem — THE ESTIMATION GATE advisory', () => {
+  /** A card with a clean body, so ONLY its two sizing columns can be at fault. */
+  const sized = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    title: string,
+    sizing: { storyPoints?: number | null; estimateMinutes?: number | null },
+    fields: { type?: WorkItemTypeDto; executor?: ExecutorDto } = {
+      type: 'code',
+      executor: 'coding_agent',
+    },
+    placement: { kind?: IssueType; parentId?: string } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: placement.kind ?? 'task',
+        title,
+        descriptionMd: '## Acceptance criteria\n\n- the thing is built and covered.',
+        parentId: placement.parentId,
+        ...sizing,
+        ...fields,
+      },
+      fx.ctx,
+    );
+
+  it('MOTIR-3068 REGRESSION: `valid: true` no longer means `advisories: []`', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await sized(fx, 'The faint-ink sweep', {
+      storyPoints: 13,
+      estimateMinutes: 600,
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, card.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-over-gate-sizing',
+        threshold: 'both',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+    ]);
+  });
+
+  it('fires on each ceiling independently, and says nothing about a right-sized card', async () => {
+    const fx = await makeWorkItemFixture();
+    const points = await sized(fx, 'Points only', { storyPoints: 13, estimateMinutes: 45 });
+    const minutes = await sized(fx, 'Minutes only', { storyPoints: 3, estimateMinutes: 90 });
+    const fine = await sized(fx, 'Right-sized', { storyPoints: 3, estimateMinutes: 45 });
+
+    const advisoriesOf = async (identifier: string) =>
+      (await workItemsService.validateWorkItem(fx.projectId, identifier, fx.ctx)).advisories;
+    expect(await advisoriesOf(points.identifier)).toMatchObject([{ threshold: 'story_points' }]);
+    expect(await advisoriesOf(minutes.identifier)).toMatchObject([
+      { threshold: 'estimate_minutes' },
+    ]);
+    expect(await advisoriesOf(fine.identifier)).toEqual([]);
+  });
+
+  it('EXEMPTS a human / manual executor, and a card that HOLDS children', async () => {
+    const fx = await makeWorkItemFixture();
+    const human = await sized(
+      fx,
+      'Flip the package to public',
+      { storyPoints: 13, estimateMinutes: 600 },
+      { type: 'manual', executor: 'human' },
+    );
+    const container = await sized(fx, 'Container', { storyPoints: 13, estimateMinutes: 600 });
+    await sized(
+      fx,
+      'Right-sized child',
+      { storyPoints: 3, estimateMinutes: 45 },
+      { type: 'code', executor: 'coding_agent' },
+      { kind: 'subtask', parentId: container.id },
+    );
+
+    const advisoriesOf = async (identifier: string) =>
+      (await workItemsService.validateWorkItem(fx.projectId, identifier, fx.ctx)).advisories;
+    expect(await advisoriesOf(human.identifier)).toEqual([]);
+    // Validating the CONTAINER scans its whole subtree — so an empty array here
+    // says both that the container is exempt and that its child is right-sized.
+    expect(await advisoriesOf(container.identifier)).toEqual([]);
+  });
+
+  it('⚠️ `valid` and `blockers` are BYTE-IDENTICAL whether or not it is emitted', async () => {
+    const fx = await makeWorkItemFixture();
+    const oversized = await sized(fx, 'Oversized', { storyPoints: 13, estimateMinutes: 600 });
+    const clean = await sized(fx, 'Clean', { storyPoints: 3, estimateMinutes: 45 });
+
+    const a = await workItemsService.validateWorkItem(fx.projectId, oversized.identifier, fx.ctx);
+    const b = await workItemsService.validateWorkItem(fx.projectId, clean.identifier, fx.ctx);
+    expect(a.advisories).toHaveLength(1);
+    expect(b.advisories).toEqual([]);
+    expect({ valid: a.valid, blockers: a.blockers }).toEqual({
+      valid: b.valid,
+      blockers: b.blockers,
+    });
+
+    // …and the same for the issue-detail readiness both surfaces gate on: a
+    // legitimately large card mid-re-plan stays claimable.
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(oversized.identifier)).toEqual(await readinessOf(clean.identifier));
+    expect((await readinessOf(oversized.identifier)).ready).toBe(true);
+  });
+
+  it('scans a whole SUBTREE — the story reports its oversized child', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The story' },
+      fx.ctx,
+    );
+    const child = await sized(
+      fx,
+      'Oversized child',
+      { storyPoints: 13, estimateMinutes: 600 },
+      { type: 'code', executor: 'coding_agent' },
+      { kind: 'subtask', parentId: story.id },
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toMatchObject([
+      { item: child.identifier, severity: 'likely-over-gate-sizing' },
+    ]);
+  });
+});
+
+describe('validate_work_item (MCP) — THE ESTIMATION GATE advisory reaches the author', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('renders the two observed numbers, which ceiling, and the SPLIT remedy — still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'bug',
+        title: 'The faint-ink sweep',
+        descriptionMd: '## Acceptance criteria\n\n- the population is empty.',
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 13,
+        estimateMinutes: 600,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    expect(struct(res).advisories).toMatchObject([
+      { kind: 'shape', severity: 'likely-over-gate-sizing', threshold: 'both' },
+    ]);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker');
+    expect(text(res)).toContain('sized OVER the estimation gate');
+    expect(text(res)).toContain('13 points / 600 minutes (over: both ceilings)');
+    expect(text(res)).toContain('SPLIT the card before it is dispatched');
+    // The remedy names the thing the four prior instances actually did, so the
+    // reader cannot mistake writing it down for having done it.
+    expect(text(res)).toContain('expect this to');
+    await client.close();
+  });
+
+  it('renders ALL THREE shape members as separate blocks when one card carries them all', async () => {
+    // The families are distinguished by their REMEDIES — cut here, split per
+    // repo, split by size — so each keeps its own block rather than being folded
+    // into a shared sentence.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const card = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'All three shape defects',
+        descriptionMd: [
+          '## Acceptance criteria',
+          '- `motir-ai/src/x.ts` is updated',
+          '- the row is visible on `main`',
+        ].join('\n'),
+        targetRepo: 'motir-core',
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 21,
+        estimateMinutes: 480,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: card.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).advisories).toHaveLength(3);
+    expect(text(res)).toContain("which exists only AFTER the card's own PR has merged");
+    expect(text(res)).toContain("discharged in a repo that is not the card's own");
+    expect(text(res)).toContain('sized OVER the estimation gate');
+    // Still VALID: three advisories, no blockers, at every severity.
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    await client.close();
+  });
+});

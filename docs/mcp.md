@@ -367,7 +367,8 @@ item they return:
 "advisories": [
   { "item": "ACME-7", "referenced": "ACME-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
-  { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 }
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 }
 ]
 ```
 
@@ -382,13 +383,27 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card's own criteria are
-mis-shaped. Two severities, each with its own remedy:
+A **`shape`** entry has no far end at all: the card contradicts itself. Three
+severities, each with its own remedy:
 
 | severity                    | what it found                                                                                        | remedy                                     |
 | --------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `likely-ordering-violation` | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged | CUT the card at that criterion             |
 | `likely-repo-straddle`      | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY      | SPLIT the card per repo (one repo, one PR) |
+| `likely-over-gate-sizing`   | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                        | SPLIT the card by size                     |
+
+**`likely-over-gate-sizing` is the one member that carries no `criterionIndex`**,
+because its finding is about two COLUMNS rather than a criterion and its remedy
+is _split the card_, not _cut it at line N_. It carries `storyPoints` and
+`estimateMinutes` as observed (either may be `null` — unestimated crosses no
+ceiling) plus `threshold`: `"story_points"`, `"estimate_minutes"`, or `"both"`
+when the card is past each. So **narrow on `severity` before reading
+`criterionIndex`** — `kind === "shape"` alone no longer guarantees it. It fires
+only for a card that is **childless** (a container is sized by rollup) and whose
+`executor` is `coding_agent` (a `human` / `manual` card's minutes are human work,
+not agent run time); the two thresholds are `storyPoints >= 13` — the split
+signal read literally — and `estimateMinutes > 60`, a run that must fit in an
+hour.
 
 `likely-repo-straddle` carries `reason`: `"contradiction"` when the card CARRIES
 repositories and the criterion's path is in none of them, or `"unpinnable"` when
@@ -1245,10 +1260,15 @@ A `reference` entry is `{ item, referenced, referencedStatus, severity }`, where
 | `advisory`            | the not-`done` item is named anywhere in the body             |
 | `likely-missing-edge` | it is named inside the card's own acceptance-criteria section |
 
-A `shape` entry (`kind: "shape"`) reports a defect in the card's OWN criteria,
-with no second work item involved: `likely-ordering-violation` (a criterion that
-turns on the card's own merge — cut there) or `likely-repo-straddle` (a criterion
-naming a path outside the card's `targetRepo` — split per repo).
+A `shape` entry (`kind: "shape"`) reports a defect the card asserts about
+ITSELF, with no second work item involved: `likely-ordering-violation` (a
+criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
+(a criterion naming a path outside the card's `targetRepo` — split per repo), or
+`likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
+or `estimateMinutes > 60` — split by size). The first two carry the
+`criterionIndex` they cut at; the third carries `threshold`, `storyPoints` and
+`estimateMinutes` and no criterion index, so narrow on `severity` before reading
+one.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it
@@ -1261,7 +1281,9 @@ reference, a self-reference, an ancestor, and anything already in the
 `descriptionMd` only, so a `type: decision` card's deferrals — which live in the
 document it produces, not in its card body — are outside its reach; and
 `likely-repo-straddle` sees only repo-QUALIFIED paths, never a bare symbol whose
-repo a reader happens to know.
+repo a reader happens to know. `likely-over-gate-sizing` has no blind spot of
+that kind — its input is two integer columns and an enum — but for the same
+reason it has no opt-out either: a card that fires is over the gate.
 
 #### `create_sprint`
 

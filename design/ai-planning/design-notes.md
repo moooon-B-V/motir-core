@@ -10,6 +10,8 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png` | MOTIR-3074           | Part IV  |
 | A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`            | MOTIR-3082           | Part V   |
 | A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`            | MOTIR-3082           | Part V   |
+| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`            | MOTIR-3159           | Part VI  |
+| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`            | MOTIR-3159           | Part VI  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -21,6 +23,12 @@ element: the review rail's status tag leaves the title's line for its own.
 **Part V amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
 parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
 differing), and a read view for one proposal composing the shipped quick view.
+
+**Part VI amends it once more, and is the first Part to draw the state AFTER the decision** — the
+accepted / declined node treatments (a fourth axis CROSSING the three `op` languages, not a fourth
+member of them), and the answer to what the canvas pane holds once a plan is approved. That second
+half re-opens a shipped decision on the record: MOTIR-1775 / MOTIR-1782 decided the establish step
+REPLACES the canvas; Part VI §4 decides it STACKS above it, and says why.
 
 ---
 
@@ -914,3 +922,267 @@ the same pass, per the design limb's rule that the design and the AC amendment s
 else in the subtree is invalidated: MOTIR-3084's read view is untouched by the Panel E redesign, and
 MOTIR-3070's criterion 2 still holds (_distinguish, and name the parent_) — the level model satisfies
 it by placement and breadcrumb rather than by a badge.
+
+---
+
+# Part VI — The DECIDED plan-review surface: the accepted / declined node treatments, and what the canvas pane holds after approve (MOTIR-3159 / bug MOTIR-3154)
+
+**Amends Parts I–V's asset in place**: the same three files
+(`design-notes.md` · `plans-surface.mock.html` · `plans-surface.png`), two new panels — **G** and **H**.
+Nothing already drawn is redrawn. The three shipped `op` frames, Panel E's level model, Panel F's read
+view, Part IV's status overline and Part III's attribution rows are all untouched and composed as they
+stand.
+
+| Surface                                         | Panel | Gates                  |
+| ----------------------------------------------- | ----- | ---------------------- |
+| The **accepted** / **declined** node treatments | **G** | MOTIR-3161             |
+| What the canvas pane holds **after approve**    | **H** | MOTIR-3161, MOTIR-3162 |
+
+## 0. The gap — a lifecycle drawn state by state, with no owner for the last state
+
+Part I drew the generating state and the pending state. Part IV drew the status tag. Part V drew the
+level model and the read view, and closed with one sentence about the state after a decision — _"a
+decided plan is read-only per Part I, and the read view stays available on it"_ — which is true and is
+not a specification of what the surface SHOWS.
+
+So the decided state is the one nobody drew, and three separate cards each filled it locally, each
+sensibly inside its own file:
+
+- `declinePlan` **deletes** every `plan_item` row (`lib/services/plansService.ts:2068` →
+  `planItemRepository.deleteByPlan`), so a declined plan's review model is `items: []` for ever.
+- `PlanDetail` hands the **whole canvas pane** to `RepositorySetStep` whenever a repository set exists
+  (`components/planning/PlanDetail.tsx:196-217`), and `approvePlan` proposes that set before
+  materializing — so an ordinary approve creates the rows that then take the pane.
+- `PlanItemNode` frames a card by **`op` alone** (`:74-80`), so there is no accepted or declined
+  treatment to give it.
+
+None of the three is wrong about its own file. Together they make the surface unable to show a
+decision it has just taken. That is the shape MOTIR-3155 records, and drawing the whole lifecycle once
+is what stops a fourth card from doing it again.
+
+## 1. Drawn against SHIPPED reality — what was RENDERED first
+
+Per the design-against-shipped-reality rule, and Part II §1's format. The real `PlanDetail` island was
+bundled and rendered headless off `origin/main` `c57daef8` — the actual component, the actual
+`packages/design-system/theme.css`, the actual `messages/en.json` — at 1440×820, `deviceScaleFactor: 2`,
+light theme, in the three states below. The harness was deleted before the design lane was run; the
+screenshots are attached to the pull request.
+
+| State                                   | What the render SHOWS (not what the source suggests)                                                                                                                                                                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planned` (the baseline)                | Four proposal nodes on the level in their three op frames; rail reads **Ready to review · 4 proposed items**, Approve / Decline beneath.                                                                                                                                                    |
+| `approved` (+ a one-row repository set) | The canvas pane is **entirely** the establish step — _"YOUR PROJECT'S CODE / Motir will host your code"_, the it's-yours callout, **Continue** + _I already have code_. Rail reads **Approved · 4 proposed items · Added 4 items to your backlog**. The four cards are nowhere on the page. |
+| `declined`                              | The pane holds the roadmap's own empty state — **"Nothing on the roadmap yet / Work items will appear here as the plan takes shape."** Rail reads **Declined · 0 proposed items**, with the correct outcome line _"Plan declined — your tree was left untouched"_ beneath it.               |
+
+Two things only a render settles, and both shaped the panels below:
+
+1. **The declined pane is not blank — it is confidently WRONG.** It reads _"work items will appear
+   here as the plan takes shape,"_ which is the roadmap's empty copy addressed to a plan that has
+   already finished. The rail says the right thing four inches away. So Panel G is not "fill an empty
+   space"; it is "stop a correct component from being handed nothing to say".
+2. **The rail is already RIGHT in both decided states.** `DecidedOutcome`
+   (`components/planning/PlanReviewRail.tsx:323-`) renders _Added N items to your backlog_ with a
+   `--el-success` `Sparkles`, and _Plan declined — your tree was left untouched_ with a neutral
+   `--el-text-muted` `X`. **The outcome language this surface needs already exists on the page**, so
+   Panel G borrows it rather than inventing a second one — which is why nothing below is new vocabulary.
+
+## 2. What this composes — and does NOT redesign
+
+| Composed                         | Real asset / component                                                                                 | What it owns — NOT re-drawn here                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| The three `op` languages         | Part I §3 Panel B · `components/planning/PlanItemNode.tsx:74-80`                                       | `add` dashed-accent, `modify` info-ring, `remove` muted-strike. **Untouched — Panel G crosses them, never joins them** |
+| The canvas LEVEL model           | Part V Panel E · `components/planning/planLevel.tsx` · `PlanReviewCanvas.tsx`                          | Breadcrumb, the parent's real children, same-level `blocked_by` edges                                                  |
+| The proposal READ view           | Part V Panel F · `ProposalQuickView.tsx`                                                               | The door, the body, its availability on a decided plan                                                                 |
+| The rail's decided OUTCOME       | `components/planning/PlanReviewRail.tsx` `DecidedOutcome`                                              | _Added N items…_ / _Plan declined…_, the `--el-success` and neutral glyphs — **Panel G borrows this language**         |
+| The establish STEP               | Story MOTIR-1775 · MOTIR-1782 · `components/planning/repositories/RepositorySetStep.tsx`               | Every pixel INSIDE the step. Panel H moves its container and changes nothing else                                      |
+| The reserved dependency language | `design/roadmap/design-notes.md` — the red dashed + hatched cross-level anchor, dashed _not in sprint_ | Cited only to stay away from it (§3)                                                                                   |
+
+## 3. Panel G — a DECIDED node: the outcome is a FOURTH AXIS that crosses the three ops
+
+### Why it cannot be a fourth op
+
+`op` and `outcome` are independent: every one of the three ops can be accepted and every one can be
+declined, so there are **six** renderings, not four. A fourth member of the `op` set could only express
+three of them. The outcome therefore has to ride on channels the op languages do not use at all — and
+the op languages already consume border **style** (dashed vs solid), border **colour**, **fill**, the
+**ring**, **opacity** and the **strike-through**.
+
+### The two channels, and why they are free
+
+**1. The op badge gains a second SEGMENT — the outcome word.** The shipped `OpBadge` sits at the top-left
+of the node and carries the op in text already. A decided node fuses a second segment to its trailing
+edge, so the chip literally reads _op × outcome_:
+
+| chip                                      | segment 1 (the shipped op tone, unchanged)       | segment 2 (the outcome)                           |
+| ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| `add · accepted`                          | `bg-(--el-accent)` / `text-(--el-accent-text)`   | `bg-(--el-tint-mint)` / `text-(--el-text-strong)` |
+| `add · declined`                          | as above                                         | `bg-(--el-muted)` / `text-(--el-text-secondary)`  |
+| `change · accepted` / `change · declined` | `bg-(--el-tint-sky)` / `text-(--el-text-strong)` | as the two rows above                             |
+| `remove · accepted` / `remove · declined` | `bg-(--el-muted)` / `text-(--el-text-secondary)` | as the two rows above                             |
+
+Shape: the fused chip keeps `--radius-badge` on its outer corners and `--spacing-chip-x/y` per segment;
+the seam is a 1px `--el-border-soft` rule, not a gap.
+
+**2. A solid 3px SPINE on the node's inline-start edge**, full height, inside the node's own border:
+`--el-success` for accepted, `--el-text-muted` for declined. This channel is **verifiably unclaimed** —
+`grep` for `border-l` / `border-s-` / a `w-[3px]` bar across `PlanItemNode.tsx`, `WorkItemNode.tsx` and
+`ProjectRoadmapCanvas.tsx` returns nothing, and every reserved language in `design/roadmap/design-notes.md`
+is either a border **style** (dashed _pending_, dotted _skippable_, dashed _upcoming_) or a red **chip**
+(_blocked elsewhere_, _not in sprint_). A solid bar on the leading edge is neither.
+
+Its two values are not chosen: they are the rail's own outcome colours one component down —
+`--el-success` is the `Sparkles` on _Added N items to your backlog_, and the neutral is the `X` on _Plan
+declined_. The node and the rail therefore say the same thing in the same colour, four inches apart.
+
+### Non-collision, stated explicitly
+
+- **Against the three op frames** — the spine is a solid fill inside the border; no op treatment paints
+  the leading edge, and the chip's op segment is byte-identical to the shipped `OpBadge`. Adding the
+  axis changes no existing pixel of any op.
+- **Against the red dashed + hatched cross-level dependency anchor** — the spine is solid, neutral or
+  green, on the node itself rather than an off-level stub, and carries no hatch.
+- **Against dashed _not in sprint_ / dotted _skippable_ / dashed _upcoming_** — the axis touches no
+  border style at all.
+
+### State is carried by TEXT, not colour
+
+The outcome word is IN the chip (`accepted` / `declined`), which is the whole of the meaning; the spine
+is decorative reinforcement (`aria-hidden`) that makes the outcome legible at a zoom where 10.5px chip
+text is not. Nothing is conveyed by colour alone, which is the a11y rule Part I §4 already holds this
+asset to. And because the meaning is redundant in text, WCAG 1.4.11 does not bind on the spine — but
+the values clear it anyway against every surface it can sit on.
+
+### One signal that is FREE, and one that must not be faked
+
+MOTIR-3160 keys a materialized `add` by its `plan_item.workItemId` and populates `identifier`. So an
+**accepted `add` shows its real key** — `MOTIR-3166` — exactly where a pending one shows `new`, and it
+lands ON the committed node rather than beside it as a keyless ghost. That is the strongest accepted
+signal on the card and it costs no pixels.
+
+A **declined `add` keeps `new`**, and must: it never became anything, and inventing a key for it would
+be the surface asserting a work item that does not exist.
+
+### States
+
+- **Accepted `add`** — the op frame it had, the green spine, `add · accepted`, its real identifier and
+  the target's live status pill (it is a work item now).
+- **Declined `add`** — the op frame it had, the neutral spine, `add · declined`, still `new`, no status
+  pill (there is no work item to have one).
+- **Accepted `modify`** — the committed node, info ring, green spine, `change · accepted`; the diff
+  overlay stays and now reads as history — what this plan changed, old → new.
+- **Declined `modify`** — the committed node unchanged, neutral spine, `change · declined`, diff shown
+  as what was proposed and refused.
+- **Accepted `remove`** — muted frame + strike, green spine, `remove · accepted`. The target is archived;
+  the strike is now a statement of fact rather than a proposal.
+- **Declined `remove`** — muted frame + strike, neutral spine, `remove · declined`. **The strike is the
+  one place a reader could be misled** — it says _will be archived_ about a card that was not. The chip's
+  `declined` segment is what corrects it, which is why the outcome must never be colour-only here.
+- **A decided plan whose target has since been archived or hard-deleted** (`targetMissing`) — unchanged
+  from today; the decided axis adds nothing to a case Part I already covers.
+
+### The level caption
+
+The canvas's level caption (Part V Panel E's `Proposed by this plan`) becomes the plan's outcome, once,
+above the level: **`Approved · 4 items added to your backlog`** / **`Declined · nothing was created`**.
+Same primitive, same placement, one word of copy per outcome — so the page states the decision at a zoom
+where no chip is readable. Copy lives in the `planReview` namespace, and every new `en` key owes its `zh`
+counterpart (the per-card floor on MOTIR-3161 and MOTIR-3162).
+
+## 4. Panel H — what the canvas pane holds after approve: **BOTH, STACKED — the step takes a band, not the pane**
+
+### The decision, and the shipped one it re-opens
+
+Story **MOTIR-1775** / **MOTIR-1782** decided this deliberately, and the shipped prop doc on
+`PlanDetailProps.repositorySet` states the intent in its own words:
+
+> _"Present → the canvas pane holds the ESTABLISH STEP instead of the proposals: once the plan has
+> materialized, the canvas of proposals has served its purpose, and replacing it is the truthful use of
+> the space."_
+
+**That sentence is correct on its own premise, and this report overturns the premise rather than the
+conclusion.** The premise is that the pane holds **proposals** — and a proposal genuinely is spent by
+the decision that resolves it, so replacing it with the next task WAS the truthful use of the space.
+
+After MOTIR-3160 and MOTIR-3161 the pane no longer holds proposals. It holds **the record of the
+decision**: the accepted cards, on their real level, on the work items they became. A record is not
+spent by the decision — it is _produced_ by it. So _"has served its purpose"_ stops describing what is
+in the pane, and with it the reason for replacing it.
+
+There is a second, sharper reason the two can share the space at all. **They are different kinds of
+thing.** The establish step is a **task** — MOTIR-1782's own central claim is that its default path is
+_one sentence, one primary, one quiet secondary_. The canvas is a **record**. A task and a record can
+share a pane along the vertical axis; only two records compete for it. That is why replacing was
+reasonable when the pane held a spent artifact and is not once it holds a record.
+
+**So: BOTH, stacked.** The establish step keeps the TOP of the canvas pane, at its own natural height,
+for as long as it is unanswered. The canvas takes the remainder and is **never replaced**. When the step
+reaches its settled state it collapses to its shipped one-line form and the canvas has effectively the
+whole pane — no extra rule needed, because the step's own design already shrinks.
+
+**Nothing inside the step changes.** Panel H moves its container and touches no pixel of its content,
+its copy, its primary, its secondary or its states. MOTIR-1782 keeps every decision it made about what
+the step SAYS; what is re-decided is only whether saying it costs the user the thing they just approved.
+
+MOTIR-3073 already trimmed this swap for a project that ARRIVES with code — the same sentence, stopped
+half-way. This finishes it for a project that does not.
+
+### The band
+
+- Full width of the canvas pane, above the roadmap's search row, at the step's own natural height.
+- `bg-(--el-surface)` with a `border-b border-(--el-border)` hairline; the pane's own
+  `--radius-card` top corners are inherited, not re-declared.
+- The canvas occupies the remainder with `min-h-0` so it can shrink rather than push the band out — the
+  shrinking-list rule; the roadmap is pan/zoom and has never required the full pane.
+- Below `1024px` the band and the canvas keep the same order; the step already wraps.
+- **Declined** — no repository set is proposed, so there is no band at all, and the canvas has the pane.
+  This panel changes nothing for a decline; Panel G is the whole of that state's fix.
+
+### What the reader gets back
+
+The render in §1 is the test: today an approve replaces four cards with a question. With the band, the
+same approve shows _Approved · 4 items added to your backlog_ over four cards carrying their new keys,
+with the repository question above them — the answer to _what did I just say yes to_ is on the surface
+that asked it, which is the whole of MOTIR-3154's report.
+
+## 5. Tokens + primitives
+
+Colour via `--el-*` element/semantic tokens only — inlined in the mock as light values exactly as Parts
+I–V do; no Tier-0 `--color-*`, no invented hue. Shape via the element-semantic tokens (`--radius-badge`
+for the chip, `--radius-card` for the pane, `--spacing-chip-x/y`, `--el-border-soft` for the seam); no
+raw `rounded-md` / `p-2` / `h-9`. Everything composes a shipped primitive — `PlanItemNode`, `OpBadge`,
+`Pill`, `SectionLabel`, `PlanReviewCanvas`, `RepositorySetStep`. **No new primitive is introduced**; the
+fused chip is the shipped `OpBadge` with a second segment, and the spine is a border on a box that
+already exists.
+
+## 6. GIVES / TAKES sweep
+
+`grep`ped this asset for every `MOTIR-<n>` it names and read the result against MOTIR-3154's subtree
+(the asset's key list says where to START; the subtree says where to STOP).
+
+| Key                                                                       | Element / structure / premise                                                                                                              | Gives / takes                   | Action                                                                  |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------- |
+| **MOTIR-3161**                                                            | **ELEMENT** — Panel G's fused chip, the spine, the six states, the level caption; **STRUCTURE** — Panel H's stacked pane                   | **GIVES**                       | none; its criteria already say _"in the treatment the design decides"_  |
+| **MOTIR-3162**                                                            | **STRUCTURE** — the workspace canvas keeps `review` after approve AND discard, so the same decided treatment has something to draw         | **GIVES**                       | none; its criteria are about the overlay surviving, which this presumes |
+| **MOTIR-3160**                                                            | **PREMISE** — an accepted `add` keyed by `workItemId` is what lets the treatment land ON the committed node                                | **GIVES** (consumes, not takes) | none — this design depends on 3160, and 3161 already `blocked_by` both  |
+| **MOTIR-3163**                                                            | **ELEMENT** — the E2E now has named things to assert: the chip's outcome word and the band's coexistence                                   | **GIVES**                       | none; its criterion is _the outcome ALONGSIDE the proposals_, satisfied |
+| **MOTIR-3165**                                                            | neither — a decided plan's staleness verdict is an engine rule, and this draws no stale treatment                                          | neither                         | none                                                                    |
+| **MOTIR-1775 / MOTIR-1782**                                               | **PREMISE** — their _replace the pane_ decision is re-decided here, in the open, to _stack_                                                | **TAKES**                       | **applied — see below**                                                 |
+| MOTIR-3073                                                                | **PREMISE** — it trimmed the same swap one case at a time; this finishes the sentence rather than contradicting it                         | neither                         | none — its own case is unchanged                                        |
+| MOTIR-1377                                                                | **PREMISE** — its `decided` short-circuit exists because a declined plan had no items; once it has them the guard stops shadowing anything | neither                         | none — removing it is MOTIR-3161's call, as that card's scope says      |
+| MOTIR-3082 / MOTIR-3083 / MOTIR-3084                                      | neither — Panels E and F are composed as they stand                                                                                        | neither                         | none                                                                    |
+| MOTIR-843 / MOTIR-847 / MOTIR-1370 / MOTIR-3070 / MOTIR-3074 / MOTIR-2985 | neither — cited as history / provenance                                                                                                    | neither                         | none                                                                    |
+
+**The one TAKES, and how it is discharged.** MOTIR-1775 and MOTIR-1782 are both `done` and merged; their
+acceptance criteria describe a step that shipped and still ships, and **not one of them is invalidated** —
+the step's content, copy, states and behaviour are exactly as they specified. What this design takes is
+narrower and is a PREMISE, not an element: _the step occupies the pane INSTEAD of the canvas_. Because
+that premise lives in a shipped prop doc rather than in a criterion, the amendment owed is to the
+**code comment that states it**, and that edit belongs to MOTIR-3161 — the card that opens
+`PlanDetail.tsx`. It is named there so the re-decision cannot land as a silent edit: the comment must be
+REPLACED with the stacked rule and a citation of this Part, never deleted.
+
+## 7. Access path
+
+Unchanged — the "Plans" left-nav entry → the Plans list → a row → the plan detail (Part I §5). A decided
+plan is reached exactly as an undecided one is; the only difference is what the pane holds when you get
+there, which is the subject of Panels G and H.
