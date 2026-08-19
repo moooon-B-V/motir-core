@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { PlanReviewRail, type PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import { RepositorySetStep } from '@/components/planning/repositories/RepositorySetStep';
 import {
@@ -45,11 +46,30 @@ export interface PlanDetailProps {
   ariaLabel?: string;
   /**
    * The project's repository SET, when the plan is approved and the project has
-   * one (Story MOTIR-1775 · MOTIR-1782). Present → the canvas pane holds the
-   * ESTABLISH STEP instead of the proposals: once the plan has materialized, the
-   * canvas of proposals has served its purpose, and replacing it is the truthful
-   * use of the space. The rail is untouched and still reads "Approved", which is
-   * what lets the user see their plan is safe while they answer.
+   * one (Story MOTIR-1775 · MOTIR-1782). Present → the establish step takes a
+   * BAND across the TOP of the canvas pane, at its own natural height, and the
+   * canvas takes the remainder.
+   *
+   * ⚠️ THIS REPLACES, AND DOES NOT DELETE, THE RULE THAT STOOD HERE
+   * (`design/ai-planning/design-notes.md` Part VI §4; bug MOTIR-3154). It read:
+   * *"Present → the canvas pane holds the ESTABLISH STEP instead of the
+   * proposals: once the plan has materialized, the canvas of proposals has served
+   * its purpose, and replacing it is the truthful use of the space."*
+   *
+   * That is correct ON ITS OWN PREMISE, and Part VI overturns the premise rather
+   * than the conclusion. The premise is that the pane holds PROPOSALS — and a
+   * proposal genuinely is spent by the decision that resolves it, so replacing it
+   * with the next task WAS the truthful use of the space. After MOTIR-3160 and
+   * MOTIR-3161 the pane no longer holds proposals: it holds the RECORD of the
+   * decision — the accepted cards, on their real level, on the work items they
+   * became — and a record is PRODUCED by the decision rather than spent by it.
+   *
+   * The second reason they can share the pane at all is that they are different
+   * KINDS. The establish step is a TASK — MOTIR-1782's own central claim is that
+   * its default path is one sentence, one primary, one quiet secondary. The
+   * canvas is a RECORD. A task and a record can share a pane vertically; only two
+   * records compete for it. Nothing INSIDE the step changes: MOTIR-1782 keeps
+   * every decision it made about what the step says.
    *
    * Null → nothing changes (an un-decided plan, a declined one, a project with no
    * set, or a repo-set read that failed — the step is an addition to this page,
@@ -166,13 +186,19 @@ export function PlanDetail({
 
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
-  // A DECIDED plan (approved/declined) is NEVER empty even with zero items:
-  // `declinePlan` DROPS every PlanItem, so without the `!decided` short-circuit a
-  // declined plan falls into this empty state and SHADOWS the review rail's
-  // declined outcome ("Plan declined — your tree was left untouched") — MOTIR-1377.
-  // A decided plan's outcome lives in `PlanReviewRail`'s `DecidedOutcome`, so it
-  // must always flow to the rail regardless of item count.
+  // A DECIDED plan (approved/declined) is NEVER empty, and the `!decided`
+  // short-circuit stays — but its REASON has changed (MOTIR-3161). It was added
+  // because `declinePlan` DROPPED every PlanItem, so a declined plan fell into
+  // this empty state and SHADOWED the rail's declined outcome ("Plan declined —
+  // your tree was left untouched") — MOTIR-1377. MOTIR-3160 retains the rows, so
+  // a declined plan is no longer empty and the guard no longer covers for that.
+  // It is kept because a decided plan's outcome must reach the rail regardless of
+  // item count: a plan decided with genuinely zero proposals still has an outcome
+  // to state, and the discovery hand-off is the wrong thing to say about it.
   const decided = review.status === 'approved' || review.status === 'declined';
+  // The plan's decision, drawn on every node the plan contributes (MOTIR-3161).
+  const outcome: PlanItemOutcome | null =
+    review.status === 'approved' ? 'accepted' : review.status === 'declined' ? 'declined' : null;
   const isEmpty = review.items.length === 0 && review.status !== 'generating' && !decided;
 
   if (isEmpty) {
@@ -198,22 +224,37 @@ export function PlanDetail({
       <PlanningWorkspace
         className="h-full w-full"
         canvas={
-          repositorySet ? (
-            <RepositorySetStep
-              projectKey={repositorySet.projectKey}
-              initialView={repositorySet.view}
-              backlogHref="/items"
-              connectHref="/settings/workspace/github"
-              onOutcomeChange={setReportedCodeOutcome}
-            />
-          ) : (
-            <PlanReviewCanvas
-              items={review.items}
-              projectKey={projectKey}
-              version={version}
-              ariaLabel={ariaLabel ?? t('canvasAria')}
-            />
-          )
+          // BOTH, STACKED (Part VI §4). The step takes a band at the top at its
+          // own natural height; the canvas takes the remainder with `min-h-0` so
+          // it SHRINKS rather than pushing the band out, and is never replaced.
+          // Once the step settles it collapses to its own one-line form and the
+          // canvas has effectively the whole pane — no extra rule needed, because
+          // the step's own design already shrinks.
+          <div className="flex h-full min-h-0 w-full flex-col">
+            {repositorySet ? (
+              <div
+                data-testid="plan-detail-establish-band"
+                className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
+              >
+                <RepositorySetStep
+                  projectKey={repositorySet.projectKey}
+                  initialView={repositorySet.view}
+                  backlogHref="/items"
+                  connectHref="/settings/workspace/github"
+                  onOutcomeChange={setReportedCodeOutcome}
+                />
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1">
+              <PlanReviewCanvas
+                items={review.items}
+                projectKey={projectKey}
+                version={version}
+                outcome={outcome}
+                ariaLabel={ariaLabel ?? t('canvasAria')}
+              />
+            </div>
+          </div>
         }
         chat={
           <PlanReviewRail

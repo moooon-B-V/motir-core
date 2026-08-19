@@ -239,8 +239,18 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
       <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={repositorySet()} />,
     );
 
+    // ⚠️ AMENDED by MOTIR-3161 (bug MOTIR-3154). This asserted
+    // `plan-review-canvas` was GONE — the rule Story MOTIR-1775 / MOTIR-1782
+    // shipped, that the step REPLACES the canvas. `design/ai-planning/design-notes.md`
+    // Part VI §4 re-decides it: after MOTIR-3160 the pane holds the RECORD of the
+    // decision rather than the spent proposals, so the step now STACKS above the
+    // canvas instead of taking its place.
+    //
+    // What this case is ACTUALLY about is unchanged and is what still matters
+    // here: the refresh's prop reaches a LIVE island and the step appears with no
+    // remount. Both halves are now asserted.
     expect(screen.getByTestId('repository-set-step')).toBeTruthy();
-    expect(screen.queryByTestId('plan-review-canvas')).toBeNull();
+    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
   });
 
   it('carries the rail code line from a prop delivered AFTER mount — not a mount-time seed', () => {

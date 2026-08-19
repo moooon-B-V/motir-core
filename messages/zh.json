@@ -186,6 +186,8 @@
     "opAdd": "新增",
     "opModify": "变更",
     "opRemove": "移除",
+    "outcomeAccepted": "已接受",
+    "outcomeDeclined": "已拒绝",
     "field_title": "标题",
     "field_priority": "优先级",
     "field_type": "类型",
