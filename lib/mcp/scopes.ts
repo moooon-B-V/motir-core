@@ -160,6 +160,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   whoami: 'read',
   list_projects: 'read',
   get_project_state: 'read',
+  skeleton: 'read',
+  // The SEMANTIC search (MOTIR-3101). A read at the gate — `assertCanBrowse` and
+  // nothing more — which is what this legacy table records. That it also spends
+  // an AI call is bounded by the `ai:chat` rate limit inside the tool, not by a
+  // scope: this vocabulary has no billing axis at all, which is one of the things
+  // `docs/decisions/token-permissions.md` §3 replaced it to fix.
+  search_work_items_semantic: 'read',
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',

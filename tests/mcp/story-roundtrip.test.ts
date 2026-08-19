@@ -244,6 +244,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // Resource-targeting: the key names tenant A's project, so a non-member
         // must read its state as not-found rather than learn A's setup.
         get_project_state: { projectKey: 'PROD' },
+        // The ORIENTING read (MOTIR-3100) — project-keyed, so a non-member must
+        // read tenant A's tree as not-found rather than receive its SHAPE. A
+        // partial skeleton would be the worst possible leak here: it names every
+        // card A has.
+        skeleton: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
@@ -270,6 +275,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
         search_work_items: { projectKey: 'PROD' },
+        // The SEMANTIC search (MOTIR-3101) — project-keyed like its substring
+        // sibling, so a non-member must read tenant A's project as not-found
+        // rather than receive a ranking over it. The refusal must also land
+        // BEFORE the embed, which is why the gate is the service's first line.
+        search_work_items_semantic: { projectKey: 'PROD', query: 'anything at all' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
@@ -636,6 +646,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // loop asserts every `read` tool actually EXECUTES, and an unconfigured
         // project is exactly the well-formed "nothing configured" answer.
         get_project_state: { projectKey: 'PROD' },
+        skeleton: { projectKey: 'PROD' },
         get_work_item: { key: item1 },
         get_work_item_activity: { key: item1 },
         list_ready: { projectKey: 'PROD' },
@@ -654,6 +665,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },
         search_work_items: { projectKey: 'PROD' },
+        // Read-scoped and aimed at the caller's OWN project. With no motir-ai
+        // configured under test it answers `outcome: 'unavailable'` — a SUCCESS
+        // result carrying a readable message, which is exactly the contract
+        // Amendment 2 pins: "I could not search" is an answer, not an error.
+        search_work_items_semantic: { projectKey: 'PROD', query: 'anything at all' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
