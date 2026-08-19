@@ -296,6 +296,143 @@ describe('planReviewService.getPlanReview', () => {
     expect(item.parentTitle).toBeNull();
   });
 
+  // ── MOTIR-3160 (bug MOTIR-3154) — the DECIDED review model ────────────────
+  //
+  // Two seams that destroyed or mis-keyed the data a decided card is drawn from.
+  // Both are read BACK through the review DTO here, which is where the drift
+  // would otherwise only show up as a canvas that draws nothing (declined) or a
+  // keyless duplicate node (approved).
+
+  it('returns a DECLINED plan its proposals — the rows are the record of the decision', async () => {
+    const fx = await makeWorkItemFixture();
+    const modifyTarget = await seedItem(fx, 'Left alone');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Refused plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'Never created', kind: 'task' } },
+        { op: 'modify', workItemId: modifyTarget.id, patch: { title: 'Never applied' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.declinePlan(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+
+    expect(review.status).toBe('declined');
+    expect(review.itemCount).toBe(2);
+    expect(review.items).toHaveLength(2);
+    expect(review.items.map((i) => i.op).sort()).toEqual(['add', 'modify']);
+    expect(review.decidedByName).not.toBeNull();
+    expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'declined']);
+
+    // The refused `add` never became anything, so it keys by its own id and has
+    // no identifier — inventing one would be the surface asserting a work item
+    // that does not exist.
+    const add = review.items.find((i) => i.op === 'add')!;
+    expect(add.nodeId).toBe(add.planItemId);
+    expect(add.identifier).toBeNull();
+    expect(add.status).toBeNull();
+    expect(add.title).toBe('Never created');
+  });
+
+  it('keys a MATERIALIZED add by the work item it became, and names it', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Accepted plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Becomes a real card', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // BEFORE the decision: not about anything yet.
+    const before = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const pending = before.items[0]!;
+    expect(pending.nodeId).toBe(pending.planItemId);
+    expect(pending.identifier).toBeNull();
+    expect(pending.status).toBeNull();
+
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Becomes a real card' },
+    });
+    const after = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const accepted = after.items[0]!;
+
+    // AFTER: the SAME node as the committed item, not a keyless ghost beside it.
+    expect(accepted.nodeId).toBe(created.id);
+    expect(accepted.nodeId).not.toBe(accepted.planItemId);
+    expect(accepted.identifier).toBe(created.identifier);
+    expect(accepted.status).toBe(created.status);
+  });
+
+  it('resolves an intra-plan ref to the referenced add NODE id once it materializes', async () => {
+    // The rule above makes a node id differ from the plan-item id, so a
+    // `planItem:<id>` parent / blocker ref can no longer resolve to the
+    // referenced id itself — it has to follow the referenced item to its node,
+    // or an approved parent's children point at a node that is not on the canvas.
+    const fx = await makeWorkItemFixture();
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Two layers' }, fx.ctx);
+    const first = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Proposed parent', kind: 'story' } }],
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: `planItem:${first.items[0]!.id}`,
+          proposedFields: { title: 'Proposed child', kind: 'task' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const parent = review.items.find((i) => i.title === 'Proposed parent')!;
+    const child = review.items.find((i) => i.title === 'Proposed child')!;
+
+    expect(parent.nodeId).not.toBe(parent.planItemId); // materialized
+    expect(child.parentNodeId).toBe(parent.nodeId); // …and the child follows it
+    expect(parent.hasChildren).toBe(true);
+  });
+
+  it('leaves modify / remove node-id resolution exactly as it was', async () => {
+    const fx = await makeWorkItemFixture();
+    const modifyTarget = await seedItem(fx, 'Modify me');
+    const removeTarget = await seedItem(fx, 'Remove me');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Pin plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: modifyTarget.id, patch: { title: 'Modified' } },
+        { op: 'remove', workItemId: removeTarget.id },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    const remove = review.items.find((i) => i.op === 'remove')!;
+
+    expect(modify.nodeId).toBe(modifyTarget.id);
+    expect(modify.identifier).toBe(modifyTarget.identifier);
+    expect(remove.nodeId).toBe(removeTarget.id);
+    expect(remove.identifier).toBe(removeTarget.identifier);
+  });
+
   it('throws PlanNotFoundError for a missing plan', async () => {
     const fx = await makeWorkItemFixture();
     await expect(
