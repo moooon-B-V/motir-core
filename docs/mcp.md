@@ -1473,6 +1473,160 @@ Errors: an unknown / other-tenant `projectKey` or `planId` returns
 malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
 `PLAN_NOT_GENERATING`.
 
+##### `validate_plan` — CHECK the plan BEFORE `final: true`
+
+The step between the last `add_plan_items` and the one that closes the plan, and
+the only moment it is cheap. It answers _"is what I just proposed finishable?"_
+over the project's live tree **⊕** this plan's proposals — the same check
+Motir's own generator runs as its pre-commit post-condition, which is why a
+Motir-generated plan arrives coherent.
+
+| Input       | Type   | Required | Notes                                                                                                                             |
+| ----------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `planId`    | string | yes      | The id `create_plan` returned.                                                                                                    |
+| `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
+
+**Output** — `structuredContent`: `{ planId, valid, blockers }`. Each blocker is
+`{ item, blockedBy, blockerStatus, blockerSprintId }`; an `item` or `blockedBy`
+of the form `planItem:<id>` names a **proposal in this plan**, not a work item.
+
+```jsonc
+validate_plan({ planId })
+// → { planId: "cm…", valid: false, blockers: [
+//      { item: "planItem:ck_email", blockedBy: "ACME-14",
+//        blockerStatus: "todo", blockerSprintId: null } ] }
+// "the invoice-email card I proposed is gated by ACME-14, which is neither in
+//  this plan nor done" — fixable now, in the plan, before anybody reads it.
+```
+
+> **⚠️ What `valid: true` means, exactly.** The containing set is the whole
+> projected forest of the plan's PROJECT — so a not-done item in the same project
+> is IN the set and does not gate, under either `condition`. The gate this
+> catches is an out-of-forest one: a **cross-project** blocker, or (under
+> `tight`) a done one. Read it as _"nothing outside this project's forest gates
+> this plan"_, not as _"every dependency is satisfied"_.
+
+**This is the WHOLE-plan verdict and takes no target.** Do not approximate it by
+looping `validate_work_item` per root: a `blocked_by` edge between two sibling
+roots — a story under proposed epic B gated by one under proposed epic A — is
+VALID here, because both materialize together, and a false positive per-root.
+For ONE subtree, pass `planId` to `validate_work_item` instead.
+
+Requires **`project:browse`** — the key `plansService.getPlan` asserts, the same
+one the two other validators name. It is **not** `ai:view_plan`: that key gates
+the plan DECISIONS (approve / decline / append), and this one decides nothing.
+
+Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
+(404-not-403, no existence leak).
+
+##### The PROJECTED mode on the existing validators
+
+`validate_work_item` and `validate_sprint` each take the same optional
+**`planId`**, and ask their own question over the projection instead of the
+committed tree:
+
+- **`validate_work_item({ key, planId })`** — is this SUBTREE finishable once the
+  plan materializes? `key` may be a committed identifier (`"ACME-7"`) **or** a
+  `planItem:<id>` temp-ref naming an `add` in that plan, which is the case an
+  authoring agent usually has: the card it wants to check has no key yet.
+- **`validate_sprint({ planId })`** — will the project's ACTIVE sprint still be
+  finishable once the plan materializes? On this path the plan names its own
+  project, so `projectKey` is not required; `sprintId` is **refused** rather than
+  ignored, because a projected verdict is always about the active sprint (an
+  `add` lands in the backlog, and a plan cannot move anything into a sprint).
+
+> **⚠️ Omitting `planId` is not a mode — it is the tool as it has always been.**
+> A call without it never builds a projection at all and returns exactly what it
+> returned before this existed. Both modes are **read-only**: a projection is
+> assembled in memory, answered from, and thrown away. Nothing is created,
+> nothing is mutated, and no proposal becomes a work item except by approving
+> the plan in Motir.
+
+> **The reads that deliberately do NOT take a `planId`:** `list_ready`,
+> `next_ready` and `claim_next_ready`. **A proposal is not dispatchable** — it has
+> no key, nothing can claim it, and a ready list that included one would put a
+> card in front of an agent whose very next call is _claim this_. That exclusion
+> is a decision, not an omission (`docs/decisions/agent-authored-plans.md`
+> AMENDMENT 3, Q6).
+
+##### The PROJECTED mode on the two READS
+
+`get_work_item` and `search_work_items` take the same optional **`planId`** and
+answer over the projection — the project's live tree **⊕** that plan's proposals
+— so an agent can ask _"what does the tree look like WITH what I just
+proposed"_ in one call, instead of fetching `get_plan` and merging it against a
+search by hand on every turn.
+
+**A proposal is never mixed into a work item's array.** It rides its own —
+`proposals` on a search, `proposedChildren` on a projected detail — and each row
+additionally carries `proposal: true` and `key: null`, because a proposal has no
+key until the plan is approved and **none is ever invented for it**. Two locks,
+so a caller that flattens the arrays still cannot confuse the two.
+
+**`get_work_item({ key, planId })`** answers under a `projection` key, and the
+ordinary `children` array comes back EMPTY — a keyless proposal cannot sit in the
+array committed children use, and nothing about that array is widened:
+
+| `projection.…`      | What it holds                                                                  |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `target`            | the card itself — a proposal (addressed by `planItem:<id>`) or a committed row |
+| `parent`            | the projected parent, or null                                                  |
+| `committedChildren` | committed children, minus any the plan removes                                 |
+| `proposedChildren`  | children **this plan** proposes under the target                               |
+| `blockedBy`         | the projected dependency edges — committed and proposed, each self-marked      |
+
+A caller branches on `projection` being present, exactly as it does on a search.
+
+| Field              | What it holds                                                                  |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `target`           | the card itself — a proposal (addressed by `planItem:<id>`) or a committed row |
+| `parent`           | the projected parent, or null                                                  |
+| `children`         | COMMITTED children only, minus any the plan removes                            |
+| `proposedChildren` | children **this plan** proposes under the target                               |
+| `blockedBy`        | the projected dependency edges — committed and proposed, each self-marked      |
+
+`key` may be a committed identifier **or** a `planItem:<id>` temp-ref, which is
+what an authoring agent usually holds. A committed row the plan `modify`s
+carries the patch verbatim as `pendingPatch` — _this is the row as it stands,
+and this is what the plan would change about it_ — and one the plan `remove`s
+comes back with `status: "removed_by_plan"` rather than as a not-found.
+
+**`search_work_items({ projectKey, filter, planId })`** keeps `items` as the
+filtered committed page (minus anything the plan removes) and adds:
+
+```jsonc
+{
+  "items": [ /* committed rows, exactly as without planId */ ],
+  "total": 42,
+  "nextCursor": null,
+  "projection": {
+    "planId": "cm…",
+    "filterAppliesTo": "items",
+    "removedIds": ["cmq…"],
+    "modifiedIds": ["cmr…"]
+  },
+  "proposals": [
+    { "proposal": true, "key": null, "tempRef": "planItem:ck_pdf",
+      "planItemId": "ck_pdf", "title": "Invoice PDF", "kind": "subtask", … }
+  ]
+}
+```
+
+> **⚠️ THE FILTER DOES NOT REACH PROPOSALS, and `projection.filterAppliesTo`
+> says so on every response.** The FilterAST compiles to parameterized SQL over
+> `work_item` rows, through the one registry that makes it injection-safe. A
+> proposal is not such a row, so the choice was between reimplementing the whole
+> grammar in memory — a second compiler, guaranteed to drift from the one the
+> `/items` page uses — and saying plainly what the filter covers. Motir says it:
+> `items` is filtered, `proposals` is the plan's **whole** `add` set. That answer
+> is the same every time, rather than an accident of which fields a given
+> proposal happens to carry.
+
+> **Omitting `planId` is not a mode.** Neither read builds a projection without
+> it, and the response has no `projection` / `proposals` key at all — so a call
+> without it is byte-identical to what it returned before this existed. Both
+> modes are read-only.
+
 #### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
 
 Changing a plan in Motir is not a one-shot prompt: it is a **persisted,

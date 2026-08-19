@@ -1,13 +1,19 @@
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { plansService, TEMP_REF_PREFIX } from '@/lib/services/plansService';
-import { workItemsService } from '@/lib/services/workItemsService';
-import { workflowsService } from '@/lib/services/workflowsService';
+import { TEMP_REF_PREFIX } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
-import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+// The PROJECTION itself moved to its own service in MOTIR-3096, because the
+// projected READS are a second consumer of it. The rules are unchanged; what
+// changed is that they are no longer private to this file.
+import {
+  buildProjection,
+  isDone,
+  resolveProjectedRoot,
+  type Projection,
+  type ProjectedNode,
+} from '@/lib/services/planProjectionService';
 import {
   buildProseVsGraphAdvisories,
   type ProseAdvisoryLocalRef,
@@ -50,260 +56,11 @@ import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sp
 // A blocker named in the verdict may be a `planItem:<id>` temp-ref when the gating
 // node is a not-yet-materialized `add` — the DTO's `item` / `blockedBy` are plain
 // strings, so no schema change is needed (the contract, 7.28.3).
-
-/** One node in the projected virtual graph (a real work item, or a plan `add`). */
-interface ProjectedNode {
-  /** Real `workItemId`, or the temp-ref `planItem:<planItemId>` for an `add`. */
-  id: string;
-  /** Real identifier (e.g. "MOTIR-1337"), or the temp-ref for an `add`. */
-  identifier: string;
-  /** Raw workflow status key (an `add` carries the project's initial status). */
-  status: string;
-  /** The node's project (a blocker can be cross-project; finding #21). */
-  projectId: string;
-  /** Projected parent id (a real id or a temp-ref), or null. */
-  parentId: string | null;
-  /** Sprint membership; an `add` lands in the backlog → null. */
-  sprintId: string | null;
-}
-
-/** The assembled projection: nodes + projected `blocked_by` adjacency. */
-interface Projection {
-  projectId: string;
-  /** id → node. Removed nodes are absent. */
-  nodes: Map<string, ProjectedNode>;
-  /** from-id → set of blocker (to) ids — the projected `is_blocked_by` edges. */
-  blockedBy: Map<string, Set<string>>;
-  /** parent-id → child ids — derived from `nodes`' projected `parentId`. */
-  childrenByParent: Map<string, string[]>;
-  /** Per-project terminal (`category = 'done'`) status keys, for done-ness. */
-  terminalByProject: Map<string, Set<string>>;
-  /**
-   * The PROPOSED body of each `add`, keyed by its temp-ref — the only place a
-   * not-yet-materialized node's `descriptionMd` exists, so the prose-vs-graph
-   * advisory (MOTIR-1969) can scan a projected card the same way it scans a live
-   * one. Real nodes' bodies are read on demand for the members actually scanned;
-   * they are deliberately NOT loaded here, because `buildProjection` reads the
-   * WHOLE project and descriptions are long.
-   */
-  projectedDescription: Map<string, string | null>;
-  /**
-   * The PROJECTED `type` / `executor` of each node the plan sets one on — an
-   * `add`'s proposed values, or a `modify`'s patched `type`. Read ONLY by the
-   * ORDERING advisory's exemption (MOTIR-2175), which suppresses on
-   * `type: 'deploy'` / `executor: 'human'`: a plan that PROPOSES the release
-   * trio's *cut* leg must not be warned about the very shape gate 14 asked for.
-   *
-   * Sparse, with `has()` semantics exactly like {@link projectedDescription}:
-   * absent means "the plan does not touch it", so the stored value wins. (A
-   * `modify` patch carries no `executor` field at all, so a modified node's
-   * executor is always the stored one.)
-   */
-  projectedType: Map<string, string | null>;
-  projectedExecutor: Map<string, string | null>;
-}
-
-function addEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: string): void {
-  const set = blockedBy.get(fromId);
-  if (set) set.add(toId);
-  else blockedBy.set(fromId, new Set([toId]));
-}
-
-function removeEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: string): void {
-  blockedBy.get(fromId)?.delete(toId);
-}
-
-/**
- * Build the virtual graph = the project's live tree ⊕ the plan's PlanItem delta.
- * Pure in-memory over read-only repository loads — NOTHING is persisted. The plan
- * is read through `plansService.getPlan`, which applies the browse access gate, so
- * the caller never reaches a plan/project it can't see.
- */
-async function buildProjection(planId: string, ctx: ServiceContext): Promise<Projection> {
-  const plan = await plansService.getPlan(planId, ctx);
-  const projectId = plan.projectId;
-
-  // The project's live node set + the initial status an `add` would be created in.
-  // The plan-health verdict's whole input, in ONE bound transaction. Unbound
-  // these returned nothing, and a validity check over an empty set does not
-  // report "I could not tell" — every rule is satisfied by an absence, so a plan
-  // with real problems was pronounced healthy.
-  const liveItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemRepository.findAllByProjectForValidity(projectId, ctx.workspaceId, tx),
-  );
-  const initialStatus =
-    (await workflowsService.getInitialStatusKey(projectId, ctx.workspaceId)) ?? '';
-
-  const nodes = new Map<string, ProjectedNode>();
-  for (const it of liveItems) {
-    nodes.set(it.id, {
-      id: it.id,
-      identifier: it.identifier,
-      status: it.status,
-      projectId: it.projectId,
-      parentId: it.parentId,
-      sprintId: it.sprintId,
-    });
-  }
-
-  // Live `is_blocked_by` edges among the project's items. The blocker may be
-  // cross-project (a block can span projects) — carry it in as a node from the
-  // edge's own fields so its done-ness/membership is judged against its OWN project.
-  const blockedBy = new Map<string, Set<string>>();
-  const liveEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemLinkRepository.findBlockerEdgesForItems(
-      liveItems.map((it) => it.id),
-      undefined,
-      tx,
-    ),
-  );
-  for (const e of liveEdges) {
-    if (!nodes.has(e.blockerId)) {
-      nodes.set(e.blockerId, {
-        id: e.blockerId,
-        identifier: e.blockerKey,
-        status: e.blockerStatus,
-        projectId: e.blockerProjectId,
-        parentId: null,
-        sprintId: e.blockerSprintId,
-      });
-    }
-    addEdge(blockedBy, e.fromId, e.blockerId);
-  }
-
-  const resolveRef = (ref: string): string =>
-    ref.startsWith(TEMP_REF_PREFIX)
-      ? `${TEMP_REF_PREFIX}${ref.slice(TEMP_REF_PREFIX.length)}`
-      : ref;
-
-  const adds = plan.items.filter((i) => i.op === 'add');
-  const modifies = plan.items.filter((i) => i.op === 'modify');
-  const removes = plan.items.filter((i) => i.op === 'remove');
-
-  // Pass 1 — virtual `add` nodes (keyed by their temp-ref, so an intra-plan
-  // parent/blocker ref resolves with no topo ordering needed).
-  const projectedDescription = new Map<string, string | null>();
-  const projectedType = new Map<string, string | null>();
-  const projectedExecutor = new Map<string, string | null>();
-  for (const item of adds) {
-    const id = `${TEMP_REF_PREFIX}${item.id}`;
-    projectedDescription.set(id, item.proposedFields?.descriptionMd ?? null);
-    // An `add` has no stored row, so its proposed shape is the ONLY shape there
-    // is — set both keys unconditionally, absent proposal included (`null`).
-    projectedType.set(id, item.proposedFields?.type ?? null);
-    projectedExecutor.set(id, item.proposedFields?.executor ?? null);
-    nodes.set(id, {
-      id,
-      identifier: id,
-      status: initialStatus,
-      projectId,
-      parentId: item.parentRef ? resolveRef(item.parentRef) : null,
-      sprintId: null,
-    });
-  }
-
-  // A real id an `add`/`modify` references but the project load didn't cover (a
-  // cross-project blocker not already on a live edge). Resolve it to a node so its
-  // status/project/sprint are real; an archived/missing ref simply yields no node,
-  // so the edge is dropped (mirrors the archived-blocker read-exclusion).
-  const referenced = new Set<string>();
-  const note = (ref: string) => {
-    const id = resolveRef(ref);
-    if (!id.startsWith(TEMP_REF_PREFIX) && !nodes.has(id)) referenced.add(id);
-  };
-  for (const item of adds) item.blockedByRefs.forEach(note);
-  for (const item of modifies) (item.patch?.blockedByAdd ?? []).forEach(note);
-  if (referenced.size > 0) {
-    const extra = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdsInWorkspace([...referenced], ctx.workspaceId, tx),
-    );
-    for (const row of extra) {
-      if (row.archivedAt) continue;
-      nodes.set(row.id, {
-        id: row.id,
-        identifier: row.identifier,
-        status: row.status,
-        projectId: row.projectId,
-        parentId: row.parentId,
-        sprintId: row.sprintId,
-      });
-    }
-  }
-
-  // Pass 2 — `add` blocked_by edges (all add targets now exist).
-  for (const item of adds) {
-    const fromId = `${TEMP_REF_PREFIX}${item.id}`;
-    for (const ref of item.blockedByRefs) {
-      const toId = resolveRef(ref);
-      if (nodes.has(toId)) addEdge(blockedBy, fromId, toId);
-    }
-  }
-
-  // Pass 3 — `modify` edge changes (title/priority/type ignored for finishability).
-  for (const item of modifies) {
-    if (!item.workItemId || !nodes.has(item.workItemId)) continue;
-    // A patched BODY is what the prose-vs-graph advisory must scan — the plan's
-    // proposed text, not the stored one. Sparse-patch semantics: the key being
-    // ABSENT means unchanged (fall through to the live body); present-but-null
-    // means the plan clears it.
-    if (item.patch && 'descriptionMd' in item.patch) {
-      projectedDescription.set(item.workItemId, item.patch.descriptionMd ?? null);
-    }
-    // Same sparse-patch semantics for the ORDERING exemption's `type`
-    // (MOTIR-2175). `PlanItemPatch` has no `executor` key, so a modified node's
-    // executor is never projected — the stored value stands.
-    if (item.patch && 'type' in item.patch) {
-      projectedType.set(item.workItemId, item.patch.type ?? null);
-    }
-    for (const ref of item.patch?.blockedByAdd ?? []) {
-      const toId = resolveRef(ref);
-      if (nodes.has(toId)) addEdge(blockedBy, item.workItemId, toId);
-    }
-    for (const ref of item.patch?.blockedByRemove ?? []) {
-      removeEdge(blockedBy, item.workItemId, resolveRef(ref));
-    }
-  }
-
-  // Pass 4 (LAST) — `remove` drops the target node AND every edge touching it, so
-  // a removed item neither gates nor is gated even if an earlier pass added an edge.
-  for (const item of removes) {
-    const target = item.workItemId;
-    if (!target) continue;
-    nodes.delete(target);
-    blockedBy.delete(target);
-    for (const set of blockedBy.values()) set.delete(target);
-  }
-
-  // Derived parent→child adjacency over the final projected `parentId` edges.
-  const childrenByParent = new Map<string, string[]>();
-  for (const node of nodes.values()) {
-    if (node.parentId == null) continue;
-    const arr = childrenByParent.get(node.parentId);
-    if (arr) arr.push(node.id);
-    else childrenByParent.set(node.parentId, [node.id]);
-  }
-
-  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-    [...new Set([...nodes.values()].map((n) => n.projectId))],
-    ctx.workspaceId,
-  );
-
-  return {
-    projectId,
-    nodes,
-    blockedBy,
-    childrenByParent,
-    terminalByProject,
-    projectedDescription,
-    projectedType,
-    projectedExecutor,
-  };
-}
-
-/** Is a node's raw status terminal (`category = 'done'`) in its OWN project? */
-function isDone(proj: Projection, node: ProjectedNode): boolean {
-  return proj.terminalByProject.get(node.projectId)?.has(node.status) ?? false;
-}
+//
+// ⚠️ The PROJECTION moved to `lib/services/planProjectionService.ts` (MOTIR-3096)
+// when the projected READS became its second consumer. Its semantics — the three
+// op kinds, temp-ref resolution, the never-persisted contract — are documented
+// there, verbatim from here, and are unchanged by the move.
 
 /** Stable wire order: by gated item, then by blocker. */
 function sortBlockers(blockers: SprintBlockerDto[]): SprintBlockerDto[] {
@@ -413,28 +170,6 @@ async function projectedProseAdvisories(
   }
 
   return buildProseVsGraphAdvisories(subjects, ctx, localRefs);
-}
-
-/**
- * Resolve the subtree-validation ROOT. A `planItem:<id>` temp-ref points at an
- * `add` THIS plan proposes — it lives in the projection (keyed by its temp-ref),
- * so resolve it there; an unknown temp-ref (no such proposed node) is a
- * `WorkItemNotFoundError`. Any other key is a REAL item resolved against the live
- * tree (the existing-anchor / extend case). Returns just `{ id, identifier }` —
- * the only fields the subtree walk + verdict need (MOTIR-1431).
- */
-async function resolveProjectedRoot(
-  proj: Projection,
-  targetKey: string,
-  ctx: ServiceContext,
-): Promise<{ id: string; identifier: string }> {
-  if (targetKey.startsWith(TEMP_REF_PREFIX)) {
-    const node = proj.nodes.get(targetKey);
-    if (!node) throw new WorkItemNotFoundError(targetKey);
-    return { id: node.id, identifier: node.identifier };
-  }
-  const wi = await workItemsService.getWorkItemByIdentifier(proj.projectId, targetKey, ctx);
-  return { id: wi.id, identifier: wi.identifier };
 }
 
 export const planValidityService = {
