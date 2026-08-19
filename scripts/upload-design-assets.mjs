@@ -243,6 +243,31 @@ export function authHeadersFor(oidcToken, token) {
 }
 
 /**
+ * The target resolved to a CONTAINER (a story or an epic), which the service
+ * refuses with `DESIGN_EVIDENCE_NOT_A_LEAF`.
+ *
+ * ⚠️ THIS IS A NO-OP, NOT A FAILURE, and the distinction is the one the step's
+ * "no `continue-on-error`" note draws: red means "a publish that should have
+ * happened and did not". A design result addressed to a story is a publish that
+ * must NEVER happen — the same class as "no resolvable target card", which this
+ * script already exits 0 on. It is reachable on any PR whose branch or title
+ * names a container and whose diff happens to touch `design/**`: the PARENT-RUN
+ * pull request (`parent/MOTIR-<story>-…`), which carries a design child's asset
+ * amendments alongside the code they document (MOTIR-3009). Failing there tells
+ * the operator to remove a correct amendment to satisfy a publisher that had
+ * nothing to publish.
+ */
+export class NotALeafError extends Error {
+  /** @param {string} targetKey @param {string} body */
+  constructor(targetKey, body) {
+    super(`${targetKey} is not a leaf; a design result attaches to the card that produced it`);
+    this.name = 'NotALeafError';
+    this.targetKey = targetKey;
+    this.body = body;
+  }
+}
+
+/**
  * Mint grants, PUT every artifact, then register the result. Returns the
  * registered evidence.
  *
@@ -279,7 +304,15 @@ export async function publishDesignResult({
     },
   );
   if (!mintRes.ok) {
-    throw new Error(`Minting upload grants failed: ${mintRes.status} ${await mintRes.text()}`);
+    const body = await mintRes.text();
+    // The service refuses a design result addressed to a CONTAINER — a result
+    // attaches to the leaf that produced it, never to a story or an epic. That
+    // is not a failed publish, it is a publish that must not happen; see the
+    // `NotALeafError` note in the header for why it exits 0.
+    if (mintRes.status === 422 && body.includes('DESIGN_EVIDENCE_NOT_A_LEAF')) {
+      throw new NotALeafError(targetKey, body);
+    }
+    throw new Error(`Minting upload grants failed: ${mintRes.status} ${body}`);
   }
   const { targets } = await mintRes.json();
 
@@ -400,19 +433,33 @@ export async function main(env = process.env, log = console, deps = {}) {
   }
 
   const baseUrl = (env['MOTIR_BASE_URL'] ?? 'https://app.motir.co').replace(/\/$/, '');
-  const evidence = await publish({
-    baseUrl,
-    targetKey,
-    assets,
-    noteMd,
-    headers: authHeadersFor(oidcToken, patToken),
-    commitSha: env['GITHUB_SHA'] ?? null,
-    ciRunUrl:
-      env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
-        ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
-        : null,
-    producedByKey: targetKey,
-  });
+  let evidence;
+  try {
+    evidence = await publish({
+      baseUrl,
+      targetKey,
+      assets,
+      noteMd,
+      headers: authHeadersFor(oidcToken, patToken),
+      commitSha: env['GITHUB_SHA'] ?? null,
+      ciRunUrl:
+        env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
+          ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
+          : null,
+      producedByKey: targetKey,
+    });
+  } catch (err) {
+    if (!(err instanceof NotALeafError)) throw err;
+    // See NotALeafError: a container-addressed result is a publish that must not
+    // happen, which is the same exit as an unresolvable target — reported, not red.
+    log.log(
+      `${targetKey} is a CONTAINER, not the card that produced these assets — NOT publishing. ` +
+        `The design child's own pull request is what publishes them. Would have published: ${assets
+          .map((a) => `${a.kind}:${a.sourcePath}`)
+          .join(', ')}`,
+    );
+    return 0;
+  }
 
   log.log(
     `Published ${assets.length} design artifact(s) to ${targetKey} (target from ${source}); evidence ${evidence.id}.`,

@@ -10,6 +10,7 @@ import {
   contentTypeFor,
   extractChangedNoteSections,
   main,
+  NotALeafError,
   parseHunkRanges,
   parseWorkItemKey,
   publishDesignResult,
@@ -409,7 +410,7 @@ describe('publishDesignResult', () => {
   });
 });
 
-describe('main — the two ways it exits 0 WITHOUT publishing', () => {
+describe('main — the ways it exits 0 WITHOUT publishing', () => {
   const logger = () => {
     const lines: string[] = [];
     return { log: (m: string) => lines.push(m), lines };
@@ -455,6 +456,49 @@ describe('main — the two ways it exits 0 WITHOUT publishing', () => {
     expect(said).toContain('NOT publishing');
     // The operator can see what was skipped without re-running anything.
     expect(said).toContain('mock:design/a/x.mock.html');
+  });
+
+  it('a CONTAINER target publishes nothing and stays GREEN — the parent-run pull request', async () => {
+    // MOTIR-3009. A parent run opens ONE pull request per repository, on
+    // `parent/MOTIR-<story>-…`, and it carries the design child's asset
+    // amendments alongside the code they document. The service refuses a design
+    // result addressed to a story, correctly — a result attaches to the leaf
+    // that produced it — and before this the refusal red-lit the whole run,
+    // whose only remedy would have been deleting a correct amendment.
+    const log = logger();
+    const publish = vi.fn(async () => {
+      throw new NotALeafError('MOTIR-2999', '{"code":"DESIGN_EVIDENCE_NOT_A_LEAF"}');
+    });
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: 'base',
+        DESIGN_PR_REF: 'parent/MOTIR-2999-implemented-status',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      { collect: () => oneMock, publish },
+    );
+
+    expect(code).toBe(0);
+    expect(publish).toHaveBeenCalledTimes(1);
+    const said = log.lines.join(' ');
+    expect(said).toContain('CONTAINER');
+    // Same courtesy as the unresolvable-target exit: say what was skipped.
+    expect(said).toContain('mock:design/a/x.mock.html');
+  });
+
+  it('ANY OTHER publish failure is still RED — the no-op is scoped to the one refusal', async () => {
+    const log = logger();
+    const publish = vi.fn(async () => {
+      throw new Error('Minting upload grants failed: 500 upstream is down');
+    });
+    await expect(
+      main(
+        { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x', MOTIR_UPLOAD_TOKEN: 'pat' },
+        log as never,
+        { collect: () => oneMock, publish },
+      ),
+    ).rejects.toThrow(/upstream is down/);
   });
 
   it('no OIDC and no PAT → publishing is opt-in (a fork PR must not fail the build)', async () => {
