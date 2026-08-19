@@ -265,6 +265,92 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     ).rejects.toBeInstanceOf(PlanNotFoundError);
   });
 
+  // ── MOTIR-3165 (bug MOTIR-3154) — a DECIDED plan is never stale ───────────
+  //
+  // Staleness answers exactly one question: *would approving this now still be
+  // correct?* `approvePlan` and `declinePlan` each refuse unless the plan is
+  // `planned`, so on a decided plan that question cannot be asked again and
+  // every warning is advice about a choice nobody can make.
+  //
+  // Worse than useless, in fact: the warning an approved plan shows is CAUSED
+  // by the approval. `findChildrenCreatedAfter` has no exclusion for the items
+  // the plan itself materialized, and `isRealRef` drops every intra-plan
+  // `planItem:` edge, so N proposals under one committed parent each see the
+  // other N−1 as unexplained new siblings.
+
+  it('an APPROVED plan is all-clear — its own materialized siblings do not flag it', async () => {
+    const fx = await makeWorkItemFixture();
+    const parentId = await seed(fx, 'Shared parent', 'story');
+    const { planId, items } = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'First child', kind: 'subtask' }, parentRef: parentId },
+      {
+        op: 'add',
+        proposedFields: { title: 'Second child', kind: 'subtask' },
+        parentRef: parentId,
+      },
+    ]);
+
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+
+    expect(result.stale).toBe(false);
+    for (const item of items) {
+      expect(verdictFor(result.items, item.id).reasons).toEqual([]);
+      expect(verdictFor(result.items, item.id).stale).toBe(false);
+    }
+  });
+
+  it('a DECLINED plan is all-clear too — nothing was decided that can be re-decided', async () => {
+    const fx = await makeWorkItemFixture();
+    const parentId = await seed(fx, 'Doomed parent', 'story');
+    const { planId, items } = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Refused', kind: 'subtask' }, parentRef: parentId },
+    ]);
+
+    await plansService.declinePlan(planId, fx.ctx);
+    // A change that WOULD flag a `planned` plan lands after the decision.
+    await workItemsService.archiveWorkItem(parentId, fx.ctx);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+
+    expect(result.stale).toBe(false);
+    expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
+  });
+
+  it('a plan still PLANNED is unaffected — the rule set fires exactly as before', async () => {
+    const fx = await makeWorkItemFixture();
+    const parentId = await seed(fx, 'Live parent', 'story');
+    const { planId, items } = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Child', kind: 'subtask' }, parentRef: parentId },
+    ]);
+
+    await seed(fx, 'Newcomer', 'subtask', parentId);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(result.stale).toBe(true);
+    expect(
+      verdictFor(result.items, items[0]!.id).reasons.some((r) => r.code === 'siblings_added'),
+    ).toBe(true);
+  });
+
+  it('the verdict NAMES the work item it is about, once the add has one', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, items } = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Becomes real', kind: 'task' } },
+    ]);
+
+    // Un-materialized: no target, so no id to name.
+    const before = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(verdictFor(before.items, items[0]!.id).workItemId).toBeNull();
+
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Becomes real' } });
+    const after = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(verdictFor(after.items, items[0]!.id).workItemId).toBe(created.id);
+  });
+
   it('tenant isolation: a change in ANOTHER tenant never flags this plan (workspace-scoped reads)', async () => {
     const a = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const b = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLBX' });

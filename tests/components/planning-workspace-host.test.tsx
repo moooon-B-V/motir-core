@@ -27,6 +27,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     projectKey,
     ariaLabel,
     diffKey,
+    outcome,
     targetIds,
     initialTrail,
     loadingFallback,
@@ -35,6 +36,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
     projectKey: string;
     ariaLabel?: string;
     diffKey: string | number;
+    outcome?: string | null;
     targetIds?: readonly string[];
     initialTrail?: readonly { id: string; label: string }[];
     loadingFallback?: ReactNode;
@@ -44,6 +46,7 @@ vi.mock('@/components/planning/PlanChangeCanvas', () => ({
       data-testid="canvas-stub"
       data-project={projectKey}
       data-diff-key={String(diffKey)}
+      data-outcome={outcome ?? ''}
       data-targets={(targetIds ?? []).join(',')}
       data-trail={(initialTrail ?? []).map((c) => c.id).join(',')}
       aria-label={ariaLabel}
@@ -100,6 +103,7 @@ const IDLE: PlanChangeConversationState = {
   },
   progress: null,
   review: null,
+  decided: null,
   jobId: null,
   planId: null,
   approved: null,
@@ -299,6 +303,40 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
     expect(key).toContain('1-1-0');
   });
 
+  // ── MOTIR-3162 (bug MOTIR-3154) — the overlay SURVIVES the decision ────────
+  //
+  // The host derives its ENTIRE diff index from `state.review`, so the hooks
+  // nulling that field on approve and on discard erased the canvas overlay in
+  // the same tick the decision landed.
+
+  it.each(['accepted', 'declined'] as const)(
+    'keeps a NON-EMPTY diff index after a plan is %s, and hands the outcome to the canvas',
+    (decided) => {
+      renderHost(
+        { mode: 'replan', from: 'project' },
+        { state: { ...REVIEWING, phase: 'idle', decided } },
+      );
+
+      const canvas = screen.getByTestId('canvas-stub');
+      // Non-empty: the counts the index derives are still in the key, so there
+      // is something for the canvas to draw.
+      expect(canvas.getAttribute('data-diff-key')).toContain('1-1-0');
+      expect(canvas.getAttribute('data-outcome')).toBe(decided);
+    },
+  );
+
+  it('drops the confirm gate once decided — a review is no longer a pending decision', () => {
+    // The gate used to be keyed on "there IS a review", which was a safe proxy
+    // only while a decision threw the review away. It is keyed on `decided` now.
+    renderHost(
+      { mode: 'replan', from: 'project' },
+      { state: { ...REVIEWING, phase: 'idle', decided: 'accepted' } },
+    );
+    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
+    // …and the canvas is still there, drawing what was accepted.
+    expect(screen.getByTestId('canvas-stub')).toBeTruthy();
+  });
+
   it('routes Approve and Discard to the one conversation both panes share', () => {
     renderHost({ mode: 'replan', from: 'project' }, { state: REVIEWING });
 
@@ -315,7 +353,14 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
 
     // What the hook calls once the commit lands.
     fireEvent.click(screen.getByRole('button', { name: /Approve changes/ }));
-    conversation.state = { ...REVIEWING, phase: 'idle', review: null, jobId: null, planId: null };
+    conversation.state = {
+      ...REVIEWING,
+      phase: 'idle',
+      review: null,
+      decided: null,
+      jobId: null,
+      planId: null,
+    };
     act(() => conversation.onApproved?.({ created: ['wi_30'], updated: [], removed: [] }));
 
     // `router.refresh()` reaches the server-rendered surfaces behind the overlay…

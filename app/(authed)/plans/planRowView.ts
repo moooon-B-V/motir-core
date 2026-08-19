@@ -33,7 +33,12 @@ function whenFor(plan: PlanDto): { key: PlanWhenKey; iso: string } {
 /** How many of a `planned` plan's proposed items have drifted out of date. Only
  *  a `planned` plan can be stale; others short-circuit to 0. A staleness read
  *  failure degrades gracefully (the row just omits the flag) rather than failing
- *  the whole list. */
+ *  the whole list.
+ *
+ *  ⚠️ `computePlanStaleness` OWNS that rule (MOTIR-3165) and returns all-clear
+ *  for a decided plan on its own. This guard is kept as an OPTIMISATION — the
+ *  row already holds a `PlanDto`, so it spares a plan read each — not as a
+ *  second source of truth; deleting it would change cost, never behaviour. */
 async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number> {
   if (plan.status !== 'planned') return 0;
   try {

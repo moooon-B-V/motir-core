@@ -156,6 +156,84 @@ describe('PlanItemNode', () => {
   });
 });
 
+// ── MOTIR-3161 (bug MOTIR-3154) — the DECIDED axis ──────────────────────────
+//
+// `design/ai-planning/design-notes.md` Part VI §3: the outcome CROSSES the three
+// op languages rather than joining them (every op can be accepted and every op
+// can be declined ⇒ six renderings), so the op frame is untouched and the
+// outcome rides the chip's second SEGMENT plus a decorative spine.
+
+describe('PlanItemNode — the decided outcome', () => {
+  const OPS = ['add', 'modify', 'remove'] as const;
+
+  it.each(OPS)('names the outcome in TEXT on a %s, for both decisions', (op) => {
+    for (const [outcome, word] of [
+      ['accepted', 'accepted'],
+      ['declined', 'declined'],
+    ] as const) {
+      renderWithIntl(<PlanItemNode item={item({ op })} outcome={outcome} />);
+      // Queried by TEXT, not by class: the word is the whole of the meaning, and
+      // the a11y rule this asset holds itself to is that state is never carried
+      // by colour alone.
+      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(word);
+      // …and the op is STILL named beside it — the chip reads op × outcome.
+      expect(screen.getByTestId('plan-item-op-chip').textContent).toContain(word);
+      cleanup();
+    }
+  });
+
+  it('leaves the op frame untouched — the axis CROSSES it, it does not replace it', () => {
+    for (const op of OPS) {
+      renderWithIntl(<PlanItemNode item={item({ op })} />);
+      const undecided = screen.getByTestId('plan-item-node').className;
+      cleanup();
+
+      renderWithIntl(<PlanItemNode item={item({ op })} outcome="accepted" />);
+      const decided = screen.getByTestId('plan-item-node').className;
+      cleanup();
+
+      // Every class the op treatment sets is still set. The only additions are
+      // the ones the decided axis owns.
+      for (const cls of undecided.split(/\s+/).filter((c) => c && c !== 'opacity-80')) {
+        expect(decided.split(/\s+/)).toContain(cls);
+      }
+    }
+  });
+
+  it('renders NOTHING new while the plan is still planned', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} />);
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
+    // The undecided badge is the shipped one, byte for byte — no chip wrapper.
+    expect(screen.queryByTestId('plan-item-op-chip')).toBeNull();
+    expect(screen.getByText('add')).toBeTruthy();
+  });
+
+  it('drops the fade on a DECIDED remove, and keeps it on an undecided one', () => {
+    // `opacity` means "this is about to happen"; on a decided card it either
+    // already happened or never will — and it would mute the outcome spine, the
+    // one signal that settles which.
+    renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} />);
+    expect(screen.getByTestId('plan-item-node').className).toContain('opacity-80');
+    cleanup();
+
+    renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} outcome="declined" />);
+    const node = screen.getByTestId('plan-item-node');
+    expect(node.className).not.toContain('opacity-80');
+    // …and the strike stays: a declined remove is the one place a reader could be
+    // misled, which is exactly why the word must be there to correct it.
+    expect(screen.getByText('A proposed item').className).toContain('line-through');
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+  });
+
+  it('carries the spine as DECORATION only', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} outcome="accepted" />);
+    const spine = screen.getByTestId('plan-item-outcome-spine');
+    expect(spine.getAttribute('aria-hidden')).toBe('true');
+    expect(spine.textContent).toBe('');
+  });
+});
+
 describe('mergePlanLevel', () => {
   /** A committed level as the roadmap read returns it. */
   function committed(ids: string[], deps: PlanCanvasLevel['deps'] = []): PlanCanvasLevel {
@@ -229,6 +307,70 @@ describe('mergePlanLevel', () => {
     expect(proposalsAtLevel(items, 'parent_1').map((i) => i.nodeId)).toEqual(['p1']);
     expect(proposalsAtLevel(items, null).map((i) => i.nodeId)).toEqual(['p3']);
     expect(mergePlanLevel(committed([]), items, 'parent_1').nodes.map((n) => n.id)).toEqual(['p1']);
+  });
+
+  it('holds exactly ONE node per approved add — on the work item it became', () => {
+    // MOTIR-3160 keys a materialized `add` by its work item, so the proposal now
+    // MATCHES the committed node and the treatment lands ON it. Before that it
+    // never matched and was pushed out as a second, keyless node beside the real
+    // one — two nodes for one thing, on a canvas whose job is the tree's shape.
+    const level = mergePlanLevel(
+      committed(['wi_new', 'wi_sibling']),
+      [
+        item({
+          planItemId: 'pi_1',
+          nodeId: 'wi_new',
+          op: 'add',
+          identifier: 'MOTIR-3166',
+          parentNodeId: 'parent_1',
+          status: 'todo',
+        }),
+      ],
+      'parent_1',
+      'accepted',
+    );
+
+    expect(level.nodes.map((n) => n.id)).toEqual(['wi_new', 'wi_sibling']);
+    expect(level.nodes.filter((n) => n.id === 'wi_new')).toHaveLength(1);
+    expect(level.nodes.some((n) => n.id === 'pi_1')).toBe(false);
+
+    renderWithIntl(<>{level.nodes[0]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    expect(screen.getByText('MOTIR-3166')).toBeTruthy();
+  });
+
+  it('draws a DECLINED plan proposals in the declined treatment, re-skinning modify/remove in place', () => {
+    const level = mergePlanLevel(
+      committed(['wi_mod', 'wi_untouched']),
+      [
+        item({ planItemId: 'pi_a', nodeId: 'pi_a', op: 'add', parentNodeId: 'parent_1' }),
+        item({
+          planItemId: 'pi_b',
+          nodeId: 'wi_mod',
+          op: 'modify',
+          identifier: 'MOTIR-9',
+          parentNodeId: 'parent_1',
+        }),
+      ],
+      'parent_1',
+      'declined',
+    );
+
+    // The modify re-skinned IN PLACE; the add appended; the untouched sibling
+    // left alone. No ghosts.
+    expect(level.nodes.map((n) => n.id)).toEqual(['wi_mod', 'wi_untouched', 'pi_a']);
+
+    renderWithIntl(<>{level.nodes[0]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    cleanup();
+
+    renderWithIntl(<>{level.nodes[2]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    cleanup();
+
+    // The committed neighbour the plan decided NOTHING about carries no outcome.
+    renderWithIntl(<>{level.nodes[1]!.content}</>);
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
   });
 
   it('renders the proposals alone when the committed level is empty', () => {

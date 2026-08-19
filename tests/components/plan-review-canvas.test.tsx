@@ -194,8 +194,13 @@ function selectNode(id: string) {
   fireEvent.keyDown(el(id)!, { key: 'Enter' });
 }
 
-function mount(items: PlanReviewItemDto[] = [proposal()]) {
-  return render(<PlanReviewCanvas items={items} projectKey="MOTIR" version={0} />);
+function mount(
+  items: PlanReviewItemDto[] = [proposal()],
+  outcome: 'accepted' | 'declined' | null = null,
+) {
+  return render(
+    <PlanReviewCanvas items={items} projectKey="MOTIR" version={0} outcome={outcome} />,
+  );
 }
 
 describe('PlanReviewCanvas — the committed level it draws', () => {
@@ -374,6 +379,74 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
       ).toBe(true),
     );
     expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+  });
+
+  // ── MOTIR-3161 (bug MOTIR-3154) — the DOOR must open what the label claims ──
+  //
+  // The routing was on `op` ALONE: `op === 'add'` opened `ProposalQuickView`.
+  // That is right for a proposal and wrong for one that has been APPROVED — with
+  // MOTIR-3160's keying an accepted card displays a real `MOTIR-<n>` and would
+  // still open the PRE-APPROVAL proposal view of a card that now exists. An
+  // accepted treatment whose View opens the proposal is a label that lies about
+  // what clicking it does.
+
+  it('peeks an APPROVED add as the WORK ITEM it became, not as a proposal', async () => {
+    const fetchMock = stubRoadmap();
+    mount(
+      [
+        proposal({
+          planItemId: 'pi_1',
+          // Keyed by the work item it became — the whole point of MOTIR-3160.
+          nodeId: 'wi_accepted',
+          op: 'add',
+          identifier: 'MOTIR-3166',
+          title: 'An accepted card',
+          status: 'todo',
+        }),
+      ],
+      'accepted',
+    );
+    await screen.findByText('An accepted card');
+
+    selectNode('wi_accepted');
+    fireEvent.click(within(el('wi_accepted') as HTMLElement).getByTestId('view-button'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) =>
+          String(u).includes('/api/work-items/peek?key=MOTIR-3166'),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+  });
+
+  it('still peeks an UN-materialized add as a proposal — the other direction', async () => {
+    const fetchMock = stubRoadmap();
+    // A declined plan's `add` never became anything: no identifier, so the
+    // proposal peek is still the honest thing to open.
+    mount([proposal({ title: 'A refused proposal' })], 'declined');
+    await screen.findByText('A refused proposal');
+
+    selectNode('pi_1');
+    fireEvent.click(within(el('pi_1') as HTMLElement).getByTestId('view-button'));
+
+    const peek = await screen.findByTestId('proposal-quick-view');
+    expect(within(peek).getByText('A refused proposal')).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek'))).toBe(
+      false,
+    );
+  });
+
+  it('draws the decided outcome on the plan own nodes and on no committed neighbour', async () => {
+    stubRoadmap();
+    mount([proposal({ title: 'An accepted proposal' })], 'accepted');
+    await screen.findByText('An accepted proposal');
+
+    // The plan's node carries the word; the committed sibling MOTIR-9 does not —
+    // the plan decided nothing about it.
+    expect(within(el('pi_1') as HTMLElement).getByText('accepted')).toBeTruthy();
+    expect(within(el(SUB_ID) as HTMLElement).queryByText('accepted')).toBeNull();
   });
 
   it('degrades to the proposals alone when there is no project to read a level from', async () => {

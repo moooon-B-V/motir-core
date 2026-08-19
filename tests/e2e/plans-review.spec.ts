@@ -11,6 +11,19 @@
 // already-`approved` plan. Waits on AUTHORITATIVE signals — the rendered rows
 // and the persisted approve/decline POST 200 — never fixed sleeps (the E2E
 // discipline in motir-core/CLAUDE.md; notes.html #37).
+//
+// ⚠️ AMENDED by MOTIR-3163 (bug MOTIR-3154) — the browser-level proof that a
+// DECIDED plan still shows its cards. The defect was distributed across the
+// whole stack (rows deleted in a service, the pane swapped on a page, the
+// treatment missing from a component, the overlay cleared in a hook), so four
+// green unit suites was exactly the state the product was in when the cards
+// disappeared. Only this layer can answer what a person SEES after they click.
+//
+// The assertion worth protecting most is the one that stays NEGATIVE: retaining
+// a declined plan's proposals must never put them in the tree. A change that
+// made the cards visible by quietly materializing them would satisfy the report
+// and destroy the feature, so the declined proposal's absence from the ready set
+// is untouched and must stay that way.
 
 import { expect, test } from '@playwright/test';
 
@@ -103,6 +116,37 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByTestId('plan-status-pill')).toContainText('Approved');
   await expect(page.getByText(/Added .* to your backlog/)).toBeVisible();
 
+  // ── MOTIR-3161 / MOTIR-3165 (bug MOTIR-3154) — an APPROVED plan still SHOWS
+  //    what was approved, on the cards it became, and stops warning about it ──
+  //
+  // The whole of the reported defect, at the browser: the four cards the user
+  // approved a second earlier used to be nowhere on this page. They are here,
+  // marked accepted, ON the committed work items — and the page is quiet.
+  const acceptedNodes = page.getByTestId('plan-item-node');
+  await expect(acceptedNodes.first()).toBeVisible();
+  // Queried by TEXT, so a colour-only treatment cannot pass.
+  await expect(page.getByTestId('plan-item-outcome').first()).toHaveText('accepted');
+
+  // ONE node per approved `add`, carrying the REAL identifier its materialized
+  // work item was given — which is what proves the node landed ON the committed
+  // card rather than beside it as a second, keyless ghost.
+  const materialized = await adminDb.workItem.findFirstOrThrow({
+    where: { projectId: seed.projectId, title: seed.staleProposalSiblings },
+  });
+  const acceptedCard = page
+    .getByTestId('plan-item-node')
+    .filter({ hasText: materialized.identifier });
+  await expect(acceptedCard).toHaveCount(1);
+  await expect(acceptedCard.getByTestId('plan-item-outcome')).toHaveText('accepted');
+
+  // Guarded on ABSENCE (CLAUDE.md § E2E): a DECIDED plan can never be decided
+  // again, so every staleness warning on it is advice about a choice nobody can
+  // make — and the two this plan carried were caused BY the approval, since the
+  // cards it created under one parent counted as unexplained new siblings against
+  // each other. Both surfaces must be quiet.
+  await expect(page.getByTestId('stale-summary')).toHaveCount(0);
+  await expect(page.getByTestId('stale-badge')).toHaveCount(0);
+
   // The bundle became real, dispatchable work: the cleanly-materialized add
   // (under the still-living parent) appears in the ready set.
   await page.goto('/ready');
@@ -129,9 +173,27 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
   await expect(page.getByText('Plan declined — your tree was left untouched')).toBeVisible();
 
-  // The list also reflects the declined status on its pill.
+  // ── MOTIR-3160 / MOTIR-3161 (bug MOTIR-3154) — …ALONGSIDE the cards ────────
+  //
+  // The comment above used to open "Decline DROPS every proposed item". It no
+  // longer does: not writing to the tree is what declining MEANS, and erasing
+  // the proposal was a separate act that destroyed the only record of what was
+  // offered and refused. The MOTIR-1377 outcome assertion above is UNCHANGED in
+  // meaning and still passes; what is new is that it now stands beside the cards
+  // it decided about.
+  const declinedCard = page.getByTestId('plan-item-node').filter({ hasText: seed.declineProposal });
+  await expect(declinedCard).toHaveCount(1);
+  // By TEXT, not by a class — a colour-only treatment must not pass here either.
+  await expect(declinedCard.getByTestId('plan-item-outcome')).toHaveText('declined');
+  // It never became anything, so it has no key to show and none is invented.
+  await expect(declinedCard).toContainText('New');
+
+  // The list also reflects the declined status on its pill — and its REAL item
+  // count, which read `0 items` for as long as the rows were deleted.
   await page.goto('/plans');
-  await expect(page.locator(`a[href="/plans/${seed.declinePlan.id}"]`)).toContainText('Declined');
+  const declinedRow = page.locator(`a[href="/plans/${seed.declinePlan.id}"]`);
+  await expect(declinedRow).toContainText('Declined');
+  await expect(declinedRow).toContainText('1 item');
 
   // Declining a bundle of proposed adds leaves the tree untouched — the proposed
   // item was never materialized, so it's absent from the ready set.
@@ -203,6 +265,16 @@ test('Plans: approving on a project that already has code shows the items, not t
   await expect(page.getByText('Motir will host your code')).toHaveCount(0);
   // … and the canvas is still showing the plan's own items.
   await expect(page.getByText(seed.declineProposal)).toBeVisible();
+
+  // ⚠️ READ against Part VI §4 by MOTIR-3163, and UNCHANGED — deliberately.
+  // Part VI re-decides what the pane holds when a set IS proposed: the step now
+  // takes a BAND above the canvas instead of replacing it. This project arrives
+  // with code, so `proposeRepositorySet`'s gate proposes NOTHING and there is no
+  // band to draw — the absence assertion above is about a step that was never
+  // summoned, not about a step that was replaced. Both assertions therefore mean
+  // exactly what they meant before, and the count below still pins the durable
+  // half. The BAND's own case is pinned by the `PlanDetail` component test.
+  await expect(page.getByTestId('plan-detail-establish-band')).toHaveCount(0);
 
   // And nothing was provisioned: the visible half of this defect was a screen, the
   // durable half was a row that should never have existed.

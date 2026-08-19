@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Lock, Minus, Pencil, Plus } from 'lucide-react';
-import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import {
   changedFields,
@@ -66,11 +66,20 @@ export interface PlanChangeDiffFrameProps {
   state: PlanChangeDiffState;
   /** The proposal behind a `change` / `remove`, so the tag can name WHAT changed. */
   proposal?: PlanReviewItemDto;
+  /** The plan's DECISION, once it has one (MOTIR-3162) — the SAME outcome
+   *  language the plan-detail canvas draws, on this canvas's own frame. */
+  outcome?: PlanItemOutcome | null;
   children: ReactNode;
 }
 
-export function PlanChangeDiffFrame({ state, proposal, children }: PlanChangeDiffFrameProps) {
+export function PlanChangeDiffFrame({
+  state,
+  proposal,
+  outcome = null,
+  children,
+}: PlanChangeDiffFrameProps) {
   const t = useTranslations('planningWorkspace.conversation.diff');
+  const tReview = useTranslations('planReview');
   const fields = state === 'change' && proposal ? changedFields(proposal) : [];
 
   return (
@@ -80,6 +89,7 @@ export function PlanChangeDiffFrame({ state, proposal, children }: PlanChangeDif
       style={{ width: NODE_W, height: NODE_H }}
       className={`relative ${FRAME[state]}`}
       data-diff-state={state}
+      data-outcome={outcome ?? undefined}
       data-testid="plan-change-diff-node"
       // A locked node is not editable by the proposal — say so, don't imply it.
       aria-disabled={state === 'locked' ? true : undefined}
@@ -116,7 +126,33 @@ export function PlanChangeDiffFrame({ state, proposal, children }: PlanChangeDif
           <Lock className="size-3" aria-hidden="true" />
         )}
         {t(state)}
+        {/* The outcome, fused to the state tag — same word, same tokens, same
+            rule as `PlanItemNode`'s chip (Part VI §3). One language across both
+            canvases, not a second one invented here. */}
+        {outcome ? (
+          <span
+            data-testid="plan-change-outcome"
+            className={`-my-px -mr-(--spacing-chip-x) ml-1 inline-flex items-center rounded-e-(--radius-badge) border-s border-(--el-border-soft) px-(--spacing-chip-x) py-px ${
+              outcome === 'accepted'
+                ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
+                : 'bg-(--el-muted) text-(--el-text-secondary)'
+            }`}
+          >
+            {outcome === 'accepted' ? tReview('outcomeAccepted') : tReview('outcomeDeclined')}
+          </span>
+        ) : null}
       </span>
+
+      {/* The decorative spine — the same reinforcement, on the same edge. */}
+      {outcome ? (
+        <span
+          aria-hidden="true"
+          data-testid="plan-change-outcome-spine"
+          className={`pointer-events-none absolute inset-y-0 start-0 w-1 rounded-s-(--radius-card) ${
+            outcome === 'accepted' ? 'bg-(--el-success)' : 'bg-(--el-text-muted)'
+          }`}
+        />
+      ) : null}
 
       {/* A locked node says WHY it can't move; a changed one says what moved; a
           removed one says it goes. All are real text (never a bare tint), so the
@@ -151,10 +187,19 @@ export function PlanChangeDiffFrame({ state, proposal, children }: PlanChangeDif
  * the same Plan, so there is no adapter left to drift: the rail's canvas and
  * `/plans/[id]` draw one proposal one way.
  */
-export function ProposedAddNode({ add }: { add: ProposedAdd }) {
+export function ProposedAddNode({
+  add,
+  outcome = null,
+}: {
+  add: ProposedAdd;
+  outcome?: PlanItemOutcome | null;
+}) {
   return (
-    <PlanChangeDiffFrame state="add">
-      <PlanItemNode item={add.item} />
+    // The frame carries the outcome and so does the node inside it — the node's
+    // own chip is the shipped one from MOTIR-3161, reused verbatim, which is what
+    // makes "one language across both canvases" true rather than asserted.
+    <PlanChangeDiffFrame state="add" outcome={outcome}>
+      <PlanItemNode item={add.item} outcome={outcome} />
     </PlanChangeDiffFrame>
   );
 }

@@ -87,6 +87,7 @@ const BASE: PlanChangeConversationState = {
   session: session([]),
   progress: null,
   review: null,
+  decided: null,
   jobId: null,
   planId: null,
   approved: null,
