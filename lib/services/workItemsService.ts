@@ -1917,9 +1917,17 @@ export const workItemsService = {
     // this call. That recompute could run before the pin, read the child as
     // `todo`, settle the parent at `todo` — and never re-fire, because the child
     // set never changes again. The wrong answer was terminal, not late, which is
-    // why the ordering has to be guaranteed by an event rather than by a
-    // debounce window the runtime may not honour (the Inngest dev server does
-    // not; measured on #2114).
+    // why the ordering has to be guaranteed by an EVENT rather than by a
+    // debounce window. The debounce that was tried first (#2114, removed) keyed
+    // `work-item/created` on `event.data.parentId`, which is null for a root
+    // item — and an unresolvable key does not skip the debounce, it MERGES every
+    // event carrying it into one bucket. That is the measured mechanism; the
+    // "the dev server discards runs" reading this comment used to give was
+    // driven ~20 times by motir-core #2122 (MOTIR-2994) and never reproduced.
+    // `lib/jobs/definitions/statusDerivation.ts` carries the full note;
+    // `tests/jobs/debounce-burst.test.ts` and `docs/jobs.md` § Debounce carry
+    // the evidence (`inngest-cli` 1.27.0 dev server; Cloud unmeasured,
+    // MOTIR-2997).
     //
     // Skipped for a ROOT item: with no parent there is nothing to derive, so an
     // emit would be a guaranteed no-op run per imported top-level row.

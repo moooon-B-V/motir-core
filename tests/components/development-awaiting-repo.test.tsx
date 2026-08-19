@@ -45,7 +45,7 @@ describe('a repository with no pull request yet', () => {
       <DevelopmentSectionBody
         pullRequests={[merged]}
         itemIdentifier="MOTIR-2725"
-        awaitingRepos={[awaiting('moooon/motir-ai')]}
+        repoDelivery={[awaiting('moooon/motir-ai')]}
       />,
     );
     const rows = screen.getAllByRole('listitem');
@@ -62,7 +62,7 @@ describe('a repository with no pull request yet', () => {
       <DevelopmentSectionBody
         pullRequests={[merged]}
         itemIdentifier="MOTIR-2725"
-        awaitingRepos={[awaiting('moooon/motir-ai', 'unknown')]}
+        repoDelivery={[awaiting('moooon/motir-ai', 'unknown')]}
       />,
     );
     expect(screen.getByText(t.mergedBranchUnknown)).toBeTruthy();
@@ -77,7 +77,7 @@ describe('a repository with no pull request yet', () => {
       <DevelopmentSectionBody
         pullRequests={[]}
         itemIdentifier="MOTIR-2725"
-        awaitingRepos={[awaiting('moooon/motir-core'), awaiting('moooon/motir-ai')]}
+        repoDelivery={[awaiting('moooon/motir-core'), awaiting('moooon/motir-ai')]}
       />,
     );
     // Two placeholder rows say more than "no linked pull request" — they say
@@ -88,6 +88,94 @@ describe('a repository with no pull request yet', () => {
 
   it('still shows the EmptyState when the item carries NOTHING and has no pull requests', () => {
     render(<DevelopmentSectionBody pullRequests={[]} itemIdentifier="MOTIR-2725" />);
+    expect(screen.getByText(t.emptyTitle)).toBeTruthy();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+});
+
+// MOTIR-3036 — A REPOSITORY WITH A PULL REQUEST IS NOT AWAITING A ROW.
+//
+// `awaiting` answers "has this repository's work MERGED?" — correct for the
+// completion gate, and true for the whole life of every open pull request. Read
+// as "no pull request exists" it drew a row saying "No pull request yet"
+// directly beneath the pull request it was saying it about (observed on
+// MOTIR-2903's quick view, 2026-08-18).
+//
+// The two sides also NAME the repository differently: the item stores the bare
+// `motir-core` and the PR DTO carries `moooon-B-V/motir-core`, so every fixture
+// here uses the real pair. A cross-reference on the raw strings matches nothing
+// and this whole block passes only by accident of matching names.
+const openPr: LinkedPullRequestDto = {
+  title: 'feat(advisories): flag a card whose deliverable…',
+  repo: 'moooon-B-V/motir-core',
+  number: 2120,
+  state: 'open',
+  ci: 'running',
+  url: 'https://github.com/moooon-B-V/motir-core/pull/2120',
+  linkedManually: false,
+};
+
+describe('a repository whose pull request is already on the list', () => {
+  it('renders ONLY the pull request row — no "No pull request yet" beneath it', () => {
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[openPr]}
+        itemIdentifier="MOTIR-2903"
+        repoDelivery={[awaiting('motir-core')]}
+      />,
+    );
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]!).getByText(openPr.title)).toBeTruthy();
+    expect(within(rows[0]!).getByText(`${openPr.repo} · #${openPr.number}`)).toBeTruthy();
+    expect(within(rows[0]!).getByText(t.prState.open)).toBeTruthy();
+    expect(screen.queryByText(t.noPullRequestYet)).toBeNull();
+  });
+
+  it('keeps the row for the OTHER repository, the one that really has none', () => {
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[openPr]}
+        itemIdentifier="MOTIR-2903"
+        repoDelivery={[awaiting('motir-core'), awaiting('motir-ai')]}
+      />,
+    );
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByText(openPr.title)).toBeTruthy();
+    // Exactly one placeholder, and it names the repository that has no PR.
+    expect(within(rows[1]!).getByText(t.noPullRequestYet)).toBeTruthy();
+    expect(within(rows[1]!).getByText('motir-ai')).toBeTruthy();
+    expect(within(rows[1]!).getByText(t.repoState.awaiting)).toBeTruthy();
+    expect(screen.queryByText('motir-core')).toBeNull();
+  });
+
+  it('suppresses the row for a MERGED pull request too — the key is that one EXISTS', () => {
+    // `merged` is still `awaiting` whenever the merge did not land on the
+    // repository's default branch, so this is not a hypothetical shape: it is
+    // the completion gate's own "merged onto a side branch" case. The row keys
+    // on the pull request existing, never on its state.
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[{ ...openPr, state: 'merged' }]}
+        itemIdentifier="MOTIR-2903"
+        repoDelivery={[awaiting('motir-core')]}
+      />,
+    );
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByText(t.noPullRequestYet)).toBeNull();
+  });
+
+  it('falls back to the EmptyState when the set is fully covered by pull requests', () => {
+    // The gate has to read the DERIVED rows, not the raw set: one repository,
+    // one pull request, nothing else to draw.
+    render(
+      <DevelopmentSectionBody
+        pullRequests={[]}
+        itemIdentifier="MOTIR-2903"
+        repoDelivery={[{ repo: 'motir-core', state: 'delivered', primary: true }]}
+      />,
+    );
     expect(screen.getByText(t.emptyTitle)).toBeTruthy();
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
   });
@@ -106,7 +194,7 @@ describe('the prop is OPT-IN — the quick view is unchanged until MOTIR-2416', 
       <DevelopmentSectionBody
         pullRequests={[merged]}
         itemIdentifier="MOTIR-2725"
-        awaitingRepos={[]}
+        repoDelivery={[]}
       />,
     ).container.innerHTML;
     expect(withEmptyProp).toBe(withoutProp);

@@ -4695,6 +4695,17 @@ gate). A string not in this table is a finding against this card, not a decision
 - The delivery glyph is decorative to a screen reader; the row's accessible content is the repository
   name plus its state word, so the list reads as _"motir-core, delivered, primary"_ rather than as a
   bare name with a coloured dot.
+- **⚠️ THE INK IS SCOPED BY THE SURFACE UNDER IT, and the awaiting row is the case that gets this
+  wrong (MOTIR-3014).** The awaiting / not-recorded rows are the only elements in this asset that
+  paint on a TINT (`bg-(--el-surface-soft)`, the dashed placeholder box); everything else sits on the
+  white card. `--el-text-muted` is **4.34:1 on `--el-surface-soft`** — it fails AA — and clears only
+  on the white page/card, at 4.54:1 (`CLAUDE.md`'s measured table, MOTIR-2455). So on those rows the
+  repository name is **`--el-text-secondary` (6.51:1)**, not muted, and the same holds for any element
+  this asset later moves onto `--el-surface` / `--el-surface-soft` / `--el-muted`. Muted copy in this
+  asset belongs on the white card only. The first revision of this asset shipped the failing pair, the
+  implementing component copied it from here, and the code-side `inkContrastLint` caught the component
+  while the asset stayed on `main` — which is why `tests/design-ink-contrast.test.ts` now measures the
+  design tree too.
 
 ### Out of scope
 
@@ -4853,8 +4864,25 @@ asserts that against a shared source rather than two copies of the literal.
 
 Identical to MOTIR-2413's set — `--el-*` only, element-semantic shape tokens only, each delivery
 state carrying its own glyph SHAPE as well as its hue plus a `title`. The one addition is the
-overflow line, which is `--el-text-muted` on the peek's rail surface (AA-safe: the rail renders on the
-raised panel, not on `--el-surface`).
+overflow line, which is `--el-text-muted` on the peek's rail surface — the raised panel, i.e. the
+white card, which is the one surface that ink clears AA on.
+
+**⚠️ AND THAT PARENTHETICAL IS THE WHOLE CONSTRAINT, so state it as one (MOTIR-3014).** It read
+_"AA-safe: the rail renders on the raised panel, not on `--el-surface`"_ — a correct claim about ONE
+element, written as an aside, while five rows in the same asset put `--el-text-muted` on
+`bg-(--el-surface-soft)`. `--el-text-muted` measures **4.12–4.34:1 on `--el-surface` /
+`--el-surface-soft` / `--el-muted`** and **4.54:1 on the white page/card** (`CLAUDE.md`'s table,
+MOTIR-2455): it is legible on white and on nothing else. So in this asset, as in MOTIR-2413's:
+
+- muted copy sits on the **white card** only;
+- anything on a **tint** — the awaiting row, the placeholder box, a tinted strip — takes
+  **`--el-text-secondary`** (6.18–6.80:1, every surface, both themes);
+- `--el-text-faint` carries no text WCAG measures at all — decorative glyphs (`aria-hidden`, or a
+  labelled `role="img"`) and disabled text only.
+
+The pair is now measured rather than asserted: `tests/design-ink-contrast.test.ts` reads every
+`design/**/*.mock.html` and fails on `--el-text-muted` over a tinted surface, the same rule
+`tests/theme/inkContrastLint.test.ts` enforces over the component tree.
 
 ### Out of scope
 

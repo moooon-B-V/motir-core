@@ -519,11 +519,11 @@ export default async function IssueDetailPage({
                   pullRequests={pullRequests}
                   itemIdentifier={item.identifier}
                   manualLinkable={canEdit}
-                  // Repositories the item carries that have not landed (Story
-                  // MOTIR-2725 · MOTIR-2415) — the state the completion gate
-                  // holds the item for, and the one thing this section could
-                  // not show. The quick view passes nothing until MOTIR-2416.
-                  awaitingRepos={repoDelivery.filter((d) => d.state !== 'delivered')}
+                  // The item's repository set, VERBATIM (Story MOTIR-2725 ·
+                  // MOTIR-2415) — which rows it earns is the section's
+                  // derivation, not this page's. Pre-filtering here is what let
+                  // this page and the quick view disagree (MOTIR-3036).
+                  repoDelivery={repoDelivery}
                 />
               </ContentSectionCard>
             </DevelopmentLinkProvider>
