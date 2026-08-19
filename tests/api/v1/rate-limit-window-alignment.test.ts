@@ -6,6 +6,7 @@ import {
   BOUNDARY_OVERSHOOT_MS,
   SUBPROCESS_HEADROOM_MS,
   SUBPROCESS_WINDOW_MS,
+  headroomIsSatisfied,
   sleep,
   waitForWindowHeadroom,
 } from '../../helpers/rateLimitWindow';
@@ -601,17 +602,55 @@ describe('waitForWindowHeadroom', () => {
     expect(Date.now() - startedAt).toBeLessThan(50);
   });
 
-  it('sleeps to the next boundary when the cell is too far spent', async () => {
+  // ⚠️ THE BRANCH IS ASSERTED AT SYNTHETIC INSTANTS, NOT BY TIMING A REAL CALL
+  // (MOTIR-3127). This describe used to prove the sleeping arm by asserting
+  // `elapsed > 0` on `waitForWindowHeadroom(w, w)`, over the claim that a
+  // whole-window request "can never be satisfied by the remainder". It can, at
+  // exactly one phase: on a boundary millisecond `remaining === w`, which
+  // satisfies the request — so the call returned immediately, `elapsed` was 0,
+  // and the case went red about one run in `w`. Timing a real call cannot fix
+  // that, because whichever arm the test wants, the clock picks the other one
+  // some of the time; forcing the phase first only moves the race (a millisecond
+  // of drift between forcing it and reading it flips the arm back). Injecting
+  // `now` removes the clock from the assertion instead.
+  it('takes the sleeping arm for every phase EXCEPT a boundary millisecond', () => {
+    const w = 200;
+
+    // 1000 % 200 === 0 — the whole window IS available, so no sleep. This is the
+    // case the old comment said could not happen, and the helper is right: a
+    // caller standing exactly at a boundary has what it asked for, and sleeping
+    // would buy a full window of dead time for nothing.
+    expect(headroomIsSatisfied(w, w, 1000)).toBe(true);
+
+    // One millisecond past it, and every phase after, the cell is short.
+    expect(headroomIsSatisfied(w, w, 1001)).toBe(false);
+    expect(headroomIsSatisfied(w, w, 1100)).toBe(false);
+    expect(headroomIsSatisfied(w, w, 1199)).toBe(false);
+
+    // …and the next boundary is satisfied again.
+    expect(headroomIsSatisfied(w, w, 1200)).toBe(true);
+  });
+
+  it('puts the partial-headroom threshold exactly where the arithmetic does', () => {
+    const w = 200;
+    const headroom = 120;
+
+    // Remaining is `w - (now % w)`, so the last satisfying instant is the one
+    // with exactly `headroom` left — inclusive, because `>=`.
+    expect(headroomIsSatisfied(w, headroom, 1000)).toBe(true); // 200 remaining
+    expect(headroomIsSatisfied(w, headroom, 1080)).toBe(true); // 120 remaining
+    expect(headroomIsSatisfied(w, headroom, 1081)).toBe(false); // 119 remaining
+    expect(headroomIsSatisfied(w, headroom, 1199)).toBe(false); // 1 remaining
+  });
+
+  it('never costs more than one window, whichever arm the phase selects', async () => {
     const windowMs = 200;
     const startedAt = Date.now();
-    // Demanding the WHOLE window is the total case — it can never be satisfied
-    // by the remainder, so this always takes the sleeping arm, and it is exactly
-    // the identity `waitForWindowBoundary(w) ≡ waitForWindowHeadroom(w, w)`.
+    // The COST bound, which is true of both arms — so unlike the assertion this
+    // replaces, it cannot depend on which one the clock happened to select.
     await waitForWindowHeadroom(windowMs, windowMs);
-    const elapsed = Date.now() - startedAt;
 
-    expect(elapsed).toBeGreaterThan(0);
-    expect(elapsed).toBeLessThanOrEqual(windowMs + BOUNDARY_OVERSHOOT_MS + 100);
+    expect(Date.now() - startedAt).toBeLessThanOrEqual(windowMs + BOUNDARY_OVERSHOOT_MS + 100);
   });
 
   // The guarantee, asserted BEHAVIOURALLY rather than by recomputing the phase:

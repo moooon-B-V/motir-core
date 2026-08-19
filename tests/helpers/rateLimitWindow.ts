@@ -180,6 +180,36 @@ export function waitForWindowBoundary(windowMs: number): Promise<void> {
  * window is small enough that a full alignment is affordable.
  */
 export function waitForWindowHeadroom(windowMs: number, minRemainingMs: number): Promise<void> {
-  const remaining = windowMs - (Date.now() % windowMs);
-  return remaining >= minRemainingMs ? Promise.resolve() : waitForWindowBoundary(windowMs);
+  return headroomIsSatisfied(windowMs, minRemainingMs)
+    ? Promise.resolve()
+    : waitForWindowBoundary(windowMs);
+}
+
+/**
+ * Whether the cell containing `now` already holds `minRemainingMs` — i.e.
+ * whether {@link waitForWindowHeadroom} returns immediately rather than sleeping.
+ *
+ * ⚠️ THE CLOCK IS A PARAMETER, AND THAT IS THE POINT (MOTIR-3127). This decision
+ * was previously inline, so the only way to assert either arm was to run the real
+ * function and time it — which makes the ASSERTION depend on the phase the test
+ * happened to start in. The case for the sleeping arm assumed a whole-window
+ * request could never be satisfied by the remainder, and went red roughly one run
+ * in `windowMs` when the call landed on a boundary millisecond: there
+ * `now % windowMs === 0`, so `remaining === windowMs`, which satisfies the
+ * request. With `now` injectable, both arms and the boundary between them are
+ * asserted exactly, at synthetic instants, with no wall clock involved.
+ *
+ * ⚠️ AND NOTE WHAT IS NOT WRONG HERE: returning immediately on a boundary is
+ * CORRECT. A caller asking for a whole window while standing exactly at one has
+ * it, and sleeping would buy a full window of dead time for nothing. So the
+ * identity `waitForWindowBoundary(w)` ≡ `waitForWindowHeadroom(w, w)` holds at
+ * every phase EXCEPT that one — which is a fact about the helper worth stating
+ * rather than an exception for a test to trip over.
+ */
+export function headroomIsSatisfied(
+  windowMs: number,
+  minRemainingMs: number,
+  now: number = Date.now(),
+): boolean {
+  return windowMs - (now % windowMs) >= minRemainingMs;
 }
