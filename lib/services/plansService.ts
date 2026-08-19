@@ -8,6 +8,10 @@ import {
 
 import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import {
+  classifyBlockerReadiness,
+  type BlockerReadinessState,
+} from '@/lib/workItems/blockerReadiness';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -15,6 +19,7 @@ import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
@@ -86,6 +91,14 @@ import { planTargetLockService } from '@/lib/services/planTargetLockService';
 // Composing the tx-aware leaves is the architecturally correct way to materialize
 // atomically (the card's `workItemsService.create(proposedFields)` intent, at the
 // layer transactional composition actually allows).
+
+// The workflow status a materialized `add` is born at when its edges say it
+// cannot start (MOTIR-3050). It is the KEY, not a category: `blocked` sits in
+// the `todo` category alongside `todo` itself, so there is nothing structural to
+// match on — `lib/workflows/defaultWorkflow.ts` seeds this key into every
+// project, and a workflow customized to drop it simply keeps the initial status
+// (the resolve-then-check in `materialize` handles that).
+const BLOCKED_STATUS_KEY = 'blocked';
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -783,6 +796,99 @@ async function materialize(
     }
   }
 
+  // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
+  // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
+  // which for the default workflow is `todo` — "the only thing between this card
+  // and the ready set is who picks it up". A card proposed with a
+  // `blockedByRefs` naming unfinished work is not that, and a person reading the
+  // approved tree was being shown a `todo` column full of cards nobody could
+  // start.
+  //
+  // ⚠️ WHY AT BIRTH, AND ONLY AT BIRTH. `blocked` is deliberately NOT a
+  // projection of the edges in this product: `lib/workflows/defaultWorkflow.ts`
+  // documents it as the human annotation for "can't proceed, full stop",
+  // INCLUDING blockers that have no edge at all (an external dependency), and
+  // MOTIR-2425 records that readiness is computed from the edges and never from
+  // the status. A recompute that owned the column would therefore CLEAR a
+  // human's externally-motivated block the moment no edge remained, and would
+  // fight `run.md`'s own guards, which move a card to `blocked` for reasons the
+  // graph cannot see. A newly created row has no such annotation to clobber —
+  // choosing its FIRST status from its edges strictly adds information and
+  // overwrites nothing. That is the whole scope of this pass, and it is what
+  // makes the two authoring doors agree (the direct path's planner types this
+  // status by hand right after `create_work_item`).
+  //
+  // The verdict comes from `classifyBlockerReadiness`, the SAME predicate the
+  // ready set uses (`lib/workItems/blockerReadiness.ts`) — so `blocked` here can
+  // never mean something different from "not ready" there. It is a snapshot of
+  // that predicate at creation, not a second source of truth for it: readiness
+  // stays computed, and it is what dispatch reads.
+  if (createdAdds.length > 0) {
+    const createdIds = createdAdds.map(({ created }) => created.id);
+    const blockerRows = await workItemLinkRepository.findBlockerStatesForItems(createdIds, tx);
+    if (blockerRows.length > 0) {
+      // A blocker may live in ANOTHER project (a cross-project edge), so
+      // "terminal" is resolved per blocker-project — the same batched read
+      // `getReadinessForItems` makes.
+      const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+        blockerRows.map((b) => b.projectId),
+        ctx.workspaceId,
+        tx,
+      );
+      const byItem = new Map<string, BlockerReadinessState[]>();
+      for (const row of blockerRows) {
+        const bucket = byItem.get(row.fromId);
+        if (bucket) bucket.push(row);
+        else byItem.set(row.fromId, [row]);
+      }
+      const unready = createdIds.filter(
+        (id) => !classifyBlockerReadiness(byItem.get(id) ?? [], terminalByProject).ready,
+      );
+      if (unready.length > 0) {
+        // Resolve the project's own blocked status rather than assuming one: a
+        // project whose workflow was customized may not have it, and under the
+        // `restricted` policy the initial → blocked move must be a declared
+        // transition. Either check failing leaves the initial status in place —
+        // a status the workflow does not offer is never written, and a workflow
+        // that has been reshaped to forbid the hop is not overridden here.
+        const blockedStatus = await workflowsRepository.findStatusByKey(
+          plan.projectId,
+          BLOCKED_STATUS_KEY,
+          ctx.workspaceId,
+          tx,
+        );
+        const initialStatus = await workflowsRepository.findStatusByKey(
+          plan.projectId,
+          statusKey,
+          ctx.workspaceId,
+          tx,
+        );
+        const legal =
+          blockedStatus != null &&
+          initialStatus != null &&
+          (project.workflowPolicyMode === 'open' ||
+            (await workflowsRepository.findTransition(
+              plan.projectId,
+              initialStatus.id,
+              blockedStatus.id,
+              ctx.workspaceId,
+              tx,
+            )) !== null);
+        if (legal) {
+          for (const id of unready) {
+            const updated = await workItemRepository.update(id, { status: blockedStatus.key }, tx);
+            // Feed the refreshed row back to Pass 3, which records the `created`
+            // revision from it — so the item's history shows ONE create, at the
+            // status it was actually born at, and not a create plus a phantom
+            // status change nobody made.
+            const entry = createdAdds.find((c) => c.created.id === id);
+            if (entry) entry.created = updated;
+          }
+        }
+      }
+    }
+  }
+
   // Pass 3 — resolve intra-plan item-link tokens in each add's body, then
   // auto-relate + record the create revision (MOTIR-1418). Every add's WorkItem
   // id now exists, so a `[label](motir-ref:planItem:<id>)` token (the form the
@@ -984,6 +1090,18 @@ async function applyModify(
   // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
   // feed renders them through the already-registered `links` disposition
   // (lib/activity/renderers.ts) rather than a new, undispositioned key.
+  // ⚠️ A `modify` WIRES THE EDGE AND LEAVES THE STATUS ALONE — deliberately
+  // (MOTIR-3050 AC 3). The `add` path above derives a materialized card's FIRST
+  // status from its edges, and the obvious symmetry would be to move an existing
+  // card to `blocked` when a `blockedByAdd` newly gates it. It is not symmetric,
+  // for one reason: an `add` has no prior status to overwrite, and a `modify`
+  // target has one that somebody RECORDED. That card may be `in_progress` with a
+  // live worktree — the exact state `run.md`'s guards produce — or `in_review`
+  // with an open PR, or `done`, from which `blocked` is not even a legal move.
+  // An approve cannot see any of that, so writing the column here would silently
+  // walk back a fact in order to display a dependency the edge already carries
+  // and readiness already computes. The mover stays explicit: whoever finds the
+  // missing prerequisite calls `transition_status` themselves.
   const linkAdded: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);

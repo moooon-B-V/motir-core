@@ -189,6 +189,88 @@ export const githubPullRequestRepository = {
     }));
   },
 
+  /** Count a work item's linked PRs that are still OPEN. The re-evaluation path
+   *  (MOTIR-3034) uses it where the sync uses `countOtherOpenByWorkItem`: there a
+   *  delivery is being decided and the DELIVERING row must be excluded from its
+   *  own gate, here there is no delivery at all, so every open sibling counts.
+   *  Deliberately a second method rather than `excludePrId: null` on the first —
+   *  the two callers are asking different questions and a nullable exclusion
+   *  would make which one is being asked a property of a call site's argument.
+   *  A read guarding the transition write → takes `tx`. */
+  async countOpenByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.githubPullRequest.count({ where: { workItemId, state: 'open' } });
+  },
+
+  /** The workspace that owns a work item's linked change requests, via the REPO
+   *  row (MOTIR-1931's tenancy rule), or null when the item has no linked change
+   *  request at all (MOTIR-3034).
+   *
+   *  This is the re-evaluation path's TRUSTED workspace resolution. It matters
+   *  that it reads the CONNECTION tier and nothing else: `github_pull_request` and
+   *  `github_repo` both carry a `system_admin` policy arm, so this read is
+   *  admitted inside `withSystemContext` — which is the only way a caller holding
+   *  just a work-item id can learn the tenant it must bind before touching
+   *  `work_item`, a table with no such arm (MOTIR-2880). Both tables the query
+   *  touches are armed; the join is part of the predicate. */
+  async findWorkspaceIdByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.githubPullRequest.findFirst({
+      where: { workItemId },
+      select: { repo: { select: { workspaceId: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return row?.repo.workspaceId ?? null;
+  },
+
+  /** One repository's MERGED change requests whose `base_ref` is NULL — the rows
+   *  the completion gate reads as UNKNOWN (MOTIR-3034). Exactly the population
+   *  the base-ref backfill repairs, and the reason a second run of that backfill
+   *  makes zero host calls: a filled row leaves this set.
+   *
+   *  MERGED ONLY, and that is the decision the card asked to be recorded rather
+   *  than a narrowing. `classifyRepoDelivery` filters on `f.merged` before it ever
+   *  looks at `baseRef`, so an unmerged row's null base is never a term in the
+   *  gate; and an OPEN change request's base is still mutable, so a value read
+   *  today can be wrong tomorrow and the next delivery writes the right one
+   *  anyway. Spending a rate-limited request on either buys nothing.
+   *
+   *  Read guarding a write → takes `tx`. Ordered so a long sweep's log is
+   *  diffable and resumable by eye. */
+  async listMergedMissingBaseRefByRepo(
+    repoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; number: number; workItemId: string | null }>> {
+    return tx.githubPullRequest.findMany({
+      where: { repoId, merged: true, baseRef: null },
+      select: { id: true, number: true, workItemId: true },
+      orderBy: { number: 'asc' },
+    });
+  },
+
+  /** Write a `base_ref` onto a row that does NOT have one, and return how many
+   *  rows that touched — 0 when a concurrent delivery filled it first
+   *  (MOTIR-3034).
+   *
+   *  `updateMany` with `baseRef: null` in the WHERE is what makes the backfill
+   *  idempotent AT THE DATABASE rather than by the caller remembering to check:
+   *  a row that already carries a base is never rewritten, so its `updated_at`
+   *  never churns and a live delivery's value is never clobbered by a slower
+   *  historical read. It also means a re-run is a no-op by construction rather
+   *  than by a comparison the caller might get wrong. Write path → `tx`. */
+  async setBaseRefIfNull(
+    id: string,
+    baseRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: { id, baseRef: null },
+      data: { baseRef },
+    });
+    return result.count;
+  },
+
   /** A work item's linked PRs, newest-updated first, with the repo + check rows
    *  the Development surface renders (MOTIR-1579). Read-only path → `db`. */
   async listByWorkItemWithContext(

@@ -470,7 +470,13 @@ export async function syncChangeRequestStatus(
  *  two obligations the stranded-merge note below carries.
  *
  *  Like that one, it describes what did NOT happen rather than asserting a
- *  status: the sync leaves the item exactly where it was. */
+ *  status: the sync leaves the item exactly where it was.
+ *
+ *  ⚠️ THE HEADING SAYS NOTHING ABOUT HOW MANY REPOSITORIES (MOTIR-3034). It read
+ *  "this item ships in more than one repository" until a ONE-element set was held
+ *  by the unknown-base arm and the note told its reader something plainly false
+ *  about their own card. The gate is about EVERY repository, never about more than
+ *  one — the set of size one is not an edge case here, it is the common case. */
 function incompleteRepoSetCommentBody(args: {
   noun: string;
   number: number;
@@ -478,7 +484,7 @@ function incompleteRepoSetCommentBody(args: {
 }): string {
   const list = (names: string[]) => names.map((n) => `\`${n}\``).join(', ');
   const lines: string[] = [
-    `⚠️ **Merged, but this item ships in more than one repository** — ${args.noun} ` +
+    `⚠️ **Merged, but this item is not complete** — ${args.noun} ` +
       `#${args.number} merged, and the item is not complete yet, so its status is left unchanged.`,
   ];
   if (args.shortfall.outstanding.length > 0) {
@@ -493,8 +499,9 @@ function incompleteRepoSetCommentBody(args: {
       `No record of which branch the merge landed on for ${list(args.shortfall.unknownBase)} — ` +
         `${args.shortfall.unknownBase.length === 1 ? 'that repository has' : 'those repositories have'} ` +
         `a merged ${args.noun} that Motir mirrored before it began recording base branches, so it ` +
-        `cannot tell whether the work reached the trunk. Open it and check, or re-merge onto the ` +
-        `default branch.`,
+        `cannot tell whether the work reached the trunk. An operator can repair this without a new ` +
+        `merge — \`pnpm db:backfill:pr-base-ref\` reads the base back from the provider and re-runs ` +
+        `this decision (MOTIR-3034).`,
     );
   }
   lines.push(

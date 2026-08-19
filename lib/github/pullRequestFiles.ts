@@ -1,4 +1,8 @@
-import { retryDelayMs } from '@/lib/github/historicalPullRequests';
+// The response-throttling rule only — this leaf keeps its OWN tighter attempt /
+// backoff budget below (it runs inside a post-commit side effect, not an operator
+// sweep). `retryDelayMs` moved to the shared leaf when a third reader needed it
+// (MOTIR-3034); the import target changed, the behaviour did not.
+import { retryDelayMs } from '@/lib/github/restRetry';
 
 // Pull-request FILES read leaf (MOTIR-2922) — walk one pull request's changed
 // paths off `GET /repos/{owner}/{name}/pulls/{number}/files` with an installation

@@ -4,8 +4,11 @@ import {
   listMergedPullRequests,
   MAX_PULL_REQUEST_PAGES,
   normalizeHistoricalPullRequest,
-  retryDelayMs,
 } from '@/lib/github/historicalPullRequests';
+// The throttling policy moved to a shared leaf when a second reader needed it
+// (MOTIR-3034); the assertions below are unchanged, and are the ONE place that
+// rule is pinned for every GitHub read leaf.
+import { retryDelayMs } from '@/lib/github/restRetry';
 
 // The historical-PR READ leaf (MOTIR-1965) — the wire contract behind the
 // mirror backfill: WHICH endpoint is walked, which rows survive normalization,
@@ -265,6 +268,20 @@ describe('listMergedPullRequests', () => {
   it('rejects a non-array body rather than reading it as an empty history', async () => {
     fetchMock.mockImplementation(async () =>
       jsonPage({ message: 'Not Found' } as unknown as unknown[]),
+    );
+    await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
+      /expected a JSON array/,
+    );
+  });
+
+  it('rejects a 200 whose body is not JSON AT ALL — an HTML error page is not an empty history', async () => {
+    // The other arm of the same guard: a 200 carrying a proxy's HTML error page
+    // makes `res.json()` REJECT, and the leaf's `.catch(() => null)` turns that
+    // into the same typed read error rather than an unhandled parse throw
+    // escaping a generator that a sweep is iterating. Without this the walk would
+    // die mid-repository with a `SyntaxError` no report could attribute.
+    fetchMock.mockImplementation(
+      async () => new Response('<html>502 Bad Gateway</html>', { status: 200 }),
     );
     await expect(drain(listMergedPullRequests(TOKEN, OWNER, NAME, REPO_ID))).rejects.toThrow(
       /expected a JSON array/,
