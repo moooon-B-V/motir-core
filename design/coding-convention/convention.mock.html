@@ -272,7 +272,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         margin: 44px auto 10px;
         padding-left: 2px;
         max-width: 1080px;
@@ -460,7 +460,7 @@
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
 
       /* ── Panel 1 — health summary ──────────────────────────────────────── */
@@ -660,7 +660,7 @@
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         margin-bottom: 3px;
       }
       .deepen .d-title {
@@ -1487,7 +1487,7 @@
         flex: none;
       }
       .step-sep {
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
         font-size: 12px;
       }
 
@@ -1532,7 +1532,7 @@
         color: var(--el-text);
       }
       .tb-crumb .sep {
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
       .tb-crumb .muted {
         color: var(--el-text-secondary);
@@ -1690,7 +1690,7 @@
         border: 1px solid var(--el-border);
       }
       .ctx .crumb .sep {
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
       .ctx .crumb .here {
         color: var(--el-text);
@@ -1740,7 +1740,7 @@
         <div class="tb-left">
           <!-- ShellTierNav — Org › Workspace -->
           <span class="tb-crumb"
-            ><strong>Acme</strong> <span class="sep">›</span>
+            ><strong>Acme</strong> <span class="sep" aria-hidden="true">›</span>
             <span class="muted">Engineering</span></span
           >
         </div>
@@ -2393,7 +2393,8 @@
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </svg>
-        Code health <span class="sep">›</span> <span class="here">Convention tab</span>
+        Code health <span class="sep" aria-hidden="true">›</span>
+        <span class="here">Convention tab</span>
       </span>
       <span
         >— the main content region of the screen above, Convention tab selected. Read-only; refine
@@ -2589,7 +2590,8 @@
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </svg>
-        Code health <span class="sep">›</span> <span class="here">Audit / Convention (fresh)</span>
+        Code health <span class="sep" aria-hidden="true">›</span>
+        <span class="here">Audit / Convention (fresh)</span>
       </span>
       <span
         >— same screen for a start-fresh project; also reachable in the onboarding wizard
@@ -2760,7 +2762,8 @@
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </svg>
-        Code health <span class="sep">›</span> <span class="here">Audit tab (no audit yet)</span>
+        Code health <span class="sep" aria-hidden="true">›</span>
+        <span class="here">Audit tab (no audit yet)</span>
       </span>
       <span>— the same screen as Panel 1, before any audit exists to render.</span>
     </div>
@@ -3288,7 +3291,7 @@ jobs:
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </svg>
-        Code health <span class="sep">›</span>
+        Code health <span class="sep" aria-hidden="true">›</span>
         <span class="here">Audit tab · 5 connected repositories</span>
       </span>
       <span>— the same screen as Panel 1, with the layer that chooses whose report is shown.</span>
@@ -3765,7 +3768,7 @@ jobs:
             d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
           />
         </svg>
-        Code health <span class="sep">›</span>
+        Code health <span class="sep" aria-hidden="true">›</span>
         <span class="here">Audit tab · the repo list from Panel 7, now actionable</span>
       </span>
       <span
