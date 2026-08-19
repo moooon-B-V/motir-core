@@ -254,11 +254,17 @@ describe('a two-repository card, end to end through the BUILT binary', () => {
     const core = makeLocalRepo(ws.root, 'motir-core');
     installFakeGh(ws.binDir);
     const agent = writeFakeAgent(join(ws.root, '.agent'));
+    // The agent must actually PUSH the half it CAN do: MOTIR-3004 refuses to
+    // record `implemented` for a run that pushed nothing and returns before the
+    // post-condition, so a do-nothing agent would hide the very report this test
+    // is about. It fails on `motir-ai` — there is no checkout to enter — which is
+    // exactly the half-done run the suspect report exists to name.
+    agent.script([{ perRepoPr: { file: 'half.txt' } }]);
     const item = await card(fx, 'One half has nowhere to go', ['motir-core', 'motir-ai']);
 
     const run = await ws.run(['run', item.identifier, '--agent', agent.command]);
 
-    expect(run.exitCode).toBe(0);
+    expect(run.exitCode, run.output).toBe(0);
     expect(existsSync(ws.path('motir-ai'))).toBe(false);
     expect(run.stderr).toContain('no checkout here yet');
     expect(run.stderr).toContain('NOT a blocker');
@@ -289,7 +295,7 @@ describe('the SINGLE-repository control, through the same harness', () => {
     expect(agent.invocations()[0]?.cwd).toBe(core.path);
     // ONE pull request, and the shipped singular follow-up.
     expect(gh.pullRequests()).toHaveLength(1);
-    expect(run.stderr).toContain('its pull request should be open');
+    expect(run.stderr).toContain('its pull request is open');
     expect(run.stderr).toContain(`motir done ${item.identifier}`);
     // …and none of the multi-repository vocabulary appears at all.
     expect(run.stderr).not.toContain('ships in every one of them');

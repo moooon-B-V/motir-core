@@ -433,6 +433,8 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
       return [
         `${key}: agent finished — integrated on "${dispatch.sessionBranch}" in ${repos.length}`,
         `repositories: ${repos.map((r) => r.name).join(', ')}.`,
+        'CI decides when each becomes reviewable: the card moves to In Review on its own',
+        'when the checks go green.',
         `Next: review + merge the session PR in EACH of them, then`,
         `\`motir done --session ${dispatch.sessionBranch}\`.`,
         `${key} is not complete until every repository's pull request has merged.`,
@@ -469,6 +471,8 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
     }
     lines.push(
       '',
+      'CI decides when it becomes reviewable: the card moves to In Review on its own',
+      'when the checks go green.',
       `Next: review + merge every one of them. ${key} completes only when EVERY`,
       "repository's pull request has merged — a single merge leaves it held.",
     );

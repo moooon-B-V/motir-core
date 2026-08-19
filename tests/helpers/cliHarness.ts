@@ -444,6 +444,15 @@ if (step.perRepoPr) {
     run('git', ['fetch', 'origin'], repoDir);
     run('git', ['worktree', 'add', b.wt, '-b', b.branch, 'origin/' + b.base], repoDir);
     const wtDir = join(repoDir, b.wt);
+    if (!existsSync(wtDir)) {
+      // The repository has no checkout to enter, so this half cannot happen here.
+      // A real agent SAYS so and finishes the halves it can — it does not abort
+      // the whole card — and the CLI's own suspect-dispatch report is what names
+      // the repository afterwards. Crashing instead would make the fixture, not
+      // the tool, decide what a half-delivered run looks like.
+      process.stderr.write('fake-agent: skipped ' + b.dir + ' — no checkout to work in\\n');
+      continue;
+    }
     writeFileSync(join(wtDir, step.perRepoPr.file), 'work by the fake agent\\n');
     run('git', ['add', step.perRepoPr.file], wtDir);
     run('git', ['commit', '-m', 'feat: ' + step.perRepoPr.file + ' (' + key + ')'], wtDir);
