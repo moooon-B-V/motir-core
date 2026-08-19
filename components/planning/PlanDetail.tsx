@@ -59,9 +59,16 @@ export interface PlanDetailProps {
    * never a precondition for it).
    */
   repositorySet?: { projectKey: string; view: ProjectRepoEstablishViewDto } | null;
+  /** The plan's project — the canvas reads its per-level roadmap (MOTIR-3083). */
+  projectKey: string;
 }
 
-export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDetailProps) {
+export function PlanDetail({
+  initialReview,
+  ariaLabel,
+  repositorySet,
+  projectKey,
+}: PlanDetailProps) {
   const t = useTranslations('planReview');
   const router = useRouter();
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
@@ -246,6 +253,7 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
           ) : (
             <PlanReviewCanvas
               items={review.items}
+              projectKey={projectKey}
               version={version}
               ariaLabel={ariaLabel ?? t('canvasAria')}
               // Editable only while planned — an approved/declined plan is immutable.

@@ -15,6 +15,11 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     op: 'add',
     nodeId: 'pi_1',
     parentNodeId: null,
+    // The COMMITTED parent (MOTIR-3083) — null by default, so an existing case
+    // keeps describing a top-level proposal and a parented one opts in.
+    parentIdentifier: null,
+    parentTitle: null,
+    parentKind: null,
     blockedByNodeIds: [],
     identifier: null,
     title: 'A proposed item',

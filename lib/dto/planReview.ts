@@ -42,6 +42,26 @@ export interface PlanReviewItemDto {
   nodeId: string;
   /** The resolved parent node id (drill placement), or null for a root. */
   parentNodeId: string | null;
+  /**
+   * The COMMITTED parent this proposal will be created under — resolved from the
+   * same batched target read, and non-null only when `parentRef` names a real
+   * work item rather than another proposal in this plan (MOTIR-3083).
+   *
+   * It is what the canvas opens a LEVEL at and what the breadcrumb names. Before
+   * this the review model carried no field that could name the parent at all, so
+   * a proposal under a committed item drew at the top level indistinguishable
+   * from a genuine root — `isRoot` is true both for "no parent" and for "a parent
+   * outside the rendered set", which is correct for a partial subtree and wrong
+   * for this. The distinction lives here, in the plan's own model, rather than in
+   * that shared predicate.
+   *
+   * All three are null for a root, for an intra-plan (`planItem:`) parent, and
+   * for a parent that has been archived or hard-deleted — the last case degrades
+   * to the root rendering rather than failing the read.
+   */
+  parentIdentifier: string | null;
+  parentTitle: string | null;
+  parentKind: string | null;
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`. */
