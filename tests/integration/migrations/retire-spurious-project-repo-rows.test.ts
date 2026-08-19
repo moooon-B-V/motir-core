@@ -10,7 +10,6 @@ import {
 import type { ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
-import { UnknownTargetRepoError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -452,21 +451,38 @@ describe('retire_spurious_project_repo_rows — the LIVE MOTIR row, and what rem
     });
   });
 
-  it('restores the real repositories as PINNABLE — the write that has been failing', async () => {
-    // AC 4's second half, proved as BEHAVIOUR rather than deduced. With the stray
-    // row present the project's own set IS the pin domain and `motir-core` is not
-    // in it; with the set empty `resolveDomains` falls through to the workspace
-    // rung and the connected repositories are nameable again.
+  it('leaves the real repositories PINNABLE — before the migration and after it', async () => {
+    // AC 4's second half, proved as BEHAVIOUR rather than deduced.
+    //
+    // ⚠️ THE PRECONDITION MOVED, and MOTIR-3086 is why. This case used to open by
+    // asserting that the stray row made `motir-core` UNPINNABLE — because the
+    // scope ladder chose between two registries on `hasSet`, so the first row a
+    // project ever gained did not join its repo list, it BECAME the list.
+    // MOTIR-3086 (#2144) removed exactly that: a set now EXTENDS the workspace's
+    // connected repositories instead of replacing them, so no row can subtract a
+    // repository from the domain — which is the root cause this migration was
+    // sweeping up after.
+    //
+    // The two cards were each green on their own base and red together
+    // (#2144 was reproduced at `fbe5e2cd`, before #2140 added this file). What
+    // the migration is FOR is unchanged and still asserted below: the spurious
+    // row is deleted. What is no longer true is that its presence hides a real
+    // repository, so asserting a rejection here would now pin the defect rather
+    // than the fix.
     const fx = await makeWorkItemFixture();
     await connectWorkspaceRepo(fx.workspaceId, 'motir-core');
     const live = await seedLiveShape(fx);
 
+    // BEFORE: pinnable already — the stray row no longer costs the project its
+    // own code (MOTIR-3086).
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
-    ).rejects.toBeInstanceOf(UnknownTargetRepoError);
+    ).resolves.toBe('motir-core');
 
     await runMigration();
 
+    // AFTER: the row is gone — the migration's actual subject — and the
+    // repository is still nameable, now through the workspace rung alone.
     expect(await survives(live)).toBe(false);
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
