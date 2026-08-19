@@ -147,6 +147,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // a 422 for the same reason: the caller can fix it, and the message names the
   // project's rows so they can.
   UNKNOWN_PROJECT_REPO_REF: 422,
+  // MOTIR-2978 — a write setting a CONTAINER's repositories, which are derived
+  // from its subtasks'. A 422 rather than a silent accept: the next recompute
+  // would erase the value with no signal to the caller.
+  CONTAINER_REPO_SET_NOT_WRITABLE: 422,
   ARCHIVED_TARGET_REPO: 422,
   // MOTIR-2728 — a write supplying BOTH `targetRepo` and `targetRepos`. The
   // scalar IS the set's first element, so the two can disagree; a refusal beats a

@@ -30,6 +30,7 @@ export type WorkItemErrorTag =
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
   | 'UNKNOWN_PROJECT_REPO_REF'
+  | 'CONTAINER_REPO_SET_NOT_WRITABLE'
   | 'ARCHIVED_TARGET_REPO'
   | 'CONFLICTING_TARGET_REPO_INPUT'
   | 'MISSING_ARTIFACT_EVIDENCE';
@@ -331,6 +332,38 @@ export class ConflictingTargetRepoInputError extends WorkItemError {
         'pin repository ROWS, targetRepos for names, and either field for a single repository.',
     );
     this.name = 'ConflictingTargetRepoInputError';
+  }
+}
+
+/**
+ * A write tried to set the repositories of a CONTAINER (Story MOTIR-2732 ·
+ * MOTIR-2978, ADR "Amendment 2026-08-18" §A6).
+ *
+ * A container never authors its repositories — they are the UNION of its
+ * non-archived leaf descendants', recomputed on every write that can move one.
+ * So a value supplied here is not merely redundant: the next recompute erases it,
+ * and the caller has no way to know that happened.
+ *
+ * **A REFUSAL rather than accept-and-ignore, and that is the decision.** Ignoring
+ * it is the tempting option because the field is already read-only on both
+ * surfaces, so "nobody sends this" — but a silent accept is exactly the shape
+ * §3.4 rejected for the both-fields case: the losing value is a decision the
+ * caller believed they had recorded, dropped with no signal, on the field whose
+ * whole job is to say where work ships.
+ *
+ * A `WorkItemError`, so the route layer maps it to 422 and an MCP caller sees a
+ * self-correctable tool error naming the leaf as the place to pin.
+ */
+export class ContainerRepoSetNotWritableError extends WorkItemError {
+  readonly tag = 'CONTAINER_REPO_SET_NOT_WRITABLE' as const;
+  readonly code = 'CONTAINER_REPO_SET_NOT_WRITABLE' as const;
+  constructor() {
+    super(
+      "A container's repositories are DERIVED — the union of its subtasks' — so they cannot be " +
+        'set directly. Pin the repository on the subtask that ships in it, and the story, task or ' +
+        'epic above it picks it up automatically.',
+    );
+    this.name = 'ContainerRepoSetNotWritableError';
   }
 }
 

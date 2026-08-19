@@ -192,7 +192,10 @@ import {
 } from '@/lib/workItems/dispatchRepo';
 import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
-import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
+import {
+  ConflictingTargetRepoInputError,
+  ContainerRepoSetNotWritableError,
+} from '@/lib/workItems/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
@@ -254,6 +257,77 @@ async function writeRepoRefs(
     refs.map((projectRepoId, position) => ({ workspaceId, workItemId, projectRepoId, position })),
     tx,
   );
+}
+
+/**
+ * Recompute the DERIVED repository set of every ANCESTOR of `itemId` (Story
+ * MOTIR-2732 · MOTIR-2978, ADR "Amendment 2026-08-18" §A6).
+ *
+ * A container never authors its repositories — they are the union of its
+ * non-archived leaf descendants' — so every write that can move a leaf's set, or
+ * move a leaf, owes this call inside its own transaction.
+ *
+ * **Locked, and this is the part that is not optional.** A rollup is a
+ * read-derive-write over a row several children can move at once: two children of
+ * one story updated concurrently each derive the parent, and the later write can
+ * be derived from a snapshot taken before the earlier one landed — a lost update
+ * that leaves a repository off the parent silently. So each ancestor's row is
+ * locked (`SELECT … FOR UPDATE`) BEFORE its descendants are read, and the
+ * descendants are re-read under that lock rather than taken from the caller's
+ * snapshot (`CLAUDE.md`'s lock-before-read-derived-update rule, named by §A6
+ * because MOTIR-2978's AC 3 asserts the outcome without prescribing the means).
+ *
+ * Ancestors arrive ROOT→self from `findAncestors` and are locked in that order,
+ * which is what stops two concurrent recomputes on overlapping chains from
+ * deadlocking: every caller takes the same rows in the same direction.
+ *
+ * The walk is naturally short — the tree is depth-capped at 4 — so this is a
+ * fixed-length parent walk, not an unbounded recursion.
+ */
+async function recomputeAncestorRepoSets(
+  itemId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const ancestors = await workItemRepository.findAncestors(itemId, workspaceId, tx);
+  for (const ancestor of ancestors) {
+    await workItemRepository.lockById(ancestor.id, tx);
+    const refs = await workItemRepoRepository.listDerivedRefsForContainer(
+      ancestor.id,
+      workspaceId,
+      tx,
+    );
+    await writeRepoRefs(ancestor.id, workspaceId, refs, tx);
+  }
+}
+
+/**
+ * Recompute a CONTAINER's own derived set and then its ancestors' — the shape
+ * every MOVE needs (MOTIR-2978, §A6).
+ *
+ * A re-parent, an archive and a delete each change TWO chains: the one the item
+ * joined and the one it left. `recomputeAncestorRepoSets` covers the chain from
+ * an item upward; the chain it LEFT starts at the old parent, which is itself a
+ * container whose set just changed — so that side needs the old parent included,
+ * not merely walked past.
+ *
+ * A container that is now childless derives the EMPTY set, which is correct and
+ * not a special case: an empty set and "this card does not say where it ships"
+ * are one state (ADR §1).
+ */
+async function recomputeContainerAndAncestors(
+  containerId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await workItemRepository.lockById(containerId, tx);
+  const refs = await workItemRepoRepository.listDerivedRefsForContainer(
+    containerId,
+    workspaceId,
+    tx,
+  );
+  await writeRepoRefs(containerId, workspaceId, refs, tx);
+  await recomputeAncestorRepoSets(containerId, workspaceId, tx);
 }
 
 /** Ordered list equality — a REORDER counts as a change, because element 0 is the
@@ -1110,6 +1184,12 @@ export const workItemsService = {
       // project's pin lives in `targetRepo` alone (§A7's compatibility rung).
       await writeRepoRefs(row.id, workspaceId, repoPins.refs, tx);
 
+      // The container ROLLUP (MOTIR-2978, §A6): a new leaf can add a repository
+      // its ancestors did not have, so every ancestor's derived set is recomputed
+      // in the SAME transaction — an item and where its parents ship commit or
+      // roll back together.
+      await recomputeAncestorRepoSets(row.id, workspaceId, tx);
+
       // Initial revision: the created-row state as a { from: null, to: value }
       // diff (1.4.6 finalized the shape 1.4.4 deferred — see buildCreatedDiff).
       // Its id is the idempotency scope of any description-mention event below.
@@ -1365,6 +1445,16 @@ export const workItemsService = {
     ) {
       const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
+      // A CONTAINER's repositories are DERIVED (MOTIR-2978, §A6) — the union of
+      // its non-archived leaf descendants' — so a value supplied for one is
+      // erased by the next recompute. REFUSED rather than ignored, on the same
+      // reasoning §3.4 refuses a silent precedence rule: the dropped value is a
+      // decision the caller believed they had recorded. Checked here, ahead of
+      // the transaction, so a container write never takes the row lock.
+      const children = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findChildren(id, tx),
+      );
+      if (children.length > 0) throw new ContainerRepoSetNotWritableError();
       nextRepoPins =
         patch.targetRepositories !== undefined
           ? await resolveAuthoredRepoRefsInProject(patch.targetRepositories, pre.projectId, ctx)
@@ -1645,6 +1735,7 @@ export const workItemsService = {
         );
         if (!sameRepoSet(nextRepoPins.refs, currentRefs)) {
           await writeRepoRefs(id, ctx.workspaceId, nextRepoPins.refs, tx);
+          await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
         }
       }
 
@@ -1658,6 +1749,18 @@ export const workItemsService = {
       }
 
       const row = await workItemRepository.update(id, update, tx);
+
+      // The container ROLLUP across a RE-PARENT (MOTIR-2978, §A6): a move changes
+      // TWO chains — the one the item joined and the one it left — and only the
+      // first is reachable by walking up from the item now that the row has moved.
+      // So the OLD parent is recomputed by id, INCLUDING itself, before the new
+      // chain is walked.
+      if (parentChanged) {
+        if (current.parentId !== null) {
+          await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        }
+        await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+      }
 
       // Link-on-write (Subtask 5.2.3): a body edit re-resolves the
       // embeds-are-attachments linkage — newly-referenced editor uploads
@@ -2595,6 +2698,11 @@ export const workItemsService = {
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
 
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
+
+      // The container ROLLUP (MOTIR-2978, §A6): an ARCHIVED descendant contributes
+      // nothing to its ancestors' union — a parent is not waiting on work archived
+      // out of it — so archiving is a recompute trigger like any set change.
+      await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
       await workItemRevisionsService.recordRevision(
         {
           workItemId: id,
@@ -2643,6 +2751,9 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
+
+      // …and unarchiving puts it back, which is the same trigger in reverse.
+      await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
       await workItemRevisionsService.recordRevision(
         {
           workItemId: id,
@@ -2741,6 +2852,16 @@ export const workItemsService = {
 
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
+
+      // 6. The container ROLLUP (MOTIR-2978, §A6). The deleted rows' references
+      //    went with them (the join table cascades on `work_item`), so the union
+      //    the ancestors derive has already shrunk — but nothing has RE-DERIVED it
+      //    yet, and a stored derived set does not update itself. Recomputed from
+      //    the surviving parent upward, INCLUDING it: the parent's own set just
+      //    changed and there is no longer a child to walk up from.
+      if (root.parentId !== null) {
+        await recomputeContainerAndAncestors(root.parentId, ctx.workspaceId, tx);
+      }
       return root.parentId;
     });
 
@@ -2898,6 +3019,16 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff },
         tx,
       );
+      // The container ROLLUP across a MOVE (MOTIR-2978, §A6) — both chains, the
+      // one left and the one joined, for the same reason the patch path does it.
+      // Gated on `parentChanged`: a pure REORDER moves no repository anywhere.
+      if (parentChanged) {
+        if (current.parentId !== null) {
+          await recomputeContainerAndAncestors(current.parentId, ctx.workspaceId, tx);
+        }
+        await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);
+      }
+
       return {
         dto: toWorkItemDto(row),
         // A pure REORDER changes no parent's child SET, so it derives nothing.

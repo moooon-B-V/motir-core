@@ -77,6 +77,61 @@ export const workItemRepoRepository = {
     });
   },
 
+  /**
+   * The DERIVED repository set of a CONTAINER — the ordered union of its
+   * non-archived LEAF descendants' references (Story MOTIR-2732 · MOTIR-2978,
+   * ADR "Amendment 2026-08-18" §A6).
+   *
+   * One round-trip: a recursive CTE walks DOWN `parentId` (the inverse of
+   * `findAncestors`), keeps only descendants that are themselves childless, and
+   * unions their references.
+   *
+   * **Ordered by `project_repository.position` — the PROJECT's own set order, not
+   * first appearance in the tree.** §A6's reason, and it is the clause that
+   * differs from this card's as-authored body: the project's order is stable and
+   * independent of child order, so re-parenting a subtask between two stories
+   * cannot reorder a parent's repositories without changing WHICH repositories it
+   * spans. A visible change that records nothing is the churn this avoids.
+   *
+   * **ARCHIVED descendants contribute nothing** (§A6): a parent is not waiting on
+   * work archived out of it, so an archived child's repository must leave the
+   * union — which is exactly why archive/unarchive are recompute triggers.
+   *
+   * `workspaceId` is filtered on BOTH the anchor and the recursive step, so a
+   * cross-workspace descendant can never leak into the union (the primary tenant
+   * gate — RLS is inert under the dev/CI superuser).
+   */
+  async listDerivedRefsForContainer(
+    containerId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<{ projectRepoId: string }[]>`
+      WITH RECURSIVE descendants AS (
+        SELECT w."id", w."archivedAt"
+          FROM "work_item" w
+          WHERE w."id" = ${containerId} AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT c."id", c."archivedAt"
+          FROM "work_item" c
+          JOIN descendants d ON c."parentId" = d."id"
+          WHERE c."workspaceId" = ${workspaceId} AND c."archivedAt" IS NULL
+      )
+      SELECT DISTINCT ON (pr."position", wir."project_repo_id")
+             wir."project_repo_id" AS "projectRepoId"
+        FROM descendants d
+        JOIN "work_item_repository" wir ON wir."work_item_id" = d."id"
+        JOIN "project_repository" pr ON pr."id" = wir."project_repo_id"
+       WHERE d."id" <> ${containerId}
+         AND d."archivedAt" IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM "work_item" k
+            WHERE k."parentId" = d."id" AND k."archivedAt" IS NULL
+         )
+       ORDER BY pr."position", wir."project_repo_id"`;
+    return rows.map((r) => r.projectRepoId);
+  },
+
   /** Drop one item's references. Paired with {@link createMany} by the service:
    *  a repository SET is replaced wholesale, never patched element by element
    *  (which is why `position` is an ordinal and not a fractional index). */
