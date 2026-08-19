@@ -1,4 +1,5 @@
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { normalizeRepoName } from './repoName';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
@@ -122,15 +123,16 @@ export async function listConnectedRepoNames(ctx: ServiceContext): Promise<Conne
  * result as one that types the short name. A blank / whitespace-only string
  * normalizes to `null` (an explicit clear), so a caller never has to distinguish
  * "" from null.
+ *
+ * ⚠️ RE-EXPORTED, not re-implemented (MOTIR-3036). The rule moved to
+ * `lib/workItems/repoName.ts` when a CLIENT component needed it — this module
+ * value-imports the GitHub repository and a workspace context, so a component
+ * that imported the rule from here would drag server code into its bundle. The
+ * name stays because it is what every shipped caller and test imports; a second
+ * copy of the rule is exactly what let `owner/name` and `name` be compared as if
+ * they were the same string.
  */
-export function normalizeTargetRepo(value: string | null | undefined): string | null {
-  if (value === undefined || value === null) return null;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return null;
-  const slash = trimmed.lastIndexOf('/');
-  const name = slash === -1 ? trimmed : trimmed.slice(slash + 1).trim();
-  return name.length === 0 ? null : name;
-}
+export const normalizeTargetRepo = normalizeRepoName;
 
 /**
  * Normalize + VALIDATE an authored `targetRepo` against a repo DOMAIN, returning

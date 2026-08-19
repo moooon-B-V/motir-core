@@ -14,11 +14,53 @@ import { RATE_LIMIT_DISABLE_ENV } from '@/lib/rateLimit/limiter';
 import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import { rateLimitKey } from '@/lib/rateLimit/keys';
 import { rateLimitCounterRepository } from '@/lib/repositories/rateLimitCounterRepository';
+import {
+  ALIGNED_HEADROOM_MS,
+  ALIGNED_WINDOW_MS,
+  currentWindowStart,
+  waitForWindowHeadroom,
+} from '@/tests/helpers/rateLimitWindow';
 
 // The route-edge guard: the 429's SHAPE, the headers, the exclusions, and the
 // multi-limb contract (Subtask 8.5.9 / MOTIR-1165).
-
-const WINDOW = 60_000;
+//
+// ── THE WINDOW IS ALIGNED, AND USED TO NOT BE AT ALL (MOTIR-3016) ────────────
+// This file declared `const WINDOW = 60_000` and handed it to every budget,
+// with no alignment anywhere. `consumeSharedRateLimit` buckets on a grid aligned
+// to the EPOCH, so a pair of calls meant to accumulate resets its counter
+// whenever a minute boundary happens to fall between them, and the call expected
+// to be refused is served instead — `expected null not to be null`, on a diff
+// that touches no rate-limiting code. Unlucky PHASE, not a slow runner: it
+// clears on a re-run every time and is invisible locally.
+//
+// It is the same defect MOTIR-2101 / -2224 / -2598 / -2647 / -2648 each fixed
+// one file at a time, and it survived all five of them for a reason worth
+// naming: MOTIR-2224's guard fails a file that RECOMPUTES the window phase, and
+// this file recomputed nothing. It simply never aligned, and an absent call
+// matches no pattern. Its own sibling `surfaceGuards.test.ts` — same directory —
+// has aligned since MOTIR-2648. See `tests/helpers/rateLimitWindow.ts` for the
+// arithmetic and the sizing, and `tests/api/v1/rate-limit-window-alignment.test.ts`
+// for the guard, now widened to catch the absence rather than the copy.
+//
+// ── Which cases wait, and which do not ───────────────────────────────────────
+// A case waits IFF it ACCUMULATES — it spends the budget more than once and
+// asserts on the accumulated count (a refusal, or the counter read back). Two
+// do:
+//
+//   'carries Retry-After AND the X-RateLimit triple'      2 calls → the 429
+//   'spends EVERY limb, so tripping one does not leave …' 2 calls → the 429 + count
+//
+// The rest do not, and the reason is not "they are quick" — it is structural:
+//
+//   'reports the TIGHTEST limb in the success headers'  ONE counted call; a
+//       straddle can only ever hand a case MORE budget, so it cannot turn an
+//       assertion that something was ALLOWED red.
+//   'pluralizes Retry-After copy…', 'merges caller-supplied headers…',
+//   'an ALLOWED response carries…', 'stamps headers onto a handler response…'
+//       build a `RateLimitDecision` by hand and never call the limiter — no
+//       counter, no window, no clock.
+//   every case under 'the never-limited paths'
+//       pure path matching against `RATE_LIMIT_EXCLUDED_PATHS`.
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
@@ -32,13 +74,14 @@ afterAll(async () => {
 
 describe('the 429 is spec-correct', () => {
   it('carries Retry-After AND the X-RateLimit triple', async () => {
-    const budget = { limit: 1, windowMs: WINDOW };
+    const budget = { limit: 1, windowMs: ALIGNED_WINDOW_MS };
     const limb = {
       scope: 'public-write' as const,
       key: rateLimitKey('public-write', 'ip'),
       budget,
     };
 
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const first = await enforceRateLimit([limb]);
     expect(first.response).toBeNull();
 
@@ -52,7 +95,7 @@ describe('the 429 is spec-correct', () => {
     // A window is at most `windowMs` away, and never zero — a `Retry-After: 0`
     // invites an immediate retry, which is the opposite of backing off.
     expect(retryAfter).toBeGreaterThanOrEqual(1);
-    expect(retryAfter).toBeLessThanOrEqual(WINDOW / 1000);
+    expect(retryAfter).toBeLessThanOrEqual(ALIGNED_WINDOW_MS / 1000);
 
     expect(res!.headers.get('x-ratelimit-limit')).toBe('1');
     expect(res!.headers.get('x-ratelimit-remaining')).toBe('0');
@@ -112,16 +155,25 @@ describe('several limbs', () => {
     const ipKey = rateLimitKey('auth:sign-in', '203.0.113.1');
     const idKey = rateLimitKey('auth:sign-in', 'id', 'a@example.com');
     const limbs = [
-      { scope: 'auth:sign-in' as const, key: ipKey, budget: { limit: 1, windowMs: WINDOW } },
-      { scope: 'auth:sign-in' as const, key: idKey, budget: { limit: 5, windowMs: WINDOW } },
+      {
+        scope: 'auth:sign-in' as const,
+        key: ipKey,
+        budget: { limit: 1, windowMs: ALIGNED_WINDOW_MS },
+      },
+      {
+        scope: 'auth:sign-in' as const,
+        key: idKey,
+        budget: { limit: 5, windowMs: ALIGNED_WINDOW_MS },
+      },
     ];
 
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await enforceRateLimit(limbs)).response).toBeNull();
     // The IP limb is now spent, so this refuses — but the identifier limb must
     // ALSO have been counted, not short-circuited.
     expect((await enforceRateLimit(limbs)).response).not.toBeNull();
 
-    const windowStart = Math.floor(Date.now() / WINDOW) * WINDOW;
+    const windowStart = currentWindowStart(ALIGNED_WINDOW_MS);
     expect(await rateLimitCounterRepository.findCountUnsafe(idKey, BigInt(windowStart))).toBe(2);
   });
 
@@ -130,12 +182,12 @@ describe('several limbs', () => {
       {
         scope: 'auth:sign-in' as const,
         key: rateLimitKey('auth:sign-in', 'wide'),
-        budget: { limit: 100, windowMs: WINDOW },
+        budget: { limit: 100, windowMs: ALIGNED_WINDOW_MS },
       },
       {
         scope: 'auth:sign-in' as const,
         key: rateLimitKey('auth:sign-in', 'narrow'),
-        budget: { limit: 3, windowMs: WINDOW },
+        budget: { limit: 3, windowMs: ALIGNED_WINDOW_MS },
       },
     ];
     const { response, headers } = await enforceRateLimit(limbs);

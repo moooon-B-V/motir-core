@@ -111,20 +111,42 @@ export const statusDerivationOnCreated = defineJob(
     retryPolicy: 'idempotent',
     // ⚠️ NOT DEBOUNCED, and that is a decision with evidence behind it
     // (Bug MOTIR-2902). A parent-keyed debounce looks ideal here: a bulk import
-    // recomputes one parent once per row. It was implemented, and the Inngest
-    // DEV SERVER — what CI's E2E lane and every self-hosted run use — does not
-    // merely ignore it, it DROPS RUNS:
+    // recomputes one parent once per row. It was implemented (#2114), it lost
+    // work, and it was removed — but the mechanism this block first recorded was
+    // the WRONG one, and the right one is why the option stays off.
     //
-    //   ERROR "error scheduling function"  error: "error enqueueing debounce
-    //         job: queue item already exists"
-    //   ERROR "error initializing fn"      function: "status-derivation/created"
+    // WHAT WAS SEEN. `tests/e2e/status-derivation.spec.ts` saw 3 succeeded
+    // derivation runs where it required 4, with the dev server logging:
     //
-    // Two same-key events close together make the second fail to schedule at
-    // all, so the recompute never happens — silently, from the caller's side.
-    // Measured on #2114: `tests/e2e/status-derivation.spec.ts` saw 3 succeeded
-    // derivation runs where it required 4. The fan-out is a real cost and worth
-    // solving, but not with an instrument that loses work in the environment
-    // most people run.
+    //     ERROR "error scheduling function" error: "error enqueueing debounce
+    //     job: queue item already exists"
+    //     ERROR "error initializing fn" function: "status-derivation/created"
+    //
+    // WHAT WAS CONCLUDED FROM IT — AND IS REFUTED. That log was read as the
+    // scheduler discarding the second same-key run, i.e. the option itself
+    // losing work. MOTIR-2994 drove exactly that claim against the pinned
+    // scheduler (motir-core #2122) and it did not reproduce once: coalescing is
+    // real, nothing was discarded, and that error string appeared ZERO times in
+    // ~20 trials. Recorded here AS refuted rather than deleted — the log is
+    // still in the CI archive and reads the same way to the next person.
+    //
+    // WHAT DOES REPRODUCE, and why the option stays off. An UNRESOLVABLE
+    // debounce `key` does not fall back to "not debounced" — it MERGES: every
+    // event whose key expression names a field the event does not carry lands in
+    // ONE shared bucket, so N unrelated events produce ONE run and N−1 units of
+    // work vanish with nothing raised to the sender. The removed debounce was
+    // keyed on `event.data.parentId` — a field `WorkItemCreatedData` carried
+    // only for that key, and which is NULL for a ROOT item — while this event
+    // fires on EVERY creation in the workspace, root ones included. So a bulk
+    // import's root rows all debounced against one another. The fan-out is a
+    // real cost and worth solving, but not with an instrument whose key cannot
+    // resolve for a whole class of this event's payloads.
+    //
+    // Every measurement above is the `inngest-cli` 1.27.0 DEV server — what CI's
+    // E2E lane and every self-hosted run use. Inngest Cloud is a different
+    // scheduler and has NOT been measured (MOTIR-2997). The standing guard is
+    // `tests/jobs/debounce-burst.test.ts`; the full matrix is `docs/jobs.md`
+    // § Debounce.
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemCreatedData;
@@ -200,19 +222,35 @@ export const statusDerivationOnChildSetChanged = defineJob(
 // ⚠️ AND WHY NOT A DEBOUNCE. Delaying the create-recompute past the pin was the
 // first two attempts at this bug, and both failed. It does not even address the
 // initial-import case — the importer creates every parented row FLAT and wires
-// the edge in a second pass, so there is no pin-adjacent window to slide past —
-// and on the Inngest dev server the debounce actively DROPS runs (see the note
-// on `status-derivation/created`). A trigger that depends only on an event being
-// emitted holds in every environment; one that depends on the scheduler honouring
-// an option holds in none that can be tested here.
+// the edge in a second pass, so there is no pin-adjacent window to slide past.
+// A trigger that depends only on an event being emitted holds in every
+// environment; the debounce that was tried additionally had to resolve a key on
+// a ROOT item, which is the MERGE recorded on `status-derivation/created` above.
+//
+// This paragraph used to close by saying that a trigger depending on the
+// scheduler honouring an option "holds in none that can be tested here". That
+// is no longer true and was never the load-bearing half of the argument:
+// `tests/jobs/debounce-burst.test.ts` tests exactly that, in exactly that
+// environment, and motir-core #2122 recorded what it measured in `docs/jobs.md`
+// § Debounce (`inngest-cli` 1.27.0 dev server; Cloud unmeasured, MOTIR-2997).
 
 export const statusDerivationOnRequested = defineJob(
   {
     id: 'status-derivation/requested',
     trigger: 'work-item/derivation.requested',
     retryPolicy: 'idempotent',
-    // Not debounced, for the reason recorded on `status-derivation/created`
-    // above: the dev server's debounce drops runs rather than coalescing them.
+    // Not debounced — but for a DIFFERENT reason than
+    // `status-derivation/created` above, and not for the scheduler behaviour
+    // that block used to assert and motir-core #2122 refuted. This event's
+    // `parentId` is required and non-null (`setImportedStatus` skips the emit
+    // for a root item), so a parent-keyed debounce here WOULD resolve its key.
+    // What rules it out is the measured `timeout` behaviour: a same-key stream
+    // faster than ~1 event/second is never capped, and an import emits these
+    // pins far faster than that, so the recompute would land only once the whole
+    // import ended — while the ordering this consumer exists to guarantee is
+    // already carried by the event itself. `tests/jobs/debounce-burst.test.ts` ·
+    // `docs/jobs.md` § Debounce (`inngest-cli` 1.27.0 dev server; Inngest Cloud
+    // unmeasured — MOTIR-2997).
   },
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemDerivationRequestedData;
