@@ -1,4 +1,5 @@
 import type { NormalizedChangeRequest } from '@/lib/git/types';
+import { MAX_ATTEMPTS, backoffMs, retryDelayMs, sleep } from './restRetry';
 
 // Historical pull-request READ leaf (MOTIR-1965) — paginate a repository's
 // CLOSED pull requests off the REST API with an installation token, normalized
@@ -47,19 +48,9 @@ const PER_PAGE = 100;
  *  "no silent caps" rule — a run that hit this says so. */
 export const MAX_PULL_REQUEST_PAGES = 500;
 
-/** Attempts per page before the error propagates — the initial try plus retries
- *  for a rate-limited or transiently-failed response. */
-const MAX_ATTEMPTS = 5;
-
-/** Ceiling on ONE rate-limit sleep. GitHub's primary-limit reset can be up to an
- *  hour away; waiting that long inside a single page fetch would look like a
- *  hang. Capped, then retried — with the attempt budget above, a genuinely
- *  exhausted primary limit ends the run with a clear error and the operator
- *  re-runs later (the script is idempotent, so a re-run resumes). */
-const MAX_BACKOFF_MS = 60_000;
-
-/** The floor between retries, doubled per attempt. */
-const BASE_BACKOFF_MS = 1_000;
+/** The retry/backoff policy — {@link MAX_ATTEMPTS} attempts per page, GitHub's
+ *  three throttling signals, the capped sleep — lives in `./restRetry`, shared
+ *  with the base-ref read leaf (MOTIR-3034). One rule per host, not two. */
 
 /** A merged historical pull request: the provider-agnostic change request the
  *  shared resolver + mirror consume, plus the host timestamps a caller may want
@@ -154,50 +145,6 @@ export function normalizeHistoricalPullRequest(
   };
 }
 
-/** Sleep, bounded by {@link MAX_BACKOFF_MS}. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, Math.min(ms, MAX_BACKOFF_MS)));
-}
-
-/**
- * How long to wait before retrying a response, or null when the response is not
- * retryable.
- *
- * GitHub signals throttling three ways and this checks all three, because they
- * do not co-occur: a SECONDARY limit sends `retry-after` (seconds) on a 403; a
- * PRIMARY limit sends `x-ratelimit-remaining: 0` plus `x-ratelimit-reset` (unix
- * seconds) on a 403 or 429; and a bare 429 may carry neither. A 5xx is retried
- * on plain exponential backoff. Anything else — 401, 404, 422 — is a real
- * failure the caller must see, so it returns null.
- */
-export function retryDelayMs(
-  status: number,
-  headers: { get(name: string): string | null },
-  attempt: number,
-  nowMs: number,
-): number | null {
-  const backoff = BASE_BACKOFF_MS * 2 ** (attempt - 1);
-
-  if (status === 403 || status === 429) {
-    const retryAfter = Number(headers.get('retry-after'));
-    if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1_000;
-
-    const remaining = Number(headers.get('x-ratelimit-remaining'));
-    const reset = Number(headers.get('x-ratelimit-reset'));
-    if (remaining === 0 && Number.isFinite(reset) && reset > 0) {
-      // `reset` is unix SECONDS. A reset already in the past still gets the
-      // backoff floor rather than 0, so a clock skew cannot spin the retry loop.
-      return Math.max(reset * 1_000 - nowMs, backoff);
-    }
-    // A 403 with no throttling signal is an ACCESS failure (the installation
-    // lost the repo), not a rate limit — do not retry it.
-    return status === 429 ? backoff : null;
-  }
-
-  if (status >= 500) return backoff;
-  return null;
-}
-
 async function fetchPage(
   token: string,
   owner: string,
@@ -234,7 +181,7 @@ async function fetchPage(
           null,
           err instanceof Error ? err.message : 'unreachable',
         );
-      await sleep(BASE_BACKOFF_MS * 2 ** (attempt - 1));
+      await sleep(backoffMs(attempt));
       continue;
     }
 
