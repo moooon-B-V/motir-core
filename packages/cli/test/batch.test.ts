@@ -17,6 +17,7 @@ import {
 } from '../src/batchPlan.js';
 import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
+import type { CommandRunner } from '../src/git.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
@@ -107,7 +108,7 @@ class FakeServer {
    *  restraint rather than an absent fixture. */
   private satisfied(depId: string): boolean {
     const dep = this.items.find((i) => i.id === depId);
-    return !!dep && (dep.status === 'done' || dep.status === 'in_review');
+    return !!dep && (dep.status === 'done' || dep.status === 'implemented');
   }
 
   /** The single lineage an item INHERITS from its integrated dependencies —
@@ -267,6 +268,9 @@ interface DriveOptions {
   agentCommand?: string;
   /** The token owner this run claims for (MOTIR-2427). */
   ownerId?: string;
+  /** The git runner the MOTIR-3004 push check asks; the default answers "the
+   *  agent pushed". */
+  git?: CommandRunner;
 }
 
 async function drive(
@@ -294,6 +298,14 @@ async function drive(
       return { model: null, ...result };
     },
     ownerId: drives.ownerId ?? OWNER,
+    // The MOTIR-3004 push check, scripted: `ls-remote --heads origin *<KEY>*`
+    // answers with a ref unless a test says the agent pushed nothing.
+    run:
+      drives.git ??
+      ((_bin: string, args: string[]) =>
+        args[0] === 'ls-remote'
+          ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
+          : { exitCode: 0, stdout: '', stderr: '' }),
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
@@ -452,7 +464,7 @@ describe('motir batch — per-item pull requests', () => {
     const { dispatched, summary } = await drive(server);
 
     expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
-    expect(summary.records.map((r) => r.outcome)).toEqual(['in_review', 'in_review']);
+    expect(summary.records.map((r) => r.outcome)).toEqual(['implemented', 'implemented']);
     // The prompt is requested with NO session-branch seed, so the server can only
     // answer with the per-item-PR workflow. (`markIntegrated` on the fake throws,
     // so calling it at all would fail this test.)
@@ -460,17 +472,18 @@ describe('motir batch — per-item pull requests', () => {
       { key: 'PROD-1', seeded: false },
       { key: 'PROD-2', seeded: false },
     ]);
-    // Each item walks its own todo → in_progress → in_review lifecycle.
+    // Each item walks its own todo → in_progress → implemented lifecycle.
     expect(server.transitions).toEqual([
       { key: 'PROD-1', status: 'in_progress' },
-      { key: 'PROD-1', status: 'in_review' },
+      { key: 'PROD-1', status: 'implemented' },
       { key: 'PROD-2', status: 'in_progress' },
-      { key: 'PROD-2', status: 'in_review' },
+      { key: 'PROD-2', status: 'implemented' },
     ]);
     expect(batchExitCode(summary)).toBe(0);
 
     const text = renderBatchSummary(summary);
-    expect(text).toContain('In Review — each has its OWN pull request to merge (2)');
+    expect(text).toContain('Implemented — each has its OWN pull request');
+    expect(text).toContain('reviewable (2)');
     expect(text).toContain('motir done PROD-1');
     expect(text).toContain('motir done PROD-2');
   });
@@ -485,7 +498,7 @@ describe('motir batch — per-item pull requests', () => {
       onDispatch: (key) => {
         if (key !== 'PROD-1') return;
         const stolen = server.byKey('PROD-2');
-        stolen.status = 'in_review';
+        stolen.status = 'implemented';
         stolen.sessionBranch = 'motir/auto-20260729-010203';
       },
     });
@@ -511,7 +524,10 @@ describe('motir batch — exclusions', () => {
       { ...leaf('idS', 'PROD-5'), kind: 'story', type: null, executor: null },
       leaf('idH', 'PROD-6', { type: 'manual' }),
       // PROD-8's dependency is integrated on a session branch but NOT on main.
-      leaf('idDep', 'PROD-7', { status: 'in_review', sessionBranch: 'motir/auto-20260729-010203' }),
+      leaf('idDep', 'PROD-7', {
+        status: 'implemented',
+        sessionBranch: 'motir/auto-20260729-010203',
+      }),
       leaf('idL', 'PROD-8', { deps: ['idDep'] }),
       leaf('idA', 'PROD-9'),
     ]);
@@ -699,7 +715,7 @@ describe('motir batch — failure policy and caps', () => {
     // The in-flight item completes; the run stops before starting another.
     expect(dispatched).toEqual(['PROD-1']);
     expect(summary.stopReason).toBe('interrupted');
-    expect(server.byKey('PROD-1').status).toBe('in_review');
+    expect(server.byKey('PROD-1').status).toBe('implemented');
     expect(server.byKey('PROD-2').status).toBe('todo');
     expect(summary.notReached.map((e) => e.key)).toEqual(['PROD-2', 'PROD-3']);
     expect(batchExitCode(summary)).toBe(130);

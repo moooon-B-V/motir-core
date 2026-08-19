@@ -478,6 +478,7 @@
       "todo": "待办",
       "blocked": "受阻",
       "in_progress": "进行中",
+      "implemented": "已实现",
       "planning": "规划中",
       "in_review": "评审中",
       "done": "已完成",

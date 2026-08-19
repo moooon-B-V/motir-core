@@ -478,6 +478,7 @@
       "todo": "To Do",
       "blocked": "Blocked",
       "in_progress": "In Progress",
+      "implemented": "Implemented",
       "planning": "Planning",
       "in_review": "In Review",
       "done": "Done",

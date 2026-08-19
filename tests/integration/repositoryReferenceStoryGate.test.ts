@@ -289,8 +289,10 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
     };
 
     expect(await deliver(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    // Held, not done. `implemented` since MOTIR-2999 — the delivery says the code
+    // is pushed, and no build has reported for this card.
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
-      'in_review',
+      'implemented',
     );
     expect(await deliver(AI, 2)).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(

@@ -184,7 +184,7 @@ test('@smoke connect flow: two-grants panel → OAuth binds the identity → ins
   await expect(page.getByRole('button', { name: 'Disconnect' })).toBeVisible();
 });
 
-test('@smoke PR opened → the linked item goes In Review; merged → Done (signed webhooks; unsigned 401s)', async ({
+test('@smoke PR opened → the linked item goes Implemented; merged → Done (signed webhooks; unsigned 401s)', async ({
   page,
 }) => {
   const email = 'e2e-github-sync@example.com';
@@ -213,8 +213,10 @@ test('@smoke PR opened → the linked item goes In Review; merged → Done (sign
   expect(unsigned.status(), 'unsigned webhook is rejected').toBe(401);
   expect(await statusOf(page, item.id)).toBe('in_progress');
 
-  // PR OPENED (title references the item key) → in_review. The 200 + result
-  // body is the committed-state signal; the page loads after it.
+  // PR OPENED (title references the item key) → `implemented`. An open pull
+  // request says the code is pushed; CI is what makes the card reviewable
+  // (MOTIR-2999), and no check has reported here. The 200 + result body is the
+  // committed-state signal; the page loads after it.
   const opened = await postSignedWebhook(
     page.request,
     'pull_request',
@@ -231,11 +233,11 @@ test('@smoke PR opened → the linked item goes In Review; merged → Done (sign
   expect(((await opened.json()) as { result: Record<string, unknown> }).result).toMatchObject({
     event: 'pull_request',
     outcome: 'transitioned',
-    toStatus: 'in_review',
+    toStatus: 'implemented',
   });
 
   await page.goto(`/items/${item.identifier}`);
-  await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
+  await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
 
   // PR MERGED → done.
   const merged = await postSignedWebhook(
@@ -288,7 +290,7 @@ test('@smoke failing check on a linked PR → the verification-failed feedback s
   expect(opened.status()).toBe(200);
   expect(((await opened.json()) as { result: Record<string, unknown> }).result).toMatchObject({
     outcome: 'transitioned',
-    toStatus: 'in_review',
+    toStatus: 'implemented',
   });
 
   // A terminal FAILING check_suite for that PR → the feedback comment + the

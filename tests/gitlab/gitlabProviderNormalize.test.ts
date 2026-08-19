@@ -78,9 +78,9 @@ describe('gitlab.changeRequestLifecycle', () => {
     title: null,
   } as const;
 
-  it('maps open → in_review, merged → done, closed-unmerged → todo', () => {
+  it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'open', merged: false })).toBe(
-      'in_review',
+      'implemented',
     );
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: true })).toBe('done');
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: false })).toBe('todo');

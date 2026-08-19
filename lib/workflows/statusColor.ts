@@ -29,6 +29,11 @@ const STATUS_KEY_EL: Record<string, string> = {
   // and render identically to `in_progress` — the exact collapse MOTIR-1273
   // un-did for `in_review`, reintroduced by adding a status.
   planning: '--el-status-planning',
+  // BUILT, waiting on checks (MOTIR-3003). Same reasoning as `planning` directly
+  // above: it sits in the in-progress category, so without its own key entry it
+  // would fall through to that category's hue and render identically to
+  // `in_progress` — the exact collapse MOTIR-1273 un-did for `in_review`.
+  implemented: '--el-status-implemented',
   in_review: '--el-status-in-review',
   done: '--el-status-done',
   cancelled: '--el-status-cancelled',

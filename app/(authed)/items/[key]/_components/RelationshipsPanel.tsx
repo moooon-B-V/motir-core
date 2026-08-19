@@ -1,15 +1,16 @@
 import { useTranslations } from 'next-intl';
 import type { ReadinessVerdictDto, RelationshipLinkDto } from '@/lib/dto/workItems';
-import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkflowDto } from '@/lib/dto/workflows';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AddLinkControl } from './AddLinkControl';
 import { RemoveLinkButton } from './RemoveLinkButton';
 import { RelationshipPeekLink } from './RelationshipPeekLink';
-import { Pill, type PillProps } from '@/components/ui/Pill';
+import { Pill } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { showsReadiness } from '@/lib/issues/readinessVisibility';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
 // + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
@@ -20,11 +21,10 @@ import { showsReadiness } from '@/lib/issues/readinessVisibility';
 // per-row remove. The EDIT page reuses it the same editable way (user directive)
 // so an editor manages dependency links without leaving the edit surface.
 
-const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status chip's tone + glyph live in `components/issues/StatusPill`
+// (MOTIR-3103). This file used to keep its own copy of the category map —
+// one of five — which is how `implemented` could share a chip with three
+// other statuses in every one of them at once.
 
 export interface RelationshipsPanelProps {
   blockedBy: RelationshipLinkDto[];
@@ -93,9 +93,12 @@ function LinkRow({
           </span>
         </span>
         {statusMeta ? (
-          <Pill status={STATUS_TONE[statusMeta.category]} className="shrink-0">
-            {statusMeta.label}
-          </Pill>
+          <StatusPill
+            statusKey={statusMeta.key}
+            category={statusMeta.category}
+            label={statusMeta.label}
+            className="shrink-0"
+          />
         ) : (
           <Pill tone="neutral" className="shrink-0">
             {item.status}

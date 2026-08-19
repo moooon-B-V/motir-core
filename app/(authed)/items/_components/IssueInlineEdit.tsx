@@ -636,7 +636,10 @@ function InlineEstimateEditor({ row }: { row: IssueRowData }) {
 /** STATUS cell — inline-editable inside a provider, else the read-only pill. */
 export function InlineStatusCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
-  if (!ctx) return <StatusValue category={row.statusCategory} label={row.statusLabel} />;
+  if (!ctx)
+    return (
+      <StatusValue statusKey={row.status} category={row.statusCategory} label={row.statusLabel} />
+    );
   return <InlineStatusEditor row={row} workflow={ctx.workflow} />;
 }
 

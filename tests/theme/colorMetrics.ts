@@ -37,6 +37,30 @@ export function mixSrgb(a: string, percent: number, b: string): string {
   return `#${hex(0)}${hex(1)}${hex(2)}`;
 }
 
+/**
+ * Fold a RESOLVED `color-mix(in srgb, <a> <p>%, <b>)` down to a flat hex, and
+ * return anything else untouched — MOTIR-3003.
+ *
+ * The token layer's resolver substitutes `var()`s but leaves the `color-mix()`
+ * wrapper in place, and every metric below needs channels. Until a status token
+ * used one this never came up; `--el-status-implemented` is a DESATURATED
+ * `--el-status-in-review` (so it tracks whatever a palette does to the brand
+ * hue), which made the separation suite throw `expected a 6-digit hex` — and a
+ * guard that THROWS on a value is a guard that measures nothing, which is worse
+ * than one that fails it.
+ *
+ * The floor is unchanged; only the set of value FORMS the suite can evaluate
+ * grows. `mixSrgb` above does the arithmetic — this is the parser in front of it.
+ */
+export function flattenColorMix(value: string): string {
+  const match =
+    /^color-mix\(\s*in\s+srgb\s*,\s*(#[0-9a-f]{3,8})\s+([\d.]+)%\s*,\s*(#[0-9a-f]{3,8})\s*\)$/i.exec(
+      value.trim(),
+    );
+  if (!match) return value;
+  return mixSrgb(match[1]!, Number(match[2]), match[3]!);
+}
+
 const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
 /** WCAG relative luminance. */

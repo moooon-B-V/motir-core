@@ -8,7 +8,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
-// Integration-state substrate (Story 7.8 · Subtask 7.8.11): the `in_review`
+// Integration-state substrate (Story 7.8 · Subtask 7.8.11): the `implemented`
 // status + `work_item.session_branch` + the integrated-dep readiness rule +
 // `mark_integrated` / `complete_session`. Real Postgres; the project comes from
 // makeWorkItemFixture (default workflow: todo → in_progress → in_review → done,
@@ -41,7 +41,7 @@ async function start(fx: WorkItemFixture, id: string) {
 }
 
 describe('integrated-dep readiness (7.8.11) — a recorded session branch unblocks dependents', () => {
-  it('an in-review dep WITH a session branch unblocks B; WITHOUT it does NOT; done still does', async () => {
+  it('an implemented dep WITH a session branch unblocks B; WITHOUT it does NOT; done still does', async () => {
     const fx = await makeWorkItemFixture();
     const a = await task(fx, 'A (the dependency)');
     const b = await task(fx, 'B (depends on A)');
@@ -50,10 +50,12 @@ describe('integrated-dep readiness (7.8.11) — a recorded session branch unbloc
     // A still in `todo` → B blocked.
     expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(false);
 
-    // Move A to in_review WITHOUT recording a branch (a raw status change, not
+    // Move A to implemented WITHOUT recording a branch (a raw status change, not
     // `mark_integrated`): the FIELD is the signal, so B is STILL blocked.
+    // (`mark_integrated` lands at `implemented` since MOTIR-3004 — built, pushed,
+    // waiting on CI — so this raw move names the same status it would.)
     await start(fx, a.id);
-    await workItemsService.updateStatus(a.id, 'in_review', fx.ctx);
+    await workItemsService.updateStatus(a.id, 'implemented', fx.ctx);
     expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(false);
 
     // Record the branch via mark_integrated → A is integrated-awaiting-review →
@@ -123,25 +125,26 @@ describe('integrated-dep readiness (7.8.11) — a recorded session branch unbloc
 });
 
 describe('mark_integrated (7.8.11) — transactional status + branch', () => {
-  it('sets in_review + branch together; re-marking updates the branch with no status change', async () => {
+  it('sets implemented + branch together; re-marking updates the branch with no status change', async () => {
     const fx = await makeWorkItemFixture();
     const a = await task(fx, 'A');
     await start(fx, a.id);
 
     const integrated = await workItemsService.markIntegrated(a.id, 'session/v1', fx.ctx);
-    expect(integrated.status).toBe('in_review');
+    expect(integrated.status).toBe('implemented');
     expect(integrated.sessionBranch).toBe('session/v1');
 
-    // Re-mark with a new branch — already in_review, so a branch-only write.
+    // Re-mark with a new branch — already implemented, so a branch-only write.
     const remarked = await workItemsService.markIntegrated(a.id, 'session/v2', fx.ctx);
-    expect(remarked.status).toBe('in_review');
+    expect(remarked.status).toBe('implemented');
     expect(remarked.sessionBranch).toBe('session/v2');
   });
 
-  it('an ILLEGAL transition to in_review throws and leaves the branch untouched', async () => {
+  it('an ILLEGAL transition to implemented throws and leaves the branch untouched', async () => {
     const fx = await makeWorkItemFixture();
-    // A is in `todo`; todo → in_review is NOT a legal default transition (only
-    // in_progress → in_review is), so mark_integrated must reject it.
+    // A is in `todo`; todo → implemented is NOT a legal default transition (only
+    // in_progress → implemented and blocked → implemented are), so
+    // mark_integrated must reject it.
     const a = await task(fx, 'A');
     await expect(workItemsService.markIntegrated(a.id, 'session/x', fx.ctx)).rejects.toBeInstanceOf(
       IllegalTransitionError,
