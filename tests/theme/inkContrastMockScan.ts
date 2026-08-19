@@ -67,21 +67,19 @@ import { SAFE_SURFACE_TOKENS } from './inkContrastScan';
 // only exemptions are the two 1.4.3 grants below, which are declared ON the
 // element and are the same two `inkContrastScan` takes.
 //
-// ── The FAINT arm is COUNTED, not ruled on — and the reason is SIZE ─────────
-// `--el-text-faint` clears AA on no surface (2.37–2.61:1), so the code guard
-// treats every non-decorative, non-disabled use as a violation. Read out of
-// this tree the same way, it is **1745 findings across 101 files** — an order
-// of magnitude past the muted arm and a backlog rather than a sweep. It is
-// declined here for that, and for nothing else: the chrome question that used
-// to hold this boundary up has been answered, and answered against the
-// exemption, so it is not available as a reason a second time.
+// ── BOTH ARMS ARE RULED ON, AT ZERO, OVER BOTH LAYERS (MOTIR-3068) ────────
+// `--el-text-faint` clears AA on NO surface (2.37–2.61:1), so — exactly like the
+// code guard — every non-decorative, non-disabled use of it is a violation here.
+// The faint arm was COUNTED and not ruled on for one reason, SIZE: read out of
+// this tree it was 1745 findings across 101 files, a backlog rather than a sweep.
+// MOTIR-3068 discharged it, area by area, and the boundary was deleted with its
+// subject rather than reworded — a decline that outlives its reason is how the
+// next reader re-derives it.
 //
-// That distinction is worth keeping straight, because the two declines look
-// identical from the outside and only one of them can be discharged by a
-// person. `scanMock` therefore REPORTS the faint findings — `ink: 'faint'` —
-// and `violations()` returns the muted ones. `design-ink-contrast.test.ts`
-// asserts the faint population is non-empty, so the boundary cannot outlive its
-// subject, and MOTIR-3068 owns emptying it.
+// The only exemptions in either arm are the two 1.4.3 grants below, declared ON
+// the element. There is no allowlist, no per-area carve-out and no `via` filter:
+// the layer an ink is written in changes nothing about the pixels it puts on
+// screen, so it changes nothing about the verdict.
 
 /** The ink this arm RULES ON, as it appears in an arbitrary-value class. */
 export const MUTED_CLASS = 'text-(--el-text-muted)';
@@ -625,21 +623,25 @@ export function scanMock(file: string, html: string): MockFinding[] {
 }
 
 /**
- * The findings that FAIL the guard: the muted arm, over BOTH layers.
+ * The findings that FAIL the guard — BOTH inks, over BOTH layers.
  *
- * The `via === 'class'` filter that used to live here was boundary (2) in the
- * header, and MOTIR-3054 removed it. What remains is a filter on the INK, not
- * on how it was written — the faint arm is reported for the census and is the
- * header's one remaining boundary.
+ * Two filters used to stand here and both are gone: `via === 'class'` (boundary
+ * 2, removed by MOTIR-3054) and `ink === 'muted'` (the faint arm's decline,
+ * removed by MOTIR-3068 once its 2199 findings were swept). Nothing narrows this
+ * any more — a finding is a finding.
  */
 export function violations(findings: MockFinding[]): MockFinding[] {
-  return findings.filter((finding) => finding.ink === 'muted');
+  return findings;
 }
 
 /**
- * The findings the guard COUNTS and does not rule on. Asserted non-empty by
- * `design-ink-contrast.test.ts`, so the boundary fails on the day it stops
- * having a subject rather than quietly outliving it.
+ * The FAINT findings, split out of the ruled-on set by ink.
+ *
+ * It no longer marks a boundary — `violations()` returns these too. It survives
+ * because the faint classification still has to be exercised in its own right:
+ * both layers, the two 1.4.3 grants, and the no-surface-resolution case. A
+ * classifier whose behaviour is only ever asserted through the aggregate is one
+ * nobody can show is running.
  */
 export function counted(findings: MockFinding[]): MockFinding[] {
   return findings.filter((finding) => finding.ink === 'faint');

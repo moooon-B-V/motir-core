@@ -609,8 +609,14 @@ not only to its utility classes.** `--el-text-muted` fails AA on `--el-surface` 
 it is of `text-(--el-text-muted)` on a row — a design board's annotations owe AA
 too (`docs/decisions/design-board-chrome-aa.md`). Reach for
 `--el-text-secondary`, which is 6.18–6.80:1 on all four surfaces in both themes
-and so is right whichever surface the element lands on.
-`tests/design-ink-contrast.test.ts` enforces this at zero over the whole tree.
+and so is right whichever surface the element lands on. **The same holds for
+`--el-text-faint`, which is 2.37–2.61:1 and clears AA on NO surface** — it is for
+decorative glyphs and disabled text only, and saying so on the element
+(`aria-hidden`, a labelled `role="img"`, `disabled`) is what makes it legitimate.
+`tests/design-ink-contrast.test.ts` enforces BOTH inks at zero over the whole
+tree, over both layers a mock paints in, and it resolves descendant / child /
+compound selectors as well as bare ones (MOTIR-3122) — a rule nested two levels
+deep is as visible to it as a top-level class.
 
 ---
 

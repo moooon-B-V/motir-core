@@ -291,41 +291,26 @@ describe('design ink-contrast — the scanner, on fixtures it must and must not 
   });
 });
 
-describe('design ink-contrast — --el-text-muted carries no text over a TINTED surface', () => {
-  it('leaves no violation in any design mock', () => {
+describe('design ink-contrast — NEITHER ink carries text it cannot carry', () => {
+  it('leaves no violation in any design mock, on either arm', () => {
     // Derived over the scanned tree, never compared to a frozen count — the
     // sweep that made this pass measured 26 findings in 4 files, and writing 26
     // down here would turn every new asset into a reason to edit the assertion.
     expect(
       violations(FINDINGS).map(formatMockFinding).join('\n'),
       '`--el-text-muted` clears AA on the white page/card by 0.04 and fails on every tint ' +
-        '(4.12–4.34:1). Give each of these `--el-text-secondary`, which is 6.18–6.80:1 on all four ' +
-        'surfaces in both themes and so is right whichever surface the element lands on. If the ' +
-        'element is really a glyph, say so with `aria-hidden` or a labelled `role="img"` and the ' +
-        'guard will agree. And a design asset is not authority here: `CLAUDE.md`’s table is.',
+        '(4.12–4.34:1); `--el-text-faint` is 2.37–2.61:1 and clears AA on NO surface at all. ' +
+        'Give each of these `--el-text-secondary`, which is 6.18–6.80:1 on all four surfaces in ' +
+        'both themes and so is right whichever surface the element lands on. If the element is ' +
+        'really a glyph, say so with `aria-hidden` or a labelled `role="img"` and the guard will ' +
+        'agree. Never an allowlist, a per-area carve-out or a `via` filter — that boundary was ' +
+        'deleted with its subject (MOTIR-3068), not relocated. And a design asset is not ' +
+        'authority here: `CLAUDE.md`’s table is.',
     ).toBe('');
   });
 });
 
-describe('design ink-contrast — the FAINT arm is counted, and its subject still exists', () => {
-  it('still finds faint ink the mocks carry', () => {
-    // The scanner header's one remaining boundary, kept honest. That population
-    // is 1745 findings across 101 files, dominated by the uppercase micro-label
-    // idiom (`.panel-label` alone is 519), and it is declined for SIZE — not
-    // because a design board's chrome is outside the product's contract, which
-    // MOTIR-3054 settled the other way.
-    //
-    // The assertion is that the population EXISTS. If MOTIR-3068 empties it,
-    // this fails — which is the intended outcome: the boundary should be
-    // deleted on the day it stops having a subject, not silently kept.
-    expect(
-      counted(FINDINGS).length,
-      'The faint population is empty. If a sweep cleared it, promote the faint arm into ' +
-        '`violations()` and delete the remaining boundary from `inkContrastMockScan.ts` — ' +
-        'the decline has outlived its subject (MOTIR-3068).',
-    ).toBeGreaterThan(0);
-  });
-
+describe('design ink-contrast — the FAINT classifier, now that the arm is ruled on', () => {
   it('counts faint ink from both layers, and takes the same two exemptions', () => {
     // The counted arm is a measurement somebody will act on, so its own
     // classification is exercised rather than assumed. No surface walk: faint
