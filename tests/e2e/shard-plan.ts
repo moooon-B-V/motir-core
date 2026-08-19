@@ -162,6 +162,13 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'quick-view-edit.spec.ts': 14.5,
   'ready.spec.ts': 5.9,
   'reports.spec.ts': 18.0,
+  // ⚠️ A FOURTH provenance (MOTIR-3009): promoted out of the acceptance lane by
+  // the story that changed the lifecycle it walks, and measured LOCALLY in this
+  // lane on 2026-08-19 against a production build — it had never run here. The
+  // number is small because `_helpers/promoted-regression` makes its ~10 pacing
+  // beats no-ops; the SAME spec takes about a minute when it is recording. Like
+  // the twelve above, re-measure it from the first green CI run that includes it.
+  'repository-set.spec.ts': 2.2,
   'roadmap-auto-drill.spec.ts': 4.0,
   'roadmap-done-ready.spec.ts': 2.6,
   'roadmap-flow.spec.ts': 4.8,
