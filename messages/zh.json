@@ -5344,6 +5344,7 @@
           "type": "类型",
           "estimate": "预估工时",
           "description": "描述",
+          "explanation": "说明",
           "points": "故事点",
           "links": "依赖关系"
         },

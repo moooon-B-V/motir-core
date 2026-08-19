@@ -42,6 +42,7 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'storyPoints',
   'estimateMinutes',
   'description',
+  'explanation',
   'links',
 ] as const;
 

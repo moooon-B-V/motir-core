@@ -5348,6 +5348,7 @@
           "type": "type",
           "estimate": "estimate",
           "description": "description",
+          "explanation": "explanation",
           "points": "points",
           "links": "dependencies"
         },
