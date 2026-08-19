@@ -133,6 +133,8 @@ describe('board API routes', () => {
       'todo',
       'blocked',
       'in_progress',
+      // MOTIR-3003 — built, pull request open, CI not yet green.
+      'implemented',
       'planning',
       'in_review',
       'done',

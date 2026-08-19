@@ -114,11 +114,16 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
   // This is the guard the card's "delete one edge → suite fails" step exercises:
   // the seed and the behavioral sweep both read DEFAULT_TRANSITIONS, so only a
   // pin against literals catches an edit to the constant itself.
-  it('declares exactly the seven default statuses', () => {
+  it('declares exactly the eight default statuses', () => {
     expect(STATUS_KEYS).toEqual([
       'todo',
       'blocked',
       'in_progress',
+      // MOTIR-3003 — the in_progress-category state a card sits in between "the
+      // agent stopped" and "a human should look at this": built, pull request
+      // open, CI not yet green. It sits BEFORE `planning` because slot 4 is the
+      // last board column a laptop shows in full (design/boards, panel 1).
+      'implemented',
       // MOTIR-2425 — the in_progress-category state a card sits in while its
       // plan is reconsidered. It is in this literal pin for the same reason
       // every other key is: adding a status has to be a deliberate edit here.
@@ -129,7 +134,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the twenty-two default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425)', () => {
+  it('declares exactly the twenty-nine default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425 + MOTIR-3003)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -162,20 +167,33 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'planning>todo',
         'planning>in_progress',
         'planning>cancelled',
+        // MOTIR-3003: built, waiting on checks. IN from the two states a card
+        // can be in when its pull request opens; OUT to the five it can reach —
+        // `in_review` is the one CI green performs, and the other four are
+        // rework, block, cancel and the no-review-gate close. Deliberately NOT
+        // from `todo` (a card nobody started has nothing built) and not from
+        // `in_review` (the promotion runs one way).
+        'in_progress>implemented',
+        'blocked>implemented',
+        'implemented>in_review',
+        'implemented>in_progress',
+        'implemented>blocked',
+        'implemented>cancelled',
+        'implemented>done',
       ]),
     );
-    expect(EDGES).toHaveLength(22);
+    expect(EDGES).toHaveLength(29);
   });
 
-  it('partitions the 7×7 grid into 22 edges + 7 self-loops + 20 non-edges', () => {
+  it('partitions the 8×8 grid into 29 edges + 8 self-loops + 27 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(20);
+    expect(NON_EDGES).toHaveLength(27);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 22-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 29-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {
