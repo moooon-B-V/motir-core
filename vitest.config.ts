@@ -464,6 +464,16 @@ export default defineConfig({
         // validity verdicts and the reads answer, and blended into the validity
         // service's number it would be invisible.
         'lib/services/planProjectionService.ts',
+        // Bug MOTIR-3123 — the FINISHABILITY engine itself. It was in neither
+        // half of this config until now, so the ≥90%-per-file gate had never
+        // applied to the file that answers "can this plan be finished?" — the
+        // check `generate_tree` runs as its pre-commit post-condition, the one
+        // the three §4 `validate-plan*` routes expose, and (MOTIR-3095) the one
+        // a PAT can reach. A gate never pointed at a file is indistinguishable
+        // from one that passes: nothing goes red and no number looks wrong.
+        // MEASURED FIRST and GATED in `thresholds` below — see the numbers and
+        // the suite set there.
+        'lib/services/planValidityService.ts',
         // The PROSE-vs-GRAPH advisory beside those rules (MOTIR-1969) — the pure
         // reference/severity extractor and the service that resolves + gates it.
         'lib/workItems/proseVsGraph.ts',
@@ -1841,6 +1851,18 @@ export default defineConfig({
         // measured number — a threshold nobody can land a new branch under is a
         // ratchet, and this file is the one both halves of the story read.
         'lib/services/planProjectionService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Bug MOTIR-3123 — the finishability engine, MEASURED FIRST on this
+        // branch over its FULL consumer set (`tests/integration/plans/
+        // planValidityService` + `tests/integration/ai/validatePlanRoutes` +
+        // `tests/mcp/validate-plan` + `tests/mcp/plan-projection-gate` +
+        // `tests/mcp/projected-reads` + `tests/rls/shared-read-seams` +
+        // `tests/app-role-bound-context-reads`): 75.96 branches / 94.73
+        // functions / 93.93 lines BEFORE this bug's cases, 92.85 / 100 / 100
+        // after. A local subset can only UNDER-report against CI's full run, so
+        // the floor below is cleared with room. Pinned at 90 rather than at the
+        // measured number for the same reason as the line above — a threshold
+        // nobody can land a new branch under is a ratchet.
+        'lib/services/planValidityService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/updateSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/deleteSprint.ts': { branches: 90, functions: 90, lines: 90 },
