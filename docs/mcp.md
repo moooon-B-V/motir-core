@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **43 tools**.
+`initialize` handshake and registers **46 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -817,6 +817,58 @@ MCP-specific wiring.
 
 **Output** — `structuredContent`: the created `CommentDTO`.
 
+#### `attach_file`
+
+Put a **file on a work item** — so a reader sees the deliverable on the card
+instead of hunting for a pull request. Use it for a deliverable that has no home
+of its own: a `research` card's findings document, a `review`'s notes, a
+`verification`'s evidence.
+
+The **repository stays the source of truth** for anything that also lives in one.
+The attachment is the card's view of that file, never a second home for it.
+
+⚠️ **Not for a design asset.** A design result has its own publisher and its own
+panel on the work item, and `text/html` is refused here — the three layers that
+make HTML safe to serve belong to that lifecycle. The rule, in the form a prompt
+author can act on: _a deliverable a LIFECYCLE owns goes through that lifecycle's
+publisher; everything else goes through this tool. If you are unsure, the test is
+whether a dedicated panel exists for it._ (`docs/decisions/attachment-api-door.md` §3.)
+
+Bytes arrive base64-encoded because MCP carries JSON, not multipart — the
+transport's constraint, not a second upload path. A payload that is not valid
+base64 is refused rather than salvaged: `Buffer.from(s, 'base64')` discards
+characters outside the alphabet instead of failing, so an unchecked decode would
+attach garbage that only fails when a human opens it.
+
+| Input           | Type   | Required | Notes                                                              |
+| --------------- | ------ | -------- | ------------------------------------------------------------------ |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                             |
+| `filename`      | string | yes      | The name a reader sees, e.g. `"findings.md"`.                      |
+| `contentType`   | string | yes      | Media type. Must be on the upload allowlist; `text/html` is a 415. |
+| `contentBase64` | string | yes      | The file's bytes, base64-encoded.                                  |
+
+**Output** — `structuredContent`: the created attachment — `id`, `workItemKey`,
+`filename`, `mimeType`, `sizeBytes`, `source`, `contentPath`, `uploader`,
+`createdAt`. `source` is `api` for anything through this tool or the equivalent
+`/api/v1` route: it records the DOOR, not the actor, because Motir cannot
+distinguish an agent from a person holding a token. The row appears in the work
+item's ordinary attachments panel, attributed to the token owner — the same
+component, with no special treatment.
+
+**Refusals** — every one comes from the shipped attachment service, so this tool
+and the browser upload answer one rule with one status: a file over the
+organization's per-file limit, a media type off the allowlist, an exhausted
+per-user upload budget, the organization's total storage cap, and a work item the
+token cannot reach (indistinguishable from one that does not exist). The size and
+type limits are defined once, in `lib/blob/allowlist.ts` and the plan
+entitlements — this page deliberately quotes no number that would drift.
+
+**Permission** — `work_item:edit`. Attaching a file to a card is editing that
+card, and this is a permission the token `motir auth login` mints **does** carry,
+so a dispatched run can call it. (Worth checking for any tool you write: a
+permission outside that grant produces a tool that works perfectly for an
+interactive operator and not at all for the agent it was built for.)
+
 #### `link_work_items`
 
 Create a relationship between two work items — the primitive for the **dependency
@@ -1046,6 +1098,77 @@ validation error.
 Each row also carries the same [`dependencies` block](#the-dependencies-block-list-reads)
 and [`commentCount`](#the-commentcount-field) `list_ready` returns — identical
 shapes, so one renderer covers both lists.
+
+#### `search_work_items_semantic`
+
+**Has this already been built?** Search a project by **meaning** rather than by
+substring — ask in your own words, and Motir embeds the query for you. It sits
+**beside** `search_work_items`, never over it: the substring search is unchanged
+and neither replaces the other. One finds a string; this finds a meaning.
+
+`search_work_items` is a `contains` predicate, so a query for _"persist UI
+preferences"_ cannot see a card titled _"Board columns remember their collapsed
+state"_ — and a capability rebuilt because of that is the most expensive planning
+mistake available. Call this **before** proposing anything.
+
+| Input        | Type           | Required | Notes                                                                       |
+| ------------ | -------------- | -------- | --------------------------------------------------------------------------- |
+| `projectKey` | string         | yes      | Project key, e.g. `"ACME"`.                                                 |
+| `query`      | string         | yes      | What you are looking for, in your own words — a phrase, not a keyword.      |
+| `limit`      | integer (1–50) | no       | Candidates to return; default 10.                                           |
+| `minScore`   | number (−1…1)  | no       | Optional cosine-similarity floor. **No default**, deliberately (see below). |
+
+There is **no `model` argument and no `queryEmbedding` argument.** The internal
+`similar-work-items` route takes a vector because its caller (`motir-ai`) owns the
+embedding seam; an MCP client holds a Motir token and nothing else, so
+`docs/decisions/plan-tree-embeddings.md` **Amendment 2** decides that `motir-core`
+embeds the query through the same `POST /v1/embeddings` seam the write path
+already uses. That is not only convenience: `model` is a **hard ranking filter**,
+so a caller that guessed it wrong would get an empty result indistinguishable from
+_"nothing similar exists"_ — the exact failure this tool exists to remove.
+
+**Output** — `structuredContent`:
+
+| Field      | Type                          | Notes                                                                     |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `outcome`  | see below                     | Which of four states this is. **Read this before reading `results`.**     |
+| `results`  | `{ key, title, score }[]`     | Candidates, best first. `score` is cosine similarity in `[-1, 1]`.        |
+| `model`    | string \| null                | The model the ranking ran in; null when nothing was embedded.             |
+| `coverage` | `{ embedded, total }` \| null | Rankable rows vs live items; null when the search did not run.            |
+| `message`  | string                        | A readable sentence — what this state is, and what to do on a non-answer. |
+
+**⚠️ An empty `results` means three different things, so `outcome` is computed
+for you:**
+
+| `outcome`         | What it means                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `ranked`          | Candidates found. Read each through `get_work_item` before concluding anything about it.   |
+| `nothing-similar` | The project **is** indexed and nothing is close. **This is an answer.**                    |
+| `not-indexed`     | The project has no vectors. **NOT evidence that nothing exists** — fall back to substring. |
+| `unavailable`     | The query could not be embedded (no AI backend, or unreachable). **The search never ran.** |
+
+The last two are still **successful** tool results carrying a readable `message`,
+never an error and never an empty ranking — a planning turn must not fail because
+a candidate-finder had nothing to offer, and it must not be told nothing exists
+when the truth is that nobody looked.
+
+**Keys, titles and scores — never prose.** `plan-tree-embeddings.md` §2 binds this
+surface: no `descriptionMd`, no `explanationMd`, no comment, no acceptance
+criterion. The tool NAMES candidates; the keyed reads dispose of them.
+
+**No default `minScore`, deliberately** (ADR Amendment 1): a spurious candidate
+costs one keyed read, a suppressed one costs a duplicate branch of the plan.
+
+**⚠️ It costs an AI call.** Unlike `search_work_items`, this embeds your query
+through Motir's AI backend, so it draws the same per-minute allowance as the
+planning chat (`ai:chat`, keyed on user + workspace — one counter across every
+door). Do not call it in a tight loop; over budget, it returns a `RATE_LIMITED`
+tool error naming the retry delay.
+
+**Access + tenancy.** `projectKey` selects **within** the token's workspace.
+Another tenant's key is a plain not-found — and the refusal lands **before** the
+embed, so a caller who cannot browse the project never spends the deployment's
+gateway budget on a refusal.
 
 ### Sprints
 
@@ -1873,6 +1996,59 @@ not-found (404-not-403, no existence leak).
 **No per-repo cost.** The index state comes from ONE ledger query joined against
 the repo list in memory, so the call's query count is invariant to how many
 repositories the grant covers.
+
+#### `skeleton`
+
+**Orient before proposing.** The whole project's tree SHAPE in ONE read — every
+live work item's key, kind, title, status and parent — so an agent can answer
+_does this already exist?_ before it proposes anything. It REPLACES paging
+`search_work_items` fifty flat rows at a time and re-parenting them client-side;
+it is not a second way to list items, and it deliberately carries no
+descriptions, no assignees and no filters.
+
+It is the same read `motir-ai`'s planner calls, under the same name
+(`aiBoundaryService.readPlanTree`, served internally at `plan-tree` / `skeleton`),
+so an agent that has read one tool surface finds the same concept called the same
+thing on the other.
+
+**Input**
+
+| Field        | Type             | Required | Notes                                                                                             |
+| ------------ | ---------------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `projectKey` | string           | yes      | Project key, e.g. `"ACME"`.                                                                       |
+| `limit`      | integer (1–5000) | no       | Row bound; default **and maximum 5000** — the whole tree. Pass a smaller number for a cheap peek. |
+
+**Output** — `structuredContent`:
+
+| Field       | Type             | Notes                                                                |
+| ----------- | ---------------- | -------------------------------------------------------------------- |
+| `project`   | object           | `{ projectId, projectKey }`.                                         |
+| `items`     | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision }` — see below. |
+| `total`     | integer          | Live work items in the project, **before** the bound is applied.     |
+| `returned`  | integer          | Rows in `items`.                                                     |
+| `truncated` | boolean          | Whether the bound bit.                                               |
+| `limit`     | integer          | The bound actually applied.                                          |
+
+`parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
+makes the response a TREE rather than a list — the hierarchy is rebuildable from
+this one call. `id` is the real work-item cuid `add_plan_items` takes for
+`parentRef` / `blockedByRefs` (it refuses a `<KEY>-<n>` key), and `revision` is
+the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
+so orienting and proposing do not cost a `get_work_item` per target.
+
+**The bound announces itself, always.** `total` / `returned` / `truncated` /
+`limit` are on every response, not only a truncated one. A skeleton that quietly
+stopped at N would read as _"this is the whole project"_, and an agent that
+believes it has seen everything proposes work that already exists two levels
+down — which is the exact failure this tool was built to prevent.
+
+**Access + tenancy.** `projectKey` selects **within** the token's workspace, it
+does not choose one. Another tenant's key is a plain not-found — never a partial
+tree, and never proof the project exists. (The internal route this shares a read
+with takes no project at all, because a job token is scoped to exactly one; a PAT
+is not, which is the whole reason this tool takes a key.)
+
+**Read-only**, and no `motir-ai` round-trip.
 
 #### `mark_integrated`
 

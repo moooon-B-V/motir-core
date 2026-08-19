@@ -2323,6 +2323,26 @@
   --el-status-todo: var(--color-stone); /* neutral grey — not started */
   --el-status-in-progress: var(--color-info); /* blue — active */
   --el-status-planning: var(--color-accent-teal); /* teal — being RE-PLANNED, not being worked */
+  /* BUILT, waiting on checks (MOTIR-3003) — a DESATURATED In Review, and the
+     mix is the meaning: this card is what In Review will be once CI says so, and
+     has not earned the brand hue yet. Both inputs are palette-tuned status
+     tokens, so it needs no per-palette block and it TRACKS a palette that moves
+     `in_review` — measured at ΔE2000 >= 10 against every other status in all ten
+     palettes x both themes (tests/theme/statusHueSeparation.test.ts).
+     ⚠️ It is NOT --color-accent, which `design/boards/implemented-column.mock.html`
+     originally specified: that reads clean in the base palette and collides in
+     five of the ten (amber/candy/citrine/graphite/sienna, ΔE as low as 0.0). The
+     asset carries the correction and the measurement. */
+  /* pink — BUILT, waiting on checks (MOTIR-3003). The one saturated Tier-0 hue
+     no other STATUS spends; sharing a hue across FAMILIES is this file's own
+     convention (--el-type-epic is also --color-accent). ΔE 33.2 / 26.2 from its
+     nearest neighbour in this palette.
+     ⚠️ FIVE palettes re-map --color-accent onto something a status already uses,
+     so each carries its own override below — the same per-palette follow-up
+     --el-status-planning needed in citrine and candy (MOTIR-2425). Measured by
+     tests/theme/statusHueSeparation.test.ts, which now folds a color-mix rather
+     than throwing on one. */
+  --el-status-implemented: var(--color-accent);
   --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
   --el-status-done: var(--color-success); /* green — resolved */
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
@@ -3014,6 +3034,11 @@
      sources. Separation from highest ΔE 24.7 (nearest other step, medium, ΔE
      32.2); contrast 4.6:1 card / 4.0:1 surface, past the 3:1 icon/UI bar. */
   --el-priority-high: #ab6400; /* Radix Amber 11 — the ramp's own amber step */
+  /* implemented (MOTIR-3003) — Graphite's --color-accent is its blue accent, a
+     step from the same family as --el-status-in-progress. The ink step is free
+     here and reads as "not yet coloured in", which is what the state is:
+     ΔE 15.9 light / 11.8 dark from the nearest status. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
@@ -3087,6 +3112,10 @@
      for the same pairing reason as the status override above: an unpaired light
      override leaks onto this canvas, where it was never measured (MOTIR-2094). */
   --el-priority-high: var(--color-warning);
+  /* implemented — the dark half of the light override above; declared in BOTH
+     themes so the light value cannot cascade into dark (the cascade trap this
+     suite checks for). */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
@@ -3537,6 +3566,11 @@
 
   /* sidebar hover — one shade darker than the cool surface */
   --el-sidebar-item-bg-hover: #eceef1;
+  /* implemented (MOTIR-3003) — Amber's --color-accent sits beside its brand
+     amber, i.e. next to --el-status-in-review. Its red is unspent by any status
+     in this palette (blocked rides the amber), so it takes it: ΔE 21.2 light /
+     33.7 dark from the nearest status. */
+  --el-status-implemented: var(--color-destructive);
 }
 
 /* Amber — dark companion: the AUTHENTIC Binance trading floor. Cool near-black
@@ -3595,6 +3629,9 @@
 
   /* sidebar hover — one shade lighter than the dark "Shark" surface */
   --el-sidebar-item-bg-hover: #262d35;
+  /* implemented — the dark half of the light override above; declared in BOTH
+     themes so the light value cannot cascade into dark. */
+  --el-status-implemented: var(--color-destructive);
 }
 
 /* ── Palette: Sienna (data-palette="sienna") — Subtask 8.8.34 (MOTIR-1252) ───
@@ -3684,6 +3721,12 @@
      takes the palette's own amber accent step, which reads as a warning without
      being the primary. ΔE 14.2; contrast 3.8:1 surface / 4.1:1 card. */
   --el-status-blocked: var(--color-accent);
+
+  /* implemented (MOTIR-3003) — Sienna re-maps --el-status-blocked onto
+     --color-accent (directly above), so the base pink would collide with it
+     here. The ink step is free: ΔE 21.1 light / 22.6 dark from the nearest
+     status. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* Sienna — dark companion. Mistral is light-dominant (few dark tokens: Mistral
@@ -3743,6 +3786,10 @@
   /* Dark's amber and flame are already ΔE 11.9 apart. Re-asserted to pair the
      light override above — see the cascade note in cobalt/dark. */
   --el-status-blocked: var(--color-warning);
+  /* implemented — the dark half of the light override above; declared in BOTH
+     themes so the light value cannot cascade into dark (this palette's
+     --el-status-blocked note above is the same pairing). */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* ── Palette: Garnet (data-palette="garnet") — Subtask 8.8.34 (MOTIR-1252) ───
@@ -3988,6 +4035,13 @@
      stays deliberately grey, so red is not overloaded. */
   --el-status-planning: #d8182c; /* Mirotone red-500 — the attention family */
   --el-status-cancelled: #4a4e5e; /* Mirotone gray-600 — one step deeper */
+  /* implemented (MOTIR-3003) — Citrine spends --color-accent on a hue its
+     --el-status-in-progress is already in the family of, and its red is
+     --el-status-planning. The ink step is what is left: ΔE 17.8 light / 10.0
+     dark. ⚠️ The dark figure sits EXACTLY on the ΔE 10 floor, against
+     in_review — a palette change that moves either one needs re-measuring
+     rather than nudging. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* Citrine — dark companion. A Mirotone gray-ramp near-black canvas (black
@@ -4061,6 +4115,9 @@
      palette does with every semantic on dark. */
   --el-status-planning: #ff6b78; /* Mirotone red-400 — brightened for dark */
   --el-status-cancelled: var(--color-steel);
+  /* implemented — the dark half of the light override above; declared in BOTH
+     themes so the light value cannot cascade into dark. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* ── Palette: Candy (data-palette="candy") — Subtask 8.8.34 (MOTIR-1252) ──────
@@ -4144,6 +4201,10 @@
 
   /* sidebar hover — one shade deeper than the candy-pink surface (Pink-4) */
   --el-sidebar-item-bg-hover: #fbdcef;
+  /* implemented (MOTIR-3003) — Candy's --color-accent is the berry family its
+     --el-status-planning already occupies (ΔE 0.0 with the base value). The ink
+     step is free: ΔE 20.0 light / 16.2 dark from the nearest status. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 /* Candy — dark companion. A pink-tinted near-black canvas (Radix Pink dark
@@ -4208,6 +4269,9 @@
 
   /* sidebar hover — one shade lighter than the candy-plum surface (Pink dark-4) */
   --el-sidebar-item-bg-hover: #4b143d;
+  /* implemented — the dark half of the light override above; declared in BOTH
+     themes so the light value cannot cascade into dark. */
+  --el-status-implemented: var(--color-charcoal);
 }
 
 [data-type='grotesk'] {

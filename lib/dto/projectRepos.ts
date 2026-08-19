@@ -400,6 +400,37 @@ export interface ProjectRepoEstablishViewDto {
 }
 
 /**
+ * A WORKSPACE-CONNECTED repository that belongs to this project's domain but has
+ * no `project_repository` row (MOTIR-3126).
+ *
+ * The wire form of the OTHER registry — the repositories the workspace connected
+ * through the GitHub App, which `lib/projectRepos/effectiveDomain.ts` layers under
+ * the set for a project that arrived with code of its own (and which ARE the whole
+ * domain for a project with no set, the shape Motir's own project is in).
+ *
+ * ⚠️ IT IS NOT A `ProjectRepoDto`, and the difference is the point. A set row has a
+ * role, a position, a state, a takeover and an access record because Motir created
+ * or adopted it; a connected repository has none of those — nobody planned it into
+ * this project, and there is nothing to take over because the user already owns it.
+ * Giving it a half-filled `ProjectRepoDto` would invite exactly the merged list the
+ * room deliberately does not render (design §16.2).
+ *
+ * Deliberately CARRIES NO ID. Both sources of this shape — the room's server read
+ * (`ConnectedRepoName`, which has no `GithubRepo.id`) and the establish view's
+ * `connectCandidates` (which does) — agree on `repoRef`, and `owner/name` is unique
+ * per host, so it is the identity a consumer keys on. Carrying an id that only one
+ * source can supply would make the two disagree about what a row IS.
+ */
+export interface ProjectRepoConnectedDto {
+  /** The bare repository NAME — the same spelling a `targetRepo` pin stores. */
+  name: string;
+  /** `owner/name` — the display form, and this shape's identity. */
+  repoRef: string;
+  /** The branch an agent would work from, or null when Motir does not know it. */
+  defaultBranch: string | null;
+}
+
+/**
  * Another project in the same workspace whose code Motir also hosts — one entry
  * of the takeover room's paused banner (MOTIR-1939).
  *
@@ -453,6 +484,28 @@ export interface ProjectRepoRoomViewDto {
   ciPaused: boolean;
   /** The OTHER projects in this workspace whose code Motir also hosts. */
   otherHostedProjects: OtherHostedProjectDto[];
+  /**
+   * The WORKSPACE-CONNECTED repositories that belong to this project's domain and
+   * are not already named by a row above (MOTIR-3126).
+   *
+   * Resolved through `resolveEffectiveRepoDomain`, so the room renders exactly the
+   * repositories dispatch would accept a pin for — the two used to disagree, which
+   * is the defect this field closes.
+   */
+  connected: ProjectRepoConnectedDto[];
+  /**
+   * Whether the workspace-connected registry is part of this project's domain AT
+   * ALL — i.e. whether the room owns a `Your own repositories` section.
+   *
+   * ⚠️ NOT `connected.length > 0`, and the two must not be conflated. A project
+   * whose domain includes the workspace rung but whose workspace has nothing
+   * connected yet still owns the section (it is simply empty right now, and the
+   * island's next refetch can fill it); a project answered by its set ALONE does
+   * not own it, and rendering an empty one there would assert an absence that
+   * project never had. The distinction is the LADDER's, decided on the server, and
+   * a client must never re-derive it.
+   */
+  connectedInDomain: boolean;
 }
 
 /** Input to `projectRepoSetService.addRow` — appends a row to the end of the set.

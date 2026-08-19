@@ -336,6 +336,58 @@ describe('designEvidenceService — the gates', () => {
     ).rejects.toBeInstanceOf(DesignEvidenceNotALeafError);
   });
 
+  it('REFUSES a `bug` that HAS CHILDREN — leaf is a POSITION, not a kind (MOTIR-3146)', async () => {
+    // The parent-run form the runbook endorses: `motir run <bug>` on a bug whose
+    // children are leaves, whose branch carries the CONTAINER's key by design.
+    // Reading `kind` alone let it through and the publish 500'd instead of
+    // no-opping, which is the outcome MOTIR-3124 exists to prevent.
+    const fx = await makeWorkItemFixture();
+    const container = await createTestWorkItem(fx, { kind: 'bug', title: 'A bug with children' });
+    await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Its child',
+      parentId: container.id,
+    });
+
+    await expect(
+      designEvidenceService.recordFromPathnames(
+        {
+          workItemId: container.id,
+          assets: [
+            seedAsset(fx, container.id, {
+              kind: 'mock',
+              name: 'b.mock.html',
+              contentType: 'text/html',
+            }),
+          ],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceNotALeafError);
+  });
+
+  it('PUBLISHES to a CHILDLESS `bug` — the ordinary case must not regress (MOTIR-3146)', async () => {
+    // The other half, and the one a children-based check could plausibly break:
+    // a logged bug that produced a design asset is a perfectly good target.
+    const fx = await makeWorkItemFixture();
+    const leafBug = await createTestWorkItem(fx, { kind: 'bug', title: 'A childless bug' });
+
+    const evidence = await designEvidenceService.recordFromPathnames(
+      {
+        workItemId: leafBug.id,
+        assets: [
+          seedAsset(fx, leafBug.id, {
+            kind: 'mock',
+            name: 'ok.mock.html',
+            contentType: 'text/html',
+          }),
+        ],
+      },
+      fx.ctx,
+    );
+    expect(evidence.id).toBeTruthy();
+  });
+
   it('rejects a pathname OUTSIDE this item’s design prefix before any DB write', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);

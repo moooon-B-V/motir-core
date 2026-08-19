@@ -2728,6 +2728,13 @@ enum AttachmentSource {
   // Story-acceptance Playwright trace (MOTIR-1674) — a private diagnostic served
   // through the content route like the video; owned by the AcceptanceEvidence
   // lifecycle, excluded from the attachments panel listing.
+  //
+  // ⚠️ That exclusion was DOCUMENTED here and absent from the query for a year
+  // (MOTIR-3085): the panel's denylist was written twice, and this member was in
+  // neither copy, so every story with a trace-carrying recording listed a `.zip`
+  // nobody wanted — deletable from a panel its lifecycle never intended, which
+  // would strand `AcceptanceEvidence.traceAttachmentId`. The predicate now lives
+  // once, in `attachmentRepository.LIFECYCLE_OWNED_SOURCES`.
   acceptance_trace
   // A published DESIGN RESULT artifact (Story MOTIR-2664 · MOTIR-2666) — the
   // `*.mock.html`, its `.png` export, or the extracted `design-notes.md`
@@ -2737,6 +2744,24 @@ enum AttachmentSource {
   // — docs/decisions/design-result.md §5a). Owned by the DesignEvidence
   // lifecycle, so the attachments panel excludes this source from its listing.
   design_asset
+  // A file uploaded through the GENERAL public-API door (Story MOTIR-3000 ·
+  // MOTIR-3056) — `POST /api/v1/work-items/[key]/attachments` and the MCP tool
+  // in front of it. Named for the DOOR, not the actor: Motir cannot distinguish
+  // an agent from a person holding a personal access token, and this column
+  // feeds filtering, GC and analytics (docs/decisions/attachment-api-door.md
+  // §2). Unlike every other member added since the original two, an `api` row is
+  // an ORDINARY attachment: it is LISTED and COUNTED in the attachments panel
+  // exactly like `editor` / `panel`, and it takes the general
+  // `ALLOWED_UPLOAD_TYPES` allowlist — `text/html` is still 415 here, because
+  // the three serving layers that make HTML safe belong to the design
+  // lifecycle (design-result.md §5a).
+  //
+  // ⚠️ The panel queries filter with `notIn` — a DENYLIST — so this member is
+  // visible BY DEFAULT and no listing change was needed. Adding `api` to
+  // `attachmentRepository.listByWorkItem` or `countByWorkItem`'s exclusion is
+  // the regression; `tests/attachments/apiSourceListing.test.ts` asserts it is
+  // in neither.
+  api
 
   @@map("attachment_source")
 }

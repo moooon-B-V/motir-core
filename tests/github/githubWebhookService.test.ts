@@ -36,7 +36,7 @@ async function makeWorkspace(email: string) {
 }
 
 /** A workspace + project + a work item already moved to `in_progress` (so a
- *  PR-opened → in_review is a legal transition), plus a seeded installation + repo. */
+ *  PR-opened → implemented is a legal transition), plus a seeded installation + repo. */
 async function makeScenario(email: string) {
   const { user, workspace } = await makeWorkspace(email);
   const project = await projectsService.createProject({
@@ -131,7 +131,7 @@ afterAll(async () => {
 });
 
 describe('githubWebhookService — pull_request → status sync', () => {
-  it('opened → in_review, closed+merged → done, closed+unmerged → in_progress', async () => {
+  it('opened → implemented, closed+merged → done, closed+unmerged → in_progress', async () => {
     const s = await makeScenario('pr@example.com');
 
     const opened = await githubWebhookService.handleEvent(
@@ -141,9 +141,9 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(opened).toMatchObject({
       event: 'pull_request',
       outcome: 'transitioned',
-      toStatus: 'in_review',
+      toStatus: 'implemented',
     });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     // The PR row is upserted and linked to the resolved work item.
     const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
@@ -159,12 +159,12 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
   it('closed WITHOUT merging returns the item to in_progress (the abandoned-work path)', async () => {
     const s = await makeScenario('unmerged@example.com');
-    // Open first so the item sits in in_review.
+    // Open first so the item sits at implemented.
     await githubWebhookService.handleEvent(
       'pull_request',
       prPayload({ action: 'opened', identifier: s.item.identifier }),
     );
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     const closed = await githubWebhookService.handleEvent(
       'pull_request',
@@ -177,6 +177,62 @@ describe('githubWebhookService — pull_request → status sync', () => {
     );
     expect(closed).toMatchObject({ outcome: 'transitioned', toStatus: 'in_progress' });
     expect(await statusOf(s.item.id)).toBe('in_progress');
+  });
+
+  it('a REOPENED pull request returns the item to implemented (MOTIR-3005)', async () => {
+    // Closing without merging puts the card back at `in_progress`; reopening
+    // re-delivers `opened`, and `in_progress → implemented` is a legal edge, so
+    // the card lands back where an open pull request belongs.
+    const s = await makeScenario('reopened@example.com');
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier }),
+    );
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        state: 'closed',
+        merged: false,
+      }),
+    );
+    expect(await statusOf(s.item.id)).toBe('in_progress');
+
+    const reopened = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'reopened', identifier: s.item.identifier }),
+    );
+    expect(reopened).toMatchObject({ outcome: 'transitioned', toStatus: 'implemented' });
+    expect(await statusOf(s.item.id)).toBe('implemented');
+  });
+
+  it('an opened delivery for a card with NO legal edge to implemented leaves it alone (MOTIR-3005)', async () => {
+    // `todo → implemented` is deliberately not an edge — a card nobody started
+    // has nothing built. The delivery must still COMPLETE: a webhook is never
+    // failed by an unreachable transition, or the host retries it forever.
+    // `classifyTransitionError` in `changeRequestStatusSync` is where that is
+    // caught, and it reports the outcome rather than swallowing it silently.
+    const s = await makeScenario('unreachable@example.com');
+    // The fixture leaves the item at `in_progress`; send it back to the queue.
+    await workItemsService.updateStatus(s.item.id, 'todo', s.ctx);
+    expect(await statusOf(s.item.id)).toBe('todo');
+
+    const opened = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier }),
+    );
+
+    expect(opened).toMatchObject({
+      event: 'pull_request',
+      outcome: 'illegal_transition',
+      toStatus: 'implemented',
+    });
+    expect(await statusOf(s.item.id)).toBe('todo');
+    // The pull-request row is still mirrored and linked — the status is what did
+    // not move, not the delivery.
+    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
+    expect(prRow).toMatchObject({ state: 'open', workItemId: s.item.id });
   });
 
   it('records the transition in the activity log as the BOUND author when the PR author is a member', async () => {
@@ -224,7 +280,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
 
     const revs = await statusRevisions(s.item.id);
     const last = revs.at(-1)!;
-    expect(last.diff).toMatchObject({ status: { to: 'in_review' } });
+    expect(last.diff).toMatchObject({ status: { to: 'implemented' } });
     expect(last.changedById).toBe(dev.id); // the bound author, not the owner
   });
 
@@ -235,7 +291,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
       prPayload({ action: 'opened', identifier: s.item.identifier, authorGithubUserId: 999999 }),
     );
     const last = (await statusRevisions(s.item.id)).at(-1)!;
-    expect(last.diff).toMatchObject({ status: { to: 'in_review' } });
+    expect(last.diff).toMatchObject({ status: { to: 'implemented' } });
     expect(last.changedById).toBe(s.user.id); // the workspace owner
   });
 
@@ -252,11 +308,11 @@ describe('githubWebhookService — pull_request → status sync', () => {
     ]);
     for (const r of results) expect(r.event).toBe('pull_request');
 
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
     const prRows = await adminDb.githubPullRequest.findMany({ where: { number: 7 } });
     expect(prRows).toHaveLength(1);
     const inReviewRevs = (await statusRevisions(s.item.id)).filter(
-      (r) => (r.diff as { status?: { to?: string } }).status?.to === 'in_review',
+      (r) => (r.diff as { status?: { to?: string } }).status?.to === 'implemented',
     );
     expect(inReviewRevs).toHaveLength(1);
   });
@@ -266,7 +322,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     const payload = prPayload({ action: 'opened', identifier: s.item.identifier });
     await githubWebhookService.handleEvent('pull_request', payload);
     const again = await githubWebhookService.handleEvent('pull_request', payload);
-    expect(again).toMatchObject({ outcome: 'noop', toStatus: 'in_review' });
+    expect(again).toMatchObject({ outcome: 'noop', toStatus: 'implemented' });
   });
 
   it('a PR that references no work item upserts the PR row (null link) and does not transition', async () => {
@@ -417,7 +473,7 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
         repoId: Number(REPO_B_PROVIDER_ID),
       }),
     );
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     // Merge the FIRST PR while its sibling (#8) is still open — the item MUST
     // stay In Review, not flip to Done (the MOTIR-1604 cardinality guard).
@@ -436,7 +492,7 @@ describe('githubWebhookService — cross-repo (two-PR) card completes on the LAS
       outcome: 'deferred_open_pr',
       workItemId: s.item.id,
     });
-    expect(await statusOf(s.item.id)).toBe('in_review');
+    expect(await statusOf(s.item.id)).toBe('implemented');
 
     // Merge the SECOND (now LAST open) PR — the item completes.
     const lastMerge = await githubWebhookService.handleEvent(

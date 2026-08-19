@@ -22,6 +22,9 @@ export interface ArchivedRowData {
   title: string;
   /** Drives the type-hued `IssueTypeIcon`. */
   kind: WorkItemKindDto;
+  /** The workflow status KEY — what the chip resolves its per-status tone from
+   *  (MOTIR-3103); the category below is the fallback. */
+  status: string;
   /** Human status label (workflow label, or the raw key as a fallback). */
   statusLabel: string;
   /**
@@ -55,6 +58,7 @@ export function toArchivedRows(
       identifier: item.identifier,
       title: item.title,
       kind: item.kind,
+      status: item.status,
       statusLabel: status?.label ?? item.status,
       statusCategory: status?.category ?? null,
       archivedByName: item.archivedBy?.name ?? null,

@@ -17,6 +17,7 @@ import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptio
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -856,14 +857,68 @@ async function resolveDescriptionMentionable(
 }
 
 // The default-workflow status keys the integration tools target (Subtask
-// 7.8.11). `mark_integrated` moves an item to `in_review`; `complete_session`
+// 7.8.11). `mark_integrated` moves an item to `implemented` (MOTIR-3004 — built,
+// pushed, waiting on CI; it used to say `in_review`); `complete_session`
 // moves each recorded item to `done`. Both are the canonical default keys
 // (lib/workflows/defaultWorkflow.ts). A project whose CUSTOM workflow lacks the
 // key surfaces `UnknownStatusError` from the transition (mark_integrated → a tool
 // error; complete_session → a per-item `failed` result) — the honest outcome
 // rather than a silent miss.
-const IN_REVIEW_STATUS_KEY = 'in_review';
+/** Where an INTEGRATED item lands (MOTIR-3004): built, pushed onto the session
+ *  branch, and waiting on CI. `mark_integrated` used to write `in_review`, which
+ *  claimed a human should look at work nothing had compiled yet — In Review is
+ *  now written by the CI-feedback consumer alone, on a green run (MOTIR-3006). */
+const IMPLEMENTED_STATUS_KEY = 'implemented';
 const DONE_STATUS_KEY = 'done';
+
+/**
+ * THE CI-GREEN LATCH (MOTIR-3006) — a card that ARRIVES at `implemented` asks
+ * whether its build already went green, and promotes itself if it did.
+ *
+ * The run pushes BEFORE it transitions (MOTIR-3004), so on a fast pipeline the
+ * green verdict lands while the card is still In Progress and the CI-side edge
+ * finds nothing to promote. The verdict is durable — the check rows are
+ * persisted — so this RE-READS it rather than queueing anything.
+ *
+ * ⚠️ BEST-EFFORT, POST-COMMIT, and never able to fail the transition it follows
+ * (`notes.html` #39: a side effect after a durable write may never propagate an
+ * error that fails it). A card left at `implemented` because this threw is a card
+ * the next CI delivery promotes anyway.
+ *
+ * ⚠️ THE IMPORT IS STATIC, AND IT USED NOT TO BE. `ciPromotion` moves cards
+ * through this very service, so the two modules form a cycle — which is safe
+ * here because neither reads the other at MODULE-EVAL time (this service's
+ * object literal is built from hoisted declarations; `ciPromotion`'s top level
+ * is constants), and every use is inside a function body.
+ *
+ * It was a `await import('./ciPromotion')` for exactly one release, to avoid
+ * closing that cycle. The E2E lane found the cost: Playwright's runner
+ * transforms STATIC imports and hands a runtime `import()` specifier to Node,
+ * which then loads the raw `.ts` and throws "Cannot use import statement outside
+ * a module". The latch was therefore a silent no-op in every spec that moves a
+ * card through the service directly (`provenance.spec.ts`, MOTIR-3009) — caught
+ * by this function's own catch, logged, and invisible. A test harness that
+ * disagrees with production about whether a feature runs is worse than the cycle
+ * it was avoiding.
+ */
+async function latchCiGreen(
+  workItemId: string,
+  toStatusKey: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  if (toStatusKey !== 'implemented') return;
+  try {
+    await promoteIfCiAlreadyGreen(workItemId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    console.error('[workItemsService] the CI-green latch failed; the card stays implemented', {
+      workItemId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
 
 export const workItemsService = {
   /**
@@ -2020,6 +2075,7 @@ export const workItemsService = {
         // can't loop. Absent on a user-driven transition.
         ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
+      await latchCiGreen(dto.id, transition.toStatusKey, ctx);
     }
     return dto;
   },
@@ -2169,7 +2225,7 @@ export const workItemsService = {
 
     // No-op STATUS move: succeed without a revision (idempotent) and emit no
     // transition. But still honor a branch-only write — re-marking an item
-    // ALREADY in `in_review` to a new session branch changes the field without a
+    // ALREADY in `implemented` to a new session branch changes the field without a
     // status transition (no revision, since sessionBranch is dispatch bookkeeping
     // not a content edit on the activity feed).
     if (fromKey === toStatusKey) {
@@ -2254,7 +2310,7 @@ export const workItemsService = {
     // integration branch (Subtask 7.8.11 invariant: done ⇒ sessionBranch null,
     // so a merged dep never leaves a stale lineage for dependents to inherit —
     // `complete_session` rides this, as does any board drag to done). Otherwise
-    // apply the explicit branch directive (`mark_integrated`'s move to in_review
+    // apply the explicit branch directive (`mark_integrated`'s move to implemented
     // sets it). The revision diff stays status-only — `sessionBranch` is dispatch
     // bookkeeping, not a content edit, so it never lands in the activity feed (and
     // keeping it out avoids the activity totality guard).
@@ -2567,7 +2623,7 @@ export const workItemsService = {
     const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const res = await workItemsService.applyStatusTransition(
         workItemId,
-        IN_REVIEW_STATUS_KEY,
+        IMPLEMENTED_STATUS_KEY,
         ctx,
         tx,
         { sessionBranch },
@@ -2600,6 +2656,9 @@ export const workItemsService = {
         revisionId: transition.revisionId,
         ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
+      // The session-lineage arm arrives at `implemented` through THIS write, not
+      // through `updateStatus`, so the latch is owed here too (MOTIR-3006).
+      await latchCiGreen(dto.id, transition.toStatusKey, ctx);
     }
     return dto;
   },

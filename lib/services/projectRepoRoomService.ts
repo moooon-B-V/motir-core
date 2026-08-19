@@ -8,7 +8,13 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { githubAppInstallUrl } from '@/lib/github/appLinks';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
-import type { OtherHostedProjectDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
+import { resolveEffectiveRepoDomain } from '@/lib/projectRepos/effectiveDomain';
+import { connectedNotInSet } from '@/lib/projectRepos/roomSections';
+import type {
+  OtherHostedProjectDto,
+  ProjectRepoConnectedDto,
+  ProjectRepoRoomViewDto,
+} from '@/lib/dto/projectRepos';
 
 // The TAKE-IT-OVER ROOM's read model (Story MOTIR-1775 · MOTIR-1939) —
 // everything `/settings/project/repositories` renders, in one server read.
@@ -18,6 +24,14 @@ import type { OtherHostedProjectDto, ProjectRepoRoomViewDto } from '@/lib/dto/pr
 // room can be SERVER-rendered. That split is what the card means by "the route→UI
 // half only": if the surface needs something the saga does not expose, that is a
 // change to MOTIR-711's API, never logic smuggled in here.
+//
+// ⚠️ THE ROOM READS THE DOMAIN, NOT THE TABLE (MOTIR-3126). It used to compose
+// `projectRepoSetService.getSet` and nothing else — one registry — so on a project
+// whose repositories are workspace-CONNECTED it returned zero rows and the page
+// said "This project has no repositories yet" beside five indexed, pinnable repos.
+// The set read is still here (the rows carry the takeover saga, which only a
+// `project_repository` row has), and beside it the room now resolves the same
+// EFFECTIVE domain the dispatch resolver does. One definition, two consumers.
 //
 // ⚠️ WHY THE ORG-WIDE FACTS ARE IN A PROJECT-SCOPED READ. The billing panel's
 // `Move repositories` door is ORG-scoped while a takeover is per ROW, so the room
@@ -38,9 +52,10 @@ export const projectRepoRoomService = {
    * the repositories has nothing to render.
    */
   async getRoomView(projectId: string, ctx: ServiceContext): Promise<ProjectRepoRoomViewDto> {
-    const [set, identity] = await Promise.all([
+    const [set, identity, domain] = await Promise.all([
       projectRepoSetService.getSet(projectId, ctx),
       githubIdentityService.getIdentityForUser(ctx.userId),
+      resolveEffectiveRepoDomain(projectId, ctx),
     ]);
 
     const [ciPaused, otherHostedProjects] = await Promise.all([
@@ -57,6 +72,18 @@ export const projectRepoRoomService = {
       installHref: githubAppInstallUrl(),
       ciPaused,
       otherHostedProjects,
+      // The two registries, kept APART — the rows above are the set; these are the
+      // repositories the workspace connected, minus any a row already names. The
+      // dedupe is `connectedNotInSet`, the same rule (and the same reason)
+      // `mergeDomainsByName` applies when it merges them for dispatch.
+      connected: connectedNotInSet(set.rows, domain.connected.map(toConnectedDto)),
+      // ⚠️ THE LADDER'S OWN ANSWER, NOT A COUNT DERIVED FROM IT. `connected` being
+      // empty is not the same fact as the workspace rung not being part of this
+      // project's domain, and only the second one means "this project owns no such
+      // section" — see the field's own doc on `ProjectRepoRoomViewDto`. Deriving it
+      // here would be a second reading of the ladder, which is the class of bug
+      // this whole card is about.
+      connectedInDomain: domain.layersConnected,
     };
   },
 };
@@ -112,4 +139,19 @@ async function listOtherHostedProjects(
   } catch {
     return [];
   }
+}
+
+/**
+ * A domain entry as the wire carries it.
+ *
+ * Deliberately NARROWER than `ConnectedRepoName`: `cloneUrl` is a coordinate for
+ * an agent about to check something out and has no business on a settings page, so
+ * it does not cross the boundary. What is left is exactly what the row renders.
+ */
+function toConnectedDto(repo: {
+  name: string;
+  repoRef: string;
+  defaultBranch: string | null;
+}): ProjectRepoConnectedDto {
+  return { name: repo.name, repoRef: repo.repoRef, defaultBranch: repo.defaultBranch };
 }

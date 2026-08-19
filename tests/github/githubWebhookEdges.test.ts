@@ -415,7 +415,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     expect(result).toMatchObject({
       outcome: 'transitioned',
       workItemId: item.id,
-      toStatus: 'in_review',
+      toStatus: 'implemented',
     });
     // Attributed to the OWNER (the retry), not the denied author.
     const revision = await adminDb.workItemRevision.findFirst({
@@ -460,7 +460,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       event: 'pull_request',
       outcome: 'transitioned',
       workItemId: item.id,
-      toStatus: 'in_review',
+      toStatus: 'implemented',
     });
   });
 

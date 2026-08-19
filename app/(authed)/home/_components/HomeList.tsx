@@ -143,7 +143,11 @@ function HomeRow({ row }: { row: HomeRowView }) {
           <AssigneeCell row={row} />
         </div>
         <div role="cell" className="flex min-w-0 items-center">
-          <StatusValue category={row.statusCategory} label={row.statusLabel} />
+          <StatusValue
+            statusKey={row.status}
+            category={row.statusCategory}
+            label={row.statusLabel}
+          />
         </div>
       </div>
     </div>

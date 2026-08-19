@@ -123,6 +123,10 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   change_kind: true,
   move_to_parent: true,
   add_comment: true,
+  // MOTIR-3058 — the general attachment door. Derives from v1's own
+  // `attachmentSchema` through `presentAttachment`; the payload is that shape
+  // verbatim, with no widening at all.
+  attach_file: true,
   // 11.6.4 — project / sprint / backlog / identity (MOTIR-2230)
   list_projects: true,
   whoami: true,
@@ -151,6 +155,14 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   append_plan_turn: true,
   submit_plan_session: true,
   get_work_item_activity: true,
+  // MOTIR-3100 — the plan-tree breadth projection. Its row is a declared
+  // NARROWING of `WorkItemRef` (`.pick` of the five fields the projection
+  // carries, `.extend`ed with the cuid and revision a plan proposal anchors on),
+  // so it derives and carries no probe — the same shape as the search row.
+  // Its sibling `search_work_items_semantic` is EXEMPT, not derived: a
+  // `{ key, title, score }` ranking is not a work-item representation and ADR §2
+  // forbids it from becoming one.
+  skeleton: true,
 };
 
 /** The runtime view the assertions below walk. */

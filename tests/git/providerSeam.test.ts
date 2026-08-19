@@ -90,9 +90,9 @@ describe('github.changeRequestLifecycle', () => {
     title: null,
   } as const;
 
-  it('maps open → in_review, merged → done, closed-unmerged → todo', () => {
+  it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {
     expect(github.changeRequestLifecycle({ ...base, state: 'open', merged: false })).toBe(
-      'in_review',
+      'implemented',
     );
     expect(github.changeRequestLifecycle({ ...base, state: 'closed', merged: true })).toBe('done');
     expect(github.changeRequestLifecycle({ ...base, state: 'closed', merged: false })).toBe('todo');

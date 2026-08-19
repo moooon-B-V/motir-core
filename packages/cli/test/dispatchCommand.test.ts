@@ -33,6 +33,25 @@ vi.mock('../src/session.js', () => ({
 
 const { doneCommand, nextCommand, runCommand } = await import('../src/commands/dispatch.js');
 
+import type { CommandResult, CommandRunner } from '../src/git.js';
+
+// The git runners the push check (MOTIR-3004) is scripted with. `implemented`
+// claims the code is on the remote, so every recording path asks git first —
+// these are how a test says "the agent pushed" / "the agent pushed nothing"
+// without a real remote.
+const okResult = (stdout: string): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
+/** A remote that carries this card's branch, and a session branch carrying its commit. */
+const PUSHED: CommandRunner = (_bin, args) => {
+  if (args[0] === 'ls-remote') return okResult('abc123\trefs/heads/subtask/PROD-7-add-the-thing');
+  if (args[0] === 'log') return okResult('abc123');
+  return okResult('');
+};
+/** A remote with nothing on it — the agent exited 0 having pushed nothing. */
+const NOTHING_PUSHED: CommandRunner = (_bin, args) => {
+  if (args[0] === 'ls-remote' || args[0] === 'log') return okResult('');
+  return okResult('');
+};
+
 const SERVER = 'https://app.motir.co';
 /** The token owner every dispatch below claims for (MOTIR-2427). */
 const OWNER = 'user_me';
@@ -259,9 +278,9 @@ describe('motir next --print', () => {
 });
 
 describe('motir next --agent', () => {
-  it('runs the agent in the target repo checkout and lands the item In Review', async () => {
+  it('runs the agent in the target repo checkout and lands the item Implemented', async () => {
     setup();
-    await nextCommand({ agent: 'claude --yolo' });
+    await nextCommand({ agent: 'claude --yolo' }, { run: PUSHED });
 
     expect(runAgentMock).toHaveBeenCalledOnce();
     const call = runAgentMock.mock.calls[0]?.[0];
@@ -276,22 +295,53 @@ describe('motir next --agent', () => {
       'dispatch_prompt',
       'transition_status',
     ]);
-    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'in_review' });
+    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'implemented' });
     expect(harness.stderr).toContain('motir done PROD-7');
+  });
+
+  it('does NOT record Implemented when the agent pushed NOTHING (MOTIR-3004)', async () => {
+    // `implemented` claims the code is on the remote. An agent that exits 0
+    // having pushed nothing would otherwise produce a card asserting built work
+    // that exists only in a worktree this run is about to delete — so the record
+    // is refused, the card stays In Progress, and the item is excluded from the
+    // next pick exactly as a failed agent's is.
+    setup();
+    await nextCommand({ agent: 'claude' }, { run: NOTHING_PUSHED });
+
+    expect(runAgentMock).toHaveBeenCalledOnce();
+    const transitions = harness.calls.filter((c) => c.tool === 'transition_status');
+    expect(transitions.map((c) => (c.args as { status: string }).status)).toEqual(['in_progress']);
+    expect(harness.calls.some((c) => c.tool === 'mark_integrated')).toBe(false);
+    expect(harness.stderr).toContain('no branch naming PROD-7 is on the remote');
+    expect(harness.stderr).toContain('stays In Progress');
+    expect(readExcludes(SERVER, 'PROD')).toContainEqual(expect.objectContaining({ key: 'PROD-7' }));
+  });
+
+  it('a SESSION-LINEAGE agent that pushed no commit for its card is refused too', async () => {
+    // Same rule, asked in the shape session work takes: the card's commit lands
+    // ON the session branch, so the question is whether a commit naming the key
+    // is on origin/<branch>.
+    setup({
+      prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
+    });
+    await nextCommand({ agent: 'claude' }, { run: NOTHING_PUSHED });
+
+    expect(harness.calls.some((c) => c.tool === 'mark_integrated')).toBe(false);
+    expect(harness.stderr).toContain('no commit naming PROD-7 is on origin/story/PROD-9');
   });
 
   it('a SESSION-LINEAGE item is mark_integrated on its inherited branch, not PR-flipped', async () => {
     setup({
       prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
     });
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
     expect(toolNames()).toContain('mark_integrated');
     expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
       key: 'PROD-7',
       sessionBranch: 'story/PROD-9',
     });
-    // it must NOT also hand-flip to in_review — mark_integrated does that move
+    // it must NOT also hand-flip the status — mark_integrated does that move
     expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
     expect(harness.stderr).toContain('motir done --session story/PROD-9');
   });
@@ -304,7 +354,7 @@ describe('motir next --agent', () => {
     setup({
       prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
     });
-    await nextCommand({ agent: '/usr/local/bin/cursor-agent --force' });
+    await nextCommand({ agent: '/usr/local/bin/cursor-agent --force' }, { run: PUSHED });
 
     expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
       implementationHarness: 'cursor',
@@ -316,7 +366,7 @@ describe('motir next --agent', () => {
     setup({
       prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
     });
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
     // Null, never defaulted: the harness is derivable and stays truthful, the
     // model is not and stays empty.
@@ -329,7 +379,7 @@ describe('motir next --agent', () => {
   it('on a NON-ZERO exit: item stays In Progress, is excluded, and the exit code propagates', async () => {
     agentResult.exitCode = 2;
     setup();
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
     // only the dispatch flip — nothing moved the item afterwards
     expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
@@ -344,7 +394,7 @@ describe('motir next --agent', () => {
   it('the NEXT next skips the excluded item by KEY, in one ask, and --reset un-skips it', async () => {
     agentResult.exitCode = 1;
     setup();
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
     agentResult.exitCode = 0;
     setup();
@@ -365,7 +415,7 @@ describe('motir next --agent', () => {
   it('a SUCCESSFUL run clears a prior exclusion for that item', async () => {
     agentResult.exitCode = 1;
     setup();
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
 
     // Retried by KEY — the explicit path, which does not consult the exclude
@@ -373,13 +423,13 @@ describe('motir next --agent', () => {
     // is what the test above asserts.
     agentResult.exitCode = 0;
     setup();
-    await runCommand('PROD-7', { agent: 'claude' });
+    await runCommand('PROD-7', { agent: 'claude' }, { run: PUSHED });
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
   });
 
   it('BOOTSTRAP: an item whose checkout is missing runs at the ROOT and is reported suspect', async () => {
     setup({ prompt: dispatchPrompt({ targetRepo: 'brand-new' }), repos: [] });
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
     expect(runAgentMock.mock.calls[0]?.[0].cwd).toBe(harness.root);
     expect(harness.stderr).toContain('Suspect dispatch');
@@ -392,7 +442,7 @@ describe('motir next --agent', () => {
       mkdirSync(join(harness.root, 'brand-new'));
       return { exitCode: 0, signal: null };
     });
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
     expect(harness.stderr).not.toContain('Suspect dispatch');
   });
 });
@@ -516,7 +566,7 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
 
   it('warns in --agent mode too, before the agent is launched', async () => {
     setup({ prompt: WITH_ADVISORY });
-    await nextCommand({ agent: 'claude' });
+    await nextCommand({ agent: 'claude' }, { run: PUSHED });
     expect(harness.stderr).toContain('PROD-5 (in_review)');
     expect(runAgentMock).toHaveBeenCalledOnce();
     expect(process.exitCode).toBeUndefined();
