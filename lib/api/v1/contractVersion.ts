@@ -28,6 +28,12 @@
  * to report — and, since 1.1.0, it lies on a header every client reads off the
  * happy path rather than in a document nobody fetches at runtime.
  *
+ * ⚠️ **FOR A NEW OPERATION THAT OBLIGATION HAS AN EXECUTOR** —
+ * `tests/api/v1/contract-version-guard.test.ts` fails when the operation
+ * registry holds an id that no entry below names (MOTIR-3157). It cannot check
+ * a new FIELD or a new HEADER, so for those the rule above is still discharged
+ * by whoever remembers it; for an endpoint it is not.
+ *
  * - `1.0.0` — the contract as Stories 11.1–11.4 and 11.7 shipped it.
  * - `1.1.0` — MOTIR-2275 adds the `X-Motir-Api-Version` response header.
  * - `1.2.0` — MOTIR-2279 adds the minimal ACTOR object to a collection row
@@ -93,5 +99,16 @@
  *   Additive: one new field, the three scalars unchanged in value, the assembled
  *   `prompt` text byte-identical. See `docs/decisions/work-item-repository-set.md`
  *   § *Amendment 2026-08-19* §B1.
+ * - `1.13.0` — MOTIR-3157 records `uploadWorkItemAttachment`, the
+ *   `POST /api/v1/work-items/{key}/attachments` operation MOTIR-3000 shipped
+ *   WITHOUT moving this number. Additive: a new endpoint, §8's first allowed
+ *   change — so the contract grew when that operation merged and only the
+ *   number stood still, which is the one thing this string exists not to do.
+ *   The bump is therefore RETROACTIVE, and the entry names the OPERATION rather
+ *   than the position: which minor it lands on depends on merge order, and a
+ *   reader asking "when did the attachment door arrive?" needs the id, not the
+ *   ordinal. Nothing on the wire changes here — the endpoint has been live
+ *   since #2145; what changes is that a client pinning a minor to get it is now
+ *   told the truth by `X-Motir-Api-Version`.
  */
-export const V1_CONTRACT_VERSION = '1.12.0';
+export const V1_CONTRACT_VERSION = '1.13.0';
