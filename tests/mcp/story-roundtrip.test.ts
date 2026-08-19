@@ -268,6 +268,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
+        // Tenant A's plan id. A non-member must read it as not-found — the plan
+        // read is where the projected validators get their access check, so a
+        // leak here would be a leak on all three (MOTIR-3095).
+        validate_plan: { planId: plan.id },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'x' },
         expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'hijacked' },
@@ -647,6 +651,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
+        // The caller's OWN plan — a read-scoped tool the loop asserts EXECUTES.
+        validate_plan: { planId: plan.id },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'scoped create' },
         expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'scoped edit' },

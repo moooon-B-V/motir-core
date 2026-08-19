@@ -163,6 +163,13 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_sprints: 'read',
   validate_sprint: 'read',
   validate_work_item: 'read',
+  // The plan-level validity verdict (MOTIR-3095), mapped into the RETIRED
+  // six-scope vocabulary only because this table is total over the registry and
+  // a new tool would not compile without a row. `read` is honest here in a way
+  // `create_plan`'s `work_items:write` is not: it is a pure read, and its REAL
+  // gate (`TOOL_PERMISSIONS` → `project:browse`) is the same class. This row
+  // governs nothing but the deprecated docs rendering.
+  validate_plan: 'read',
   get_plan_status: 'read',
   get_plan: 'read',
   open_plan_session: 'read',

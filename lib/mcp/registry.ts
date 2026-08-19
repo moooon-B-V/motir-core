@@ -38,6 +38,7 @@ import { GET_PROJECT_STATE_TOOL_NAME, registerGetProjectState } from './tools/ge
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
+import { VALIDATE_PLAN_TOOL_NAME, registerValidatePlan } from './tools/validatePlan';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -101,6 +102,7 @@ export const MCP_TOOL_NAMES = [
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
+  VALIDATE_PLAN_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -223,6 +225,12 @@ export function registerMcpTools(
   // Work-item finishability check (7.8.23) — the single-item analogue of
   // validate_sprint, validating a target's whole subtree (any non-leaf kind).
   registerValidateWorkItem(target, resolveContext);
+  // PLAN finishability (MOTIR-3095) — the FOREST verdict over a plan being
+  // authored, the pre-commit check `motir-ai`'s generator already runs and a PAT
+  // could not reach. Its own tool rather than a `planId` on validate_work_item
+  // because it takes NO target: an edge between two sibling roots is valid in
+  // the forest and a false positive per-root, so it is not a loop.
+  registerValidatePlan(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

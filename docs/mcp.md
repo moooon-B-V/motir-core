@@ -1473,6 +1473,82 @@ Errors: an unknown / other-tenant `projectKey` or `planId` returns
 malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
 `PLAN_NOT_GENERATING`.
 
+##### `validate_plan` — CHECK the plan BEFORE `final: true`
+
+The step between the last `add_plan_items` and the one that closes the plan, and
+the only moment it is cheap. It answers _"is what I just proposed finishable?"_
+over the project's live tree **⊕** this plan's proposals — the same check
+Motir's own generator runs as its pre-commit post-condition, which is why a
+Motir-generated plan arrives coherent.
+
+| Input       | Type   | Required | Notes                                                                                                                             |
+| ----------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `planId`    | string | yes      | The id `create_plan` returned.                                                                                                    |
+| `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
+
+**Output** — `structuredContent`: `{ planId, valid, blockers }`. Each blocker is
+`{ item, blockedBy, blockerStatus, blockerSprintId }`; an `item` or `blockedBy`
+of the form `planItem:<id>` names a **proposal in this plan**, not a work item.
+
+```jsonc
+validate_plan({ planId })
+// → { planId: "cm…", valid: false, blockers: [
+//      { item: "planItem:ck_email", blockedBy: "ACME-14",
+//        blockerStatus: "todo", blockerSprintId: null } ] }
+// "the invoice-email card I proposed is gated by ACME-14, which is neither in
+//  this plan nor done" — fixable now, in the plan, before anybody reads it.
+```
+
+> **⚠️ What `valid: true` means, exactly.** The containing set is the whole
+> projected forest of the plan's PROJECT — so a not-done item in the same project
+> is IN the set and does not gate, under either `condition`. The gate this
+> catches is an out-of-forest one: a **cross-project** blocker, or (under
+> `tight`) a done one. Read it as _"nothing outside this project's forest gates
+> this plan"_, not as _"every dependency is satisfied"_.
+
+**This is the WHOLE-plan verdict and takes no target.** Do not approximate it by
+looping `validate_work_item` per root: a `blocked_by` edge between two sibling
+roots — a story under proposed epic B gated by one under proposed epic A — is
+VALID here, because both materialize together, and a false positive per-root.
+For ONE subtree, pass `planId` to `validate_work_item` instead.
+
+Requires **`project:browse`** — the key `plansService.getPlan` asserts, the same
+one the two other validators name. It is **not** `ai:view_plan`: that key gates
+the plan DECISIONS (approve / decline / append), and this one decides nothing.
+
+Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
+(404-not-403, no existence leak).
+
+##### The PROJECTED mode on the existing validators
+
+`validate_work_item` and `validate_sprint` each take the same optional
+**`planId`**, and ask their own question over the projection instead of the
+committed tree:
+
+- **`validate_work_item({ key, planId })`** — is this SUBTREE finishable once the
+  plan materializes? `key` may be a committed identifier (`"ACME-7"`) **or** a
+  `planItem:<id>` temp-ref naming an `add` in that plan, which is the case an
+  authoring agent usually has: the card it wants to check has no key yet.
+- **`validate_sprint({ planId })`** — will the project's ACTIVE sprint still be
+  finishable once the plan materializes? On this path the plan names its own
+  project, so `projectKey` is not required; `sprintId` is **refused** rather than
+  ignored, because a projected verdict is always about the active sprint (an
+  `add` lands in the backlog, and a plan cannot move anything into a sprint).
+
+> **⚠️ Omitting `planId` is not a mode — it is the tool as it has always been.**
+> A call without it never builds a projection at all and returns exactly what it
+> returned before this existed. Both modes are **read-only**: a projection is
+> assembled in memory, answered from, and thrown away. Nothing is created,
+> nothing is mutated, and no proposal becomes a work item except by approving
+> the plan in Motir.
+
+> **The reads that deliberately do NOT take a `planId`:** `list_ready`,
+> `next_ready` and `claim_next_ready`. **A proposal is not dispatchable** — it has
+> no key, nothing can claim it, and a ready list that included one would put a
+> card in front of an agent whose very next call is _claim this_. That exclusion
+> is a decision, not an omission (`docs/decisions/agent-authored-plans.md`
+> AMENDMENT 3, Q6).
+
 #### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
 
 Changing a plan in Motir is not a one-shot prompt: it is a **persisted,

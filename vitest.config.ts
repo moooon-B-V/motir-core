@@ -450,6 +450,13 @@ export default defineConfig({
         // predicate both validators use (Subtask 7.8.23).
         'lib/mcp/tools/validateWorkItem.ts',
         'lib/workItems/validity.ts',
+        // Story MOTIR-3093 · Subtask MOTIR-3095 — the PROJECTED validity mode.
+        // The new plan-level tool and the shared `planId` / temp-ref plumbing
+        // both validators and (MOTIR-3096) the projected reads address a plan
+        // through. Both MEASURED before being pinned, on this branch, with
+        // `tests/mcp/validate-plan.test.ts`: 100 / 100 / 100 each.
+        'lib/mcp/tools/validatePlan.ts',
+        'lib/mcp/tools/planRef.ts',
         // The PROSE-vs-GRAPH advisory beside those rules (MOTIR-1969) — the pure
         // reference/severity extractor and the service that resolves + gates it.
         'lib/workItems/proseVsGraph.ts',
@@ -1813,6 +1820,11 @@ export default defineConfig({
         // walks both the populated and empty-list arms plus the thrown-error path).
         'lib/mcp/tools/listProjects.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/validateSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3095 — measured at 100/100/100 before being pinned (see the
+        // `include` note above); at 90 rather than 100 so a later branch can
+        // land with its test in the same PR without the gate becoming a ratchet.
+        'lib/mcp/tools/validatePlan.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/planRef.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/createSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/updateSprint.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/deleteSprint.ts': { branches: 90, functions: 90, lines: 90 },
