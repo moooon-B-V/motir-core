@@ -436,6 +436,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "The whole project's tree shape in one read — every item's key, kind, title, status and parent, with no paging loop.",
     descriptionFingerprint: '26ceb84cf462',
   },
+  search_work_items_semantic: {
+    summary:
+      'Has this already been built? Search by MEANING rather than substring — keys, titles and scores only.',
+    descriptionFingerprint: '71d731c71c15',
+  },
   list_sprints: {
     summary:
       "A project's sprints with state, goal, window and issue count, and the ids the sprint tools take.",

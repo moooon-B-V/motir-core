@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **40 tools**.
+`initialize` handshake and registers **41 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1046,6 +1046,77 @@ validation error.
 Each row also carries the same [`dependencies` block](#the-dependencies-block-list-reads)
 and [`commentCount`](#the-commentcount-field) `list_ready` returns — identical
 shapes, so one renderer covers both lists.
+
+#### `search_work_items_semantic`
+
+**Has this already been built?** Search a project by **meaning** rather than by
+substring — ask in your own words, and Motir embeds the query for you. It sits
+**beside** `search_work_items`, never over it: the substring search is unchanged
+and neither replaces the other. One finds a string; this finds a meaning.
+
+`search_work_items` is a `contains` predicate, so a query for _"persist UI
+preferences"_ cannot see a card titled _"Board columns remember their collapsed
+state"_ — and a capability rebuilt because of that is the most expensive planning
+mistake available. Call this **before** proposing anything.
+
+| Input        | Type           | Required | Notes                                                                       |
+| ------------ | -------------- | -------- | --------------------------------------------------------------------------- |
+| `projectKey` | string         | yes      | Project key, e.g. `"ACME"`.                                                 |
+| `query`      | string         | yes      | What you are looking for, in your own words — a phrase, not a keyword.      |
+| `limit`      | integer (1–50) | no       | Candidates to return; default 10.                                           |
+| `minScore`   | number (−1…1)  | no       | Optional cosine-similarity floor. **No default**, deliberately (see below). |
+
+There is **no `model` argument and no `queryEmbedding` argument.** The internal
+`similar-work-items` route takes a vector because its caller (`motir-ai`) owns the
+embedding seam; an MCP client holds a Motir token and nothing else, so
+`docs/decisions/plan-tree-embeddings.md` **Amendment 2** decides that `motir-core`
+embeds the query through the same `POST /v1/embeddings` seam the write path
+already uses. That is not only convenience: `model` is a **hard ranking filter**,
+so a caller that guessed it wrong would get an empty result indistinguishable from
+_"nothing similar exists"_ — the exact failure this tool exists to remove.
+
+**Output** — `structuredContent`:
+
+| Field      | Type                          | Notes                                                                     |
+| ---------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `outcome`  | see below                     | Which of four states this is. **Read this before reading `results`.**     |
+| `results`  | `{ key, title, score }[]`     | Candidates, best first. `score` is cosine similarity in `[-1, 1]`.        |
+| `model`    | string \| null                | The model the ranking ran in; null when nothing was embedded.             |
+| `coverage` | `{ embedded, total }` \| null | Rankable rows vs live items; null when the search did not run.            |
+| `message`  | string                        | A readable sentence — what this state is, and what to do on a non-answer. |
+
+**⚠️ An empty `results` means three different things, so `outcome` is computed
+for you:**
+
+| `outcome`         | What it means                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `ranked`          | Candidates found. Read each through `get_work_item` before concluding anything about it.   |
+| `nothing-similar` | The project **is** indexed and nothing is close. **This is an answer.**                    |
+| `not-indexed`     | The project has no vectors. **NOT evidence that nothing exists** — fall back to substring. |
+| `unavailable`     | The query could not be embedded (no AI backend, or unreachable). **The search never ran.** |
+
+The last two are still **successful** tool results carrying a readable `message`,
+never an error and never an empty ranking — a planning turn must not fail because
+a candidate-finder had nothing to offer, and it must not be told nothing exists
+when the truth is that nobody looked.
+
+**Keys, titles and scores — never prose.** `plan-tree-embeddings.md` §2 binds this
+surface: no `descriptionMd`, no `explanationMd`, no comment, no acceptance
+criterion. The tool NAMES candidates; the keyed reads dispose of them.
+
+**No default `minScore`, deliberately** (ADR Amendment 1): a spurious candidate
+costs one keyed read, a suppressed one costs a duplicate branch of the plan.
+
+**⚠️ It costs an AI call.** Unlike `search_work_items`, this embeds your query
+through Motir's AI backend, so it draws the same per-minute allowance as the
+planning chat (`ai:chat`, keyed on user + workspace — one counter across every
+door). Do not call it in a tight loop; over budget, it returns a `RATE_LIMITED`
+tool error naming the retry delay.
+
+**Access + tenancy.** `projectKey` selects **within** the token's workspace.
+Another tenant's key is a plain not-found — and the refusal lands **before** the
+embed, so a caller who cannot browse the project never spends the deployment's
+gateway budget on a refusal.
 
 ### Sprints
 

@@ -270,6 +270,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
         search_work_items: { projectKey: 'PROD' },
+        // The SEMANTIC search (MOTIR-3101) — project-keyed like its substring
+        // sibling, so a non-member must read tenant A's project as not-found
+        // rather than receive a ranking over it. The refusal must also land
+        // BEFORE the embed, which is why the gate is the service's first line.
+        search_work_items_semantic: { projectKey: 'PROD', query: 'anything at all' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },
@@ -650,6 +655,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },
         search_work_items: { projectKey: 'PROD' },
+        // Read-scoped and aimed at the caller's OWN project. With no motir-ai
+        // configured under test it answers `outcome: 'unavailable'` — a SUCCESS
+        // result carrying a readable message, which is exactly the contract
+        // Amendment 2 pins: "I could not search" is an answer, not an error.
+        search_work_items_semantic: { projectKey: 'PROD', query: 'anything at all' },
         list_sprints: { projectKey: 'PROD' },
         validate_sprint: { projectKey: 'PROD', sprintId: sprint.id },
         validate_work_item: { key: item1 },

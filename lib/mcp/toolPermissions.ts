@@ -42,6 +42,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // status (that is `claim_next_ready`'s job, which is why they differ here).
   dispatch_prompt: 'project:browse',
   search_work_items: 'project:browse',
+  // `aiBoundaryService.searchSimilarWorkItemsByText` asserts `project:browse` by
+  // name, BEFORE it embeds — so a caller who may not browse the project cannot
+  // spend the deployment's gateway budget on a refusal. It is NOT `ai:plan`:
+  // that key gates the billable planning SUBMITS, and this starts no job and
+  // proposes nothing (`docs/decisions/plan-tree-embeddings.md` Amendment 2 pins
+  // the spend to the `ai:chat` RATE LIMIT instead, which is a ceiling and not a
+  // permission).
+  search_work_items_semantic: 'project:browse',
   // The identity read, and the ONE entry not justified by a project gate the
   // operation itself runs: `whoami` resolves the token owner's profile and the
   // bound workspace's summary, touching no project. The catalog is
