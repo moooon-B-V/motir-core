@@ -96,7 +96,8 @@ export interface Snapshot {
 
 /** How one dispatched item ended. */
 export type BatchOutcome =
-  /** Agent exited 0; its own pull request is open, so the item is In Review. */
+  /** Agent exited 0 and its work reached the remote; its own pull request is
+   *  open, so the item is Implemented — CI promotes it (MOTIR-3006). */
   | 'implemented'
   /** Agent exited non-zero. The item stays In Progress — nothing was reverted. */
   | 'failed';

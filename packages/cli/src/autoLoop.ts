@@ -341,12 +341,16 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
 
   blocks.push(...renderPlanningBlocks(summary.planning, titleWidth));
 
-  const inReview = summary.records.filter((r) => r.outcome !== 'failed');
-  if (inReview.length > 0) {
+  const landed = summary.records.filter((r) => r.outcome !== 'failed');
+  if (landed.length > 0) {
     blocks.push(
       [
-        `In Review — awaiting your merge (${inReview.length}):`,
-        ...inReview.map((r) => `  ${r.key} on ${r.sessionBranch ?? '(no branch recorded)'}`),
+        // Implemented, not In Review: the cards are built and pushed, and CI is
+        // what promotes them (MOTIR-3006). Saying "awaiting your merge" here
+        // would teach the operator that the run finished the lifecycle, which is
+        // the mental model this story exists to correct.
+        `Implemented — CI decides when these become reviewable (${landed.length}):`,
+        ...landed.map((r) => `  ${r.key} on ${r.sessionBranch ?? '(no branch recorded)'}`),
       ].join('\n'),
     );
   }

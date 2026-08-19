@@ -874,11 +874,11 @@ describe('motir auto — the close-out', () => {
     expect(text).toContain(`motir done --session ${BRANCH}`);
   });
 
-  it('names every in-review item with its recorded branch', async () => {
+  it('names every implemented item with its recorded branch', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
     const { summary } = await drive(server, new FakeGit());
     const text = renderAutoSummary(summary);
-    expect(text).toContain('In Review — awaiting your merge (2)');
+    expect(text).toContain('Implemented — CI decides when these become reviewable (2)');
     expect(text).toContain(`PROD-1 on ${BRANCH}`);
     expect(text).toContain(`PROD-2 on ${BRANCH}`);
   });
