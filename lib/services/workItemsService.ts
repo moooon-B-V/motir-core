@@ -303,8 +303,42 @@ async function recomputeAncestorRepoSets(
       workspaceId,
       tx,
     );
-    await writeRepoRefs(ancestor.id, workspaceId, refs, tx);
+    await writeDerivedRepoSet(ancestor.id, workspaceId, refs, tx);
   }
+}
+
+/**
+ * A container's derived set, written as BOTH halves of the one fact (Story
+ * MOTIR-2732 · MOTIR-2978).
+ *
+ * ⚠️ The name projection is not optional here, and leaving it out is invisible.
+ * `work_item.targetRepos` is a STORED projection of the references (ADR §A4), and
+ * a leaf gets it written by its own create/update — but a container never
+ * authors its set, so the rollup is the only writer it has. Writing only the join
+ * rows leaves every container with an empty `targetRepos`, and the completion
+ * gate reads exactly that column: the story that spans two repositories would
+ * complete on its first merge, which is the outcome this whole capability exists
+ * to prevent. Caught by MOTIR-3031's gate, which is the seam no unit test on
+ * either card could see.
+ *
+ * Names are RESOLVED through the same rule every reader uses (`toWorkItemRepositoryDtos`
+ * — the realized repository's own name, else the row's authored intent), so the
+ * projection cannot say something different from what the panel shows.
+ */
+async function writeDerivedRepoSet(
+  containerId: string,
+  workspaceId: string,
+  refs: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await writeRepoRefs(containerId, workspaceId, refs, tx);
+  const rows = await workItemRepoRepository.listByWorkItem(containerId, tx);
+  const names = toWorkItemRepositoryDtos(rows).map((r) => r.name);
+  await workItemRepository.update(
+    containerId,
+    { targetRepos: names, targetRepo: primaryTargetRepo(names) },
+    tx,
+  );
 }
 
 /**
@@ -332,7 +366,7 @@ async function recomputeContainerAndAncestors(
     workspaceId,
     tx,
   );
-  await writeRepoRefs(containerId, workspaceId, refs, tx);
+  await writeDerivedRepoSet(containerId, workspaceId, refs, tx);
   await recomputeAncestorRepoSets(containerId, workspaceId, tx);
 }
 
