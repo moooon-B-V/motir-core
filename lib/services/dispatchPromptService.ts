@@ -5,7 +5,7 @@ import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryS
 import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { resolveItemDispatchRepo, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
+import { resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';

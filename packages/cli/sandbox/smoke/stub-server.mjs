@@ -312,6 +312,19 @@ function workItemDetail(key) {
     sprintId: null,
     targetRepo: 'demo-repo',
     targetRepos: ['demo-repo'],
+    // The REFERENCES the two name fields above resolve to (Story MOTIR-2732 ·
+    // MOTIR-3041) — required on the detail body, so a stub that omits it serves
+    // a response the generated client refuses.
+    targetRepositories: [
+      {
+        ref: 'demo-repo-row',
+        name: 'demo-repo',
+        role: 'web',
+        label: null,
+        state: 'connected',
+        primary: true,
+      },
+    ],
     executor: item?.executor ?? 'coding_agent',
     planningSource: null,
     planningHarness: null,

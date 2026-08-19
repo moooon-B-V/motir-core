@@ -2,7 +2,6 @@ import {
   Prisma,
   type EstimationStatistic,
   type Executor,
-  type ProjectRepoRole,
   type WorkItem,
   type WorkItemImplementationSource,
   type WorkItemKind,
