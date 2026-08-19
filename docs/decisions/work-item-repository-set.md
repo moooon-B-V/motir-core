@@ -884,8 +884,12 @@ re-derive.**
 - **MOTIR-3042** (the surfaces) — AC 2's "a `proposed` row reads as proposed rather than as
   awaiting a pull request" is §A5's `unestablished`, and AC 3's shared derivation is
   `repoDelivery.ts` keeping its single-derivation contract.
-- **MOTIR-3038** (the design) — AC 4's "all five Development-section states" are §A5's five,
-  by those names.
+- **MOTIR-3038** (the design) — §A5 supplies the five delivery STATES and what each MEANS,
+  which is all a decision card can supply: **this ADR has no design deliverable in it**, and
+  none of it decides what the Development section renders. AC 4 asks for five states _"each
+  with its exact copy"_, and **the copy is the design's to author** — as MOTIR-3038's own body
+  puts it, _"MOTIR-3037 names what the `proposed` case means; draw what it decided."_ Read this
+  row as the vocabulary being settled, never as the rows being specified.
 - **MOTIR-3044** (the planning envelope) — AC 1's "reference, name, role, label, establish
   state" is §A4's `targetRepositories` element shape, with §A4's resolved-name rule deciding
   what `name` holds.
