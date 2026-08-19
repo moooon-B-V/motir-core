@@ -93,20 +93,40 @@ export function PlanReviewRail({
   return (
     <aside
       aria-label={t('reviewRailAria')}
-      className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface) p-5"
+      className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface) p-5"
     >
-      <header className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-serif text-lg font-semibold text-(--el-text)">
-            {review.title ?? t('untitledPlan')}
-          </h2>
-          <span
-            data-testid="plan-status-pill"
-            className={`inline-flex shrink-0 items-center rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[review.status]}`}
-          >
-            {t(`status_${review.status}`)}
-          </span>
-        </div>
+      <header className="flex min-w-0 flex-col gap-2">
+        {/* The status is an OVERLINE on its own line ABOVE the title (MOTIR-3074),
+            not a `shrink-0` pill beside it. Plan titles are GENERATED — long by
+            default, and routinely carrying an unbreakable token (a SCREAMING_CASE
+            constant, a repo name, a cuid) — so on a shared flex row the title wrapped
+            to five lines while `items-center` held the one-line pill against the
+            middle of the block, and the tag read as an annotation on line 3 of the
+            sentence rather than as the plan's state. On its own line the title owns
+            the full rail width, a five-line title reads exactly like a one-line one,
+            and the state stays the FIRST thing read on the rail — which is what this
+            pill is for ("did my plan go through?"). `self-start` keeps it at its own
+            width: a flex COLUMN child would otherwise stretch to the full rail. */}
+        <span
+          data-testid="plan-status-pill"
+          className={`inline-flex max-w-full items-center self-start rounded-(--radius-badge) px-2 py-0.5 text-xs font-semibold ${STATUS_TINT[review.status]}`}
+        >
+          {t(`status_${review.status}`)}
+        </span>
+        {/* The overflow guard, owed WHEREVER the pill sits. A flex/grid item's automatic
+            minimum size is its longest unbreakable word, and the rail is a fixed `22rem`
+            track, so a title carrying a cuid or a SCREAMING_CASE constant pushed the
+            `<aside>` past it. Measured in chromium at the shipped 352px rail width, on the
+            reported title: shipped shape overflowed the rail by 7px; `wrap-anywhere` alone
+            cleared it, `break-words` alone did NOT (still 7px) — only `overflow-wrap:
+            anywhere` feeds its break opportunities into the MIN-CONTENT size the track is
+            measured from, which is the whole reason this class of bug keeps recurring here.
+            `min-w-0` floors the item independently. The overline placement makes neither
+            redundant: a token wider than the FULL column still overflows without them
+            (324px on a 60-character token, 0px with them). */}
+        <h2 className="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)">
+          {review.title ?? t('untitledPlan')}
+        </h2>
         {review.summary ? (
           <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
         ) : null}

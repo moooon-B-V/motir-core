@@ -208,3 +208,80 @@ test('Plans: approving on a project that already has code shows the items, not t
   // durable half was a row that should never have existed.
   expect(await adminDb.projectRepo.count({ where: { projectId: seed.projectId } })).toBe(0);
 });
+
+// MOTIR-3074 — the rail's status tag COLLIDED with the plan title. Plan titles are
+// GENERATED: long by default, and routinely carrying an unbreakable token (a
+// SCREAMING_CASE constant, a cuid). The title and a `shrink-0` pill shared one
+// `flex items-center` row, so the title wrapped to five lines while the one-line
+// pill stayed centred against the block — the tag landed inside the title's text
+// column — and the title's own min-content (its longest word) pushed the `<aside>`
+// past its fixed 22rem track.
+//
+// This is the GEOMETRY half of the fix, and it lives here rather than in a
+// component test on purpose: happy-dom reports all-zero geometry, so
+// `tests/components/plan-review-rail-status-overline.test.tsx` can only pin the
+// STRUCTURE. Measured at the SHIPPED rail width (the real 22rem column of the real
+// page), not at a full-page viewport — a page-level `scrollWidth` check passes
+// while the rail overflows inside its own scroll container.
+test('Plans: a long unbreakable title never overflows the rail, and the status tag stays clear of it', async ({
+  page,
+}) => {
+  const seed = await seedPlansReview('plans-review-long-title@example.com');
+
+  // The reported title, both unbreakable tokens intact: a SCREAMING_CASE constant
+  // and a 25-character cuid. `adminDb` — `plan` is RLS-bound to the active
+  // workspace GUC, which a spec's own client does not set.
+  const LONG_TITLE =
+    'Mirror the sweep-is-not-its-grep-pattern limb into SHARED_PLANNING_RULES (motir-ai) — supersedes plan cmszanri500bfi3phws7wdiu8';
+  await adminDb.plan.update({
+    where: { id: seed.declinePlan.id },
+    data: { title: LONG_TITLE },
+  });
+
+  await signIn(page, seed.email, PLANS_SEED_PASSWORD);
+  await page.goto(`/plans/${seed.declinePlan.id}`);
+
+  const rail = page.getByRole('complementary', { name: 'Plan review' });
+  await expect(rail).toBeVisible();
+  const pill = page.getByTestId('plan-status-pill');
+  await expect(pill).toContainText('Ready to review');
+  const heading = page.getByRole('heading', { level: 2, name: LONG_TITLE });
+  await expect(heading).toBeVisible();
+
+  const geometry = await rail.evaluate((el) => {
+    const h2 = el.querySelector('h2') as HTMLElement;
+    const tag = el.querySelector('[data-testid="plan-status-pill"]') as HTMLElement;
+    const railBox = el.getBoundingClientRect();
+    const titleBox = h2.getBoundingClientRect();
+    const tagBox = tag.getBoundingClientRect();
+    const padRight = parseFloat(getComputedStyle(el).paddingRight);
+    return {
+      railOverflow: el.scrollWidth - el.clientWidth,
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      // How far the title's box runs past the rail's padded content edge.
+      titleOverhang: titleBox.right - (railBox.right - padRight),
+      // The title genuinely WRAPS here — otherwise this asserts nothing. Counted
+      // off the rendered line boxes rather than height/line-height, which returns
+      // NaN whenever `line-height` computes to `normal`.
+      titleLines: (() => {
+        const range = document.createRange();
+        range.selectNodeContents(h2);
+        return range.getClientRects().length;
+      })(),
+      // The defect, stated as geometry: the tag's box inside the title's rows.
+      tagOverlapsTitle: !(
+        tagBox.bottom <= titleBox.top + 0.5 || tagBox.top >= titleBox.bottom - 0.5
+      ),
+    };
+  });
+
+  // No horizontal overflow — of the rail's own scroll container, or of the page.
+  expect(geometry.railOverflow).toBeLessThanOrEqual(1);
+  expect(geometry.pageOverflow).toBeLessThanOrEqual(1);
+  // The title stays inside the rail's content column …
+  expect(geometry.titleOverhang).toBeLessThanOrEqual(1);
+  // … while actually wrapping (a one-line title would make the rest vacuous) …
+  expect(geometry.titleLines).toBeGreaterThan(1);
+  // … and no text runs under the tag.
+  expect(geometry.tagOverlapsTitle).toBe(false);
+});
