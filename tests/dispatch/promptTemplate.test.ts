@@ -655,6 +655,23 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
     expect(prompt).toContain('open a pull request against trunk whose');
   });
 
+  it('falls back to `origin/main` for a repository whose default branch Motir does not know', () => {
+    // `null`, never a guessed branch — the same rule the payload's coordinates
+    // follow. `main` is the fallback the single-repository grammar has always
+    // hardcoded, so an unknown default branch renders the text that already
+    // shipped rather than a second unknown.
+    const prompt = assembleDispatchPrompt(
+      source({
+        targetRepos: [
+          { name: 'motir-core', defaultBranch: null },
+          { name: 'motir-ai', defaultBranch: null },
+        ],
+      }),
+    ).prompt;
+    expect(prompt.match(/origin\/main/g)).toHaveLength(2);
+    expect(prompt).toContain('open a pull request against main whose');
+  });
+
   it('uses the SAME branch name in every repository', () => {
     const branch = `subtask/PROD-7-${branchSlug('Add the ready-set filter bar')}`;
     const names = [...built().matchAll(/-b (\S+) origin\//g)].map((m) => m[1]);

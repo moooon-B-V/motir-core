@@ -89,13 +89,17 @@ async function resolveDispatchRepos(
   }
   const domain = await listDispatchRepoNames(projectId, ctx);
   return delivery.map((d) => {
-    // A NAME is a pin as far as this resolver is concerned, so it never returns
-    // null here — and it is the throw site for the archived refusal above.
-    const resolved = resolveDispatchRepo(d.repo, domain);
+    // TOTAL for a non-null pin: `resolveDispatchRepo` returns the name it was
+    // given, with whatever coordinates the domain knows (`null` where it knows
+    // none). Its `null` return is the UNPINNED case, which cannot arise from a
+    // name — so there is no fallback arm here to write, and writing one would be
+    // an untestable branch pretending the contract is weaker than it is. It is
+    // also the throw site for the archived refusal above.
+    const resolved = resolveDispatchRepo(d.repo, domain)!;
     return {
-      name: resolved?.name ?? d.repo,
-      cloneUrl: resolved?.cloneUrl ?? null,
-      defaultBranch: resolved?.defaultBranch ?? null,
+      name: resolved.name,
+      cloneUrl: resolved.cloneUrl,
+      defaultBranch: resolved.defaultBranch,
       delivery: d.state,
     };
   });

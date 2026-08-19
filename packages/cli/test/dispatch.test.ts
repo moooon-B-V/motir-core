@@ -663,6 +663,15 @@ describe('the delivery state on each repository line', () => {
     expect(text).not.toContain('awaiting');
   });
 
+  it('says a recorded merge whose branch is unknown is UNKNOWN, not delivered', () => {
+    // `unknown` is not a lenient `delivered`: a merge whose base branch the
+    // mirror never recorded does not prove the work reached the trunk, and
+    // reading it as satisfied would complete a card on a stranded merge.
+    const text = renderRepositoriesBlock(targets(2), ['unknown', 'awaiting']).join('\n');
+    expect(text).toContain('a merge is recorded but not which branch it reached');
+    expect(text).not.toContain('delivered');
+  });
+
   it('renders an UNKNOWN state verbatim rather than mapping it onto a neighbour', () => {
     // The forward-compatibility rule the advisory renderer already follows: a
     // build that guesses is worse than one that admits.

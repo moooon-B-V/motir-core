@@ -563,10 +563,13 @@ function siblingDir(repo: string, index: number): string {
  * so a pull request without it is invisible to the gate and the card is held
  * forever by work that has actually shipped.
  */
-function multiRepoPrBlocks(src: DispatchPromptSource, repos: ReturnType<typeof multiRepoSet>) {
+function multiRepoPrBlocks(
+  src: DispatchPromptSource,
+  repos: NonNullable<ReturnType<typeof multiRepoSet>>,
+) {
   const branch = cardBranch(src);
   const lines: string[] = [];
-  (repos ?? []).forEach((repo, i) => {
+  repos.forEach((repo, i) => {
     // Every step is relative to the repository's OWN checkout, which step 1
     // enters — so the worktree path is the same `../<repo>-<key>` the
     // single-repository grammar renders, for every element of the set.
