@@ -59,7 +59,7 @@ render the project's configured **statistic** (story points by default).
   (`ring-(--focus-ring-color)`). It is NEVER nested inside another button — on the
   backlog/board row it sits in the flex container alongside the avatar / `⋯`
   menu, not inside them.
-- **Unestimated** → a muted `—` (`--el-text-faint`), never `0`, `null`, or `NaN`.
+- **Unestimated** → a muted `—` (`--el-text-faint`), never `0`, `null`, or `NaN`. — faint is correct here: the em-dash is an empty-value glyph, not a measured string.
 - **Read-only** (no edit permission) → the static `.est` span (no `est--btn`
   button, no hover/focus affordance), so it degrades with no layout shift.
 

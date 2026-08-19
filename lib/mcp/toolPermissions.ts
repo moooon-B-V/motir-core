@@ -113,6 +113,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // Flips the claimed item to in_progress through `applyStatusTransition` →
   // `assertCanEdit`.
   claim_next_ready: 'work_item:edit',
+  // The KEYED claim (MOTIR-2961). It assigns AND transitions, which is exactly
+  // what `work_item:edit` gates — and it is already in `CLI_TOKEN_GRANT`, so a
+  // dispatched agent can actually call it (the MOTIR-3051 shape, avoided).
+  claim_work_item: 'work_item:edit',
   link_work_items: 'work_item:edit',
   unlink_work_items: 'work_item:edit',
   move_to_parent: 'work_item:edit',

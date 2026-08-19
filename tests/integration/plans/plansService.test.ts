@@ -800,7 +800,12 @@ describe('plansService.approvePlan — native planning provenance', () => {
 });
 
 describe('plansService.declinePlan', () => {
-  it('drops all PlanItems and leaves the work-item tree untouched', async () => {
+  // AMENDED by MOTIR-3160 (bug MOTIR-3154). This test used to assert
+  // `planItemCount === 0` — the delete this card removes. Not writing to the
+  // tree is what declining MEANS; erasing the proposal was a separate act that
+  // destroyed the only record of what was offered and refused. Everything the
+  // test said about the TREE is unchanged, and is the half that mattered.
+  it('KEEPS every PlanItem and leaves the work-item tree untouched', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Untouched');
     const planId = await plannedPlan(fx, [
@@ -811,15 +816,42 @@ describe('plansService.declinePlan', () => {
     const declined = await plansService.declinePlan(planId, fx.ctx);
     expect(declined.status).toBe('declined');
     expect(declined.decidedById).toBe(fx.ownerId);
+    expect(declined.decidedAt).not.toBeNull();
 
-    // The add was never materialized; the modify target is unchanged; items dropped.
+    // The add was never materialized; the modify target is unchanged.
     const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'Never created' } });
     expect(workItemRow).toBeNull();
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } })).title).toBe(
       'Untouched',
     );
-    const planItemCount = await adminDb.planItem.count({ where: { planId } });
-    expect(planItemCount).toBe(0);
+
+    // …and the proposals SURVIVE, as the record of the decision.
+    const rows = await adminDb.planItem.findMany({ where: { planId } });
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.op).sort()).toEqual(['add', 'modify']);
+    // No add materialized, so none was stamped with a work item.
+    expect(rows.find((r) => r.op === 'add')!.workItemId).toBeNull();
+  });
+
+  // The SECOND count site (MOTIR-3160): `declinePlan` returned `toPlanDto(row, 0)`
+  // — a hardcoded zero, not a read. With the rows retained that told the caller
+  // who had just declined a plan it held no items while `listPlans` (counting
+  // through `countByPlanIds`) said otherwise.
+  it('returns the plan REAL item count, and the list agrees with it', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'One', kind: 'task' } },
+      { op: 'add', proposedFields: { title: 'Two', kind: 'task' } },
+      { op: 'add', proposedFields: { title: 'Three', kind: 'task' } },
+    ]);
+
+    const declined = await plansService.declinePlan(planId, fx.ctx);
+    expect(declined.itemCount).toBe(3);
+
+    const listed = await plansService.listPlans(fx.projectId, fx.ctx);
+    const row = listed.plans.find((p: { id: string }) => p.id === planId);
+    expect(row?.status).toBe('declined');
+    expect(row?.itemCount).toBe(3);
   });
 
   it('rejects approve/decline from a non-planned status', async () => {

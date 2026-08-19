@@ -282,7 +282,7 @@ detail page, so the run-instruction reads identically wherever it appears.
 **States:**
 
 - **Empty** — when `descriptionMd` is blank, the body shows a quiet empty block
-  (lucide **`file-x`** 40px in `--el-text-faint` + **"No instruction yet"** +
+  (lucide **`file-x`** 40px in `--el-text-faint` + **"No instruction yet"** + — faint is correct here: a 40px lucide glyph beside the string, not the string.
   "This human task has no description. Add one on the work item so whoever picks
   it up knows what to do.") instead of a blank pane, pointing the reader at the
   fix.

@@ -546,9 +546,10 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // 11.7's own conformance suite (MOTIR-2243). Listing them here would make
     // this guard pass by covering them in the wrong story's walk.
     // (`…/implementation` joined them in MOTIR-2421 — it is `…/integration`'s
-    // sibling, minus the branch.)
+    // sibling, minus the branch; `…/claim` in MOTIR-2961, which is dispatch and
+    // therefore belongs to the work loop's walk, not to this story's.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the

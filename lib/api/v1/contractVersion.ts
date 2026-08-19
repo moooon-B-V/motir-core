@@ -119,5 +119,13 @@
  *   ordinal. Nothing on the wire changes here — the endpoint has been live
  *   since #2145; what changes is that a client pinning a minor to get it is now
  *   told the truth by `X-Motir-Api-Version`.
+ * - `1.15.0` — MOTIR-2961 adds `claimWorkItem`,
+ *   `POST /api/v1/work-items/{key}/claim`: an ATOMIC claim of one work item BY
+ *   KEY — lock the row, re-assert the to-do category, assign and transition, in
+ *   one transaction. Every dispatch path except `claim_next_ready`'s "give me
+ *   whatever is next" was serialising claimants with an assignment its own code
+ *   calls an advisory, so two runs could start the same card. Additive: one new
+ *   endpoint (§8's first allowed change) and one new resource (`WorkItemClaim`);
+ *   no declared shape changed.
  */
-export const V1_CONTRACT_VERSION = '1.14.0';
+export const V1_CONTRACT_VERSION = '1.15.0';

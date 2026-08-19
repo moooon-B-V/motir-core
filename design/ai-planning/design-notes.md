@@ -386,12 +386,12 @@ Every failure states **nothing was created** — true by construction: approve r
 mock or the implementation.**
 
 | Element                                                       | Colour token                                                                        | Shape token                                               |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Page title / body ink                                         | `--el-text`                                                                         | —                                                         |
 | Sprint name, chip ink, callout lead                           | `--el-text-strong`                                                                  | —                                                         |
 | Secondary copy, ghost button ink                              | `--el-text-secondary`                                                               | —                                                         |
 | Capacity line, count badge ink, footer fine print             | `--el-text-muted`                                                                   | —                                                         |
-| Velocity seam, drag grip, avatar dash                         | `--el-text-faint`                                                                   | —                                                         |
+| Velocity seam, drag grip, avatar dash                         | `--el-text-faint`                                                                   | —                                                         | — faint is correct here: the grip and the avatar dash are `aria-hidden` glyphs. |
 | Strip + panel borders                                         | `--el-border` · `--el-border-strong` (dashed strip) · `--el-border-soft`            | `--radius-card`                                           |
 | AI door fill / dock head / Proposed chip on white             | `--el-tint-lavender`                                                                | `--radius-card` · `--radius-badge`                        |
 | AI door ink, Sparkles glyph, ⌘K active row                    | `--el-accent-on-surface`                                                            | —                                                         |

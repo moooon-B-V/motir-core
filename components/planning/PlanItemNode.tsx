@@ -21,6 +21,23 @@ import type { StaleReason } from '@/lib/dto/plans';
 //              strike-through title), deliberately not red (archive is reversible).
 // Stale items carry a warning badge with the reason. Tokens only; the status pill
 // carries TEXT (not colour only); per-kind `IssueTypeIcon`.
+//
+// ⚠️ A DECIDED plan adds a FOURTH AXIS that CROSSES those three, rather than
+// joining them (`design/ai-planning/design-notes.md` Part VI; bug MOTIR-3154).
+// Every op can be accepted and every op can be declined, so there are six
+// renderings and a fourth `op` member could only express three. The outcome
+// therefore rides two channels the op treatments do not use at all — they
+// already consume border style, border colour, fill, the ring, opacity and the
+// strike:
+//   • the op badge gains a second SEGMENT carrying the WORD (`accepted` /
+//     `declined`), which is the whole of the meaning; and
+//   • a solid spine on the node's inline-start edge, decorative (`aria-hidden`),
+//     so the outcome survives a zoom-out where 10.5px chip text does not.
+// The spine's two values are the review rail's OWN outcome colours one component
+// down (`--el-success` on "Added N items to your backlog"; the neutral on "Plan
+// declined"), so this introduces no vocabulary. No reserved canvas language is
+// approached: each of those is a border STYLE (dashed pending / dotted skippable
+// / dashed not-in-sprint) or a red CHIP (blocked elsewhere), and this is neither.
 
 // ⚠️ THE THIRD COPY OF THE STATUS SET USED TO LIVE HERE, AND IT IS GONE (bug
 // MOTIR-3170). It was a six-member literal that coerced anything outside itself
@@ -61,7 +78,17 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
 // pencil and its modal are REMOVED: a proposal is READ — the canvas peek — and
 // changed by re-planning, not hand-corrected in a five-field form. The design
 // records the supersession in `design/ai-planning/design-notes.md` Part V §3.
-export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
+/** The plan's decision, once it has one. `null` while the plan is still
+ *  `planned` — which is every rendering that shipped before MOTIR-3161. */
+export type PlanItemOutcome = 'accepted' | 'declined';
+
+export function PlanItemNode({
+  item,
+  outcome = null,
+}: {
+  item: PlanReviewItemDto;
+  outcome?: PlanItemOutcome | null;
+}) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
 
@@ -70,7 +97,14 @@ export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
     item.op === 'add'
       ? 'border border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)'
       : item.op === 'remove'
-        ? 'border border-(--el-border-strong) bg-(--el-muted) opacity-80 shadow-(--shadow-subtle)'
+        ? // A DECIDED `remove` drops the FADE (Part VI §3). `opacity` means "this
+          // is about to happen"; on a decided card it either already happened or
+          // never will, and the fade would also mute the outcome spine — the one
+          // signal that settles which. The muted fill, the strong border and the
+          // strike all stay.
+          `border border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)${
+            outcome ? '' : ' opacity-80'
+          }`
         : 'border border-(--el-border) bg-(--el-surface) ring-2 ring-(--el-info) shadow-(--shadow-card)';
 
   return (
@@ -78,13 +112,26 @@ export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
       // Fixed footprint (= the layout's NODE_W/NODE_H) so a node never grows into
       // the row below — the deterministic layout spaces rows by NODE_H.
       style={{ width: NODE_W, height: NODE_H }}
-      className={`flex flex-col overflow-hidden rounded-(--radius-card) p-3 ${frame}`}
+      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) p-3 ${frame}`}
       data-op={item.op}
+      data-outcome={outcome ?? undefined}
       data-testid="plan-item-node"
     >
+      {/* The outcome SPINE — decorative reinforcement only; the word in the op
+          chip carries the meaning, which is what keeps this off colour-alone and
+          discharges 1.4.11 on the bar itself. */}
+      {outcome ? (
+        <span
+          aria-hidden="true"
+          data-testid="plan-item-outcome-spine"
+          className={`absolute inset-y-0 start-0 w-1 ${
+            outcome === 'accepted' ? 'bg-(--el-success)' : 'bg-(--el-text-muted)'
+          }`}
+        />
+      ) : null}
       {/* TOP ROW — the op badge (left) + the status pill / stale flag (right). */}
       <div className="flex shrink-0 items-center gap-2">
-        <OpBadge op={item.op} t={t} />
+        <OpBadge op={item.op} outcome={outcome} t={t} />
         <div className="ml-auto flex items-center gap-1.5">
           {item.stale ? (
             <span
@@ -143,33 +190,70 @@ export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
   );
 }
 
+/**
+ * The op badge, with the OUTCOME fused to its trailing edge once the plan is
+ * decided — so the chip reads `op × outcome` (Part VI §3).
+ *
+ * Segment 1 is the SHIPPED op tone, unchanged; segment 2 is the outcome. The
+ * word is the whole of the meaning, which is what keeps the decided state off
+ * colour-alone (Part I §4's a11y rule) — the spine on the node is decorative
+ * reinforcement for a zoom-out, never the signal.
+ */
 function OpBadge({
   op,
+  outcome,
   t,
 }: {
   op: PlanReviewItemDto['op'];
+  outcome?: PlanItemOutcome | null;
   t: ReturnType<typeof useTranslations>;
 }) {
-  if (op === 'add') {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-accent-on-surface)">
-        <Plus className="size-3" aria-hidden="true" />
-        {t('opAdd')}
-      </span>
-    );
-  }
-  if (op === 'remove') {
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-surface) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-secondary)">
-        <ArchiveX className="size-3" aria-hidden="true" />
-        {t('opRemove')}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-sky) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-strong)">
+  const seg = 'inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold';
+  const opSeg =
+    op === 'add'
+      ? `${seg} bg-(--el-surface) text-(--el-accent-on-surface)`
+      : op === 'remove'
+        ? `${seg} bg-(--el-surface) text-(--el-text-secondary)`
+        : `${seg} bg-(--el-tint-sky) text-(--el-text-strong)`;
+  const glyph =
+    op === 'add' ? (
+      <Plus className="size-3" aria-hidden="true" />
+    ) : op === 'remove' ? (
+      <ArchiveX className="size-3" aria-hidden="true" />
+    ) : (
       <Pencil className="size-3" aria-hidden="true" />
-      {t('opModify')}
+    );
+  const label = op === 'add' ? t('opAdd') : op === 'remove' ? t('opRemove') : t('opModify');
+
+  // Undecided: exactly the shipped badge, byte for byte.
+  if (!outcome) {
+    return (
+      <span className={`${opSeg} rounded-(--radius-badge)`}>
+        {glyph}
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex shrink-0 items-stretch overflow-hidden rounded-(--radius-badge)"
+      data-testid="plan-item-op-chip"
+    >
+      <span className={opSeg}>
+        {glyph}
+        {label}
+      </span>
+      <span
+        data-testid="plan-item-outcome"
+        className={`${seg} border-s border-(--el-border-soft) ${
+          outcome === 'accepted'
+            ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
+            : 'bg-(--el-muted) text-(--el-text-secondary)'
+        }`}
+      >
+        {outcome === 'accepted' ? t('outcomeAccepted') : t('outcomeDeclined')}
+      </span>
     </span>
   );
 }

@@ -13,9 +13,18 @@ import { cn } from '@/lib/utils/cn';
 // `design/settings/account-settings.mock.html` (the `.rail-head` panel). The
 // account area is PERSONAL (no project context), which is why the header shows the
 // user rather than the project (the SettingsSidebarHeader's shape, retargeted).
-// Back goes to the app home (the dashboard reads the active project context).
+//
+// Back goes to the app home, and that is `/home` (MOTIR-3171) — the same
+// correction, and the same stale sentence, as the sibling SettingsSidebarHeader;
+// the two rail heads are written from one pattern and go stale as a pair.
+// MOTIR-2654 moved the signed-in landing to `/home`; MOTIR-2761 narrowed it to
+// the ACTIVE project. That narrowing is what makes `/home` safe from THIS area,
+// which is personal and carries no project context: with no active project
+// `/home` renders `ProjectsEmptyState`, the create-first door
+// (`docs/decisions/home-scope.md` §2.2). `tests/components/rail-head-back-link.test.tsx`
+// is the guard on the rendered `href`, in both rail variants.
 
-const BACK_HREF = '/dashboard';
+const BACK_HREF = '/home';
 
 export interface AccountSidebarHeaderProps {
   user: { name: string; email: string };

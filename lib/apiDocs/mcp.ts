@@ -546,6 +546,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Atomically claim the next ready subtask in the active sprint and flip it to In Progress. Race-safe.',
     descriptionFingerprint: 'ef64f059efb9',
   },
+  claim_work_item: {
+    summary:
+      'Atomically claim ONE named work item and flip it to In Progress. A lost claim says WHO holds it.',
+    descriptionFingerprint: '272d4e9c0a23',
+  },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',

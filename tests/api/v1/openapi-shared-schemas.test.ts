@@ -429,6 +429,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     ['openPlanSession', 'open_plan_session'],
     ['appendPlanTurn', 'append_plan_turn'],
     ['submitPlanSession', 'submit_plan_session'],
+    // MOTIR-2961 — the keyed claim ships on BOTH surfaces over one service
+    // method, so the two must ask for the same permission.
+    ['claimWorkItem', 'claim_work_item'],
   ];
 
   it.each(MIRRORED)('%s asks for the same permission as the %s tool', (operationId, tool) => {
@@ -437,8 +440,8 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 41 declarations names a GRANTABLE permission', () => {
-    expect(V1_OPERATIONS.length).toBe(41);
+  it('every one of the 42 declarations names a GRANTABLE permission', () => {
+    expect(V1_OPERATIONS.length).toBe(42);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

@@ -457,8 +457,9 @@ export interface PlanItemStalenessDto {
   /** The PlanItem this verdict concerns — the stable key (an un-materialized
    *  `add` has no `workItemId`). */
   planItemId: string;
-  /** The target/parent work item the verdict concerns; `null` for an `add`
-   *  (it has no real target until materialize). */
+  /** The work item the verdict concerns; `null` only for an `add` that has not
+   *  been materialized yet — a `modify` / `remove` always has a target, and an
+   *  approved `add` names the card it became (MOTIR-3165). */
   workItemId: string | null;
   stale: boolean;
   reasons: StaleReason[];

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   appendPlanChangeTurn,
   openPlanChangeSession,
@@ -94,9 +95,32 @@ export interface PlanChangeConversationState {
   session: PlanChangeSessionDto | null;
   /** The live narration of the running job (the `aria-live` line). */
   progress: PlanChangeProgress | null;
-  /** The run's PROPOSALS, read from its Plan — what the canvas draws and what the
-   *  gate confirms. Pending until approved or discarded. */
+  /**
+   * The run's PROPOSALS, read from its Plan — what the canvas draws and what the
+   * gate confirms.
+   *
+   * ⚠️ IT SURVIVES THE DECISION (MOTIR-3162; bug MOTIR-3154). Approve and
+   * discard each used to set it `null`, and `PlanningWorkspaceHost` derives its
+   * ENTIRE diff index from this one field — so the overlay vanished the instant
+   * a decision was taken. After an approve the items at least remained as
+   * ordinary committed cards, so the canvas merely stopped saying which of them
+   * you had just accepted; after a DISCARD nothing remained at all, and the
+   * conversation that produced the tree was still on screen beside the space
+   * where the tree had been.
+   *
+   * It is now cleared only when a NEW run starts, which is the moment it stops
+   * describing anything. What the decision itself records is {@link decided},
+   * beside this — not the erasure of it.
+   */
   review: PlanReviewDto | null;
+  /**
+   * WHICH WAY the current `review` was decided, or `null` while it is still
+   * pending (MOTIR-3162). It is what tells the canvas to draw the accepted or
+   * declined treatment `design/ai-planning/design-notes.md` Part VI specifies —
+   * the SAME treatment the plan-detail canvas renders, one language across both
+   * surfaces rather than a second one invented here.
+   */
+  decided: PlanItemOutcome | null;
   jobId: string | null;
   /**
    * The `Plan` the current run's proposals append into (MOTIR-1743/1745) — what a
@@ -120,6 +144,7 @@ const INITIAL: PlanChangeConversationState = {
   session: null,
   progress: null,
   review: null,
+  decided: null,
   jobId: null,
   planId: null,
   approved: null,
@@ -310,6 +335,18 @@ export function usePlanChangeConversation({
           // A new run supersedes whatever the resume re-attached to, so this is
           // an assignment, not a merge — `undefined` (a stub) clears it.
           planId: planId ?? null,
+          // …and it supersedes a DECIDED overlay (MOTIR-3162). The review is kept
+          // THROUGH the decision so the canvas can draw it; a new run is the
+          // moment it stops describing anything, so a decided overlay can never
+          // bleed into the next generation.
+          //
+          // ⚠️ Only a DECIDED one. A still-pending proposal survives a run,
+          // because `retry` comes through here too and a retry CONTINUES the
+          // conversation rather than restarting it — clearing unconditionally
+          // would drop a proposal the user is still looking at and the server
+          // still awaits a decision on.
+          review: s.decided ? null : s.review,
+          decided: null,
           progress: { kind: 'submitted' },
           errorCode: null,
           outOfCredits: false,
@@ -528,7 +565,9 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'idle',
-        review: null,
+        // The review STAYS (MOTIR-3162) — it is the record of what was accepted,
+        // and `decided` is what turns it into the accepted treatment.
+        decided: 'accepted',
         jobId: null,
         // Decided: the plan is no longer pending, so its handle goes with the
         // job id rather than lingering as a stale confirm target.
@@ -559,7 +598,11 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'idle',
-        review: null,
+        // The review STAYS (MOTIR-3162). This is the case where nothing survived
+        // at all: a discarded plan left the workspace with no trace, so somebody
+        // who had just spent ten minutes shaping a tree and decided against it
+        // had nothing to look back at before starting the next turn.
+        decided: 'declined',
         jobId: null,
         planId: null,
         progress: null,

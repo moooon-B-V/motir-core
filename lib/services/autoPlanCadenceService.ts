@@ -107,6 +107,11 @@ function errorMessage(err: unknown): string {
  * degradation — a staleness read that fails costs the indicator its drift line,
  * it does not fail the settings page that is only asking whether cadence is
  * paused.
+ *
+ * ⚠️ `computePlanStaleness` OWNS the `planned`-only rule (MOTIR-3165) and
+ * returns all-clear for a decided plan on its own. The `status` guard below is
+ * kept as an OPTIMISATION — this caller already holds a `PlanDto`, so it spares
+ * a plan read — not as a second source of truth.
  */
 async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number> {
   if (plan.status !== 'planned') return 0;

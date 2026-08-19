@@ -7,6 +7,7 @@ import {
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
@@ -55,6 +56,9 @@ export interface PlanReviewCanvasProps {
   projectKey: string;
   /** Bumped by the parent on each poll update so the canvas refetches its level. */
   version: number;
+  /** The plan's DECISION, once it has one (MOTIR-3161) — drawn on the plan's own
+   *  nodes, never on the committed neighbours it decided nothing about. */
+  outcome?: PlanItemOutcome | null;
   ariaLabel?: string;
 }
 
@@ -108,7 +112,13 @@ export function arrivalLevel(
   return best ? { id: best.id, trail: best.trail } : null;
 }
 
-export function PlanReviewCanvas({ items, projectKey, version, ariaLabel }: PlanReviewCanvasProps) {
+export function PlanReviewCanvas({
+  items,
+  projectKey,
+  version,
+  outcome = null,
+  ariaLabel,
+}: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const arrival = useMemo(() => arrivalLevel(items), [items]);
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
@@ -139,7 +149,14 @@ export function PlanReviewCanvas({ items, projectKey, version, ariaLabel }: Plan
   const onView = useCallback(
     (nodeId: string) => {
       const proposal = byNodeId.get(nodeId);
-      if (proposal && proposal.op === 'add') setPeeked({ proposal, key: null });
+      // An `add` peeks its PROPOSAL only while it still IS one. Once the plan is
+      // approved that proposal HAS become a work item and carries its real
+      // identifier (MOTIR-3160's keying), so peeking it as a proposal would open
+      // the pre-approval view of a card that now exists — a label that lies about
+      // what clicking it does. An `add` with an identifier is a committed card;
+      // peek it as one (MOTIR-3161).
+      if (proposal && proposal.op === 'add' && !proposal.identifier)
+        setPeeked({ proposal, key: null });
       // A `modify` / `remove` names its live target itself; a committed sibling is
       // resolved from the level it arrived on. A node that is neither opens
       // nothing rather than a peek for a key no work item has.
@@ -170,9 +187,9 @@ export function PlanReviewCanvas({ items, projectKey, version, ariaLabel }: Plan
         for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
         committed = buildWorkItemLevel(wi);
       }
-      return mergePlanLevel(committed, items, parentId);
+      return mergePlanLevel(committed, items, parentId, outcome);
     },
-    [items, projectKey],
+    [items, projectKey, outcome],
   );
 
   return (

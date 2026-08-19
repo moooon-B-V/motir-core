@@ -67,21 +67,19 @@ import { SAFE_SURFACE_TOKENS } from './inkContrastScan';
 // only exemptions are the two 1.4.3 grants below, which are declared ON the
 // element and are the same two `inkContrastScan` takes.
 //
-// ── The FAINT arm is COUNTED, not ruled on — and the reason is SIZE ─────────
-// `--el-text-faint` clears AA on no surface (2.37–2.61:1), so the code guard
-// treats every non-decorative, non-disabled use as a violation. Read out of
-// this tree the same way, it is **1745 findings across 101 files** — an order
-// of magnitude past the muted arm and a backlog rather than a sweep. It is
-// declined here for that, and for nothing else: the chrome question that used
-// to hold this boundary up has been answered, and answered against the
-// exemption, so it is not available as a reason a second time.
+// ── BOTH ARMS ARE RULED ON, AT ZERO, OVER BOTH LAYERS (MOTIR-3068) ────────
+// `--el-text-faint` clears AA on NO surface (2.37–2.61:1), so — exactly like the
+// code guard — every non-decorative, non-disabled use of it is a violation here.
+// The faint arm was COUNTED and not ruled on for one reason, SIZE: read out of
+// this tree it was 1745 findings across 101 files, a backlog rather than a sweep.
+// MOTIR-3068 discharged it, area by area, and the boundary was deleted with its
+// subject rather than reworded — a decline that outlives its reason is how the
+// next reader re-derives it.
 //
-// That distinction is worth keeping straight, because the two declines look
-// identical from the outside and only one of them can be discharged by a
-// person. `scanMock` therefore REPORTS the faint findings — `ink: 'faint'` —
-// and `violations()` returns the muted ones. `design-ink-contrast.test.ts`
-// asserts the faint population is non-empty, so the boundary cannot outlive its
-// subject, and MOTIR-3068 owns emptying it.
+// The only exemptions in either arm are the two 1.4.3 grants below, declared ON
+// the element. There is no allowlist, no per-area carve-out and no `via` filter:
+// the layer an ink is written in changes nothing about the pixels it puts on
+// screen, so it changes nothing about the verdict.
 
 /** The ink this arm RULES ON, as it appears in an arbitrary-value class. */
 export const MUTED_CLASS = 'text-(--el-text-muted)';
@@ -318,7 +316,7 @@ function collapse(source: string): string {
  * BEFORE it must be its immediate parent rather than any ancestor.
  */
 interface StyleRule {
-  steps: Array<{ classes: string[]; child: boolean }>;
+  steps: Array<{ classes: string[]; child: boolean; tag: string | null }>;
   color: string | null;
   background: string | null;
 }
@@ -345,9 +343,13 @@ function stylesheetText(html: string): string {
  * resolving them is not a guess — it is the same fact a bare `.a` states, one
  * containment step further out.
  *
+ * Read: TAGS too (`th`, `table.spec`, `.doc h3`) — a tag is structural, so such a
+ * rule paints in every render exactly as a class chain does. Excluding them cost
+ * 381 faint findings and 270 MUTED violations, on the arm that is enforced
+ * (MOTIR-3147); the same mistake as the bare-only form, one coordinate over.
+ *
  * Abstains: a selector carrying a pseudo-class or pseudo-element (`:hover`,
- * `:focus`, `::before`), an attribute (`[data-state]`), a tag (`table td`), or a
- * universal. **That restriction is the original one and its warrant is
+ * `:focus`, `::before`), an attribute (`[data-state]`), or a universal. **That restriction is the original one and its warrant is
  * unchanged:** a STATE rule paints in one render and not another, so clearing an
  * ink on the strength of one would be a false NEGATIVE, and claiming a tint from
  * one would be a false positive nobody can act on. Both directions are still
@@ -391,18 +393,24 @@ function parseSelector(selector: string): StyleRule['steps'] | null {
       child = true;
       continue;
     }
-    // A compound must be classes and nothing else: `.a`, `.a.b`, `.a\(x\)`.
-    if (!/^(?:\.(?:[\w-]|\\.)+)+$/.test(part)) return null;
+    // A compound is an optional TAG plus zero or more classes: `.a`, `.a.b`,
+    // `th`, `table.spec`. A tag is STRUCTURAL — `.doc h3` paints every heading in
+    // the doc, in every render — so it is read for the same reason a descendant
+    // class chain is (MOTIR-3147). What still abstains is STATE, below.
+    if (!/^[a-zA-Z][-\w]*(?:\.(?:[\w-]|\\.)+)*$|^(?:\.(?:[\w-]|\\.)+)+$/.test(part)) return null;
     const classes = [...part.matchAll(/\.((?:[\w-]|\\.)+)/g)].map((m) => m[1]!.replace(/\\/g, ''));
-    if (classes.length === 0) return null;
-    steps.push({ classes, child });
+    const tagMatch = part.match(/^([a-zA-Z][-\w]*)/);
+    const tag = tagMatch ? tagMatch[1]!.toLowerCase() : null;
+    if (classes.length === 0 && !tag) return null;
+    steps.push({ classes, child, tag });
     child = false;
   }
   return steps.length ? steps : null;
 }
 
-/** Every class in `classes` is on `element`. */
-function carries(element: MockElement, classes: string[]): boolean {
+/** `element` matches this compound: its tag (when named) and every class. */
+function carries(element: MockElement, classes: string[], tag: string | null): boolean {
+  if (tag !== null && element.tag !== tag) return false;
   return classes.every((c) => element.classes.includes(c));
 }
 
@@ -419,7 +427,7 @@ function carries(element: MockElement, classes: string[]): boolean {
  */
 function ruleMatches(rule: StyleRule, element: MockElement, elements: MockElement[]): boolean {
   const last = rule.steps[rule.steps.length - 1]!;
-  if (!carries(element, last.classes)) return false;
+  if (!carries(element, last.classes, last.tag)) return false;
   let node: MockElement | undefined = element;
   for (let i = rule.steps.length - 1; i > 0; i -= 1) {
     const step = rule.steps[i - 1]!;
@@ -427,11 +435,11 @@ function ruleMatches(rule: StyleRule, element: MockElement, elements: MockElemen
     let ancestor: MockElement | undefined =
       node!.parent === -1 ? undefined : elements[node!.parent];
     if (asChild) {
-      if (!ancestor || !carries(ancestor, step.classes)) return false;
+      if (!ancestor || !carries(ancestor, step.classes, step.tag)) return false;
       node = ancestor;
       continue;
     }
-    while (ancestor && !carries(ancestor, step.classes)) {
+    while (ancestor && !carries(ancestor, step.classes, step.tag)) {
       ancestor = ancestor.parent === -1 ? undefined : elements[ancestor.parent];
     }
     if (!ancestor) return false;
@@ -625,21 +633,25 @@ export function scanMock(file: string, html: string): MockFinding[] {
 }
 
 /**
- * The findings that FAIL the guard: the muted arm, over BOTH layers.
+ * The findings that FAIL the guard — BOTH inks, over BOTH layers.
  *
- * The `via === 'class'` filter that used to live here was boundary (2) in the
- * header, and MOTIR-3054 removed it. What remains is a filter on the INK, not
- * on how it was written — the faint arm is reported for the census and is the
- * header's one remaining boundary.
+ * Two filters used to stand here and both are gone: `via === 'class'` (boundary
+ * 2, removed by MOTIR-3054) and `ink === 'muted'` (the faint arm's decline,
+ * removed by MOTIR-3068 once its 2199 findings were swept). Nothing narrows this
+ * any more — a finding is a finding.
  */
 export function violations(findings: MockFinding[]): MockFinding[] {
-  return findings.filter((finding) => finding.ink === 'muted');
+  return findings;
 }
 
 /**
- * The findings the guard COUNTS and does not rule on. Asserted non-empty by
- * `design-ink-contrast.test.ts`, so the boundary fails on the day it stops
- * having a subject rather than quietly outliving it.
+ * The FAINT findings, split out of the ruled-on set by ink.
+ *
+ * It no longer marks a boundary — `violations()` returns these too. It survives
+ * because the faint classification still has to be exercised in its own right:
+ * both layers, the two 1.4.3 grants, and the no-surface-resolution case. A
+ * classifier whose behaviour is only ever asserted through the aggregate is one
+ * nobody can show is running.
  */
 export function counted(findings: MockFinding[]): MockFinding[] {
   return findings.filter((finding) => finding.ink === 'faint');

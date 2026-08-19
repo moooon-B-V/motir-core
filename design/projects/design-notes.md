@@ -949,7 +949,7 @@ access), **Work** (Workflow, Boards, Estimation, Fields, Components),
 **Automation** (the 6.6 slot). The Automation **Rules** row is drawn as a
 **designed-for "Soon" entry** — present (so the area's shape is legible from
 day one) but disabled, with a `--el-tint-yellow` "Soon" chip and
-`--el-text-faint` ink; it is NOT a registry route entry until Story 6.6 adds
+`--el-text-secondary` ink; it is NOT a registry route entry until Story 6.6 adds
 its page. This is the "draw the slot, don't build the page" convention.
 
 ## Composing primitives (no new primitive required)
@@ -1247,13 +1247,13 @@ triangle`) · **No actions** (neutral, `minus-circle`) — AA per finding #35
 
 ## The last-run glyph vocabulary (list + audit log share it)
 
-| State         | glyph            | colour            | copy                          |
-| ------------- | ---------------- | ----------------- | ----------------------------- |
-| Success       | `check-circle`   | `--el-success`    | "Ran {time} ago"              |
-| Failure       | `alert-triangle` | `--el-danger`     | "Failed · {time} ago"         |
-| No actions    | `minus-circle`   | `--el-text-faint` | "No actions · {time} ago"     |
-| Never run     | — (text only)    | `--el-text-faint` | "Never run"                   |
-| Auto-disabled | `alert-triangle` | `--el-danger`     | "Auto-disabled · 10 failures" |
+| State         | glyph            | colour                | copy                          |
+| ------------- | ---------------- | --------------------- | ----------------------------- | ------------------------------------------------------- |
+| Success       | `check-circle`   | `--el-success`        | "Ran {time} ago"              |
+| Failure       | `alert-triangle` | `--el-danger`         | "Failed · {time} ago"         |
+| No actions    | `minus-circle`   | `--el-text-faint`     | "No actions · {time} ago"     | — faint is correct here: the `minus-circle` is a glyph. |
+| Never run     | — (text only)    | `--el-text-secondary` | "Never run"                   |
+| Auto-disabled | `alert-triangle` | `--el-danger`         | "Auto-disabled · 10 failures" |
 
 ## Real-product operations (finding #57 — bounded, drawn)
 
@@ -2004,12 +2004,12 @@ byte-identical rather than pruned, which is exactly why it was there to compose 
 ## Primitives composed — MOTIR-2263's screens need NO new primitive; MOTIR-2257's page needs exactly ONE
 
 | Element                               | Shipped primitive                                   | Token role                                                                                                   |
-| ------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| ------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | The role list · the permission card   | `Card`                                              | `--radius-card` · `--shadow-card` · `--el-border`                                                            |
 | A role ROW                            | the `MembersCard` row grammar                       | `--spacing-card-padding` · hover `--el-surface-soft`                                                         |
 | A role's TILE                         | `Pill` tint grammar                                 | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink                              |
-| `Built-in` lock · `Custom` chip       | `Pill`                                              | `--el-text-faint` · `pill-member` sky                                                                        |
-| Domain heading                        | `SectionLabel` grammar                              | `--el-muted` · `--el-text-faint`                                                                             |
+| `Built-in` lock · `Custom` chip       | `Pill`                                              | `--el-text-faint` · `pill-member` sky                                                                        | — faint is correct here: the `Built-in` lock is a glyph. |
+| Domain heading                        | `SectionLabel` grammar                              | `--el-muted` · `--el-text-secondary`                                                                         |
 | Held / withheld / level-gated mark    | icon + `aria-label`                                 | `--el-success` · `--el-text-faint`                                                                           |
 | `Create role` · `Cancel` · `Edit`     | `Button` (primary / ghost / secondary)              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`                                      |
 | `Delete` on a custom role             | `Button` (icon)                                     | `--spacing-icon-btn` (PADDING) · `--radius-control`                                                          |
@@ -2070,7 +2070,7 @@ correctly without it. Nothing else on the screen depends on it.
 > Every ACTIVE informational ink that was `--el-text-faint` is now `--el-text-secondary`:
 > `.crumb`, `.lockchip`, `.rsum .rmembers`, `.pgroup`, `.permrow .from`, `.reserved-tag`.
 
-- **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
+- **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated** (faint is correct here: the `minus` is a glyph)
   = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
   access level_), so state is never carried by colour or glyph ALONE.
 - On the create page a permission is held or it is not — **ONE checked state**, an accent-filled
@@ -2295,7 +2295,7 @@ amendment — it widened the hidden set for ENTRY POINTS and did not re-open the
 IN-PLACE CONTROLS. Drawn verbatim from what ships, so a sibling card can see there is nothing to do:
 
 - **The Create control** — `CreateIssueButton.tsx`: a `Tooltip`-wrapped `aria-disabled` span at
-  `--el-text-faint` with `opacity: 0.6`, carrying the `projectAccess.readOnlyHint` copy. Visible,
+  `--el-text-secondary` with `opacity: 0.6`, carrying the `projectAccess.readOnlyHint` copy. Visible,
   disabled, explained.
 - **The board** — `BoardContainer.tsx`: cards do not drag, and a `role="status"` notice
   (`readOnlyBoardBanner`) is what says so.
@@ -2342,7 +2342,7 @@ with `--el-text-strong` text (AA-safe, finding #35).
 `--el-surface` and fails AA (MOTIR-2455; the MOTIR-2459 scanner exists because of it), and
 `--el-text-muted` is safe only on the white page/card. So **every secondary string inside a stage is
 `--el-text-secondary`** (6.80:1, clears AA on every surface in both themes) — including the group
-captions, which the 6.5.1 asset drew faint. `--el-text-faint` appears exactly four times: the review
+captions, which the 6.5.1 asset drew faint. `--el-text-faint` appears exactly four times: the review (faint is correct here: a historical count of the 6.5.1 asset, kept as the record of what was corrected)
 page's own panel labels, which are not product surface, and the three **disabled** controls in panel
 5 — disabled text is what WCAG 1.4.3 exempts, and it is the treatment `CreateIssueButton` already
 ships.

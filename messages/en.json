@@ -186,6 +186,8 @@
     "opAdd": "add",
     "opModify": "change",
     "opRemove": "remove",
+    "outcomeAccepted": "accepted",
+    "outcomeDeclined": "declined",
     "field_title": "Title",
     "field_priority": "Priority",
     "field_type": "Type",

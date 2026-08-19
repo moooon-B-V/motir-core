@@ -12,10 +12,19 @@ import { ProjectMark } from './ProjectMark';
 // the project-settings area it REPLACES the SidebarHeader/ProjectSwitcher with a
 // "← Back to {project}" link + a static project-identity block + a "Project
 // settings" eyebrow — Jira's verified team-managed shape (decision-ladder rung 1),
-// per `design/projects/settings-area.mock.html` (the `.rail-head` panel). Back
-// goes to the project home (the dashboard reads the active project context).
+// per `design/projects/settings-area.mock.html` (the `.rail-head` panel).
+//
+// Back goes to the PROJECT HOME, and that is `/home` (MOTIR-3171). It was
+// `/dashboard` when this file landed and the line here said so; MOTIR-2654 then
+// made `/home` the signed-in landing and the rail's first project row, and
+// MOTIR-2761 narrowed it to the ACTIVE project with a create-first door for the
+// no-project case (`docs/decisions/home-scope.md` §2). `/dashboard` kept its
+// route and its own rail entry and is reached by navigating to it — it is one
+// project surface among the rows, not the home (`app/(authed)/dashboard/page.tsx`
+// carries the same warning). `tests/components/rail-head-back-link.test.tsx` is
+// the guard on the rendered `href`, in both rail variants.
 
-const BACK_HREF = '/dashboard';
+const BACK_HREF = '/home';
 
 export interface SettingsSidebarHeaderProps {
   activeProject: ProjectDTO;

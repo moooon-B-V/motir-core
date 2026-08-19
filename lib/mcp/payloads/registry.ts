@@ -10,6 +10,7 @@ import {
   addCommentPayload,
   attachFilePayload,
   claimNextReadyPayload,
+  claimWorkItemPayload,
   getWorkItemPayload,
   listReadyPayload,
   nextReadyPayload,
@@ -70,6 +71,9 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   list_ready: listReadyPayload as unknown as PayloadDefinition<never>,
   next_ready: nextReadyPayload as unknown as PayloadDefinition<never>,
   claim_next_ready: claimNextReadyPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-2961 — the KEYED claim. Its payload IS v1's `WorkItemClaim`, so it
+  // probes that resource whole rather than a part of it.
+  claim_work_item: claimWorkItemPayload as unknown as PayloadDefinition<never>,
   create_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   update_work_item: workItemWritePayload as unknown as PayloadDefinition<never>,
   transition_status: workItemWritePayload as unknown as PayloadDefinition<never>,

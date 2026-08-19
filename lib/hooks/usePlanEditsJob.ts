@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   submitExpandJob,
   submitReplanJob,
@@ -48,8 +49,24 @@ export interface PlanEditsState {
   jobId: string | null;
   /** The `Plan` this run's proposals append into — what a confirm addresses. */
   planId: string | null;
-  /** The run's proposals, read from its Plan. Pending until decided. */
+  /**
+   * The run's proposals, read from its Plan.
+   *
+   * ⚠️ IT SURVIVES the approve (MOTIR-3162; bug MOTIR-3154). Completion used to
+   * null it alongside `phase: 'done'`, and `PlanningWorkspaceHost` derives its
+   * whole diff index from this field — so the overlay vanished in the same tick
+   * the decision landed. `startJob` resets to `INITIAL`, so a NEW job still
+   * clears it and a decided overlay cannot bleed into the next one.
+   */
   review: PlanReviewDto | null;
+  /**
+   * WHICH WAY the current `review` was decided, or `null` while it is pending
+   * (MOTIR-3162) — what tells the canvas to draw the treatment
+   * `design/ai-planning/design-notes.md` Part VI specifies. The SAME field name
+   * and the same values as `usePlanChangeConversation`'s, because both canvases
+   * render one language.
+   */
+  decided: PlanItemOutcome | null;
   approved: PlanApproveSummary | null;
   errorCode: string | null;
 }
@@ -59,6 +76,7 @@ const INITIAL: PlanEditsState = {
   jobId: null,
   planId: null,
   review: null,
+  decided: null,
   approved: null,
   errorCode: null,
 };
@@ -158,7 +176,11 @@ export function usePlanEditsJob() {
     try {
       const approved = summarizePlanApproval(await approvePlanRequest(planId));
       if (!mountedRef.current) return;
-      setState((s) => ({ ...s, phase: 'done', review: null, planId: null, approved }));
+      // The review STAYS and is marked accepted (MOTIR-3162) — `phase: 'done'`
+      // says the job is over, not that there is nothing left to show. Discard
+      // below is a different act: it TEARS THE DOCK DOWN to idle, which is the
+      // hook's close, so it keeps resetting to INITIAL.
+      setState((s) => ({ ...s, phase: 'done', decided: 'accepted', planId: null, approved }));
     } catch (err) {
       if (!mountedRef.current) return;
       setState((s) => ({ ...s, phase: 'review', errorCode: planDecisionErrorCode(err) }));
