@@ -11,8 +11,10 @@ import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
+  agentSubmittedReplan,
   checkBootstrapCheckout,
   cwdReasonLabel,
+  renderReplanSubmitted,
   renderRepositoriesBlock,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -22,6 +24,7 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  landedWork,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
@@ -468,6 +471,19 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       });
       records.push(record);
 
+      // ⚠️ A REFUSED CARD STOPS THE RUN, and `--keep-going` does not override it
+      // (MOTIR-3018). That flag says "one agent failing is not a reason to
+      // abandon the rest"; this is not a failure — it is the agent reporting
+      // that the PLAN is wrong, and the cards the loop would take next are the
+      // ones the submitted plan may be about to change. The prompt's own branch
+      // tells the agent not to pick up other work; the loop honours the same
+      // instruction. Not excluded, either: `planning` is in the in-progress
+      // category, so the server already holds the card out of the ready set.
+      if (record.outcome === 'replanned') {
+        stopReason = 'replanned';
+        break;
+      }
+
       if (record.outcome === 'failed') {
         addExclude(serverUrl, projectKey, { key: item.key });
         excludedKeys.add(item.key.toUpperCase());
@@ -589,6 +605,21 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     };
   }
 
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so ask the card which it was before deciding anything else.
+  // FIRST, ahead of the bootstrap and push checks, because a refusing agent
+  // reverts its worktree and pushes nothing BY DESIGN — those checks would
+  // otherwise report a correctly-refused card as a failed bootstrap or as work
+  // that went missing.
+  if (await agentSubmittedReplan(client, item.key)) {
+    info('');
+    info(renderReplanSubmitted(item.key));
+    // `sessionBranch: null` is the substantive claim here, not bookkeeping: the
+    // card was never integrated, so it must not appear among the cards the
+    // branch carries or in the pull request this run opens.
+    return { ...base, outcome: 'replanned', sessionBranch: null };
+  }
+
   // A bootstrap dispatch that did not produce its checkout is a FAILED dispatch,
   // not a success with a warning: the prompt's whole job was to create it, and
   // every later item routed at that repo would repeat the same bootstrap.
@@ -680,7 +711,7 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
         // written before it existed, and the scalar is that record's whole set.
         (r.outcome === 'failed' && (r.repos ?? [r.repo]).includes(repo.repoName)),
     );
-    const carried = mine.filter((r) => r.outcome !== 'failed');
+    const carried = mine.filter(landedWork);
     const result = openSessionPr(
       repo.cwd,
       {

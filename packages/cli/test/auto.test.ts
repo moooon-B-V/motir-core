@@ -13,11 +13,13 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  landedWork,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
   type AutoSummary,
+  type DispatchRecord,
 } from '../src/autoLoop.js';
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
@@ -1343,5 +1345,66 @@ describe('renderSessionPrBody — the commits, not the card titles', () => {
     const out = renderSessionPrBody('20260729-010203', BRANCH, [record('PROD-1', 'A')], []);
     expect(out).not.toContain('## What the commits say');
     expect(out).toContain('- PROD-1 — A');
+  });
+});
+
+describe('landedWork — the partition that used to be `!== failed` (MOTIR-3018)', () => {
+  const rec = (
+    over: Partial<DispatchRecord> & Pick<DispatchRecord, 'key' | 'outcome'>,
+  ): DispatchRecord => ({
+    title: `Item ${over.key}`,
+    durationMs: 1000,
+    sessionBranch: 'motir/run-1',
+    repo: 'motir-core',
+    parentKey: null,
+    ...over,
+  });
+
+  it.each([
+    ['integrated', true],
+    ['implemented', true],
+    ['failed', false],
+    // The member the old spelling got wrong: a refused card put no code
+    // anywhere, so it is not carried by a branch and not named in a pull
+    // request.
+    ['replanned', false],
+  ] as const)('%s → %s', (outcome, expected) => {
+    expect(landedWork({ outcome })).toBe(expected);
+  });
+
+  it('keeps a re-planned card out of the pull-request body and title', () => {
+    const records: DispatchRecord[] = [
+      rec({ key: 'PROD-1', title: 'Built it', outcome: 'integrated' }),
+      rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+    ];
+    const body = renderSessionPrBody('20260819-010203', 'motir/run-1', records);
+    expect(body).toContain('Work items carried (1)');
+    expect(body).toContain('PROD-1');
+    expect(body).not.toContain('PROD-2');
+    // One carried card, so the title names it — not "2 work items".
+    expect(sessionPrTitle('20260819-010203', records.filter(landedWork))).toContain('PROD-1');
+  });
+
+  it('names the re-planned card in the summary, as an outcome rather than a failure', () => {
+    const summary: AutoSummary = {
+      runId: '20260819-010203',
+      records: [
+        rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+      ],
+      skipped: [],
+      planning: [],
+      repos: [],
+      prs: [],
+      stopReason: 'replanned',
+    };
+    const text = renderAutoSummary(summary);
+    expect(text).toContain('an agent refused its card and submitted a re-plan');
+    expect(text).toContain('Re-planned');
+    expect(text).toContain('PROD-2');
+    // Not listed as delivered work, and not as a failure.
+    expect(text).not.toContain('Implemented — CI decides');
+    expect(text).not.toContain('Failed — still In Progress');
+    // A correct outcome exits 0.
+    expect(autoExitCode(summary)).toBe(0);
   });
 });

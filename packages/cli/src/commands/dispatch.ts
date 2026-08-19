@@ -12,10 +12,12 @@ import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
 import {
+  agentSubmittedReplan,
   checkBootstrapCheckout,
   renderAgentFailure,
   renderAgentSuccess,
   renderNothingPushed,
+  renderReplanSubmitted,
   renderDispatchAdvisories,
   renderDispatchSummary,
   renderResumeNotice,
@@ -238,6 +240,21 @@ async function deliver(input: DeliverInput): Promise<void> {
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
     process.exitCode = result.exitCode;
+    return;
+  }
+
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so the run asks the card which it was before deciding anything
+  // else. This read comes FIRST — before the push check — because a refusing
+  // agent reverts its worktree and pushes nothing by design, so the push check
+  // would otherwise report a correctly-refused card as work that went missing.
+  if (await agentSubmittedReplan(client, key)) {
+    // Nothing to exclude: `planning` is in the in-progress CATEGORY, so the card
+    // is already out of the pickable set — which is the entire reason that
+    // status exists (MOTIR-2425). Adding it to the session exclude list would
+    // record a local opinion about a card the server already holds back.
+    info('');
+    info(renderReplanSubmitted(key));
     return;
   }
 

@@ -81,11 +81,24 @@ export interface SnapshotEntry {
   statusKey?: string | undefined;
 }
 
-/** One item the snapshot left out, with the reason a human needs. */
+/**
+ * Why an item is not among the run's dispatched records.
+ *
+ * Every member but the last is decided AT SNAPSHOT TIME, from the ready row
+ * alone, by {@link classifySnapshotItem}. `replan_submitted` is the one decided
+ * DURING the drain and cannot be a {@link SnapshotDisposition}: it is what the
+ * card itself says after its agent has run (MOTIR-3018), which nothing knows
+ * before the agent exists. Modelled as a skip rather than a record because the
+ * run implemented nothing — a record would owe an outcome, a duration and a
+ * repo for work that was deliberately not done.
+ */
+export type SkipReason = Exclude<SnapshotDisposition, 'take'> | 'replan_submitted';
+
+/** One item the run left out, with the reason a human needs. */
 export interface SnapshotSkip {
   key: string;
   title: string | null;
-  reason: Exclude<SnapshotDisposition, 'take'>;
+  reason: SkipReason;
 }
 
 /** The frozen plan of the run: what will be implemented, and what will not. */
@@ -147,14 +160,23 @@ const STOP_LABEL: Record<BatchStopReason, string> = {
   interrupted: 'interrupted (Ctrl-C)',
 };
 
-const SKIP_LABEL: Record<SnapshotSkip['reason'], string> = {
+const SKIP_LABEL: Record<SkipReason, string> = {
   needs_planning: 'needs planning',
   needs_human: 'needs a human',
   integrated_dep: 'ready only via an integrated dependency (not on main)',
+  // ⚠️ Phrased as an OUTCOME, not as a shortfall. The other three say what the
+  // run could not do; this one says what the agent DID, and reading it as a
+  // failure is what teaches an operator to distrust the signal (MOTIR-3018).
+  replan_submitted: 'refused by its agent — a re-plan is waiting for you in Motir',
 };
 
 /** The reasons in the order the summary groups them. */
-const SKIP_ORDER: SnapshotSkip['reason'][] = ['needs_planning', 'needs_human', 'integrated_dep'];
+const SKIP_ORDER: SkipReason[] = [
+  'needs_planning',
+  'needs_human',
+  'integrated_dep',
+  'replan_submitted',
+];
 
 // ⚠️ No REPO column. The snapshot freezes WHICH ITEMS the run will take; where
 // each one runs is assembled per iteration, from the dispatch prompt, at the
@@ -205,6 +227,11 @@ function renderSkipGroups(skipped: SnapshotSkip[], titleWidth: number): string[]
     ];
     if (reason === 'integrated_dep') {
       lines.push('  Run these with `motir auto`, which carries that lineage on a session branch.');
+    }
+    if (reason === 'replan_submitted') {
+      lines.push(
+        '  Each is in Planning with a plan awaiting approval; nothing was recorded for it.',
+      );
     }
     blocks.push(lines.join('\n'));
   }

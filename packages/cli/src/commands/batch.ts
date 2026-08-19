@@ -13,9 +13,11 @@ import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
+  agentSubmittedReplan,
   checkBootstrapCheckout,
   cwdReasonLabel,
   renderNothingPushed,
+  renderReplanSubmitted,
   renderRepositoriesBlock,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -433,6 +435,20 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     return {
       kind: 'record',
       record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
+    };
+  }
+
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so ask the card which it was before deciding anything else —
+  // and ask BEFORE the push check, because a refusing agent reverts and pushes
+  // nothing by design, so that check would otherwise report a correctly-refused
+  // card as work that went missing. A skip, not a record: the run implemented
+  // nothing, and `keepGoing` is not consulted because there was no failure.
+  if (await agentSubmittedReplan(client, entry.key)) {
+    info(renderReplanSubmitted(entry.key));
+    return {
+      kind: 'skipped',
+      skip: { key: entry.key, title: entry.title, reason: 'replan_submitted' },
     };
   }
 

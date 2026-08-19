@@ -287,15 +287,20 @@ describe('motir next --agent', () => {
     expect(call.prompt).toBe(PROMPT_TEXT);
     expect(call.cwd).toBe(join(harness.root, 'motir-core'));
     expect(call.command).toMatchObject({ binary: 'claude', args: ['--yolo'] });
+    // The `get_work_item` between the agent and the close-out is the re-plan
+    // read-back (MOTIR-3018): a finished card and a REFUSED one both exit 0, so
+    // the run asks the card which it was. Its per-item cost is stated here
+    // rather than hidden, because this list is where a reviewer counts requests.
     expect(toolNames()).toEqual([
       'whoami',
       'next_ready',
       'claim',
       'transition_status',
       'dispatch_prompt',
+      'get_work_item',
       'transition_status',
     ]);
-    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'implemented' });
+    expect(harness.calls[6]?.args).toEqual({ key: 'PROD-7', status: 'implemented' });
     expect(harness.stderr).toContain('motir done PROD-7');
   });
 
@@ -824,16 +829,26 @@ describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
     // The boundary: this card reports, it does not ask. A second read would be a
     // second source of truth about what has shipped, which is the defect
     // `lib/workItems/repoDelivery.ts` exists to prevent one level down.
+    //
+    // ⚠️ THE ONE `get_work_item` IS NOT THAT READ — it is the re-plan read-back
+    // (MOTIR-3018), and it happens AFTER the agent, so nothing about the
+    // delivery report can have come from it. Asserted by position rather than by
+    // absence: the request budget for the repository facts is still zero, and
+    // this test is still the thing that says so.
     setup({ prompt: halfShipped(), repos: ['motir-core', 'motir-ai'] });
     await nextCommand({ agent: 'claude' });
 
-    expect(toolNames()).toEqual([
+    const names = toolNames();
+    expect(names).toEqual([
       'whoami',
       'next_ready',
       'claim',
       'transition_status',
       'dispatch_prompt',
+      'get_work_item',
       'transition_status',
     ]);
+    // Everything the resume notice reported was rendered before this index.
+    expect(names.indexOf('get_work_item')).toBeGreaterThan(names.indexOf('dispatch_prompt'));
   });
 });
