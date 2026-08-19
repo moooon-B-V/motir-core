@@ -288,7 +288,7 @@ workaround.
   per-row org-role select, the per-row search. `--radius-card` container,
   `--shadow-elevated`, rows at `--spacing-control-*` / `--radius-control`.
 - **`Input`** — the org-settings fields (`--height-input`, `--spacing-input-*`,
-  `--radius-input`); the URL field uses a `--el-text-faint` `motir.co/` prefix.
+  `--radius-input`); the URL field uses a `--el-text-secondary` `motir.co/` prefix.
 - **`Pill`** — org-role chips (see colour roles below), workspace chips, the
   count + pending + "Coming soon" neutral pills. `--radius-badge`,
   `--spacing-chip-*`; **hue in the tint BACKGROUND with `--el-text-strong` text

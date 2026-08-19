@@ -180,7 +180,7 @@ Other roles: the hero eyebrow + the Trending rank/window + the primary CTA use
 `--el-accent` (tags) / `--el-info` (attrs) / `--el-success` (strings); the GEO
 note + the trust/fact checks use `--el-tint-mint` / `--el-success`. Primary ink
 `--el-text`, secondary copy `--el-text-secondary`, captions `--el-text-muted`,
-faint mono notes `--el-text-faint`. Surfaces sit on `--el-page-bg`; quieter fills
+faint mono notes `--el-text-secondary`. Surfaces sit on `--el-page-bg`; quieter fills
 on `--el-surface` / `--el-muted`; borders via `--el-border` / `-soft` / `-strong`.
 **No Tier-0 `--color-*` and no raw `rounded-*`/`p-*`/`h-*` on any surface** — every
 radius / padding / height / shadow references a `[data-display-style]` shape token
