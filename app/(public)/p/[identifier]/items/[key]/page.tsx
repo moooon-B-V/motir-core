@@ -12,10 +12,10 @@ import { Pill } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { PublicTabNav } from '@/app/(public)/_components/PublicTabNav';
 import { PublicChildIssues } from '@/app/(public)/_components/PublicChildIssues';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // The public read-only WORK-ITEM DETAIL page (Story 6.14 · Subtask 6.14.11 ·
 // design `public-item-detail.mock.html`) — the crawlable, server-rendered detail
@@ -34,11 +34,10 @@ import { PublicChildIssues } from '@/app/(public)/_components/PublicChildIssues'
 // the DOM — excluded server-side), and "Hidden" sidebar rollups. READ is fully
 // public — no sign-in.
 
-const STATUS_TONE: Record<StatusCategoryDto, 'planned' | 'in-progress' | 'done'> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status chip's tone + glyph live in `components/issues/StatusPill`
+// (MOTIR-3103). This file used to keep its own copy of the category map —
+// one of five — which is how `implemented` could share a chip with three
+// other statuses in every one of them at once.
 
 const KIND_LABEL: Record<WorkItemKindDto, string> = {
   epic: 'kindEpic',
@@ -152,9 +151,12 @@ export default async function PublicWorkItemDetailPage({
                     {t('epicNotPublicBadge')}
                   </Pill>
                 ) : (
-                  <Pill status={STATUS_TONE[detail.statusCategory]} className="flex-none">
-                    {detail.statusLabel}
-                  </Pill>
+                  <StatusPill
+                    statusKey={detail.status}
+                    category={detail.statusCategory}
+                    label={detail.statusLabel}
+                    className="flex-none"
+                  />
                 )}
               </div>
             </div>

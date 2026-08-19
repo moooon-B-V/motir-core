@@ -18,12 +18,17 @@ export interface SprintListResponse {
 /** Wire shape of `GET /api/backlog` and `GET /api/sprints/[id]/issues`. */
 export type RankedIssuePage = RankedIssuePageDto;
 
-/** A status key → its display label + lifecycle category, for the row `Pill`. */
-export type StatusByKey = Map<string, { label: string; category: StatusCategoryDto }>;
+/** A status key → its display label + lifecycle category, for the row `Pill`.
+ *  The KEY rides in the value too (MOTIR-3103): the chip's tone is per-STATUS
+ *  first and per-category second, so a consumer that only held the map's value
+ *  could not ask for the right one. */
+export type StatusByKey = Map<string, { key: string; label: string; category: StatusCategoryDto }>;
 
 /** Build the status lookup the rows resolve their `Pill` tone/label from. */
 export function buildStatusByKey(statuses: WorkflowStatusDto[]): StatusByKey {
-  return new Map(statuses.map((s) => [s.key, { label: s.label, category: s.category }]));
+  return new Map(
+    statuses.map((s) => [s.key, { key: s.key, label: s.label, category: s.category }]),
+  );
 }
 
 /** Build the assignee id → display name lookup (mirrors the board's). */

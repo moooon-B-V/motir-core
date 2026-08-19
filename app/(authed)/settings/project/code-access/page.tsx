@@ -22,6 +22,32 @@ import { guardSettingsPage } from '../_guard';
 // identity, and their edit capability — then hands typed data to the client
 // island that owns the interaction.
 //
+// ⚠️ THIS SURFACE IS DELIBERATELY NARROWER THAN THE REPOSITORIES ROOM, and the
+// narrowness is the answer to MOTIR-3126, not an oversight it missed.
+//
+// That card widened `/settings/project/repositories` to render BOTH registries —
+// the `project_repository` set and the workspace-CONNECTED repositories the
+// effective-domain ladder layers under it — because the room's question is "which
+// repositories does this project have?", and answering it from one table told
+// Motir's own project it had none. This pane asks a DIFFERENT question: "who else
+// on the team can clone the code Motir is holding?" — and its answer is a
+// per-`(repository × member)` COLLABORATOR INVITATION that Motir sends through the
+// GitHub App (`projectRepoAccessService.listTeamAccess` → `isInvitable`, which is
+// true only of a `created` row with a live realized repository).
+//
+// A workspace-connected repository has no such record and can have none: it is the
+// user's own repository on their own account, its collaborators are granted on
+// GitHub by its owner, and Motir has no invitation there to report, grant or
+// revoke. Listing one here would render a row of members whose access state is
+// unknowable and whose only action Motir cannot perform — strictly worse than its
+// absence. So `projectRepoSetService.listByProject` stays the right read for this
+// pane, and the empty state ("nothing to grant until a plan is approved") stays
+// true for a project whose repositories are all its own: there is genuinely
+// nothing for Motir to grant.
+//
+// If a revoke/read-back path for connected repositories ever lands, this is the
+// comment to come back to — the boundary is the INVITATION, not the registry.
+//
 // BROWSE-gated by the area layout; the WRITE is re-gated in
 // `projectRepoAccessService.grantTeamAccess` (edit — handing out push access to
 // the project's code must never be reachable by merely being able to SEE it), so

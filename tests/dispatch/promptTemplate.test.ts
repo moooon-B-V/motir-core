@@ -207,6 +207,76 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
+  // ── MOTIR-3059: the design step that closes the loop ──────────────────────
+  //
+  // The gap this pins is specific: the design result is published by CI, from a
+  // step that SHARES a job with the design-asset guards and runs after them — so
+  // a guard failure skips it silently. The run sees a green pull request and the
+  // card stays empty, which has happened (MOTIR-2413, filed as MOTIR-2981). That
+  // fix was a change to the human runbook; the agent reads THIS file.
+  describe('WHAT_TO_DO.design tells the agent to confirm the publish', () => {
+    const designPrompt = (): string =>
+      assembleDispatchPrompt(source({ type: 'design', executor: 'coding_agent' })).prompt;
+
+    it('names the CHECK before the action — not "publish it", but "confirm it arrived"', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('CONFIRM the design result reached the work item');
+      // The log line is what makes the check performable rather than vague.
+      expect(prompt).toContain('Published N design artifact(s)');
+      // …and WHY it can be absent, so the agent knows this is a real case and
+      // not a formality.
+      expect(prompt).toContain('SKIPPED when the guards fail');
+    });
+
+    it('names the SHIPPED publisher, never the general attach tool', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('design-evidence');
+      // ⚠️ The general door would put the .png in the ATTACHMENTS panel while CI
+      // puts it in the Design result panel — one artifact, two surfaces. The
+      // which-door rule is docs/decisions/attachment-api-door.md §3, and this is
+      // where an agent would otherwise pick the wrong one.
+      expect(prompt).not.toContain('attach_file');
+    });
+
+    it('keeps the repository the source of truth', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('REPOSITORY stays the source of truth');
+      expect(prompt).toContain('never a replacement for committing the three files');
+    });
+
+    it('"Stop at the asset" SURVIVES as the stopping condition', () => {
+      // The new step must not read as permission to continue building. If step 5
+      // ever disappears, the agent gains a publish instruction and loses the
+      // gate that made the design reviewable first.
+      const prompt = designPrompt();
+      expect(prompt).toContain('Stop at the asset. A design is reviewed before anything is built');
+      expect(prompt.indexOf('Stop at the asset')).toBeLessThan(
+        prompt.indexOf('CONFIRM the design result'),
+      );
+    });
+
+    it('carries the step in BOTH workflow variants', () => {
+      // A step added to one dispatch path only is the classic half-shipped
+      // prompt change: it works when you test it and is missing where it runs.
+      for (const sessionBranch of [null, 'session/MOTIR-1-lineage']) {
+        const { prompt } = assembleDispatchPrompt(
+          source({ type: 'design', executor: 'coding_agent', sessionBranch }),
+        );
+        expect(prompt).toContain('CONFIRM the design result reached the work item');
+      }
+    });
+
+    it('changes NO other type’s steps', () => {
+      // Asserted as a set difference rather than by eye: a broad edit to the
+      // WHAT_TO_DO record would otherwise pass every marker test above.
+      for (const type of Object.keys(MARKERS) as WorkItemTypeDto[]) {
+        if (type === 'design') continue;
+        const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));
+        expect(prompt).not.toContain('CONFIRM the design result');
+      }
+    });
+  });
+
   it('every type produces a DISTINCT WHAT TO DO block', () => {
     const blocks = (Object.keys(MARKERS) as WorkItemTypeDto[]).map((type) => {
       const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));
@@ -456,14 +526,43 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     }
   });
 
-  it('the FINISHED signal names in_review and says it is REQUIRED', () => {
+  it('the FINISHED signal names implemented and says it is REQUIRED', () => {
     const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
-    expect(outcome).toContain('status in_review');
+    expect(outcome).toContain('status implemented');
     expect(outcome).toContain('REQUIRED, not a courtesy');
     // The reason, not just the rule: an agent told only "do this" treats it as
     // ceremony, and the loop's whole ability to tell success from a quiet death
     // rests on it.
     expect(outcome).toContain('died quietly');
+  });
+
+  it('states the ORDER — commit, push, open the PR, THEN transition (MOTIR-3004)', () => {
+    // Asserted as an ORDER on the assembled string, not as four strings that
+    // happen to be present: an agent handed an unordered list does the cheap
+    // status call first, and then the card claims built work that exists only in
+    // a worktree the run is about to delete.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    const at = (needle: string) => outcome.indexOf(needle);
+    expect(at('1. commit')).toBeGreaterThan(-1);
+    expect(at('2. push the branch')).toBeGreaterThan(at('1. commit'));
+    expect(at('3. open the pull request')).toBeGreaterThan(at('2. push the branch'));
+    expect(at('status implemented')).toBeGreaterThan(at('3. open the pull request'));
+    // …and it says WHAT the status claims, which is the whole reason for the order.
+    expect(outcome).toContain('THE CODE IS ON THE REMOTE');
+  });
+
+  it('tells the agent that In Review belongs to CI, not to it (MOTIR-3004)', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('Do NOT set In Review');
+    expect(outcome).toContain('CI does');
+  });
+
+  it("no assembled text still claims the agent's pull request causes In Review", () => {
+    // The GIT WORKFLOW step used to say the title reference "is what moves this
+    // work item to In Review". After this story that half is false, and a prompt
+    // that says both things teaches the agent the wrong owner of the status.
+    const prompt = assembleDispatchPrompt(source()).prompt;
+    expect(prompt).not.toContain('moves this work item to In Review');
   });
 
   it('the defect signal names Planning and NEVER offers `blocked`', () => {

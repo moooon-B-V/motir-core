@@ -347,13 +347,30 @@ describe('the CI jobs that run all of it', () => {
     expect(images).toContain('fail-fast: false');
   });
 
-  it('skip on the design/ and docs/ branch prefixes, like the other heavy lanes', () => {
-    const call = ci.slice(ci.indexOf('  sandbox:'));
-    for (const prefix of ['seed/', 'design/', 'docs/']) {
-      expect(call, `${prefix} skip on the sandbox call job`).toContain(
-        `!startsWith(github.head_ref, '${prefix}')`,
-      );
-    }
+  it('skips when the diff cannot reach an image, like the other heavy lanes', () => {
+    // The CLAIM is unchanged and the MECHANISM moved (MOTIR-3148). This lane
+    // used to skip on the branch PREFIX — `seed/` / `design/` / `docs/` — which
+    // is a guess about the diff read off a naming convention. It now reads the
+    // `changes` job, which computes the same exclusion from the diff itself.
+    //
+    // Windowed to the NEXT job key rather than sliced to EOF: `ci.indexOf` +
+    // an open-ended slice equals "this job" only while `sandbox:` is the last
+    // job in the file, and it no longer is.
+    const from = ci.indexOf('\n  sandbox:\n');
+    expect(from, 'ci.yml still has a `sandbox:` job').toBeGreaterThan(-1);
+    const rest = ci.slice(from + 1);
+    const next = rest.slice(1).search(/\n {2}[A-Za-z0-9_-]+:\n/);
+    const call = next === -1 ? rest : rest.slice(0, next + 1);
+
+    expect(call).toContain("needs.changes.outputs.images == 'true'");
+    expect(call, 'the call job needs the job it reads').toMatch(/^\s*needs:.*\bchanges\b/m);
+    expect(call, 'no branch-name gate survives here').not.toContain('startsWith(github.head_ref');
+
+    // And the exclusion this test was written for still holds at the source:
+    // a design-only or docs-only diff sets neither flag. Asserting only the
+    // wiring above would pass a `changes` job that had stopped excluding them.
+    const changes = ci.slice(ci.indexOf('\n  changes:\n'));
+    expect(changes).toMatch(/docs\/\*\|design\/\*\|scripts\/plan-seed\/\*\|\*\.md/);
   });
 });
 

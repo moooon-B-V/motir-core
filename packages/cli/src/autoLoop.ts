@@ -53,9 +53,11 @@ export function classifyReadyItem(item: {
 export type AutoOutcome =
   /** Agent exited 0 and the work was recorded on the session branch. */
   | 'integrated'
-  /** Agent exited 0, but the server kept the item OFF the session lineage (it
-   *  already belonged to another one), so it was moved to In Review instead. */
-  | 'in_review'
+  /** Agent exited 0 and its work reached the remote, but the server kept the item
+   *  OFF the session lineage (it already belonged to another one), so it opened a
+   *  pull request of its own and was moved to Implemented instead — CI decides
+   *  when that becomes In Review (MOTIR-3004). */
+  | 'implemented'
   /** Agent exited non-zero. The item stays In Progress — nothing was reverted. */
   | 'failed';
 
@@ -179,7 +181,7 @@ export function formatDuration(ms: number): string {
 
 const OUTCOME_LABEL: Record<AutoOutcome, string> = {
   integrated: 'integrated',
-  in_review: 'in review',
+  implemented: 'implemented',
   failed: 'FAILED',
 };
 
@@ -350,12 +352,16 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
 
   blocks.push(...renderPlanningBlocks(summary.planning, titleWidth));
 
-  const inReview = summary.records.filter((r) => r.outcome !== 'failed');
-  if (inReview.length > 0) {
+  const landed = summary.records.filter((r) => r.outcome !== 'failed');
+  if (landed.length > 0) {
     blocks.push(
       [
-        `In Review — awaiting your merge (${inReview.length}):`,
-        ...inReview.map((r) => `  ${r.key} on ${r.sessionBranch ?? '(no branch recorded)'}`),
+        // Implemented, not In Review: the cards are built and pushed, and CI is
+        // what promotes them (MOTIR-3006). Saying "awaiting your merge" here
+        // would teach the operator that the run finished the lifecycle, which is
+        // the mental model this story exists to correct.
+        `Implemented — CI decides when these become reviewable (${landed.length}):`,
+        ...landed.map((r) => `  ${r.key} on ${r.sessionBranch ?? '(no branch recorded)'}`),
       ].join('\n'),
     );
   }

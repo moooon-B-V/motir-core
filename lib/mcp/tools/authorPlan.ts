@@ -211,6 +211,84 @@ const proposedFieldsSchema = z
   })
   .describe('The proposed item’s fields. Required on an `add`, ignored otherwise.');
 
+/**
+ * The `modify` patch — the keys `PlanItemPatch` (`lib/dto/plans.ts`) declares,
+ * named here rather than left to an opaque record (MOTIR-3111).
+ *
+ * This used to be `z.record(z.string(), z.unknown())`, which accepted everything
+ * and DOCUMENTED nothing: an agent reading the tool could not tell that a patch
+ * may carry a body at all, let alone which one. That mattered the moment the
+ * runbook's REPLAN ACTION started routing through this door — it mandates
+ * rewriting the survivor's `explanationMd`, and the only listing of what a patch
+ * can hold was a sentence saying "the sparse patch".
+ *
+ * `.passthrough()` is load-bearing, not tidiness: an unrecognised key is passed
+ * to the service UNCHANGED rather than stripped, so this schema can never become
+ * the reason a field the service already understands stops arriving. Every key
+ * below is typed no more narrowly than the boundary the service already enforces
+ * (`validateStoryPoints` / `validateEstimateMinutes` reject a non-number today),
+ * so nothing that used to reach `applyModify` is turned away here.
+ */
+const patchSchema = z
+  .object({
+    title: z.string().optional().describe('Re-title the target.'),
+    descriptionMd: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Markdown body — WHAT to do. An explicit `null` clears it.'),
+    explanationMd: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'Markdown body — WHY it matters. An explicit `null` clears it. Patch it whenever a ' +
+          're-scope moves the card’s rationale: a survivor keeps its OLD explanation unless you ' +
+          'rewrite it, and a stale WHY is worse than a null one.',
+      ),
+    priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']).nullable().optional(),
+    type: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Leaf work type (code / design / test / decision / manual / …).'),
+    storyPoints: z
+      .number()
+      .nullable()
+      .optional()
+      .describe('Re-scope the agile sizing. An explicit `null` clears it.'),
+    estimateMinutes: z
+      .number()
+      .int()
+      .nullable()
+      .optional()
+      .describe('Re-scope the time estimate. An explicit `null` clears it.'),
+    targetRepo: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('RE-PIN which repo the item ships in. An explicit `null` unpins it.'),
+    targetRepoRole: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('RE-PIN the portable repo role. An explicit `null` unpins it.'),
+    blockedByAdd: z
+      .array(z.string())
+      .optional()
+      .describe('Dependency edges to ADD — real work-item ids or `planItem:<id>` refs.'),
+    blockedByRemove: z
+      .array(z.string())
+      .optional()
+      .describe('Dependency edges to REMOVE — real work-item ids or `planItem:<id>` refs.'),
+  })
+  .passthrough()
+  .describe(
+    '`modify` only: the SPARSE patch to apply to the target at approve. A key you omit is left ' +
+      'untouched; an explicit `null` CLEARS a nullable field. Nothing is applied until someone ' +
+      'approves the plan in Motir.',
+  );
+
 const proposalSchema = z.object({
   op: z.enum(['add', 'modify', 'remove']).describe('add a new item, modify one, or remove one.'),
   workItemId: z
@@ -218,10 +296,7 @@ const proposalSchema = z.object({
     .optional()
     .describe('`modify` / `remove` only: the existing target work item’s id.'),
   proposedFields: proposedFieldsSchema.optional(),
-  patch: z
-    .record(z.string(), z.unknown())
-    .optional()
-    .describe('`modify` only: the sparse patch to apply to the target at approve.'),
+  patch: patchSchema.optional(),
   parentRef: z
     .string()
     .optional()

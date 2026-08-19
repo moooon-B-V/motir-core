@@ -380,7 +380,7 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
     await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
     // Move to In Review so the merge's Done transition is workflow-legal.
     await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
-    await workItemsService.updateStatus(item.id, 'in_review', s.ctx);
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
 
     await githubWebhookService.handleEvent(
       'pull_request',

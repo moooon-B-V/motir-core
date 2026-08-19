@@ -325,6 +325,46 @@ you.
 
 ---
 
+## The status lifecycle — who moves the card, and when
+
+A card walks five hops from picked-up to closed, and **three different actors
+move it**. Two of them are not you and one of them is not even a process you can
+see, which is the single most surprising thing about the loop the first time you
+watch it.
+
+| hop                                   | who does it                                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `todo → in_progress`                  | **the run**, when it claims the card                                                         |
+| `in_progress → implemented`           | **the agent, or the CLI** — once the work is committed, PUSHED, and its pull request is open |
+| `implemented → in_review`             | **the webhook, when CI goes green.** Nobody at a terminal                                    |
+| `in_review → done`                    | **a human**, by merging                                                                      |
+| a session-branch pull request merging | **the merge** — it closes EVERY card that branch carries                                     |
+
+**Implemented means the code is on the remote.** It is not "the agent stopped
+typing": the CLI records it only after checking that the work actually reached
+origin, so a card at Implemented is one whose branch you can go and look at. If
+an agent exits 0 having pushed nothing, the card stays **In Progress** and the run
+says so — which is what an interrupted run really is.
+
+**The third hop happens after your terminal has exited.** The promotion runs
+server-side, when Motir receives the check results for the pushed commit — often
+a minute or two after `motir next` has returned and your shell prompt is back.
+There is nothing to wait for locally, and nothing has gone wrong: In Review means
+"a human should look at this", so only a green build is entitled to say it.
+
+**A red build leaves the card at Implemented**, and the CI comment on the card
+names the check that failed. Push a fix to the same branch — when the checks go
+green, the card promotes itself. You never move it by hand, and moving it by hand
+is the one thing that defeats the gate.
+
+**One merge closes the whole run.** A `motir auto` run puts every card on one
+session branch and opens one pull request; merging it closes **every** card that
+branch carries, not just one. `motir done --session <branch>` still exists and
+still works — it is now the manual fallback for a run whose pull request was
+never opened, rather than the step you have to remember.
+
+---
+
 ## Command reference
 
 Every command and flag the binary registers. `motir`, `motir help`, and
@@ -870,13 +910,17 @@ dirty working tree is safe. Creation is idempotent: a re-run finds the branch
 present and reuses it rather than rewinding the commits already on it.
 
 **Statuses run ahead of `main`, deliberately.** An integrated item is recorded
-with `mark_integrated` and moves to **In Review** — never Done. In Review is the
-honest status: the work exists on the session branch, `main` does not have it,
-and a human has not looked at it. That same recording is what makes the item's
+with `mark_integrated` and moves to **Implemented** — never Done, and not yet In
+Review either. Implemented is the honest status: the work exists on the session
+branch, `main` does not have it, CI has not spoken for it, and a human has not
+looked at it. When the branch's checks go green the webhook moves the whole
+branch's cards on to In Review (see
+[The status lifecycle](#the-status-lifecycle--who-moves-the-card-and-when)). That same recording is what makes the item's
 dependents ready _mid-run_, which is how the loop cascades through the
 dependency graph instead of stopping at whatever happened to be ready at second
-zero. So between the run ending and your merge, the tenant shows a set of In
-Review items whose code is not on `main`. That is the design, not drift.
+zero. So between the run ending and your merge, the tenant shows a set of Implemented
+items (In Review once the build is green) whose code is not on `main`. That is
+the design, not drift.
 
 **Nothing reaches Done without you.** The session branch carries no `MOTIR-<n>`
 key in its name or its pull-request title — on purpose. Motir's status webhook
@@ -898,9 +942,9 @@ Because the shipped close-out is a human's. `motir auto` runs entirely in
 `workflowMode: 'session_lineage'`
 ([`packages/cli/src/commands/dispatch.ts`](../packages/cli/src/commands/dispatch.ts),
 the `deliver()` branch that calls `mark_integrated` instead of transitioning
-straight to In Review, and the `motir done --session` close-out below it). In
-that mode the item's _best_ outcome — agent exited 0, work integrated, branch
-pushed — is **In Review**. There is no code path anywhere in the CLI that merges
+directly, and the merge close-out below it). In that mode the item's _best_
+outcome — agent exited 0, work integrated, branch pushed — is **Implemented**,
+and In Review only once CI agrees. There is no code path anywhere in the CLI that merges
 a pull request, advances `main`, or moves an item to Done on its own: the only
 `done` write in the tool is the one you type. The prompt agrees with the CLI —
 the session-lineage GIT WORKFLOW tells the agent to integrate into the session
@@ -916,10 +960,11 @@ decision; there is no separate ADR for it.
 If you don't want what a run produced, **don't run `motir done --session`** —
 that is the only thing that would move those items to Done.
 
-- The items stay **In Review** and the summary names every one with its branch,
-  so nothing is lost track of.
+- The items stay **Implemented** (or In Review, if the build went green) and the
+  summary names every one with its branch, so nothing is lost track of.
 - To redo one, `motir run <key>` re-dispatches it: the CLI moves it back to In
-  Progress (a legal edge from In Review) and fetches a fresh prompt.
+  Progress (a legal edge from both Implemented and In Review) and fetches a fresh
+  prompt.
 - To abandon the run, close the pull request and delete the branch on origin.
   Moving the items _backwards_ in the workflow is a web-app (or direct API)
   action — the CLI's only status writes are the dispatch
@@ -973,7 +1018,8 @@ motir done --session <branch>          # a merged session pull request (auto)
 
 Since MOTIR-1625 the default workflow carries a **direct `in_progress → done`
 edge** — review is optional, not mandatory. So `motir done` is a single legal hop
-both for an item the CLI watched finish (already In Review) and for one
+both for an item the CLI watched finish (already Implemented, or In Review once
+CI passed) and for one
 dispatched with `--print`, where Motir never observed an agent finish and the
 item is still In Progress.
 

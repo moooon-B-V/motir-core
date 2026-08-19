@@ -1190,7 +1190,7 @@ describe('single dispatch — motir next / run / done', () => {
     expect(next.stderr).toContain('No ready work items');
   });
 
-  it('`next --agent` on a successful agent lands the item In Review', async () => {
+  it('`next --agent` on a successful agent lands the item Implemented', async () => {
     const { fx } = await linkedProject();
     const agent = writeFakeAgent(join(ws.root, '.agent'));
     const item = await leaf(fx, 'Agent runs this', { type: 'code' });
@@ -1198,7 +1198,9 @@ describe('single dispatch — motir next / run / done', () => {
     const next = await ws.run(['next', '--agent', agent.command]);
 
     expect(next.exitCode).toBe(0);
-    expect((await stateOf(fx, item.id)).status).toBe('in_review');
+    // Implemented, not In Review, since MOTIR-2999: a finished agent has pushed
+    // its work, and only a green build makes the card reviewable.
+    expect((await stateOf(fx, item.id)).status).toBe('implemented');
     // BYOK's delivery contract: the prompt reaches the agent on BOTH channels.
     const [invocation] = agent.invocations();
     expect(invocation?.stdin).toContain(item.identifier);
@@ -1400,8 +1402,10 @@ describe('motir auto — the session-branch run', () => {
     const stateB = await stateOf(fx, b.id);
     const branch = stateA.sessionBranch;
     expect(branch).toMatch(/^motir\/auto-\d{8}-\d{6}$/);
-    expect(stateA.status).toBe('in_review');
-    expect(stateB.status).toBe('in_review');
+    // Both land at Implemented — the run's own report. The branch's build is
+    // what moves them on to In Review (MOTIR-2999), and no check has run here.
+    expect(stateA.status).toBe('implemented');
+    expect(stateB.status).toBe('implemented');
     // B INHERITED the lineage: the server, not the CLI, put it on A's branch.
     expect(stateB.sessionBranch).toBe(branch);
     expect(invocations[1]?.stdin).toContain(`Integrate the commit into ${branch}`);
@@ -1416,7 +1420,10 @@ describe('motir auto — the session-branch run', () => {
     // The close-out instruction, and the honest answer if the PR is REJECTED.
     expect(prs[0]?.body).toContain(`motir done --session ${branch}`);
     expect(prs[0]?.body).toContain('rejected');
-    expect(auto.stderr).toContain('In Review — awaiting your merge (2)');
+    // The run's summary says what it actually did — built and pushed — and names
+    // CI as what makes the cards reviewable (MOTIR-3004/3006). "Awaiting your
+    // merge" would tell the operator the lifecycle is finished when it is not.
+    expect(auto.stderr).toContain('Implemented — CI decides when these become reviewable (2)');
 
     // NO AUTO-MERGE: the branch exists on origin, `main` is exactly where it was,
     // and `gh pr merge` was never even attempted.

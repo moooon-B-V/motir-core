@@ -439,7 +439,9 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
       ].join('\n');
     }
     return [
-      `${key}: agent finished — integrated on "${dispatch.sessionBranch}" (now In Review).`,
+      `${key}: agent finished — integrated on "${dispatch.sessionBranch}" (now Implemented).`,
+      'CI decides when it becomes reviewable: the card moves to In Review on its own',
+      'when the checks on that branch go green.',
       `Next: review + merge the session PR, then \`motir done --session ${dispatch.sessionBranch}\`.`,
     ].join('\n');
   }
@@ -473,8 +475,33 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
     return lines.join('\n');
   }
   return [
-    `${key}: agent finished — its pull request should be open (now In Review).`,
+    `${key}: agent finished — its pull request is open (now Implemented).`,
+    'CI decides when it becomes reviewable: the card moves to In Review on its own',
+    'when the checks on that pull request go green.',
     `Next: review + merge the PR, then \`motir done ${key}\`.`,
+  ].join('\n');
+}
+
+/**
+ * The agent exited 0 but NOTHING for this card reached the remote (MOTIR-3004).
+ *
+ * `implemented` is a claim that the code is pushed, so this run cannot make it —
+ * and the honest failure is to say so and leave the card in progress rather than
+ * to record a card whose work exists only in a worktree that is about to be
+ * deleted. The item is excluded from the next pick for the same reason a failed
+ * agent's is: re-picking it in the same session would just repeat the run.
+ */
+export function renderNothingPushed(key: string, dispatch: DispatchPrompt): string {
+  const where =
+    dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch
+      ? `no commit naming ${key} is on origin/${dispatch.sessionBranch}`
+      : `no branch naming ${key} is on the remote`;
+  return [
+    `${key}: agent exited 0, but ${where}.`,
+    'The card stays In Progress: Implemented means the code is PUSHED, and this run',
+    'cannot claim that. Nothing was reverted — check the worktree for uncommitted or',
+    'unpushed work.',
+    `It is excluded from the next \`motir next\` in this session; re-run it with \`motir run ${key}\`.`,
   ].join('\n');
 }
 

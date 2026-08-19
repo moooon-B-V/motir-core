@@ -10,10 +10,12 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
+import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
 import {
   checkBootstrapCheckout,
   renderAgentFailure,
   renderAgentSuccess,
+  renderNothingPushed,
   renderDispatchAdvisories,
   renderDispatchSummary,
   renderResumeNotice,
@@ -47,6 +49,9 @@ import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
  *  (lib/workflows/defaultWorkflow.ts); a project on a custom workflow surfaces
  *  the server's own allowed-targets error, which is the honest failure. */
 const IN_PROGRESS = 'in_progress';
+/** Where a FINISHED run leaves the card (MOTIR-3003 / MOTIR-3004): built, pushed,
+ *  pull request open, CI not yet green. In Review is written by CI, never here. */
+const IMPLEMENTED = 'implemented';
 const IN_REVIEW = 'in_review';
 const DONE = 'done';
 /** The status a re-planned card sits at (MOTIR-2425) — in the in-progress
@@ -78,6 +83,18 @@ export interface DeliveryOptions {
   agent?: string;
   /** `--print` — print the prompt and stop (the default when no agent). */
   print?: boolean;
+}
+
+/**
+ * Injectable seams; never overridden in production — and deliberately NOT on
+ * `DeliveryOptions`, which is the FLAG surface (`optionRegistrationAudit` holds
+ * every field there to a registered option). `motir auto` and `motir batch` take
+ * their seams the same way.
+ */
+export interface DeliveryDeps {
+  /** The git runner the push check (MOTIR-3004) asks, so a test can script "the
+   *  agent pushed" / "the agent pushed nothing" without a real remote. */
+  run?: CommandRunner;
 }
 
 /**
@@ -145,6 +162,7 @@ interface DeliverInput {
   title: string | null;
   dispatch: DispatchPrompt;
   opts: DeliveryOptions;
+  deps: DeliveryDeps;
 }
 
 /**
@@ -153,7 +171,7 @@ interface DeliverInput {
  * never drift.
  */
 async function deliver(input: DeliverInput): Promise<void> {
-  const { session, key, title, dispatch, opts } = input;
+  const { session, key, title, dispatch, opts, deps } = input;
   const { client, link, serverUrl, projectKey } = session;
 
   const agent = resolveAgent(opts);
@@ -223,10 +241,26 @@ async function deliver(input: DeliverInput): Promise<void> {
     return;
   }
 
-  // Exit 0 means the agent completed the prompt's GIT WORKFLOW section, whose
-  // last step is opening the PR / integrating the branch. Both modes therefore
-  // land the item at In Review — the "PR created" step of the documented status
-  // lifecycle.
+  // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004). `implemented` says the code is on the
+  // remote and the pull request is open — a claim this run can only make by
+  // checking. An agent that exits 0 having pushed nothing leaves a card asserting
+  // built work that exists only in a worktree the run is about to delete, so the
+  // recording is refused and the card stays In Progress, which is what an
+  // interrupted run actually looks like.
+  if (
+    workReachedRemote(target.cwd, key, dispatch.sessionBranch, deps.run ?? execCommand) ===
+    'nothing'
+  ) {
+    addExclude(serverUrl, projectKey, { key });
+    info('');
+    info(renderNothingPushed(key, dispatch));
+    return;
+  }
+
+  // Exit 0 AND the work is on the remote: the agent completed the prompt's GIT
+  // WORKFLOW section, whose last step is opening the PR / integrating the
+  // branch. Both modes therefore land the item at IMPLEMENTED — built, pushed,
+  // and waiting on CI, which is the step of the lifecycle this run can vouch for.
   if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
     await client.markIntegrated({
       key,
@@ -238,7 +272,7 @@ async function deliver(input: DeliverInput): Promise<void> {
       implementationModel: result.model,
     });
   } else {
-    await client.transitionStatus({ key, status: IN_REVIEW });
+    await client.transitionStatus({ key, status: IMPLEMENTED });
   }
   removeExclude(serverUrl, projectKey, key);
 
@@ -270,7 +304,7 @@ export interface NextOptions extends DeliveryOptions {
   reset?: boolean;
 }
 
-export async function nextCommand(opts: NextOptions): Promise<void> {
+export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): Promise<void> {
   const kinds = parseKinds(opts.kinds);
   await withProjectSession(async (session) => {
     const { client, serverUrl, projectKey } = session;
@@ -302,6 +336,7 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       title: item.title,
       dispatch,
       opts,
+      deps,
     });
   });
 }
@@ -403,7 +438,11 @@ export function notReadyError(detail: {
   });
 }
 
-export async function runCommand(key: string, opts: RunOptions): Promise<void> {
+export async function runCommand(
+  key: string,
+  opts: RunOptions,
+  deps: DeliveryDeps = {},
+): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
@@ -440,6 +479,7 @@ export async function runCommand(key: string, opts: RunOptions): Promise<void> {
       title: item.title,
       dispatch,
       opts,
+      deps,
     });
   });
 }

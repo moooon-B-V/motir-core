@@ -215,11 +215,26 @@ describe('the backfill onto a project that predates the status', () => {
     expect(planning?.category).toBe('in_progress');
     // It sorts between in_progress and in_review, as it does in the seed — the
     // position is opaque, the ORDER is the claim.
+    //
+    // ⚠️ The claim is exactly that pair of neighbours, NOT equality with the
+    // whole modern `DEFAULT_STATUSES` order (MOTIR-3003). This scenario strips a
+    // status from a project that was seeded by TODAY's constant and re-runs an
+    // OLD migration against it, which is not a shape production can be in:
+    // migrations run in filename order, so `planning` (20260807220000) is always
+    // inserted before `implemented` (20260819090000) exists. Re-inserted
+    // afterwards it takes `in_progress.position || 'V'`, which lands it before
+    // the seed's `implemented` at 'a3' — a synthetic ordering, and one that says
+    // nothing about this migration's correctness.
     const ordered = await adminDb.workflowStatus.findMany({
       where: { projectId: fx.projectId },
       orderBy: { position: 'asc' },
     });
-    expect(ordered.map((s) => s.key)).toEqual(DEFAULT_STATUSES.map((s) => s.key));
+    const keys = ordered.map((s) => s.key);
+    expect(keys.indexOf('planning')).toBeGreaterThan(keys.indexOf('in_progress'));
+    expect(keys.indexOf('planning')).toBeLessThan(keys.indexOf('in_review'));
+    // Every default status is present and each appears once — the part of the
+    // old assertion that was about this migration.
+    expect([...keys].sort()).toEqual([...DEFAULT_STATUSES.map((s) => s.key)].sort());
   });
 
   it('is IDEMPOTENT — running it twice changes nothing', async () => {

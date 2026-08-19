@@ -174,6 +174,43 @@ export interface SimilarWorkItemsResponse {
   coverage: { embedded: number; total: number };
 }
 
+// The MCP semantic-search response (Story MOTIR-3098 · Subtask MOTIR-3101, per
+// `docs/decisions/plan-tree-embeddings.md` Amendment 2) — the SAME ranking as
+// `SimilarWorkItemsResponse`, reached from TEXT instead of a vector, plus the
+// one field that keeps its failure modes apart.
+//
+// ⚠️ `outcome` EXISTS BECAUSE AN EMPTY ARRAY MEANS THREE DIFFERENT THINGS, and
+// an agent that reads the wrong one re-creates the very defect this story was
+// written to remove (MOTIR-3079: a capability rebuilt because the search that
+// should have found it could not). `coverage` already separates two of them and
+// requires arithmetic; embedding the query from text adds a third that coverage
+// cannot express at all, because when the query cannot be embedded the search
+// never ran. So the discriminator is COMPUTED SERVER-SIDE and travels beside the
+// raw numbers rather than instead of them:
+//
+//   'ranked'          — candidates found.
+//   'nothing-similar' — the project IS indexed and nothing is close. An answer.
+//   'not-indexed'     — the project has no vectors for this model. NOT evidence
+//                       that nothing exists.
+//   'unavailable'     — the query could not be embedded (no AI backend, or it is
+//                       unreachable). The search DID NOT HAPPEN.
+//
+// `coverage` is null on `unavailable` for the same reason: nothing was counted,
+// and reporting `{ embedded: 0, total: 0 }` there would be indistinguishable from
+// a degraded read of a real project.
+export type SemanticSearchOutcome = 'ranked' | 'nothing-similar' | 'not-indexed' | 'unavailable';
+
+export interface SemanticSearchResponse {
+  outcome: SemanticSearchOutcome;
+  results: SimilarWorkItemRow[];
+  /** The model the ranking ran in; null when nothing was embedded or ranked. */
+  model: string | null;
+  coverage: { embedded: number; total: number } | null;
+  /** A readable sentence for the human half of the dual content — what state this
+   *  is and, on the two non-answers, what to do instead. */
+  message: string;
+}
+
 // One applied operation's result — the resolved key + id core assigned.
 export interface PlanDeltaAppliedEntry {
   op: 'create' | 'update';

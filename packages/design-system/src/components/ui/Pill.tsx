@@ -6,7 +6,10 @@ import { cn } from '../../utils/cn';
  * Pill — compact status or severity label. Pure span, no interaction.
  *
  * Variant axes (use exactly one):
- *  - `status`: planned | in-progress | done — Motir's Subtask lifecycle states.
+ *  - `status`: planned | in-progress | implemented | done — Motir's Subtask
+ *    lifecycle states. The first three are per-CATEGORY tones; `implemented` is
+ *    the one PER-STATUS tone (MOTIR-3103), because it shares a category with
+ *    In Progress / Planning / In Review and must not share their chip.
  *  - `severity`: info | success | warning | danger — semantic UI states.
  *  - `priority`: highest | high | medium | low | lowest — work-item priority, a
  *    5-step diverging ramp (`--el-priority-*` hue tinted over the surface, plus a
@@ -51,6 +54,21 @@ const pillVariants = cva(
       status: {
         planned: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
         'in-progress': 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
+        // BUILT, waiting on checks (MOTIR-3103). The first PER-STATUS tone on
+        // this axis — the other three are per-CATEGORY, and `implemented` sits in
+        // the same `in_progress` category as In Progress, Planning and In Review,
+        // so without its own tone four statuses render one chip.
+        //
+        // It uses the recipe theme.css's own `--el-status-*` header prescribes —
+        // "a status CHIP bg = color-mix(var(--el-status-X) 14%, var(--el-surface))
+        // with --el-text-strong" — which is the same dilution the `priority`
+        // variant below already renders. The hue is not spent by any other
+        // status in any palette (measured at ΔE2000 >= 10 across all ten by
+        // tests/theme/statusHueSeparation.test.ts), and the chip additionally
+        // carries a GLYPH, because a 14% tint is a subtle mark by construction
+        // and finding #35 forbids resting a state on colour alone.
+        implemented:
+          'bg-[color-mix(in_srgb,var(--el-status-implemented)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
         done: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
       },
       severity: {

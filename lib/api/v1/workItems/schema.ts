@@ -990,6 +990,64 @@ export function presentComment(source: CommentSource): V1Comment {
   };
 }
 
+/**
+ * One attachment on the wire (Story MOTIR-3000 · Subtask MOTIR-3057).
+ *
+ * A deliberately SMALLER projection than the panel's `AttachmentDTO`. Three
+ * fields are dropped and each for its own reason: `isImage` / `isPdf` are a
+ * PRESENTATION split the panel derives so its lightbox need not re-derive it —
+ * a public client has `mimeType` and can decide for itself, and shipping our
+ * preview taxonomy would freeze it as contract; and `uploader.image` is an
+ * avatar URL, which the comment presenter deliberately withholds too
+ * (ADR Amendment 10 Q1 embeds a minimal actor, never a user resource).
+ *
+ * `contentPath` is named for what it IS, unlike the panel DTO's historical
+ * `blobUrl`, which has carried a content PATH rather than a blob URL since
+ * MOTIR-1667. A new contract does not inherit an old field's misnomer.
+ */
+export const attachmentSchema = z.object({
+  id: z.string(),
+  workItemKey: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int(),
+  source: z.enum(['editor', 'panel', 'api']),
+  contentPath: z.string(),
+  uploader: z.object({ id: z.string(), name: z.string() }),
+  createdAt: z.string(),
+});
+export type V1Attachment = z.infer<typeof attachmentSchema>;
+
+/** What {@link presentAttachment} reads — the shipped `AttachmentDTO` fields it maps. */
+export interface AttachmentSource {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  source: 'editor' | 'panel' | 'api';
+  blobUrl: string;
+  uploader: { id: string; name: string };
+  createdAt: string;
+}
+
+/** Map one attachment to the wire, field by field — never a spread. */
+export function presentAttachment(source: AttachmentSource, workItemKey: string): V1Attachment {
+  return {
+    id: source.id,
+    // The KEY, not the internal id: v1 addresses work items by `MOTIR-<n>`
+    // everywhere, and a response that answered with a cuid would hand a client
+    // an identifier no other v1 route accepts.
+    workItemKey,
+    filename: source.filename,
+    mimeType: source.mimeType,
+    sizeBytes: source.sizeBytes,
+    source: source.source,
+    contentPath: source.blobUrl,
+    uploader: { id: source.uploader.id, name: source.uploader.name },
+    createdAt: source.createdAt,
+  };
+}
+
 /** Map a root comment and its replies. */
 export function presentCommentThread(
   source: CommentSource & { replies: CommentSource[] },

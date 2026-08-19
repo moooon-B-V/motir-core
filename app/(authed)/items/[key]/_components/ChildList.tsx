@@ -1,9 +1,10 @@
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
-import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { RelationshipPeekLink } from './RelationshipPeekLink';
-import { Pill, type PillProps } from '@/components/ui/Pill';
+import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // The child list on the issue detail page (Story 2.4 · Subtask 2.4.3): the
 // item's DIRECT children (one level — the `getIssueDetail` bundle's `children`,
@@ -39,11 +40,10 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // keys. Assignee resolves against the workspace members the page already loaded
 // (the summary carries `assigneeId` only); unassigned children show no avatar.
 
-const STATUS_TONE: Record<StatusCategoryDto, NonNullable<PillProps['status']>> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status chip's tone + glyph live in `components/issues/StatusPill`
+// (MOTIR-3103). This file used to keep its own copy of the category map —
+// one of five — which is how `implemented` could share a chip with three
+// other statuses in every one of them at once.
 
 // Initial-letter avatar — matches the detail rail's assignee chip
 // (CoreFieldsPanel). Presentational; the row's accessible name carries identity.
@@ -88,7 +88,11 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
                 {child.title}
               </span>
               {statusMeta ? (
-                <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
+                <StatusPill
+                  statusKey={statusMeta.key}
+                  category={statusMeta.category}
+                  label={statusMeta.label}
+                />
               ) : (
                 <Pill tone="neutral">{child.status}</Pill>
               )}
