@@ -3,9 +3,11 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
 import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
-import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
+import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
+import { resolveDispatchRepo } from '@/lib/workItems/targetRepo';
+import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -45,6 +47,58 @@ async function resolveBlockerKeys(workItemId: string, workspaceId: string): Prom
     .slice()
     .sort((a, b) => a.key - b.key)
     .map((r) => r.identifier);
+}
+
+/**
+ * EVERY repository the item ships in, as the dispatch payload's ordered element
+ * list (Story MOTIR-2731 · MOTIR-3131 · ADR § *Amendment 2026-08-19* §B1).
+ *
+ * Composed rather than derived a second time, which is the whole point:
+ *
+ * - the NAMES and the per-repository DELIVERY state come from
+ *   `workItemsService.listRepoDelivery`, the shared classifier the completion
+ *   gate and the item-detail panel already answer from (and which resolves the
+ *   set through the item's REFERENCES, so a repository renamed on the host is
+ *   named correctly here — `lib/workItems/expectedRepos.ts`);
+ * - the COORDINATES come from `resolveDispatchRepo` against the project's
+ *   domain, the same function that produced the scalar `targetRepo` pair.
+ *
+ * ⚠️ It therefore THROWS `ArchivedTargetRepoError` for an archived repository
+ * ANYWHERE in the set, not only for the primary. A read-only repository can
+ * accept no branch and no pull request, so a card carrying one is undispatchable
+ * rather than degraded — and a non-primary archived repository is the worse of
+ * the two, because the run otherwise appears to succeed while the completion
+ * gate holds the card forever on work that can never merge.
+ *
+ * The `primary` argument is the resolved scalar. When the item carries no
+ * repository of its own but the project has exactly one — `resolveDispatchRepo`'s
+ * second rung — the set is that one repository with a `null` delivery state, so
+ * `targetRepos[0]?.name ?? null === targetRepo` stays total.
+ */
+async function resolveDispatchRepos(
+  delivery: readonly RepoDelivery[],
+  projectId: string,
+  primary: { name: string; cloneUrl: string | null; defaultBranch: string | null } | null,
+  ctx: ServiceContext,
+): Promise<DispatchRepoDto[]> {
+  if (delivery.length === 0) {
+    // No set of its own. Either Motir cannot say where this ships at all (`[]`),
+    // or the project's single repository answered for it — carry that one so the
+    // scalar stays a projection of this array.
+    return primary === null ? [] : [{ ...primary, delivery: null }];
+  }
+  const domain = await listDispatchRepoNames(projectId, ctx);
+  return delivery.map((d) => {
+    // A NAME is a pin as far as this resolver is concerned, so it never returns
+    // null here — and it is the throw site for the archived refusal above.
+    const resolved = resolveDispatchRepo(d.repo, domain);
+    return {
+      name: resolved?.name ?? d.repo,
+      cloneUrl: resolved?.cloneUrl ?? null,
+      defaultBranch: resolved?.defaultBranch ?? null,
+      delivery: d.state,
+    };
+  });
 }
 
 export interface DispatchPromptOptions {
@@ -99,25 +153,35 @@ export const dispatchPromptService = {
 
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // The access gate (`getWorkItemByIdentifier`) is awaited above, and none
-    // of these five arms has a refusal path — `resolveDispatchRepoForItem`
-    // returns `null` for an unresolvable repo instead of throwing.
-    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories] = await Promise.all([
-      item.parentId
-        ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-            workItemRepository.findById(item.parentId as string, tx),
-          )
-        : Promise.resolve(null),
-      resolveBlockerKeys(item.id, ctx.workspaceId),
-      workItemsService.getReadiness(item.id, ctx),
-      resolveDispatchRepoForItem({ id: item.id, targetRepo: item.targetRepo, projectId }, ctx),
-      // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
-      // above, not a second pass, and deliberately independent of `readiness`:
-      // nothing below consults it when deciding the workflow variant, so the
-      // prompt an item gets is the same prompt whether or not it has one.
-      buildDispatchProseAdvisories(item, ctx),
-    ]);
+    // of these six arms has a refusal path — `resolveDispatchRepoForItem`
+    // returns `null` for an unresolvable repo instead of throwing, and
+    // `listRepoDelivery` classifies rather than refuses. (The archived refusal
+    // over the whole SET is raised AFTER this settles, in
+    // `resolveDispatchRepos`, so no arm is ever abandoned mid-flight.)
+    const [parentRow, blockerKeys, readiness, dispatchRepo, advisories, repoDelivery] =
+      await Promise.all([
+        item.parentId
+          ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              workItemRepository.findById(item.parentId as string, tx),
+            )
+          : Promise.resolve(null),
+        resolveBlockerKeys(item.id, ctx.workspaceId),
+        workItemsService.getReadiness(item.id, ctx),
+        resolveDispatchRepoForItem({ id: item.id, targetRepo: item.targetRepo, projectId }, ctx),
+        // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads
+        // above, not a second pass, and deliberately independent of `readiness`:
+        // nothing below consults it when deciding the workflow variant, so the
+        // prompt an item gets is the same prompt whether or not it has one.
+        buildDispatchProseAdvisories(item, ctx),
+        // The per-repository DELIVERY state (MOTIR-3131) — a sixth peer read with
+        // no refusal path of its own, and the source `targetRepos` is built from.
+        // It resolves the set through the item's REFERENCES, so it is also what
+        // makes the array survive a repository rename on the host.
+        workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
+      ]);
 
     const targetRepo = dispatchRepo?.name ?? null;
+    const targetRepos = await resolveDispatchRepos(repoDelivery, projectId, dispatchRepo, ctx);
     const assembled = assembleDispatchPrompt({
       key: item.identifier,
       title: item.title,
@@ -158,6 +222,9 @@ export const dispatchPromptService = {
       // either surface handles one shape.
       targetRepoCloneUrl: dispatchRepo?.cloneUrl ?? null,
       targetRepoDefaultBranch: dispatchRepo?.defaultBranch ?? null,
+      // The WHOLE set, ordered with the primary first — of which the three
+      // scalars above are the projection (MOTIR-3131).
+      targetRepos,
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
       // Handed over SEPARATELY as well as rendered into the prompt: the prompt

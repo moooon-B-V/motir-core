@@ -9,6 +9,7 @@
 // product, and the single place the Epic-9 enrichment injections will land.
 
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
+import type { RepoDeliveryState } from '@/lib/workItems/repoDelivery';
 
 /**
  * WHICH git workflow the prompt's `GIT WORKFLOW` section instructs — chosen
@@ -23,6 +24,42 @@ import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
  *   back into that branch and is reported with `mark_integrated`.
  */
 export type DispatchWorkflowMode = 'per_item_pr' | 'session_lineage';
+
+/**
+ * ONE repository of the item's dispatch set (Story MOTIR-2731 · MOTIR-3131) —
+ * everything a launcher needs to resolve a checkout for it and to say what has
+ * already shipped there, without a second request and without a second
+ * resolution of its own.
+ *
+ * The element is the SAME answer {@link DispatchPromptDto.targetRepo} and its
+ * two coordinate fields carry for the primary, computed by the same
+ * `resolveDispatchRepo` — a client that resolved a repository itself could
+ * disagree with the completion gate about where a card ships, which is the
+ * defect `lib/workItems/repoDelivery.ts` exists to prevent one level down.
+ */
+export interface DispatchRepoDto {
+  /** The bare repository NAME the CLI keys `<root>/<name>` on. */
+  name: string;
+  /** Its HTTPS clone URL, or `null` when Motir does not know one — never guessed. */
+  cloneUrl: string | null;
+  /** Its default branch, or `null` when Motir does not know it — never defaulted to `"main"`. */
+  defaultBranch: string | null;
+  /**
+   * What this repository has to show for itself
+   * ({@link RepoDeliveryState} — `delivered` / `awaiting` / `unknown` /
+   * `unestablished` / `excluded`), from the shared classifier
+   * `workItemsService.listRepoDelivery` that the completion gate and the item
+   * detail panel both answer from.
+   *
+   * **`null` means the repository is NOT on the card's own set** — the one case
+   * that arises is an UNPINNED card in a project with exactly one repository,
+   * where `resolveDispatchRepo`'s second rung answers with that repository so
+   * the dispatch has somewhere to run. The completion gate does not hold such a
+   * card on it, so it has no delivery state to report, and saying `awaiting`
+   * would be a lie of precision.
+   */
+  delivery: RepoDeliveryState | null;
+}
 
 /**
  * The `dispatch_prompt` payload: the assembled prompt plus the facts the CLI
@@ -73,6 +110,31 @@ export interface DispatchPromptDto {
    *  never defaulted to `"main"` (a guessed branch is a guessed repo's sibling
    *  error). Mirrors `ReadyItemDispatchDto.targetRepoDefaultBranch`. */
   targetRepoDefaultBranch: string | null;
+  /**
+   * EVERY repository this item ships in (Story MOTIR-2731 · MOTIR-3131) —
+   * ordered, the PRIMARY first, each element carrying its coordinates and its
+   * delivery state. **Always present**, `[]` when Motir cannot say where the
+   * item ships at all.
+   *
+   * ⚠️ The scalar is a PROJECTION of this array and never independently
+   * writable state — the dispatch shape's form of ADR
+   * `work-item-repository-set.md` §3.1's rule:
+   *
+   * ```
+   * targetRepos[0]?.name ?? null === targetRepo
+   * ```
+   *
+   * That holds for every item, including the unpinned card whose repository is
+   * resolved from its project's single one: the array then carries that one
+   * element, with a `null` {@link DispatchRepoDto.delivery} because the card
+   * does not carry the repository (see that field).
+   *
+   * Additive under `public-api-conventions.md` §8, which is why the three
+   * scalars above keep their exact values rather than being replaced: a client
+   * that never learns about this array under-reports rather than mis-reports.
+   * See `work-item-repository-set.md` § *Amendment 2026-08-19* §B1.
+   */
+  targetRepos: DispatchRepoDto[];
   /**
    * Which `GIT WORKFLOW` variant the prompt carries — see
    * {@link DispatchWorkflowMode}. A MANUAL item (`type: manual` / `executor:
