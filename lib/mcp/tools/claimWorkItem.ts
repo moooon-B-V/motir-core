@@ -81,10 +81,7 @@ export async function runClaimWorkItem(
   }
 }
 
-export function registerClaimWorkItem(
-  server: McpServer,
-  resolveContext: McpContextResolver,
-): void {
+export function registerClaimWorkItem(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CLAIM_WORK_ITEM_TOOL_NAME,
     {

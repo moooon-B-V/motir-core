@@ -1,5 +1,9 @@
 import { z } from 'zod/v4';
-import { actorRefSchema, commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import {
+  actorRefSchema,
+  commentThreadSchema,
+  workItemKeySchema,
+} from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';

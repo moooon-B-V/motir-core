@@ -534,10 +534,10 @@ status flip, so do NOT call `transition_status` afterwards.
 different questions, and both go through the same service method as the v1
 route:
 
-| You are… | Use | Where it is served |
-| --- | --- | --- |
-| asking for whatever is next | `claim_next_ready` | MCP only |
-| handed a specific card by key | `claim_work_item` | MCP **and** `POST /api/v1/work-items/{key}/claim` |
+| You are…                      | Use                | Where it is served                                |
+| ----------------------------- | ------------------ | ------------------------------------------------- |
+| asking for whatever is next   | `claim_next_ready` | MCP only                                          |
+| handed a specific card by key | `claim_work_item`  | MCP **and** `POST /api/v1/work-items/{key}/claim` |
 
 `packages/cli` (`motir run` / `next` / `batch` / `auto`) speaks **v1**, not MCP —
 it retired its MCP transport in 11.5.6 — which is why the keyed claim's primary
@@ -550,8 +550,8 @@ dispatch of a card whose dependencies are unmet targets a card sitting at
 `blocked`, and keying on the literal `todo` would refuse exactly the case the
 force exists for.
 
-| Input | Type   | Required | Notes                                 |
-| ----- | ------ | -------- | ------------------------------------- |
+| Input | Type   | Required | Notes                                  |
+| ----- | ------ | -------- | -------------------------------------- |
 | `key` | string | yes      | Work item identifier, e.g. `"ACME-7"`. |
 
 **Output** — `structuredContent`: v1's `WorkItemClaim` resource —

@@ -119,6 +119,32 @@ describe('claimWorkItem — the happy path', () => {
     expect(claim.transitionedAt).not.toBeNull();
     expect(() => new Date(claim.transitionedAt as string).toISOString()).not.toThrow();
   });
+
+  it('writes ONLY `todo → in_progress` and `blocked → in_progress`, and nothing else', async () => {
+    // The claimable set is the to-do CATEGORY, and in the default workflow that
+    // category holds exactly two statuses — so those are the only two edges this
+    // op can ever write. Read off the revision trail rather than asserted from
+    // the code: a widened category or a re-pointed target would show up here as
+    // a third pair.
+    const fx = await makeWorkItemFixture();
+    const fromTodo = await makeItem(fx, 'from todo');
+    const fromBlocked = await makeItem(fx, 'from blocked');
+    await workItemsService.updateStatus(fromBlocked.id, 'blocked', fx.ctx);
+
+    await workItemsService.claimWorkItem(fx.projectId, fromTodo.identifier, fx.ctx);
+    await workItemsService.claimWorkItem(fx.projectId, fromBlocked.identifier, fx.ctx);
+
+    const edges = await adminDb.workItemRevision.findMany({
+      where: { workItemId: { in: [fromTodo.id, fromBlocked.id] } },
+      orderBy: { changedAt: 'asc' },
+    });
+    const written = edges
+      .map((r) => (r.diff as { status?: { from: string; to: string } }).status)
+      .filter((s): s is { from: string; to: string } => s !== undefined)
+      .filter((s) => s.to === 'in_progress')
+      .map((s) => `${s.from} → ${s.to}`);
+    expect(new Set(written)).toEqual(new Set(['todo → in_progress', 'blocked → in_progress']));
+  });
 });
 
 describe('claimWorkItem — the refusal DISCRIMINATES', () => {
@@ -128,11 +154,7 @@ describe('claimWorkItem — the refusal DISCRIMINATES', () => {
     const item = await makeItem(fx, 'contested');
 
     const first = await workItemsService.claimWorkItem(fx.projectId, item.identifier, fx.ctx);
-    const second = await workItemsService.claimWorkItem(
-      fx.projectId,
-      item.identifier,
-      rival.ctx,
-    );
+    const second = await workItemsService.claimWorkItem(fx.projectId, item.identifier, rival.ctx);
 
     expect(first.outcome).toBe('claimed');
     expect(second.outcome).toBe('taken');

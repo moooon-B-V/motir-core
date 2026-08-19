@@ -5412,7 +5412,9 @@ export const workItemsService = {
     // resolves to no user (a deleted account the `Restrict` FK should prevent)
     // yields `null` rather than a cuid: §7 forbids naming a person by internal
     // id whatever the reason.
-    const actorIds = [...new Set([outcome.assigneeId, outcome.held?.changedById].filter(isPresentId))];
+    const actorIds = [
+      ...new Set([outcome.assigneeId, outcome.held?.changedById].filter(isPresentId)),
+    ];
     const users = await userRepository.findByIds(actorIds);
     const actor = (id: string | null | undefined): ClaimActorDto | null => {
       if (!id) return null;

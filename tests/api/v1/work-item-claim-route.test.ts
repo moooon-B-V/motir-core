@@ -142,7 +142,10 @@ describe('POST /api/v1/work-items/{key}/claim', () => {
     // is unavailable — reporting that it does not EXIST would be a 404 for a row
     // sitting in front of the reader, which is what an INNER join on
     // `workflow_status` produces.
-    const orphan = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Off-workflow' });
+    const orphan = await createTestWorkItem(caller.fixture, {
+      kind: 'task',
+      title: 'Off-workflow',
+    });
 
     const res = await claim(orphan.identifier, caller);
 
