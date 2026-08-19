@@ -22,9 +22,39 @@ import type {
   PlanOriginDto,
 } from '@/lib/dto/plans';
 
+/**
+ * Every field name `planReviewService.buildChanges` can emit on a `modify`'s
+ * diff overlay — the WIRE vocabulary the review surfaces localize.
+ *
+ * It is a closed list on purpose (MOTIR-3151). Each surface names its label by
+ * interpolating the field into a message key (`field_<name>`), which no compiler
+ * can follow — so when MOTIR-1532 taught `buildChanges` to emit `storyPoints` /
+ * `estimateMinutes` and stopped at the producer, the plan-review canvas rendered
+ * `planReview.field_storyPoints` at a reader for weeks and nothing failed.
+ * Adding a member here is what makes
+ * `tests/components/plan-change-field-labels.test.tsx` demand its copy — in both
+ * catalogs, and in each of the three maps that stand between a field and a word.
+ */
+export const PLAN_ITEM_CHANGE_FIELDS = [
+  'title',
+  'priority',
+  'type',
+  'storyPoints',
+  'estimateMinutes',
+  'description',
+  'links',
+] as const;
+
+export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];
+
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
 export interface PlanItemChangeDto {
-  /** The changed field — `title` / `priority` / `type` / `description` / `links`. */
+  /**
+   * The changed field. The producer emits one of {@link PLAN_ITEM_CHANGE_FIELDS}
+   * and is typed to (`buildChanges`), but this stays a plain `string`: a client
+   * bundle can be older than the server that answered it, and a surface that
+   * cannot even REPRESENT a field it does not know cannot fall back for one.
+   */
   field: string;
   /** The live OLD value (read from the target), or null when there was none. */
   from: string | null;

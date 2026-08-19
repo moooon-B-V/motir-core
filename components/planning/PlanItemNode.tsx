@@ -174,6 +174,26 @@ function OpBadge({
   );
 }
 
+/** The label for a changed field, degrading to the field's own WIRE NAME when
+ *  the catalog has no message for it (MOTIR-3151).
+ *
+ *  The key is INTERPOLATED (`field_<name>`), so nothing checks it at build time:
+ *  `buildChanges` grew `storyPoints` / `estimateMinutes` in MOTIR-1532 and the
+ *  labels never followed, and with no `getMessageFallback` configured
+ *  (`i18n/request.ts`) `t()` renders the KEY PATH — a reader of the approve
+ *  screen saw `planReview.field_storyPoints` where a word belongs. `t.has()`
+ *  asks the catalog first, so the NEXT field somebody teaches `buildChanges` to
+ *  emit degrades to something readable instead of leaking a key. This is the
+ *  same fallback `PlanEditsReviewDock` has always had, which is why its own
+ *  gap was cosmetic and this one was not.
+ *
+ *  The copy itself is still owed — `plan-change-field-labels.test.tsx` fails
+ *  when a `PLAN_ITEM_CHANGE_FIELDS` member has no message. */
+function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
+  const key = `field_${field}`;
+  return t.has(key) ? t(key) : field;
+}
+
 function DiffLine({
   changes,
   t,
@@ -189,7 +209,7 @@ function DiffLine({
       className="mt-1.5 flex shrink-0 items-center gap-1 overflow-hidden text-xs text-(--el-text-secondary)"
     >
       <span className="shrink-0 font-medium text-(--el-text-muted)">
-        {t(`field_${first.field}`)}
+        {fieldLabel(t, first.field)}
       </span>
       {first.from != null ? (
         <span className="truncate text-(--el-text-muted) line-through">{first.from}</span>
