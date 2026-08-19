@@ -1,4 +1,5 @@
 import type { LinkedChangeRequestCompletionFact } from '@/lib/repositories/githubPullRequestRepository';
+import { repoNameKey } from './repoName';
 
 // PER-REPOSITORY DELIVERY (Story MOTIR-2725 · MOTIR-2415) — the ONE answer to
 // "has this repository's work landed?", shared by the two consumers that must
@@ -99,4 +100,50 @@ export function repoSetShortfall(delivery: readonly RepoDelivery[]): RepoSetShor
 /** Whether a shortfall HOLDS the item — either list being non-empty. */
 export function hasRepoSetShortfall(shortfall: RepoSetShortfall): boolean {
   return shortfall.outstanding.length > 0 || shortfall.unknownBase.length > 0;
+}
+
+/**
+ * The repositories the Development section draws a PLACEHOLDER row for — the
+ * item's set, minus every repository that already has a row of its own.
+ *
+ * ⚠️ **Delivery state and "has a pull request" are DIFFERENT QUESTIONS, and the
+ * section needs the second one** (MOTIR-3036). `awaiting` means *not merged onto
+ * the default branch* — correct for the completion gate, and true for the entire
+ * life of every open pull request. Read as *"no pull request exists"* it produced
+ * a row asserting "No pull request yet" directly beneath the pull request it was
+ * asserting it about. So the placeholder keys on the pull request EXISTING,
+ * whatever its state: an open one, a merged-onto-a-side-branch one and a closed
+ * one all render their own row, and a repository with any of them is not owed a
+ * placeholder.
+ *
+ * It lives HERE, next to the classifier, and the component calls it — rather
+ * than each of the two hosts filtering its own list before mounting the shared
+ * body. That per-caller filter is what let the detail page and the quick view
+ * disagree, and it would let them disagree again one fix later.
+ *
+ * `delivered` is still dropped, for the reason it always was: a merged
+ * repository is finished, and the section has its pull-request row to show for
+ * it. That drop moved in here WITH the cross-reference, so a host passes the
+ * item's set verbatim and makes no editorial decision at all.
+ */
+export function awaitingRepoRows(
+  delivery: readonly RepoDelivery[],
+  pullRequests: readonly { repo: string }[],
+): RepoDelivery[] {
+  // Compared on the shared repository IDENTITY, not on the raw strings: the two
+  // sides are written by different tables in different forms (`motir-core` from
+  // the item's pin, `moooon-B-V/motir-core` from the PR DTO), and comparing them
+  // as-is matches nothing at all — which is the defect, not a hardening of it.
+  const linked = new Set<string>();
+  for (const pr of pullRequests) {
+    const key = repoNameKey(pr.repo);
+    if (key !== null) linked.add(key);
+  }
+  return delivery.filter((d) => {
+    if (d.state === 'delivered') return false;
+    const key = repoNameKey(d.repo);
+    // A set entry that names no repository at all cannot be matched by a pull
+    // request, so it keeps its row rather than silently disappearing.
+    return key === null || !linked.has(key);
+  });
 }

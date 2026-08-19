@@ -15,7 +15,7 @@ import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
-import type { RepoDelivery } from '@/lib/workItems/repoDelivery';
+import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 
 // The work-item "Development" section (Story 7.10 · MOTIR-1579), per
 // design/github Panels 3 + 4a: linked-PR rows — PR glyph + title +
@@ -173,7 +173,7 @@ export function DevelopmentSectionBody({
   pullRequests,
   itemIdentifier,
   manualLinkable = false,
-  awaitingRepos = [],
+  repoDelivery = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   /** The item's `MOTIR-<n>` key — the empty-state / caption copy names it. */
@@ -183,22 +183,32 @@ export function DevelopmentSectionBody({
    *  5a). The read-only peek leaves it false (its caption names only auto-link). */
   manualLinkable?: boolean;
   /**
-   * Repositories the item CARRIES whose work has not landed (Story MOTIR-2725 ·
-   * MOTIR-2415) — rendered as placeholder rows after the real pull requests.
+   * EVERY repository the item carries, with its delivery state (Story MOTIR-2725
+   * · MOTIR-2415) — the item's own set, passed VERBATIM. The rows that get drawn
+   * for it are derived here, by `awaitingRepoRows`.
    *
-   * ⚠️ A PROP with an empty default, not a new behaviour, and that is
-   * deliberate: this component is mounted on the detail page AND in the
-   * quick-view peek, and MOTIR-2415's scope is the detail page only. The peek
-   * passes nothing and its output is byte-identical until MOTIR-2416 turns it
-   * on — so the two surfaces never disagree by accident, only by decision.
+   * ⚠️ The host does NOT pre-filter this (MOTIR-3036). Both hosts used to hand
+   * over `delivery.filter((d) => d.state !== 'delivered')`, and two copies of one
+   * editorial decision is how the detail page and the quick view came to disagree
+   * — and how they both came to say "No pull request yet" about a repository
+   * whose pull request was on the row above. A host that supplies the set and
+   * decides nothing cannot drift from the other host.
+   *
+   * Still defaulted to `[]`, which is the state most cards are in: an item that
+   * carries no repositories renders exactly the shipped section.
    */
-  awaitingRepos?: RepoDelivery[];
+  repoDelivery?: RepoDelivery[];
 }) {
   const t = useTranslations('github');
   const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
+  // The repositories still owed a row of their own — never the raw set (see the
+  // prop's note). Derived BEFORE the empty-state gate, because the gate asks
+  // whether there is anything to draw, and the raw set can be non-empty while
+  // every one of its repositories already has a pull-request row.
+  const awaiting = awaitingRepoRows(repoDelivery, pullRequests);
   // The big EmptyState is for an item with NOTHING to show. An item that carries
   // repositories always has rows — the awaiting ones — so it never lands here.
-  if (pullRequests.length === 0 && awaitingRepos.length === 0) {
+  if (pullRequests.length === 0 && awaiting.length === 0) {
     return (
       <EmptyState
         className="mt-2"
@@ -217,7 +227,7 @@ export function DevelopmentSectionBody({
         {/* After the real rows: a placeholder per repository still owed one.
             Ordered by the item's own repository order, so the list reads in the
             same sequence the rail does. */}
-        {awaitingRepos.map((d) => (
+        {awaiting.map((d) => (
           <AwaitingRepoRow key={d.repo} delivery={d} />
         ))}
       </ul>
@@ -239,15 +249,15 @@ export function DevelopmentSection({
   pullRequests,
   itemIdentifier,
   className,
-  awaitingRepos = [],
+  repoDelivery = [],
 }: {
   pullRequests: LinkedPullRequestDto[];
   itemIdentifier: string;
   className?: string;
-  /** Repositories the item carries whose work has not landed (MOTIR-2416) —
-   *  passed straight through to the shared body, so the peek shows the same
-   *  placeholder rows the detail page does rather than a reduced second form. */
-  awaitingRepos?: RepoDelivery[];
+  /** The item's repository set (MOTIR-2416) — passed straight through to the
+   *  shared body, so the peek shows the same rows the detail page does rather
+   *  than a reduced second form. Unfiltered, per the body's prop note. */
+  repoDelivery?: RepoDelivery[];
 }) {
   const t = useTranslations('github');
   return (
@@ -256,7 +266,7 @@ export function DevelopmentSection({
       <DevelopmentSectionBody
         pullRequests={pullRequests}
         itemIdentifier={itemIdentifier}
-        awaitingRepos={awaitingRepos}
+        repoDelivery={repoDelivery}
       />
     </section>
   );

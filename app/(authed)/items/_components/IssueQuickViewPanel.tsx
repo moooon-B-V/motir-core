@@ -510,7 +510,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             // default empty so its output could not move by accident. This is
             // the card that turns it on — by DECISION, and the design (2414 Q2)
             // keeps the same treatment here rather than a reduced second one.
-            awaitingRepos={(data.repoDelivery ?? []).filter((d) => d.state !== 'delivered')}
+            // The set goes over VERBATIM: the peek filtering its own copy is
+            // what made it say "No pull request yet" about a repository whose
+            // pull request was on the row above (MOTIR-3036).
+            repoDelivery={data.repoDelivery ?? []}
           />
           <p className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-muted)">
             {t.rich('quickViewMore', {
