@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **39 tools**.
+`initialize` handshake and registers **40 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1357,7 +1357,7 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -1472,6 +1472,69 @@ Errors: an unknown / other-tenant `projectKey` or `planId` returns
 `PROJECT_NOT_FOUND` / `PLAN_NOT_FOUND` (404-not-403, no existence leak); a
 malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
 `PLAN_NOT_GENERATING`.
+
+##### `update_plan_item` — the DEEPEN turn
+
+`add_plan_items` is append-only: a proposal is frozen the moment it lands. That
+forbids the strategy Motir's own generator uses, so this tool is the other half —
+**write the tree's SHAPE first, then fill each card in.**
+
+| Input                                                                                                               | Type   | Required | Notes                                                       |
+| ------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
+| `planId`                                                                                                            | string | yes      | The id `create_plan` returned.                              |
+| `planItemId`                                                                                                        | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
+| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
+
+**The patch is SPARSE, and absent is not the same as `null`.** A field you omit is
+left exactly as it was; an explicit `null` clears it. So a deepen turn sends only
+what it is deciding, and nothing it has not thought about yet is destroyed.
+
+```jsonc
+// 1 — the SKELETON: titles, kinds and the edge graph. No `final`.
+add_plan_items({ planId, proposals: [
+  { op: "add", proposedFields: { title: "Invoices", kind: "story" }, parentRef: "planItem:ck_epic" },
+]})
+// → planItemIds: ["ck_story"]
+
+// 2 — the DEEPEN pass: one call per proposal, now that every sibling exists
+update_plan_item({ planId, planItemId: "ck_subtask",
+  descriptionMd: "## What to do\n…",
+  explanationMd: "Why it matters …",
+  type: "code", executor: "coding_agent", priority: "high",
+  storyPoints: 3, estimateMinutes: 45 })
+
+// 3 — CLOSE, and the deepened bodies go into the review queue with the tree
+add_plan_items({ planId, final: true, proposals: [ … ] })
+```
+
+**Set `executor` whenever you set `type`.** Approving a plan does **not** derive
+an executor from the work type — a proposal that never carried one materializes
+unassigned — so the deepen turn is where a leaf gets both.
+
+**What it deliberately cannot do**, because that is the shape you settled in the
+skeleton pass: re-parent a proposal (`parentRef`), change its dependency edges
+(`blockedByRefs`), or re-pin its repo (`targetRepo` / `targetRepoRole`). Nor can
+it WITHDRAW a proposal — `op: "remove"` targets an existing work item, not a
+proposal. Before you close the plan, the repair for any of these is a fresh plan;
+they cost nothing and start no job.
+
+**Legal only while the plan is `generating`.** Once `final: true` has closed it,
+the plan is in front of a person and stops moving: a deepen is refused with
+`PLAN_NOT_IN_EXPECTED_STATUS`, naming the status it actually found, so the refusal
+reads as terminal rather than as something to retry. Editing a `planned`
+proposal is the reviewer's own act, on the review surface.
+
+Requires **`ai:view_plan`** — the permission `plansService.deepenProposal`
+asserts, the same key `add_plan_items` names.
+
+Errors: `PLAN_NOT_FOUND` / `PLAN_ITEM_NOT_FOUND` (404-not-403 — an id from
+another tenant is indistinguishable from one that does not exist);
+`PLAN_NOT_IN_EXPECTED_STATUS` once the plan has closed; `INVALID_PROPOSAL` for a
+`modify` / `remove` proposal (only an `add` can be deepened) or sizing outside the
+Fibonacci range.
+
+> **⚠️ This creates no work item either.** It edits a proposal in place, and
+> nothing in the tree changes until a person approves the plan.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 
