@@ -32,7 +32,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
-import { getBoard, columnByStatus, cardIdsIn } from './_helpers/board';
+import { getBoard, columnByStatus, cardIdsIn, boardViewportWidth } from './_helpers/board';
 import { createItem, transition } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
 
@@ -76,11 +76,20 @@ function cardTid(identifier: string): string {
 }
 
 // Open /boards and wait for the interactive board to be present (past the
-// loading skeleton). A wide viewport keeps the first four columns
-// (todo · blocked · in_progress · in_review) on screen without horizontal
-// scroll, so a pointer drag never has to chase a scrolling target.
+// loading skeleton). The viewport keeps EVERY default column on screen without
+// horizontal scroll, so a pointer drag never has to chase a scrolling target.
+//
+// ⚠️ The width is ARITHMETIC (`boardViewportWidth`), not the literal 1920 it
+// used to be — and MOTIR-2999 is why. Adding the `implemented` status put the
+// board at 8 columns (~2.3k px), which pushed Done off a 1920 viewport and broke
+// the drop-into-Done drag below with a 10s `waitForResponse` timeout: the drag
+// never reached the column. That is the exact failure `boardViewportWidth`'s own
+// header describes — an invariant written in a comment while the number quietly
+// stopped satisfying it — so the number is derived from the status count here
+// too, and the NEXT status to arrive widens the viewport rather than breaking a
+// drag.
 async function openBoard(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize(boardViewportWidth());
   await page.goto('/boards');
   await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
 }
@@ -651,7 +660,7 @@ test.describe('board-ui drop into a recency-ordered Done column @smoke', () => {
     expect(doneDisplay.length).toBe(2);
     expect(doneDisplay[0]!.position > doneDisplay[1]!.position).toBe(true);
 
-    await openBoard(page); // 1920 wide — Done is on screen, no auto-scroll needed
+    await openBoard(page); // wide enough for every column — Done is on screen
 
     // Drop the mover onto the LOWER HALF of the top Done card, so it inserts
     // BETWEEN the two display cards — i.e. between two position-inverted

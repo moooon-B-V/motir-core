@@ -17,6 +17,7 @@ import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptio
 import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -884,10 +885,21 @@ const DONE_STATUS_KEY = 'done';
  * error that fails it). A card left at `implemented` because this threw is a card
  * the next CI delivery promotes anyway.
  *
- * ⚠️ The import is DYNAMIC on purpose: `ciPromotion` moves cards through this
- * very service, so a static import would close a module cycle. Deferring it to
- * the call keeps the graph one-directional at load time, and this path runs once
- * per transition into one status — never in a hot loop.
+ * ⚠️ THE IMPORT IS STATIC, AND IT USED NOT TO BE. `ciPromotion` moves cards
+ * through this very service, so the two modules form a cycle — which is safe
+ * here because neither reads the other at MODULE-EVAL time (this service's
+ * object literal is built from hoisted declarations; `ciPromotion`'s top level
+ * is constants), and every use is inside a function body.
+ *
+ * It was a `await import('./ciPromotion')` for exactly one release, to avoid
+ * closing that cycle. The E2E lane found the cost: Playwright's runner
+ * transforms STATIC imports and hands a runtime `import()` specifier to Node,
+ * which then loads the raw `.ts` and throws "Cannot use import statement outside
+ * a module". The latch was therefore a silent no-op in every spec that moves a
+ * card through the service directly (`provenance.spec.ts`, MOTIR-3009) — caught
+ * by this function's own catch, logged, and invisible. A test harness that
+ * disagrees with production about whether a feature runs is worse than the cycle
+ * it was avoiding.
  */
 async function latchCiGreen(
   workItemId: string,
@@ -896,7 +908,6 @@ async function latchCiGreen(
 ): Promise<void> {
   if (toStatusKey !== 'implemented') return;
   try {
-    const { promoteIfCiAlreadyGreen } = await import('./ciPromotion');
     await promoteIfCiAlreadyGreen(workItemId, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,

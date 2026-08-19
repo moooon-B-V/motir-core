@@ -6,13 +6,33 @@ import {
 } from './_helpers/github-seed';
 import { E2E_REPO, E2E_REPO_SECOND } from './_helpers/github-const';
 import { signUp } from './_helpers/shell-session';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 
-// ACCEPTANCE — a work item that ships in MORE THAN ONE repository
-// (Story MOTIR-2725 · Subtask MOTIR-2730). The story's `verification_recipe`,
-// driven the way a person drives it, and recorded as the receipt Yue watches to
-// accept the story.
+// A work item that ships in MORE THAN ONE repository (Story MOTIR-2725 ·
+// Subtask MOTIR-2730), PROMOTED out of the acceptance lane into the lane that
+// runs on every pull request.
+//
+// ── WHY IT MOVED, and why now (MOTIR-3009) ──────────────────────────────────
+// MOTIR-2725 is `done` and its receipt is frozen, so this spec has discharged
+// its purpose and owes a disposition — promote or retire, no third route
+// (`docs/decisions/acceptance-receipt-lifecycle.md` §3). The disposition was
+// already decided in `docs/acceptance-lane-triage.md` ("promote alongside" the
+// repository-reference row) and is executed here, by MOTIR-2999 — the story
+// that made it due, because the lifecycle this spec walks through changed under
+// it. The rule that forced the ordering is worth stating: a receipt must NOT be
+// edited to describe today. So the spec left the lane FIRST, and only then was
+// its status assertion updated — as a regression test, which is a thing you may
+// update when the product deliberately changes.
+//
+// The promotion is the sanctioned one-line import swap (`_helpers/promoted-regression`),
+// so every `chapter()` and `beat()` call stands and NO assertion was touched in
+// the move — the mechanism exists precisely so a cleanup cannot quietly drop
+// coverage.
+//
+// What it still proves, on every PR: a card that carries two repositories names
+// both, reads the same way in the quick view, holds after the first merge naming
+// the repository still outstanding, and completes on the second.
 //
 // ⚠️ WHAT THE CLIP HAS TO SHOW, and why the pacing is load-bearing: the entire
 // product change is a PAUSE. The card holds at In Review after the first merge
@@ -251,8 +271,11 @@ test('a card that ships in two repositories holds until BOTH have merged', async
     });
 
     await page.goto(`/items/${twoRepo.identifier}`);
-    // Still In Review — the hold, on the surface.
-    await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
+    // Still held — the hold, on the surface. The status it holds AT became
+    // `Implemented` with MOTIR-2999 (an open pull request whose build has not
+    // reported is delivered, not reviewable); what this chapter asserts is
+    // unchanged, which is that the card did NOT complete on the first merge.
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
     await beat();
 
     // And the surface says WHICH repository is still outstanding — the hold plus

@@ -147,7 +147,7 @@ test('MOTIR-1685: provenance on the work-item detail — manual · mcp · native
       { projectId: project.id, kind: 'task', title: 'A BYOK-built item' },
       ctx,
     );
-    // Move to in_progress so mark_integrated's → in_review transition is legal.
+    // Move to in_progress so mark_integrated's → `implemented` transition is legal.
     await workItemsService.updateStatus(built.id, 'in_progress', ctx);
     await workItemsService.markIntegrated(built.id, 'session/PRV-run', ctx, {
       source: 'byok',
