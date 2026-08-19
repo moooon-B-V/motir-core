@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
+import { isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
@@ -77,14 +78,22 @@ const referenceAdvisorySchema = z.object({
 });
 
 /**
- * A SHAPE advisory — the card's own acceptance criteria are mis-shaped, with no
- * second work item involved anywhere in the finding (MOTIR-2175 / MOTIR-2177).
+ * A CRITERION-shaped SHAPE advisory — the card's own acceptance criteria are
+ * mis-shaped, with no second work item involved anywhere in the finding
+ * (MOTIR-2175 / MOTIR-2177), plus the 1-based index the remedy cuts at.
  *
  * The per-severity extras are OPTIONAL for the same reason `severity` is open: a
  * future shape severity carries its own fields, and a schema that required
  * today's would reject tomorrow's advisory rather than pass it through.
+ *
+ * ⚠️ `criterionIndex` stays REQUIRED here, and MOTIR-3110's sizing severity
+ * therefore arrives as a SECOND `kind: 'shape'` variant below rather than by
+ * loosening this one. Making it optional would be a nullability change on a
+ * shipped field, which §8 forbids outright; adding a union member is the
+ * additive form of the same widening (`public-api-conventions.md` §8, the
+ * *"a new field on a response object"* / open-ended-enum limbs).
  */
-const shapeAdvisorySchema = z.object({
+const criterionShapeAdvisorySchema = z.object({
   kind: z.literal('shape'),
   item: workItemKeySchema,
   severity: advisorySeveritySchema,
@@ -97,6 +106,35 @@ const shapeAdvisorySchema = z.object({
   repo: z.string().optional(),
   /** `likely-repo-straddle`: `contradiction` or `unpinnable`. */
   reason: z.string().optional(),
+});
+
+/**
+ * A SIZING SHAPE advisory — the card's own `storyPoints` / `estimateMinutes` are
+ * over the estimation gate's two ceilings (MOTIR-3110).
+ *
+ * ⚠️ `kind: 'shape'` and NO `criterionIndex`, which is why it is a second
+ * variant beside {@link criterionShapeAdvisorySchema} rather than a third
+ * severity inside it. The two are disjoint on their REQUIRED fields — this one
+ * needs `threshold`, that one needs `criterionIndex` — so the plain union below
+ * resolves each unambiguously, whichever order it tries them in. A client that
+ * reads `criterionIndex` off anything tagged `shape` was already obliged to
+ * tolerate unknown members (§8's other half); one that switches on `severity`
+ * ignores this severity and loses nothing, because advisories never gate.
+ *
+ * ⚠️ Additive under §8, on the same terms as the subsumption variant.
+ * `V1_CONTRACT_VERSION` moves with it (Amendment 8's obligation) — that number
+ * is how a client learns the family grew without re-reading a document.
+ */
+const sizingShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** Which ceiling(s) the card crossed: points, minutes, or both. */
+  threshold: z.string(),
+  /** The card's observed `storyPoints` — `null` when unestimated. */
+  storyPoints: z.number().nullable(),
+  /** The card's observed `estimateMinutes` — `null` when unestimated. */
+  estimateMinutes: z.number().nullable(),
 });
 
 /**
@@ -136,7 +174,8 @@ const subsumptionAdvisorySchema = z.object({
  * untagged object, and only an untagged one, is a reference.
  */
 export const dispatchAdvisorySchema = z.union([
-  shapeAdvisorySchema,
+  criterionShapeAdvisorySchema,
+  sizingShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -227,6 +266,19 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {
+      // The SIZING member first, because it is the one `shape` variant with no
+      // `criterionIndex` — narrowing it out is what lets the branch below read
+      // the index off the two members that have one (MOTIR-3110).
+      if (isSizingAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          threshold: advisory.threshold,
+          storyPoints: advisory.storyPoints,
+          estimateMinutes: advisory.estimateMinutes,
+        };
+      }
       if (advisory.kind === 'shape') {
         return {
           kind: 'shape' as const,

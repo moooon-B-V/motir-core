@@ -93,5 +93,14 @@
  *   Additive: one new field, the three scalars unchanged in value, the assembled
  *   `prompt` text byte-identical. See `docs/decisions/work-item-repository-set.md`
  *   § *Amendment 2026-08-19* §B1.
+ * - `1.13.0` — MOTIR-3110 adds the SIZING member to the dispatch prompt's
+ *   `advisories` union: a childless `coding_agent` card sized over the
+ *   estimation gate (13+ story points, or more than 60 estimated minutes).
+ *   Additive on the same terms as `1.10.0` — a new member of the same union, on
+ *   the same field clients must tolerate unknown members of. It is a SECOND
+ *   `kind: "shape"` variant rather than a third severity inside the existing
+ *   one, because it carries no `criterionIndex` and making that field optional
+ *   would be a nullability change §8 forbids. Every existing member is
+ *   byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.12.0';
+export const V1_CONTRACT_VERSION = '1.13.0';

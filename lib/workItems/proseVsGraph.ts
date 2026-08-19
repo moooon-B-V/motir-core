@@ -677,3 +677,102 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
   if (!md) return false;
   return SUBSUMPTION_EXEMPT_MATCHERS.some((re) => re.test(md));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ESTIMATION-GATE SIZING CHECK (MOTIR-3110) — the third member of the SHAPE
+// family, and the only one that reads no prose at all.
+//
+// The planner's estimation gate (`plan-rules/kind-leaf-deepen.md`) puts two
+// ceilings on a `coding_agent` LEAF: `storyPoints >= 13` is its literal SPLIT
+// signal, and the agent run must be ≤ 60 minutes. Nothing in the product checked
+// either, and four cards have now been sealed over it by an author who
+// understood the gate perfectly and wrote the correct remedy into the card's own
+// description — MOTIR-1180, MOTIR-1229, MOTIR-1452 and MOTIR-3068, the last of
+// which reached a run at 13 SP / 600 min with "Expect this to SPLIT" in its body
+// (`notes.html` #323). The OUTPUT of the analysis kept going into a field the
+// plan does not read.
+//
+// So this is the same promotion `likely-ordering-violation` and
+// `likely-repo-straddle` each got — a check a person keeps rationalising past,
+// moved into the channel a machine reads — and it is the cheapest member the
+// family will ever have: two integer columns and an enum, no prose parsing, no
+// judgement, and no false-positive class needing a `reason` discriminator.
+
+/**
+ * The estimation gate's SPLIT signal: a `coding_agent` leaf at or above this
+ * many story points is asking to be split (`plan-rules/kind-leaf-deepen.md` —
+ * *"reserve `13+` for a subtask that should be split"*).
+ *
+ * At-or-above, not above: 13 is the signal itself, not the first value past it.
+ */
+export const ESTIMATION_GATE_STORY_POINTS = 13;
+
+/**
+ * The estimation gate's run ceiling, in minutes — a `coding_agent` leaf's
+ * agent-time-plus-CI-time estimate must be ≤ 60.
+ *
+ * STRICTLY above, unlike the points threshold: 60 is the ceiling and a card
+ * sitting exactly on it is inside the gate.
+ */
+export const ESTIMATION_GATE_ESTIMATE_MINUTES = 60;
+
+/** WHICH of the two ceilings a card crossed — one advisory says both. */
+export type OverGateThreshold = 'story_points' | 'estimate_minutes' | 'both';
+
+/** The SIZING finding: which ceiling(s), and the values that crossed them. */
+export interface OverGateSizing {
+  threshold: OverGateThreshold;
+  /** The card's own `storyPoints`, as observed — `null` when unestimated. */
+  storyPoints: number | null;
+  /** The card's own `estimateMinutes`, as observed — `null` when unestimated. */
+  estimateMinutes: number | null;
+}
+
+/**
+ * The card's sizing read against the estimation gate, or `null` when it is
+ * inside both ceilings (or exempt from them).
+ *
+ * Two exemptions, and both are the rule's own scope read back rather than noise
+ * filters:
+ *
+ *  - **Executor.** The ceilings are about AGENT run time. A `human` executor's
+ *    minutes are human work — a two-day dashboard chore is correctly sized at
+ *    600 — and a `manual` card takes `executor: 'human'` from the type→executor
+ *    default map, so testing the executor covers both and testing the TYPE would
+ *    cover neither reliably. Anything that is not `coding_agent` is out of
+ *    scope, including an untyped card that carries no executor at all: this
+ *    check reports a card whose sizing contradicts a rule it is subject to, and
+ *    a card with no executor is not yet subject to it.
+ *  - **Position, not kind.** A card with CHILDREN is sized by rollup, so its own
+ *    columns describe a subtree rather than a run and the gate does not reach
+ *    them. `hasChildren` is therefore the condition — the same leaf-POSITION
+ *    definition the estimation gate itself uses, which is why a childless `bug`
+ *    or `task` is IN scope exactly as a `subtask` is (MOTIR-3068 was a `bug`).
+ *
+ * A `null` on either column is unestimated, never zero: it cannot cross a
+ * ceiling, and the gate's *"every leaf MUST carry a non-null estimate"* limb is
+ * a different finding this check deliberately does not make.
+ */
+export function overGateSizing(card: {
+  executor: string | null | undefined;
+  hasChildren: boolean;
+  storyPoints: number | null | undefined;
+  estimateMinutes: number | null | undefined;
+}): OverGateSizing | null {
+  if (card.executor !== 'coding_agent') return null;
+  if (card.hasChildren) return null;
+
+  const storyPoints = card.storyPoints ?? null;
+  const estimateMinutes = card.estimateMinutes ?? null;
+  const overPoints = storyPoints !== null && storyPoints >= ESTIMATION_GATE_STORY_POINTS;
+  const overMinutes =
+    estimateMinutes !== null && estimateMinutes > ESTIMATION_GATE_ESTIMATE_MINUTES;
+  if (!overPoints && !overMinutes) return null;
+
+  return {
+    threshold:
+      overPoints && overMinutes ? 'both' : overPoints ? 'story_points' : 'estimate_minutes',
+    storyPoints,
+    estimateMinutes,
+  };
+}

@@ -1284,11 +1284,22 @@ export interface WorkItemValidityDto {
 export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge';
 
 /**
- * The severity of a SHAPE advisory (MOTIR-2175) — a defect in what a card's own
- * acceptance criteria ASK FOR, with no second work item involved. Two members:
- * gate 14's ORDERING axis and gate 1's repo column (MOTIR-2177).
+ * The severity of a SHAPE advisory (MOTIR-2175) — a defect the card asserts
+ * about ITSELF, with no second work item involved. Three members: gate 14's
+ * ORDERING axis, gate 1's repo column (MOTIR-2177), and the ESTIMATION GATE's
+ * two sizing ceilings (MOTIR-3110).
+ *
+ * ⚠️ The first two are defects in what the card's acceptance criteria ASK FOR
+ * and carry the `criterionIndex` their remedy cuts at; the third is a defect in
+ * two of the card's own COLUMNS and has no criterion to point at. That is why
+ * {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all three share
+ * and the criterion index sits one level down — see
+ * {@link WorkItemProseCriterionShapeAdvisoryBaseDto}.
  */
-export type WorkItemProseShapeSeverityDto = 'likely-ordering-violation' | 'likely-repo-straddle';
+export type WorkItemProseShapeSeverityDto =
+  | 'likely-ordering-violation'
+  | 'likely-repo-straddle'
+  | 'likely-over-gate-sizing';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1342,17 +1353,32 @@ export interface WorkItemProseReferenceAdvisoryDto {
 interface WorkItemProseShapeAdvisoryBaseDto {
   /** The union discriminant — see {@link WorkItemProseAdvisoryDto}. */
   kind: 'shape';
-  /** The card whose own acceptance criteria carry the defect. */
+  /** The card that carries the defect. */
   item: string;
   /** Which shape defect this is. */
   severity: WorkItemProseShapeSeverityDto;
-  /**
-   * 1-based index of the offending criterion — where the remedy cuts. The line
-   * number is the actionable half of the finding, not decoration, and both
-   * members number criteria the same way (`criterionRepoPaths` reuses
-   * `firstPostMergeCriterion`'s attribution), so a card carrying both findings
-   * can be read against ONE numbering.
-   */
+}
+
+/**
+ * What every CRITERION-shaped member adds (MOTIR-2175 / MOTIR-2177): the 1-based
+ * index of the criterion the remedy cuts at.
+ *
+ * ⚠️ **A second base rather than a field on the first, and NOT an optional
+ * field on the first.** `criterionIndex` is the actionable half of these two
+ * findings, not decoration, and both number criteria the same way
+ * (`criterionRepoPaths` reuses `firstPostMergeCriterion`'s attribution) so a
+ * card carrying both can be read against ONE numbering. The sizing member
+ * (MOTIR-3110) has no criterion at all — its finding is about two COLUMNS — and
+ * making the index optional would weaken it to `number | undefined` for the two
+ * members whose remedy IS the number, on a shape the public `/api/v1` schema
+ * already publishes as required (`public-api-conventions.md` §8 forbids the
+ * nullability change outright). So the split runs the other way: the shared base
+ * holds what all three share, and this one holds what the two criterion members
+ * add. A renderer reading `.criterionIndex` must narrow to a member that has
+ * one — {@link isOrderingAdvisory} / {@link isRepoStraddleAdvisory} already do.
+ */
+interface WorkItemProseCriterionShapeAdvisoryBaseDto extends WorkItemProseShapeAdvisoryBaseDto {
+  /** 1-based index of the offending criterion — where the remedy cuts. */
   criterionIndex: number;
 }
 
@@ -1366,7 +1392,7 @@ interface WorkItemProseShapeAdvisoryBaseDto {
  * DEFINED by needing the merge (see `isOrderingCheckExempt`, which suppresses
  * exactly that shape).
  */
-export interface WorkItemProseOrderingAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+export interface WorkItemProseOrderingAdvisoryDto extends WorkItemProseCriterionShapeAdvisoryBaseDto {
   severity: 'likely-ordering-violation';
   /** The gate-14 phrase that matched, in its canonical list form. */
   phrase: string;
@@ -1390,7 +1416,7 @@ export interface WorkItemProseOrderingAdvisoryDto extends WorkItemProseShapeAdvi
  * `SHARED_PLANNING_RULES`) — that needs a cross-repo index. Gate 1's prose stays
  * in force; this narrows the prose's job, it does not retire it.
  */
-export interface WorkItemProseRepoStraddleAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+export interface WorkItemProseRepoStraddleAdvisoryDto extends WorkItemProseCriterionShapeAdvisoryBaseDto {
   severity: 'likely-repo-straddle';
   /** The repo-qualified path the criterion names, as it wrote it. */
   path: string;
@@ -1406,12 +1432,64 @@ export interface WorkItemProseRepoStraddleAdvisoryDto extends WorkItemProseShape
 }
 
 /**
+ * Which of the estimation gate's two ceilings a card crossed (MOTIR-3110) —
+ * `both` when it crossed each, because one over-sized card is ONE finding.
+ * Mirrors `OverGateThreshold` (`lib/workItems/proseVsGraph.ts`).
+ */
+export type WorkItemProseSizingThresholdDto = 'story_points' | 'estimate_minutes' | 'both';
+
+/**
+ * THE ESTIMATION GATE, mechanized (MOTIR-3110) — a childless `coding_agent` card
+ * sized at or above 13 story points, or estimated at more than 60 minutes of
+ * agent run time. Both are the gate's own numbers
+ * (`plan-rules/kind-leaf-deepen.md`): `13+` is its literal SPLIT signal, and a
+ * `coding_agent` leaf's run must fit inside an hour.
+ *
+ * ⚠️ A `shape` member and not its own family, unlike
+ * {@link WorkItemProseSubsumptionAdvisoryDto}, and the discriminator is what the
+ * finding is ABOUT rather than what it carries: this is a defect the card
+ * asserts about itself with no second party anywhere in it — the shape family's
+ * definition — while a subsumption finding has a far end (a merged pull
+ * request). What it does NOT carry is a `criterionIndex`, because its remedy is
+ * *split this card*, not *cut it at line N*: see
+ * {@link WorkItemProseCriterionShapeAdvisoryBaseDto} for why that lives on a
+ * second base rather than becoming optional on the first.
+ *
+ * ⚠️ **Never a gate, for a reason specific to this check.** A large card is
+ * sometimes the honest intermediate state of a re-plan in progress, and gating
+ * readiness on it would trade a missed split for a stuck board. Reporting
+ * without blocking is the whole design: the size becomes VISIBLE when the author
+ * seals the card and when a run claims it, instead of surfacing only when a
+ * session opens the description and reads a sentence asking it not to proceed.
+ *
+ * ⚠️ **No opt-out, deliberately** — no `isOverGateSizingCheckExempt` to match
+ * {@link isSubsumptionCheckExempt}. The other two checks have false-positive
+ * classes a card can legitimately be in (a boundary contract, a release cut);
+ * this one has none. Its input is two integers and an enum, so a card that fires
+ * is over the gate, full stop, and a mute would only re-create the field the
+ * plan does not read.
+ */
+export interface WorkItemProseSizingAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-over-gate-sizing';
+  /** Which ceiling(s) the card crossed. */
+  threshold: WorkItemProseSizingThresholdDto;
+  /** The card's own `storyPoints`, as observed — `null` when unestimated. */
+  storyPoints: number | null;
+  /** The card's own `estimateMinutes`, as observed — `null` when unestimated. */
+  estimateMinutes: number | null;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
+ *
+ * ⚠️ Not every member carries `criterionIndex` since MOTIR-3110 — narrow to a
+ * SEVERITY before reading it, which the three predicates below already force.
  */
 export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseOrderingAdvisoryDto
-  | WorkItemProseRepoStraddleAdvisoryDto;
+  | WorkItemProseRepoStraddleAdvisoryDto
+  | WorkItemProseSizingAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). One member today, named
@@ -1471,8 +1549,9 @@ export interface WorkItemProseSubsumptionAdvisoryDto {
  * Three families, ONE non-blocking channel:
  *  - **`reference`** — the card NAMES a not-done work item it has no
  *    `blocked_by` edge to ({@link WorkItemProseReferenceAdvisoryDto}).
- *  - **`shape`** — the card's own criteria are mis-shaped; there is no far end
- *    at all ({@link WorkItemProseShapeAdvisoryDto}).
+ *  - **`shape`** — the card contradicts itself; there is no far end at all
+ *    ({@link WorkItemProseShapeAdvisoryDto}). Its criteria are mis-shaped, or
+ *    (MOTIR-3110) its own sizing columns are over the estimation gate.
  *  - **`subsumption`** — a path the card's body names is already in a merged
  *    diff, so its deliverable may be shipped ({@link WorkItemProseSubsumptionAdvisoryDto}).
  *
@@ -1543,4 +1622,15 @@ export function isRepoStraddleAdvisory(
   a: WorkItemProseAdvisoryDto,
 ): a is WorkItemProseRepoStraddleAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-repo-straddle';
+}
+
+/**
+ * Narrow an advisory to the ESTIMATION-GATE SIZING shape (MOTIR-3110).
+ *
+ * The predicate earns its keep twice over here: it narrows to the one shape
+ * member that has no `criterionIndex`, so a renderer that reached for the index
+ * on the whole `shape` family stops compiling rather than printing `undefined`.
+ */
+export function isSizingAdvisory(a: WorkItemProseAdvisoryDto): a is WorkItemProseSizingAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-over-gate-sizing';
 }
