@@ -163,6 +163,7 @@ const FIELD_KEY: Record<string, string> = {
   priority: 'priority',
   type: 'type',
   description: 'description',
+  explanation: 'explanation',
   links: 'links',
   estimateMinutes: 'estimate',
   storyPoints: 'points',

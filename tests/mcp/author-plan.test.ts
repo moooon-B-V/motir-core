@@ -287,6 +287,93 @@ describe('add_plan_items — the append-order temp-ref contract', () => {
   });
 });
 
+describe('add_plan_items — the `modify` patch schema (MOTIR-3111)', () => {
+  it('carries `explanationMd` through to the stored patch — the WHY the REPLAN ACTION rewrites', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'A card being re-scoped' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      final: true,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: {
+            title: 'A card, re-scoped',
+            descriptionMd: 'The WHAT, as the re-scope leaves it.',
+            explanationMd: 'The WHY, as the re-scope leaves it.',
+          },
+        },
+      ],
+    });
+
+    // Read it BACK through `get_plan` rather than off the append's own return —
+    // the door only works if the field survives the wire, the JSON column and
+    // the read DTO, and the schema is the half that used to drop it.
+    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
+    const modify = read.items.find((i) => i.op === 'modify')!;
+    expect(modify.patch).toMatchObject({
+      title: 'A card, re-scoped',
+      descriptionMd: 'The WHAT, as the re-scope leaves it.',
+      explanationMd: 'The WHY, as the re-scope leaves it.',
+    });
+    await client.close();
+  });
+
+  it('carries an explicit `null` explanation — CLEAR is a different instruction from ABSENT', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'A card losing its WHY' });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      final: true,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { explanationMd: null } }],
+    });
+
+    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
+    const patch = read.items.find((i) => i.op === 'modify')!.patch as Record<string, unknown>;
+    expect('explanationMd' in patch).toBe(true);
+    expect(patch.explanationMd).toBeNull();
+    await client.close();
+  });
+
+  it('still passes an UNRECOGNISED patch key through — naming the keys narrowed nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'A card with a future field',
+    });
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    // The schema names the keys `PlanItemPatch` declares, but it is a PASSTHROUGH:
+    // a key the service understands and this file has not caught up with must
+    // still arrive. A stripping schema would make THIS module the next place a
+    // field goes missing — the exact defect MOTIR-3111 fixes, one layer up.
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      final: true,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { title: 'Renamed', someFutureField: 'still here' },
+        },
+      ],
+    });
+
+    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
+    const patch = read.items.find((i) => i.op === 'modify')!.patch as Record<string, unknown>;
+    expect(patch).toMatchObject({ title: 'Renamed', someFutureField: 'still here' });
+    await client.close();
+  });
+});
+
 describe('add_plan_items — authorship and the proposal gate', () => {
   it('stamps every `add` with the PLAN’s authorship triple', async () => {
     const fx = await makeWorkItemFixture();

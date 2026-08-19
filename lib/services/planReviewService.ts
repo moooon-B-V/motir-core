@@ -84,6 +84,18 @@ function buildChanges(
     // Descriptions are long prose — surface only THAT it changed, not the text.
     changes.push({ field: 'description', from: null, to: 'updated' });
   }
+  // …and the SECOND body (MOTIR-3111). Same treatment as the description above —
+  // long prose, so the cell says only that it moved. It is listed because the
+  // explanation is the half a reviewer reads to decide whether a proposed
+  // re-shape is right: a `modify` that silently rewrote the WHY while the review
+  // surface showed nothing would defeat the point of putting the plan in front of
+  // a person at all.
+  if (
+    patch.explanationMd !== undefined &&
+    patch.explanationMd !== (target?.explanationMd ?? null)
+  ) {
+    changes.push({ field: 'explanation', from: null, to: 'updated' });
+  }
   const added = patch.blockedByAdd?.length ?? 0;
   const removed = patch.blockedByRemove?.length ?? 0;
   if (added > 0 || removed > 0) {

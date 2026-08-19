@@ -408,6 +408,178 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(revision.diff).toMatchObject({ storyPoints: { from: 5, to: null } });
   });
 
+  // ── A `modify` may REWRITE THE WHY (MOTIR-3111) ───────────────────────────
+  // The second body was the one asymmetry left between the two proposal paths:
+  // an `add` carried `explanationMd`, a `modify` had nowhere to put it, so the
+  // REPLAN ACTION's "patch BOTH bodies" had no door and a re-scoped survivor kept
+  // a rationale that no longer described it. These five lock the sparse contract
+  // (write / absent / null), the chip normalization the description already got,
+  // and the provenance column a patch must NOT be able to forge.
+
+  it('materializes a modify that REWRITES the WHY: explanationMd applied, ONE revision with the diff cell (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Card with a stale WHY');
+    await adminDb.workItem.update({
+      where: { id: targetId },
+      data: { explanationMd: 'The OLD rationale, written for a shape this card no longer has.' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'modify',
+        workItemId: targetId,
+        patch: { explanationMd: 'The rationale as the re-scope leaves it.' },
+      },
+    ]);
+
+    // While planned, the target's explanation is byte-for-byte unchanged.
+    const beforeApprove = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(beforeApprove.explanationMd).toBe(
+      'The OLD rationale, written for a shape this card no longer has.',
+    );
+
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.id).toBe(targetId); // identity never re-minted
+    expect(modified.explanationMd).toBe('The rationale as the re-scope leaves it.');
+
+    // ONE `updated` revision carrying the `explanationMd` diff cell — the key
+    // already has an `editedField()` disposition in lib/activity/renderers.ts
+    // (`buildAddDiff` emits it), so this renders with no new registry entry.
+    const revisions = await adminDb.workItemRevision.findMany({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]!.diff).toMatchObject({
+      explanationMd: {
+        from: 'The OLD rationale, written for a shape this card no longer has.',
+        to: 'The rationale as the re-scope leaves it.',
+      },
+    });
+  });
+
+  it('leaves an existing explanation UNTOUCHED when the patch carries no explanationMd key (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Re-titled, not re-explained');
+    await adminDb.workItem.update({
+      where: { id: targetId },
+      data: { explanationMd: 'Still the right WHY.' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { title: 'A new title only' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.title).toBe('A new title only');
+    expect(modified.explanationMd).toBe('Still the right WHY.'); // absent ≠ null
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revision.diff).not.toHaveProperty('explanationMd');
+  });
+
+  it('CLEARS an explanation on an explicit null, with a diff cell (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'To un-explain');
+    await adminDb.workItem.update({
+      where: { id: targetId },
+      data: { explanationMd: 'A rationale about to be withdrawn.' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { explanationMd: null } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.explanationMd).toBeNull();
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revision.diff).toMatchObject({
+      explanationMd: { from: 'A rationale about to be withdrawn.', to: null },
+    });
+  });
+
+  it('normalizes a bare REAL key in a materialized MODIFY patch EXPLANATION (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const editTargetId = await seedItem(fx, 'Edit my WHY');
+    const refId = await seedItem(fx, 'Ref target');
+    const ref = await adminDb.workItem.findUniqueOrThrow({ where: { id: refId } });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'modify',
+        workItemId: editTargetId,
+        patch: {
+          descriptionMd: `Body mentions ${ref.identifier}.`,
+          explanationMd: `It matters because of ${ref.identifier}.`,
+        },
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    // Both bodies chip, off the ONE resolve `applyModify` makes for the pair.
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: editTargetId } });
+    expect(modified.descriptionMd).toBe(`Body mentions [${ref.identifier}](motir:${ref.id}).`);
+    expect(modified.explanationMd).toBe(
+      `It matters because of [${ref.identifier}](motir:${ref.id}).`,
+    );
+  });
+
+  it('leaves explanationSource ALONE when a patch rewrites the explanation — a plan cannot forge provenance (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'AI-drafted WHY');
+    await adminDb.workItem.update({
+      where: { id: targetId },
+      data: { explanationMd: 'Drafted by the generator.', explanationSource: 'ai_draft' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { explanationMd: 'Rewritten by the re-plan.' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.explanationMd).toBe('Rewritten by the re-plan.');
+    // NOT `user_edited`: that auto-transition belongs to the SERVICE edit path.
+    // `applyModify` never writes this column, whatever its prior value.
+    expect(modified.explanationSource).toBe('ai_draft');
+  });
+
+  it('applies a modify carrying NO body keys exactly as before — the regression the new key sits next to (MOTIR-3111)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Bodies untouched');
+    await adminDb.workItem.update({
+      where: { id: targetId },
+      data: { descriptionMd: 'The WHAT, unchanged.', explanationMd: 'The WHY, unchanged.' },
+    });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'modify',
+        workItemId: targetId,
+        patch: { title: 'Renamed', priority: 'high', estimateMinutes: 30 },
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.title).toBe('Renamed');
+    expect(modified.priority).toBe('high');
+    expect(modified.estimateMinutes).toBe(30);
+    expect(modified.descriptionMd).toBe('The WHAT, unchanged.');
+    expect(modified.explanationMd).toBe('The WHY, unchanged.');
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revision.diff).not.toHaveProperty('descriptionMd');
+    expect(revision.diff).not.toHaveProperty('explanationMd');
+  });
+
   it('rejects a modify patch with a malformed re-scope estimate (InvalidEstimateError, MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Reject bad re-scope');
