@@ -62,6 +62,13 @@ export default defineConfig({
       // guard it extends (`tests/theme/inkContrastLint.test.ts`) is in the root
       // config, which such a PR skips.
       'tests/design-ink-contrast.test.ts',
+      // `design-three-file-set` (MOTIR-3069) walks the tree for the rule
+      // `CLAUDE.md` states and nothing measured: every `*.mock.html` has a
+      // same-basename `.png`, and every area shipping an asset has a
+      // `design-notes.md`. Seven mocks had shipped without an export, the
+      // oldest for ten weeks — a design PR is both the only thing that can
+      // break this and the only thing that can fix it, so it belongs here.
+      'tests/design-three-file-set.test.ts',
     ],
   },
   resolve: {

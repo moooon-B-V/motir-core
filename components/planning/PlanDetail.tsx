@@ -11,17 +11,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { PlanReviewRail, type PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
-import { ProposalEditModal } from '@/components/planning/ProposalEditModal';
 import { RepositorySetStep } from '@/components/planning/repositories/RepositorySetStep';
 import {
   approvePlanRequest,
   declinePlanRequest,
   fetchPlanReview,
-  updateProposalRequest,
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
-import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
-import type { UpdateProposalInput } from '@/lib/dto/plans';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 
 // The plan-detail island (Subtask 7.4.5 / MOTIR-847) — the generation-review MODE
@@ -59,9 +56,16 @@ export interface PlanDetailProps {
    * never a precondition for it).
    */
   repositorySet?: { projectKey: string; view: ProjectRepoEstablishViewDto } | null;
+  /** The plan's project — the canvas reads its per-level roadmap (MOTIR-3083). */
+  projectKey: string;
 }
 
-export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDetailProps) {
+export function PlanDetail({
+  initialReview,
+  ariaLabel,
+  repositorySet,
+  projectKey,
+}: PlanDetailProps) {
   const t = useTranslations('planReview');
   const router = useRouter();
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
@@ -160,47 +164,6 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
 
   const onDecline = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
-  // Inline edit of a proposed `add` (Subtask 7.21.6 / MOTIR-1370). The edit
-  // trigger on an `add` node opens the modal; save PATCHes the proposal and
-  // refetches the review model (the same client-island refetch the actions use —
-  // router.refresh can't reach this island's useState seed). Only offered while
-  // `planned` (an approved/declined plan is immutable).
-  const [editingItem, setEditingItem] = useState<PlanReviewItemDto | null>(null);
-  const [editBusy, setEditBusy] = useState(false);
-  const [editErrorCode, setEditErrorCode] = useState<string | null>(null);
-
-  const onEditAdd = useCallback(
-    (planItemId: string) => {
-      const found = review.items.find((i) => i.planItemId === planItemId) ?? null;
-      setEditErrorCode(null);
-      setEditingItem(found);
-    },
-    [review.items],
-  );
-
-  const onSubmitEdit = useCallback(
-    async (planItemId: string, input: UpdateProposalInput) => {
-      setEditBusy(true);
-      setEditErrorCode(null);
-      try {
-        await updateProposalRequest(planId, planItemId, input);
-        await refetch();
-        setEditingItem(null);
-      } catch (err) {
-        setEditErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
-        // A 409 means a concurrent reviewer decided the plan — it's no longer
-        // editable; refetch to show the new state and close the now-stale form.
-        if (err instanceof PlanRequestError && err.status === 409) {
-          await refetch().catch(() => {});
-          setEditingItem(null);
-        }
-      } finally {
-        setEditBusy(false);
-      }
-    },
-    [planId, refetch],
-  );
-
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
   // A DECIDED plan (approved/declined) is NEVER empty even with zero items:
@@ -246,10 +209,9 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
           ) : (
             <PlanReviewCanvas
               items={review.items}
+              projectKey={projectKey}
               version={version}
               ariaLabel={ariaLabel ?? t('canvasAria')}
-              // Editable only while planned — an approved/declined plan is immutable.
-              onEditAdd={review.status === 'planned' ? onEditAdd : undefined}
             />
           )
         }
@@ -281,16 +243,6 @@ export function PlanDetail({ initialReview, ariaLabel, repositorySet }: PlanDeta
           </Button>
         </div>
       </Modal>
-
-      <ProposalEditModal
-        item={editingItem}
-        onOpenChange={(open) => {
-          if (!open) setEditingItem(null);
-        }}
-        onSubmit={onSubmitEdit}
-        busy={editBusy}
-        errorCode={editErrorCode}
-      />
     </>
   );
 }

@@ -61,6 +61,7 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
   it('renders the DECLINED outcome (not the empty state) for a declined plan with no items', () => {
     renderWithIntl(
       <PlanDetail
+        projectKey="PRJ"
         initialReview={review({ status: 'declined', decidedByName: 'Yue', items: [] })}
       />,
     );
@@ -71,7 +72,9 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
   });
 
   it('still shows the EMPTY state for a genuinely-empty planned plan (no over-broad fix)', () => {
-    renderWithIntl(<PlanDetail initialReview={review({ status: 'planned', items: [] })} />);
+    renderWithIntl(
+      <PlanDetail projectKey="PRJ" initialReview={review({ status: 'planned', items: [] })} />,
+    );
 
     expect(screen.getByText('This plan has no proposals')).toBeTruthy();
     expect(screen.queryByText('Plan declined — your tree was left untouched')).toBeNull();
@@ -80,6 +83,7 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
   it('renders the APPROVED outcome for an approved plan', () => {
     renderWithIntl(
       <PlanDetail
+        projectKey="PRJ"
         initialReview={review({ status: 'approved', itemCount: 1, decidedByName: 'Yue' })}
       />,
     );

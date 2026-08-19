@@ -30,6 +30,11 @@ export const EXEMPT_TOOLS = {
   validate_sprint:
     'The same verdict shape over a sprint’s membership. Same boundary, same reason — it ' +
     'describes whether a set of work can finish, which is not a thing v1 returns.',
+  validate_plan:
+    'The same verdict shape again, over the PROJECTED forest of a plan being authored ' +
+    '(`{ planId, valid, blockers }`). v1 returns plans, and a plan resource is not this — ' +
+    'this is a judgement ABOUT one, computed over a projection that is never persisted ' +
+    '(MOTIR-3095).',
   get_project_state:
     'Reports a project’s PLANNING PRECONDITIONS (established?, code connected + indexed?, ' +
     'repo set, onboarding run) — an agent-facing readiness report assembled for dispatch, ' +
