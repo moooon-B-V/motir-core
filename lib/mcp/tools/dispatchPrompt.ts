@@ -8,6 +8,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -70,6 +71,7 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   const shapes = dto.advisories.filter(isOrderingAdvisory);
   const straddles = dto.advisories.filter(isRepoStraddleAdvisory);
   const subsumed = dto.advisories.filter(isSubsumptionAdvisory);
+  const oversized = dto.advisories.filter(isSizingAdvisory);
   const lines: string[] = [];
   if (references.length > 0) {
     lines.push(
@@ -93,6 +95,15 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
           ? " — not this card's pinned repo."
           : ', and this card pins no repo while its criteria name more than one.') +
         ' One subtask, one repo, one PR — check the other repo before branching.',
+    );
+  }
+  // THE ESTIMATION GATE (MOTIR-3110).
+  for (const s of oversized) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): it is sized ` +
+        `${s.storyPoints ?? '—'} story points / ${s.estimateMinutes ?? '—'} estimated minutes, ` +
+        'over the estimation gate (13+ points is the SPLIT signal; a coding_agent run must fit ' +
+        'in 60 minutes). Split it before starting.',
     );
   }
   // The SUBSUMPTION advisory (MOTIR-2903).

@@ -214,7 +214,15 @@ describe('ALL THREE published surfaces agree — one card, one test', () => {
   it('moves V1_CONTRACT_VERSION for the addition', () => {
     // Amendment 8 makes the bump obligatory for an additive change, because the
     // number rides a response header rather than a document nobody fetches.
-    expect(V1_CONTRACT_VERSION).toBe('1.11.0');
+    //
+    // MOTIR-2728 moved it to `1.11.0`, and this used to assert that literal. It
+    // now asserts "at or past 1.11.0" instead, because the obligation applies to
+    // EVERY additive change: the exact form made the next card to honour it fail
+    // this test (MOTIR-3110 was the first), which turns a rule the repository
+    // wants followed into a test that punishes following it.
+    const [major, minor] = V1_CONTRACT_VERSION.split('.').map(Number);
+    expect(major).toBe(1);
+    expect(minor).toBeGreaterThanOrEqual(11);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import type {
@@ -332,6 +333,7 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const shapes = advisories.filter(isOrderingAdvisory);
   const straddles = advisories.filter(isRepoStraddleAdvisory);
   const subsumed = advisories.filter(isSubsumptionAdvisory);
+  const oversized = advisories.filter(isSizingAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -399,6 +401,31 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  own body pins the producer/mirror split (two coordinated PRs, one card), the finding',
       '  is a known false positive and you proceed. Otherwise do NOT silently pick one repo and',
       "  drop the other's criteria: that is run.md guard #5 — surface the split and STOP.",
+    );
+  }
+
+  // THE ESTIMATION GATE (MOTIR-3110). Addressed to the agent because the agent
+  // is where the cost lands: a card sized past the gate is a session that runs
+  // out of room, and the recurring ending is a hundred-file pull request nobody
+  // can review. It goes in the prompt rather than only in the tool summary for
+  // the same reason the other three do — the prompt is the one surface every
+  // harness inherits, because none of them assembles its own.
+  if (oversized.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD IS SIZED PAST THE ESTIMATION GATE — split it before you start:',
+      ...oversized.map(
+        (a) =>
+          `    - ${a.storyPoints ?? '—'} story points / ${a.estimateMinutes ?? '—'} estimated` +
+          ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 13-point split signal' : 'the 60-minute run ceiling'}.`,
+      ),
+      '  13+ points is the split signal read literally, and a coding_agent run must fit inside',
+      '  an hour. READ THE CARD FIRST: every prior instance of this had already done the',
+      '  analysis and written the axis to split on into its own description — that is why the',
+      '  check exists, because the answer kept going into a field nothing reads. Propose the',
+      '  split and STOP; do not start a run whose own sizing says it will not finish. If the',
+      '  card is genuinely one unit and the numbers are wrong, say so and correct them on the',
+      '  record — but do not simply proceed past this line.',
     );
   }
 
