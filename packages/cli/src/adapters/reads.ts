@@ -469,10 +469,11 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
     parentKey: body.parentKey,
     targetRepo: body.targetRepo,
     // MOTIR-3133 — the SET, carried because the launcher resolves a checkout per
-    // element. `delivery` is dropped for the same reason the scalar coordinates
-    // are: nothing in `packages/cli/src` reads it (the run's own report of what
-    // has shipped is MOTIR-3136). Absent from an older server stays absent, so
-    // the single-repository path is what runs.
+    // element; and MOTIR-3136 — `delivery` with it, because the run REPORTS what
+    // has already shipped, which is the only thing that distinguishes a resume
+    // from a fresh card. (MOTIR-3133 dropped `delivery` under the field-with-no-
+    // reader rule; this card is the reader, so it is carried.) Absent from an
+    // older server stays absent, so the single-repository path is what runs.
     ...(body.targetRepos === undefined
       ? {}
       : {
@@ -480,6 +481,7 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
             name: repo.name,
             cloneUrl: repo.cloneUrl,
             defaultBranch: repo.defaultBranch,
+            delivery: repo.delivery,
           })),
         }),
     workflowMode: body.workflowMode,

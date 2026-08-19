@@ -16,6 +16,7 @@ import {
   renderAgentSuccess,
   renderDispatchAdvisories,
   renderDispatchSummary,
+  renderResumeNotice,
   renderSessionOutcomes,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -182,6 +183,10 @@ async function deliver(input: DeliverInput): Promise<void> {
   // WARNING: nothing below branches on it, no exit code changes, and no `--force`
   // is involved (see `renderDispatchAdvisories` for why a refusal would be wrong).
   const advisory = renderDispatchAdvisories(dispatch);
+  // MOTIR-3136 — a partially delivered card is a legitimate resting state, and
+  // a resumed run that reads like a fresh one is how an agent re-opens a pull
+  // request in a repository that has already merged.
+  const resume = renderResumeNotice(dispatch);
 
   if (!agent) {
     // PRINT mode: the prompt is the PAYLOAD (stdout, byte-identical), the
@@ -189,6 +194,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     // `motir next --print | pbcopy` copy the prompt and nothing else, while the
     // user still sees the repo + resolved path on screen.
     info(summary);
+    if (resume) info(resume);
     if (advisory) info(advisory);
     info('');
     outVerbatim(dispatch.prompt);
@@ -196,6 +202,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   }
 
   info(summary);
+  if (resume) info(resume);
   if (advisory) info(advisory);
   info('');
   const result = await runAgent({
@@ -209,7 +216,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     // the next `motir next` moves past it instead of re-picking the failure.
     addExclude(serverUrl, projectKey, { key });
     info('');
-    info(renderAgentFailure(key, result.exitCode));
+    info(renderAgentFailure(key, result.exitCode, dispatch));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
     process.exitCode = result.exitCode;

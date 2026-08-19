@@ -674,8 +674,8 @@ describe('a MULTI-REPOSITORY card — one agent, every repository named (MOTIR-3
     dispatchPrompt({
       targetRepo: 'motir-core',
       targetRepos: [
-        { name: 'motir-core', cloneUrl: null, defaultBranch: 'main' },
-        { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk' },
+        { name: 'motir-core', cloneUrl: null, defaultBranch: 'main', delivery: 'awaiting' },
+        { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk', delivery: 'awaiting' },
       ],
       ...over,
     });
@@ -724,5 +724,66 @@ describe('a MULTI-REPOSITORY card — one agent, every repository named (MOTIR-3
     expect(runAgentMock.mock.calls[0]?.[0].cwd).toBe(join(harness.root, 'motir-core'));
     expect(harness.stderr).not.toContain('ships in every one of them');
     expect(harness.stderr).not.toContain('motir-ai');
+  });
+});
+
+describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
+  const halfShipped = () =>
+    dispatchPrompt({
+      targetRepo: 'motir-core',
+      targetRepos: [
+        { name: 'motir-core', cloneUrl: null, defaultBranch: 'main', delivery: 'delivered' },
+        { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk', delivery: 'awaiting' },
+      ],
+    });
+
+  it('names the resume, what is done and what remains, BEFORE the agent starts', async () => {
+    setup({ prompt: halfShipped(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(harness.stderr).toContain('PARTIALLY DELIVERED');
+    expect(harness.stderr).toContain('already delivered: motir-core');
+    expect(harness.stderr).toContain('still outstanding: motir-ai');
+  });
+
+  it('does not tell the operator the card is finished when the agent exits 0', async () => {
+    setup({ prompt: halfShipped(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(harness.stderr).toContain('a pull request is expected in EACH of its 2 repositories');
+    expect(harness.stderr).not.toContain('its pull request should be open');
+    expect(harness.stderr).not.toContain('motir done PROD-7');
+  });
+
+  it('prints no resume line for a card whose repositories are all awaiting', async () => {
+    setup({
+      prompt: dispatchPrompt({
+        targetRepos: [
+          { name: 'motir-core', cloneUrl: null, defaultBranch: 'main', delivery: 'awaiting' },
+          { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk', delivery: 'awaiting' },
+        ],
+      }),
+      repos: ['motir-core', 'motir-ai'],
+    });
+    await nextCommand({ agent: 'claude' });
+
+    expect(harness.stderr).not.toContain('PARTIALLY DELIVERED');
+  });
+
+  it('makes NO additional request for any of it — every fact is already on the payload', async () => {
+    // The boundary: this card reports, it does not ask. A second read would be a
+    // second source of truth about what has shipped, which is the defect
+    // `lib/workItems/repoDelivery.ts` exists to prevent one level down.
+    setup({ prompt: halfShipped(), repos: ['motir-core', 'motir-ai'] });
+    await nextCommand({ agent: 'claude' });
+
+    expect(toolNames()).toEqual([
+      'whoami',
+      'next_ready',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+      'transition_status',
+    ]);
   });
 });

@@ -7,6 +7,7 @@ import {
   renderDispatchAdvisories,
   renderDispatchSummary,
   renderRepositoriesBlock,
+  renderResumeNotice,
   renderSessionOutcomes,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -526,7 +527,9 @@ describe('the REPOSITORIES block', () => {
       renderDispatchSummary({
         ...one,
         dispatch: prompt({
-          targetRepos: [{ name: 'motir-core', cloneUrl: null, defaultBranch: null }],
+          targetRepos: [
+            { name: 'motir-core', cloneUrl: null, defaultBranch: null, delivery: 'awaiting' },
+          ],
         }),
         target,
         targets: resolveDispatchTargets(ROOT, LINK, ['motir-core'], { exists }),
@@ -584,5 +587,166 @@ describe('the bootstrap post-condition, over the whole set', () => {
     expect(suspects[0]).toBeNull();
     expect(suspects[1]?.repoName).toBe('motir-ai');
     expect(suspects[1]?.message).toContain('motir-ai');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT HAS SHIPPED, and what has not (Story MOTIR-2731 · MOTIR-3136)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A multi-repository card has a MIDDLE state and the CLI had no vocabulary for
+// it: one repository's pull request has merged and the other's has not, the
+// completion gate is holding the card — correctly — and every line the run
+// printed was about a single repository. `renderAgentSuccess` said *"its pull
+// request should be open"* and *"review + merge the PR, then `motir done`"*,
+// which for that card is not merely incomplete: it reads as reassurance, at the
+// exact moment the operator could still notice that half the work has no pull
+// request at all.
+//
+// Everything here is a PURE renderer over the payload the run already fetched —
+// no client, no clock, no second request.
+
+/** A payload carrying N repositories with the given delivery states. */
+function withRepos(...states: [string, string | null][]): DispatchPrompt {
+  return prompt({
+    targetRepo: states[0]?.[0] ?? null,
+    targetRepos: states.map(([name, delivery]) => ({
+      name,
+      cloneUrl: null,
+      defaultBranch: 'main',
+      delivery,
+    })),
+  });
+}
+
+describe('the RESUME notice', () => {
+  it('names a partially delivered card, what is done and what remains', () => {
+    const notice = renderResumeNotice(
+      withRepos(['motir-core', 'delivered'], ['motir-ai', 'awaiting']),
+    );
+    expect(notice).toContain('PARTIALLY DELIVERED');
+    expect(notice).toContain('already delivered: motir-core');
+    expect(notice).toContain('still outstanding: motir-ai');
+    expect(notice).toContain(
+      'Do not re-open a pull request in a repository that has already merged',
+    );
+  });
+
+  it('prints NOTHING when nothing has delivered, when everything has, or for one repository', () => {
+    // A fresh card and a finished one are both "not a resume" — the notice
+    // exists to mark the middle, and a line that always prints marks nothing.
+    expect(
+      renderResumeNotice(withRepos(['motir-core', 'awaiting'], ['motir-ai', 'awaiting'])),
+    ).toBeNull();
+    expect(
+      renderResumeNotice(withRepos(['motir-core', 'delivered'], ['motir-ai', 'delivered'])),
+    ).toBeNull();
+    expect(renderResumeNotice(withRepos(['motir-core', 'delivered']))).toBeNull();
+    expect(renderResumeNotice(prompt())).toBeNull();
+  });
+});
+
+describe('the delivery state on each repository line', () => {
+  const targets = (n: number) =>
+    resolveDispatchTargets(ROOT, LINK, ['motir-core', 'motir-ai'].slice(0, n), { exists: none });
+
+  it('distinguishes unestablished and excluded from awaiting — the reader’s next action differs', () => {
+    // Not shades of one answer: `awaiting` points at the host, `unestablished`
+    // at the project's establish step, and `excluded` says nothing is expected
+    // there at all. Collapsing them is what produced a false "No pull request
+    // yet" one level down.
+    const text = renderRepositoriesBlock(targets(2), ['unestablished', 'excluded']).join('\n');
+    expect(text).toContain('NOT ESTABLISHED');
+    expect(text).toContain('does not exist yet');
+    expect(text).toContain('excluded');
+    expect(text).toContain('does not hold this card');
+    expect(text).not.toContain('awaiting');
+  });
+
+  it('renders an UNKNOWN state verbatim rather than mapping it onto a neighbour', () => {
+    // The forward-compatibility rule the advisory renderer already follows: a
+    // build that guesses is worse than one that admits.
+    expect(renderRepositoriesBlock(targets(2), ['delivered', 'teleported']).join('\n')).toContain(
+      'teleported',
+    );
+  });
+
+  it('says nothing at all when the state is null — the repository the card does not carry', () => {
+    expect(renderRepositoriesBlock(targets(2), [null, null]).join('\n')).not.toContain('awaiting');
+  });
+});
+
+describe('renderAgentSuccess for a card that ships in more than one repository', () => {
+  const success = () =>
+    renderAgentSuccess('PROD-7', withRepos(['motir-core', 'delivered'], ['motir-ai', 'awaiting']));
+
+  it('names every repository and says the card completes only when EVERY one has merged', () => {
+    const text = success();
+    expect(text).toContain('a pull request is expected in EACH of its 2 repositories');
+    expect(text).toContain('motir-core');
+    expect(text).toContain('motir-ai');
+    expect(text).toContain("EVERY\nrepository's pull request has merged");
+  });
+
+  it('does NOT claim the card is finished, and drops the singular follow-up', () => {
+    // `motir done PROD-7` on a card the completion gate is holding is an
+    // instruction that cannot succeed, which is worse than no instruction.
+    const text = success();
+    expect(text).not.toContain('its pull request should be open');
+    expect(text).not.toContain('motir done PROD-7');
+    expect(text).not.toContain('(now In Review)');
+  });
+
+  it('calls out an UNESTABLISHED repository as a stopper, in its own words', () => {
+    const text = renderAgentSuccess(
+      'PROD-7',
+      withRepos(['motir-core', 'awaiting'], ['motir-ai', 'unestablished']),
+    );
+    expect(text).toContain('cannot be delivered yet');
+    expect(text).toContain('Establish it on the project');
+  });
+
+  it('is byte-identical to today’s for a one-repository card and an unpinned one', () => {
+    expect(renderAgentSuccess('PROD-7', withRepos(['motir-core', 'awaiting']))).toBe(
+      renderAgentSuccess('PROD-7', prompt()),
+    );
+    expect(renderAgentSuccess('PROD-7', prompt({ targetRepo: null, targetRepos: [] }))).toBe(
+      renderAgentSuccess('PROD-7', prompt({ targetRepo: null })),
+    );
+  });
+
+  it('carries the multi-repository form into SESSION LINEAGE too', () => {
+    const text = renderAgentSuccess(
+      'PROD-7',
+      withRepos(['motir-core', 'awaiting'], ['motir-ai', 'awaiting']),
+    );
+    const lineage = renderAgentSuccess('PROD-7', {
+      ...withRepos(['motir-core', 'awaiting'], ['motir-ai', 'awaiting']),
+      workflowMode: 'session_lineage',
+      sessionBranch: 'motir/auto-1',
+    });
+    expect(lineage).toContain('in 2');
+    expect(lineage).toContain('review + merge the session PR in EACH of them');
+    expect(lineage).not.toBe(text);
+  });
+});
+
+describe('renderAgentFailure names how wide the half-done work is', () => {
+  it('adds the repositories, and changes no part of the policy', () => {
+    const text = renderAgentFailure(
+      'PROD-7',
+      3,
+      withRepos(['motir-core', 'awaiting'], ['motir-ai', 'awaiting']),
+    );
+    expect(text).toContain('stays In Progress (nothing was reverted)');
+    expect(text).toContain('motir run PROD-7');
+    expect(text).toContain('ships in 2 repositories (motir-core, motir-ai)');
+    expect(text).toContain('more than one checkout');
+  });
+
+  it('is byte-identical to today’s with no payload, and for a one-repository card', () => {
+    expect(renderAgentFailure('PROD-7', 3)).toBe(
+      renderAgentFailure('PROD-7', 3, withRepos(['motir-core', 'awaiting'])),
+    );
   });
 });

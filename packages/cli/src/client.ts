@@ -416,7 +416,24 @@ export interface DispatchPrompt {
    * such key, and absent must read as "this card ships in one place" — the
    * single-repository path — rather than as a crash.
    */
-  targetRepos?: { name: string; cloneUrl: string | null; defaultBranch: string | null }[];
+  targetRepos?: {
+    name: string;
+    cloneUrl: string | null;
+    defaultBranch: string | null;
+    /**
+     * What this repository has to show for itself (MOTIR-3136) — `delivered`
+     * (a pull request merged onto its own default branch), `awaiting`,
+     * `unknown`, `unestablished` (the repository does not exist yet, so there is
+     * nothing to open a pull request against) or `excluded` (the project is
+     * deliberately code-less there, and it does not hold the card).
+     *
+     * `null` for a repository the card does not carry — the unpinned card whose
+     * project has exactly one. The wire type is an open string for the same
+     * reason `advisories`' severity is: a state a newer server adds must read as
+     * "something this build has no words for", not as a crash.
+     */
+    delivery: string | null;
+  }[];
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
   /**

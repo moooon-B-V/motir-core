@@ -290,6 +290,70 @@ export interface DispatchSummaryInput {
 }
 
 /**
+ * The five per-repository delivery states, in the words a PERSON needs
+ * (MOTIR-3136 · `lib/workItems/repoDelivery.ts`).
+ *
+ * ⚠️ `unestablished` and `excluded` are NOT shades of `awaiting`, and the
+ * difference is the reader's next ACTION rather than a nuance. `awaiting` says a
+ * pull request has not been opened and points at the host; `unestablished` says
+ * there is no repository to open one against and points at the project's
+ * establish step; `excluded` says nothing is expected there at all, and it is
+ * the one state that does not hold the card. Collapsing them is what produced
+ * the false "No pull request yet" row one level down.
+ *
+ * An UNKNOWN state — one a newer server added — renders verbatim rather than
+ * being mapped onto a neighbour, for the same reason the advisory renderer
+ * prints nothing for a family it does not know: a build that guesses is worse
+ * than one that admits.
+ */
+function deliveryLabel(state: string | null): string | null {
+  switch (state) {
+    case null:
+      return null;
+    case 'delivered':
+      return 'delivered — a pull request has merged onto its default branch';
+    case 'awaiting':
+      return 'awaiting — no merged pull request yet';
+    case 'unknown':
+      return 'unknown — a merge is recorded but not which branch it reached';
+    case 'unestablished':
+      return 'NOT ESTABLISHED — this repository does not exist yet, so there is nothing to open a pull request against';
+    case 'excluded':
+      return 'excluded — the project is deliberately code-less here; it does not hold this card';
+    default:
+      return state;
+  }
+}
+
+/** The repositories of a card that carries more than one, or `[]`. */
+function repoSet(dispatch: DispatchPrompt): NonNullable<DispatchPrompt['targetRepos']> {
+  const repos = dispatch.targetRepos ?? [];
+  return repos.length >= 2 ? repos : [];
+}
+
+/**
+ * The RESUME line (MOTIR-3136) — printed only when at least one repository has
+ * delivered and at least one has not.
+ *
+ * A partially delivered card is a legitimate resting state, not an error (ADR
+ * §B4), and the whole cost of not saying so is that a resumed run reads exactly
+ * like a fresh one: the operator has no way to tell that half the work is
+ * already on `main` and the agent should not re-open it.
+ */
+export function renderResumeNotice(dispatch: DispatchPrompt): string | null {
+  const repos = repoSet(dispatch);
+  const delivered = repos.filter((r) => r.delivery === 'delivered').map((r) => r.name);
+  const remaining = repos.filter((r) => r.delivery !== 'delivered').map((r) => r.name);
+  if (delivered.length === 0 || remaining.length === 0) return null;
+  return [
+    `Resume:     ${dispatch.key} is PARTIALLY DELIVERED — this is not a fresh card.`,
+    `            already delivered: ${delivered.join(', ')}`,
+    `            still outstanding: ${remaining.join(', ')}`,
+    '            Do not re-open a pull request in a repository that has already merged.',
+  ].join('\n');
+}
+
+/**
  * The REPOSITORIES block — one line per repository, in set order, with the
  * primary marked as the working directory.
  *
@@ -303,13 +367,19 @@ export interface DispatchSummaryInput {
  * and the exit code is untouched. (ADR `work-item-repository-set.md`
  * § *Amendment 2026-08-19* §B6(a).)
  */
-export function renderRepositoriesBlock(targets: DispatchTarget[]): string[] {
+export function renderRepositoriesBlock(
+  targets: DispatchTarget[],
+  delivery?: (string | null)[],
+): string[] {
   if (targets.length <= 1) return [];
   const lines = [`Repos:      ${targets.length} — this item ships in every one of them:`];
   targets.forEach((t, i) => {
     const where = i === 0 ? 'the working directory' : 'a sibling checkout';
     lines.push(`            - ${t.targetRepo ?? '(unpinned)'}  (${where})`);
     lines.push(`                ${t.repoPath ?? t.cwd}  (${t.repoSource ?? 'root'})`);
+    // MOTIR-3136 — what this repository has already shipped, beside where it is.
+    const label = deliveryLabel(delivery?.[i] ?? null);
+    if (label) lines.push(`                ${label}`);
     if (t.reason === 'bootstrap_root') {
       lines.push(
         `                ⚠ no checkout here yet. This is NOT a blocker — the dispatch`,
@@ -336,7 +406,10 @@ export function renderDispatchSummary(input: DispatchSummaryInput): string {
     // MOTIR-3133 — every OTHER repository the card ships in, and where each one
     // resolved to. Nothing is emitted for a one-repository or unpinned card, so
     // the two lines above are still the whole answer for every card that exists.
-    ...renderRepositoriesBlock(input.targets ?? []),
+    ...renderRepositoriesBlock(
+      input.targets ?? [],
+      (dispatch.targetRepos ?? []).map((r) => r.delivery),
+    ),
     `Workflow:   ${workflowLabel(dispatch.workflowMode, dispatch.sessionBranch)}`,
   ];
   lines.push(
@@ -354,11 +427,50 @@ export function renderDispatchSummary(input: DispatchSummaryInput): string {
  * so its close-out is the bulk `motir done --session`.
  */
 export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): string {
+  const repos = repoSet(dispatch);
   if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
+    if (repos.length > 0) {
+      return [
+        `${key}: agent finished — integrated on "${dispatch.sessionBranch}" in ${repos.length}`,
+        `repositories: ${repos.map((r) => r.name).join(', ')}.`,
+        `Next: review + merge the session PR in EACH of them, then`,
+        `\`motir done --session ${dispatch.sessionBranch}\`.`,
+        `${key} is not complete until every repository's pull request has merged.`,
+      ].join('\n');
+    }
     return [
       `${key}: agent finished — integrated on "${dispatch.sessionBranch}" (now In Review).`,
       `Next: review + merge the session PR, then \`motir done --session ${dispatch.sessionBranch}\`.`,
     ].join('\n');
+  }
+  // ⚠️ THE MULTI-REPOSITORY FORM MUST NOT SAY THE CARD IS FINISHED. The single
+  // line below is not merely incomplete for a card carrying two repositories —
+  // it reads as reassurance, at the exact moment the operator could still notice
+  // that half the work has no pull request. It also drops the singular follow-up
+  // deliberately: `motir done <key>` on a card the completion gate is holding
+  // would be an instruction that cannot succeed.
+  if (repos.length > 0) {
+    const lines = [
+      `${key}: agent finished — a pull request is expected in EACH of its ${repos.length} repositories:`,
+    ];
+    for (const repo of repos) {
+      const label = deliveryLabel(repo.delivery);
+      lines.push(`  - ${repo.name}${label ? ` — ${label}` : ''}`);
+    }
+    const blocked = repos.filter((r) => r.delivery === 'unestablished');
+    if (blocked.length > 0) {
+      lines.push(
+        '',
+        `⚠ ${blocked.map((r) => r.name).join(', ')} cannot be delivered yet: the repository does`,
+        '  not exist. Establish it on the project before this card can complete.',
+      );
+    }
+    lines.push(
+      '',
+      `Next: review + merge every one of them. ${key} completes only when EVERY`,
+      "repository's pull request has merged — a single merge leaves it held.",
+    );
+    return lines.join('\n');
   }
   return [
     `${key}: agent finished — its pull request should be open (now In Review).`,
@@ -372,11 +484,26 @@ export function renderAgentSuccess(key: string, dispatch: DispatchPrompt): strin
  * it to `todo` would hide that. It is added to the session exclude list instead,
  * so the next `motir next` moves on rather than re-picking the same failure.
  */
-export function renderAgentFailure(key: string, exitCode: number): string {
-  return [
+export function renderAgentFailure(
+  key: string,
+  exitCode: number,
+  dispatch?: DispatchPrompt,
+): string {
+  const lines = [
     `${key}: agent exited ${exitCode}. The item stays In Progress (nothing was reverted).`,
     `It is excluded from the next \`motir next\` in this session; re-run it with \`motir run ${key}\`.`,
-  ].join('\n');
+  ];
+  // MOTIR-3136 — how WIDE the half-done work is. The policy above is unchanged;
+  // what a person reading a failed multi-repository run cannot otherwise tell is
+  // how many checkouts they may now have to look in.
+  const repos = dispatch ? repoSet(dispatch) : [];
+  if (repos.length > 0) {
+    lines.push(
+      `${key} ships in ${repos.length} repositories (${repos.map((r) => r.name).join(', ')}),`,
+      'so partial work may be sitting in more than one checkout.',
+    );
+  }
+  return lines.join('\n');
 }
 
 /** The per-item outcome lines of a `complete_session` bulk close-out. */
