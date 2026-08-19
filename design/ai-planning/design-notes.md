@@ -2,16 +2,21 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                 | Files                                         | Card                 | Section  |
-| ----------------------- | --------------------------------------------- | -------------------- | -------- |
-| The Plans surface       | `plans-surface.mock.html` + `.png`            | MOTIR-843 (7.4.1)    | Part I   |
-| AI **sprint** planning  | `sprint-planning.mock.html` + `.png`          | MOTIR-1749 (7.13.11) | Part II  |
-| **Who authored a plan** | `plans-surface.mock.html` (panel A2) + `.png` | MOTIR-2985           | Part III |
+| Surface                       | Files                                         | Card                 | Section  |
+| ----------------------------- | --------------------------------------------- | -------------------- | -------- |
+| The Plans surface             | `plans-surface.mock.html` + `.png`            | MOTIR-843 (7.4.1)    | Part I   |
+| AI **sprint** planning        | `sprint-planning.mock.html` + `.png`          | MOTIR-1749 (7.13.11) | Part II  |
+| **Who authored a plan**       | `plans-surface.mock.html` (panel A2) + `.png` | MOTIR-2985           | Part III |
+| Out-of-plan **PARENT** signal | `plans-surface.mock.html` (panel E) + `.png`  | MOTIR-3082           | Part IV  |
+| A proposal **READ view**      | `plans-surface.mock.html` (panel F) + `.png`  | MOTIR-3082           | Part IV  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
 Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
 and its AUTHOR, to a shipped row and a shipped header, and redraws nothing.
+**Part IV amends it again** — two panels on the plan DETAIL surface (the parent a proposal will
+be created under, and a read view for one proposal), composing the shipped canvas peek rather than
+drawing a second one.
 
 ---
 
@@ -649,3 +654,185 @@ Written into those cards in the same pass (the sweep-the-referrers rule):
 **Explicitly NOT closed here:** the shipped row does not render the DECIDER, though panel A draws it.
 That is a pre-existing gap in the third axis, out of this story's scope, and it is named so nobody
 reads panel A as shipped behaviour.
+
+---
+
+# Part IV — The plan-review DETAIL surfaces: the out-of-plan PARENT signal and a proposal READ view (MOTIR-3082 / bug MOTIR-3070)
+
+**Amends Parts I–III's asset in place**: the same three files
+(`design-notes.md` · `plans-surface.mock.html` · `plans-surface.png`), two new panels — **E** and **F**.
+Nothing already drawn is redrawn.
+
+| Surface                                                     | Panel | Gates      |
+| ----------------------------------------------------------- | ----- | ---------- |
+| The out-of-plan **parent** signal on the plan-detail canvas | **E** | MOTIR-3083 |
+| The proposal **read view** and its door                     | **F** | MOTIR-3084 |
+
+## 0. The gap, and why it needed a design pass at all
+
+`MOTIR-3070` reports two absences on the plan-detail canvas Part I §3 Panel B draws. Panel B
+specifies exactly three op treatments (`add` / `modify` / `remove`) plus MOTIR-1370's inline-edit
+modal, and it specifies **no parent context on a node** and **no per-proposal detail surface**. A
+`grep` across every `design/*/design-notes.md` finds neither drawn anywhere else in the tree, so both
+are whole elements rather than unspecified details — the design gate's NONE-exists case, and the
+reason the card's `motir run` stopped instead of improvising.
+
+## 1. What this composes — and does NOT redesign
+
+Per `notes.html` **#82** and **#95**: cite the asset, the COMPONENT, and its contract.
+
+| Composed                                   | Real asset / component                                                                                                                            | What it owns — NOT re-drawn here                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The plan-detail canvas + its op treatments | Part I §3 Panel B · `components/planning/PlanItemNode.tsx` · `PlanReviewCanvas.tsx`                                                               | The three op languages, the stale badge, the drill chevron, the edit pencil, the node's fixed `NODE_W`/`NODE_H` footprint                          |
+| The canvas **detail-surface pattern**      | `design/roadmap/design-notes.md` § _Canvas detail surfaces_ (MOTIR-1351) · built by MOTIR-1352                                                    | **Select a node → the selected card's `View` button → a `Modal size="xl"` peek.** This design adds no second interaction model; it reuses that one |
+| The peek **body**                          | `design/work-items/quick-view.mock.html` · `components/planning/WorkItemQuickView.tsx` → `app/(authed)/items/_components/IssueQuickViewPanel.tsx` | The `.qv-head` / `.qv-body` / `.qv-main` + `.qv-rail` two-column shell, the section labels, the read-only rail rows                                |
+| The dependency **ghost anchor**            | `design/roadmap/design-notes.md`, cross-level dependency                                                                                          | The red dashed + hatched off-level anchor and its `blocked elsewhere` flag — **cited here only to stay away from it** (§2)                         |
+| The edit path                              | `ProposalEditModal.tsx` (MOTIR-1370)                                                                                                              | Editing an `add`. Unchanged, and still the ONLY writer                                                                                             |
+
+## 2. Panel E — the out-of-plan PARENT signal
+
+### The problem in one sentence
+
+`isRoot` (`lib/planning/projectCanvasModel.ts:141`) is true both for _a node with no parent_ and for
+_a node whose parent is not in the rendered set_, so a proposal parented under a **committed** work
+item draws at the top level, identical to a genuine root — and where a card lands in the tree is one
+of the things approval decides.
+
+### The decision: ADD AN OBJECT, do not restyle the node
+
+The node's frame is fully spoken for. Four languages already live on this canvas, and each was
+chosen so it cannot be confused with the others:
+
+| Existing language                                           | Means                                                  | Where                           |
+| ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------- |
+| Dashed **accent** border + lavender tint                    | `add` — proposed, not yet real                         | Part I §3 Panel B               |
+| Solid **info / sky** ring                                   | `modify` — a change to an existing item                | Part I §3 Panel B               |
+| Muted grey + strike-through title                           | `remove` — will be archived                            | Part I §3 Panel B               |
+| **Red** dashed + **hatched** chip, `blocked elsewhere` flag | a bad-plan TANGLE — a dependency the level cannot show | `design/roadmap`                |
+| Dashed border, `not in sprint`                              | outside the current sprint                             | `design/roadmap` (sprint scope) |
+
+So the parent signal is **not a border, not a fill, and not a hue on the node**. It is a separate,
+quieter object: a **parent chip** pinned above the node and joined to it by a short neutral stem —
+`↳ MOTIR-2200 · The Motir agent loop`, with the parent's kind glyph, in `--soft` on `--secondary`
+ink with a `--hair` border.
+
+**Why it cannot be read as any of the five.** It is not on the node, so it cannot be mistaken for an
+op treatment. It carries no semantic hue at all — the ghost anchor's whole signal is `--danger`, and
+the reason this must not borrow it is that **a proposal parented under a committed item is the
+normal, endorsed case**: `lib/dto/planReview.ts` states that a real work-item `parentRef` _"stays
+as-is"_, and MOTIR-2982's MCP door emits exactly this shape by design. Painting the ordinary case in
+the colour reserved for a broken plan teaches a reviewer to stop trusting the colour. It is solid,
+not dashed, so it does not read as _not in sprint_ or as _proposed_.
+
+**It deliberately borrows the ghost anchor's STRUCTURE while inverting its TONE** — both name an
+off-canvas thing beside the node it belongs to, because that is the shape a reader already knows.
+Structure is the reusable part; the alarm is not.
+
+### States drawn
+
+1. **One parented proposal** — chip above the node, stem down to it.
+2. **A genuine root** — no chip, no stem, unchanged from Panel B. This is the contrast the panel
+   exists to make legible; the two nodes sit side by side.
+3. **A parent that is archived or missing** — **no chip.** The card degrades to the root treatment
+   (MOTIR-3083 AC 5). Naming a parent the reader cannot open is worse than naming none, and the
+   alternative — a chip in an error state — would put the danger language back on the ordinary path
+   by the side door.
+4. **Mixed roots** — a level holding both kinds at once, which is the only state in which the
+   distinction actually earns its pixels.
+
+### What it is NOT
+
+It is **not** an edge, and it draws no line into the parent's own node: the parent has no node at
+this level, which is the whole premise. It does **not** change `isRoot` — that predicate is correct
+for its stated purpose (a partial subtree rendering with its top nodes as roots) and the distinction
+belongs in the plan's own forest model (`buildPlanForest`), per MOTIR-3083 AC 4.
+
+## 3. Panel F — the proposal READ view, and its door
+
+### The door
+
+The canvas already has one, and this design does not invent a second: MOTIR-1351 specifies
+**select a node → the selected card's `View` button → a `Modal size="xl"` peek**, and MOTIR-1352
+shipped it for work-item nodes. The proposed node gains the same **`View`** button, in the node's
+top-right control cluster, **to the left of** MOTIR-1370's edit pencil — so the pair reads
+`View · Edit`, in the order the roadmap's own selected card uses (`View` then `Open ›`).
+
+**Which ops carry it: all three.** An `add` peeks its PROPOSAL (there is nothing else to peek); a
+`modify` or `remove` peeks the **live target**, which is an ordinary work item and therefore the
+already-shipped `WorkItemQuickView`. The pencil remains `add`-only, because only an `add` is
+editable. That asymmetry is the point: **every proposal can be read; only one kind can be written.**
+
+### The body for an `add` — and the one place it must NOT copy the work-item peek
+
+The shipped work-item peek ends with a deliberate deferral:
+
+> _"Explanation, child items, the full relationships / links panel, attachments, and the activity
+> feed live on the **full page**."_
+
+That is correct for a work item and **impossible for a proposal**: a proposal has no full page —
+`app/(authed)/plans/` holds `page.tsx` and `[id]/page.tsx` and nothing per item — and MOTIR-3070's
+sharpest finding is that `explanationMd` is carried, diffed, and materialized while no code path in
+the review surface reads it. So the proposal peek **renders both bodies inline**, as two sibling
+sections in the work-item page's own grammar, and defers nothing.
+
+| Field                             | Rendered as                                                                              | Composed from                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `descriptionMd`                   | `Description` section, **Markdown**                                                      | `.qv-section-label` + `.qv-desc` (the shipped peek)                          |
+| `explanationMd`                   | `Why this matters` section, **Markdown**, directly below                                 | the same pair — the item page renders the two as siblings                    |
+| `kind` · `type`                   | rail rows with the shipped `IssueTypeIcon` + work-type chip                              | `.qv-rail` `.rail-field`                                                     |
+| `priority`                        | rail row, shipped priority chip                                                          | `.rail-field`                                                                |
+| `storyPoints` · `estimateMinutes` | one rail row each — points as the shipped `EstimateBadge` language, estimate in minutes  | `.rail-field`                                                                |
+| `targetRepo` / `targetRepoRole`   | rail row, mono repo name; the ROLE when no name is pinned yet                            | `.rail-field` + the repository row from `design/work-items/repository-set.*` |
+| `executor`                        | rail row — _Coding agent_ / _Human_                                                      | `.rail-field`                                                                |
+| `explanationSource`               | a quiet `AI-drafted` marker beside the `Why this matters` label, when the source says so | the shipped provenance chip language                                         |
+
+**The head differs from the work-item peek in exactly three ways, and each is forced by the model:**
+there is **no identifier** (the `.qv-id` slot carries the `add` op badge and the word `new` instead —
+the same `new` the node already shows), there is **no status pill** (a proposal has no status until
+it materializes), and the primary action is **not** `Open full page →` — there is no page — so the
+head carries `Close` alone. Nothing else moves.
+
+### `modify` / `remove`
+
+The peek shows the **live target**, i.e. the shipped `WorkItemQuickView` verbatim, with the op badge
+in the head so the reader knows which side they are looking at. The old→new diff stays where Panel B
+already draws it, on the node: duplicating it inside the peek would give two renderings of one fact
+that can disagree. A `remove` peek is the target as it stands today — the thing that will be archived.
+
+### Read-only, and after a decision
+
+The peek exposes **no write path**: no fields, no save, no destructive action. `ProposalEditModal`
+remains the only editor for an `add`, reached from the pencil beside `View`. A **decided** plan is
+read-only per Part I, and the read view **stays available** on it — reading is exactly what a decided
+plan still supports, and it is how somebody later answers _what did we approve?_.
+
+### a11y
+
+`Modal` owns focus trap, `Esc`, and the backdrop; the dialog is labelled by the proposal title. The
+op badge carries **text**, not colour alone. `View` and `Edit` are icon buttons with `aria-label`s and
+stop propagation so a press cannot start a canvas drag — the same guard the shipped node's pencil
+uses. Copy lives in the `planReview` namespace.
+
+## 4. Tokens + primitives
+
+Colour via the element/semantic tokens only, inlined here as light values exactly as
+`quick-view.mock.html` does; no Tier-0 `--color-*`, no raw `rounded-md` / `p-2` / `h-9`. Everything
+composes a shipped primitive — `Modal`, `Card`, `Pill`, `SectionLabel`, `IssueQuickViewPanel`,
+`CoreFieldsPanel`, `IssueTypeIcon`. **No new primitive is introduced**; a genuinely new one would be
+its own design subtask.
+
+## 5. GIVES / TAKES sweep
+
+`grep`ped this asset for every `MOTIR-<n>` it names, and read the result against MOTIR-3070's subtree
+(the asset's key list says where to START; the subtree says where to STOP):
+
+| Key                                             | Gives / takes                                                                              | Action                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------- |
+| **MOTIR-3083**                                  | **GIVES** panel E — the parent chip, its states, and the rule that `isRoot` is not touched | none; its ACs already say this        |
+| **MOTIR-3084**                                  | **GIVES** panel F — the door, the head's three differences, the field-by-field body        | none; its ACs already say this        |
+| MOTIR-3070                                      | **GIVES** its two UI criteria a drawn answer                                               | none — the parent record is unchanged |
+| MOTIR-1370                                      | neither — the edit modal is untouched and stays the only writer                            | none                                  |
+| MOTIR-1351 / MOTIR-1352                         | neither — this composes the shipped detail-surface pattern and adds no second one          | none                                  |
+| MOTIR-847 / MOTIR-850 / MOTIR-2982 / MOTIR-2985 | neither — cited as history / provenance                                                    | none                                  |
+
+**Nothing is TAKEN from any card**, so no acceptance criteria elsewhere are invalidated by this pass.

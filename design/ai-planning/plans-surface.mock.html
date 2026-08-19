@@ -1270,6 +1270,183 @@
         color: var(--faint);
         font-size: 12px;
       }
+
+      /* ===== Part IV (MOTIR-3082) — the plan-review DETAIL surfaces ========= */
+      /* Panel E — the out-of-plan PARENT chip. NOT a border, NOT a fill, and no
+         semantic hue: the node's frame is owned by the three op treatments, red
+         dashed+hatch is the dependency TANGLE signal, and dashed is "not in
+         sprint". A parent outside the plan is the ordinary case, so it gets a
+         separate, quieter OBJECT above the node instead of a restyled node. */
+      .pchip {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 236px;
+        padding: 4px 9px;
+        border: 1px solid var(--hair);
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--secondary);
+        font-size: 11.5px;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+      .pchip .k {
+        color: var(--faint);
+      }
+      .pchip .pid {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--muted);
+      }
+      .pchip .ptitle {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 132px;
+      }
+      .pchip svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      /* The stem: 1px, solid, neutral. Solid so it cannot read as a proposed or
+         not-in-sprint dash; neutral so it cannot read as a dependency edge, all
+         of which are hued and arrow-headed. */
+      .pstem {
+        position: absolute;
+        width: 1px;
+        background: var(--border-strong);
+      }
+      /* The View button — the canvas detail-surface door (MOTIR-1351/1352),
+         placed LEFT of MOTIR-1370's edit pencil so the pair reads View · Edit. */
+      .viewbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .viewbtn svg {
+        width: 13px;
+        height: 13px;
+      }
+      .viewbtn.is-selected {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      /* A SELECTED node — the accent ring the shipped canvas already uses for
+         selection (roadmap panel 1). Selection is what reveals View. */
+      .node.selected {
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+      /* Panel F — the peek. The SHIPPED work-item peek shell, reused: Modal
+         size="xl", .qv-head / .qv-body / .qv-main + .qv-rail. */
+      .qvm {
+        width: 720px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 18px 48px rgb(24 22 20 / 14%);
+        overflow: hidden;
+      }
+      .qvhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .qvhead .sp {
+        flex: 1;
+      }
+      .qvbody {
+        display: grid;
+        grid-template-columns: 1fr 232px;
+        min-height: 268px;
+      }
+      .qvmain {
+        padding: 16px 18px;
+        border-right: 1px solid var(--hair);
+      }
+      .qvtitle {
+        margin: 0 0 12px;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 19px;
+        color: var(--text);
+      }
+      .qvsec {
+        display: block;
+        margin: 14px 0 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .qvsec:first-of-type {
+        margin-top: 0;
+      }
+      .qvdesc {
+        font-size: 13px;
+        line-height: 1.62;
+        color: var(--secondary);
+      }
+      .qvdesc p {
+        margin: 0 0 8px;
+      }
+      .qvdesc ul {
+        margin: 0 0 8px;
+        padding-left: 18px;
+      }
+      .qvdesc code {
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: var(--mutedfill);
+        font-size: 12px;
+      }
+      .qvrail {
+        padding: 14px 16px;
+        background: var(--soft);
+      }
+      .rf {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--hair);
+        font-size: 12px;
+      }
+      .rf:last-child {
+        border-bottom: 0;
+      }
+      .rf .lbl {
+        width: 78px;
+        flex: none;
+        color: var(--faint);
+      }
+      .rf .val {
+        color: var(--strong);
+      }
+      .rf .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+      }
+      .aidraft {
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: none;
+      }
     </style>
   </head>
   <body>
@@ -2967,6 +3144,270 @@
                   <path d="M12 5v14M5 12h14" /></svg
                 >Top up credits
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- ============================================================= -->
+      <!-- PANEL E — the OUT-OF-PLAN PARENT signal (MOTIR-3082)           -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">E</span>
+          <h2>A proposal parented under a COMMITTED item — named, not mistaken for a root</h2>
+          <span class="note"
+            >a separate object above the node · no border, no fill, no semantic hue · the genuine
+            root beside it is unchanged</span
+          >
+        </div>
+        <div class="frame">
+          <div class="viewport" style="height: 310px">
+            <div class="ovl" style="top: 14px; left: 16px">
+              <span class="crumb"
+                ><span class="dot"></span>Plans · Marketplace payouts
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                Top level</span
+              >
+            </div>
+
+            <!-- PARENTED: the chip names the committed parent this add will be
+                 created under; the stem joins it to the node. -->
+            <div class="pchip" style="left: 44px; top: 92px">
+              <span class="k">in</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                <path d="M4 4h16v5H4zM4 13h10v5H4z" />
+              </svg>
+              <span class="pid">MOTIR-2200</span>
+              <span class="ptitle">The Motir agent loop</span>
+            </div>
+            <div class="pstem" style="left: 96px; top: 116px; height: 22px"></div>
+
+            <div class="node add" style="left: 44px; top: 138px; width: 216px">
+              <div class="top">
+                <span class="tile" style="background: var(--peach)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-bug)" stroke-width="2">
+                    <circle cx="12" cy="12" r="7" />
+                    <path d="M12 9v4M12 16h.01" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">A proposal READ view</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+
+            <!-- GENUINE ROOT: no chip, no stem. Unchanged from Panel B — the
+                 contrast is the whole point of drawing them side by side. -->
+            <div class="node add" style="left: 300px; top: 138px; width: 216px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-story-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-story)" stroke-width="2">
+                    <path d="M5 4h11l3 3v13H5z" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">Billing portal</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+
+            <!-- ARCHIVED / MISSING parent: NO chip. The card degrades to the root
+                 treatment (MOTIR-3083 AC 5) — naming a parent the reader cannot
+                 open is worse than naming none, and an "error" chip would put the
+                 danger language back on the ordinary path by the side door. -->
+            <div class="node add" style="left: 556px; top: 138px; width: 200px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">Webhook retry ledger</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+
+            <div
+              style="
+                position: absolute;
+                left: 44px;
+                bottom: 14px;
+                display: flex;
+                gap: 18px;
+                font-size: 11px;
+                color: var(--muted);
+              "
+            >
+              <span>1 · parented under a committed item — chip + stem</span>
+              <span>2 · a genuine root — nothing added</span>
+              <span>3 · parent archived or missing — degrades to root</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL F — the proposal READ view + its DOOR (MOTIR-3082)       -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">F</span>
+          <h2>Read a proposal — the shipped canvas peek, with both bodies inline</h2>
+          <span class="note"
+            >the door: select → View (left of MOTIR-1370's pencil) · the body: Modal size="xl" +
+            IssueQuickViewPanel · no full page to defer to, so nothing is deferred</span
+          >
+        </div>
+        <div class="frame">
+          <!-- F1 — THE DOOR, drawn on the node (the access-path rule). -->
+          <div class="viewport" style="height: 132px">
+            <div class="node add selected" style="left: 44px; top: 26px; width: 250px">
+              <div class="top">
+                <span class="tile" style="background: var(--peach)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-bug)" stroke-width="2">
+                    <circle cx="12" cy="12" r="7" />
+                    <path d="M12 9v4M12 16h.01" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">A proposal READ view</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+                <!-- View: EVERY op carries it. Edit: `add` only (MOTIR-1370). -->
+                <button class="viewbtn is-selected" aria-label="View proposal" title="View">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="2.6" />
+                  </svg>
+                </button>
+                <button class="editbtn" aria-label="Edit proposed item" title="Edit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div
+              style="
+                position: absolute;
+                left: 316px;
+                top: 44px;
+                max-width: 400px;
+                font-size: 11.5px;
+                line-height: 1.6;
+                color: var(--muted);
+              "
+            >
+              A selected node reveals <strong style="color: var(--strong)">View</strong> beside the
+              pencil — the same select → View → peek the roadmap canvas already ships
+              (MOTIR-1351/1352). <strong style="color: var(--strong)">View</strong> is on every op;
+              the pencil stays <code>add</code>-only. A <code>modify</code> / <code>remove</code>
+              peeks its LIVE target, i.e. the shipped work-item quick view.
+            </div>
+          </div>
+
+          <!-- F2 — THE PEEK for an `add`. -->
+          <div style="display: flex; justify-content: center; padding: 18px 0 4px">
+            <div class="qvm" role="dialog" aria-modal="true" aria-labelledby="p4-title">
+              <div class="qvhead">
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+                <!-- No identifier and no status pill: a proposal has neither until
+                     it materializes. The `new` the node shows, shown here too. -->
+                <span style="font-size: 12px; color: var(--faint)">new · not yet created</span>
+                <span class="sp"></span>
+                <!-- No "Open full page →": there IS no page for a proposal. -->
+                <button class="editbtn" aria-label="Edit proposed item" title="Edit">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </button>
+                <button class="editbtn" aria-label="Close">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div class="qvbody">
+                <div class="qvmain">
+                  <h2 class="qvtitle" id="p4-title">A proposal READ view</h2>
+                  <span class="qvsec">Description</span>
+                  <div class="qvdesc">
+                    <p>
+                      A detail surface for one proposal showing both bodies as rendered Markdown,
+                      plus sizing, repo pin and executor — reusing the shipped work-item card
+                      language. <code>ProposalEditModal</code> stays the edit path.
+                    </p>
+                    <ul>
+                      <li>Composes the shipped peek shell; adds no second interaction model.</li>
+                      <li>Read-only — no fields, no save, no destructive action.</li>
+                    </ul>
+                  </div>
+                  <span class="qvsec">Why this matters<span class="aidraft">AI-drafted</span></span>
+                  <div class="qvdesc">
+                    <p>
+                      The second content body is carried on the proposal, diffed, and written onto
+                      the created work item — and no code path in the review surface reads it. A
+                      reviewer approves a rationale they were never shown.
+                    </p>
+                    <p>
+                      The work-item peek can defer this to a full page. A proposal has no full page,
+                      so this one renders it inline.
+                    </p>
+                  </div>
+                </div>
+                <div class="qvrail">
+                  <div class="rf">
+                    <span class="lbl">Type</span
+                    ><span class="val"
+                      ><span class="pill" style="background: var(--t-subtask-soft)">Subtask</span> ·
+                      Code</span
+                    >
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Priority</span><span class="val">High</span>
+                  </div>
+                  <div class="rf"><span class="lbl">Points</span><span class="val">5</span></div>
+                  <div class="rf">
+                    <span class="lbl">Estimate</span><span class="val">120 min</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Repository</span
+                    ><span class="val mono">moooon-B-V/motir-core</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Executor</span><span class="val">Coding agent</span>
+                  </div>
+                  <div class="rf">
+                    <span class="lbl">Parent</span><span class="val mono">MOTIR-3070</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
