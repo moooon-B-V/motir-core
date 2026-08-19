@@ -22,6 +22,14 @@ import { join } from 'node:path';
 //      the fault MOTIR-1970 fixed (five production jobs dead for a month).
 //   4. Verification reads the PLATFORM, never `fly.toml`. A config file is a
 //      claim about the deployment, not a reading of it — MOTIR-2102 verbatim.
+//   5. The WORKFLOW-level concurrency lets a run on `main` FINISH (MOTIR-3106).
+//      The three above are all about the deploy job's own body, and every one
+//      of them held while the deploy was in practice never reached. An
+//      unconditional `cancel-in-progress: true` in the workflow header did not
+//      lose any single release — a later run carries the earlier commits — it
+//      STARVED the lane: the run inheriting the obligation to ship was itself
+//      cancelled by the merge after it, indefinitely. A guard on the job cannot
+//      see that; this one reads the header.
 
 const CI_PATH = join(process.cwd(), '.github/workflows/ci.yml');
 const SYNC_WORKFLOW_PATH = join(process.cwd(), '.github/workflows/inngest-sync.yml');
@@ -95,6 +103,13 @@ function declaredNeeds(jobCode: string): string[] {
 const ciJobs = jobsOf(ci);
 const deployCode = codeOf(ciJobs.get(DEPLOY_JOB) ?? '');
 const deployNeeds = declaredNeeds(deployCode);
+
+/**
+ * The workflow HEADER — everything above `jobs:`, comments stripped. `jobsOf`
+ * deliberately reads only the mapping below it, and the defect MOTIR-3106 fixed
+ * lived entirely up here.
+ */
+const ciHeader = codeOf(ci.split(/^jobs:\s*$/m)[0] ?? '');
 
 describe('the Fly deploy runs after the existing gates (MOTIR-2390)', () => {
   it('finds the job it is meant to guard', () => {
@@ -212,5 +227,45 @@ describe('post-deploy verification reads the platform (MOTIR-2390 / MOTIR-2102)'
     // line, not a check.
     expect(deployCode).toMatch(/if \[ "\$actual" != "\$EXPECTED" \]/);
     expect(deployCode).toMatch(/::error::.*expected/);
+  });
+});
+
+describe('a run on main is allowed to finish, so the deploy is reached (MOTIR-3106)', () => {
+  it('finds the workflow-level concurrency block it is meant to guard', () => {
+    // The negative control: a restructure that moved or dropped the header
+    // block would otherwise make both assertions below pass vacuously.
+    expect(ciHeader).toMatch(/^concurrency:\s*$/m);
+    expect(ciHeader).toMatch(
+      /^\s*group:\s*\$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s*$/m,
+    );
+    expect(ciHeader).not.toContain('jobs:');
+  });
+
+  it('cancels superseded runs on a PR but NEVER on a push to main', () => {
+    // `cancel-in-progress: true` is the exact line that shipped the defect.
+    // Every merge pushes the same ref, so one shared group meant the newest
+    // always won; the release is the LAST thing in a run, so the merge that
+    // inherited the obligation to ship never got there before the next one
+    // cancelled it too. Asserting merely that SOME expression is present is not
+    // enough; it must be one that distinguishes the two triggers, or the next
+    // rewrite reintroduces the fault while staying green. Same expression, and
+    // the same assertion, as `tests/ci-acceptance-lane.test.ts` — deliberately
+    // one idiom, not two.
+    const setting = /^\s*cancel-in-progress:\s*(.+)$/m.exec(ciHeader)?.[1]?.trim();
+    expect(setting).toBeDefined();
+    expect(setting).not.toBe('true');
+    expect(ciHeader).toMatch(
+      /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
+    );
+  });
+
+  it('still supersedes an older run on a pull-request branch', () => {
+    // The saving is real and worth keeping — a force-push should not leave its
+    // own predecessor running. `github.ref` is `refs/pull/<n>/merge` on that
+    // event, so per-ref grouping is what makes the exception above safe to
+    // scope this narrowly: a PR cancels only itself.
+    expect(ciHeader).toMatch(/^\s*push:\s*$/m);
+    expect(ciHeader).toMatch(/^\s*pull_request:\s*$/m);
+    expect(ciHeader).toMatch(/branches:\s*\[main\]/);
   });
 });

@@ -8,7 +8,9 @@
 - **Consumed by:** MOTIR-2985 (design — the Plans-surface attribution), MOTIR-2986
   (the Plan's authorship carrier), MOTIR-2988 (`create_plan` + `add_plan_items`),
   MOTIR-2990 (materialize reads the proposal's provenance), MOTIR-2991 (the surface),
-  MOTIR-2992 (the vitest gate), MOTIR-2993 (the E2E).
+  MOTIR-2992 (the vitest gate), MOTIR-2993 (the E2E). AMENDMENT 3 is consumed by
+  MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
+  MOTIR-3097 (the story's vitest gate).
 
 > Every reading below was taken off `origin/main` at `d82b5fa7` on 2026-08-18. Where a
 > reading and a card's prose disagreed, the code won and the difference is recorded — in
@@ -616,7 +618,235 @@ and the tenant-root write refusal stays exactly as strong as it was.
 
 ---
 
-## AMENDMENT 3 — the DEEPEN turn: an agent fills in the cards it proposed (MOTIR-3089, 2026-08-19)
+## AMENDMENT 3 — the PROJECTION: how an MCP call names the plan it is working in, and which calls can see it (MOTIR-3094, 2026-08-19)
+
+The four answers above gave an agent a door onto the plan substrate. They did not give it eyes.
+Every read tool a PAT holds sees only committed `work_item` rows and every validity tool it holds
+checks only committed rows, so an agent closes its plan with `final: true` and finds out whether
+the tree it proposed is coherent when a person reads it — or at approve. Motir's own planner never
+does this: `motir-ai`'s `generate_tree` runs `planValidityService.validateProjectedPlan` as its
+**pre-commit post-condition** before closing a plan. The check is written, tested, and running; it
+is simply unreachable from a token.
+
+This amendment answers the four questions **MOTIR-3093** builds on.
+It ADDS to Q1–Q4 above and overturns none of them: the two doors stay two doors, their permissions
+are unchanged, and nothing here creates a work item.
+
+> Every reading below was taken off `origin/main` at `d7550252` on 2026-08-19.
+
+**The substrate is already built and is not re-litigated here.**
+`planValidityService.buildProjection` (`lib/services/planValidityService.ts:122`) assembles _the
+project's live tree ⊕ the plan's `PlanItem` delta_ — pure in-memory over read-only repository
+loads, reading the plan through `plansService.getPlan` so the browse gate applies — and the three
+`validateProjected*` methods (`:460`, `:534`, `:607`) run the shipped finishability rules over it.
+All three are reachable today only from `POST /api/internal/ai/validate-plan{,-forest,-sprint}`,
+§4 job-token routes. What follows is a transport decision, not a semantics decision.
+
+---
+
+### Q5 — how does a call NAME the plan it is projecting?
+
+#### Decision: an explicit `planId` parameter, per call, always optional. Omitting it is today's behaviour, byte for byte.
+
+**Why an explicit parameter.** It matches every plan-addressed tool the surface already has —
+`get_plan(planId)`, `add_plan_items(planId)`, `get_plan_status` — and every internal route this
+mirrors: `validate-plan`, `validate-plan-forest` and `validate-plan-sprint` each take a `planId`
+in the body. A projected mode that is _opt-in by an argument_ also makes the compatibility
+promise checkable rather than aspirational: a call without the parameter never reaches
+`buildProjection` at all, so "unchanged" is a property of the code path and not of a test.
+
+**Why the implicit "the caller's open plan" LOSES — and it is not a matter of taste.** There is no
+column that could resolve it. `Plan` records three parties and none of them is _the token that is
+writing_:
+
+- `createdById` is the REQUESTER — _"WHO ASKED for this plan … as opposed to `decidedById`'s who
+  APPROVED it and `authorSource`'s which AGENT wrote it"_ (`prisma/schema.prisma`, the `Plan`
+  model) — and it is deliberately NULL for a cadence plan.
+- `decidedById` is the approver, and does not exist yet at authoring time.
+- `authorSource` / `authorHarness` / `authorModel` (Q3) record WHAT wrote it — `mcp`, a harness
+  name, a model name. They identify a KIND of producer, never an instance: two agents on two
+  tokens both write `mcp · Claude Code`.
+
+So "the token's most recent `generating` plan on the project" would have to be resolved by
+`(projectId, status)` and a timestamp — a query that is not scoped to the caller at all, and that
+two concurrent agents on one project would both win. And the row it binds to is one this very ADR
+has now twice documented as a real, reachable state: AMENDMENT 1 (MOTIR-3051) records a
+`work_item:edit`-only token opening an empty `generating` plan it can never fill, and AMENDMENT 2
+(MOTIR-3064) records a `generating` plan whose PRODUCER died. Implicit resolution binds a READ to
+exactly those rows, and the failure is silent — the call succeeds and returns a plausible tree.
+
+**Why a SESSION loses.** The MCP transport is stateless streamable HTTP and builds one server per
+request (`lib/mcp/registry.ts`, `buildMcpServer`); there is no session to hang state on and
+inventing one means a new persisted concept, its lifecycle, and its expiry — a large contract for
+an argument the caller already holds, since it got the `planId` back from `create_plan`.
+
+**The parameter accepts a `planItem:<id>` temp-ref wherever it names a TARGET, not only a real
+key.** `resolveProjectedRoot` (`:426`) already takes both forms, and the temp-ref case is the one
+an authoring agent actually has: it wants to validate the epic it _proposed_, which has no key
+until approve. Rejecting the temp-ref would leave the most useful call unreachable.
+
+---
+
+### Q6 — WHICH calls gain a projected mode?
+
+#### Decision: the four work-item reads/validations whose subject is a tree, plus one new plan-level tool. Every other read is OUT, and the ready-set family is out FOR A REASON, not by omission.
+
+The verdict is given for every tool the server registers, so a tool added later has a rule to
+follow rather than a precedent to guess at.
+
+| tool                           | projected mode          | why                                                                                                                                                                                                                                                      |
+| ------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validate_work_item`           | **IN** — gains `planId` | `validateProjectedWorkItem`, the subtree verdict. Target may be a real key or a `planItem:<id>`                                                                                                                                                          |
+| `validate_sprint`              | **IN** — gains `planId` | `validateProjectedSprint`, the active-sprint verdict                                                                                                                                                                                                     |
+| **`validate_plan`** (NEW)      | **IN** by construction  | `validateProjectedPlan`, the FOREST verdict. It takes no target, which is why it cannot be a parameter on an existing tool                                                                                                                               |
+| `get_work_item`                | **IN** — gains `planId` | the authoring loop's per-card read                                                                                                                                                                                                                       |
+| `search_work_items`            | **IN** — gains `planId` | the authoring loop's set read                                                                                                                                                                                                                            |
+| `list_ready`                   | **OUT**                 | see the ready-set rule below                                                                                                                                                                                                                             |
+| `next_ready`                   | **OUT**                 | same                                                                                                                                                                                                                                                     |
+| `claim_next_ready`             | **OUT**                 | same, and it is a write                                                                                                                                                                                                                                  |
+| `dispatch_prompt`              | **OUT**                 | it assembles the instruction an agent EXECUTES. A proposal has nothing to execute                                                                                                                                                                        |
+| `get_work_item_activity`       | **OUT**                 | a proposal has no comments and no history. There is nothing to project                                                                                                                                                                                   |
+| `list_sprints`                 | **OUT**                 | a plan cannot change sprint membership. `PlanItemPatch` carries no sprint field and an `add` lands in the backlog (`validateProjectedSprint`: _"an `add` lands in the backlog, so it is NOT a member"_), so the projected answer is the committed answer |
+| `get_project_state`            | **OUT**                 | reports planning PRECONDITIONS — established, code connected, indexed, repo set. A plan projects none of them                                                                                                                                            |
+| `get_plan` / `get_plan_status` | **N/A**                 | already plan-addressed. They ARE the plan read; projecting a plan onto itself is not a mode                                                                                                                                                              |
+| `list_projects` · `whoami`     | **OUT**                 | no work-item subject                                                                                                                                                                                                                                     |
+
+**The ready-set exclusion, in the words the next reader needs.** `list_ready`, `next_ready` and
+`claim_next_ready` do **NOT** gain a projected mode, and that is a decision rather than an
+oversight. **A proposal is not dispatchable.** It is not a work item, it has no key, nothing may
+claim it, and `claim_next_ready` cannot transition a row that does not exist. A projected ready
+list would put a card in front of an agent whose very next call is _claim this_ — so the harm is
+not a confusing answer, it is a dispatch attempt against nothing. Readiness is the one read whose
+output is an INSTRUCTION TO ACT, and the projection is the one input that describes work which
+cannot be acted on.
+
+**The rule a later tool follows.** A read gains a projected mode ⟺ **(a)** its subject is a work
+item or a set of work items, and **(b)** its answer is a DESCRIPTION rather than an instruction to
+act on one. Clause (b) is the whole ready-set family, and it is why `dispatch_prompt` — a read by
+permission — is out with them.
+
+---
+
+### Q7 — is a projected row DISTINGUISHABLE from a work item?
+
+#### Decision: YES, by an explicit field on the row, and it carries NO key. A caller must never need to read prose, a summary line, or an id's shape to tell the two apart.
+
+The plan substrate already rests on this rule and states it in three places: `get_plan`'s own
+description (_"these are PROPOSALS, NOT work items … an `add`'s `workItemId` stays null until
+then"_), `create_plan`'s and `add_plan_items`' (_"this creates NO work item"_), and §5 above,
+whose stated failure mode is _"a client reporting work it never created."_ A read that returns
+both kinds in one array is precisely where that rule could quietly stop being true, so the
+discriminator is what makes the read safe rather than a nicety on top of it.
+
+A projected proposal row therefore carries:
+
+- **`proposal: true`** — present and `true` on a proposal, present and `false` on a committed row.
+  Not an absent-means-false optional: a consumer that forgets the field must not silently read
+  every proposal as a work item.
+- **`planItemId`** and the **`planItem:<id>` temp-ref** it is addressed by.
+- **`key: null` / `identifier: null`.** A proposal has no key until approve, and **no synthesized
+  key is invented for it** — a `MOTIR-`-shaped string on a row that no `get_work_item` can fetch
+  is the single worst thing this story could ship.
+
+Fields a proposal genuinely does not have — `status` history, `commentCount`, `assignee`,
+`sprintId` — are `null`, never defaulted to a plausible value. `0` comments and _no comment
+thread_ are different facts and only one of them is true.
+
+#### ⚠️ AMENDED WHILE BUILDING IT (MOTIR-3096, 2026-08-19): the discriminator is STRUCTURAL as well as per-row.
+
+The paragraph above describes a proposal as a marked row _inside_ the read's existing array,
+and that is not what shipped — for a reason that only became visible at the keyboard, so it is
+recorded here rather than quietly applied. The MCP **payload seam** (ADR Amendment 7) requires
+`search_work_items`' `items` and `get_work_item`'s `children` to satisfy the shared `/api/v1`
+resource shapes, and a keyless proposal cannot: `derived()` validates it, and it would fail.
+
+So proposals ride their **own arrays** — `proposals` on the search envelope,
+`proposedChildren` on the projected detail — beside the committed ones. **That is strictly
+stronger than what Q7 asked for**, in the direction Q7 wanted:
+
+- Every existing reader of `items` / `children` is untouched **by construction**, not by care.
+- A caller cannot mix the two by accident, because they never arrive mixed.
+- A caller that flattens the arrays anyway **still** cannot lose the distinction, because each
+  row carries `proposal` and a null `key` exactly as specified above.
+
+The per-row marking is therefore unchanged and is not weakened by the array split — it is the
+second of two locks, not a replacement for the first.
+
+---
+
+### Q8 — which PERMISSION does a projected call name?
+
+#### Decision: `project:browse`, unchanged, for all five. The projected mode neither narrows nor widens the key, and it is NOT `ai:view_plan`.
+
+§3's rule that a declared permission may not be a fiction applies here exactly as it did to
+`add_plan_items`, so the answer is read off the gates rather than off the tool's ambition. A
+projected call reaches two things and asserts browse on both:
+
+- the WORK ITEM side — `projectsService.getByKey` / `workItemsService.getWorkItemByIdentifier` →
+  `assertCanBrowse`, which is what `validate_work_item` and `get_work_item` name today;
+- the PLAN side — `buildProjection` reads the plan through `plansService.getPlan`, which runs
+  `projectAccessService.assertCanBrowse(plan.projectId, ctx)` at
+  `lib/services/plansService.ts:1686`, after a not-found that precedes it.
+
+Both are `project:browse` and both are on the _same project_, so the composed reach of a projected
+call is exactly the reach of the two calls it replaces. Widening would be a fiction in one
+direction; declaring something narrower would be a fiction in the other.
+
+**NOT `ai:view_plan`, and the near-miss is worth naming** because `add_plan_items` sits under that
+key one section up. `ai:view_plan` gates the plan DECISIONS — `approvePlan` / `declinePlan` /
+`addProposals` — the _"write key wearing a read's name"_ `lib/mcp/toolPermissions.ts` describes.
+A projection decides nothing, writes nothing and persists nothing. Filing these reads under it
+would mean a token granted browse-only could no longer validate a plan it is allowed to READ in
+full through `get_plan` — a narrowing with no gate behind it.
+
+**The consequence, stated so nobody has to derive it:** a token that can already read a project's
+tree and its plans can now also read them JOINED. It reaches no row it could not fetch with two
+calls it already holds.
+
+---
+
+### What this amendment does NOT decide
+
+- **The FILTER GRAMMAR over projected rows.** A `FilterAST` condition on `sprint`, `assignee`,
+  `created` or a custom field has no meaning for a proposal, and whether each is satisfied,
+  never-matched, or an honest refusal naming the field is
+  **MOTIR-3096**'s to settle per field. Q7 binds it only this far:
+  whatever the answer is, it is the SAME answer every time and not an accident of which rows the
+  delta happened to contain.
+- **The COST of the projection on a read path.** `buildProjection` loads the project's whole live
+  node set (`findAllByProjectForValidity`) — proportionate for a validity check run once before
+  closing a plan, and not obviously proportionate for a search called on every turn. Measuring it
+  and bounding it if it does not hold is MOTIR-3096's, and Q6's IN verdict is not a finding that
+  it is free.
+- **A `/api/v1` twin.** Plan authoring is agent-facing; v1's plan operations stay as read-only and
+  as wide as they are today, exactly as Q1's _Consequences_ line already says.
+- **Anything in `motir-ai`.** The internal `validate-plan*` routes and the client-side
+  `ctx.proposals` overlay (`src/llm/retrievalTools.ts`, MOTIR-2638) stay as they are. This is a
+  second consumer of one service, not a migration, and the two overlays must not share code
+  across the repo boundary.
+
+---
+
+### The INWARD sweep — what this amendment falsified, and where each was amended
+
+`notes.html` #304: an ADR run that sweeps only OUTWARD misses the mirror case — a sentence
+somewhere else that has just stopped being true on a card that still reads green. The three
+sibling cards' criteria were diffed against every answer above.
+
+| card       | the clause                                                                                                                                    | disposition                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-3095 | _"joined to all four compile-total registries"_, naming `lib/mcp/registry.ts`, `toolPermissions.ts`, `payloads/registry.ts`, `apiDocs/mcp.ts` | **There are FIVE.** `lib/mcp/scopes.ts`'s `TOOL_SCOPES` is declared `Record<McpToolName, TokenScope>` and is total over the registry, so a new tool does not COMPILE without a row there. It is deprecated scaffolding governing only the legacy docs rendering — which is exactly why it reads as skippable and is not. Amended on the card                                                         |
+| MOTIR-3095 | `lib/apiDocs/mcp.ts` named as a registry to JOIN                                                                                              | Joining it is half the obligation. `TOOL_SUMMARIES` pins a `descriptionFingerprint` of each tool's shipped `title` + `description`, recomputed from a live `tools/list` by MOTIR-2330's gate — so amending `validate_work_item`'s / `validate_sprint`'s / `get_work_item`'s / `search_work_items`' description RE-PINS four existing fingerprints in addition to adding one row. Amended on the card |
+| MOTIR-3095 | _"`validate_work_item` gains the plan parameter Q1 pinned"_                                                                                   | Holds. Q5 pins `planId`, optional, absent = unchanged — which is also that card's acceptance criterion 4                                                                                                                                                                                                                                                                                             |
+| MOTIR-3096 | _"`get_work_item` on a `planItem:<id>` temp-ref returns the proposed card"_                                                                   | Holds, and Q7 tightens it: that row carries `proposal: true` and `key: null`                                                                                                                                                                                                                                                                                                                         |
+| MOTIR-3097 | _"every amended tool's `toolPermissions` entry is exactly the key Q4 pinned"_                                                                 | Holds, and the key is `project:browse` (Q8) — including for the NEW `validate_plan`, which is the entry most likely to be filed under `ai:view_plan` by analogy with its neighbour                                                                                                                                                                                                                   |
+
+**Nothing this amendment names as follow-up is left unfiled.** The filter grammar and the cost
+bound are both MOTIR-3096's own deliverables, named in its body; neither is an orphan.
+
+---
+
+## AMENDMENT 4 — the DEEPEN turn: an agent fills in the cards it proposed (MOTIR-3089, 2026-08-19)
 
 Q1 gave the authoring door two tools and no third. `add_plan_items` is **append-only**, and a
 proposal is frozen the moment it lands — which forbids the one authoring strategy Motir's own
@@ -859,8 +1089,15 @@ op is worth its own card rather than a clause here.
 - **The authorship is published on the MCP plan payload and NOT on v1's `planSchema`**, so
   the public REST surface's plan operations stay exactly as read-only and as wide as they
   are today.
+- **The MCP surface can SEE and CHECK a plan it is writing** (AMENDMENT 3, MOTIR-3094): five
+  calls take an optional `planId` and answer over the live tree ⊕ that plan's delta —
+  `validate_work_item`, `validate_sprint`, `get_work_item`, `search_work_items`, and a new
+  plan-level `validate_plan` for the forest verdict. All five stay on `project:browse`, none
+  persists anything, and the ready-set family (`list_ready` / `next_ready` /
+  `claim_next_ready`) is deliberately excluded — a proposal is not dispatchable. Omitting
+  `planId` leaves every one of them byte-identical to today.
 - **A PAT may now DEEPEN a proposal it appended, while the plan is still `generating`**
-  (AMENDMENT 3, MOTIR-3089): `update_plan_item`, gated by `ai:view_plan` — the key
+  (AMENDMENT 4, MOTIR-3089): `update_plan_item`, gated by `ai:view_plan` — the key
   `editAddProposal` asserts — so the titles-first strategy Motir's own generator uses is
   reachable from the MCP. The editable set gains exactly one field, `executor`, because
   `materialize` writes `pf.executor ?? null` and never consults the type→executor default map;

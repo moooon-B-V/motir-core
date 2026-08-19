@@ -522,7 +522,7 @@ describe('update_plan_item — deepening a proposal before the plan closes', () 
     // A type ALONE. `plansService.materialize` writes `pf.executor ?? null` and
     // never calls `defaultExecutorForType`, so nothing downstream will fill this
     // in — which is exactly why `executor` joined the editable set
-    // (`agent-authored-plans.md` AMENDMENT 3 D3a). Asserting the absence here is
+    // (`agent-authored-plans.md` AMENDMENT 4 D3a). Asserting the absence here is
     // what stops someone "simplifying" the field away on the assumption that
     // approve derives it.
     await call(client, UPDATE_PLAN_ITEM_TOOL_NAME, { planId, planItemId: itemId, type: 'design' });
@@ -556,7 +556,7 @@ describe('update_plan_item — deepening a proposal before the plan closes', () 
     expect(late.isError).toBe(true);
     // The status is NAMED, which is what lets an agent read the refusal as
     // terminal rather than retry it. `generating` is the whole boundary the ADR
-    // pinned (AMENDMENT 3 D1) — a `planned` plan is somebody's to read, and
+    // pinned (AMENDMENT 4 D1) — a `planned` plan is somebody's to read, and
     // editing one is the reviewer's own act on the review surface.
     expect(text(late)).toContain('PLAN_NOT_IN_EXPECTED_STATUS');
     expect(text(late)).toContain('planned');
@@ -717,7 +717,7 @@ describe('the four registries and the gates', () => {
     // `editAddProposal`, whose first act is the same `ai:view_plan` assertion.
     // The KEY is asserted, not merely that some key exists — a map entry that
     // declares something narrower than the gate applies is a fiction
-    // (`token-permissions.md` §3, and AMENDMENT 3 D2).
+    // (`token-permissions.md` §3, and AMENDMENT 4 D2).
     expect(TOOL_PERMISSIONS[UPDATE_PLAN_ITEM_TOOL_NAME]).toBe('ai:view_plan');
   });
 

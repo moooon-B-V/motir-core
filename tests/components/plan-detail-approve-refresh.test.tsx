@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   approvePlanRequest: vi.fn(async () => ({})),
   declinePlanRequest: vi.fn(async () => ({})),
-  updateProposalRequest: vi.fn(async () => ({})),
   fetchPlanReview: vi.fn(),
 }));
 
@@ -42,7 +41,6 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
     ...actual,
     approvePlanRequest: mocks.approvePlanRequest,
     declinePlanRequest: mocks.declinePlanRequest,
-    updateProposalRequest: mocks.updateProposalRequest,
     fetchPlanReview: mocks.fetchPlanReview,
   };
 });
@@ -118,6 +116,9 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         op: 'add',
         nodeId: 'item-1',
         parentNodeId: null,
+        parentIdentifier: null,
+        parentTitle: null,
+        parentKind: null,
         blockedByNodeIds: [],
         identifier: null,
         title: 'A proposed story',
@@ -125,6 +126,14 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         priority: null,
         type: null,
         descriptionMd: null,
+        explanationMd: null,
+        explanationSource: null,
+        storyPoints: null,
+        estimateMinutes: null,
+        targetRepo: null,
+        targetRepoRole: null,
+        executor: null,
+        planningProvenance: null,
         status: null,
         hasChildren: false,
         changes: [],
@@ -193,7 +202,7 @@ afterEach(() => {
 
 describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)', () => {
   it('approve refetches the review AND refreshes the server read that produces the step', async () => {
-    renderWithIntl(<PlanDetail initialReview={review()} repositorySet={null} />);
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
@@ -205,7 +214,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
   });
 
   it('still updates the review itself — the refresh does not replace the client refetch', async () => {
-    renderWithIntl(<PlanDetail initialReview={review()} repositorySet={null} />);
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
@@ -216,7 +225,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
 
   it('shows the step and its rail line when the refresh delivers the prop — with no remount', async () => {
     const { rerender } = renderWithIntl(
-      <PlanDetail initialReview={review()} repositorySet={null} />,
+      <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
@@ -225,7 +234,9 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
 
     // What `router.refresh()` produces: the SAME island instance re-rendered with
     // the repo set the server could only read once the plan was approved.
-    rerender(<PlanDetail initialReview={review()} repositorySet={repositorySet()} />);
+    rerender(
+      <PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={repositorySet()} />,
+    );
 
     expect(screen.getByTestId('repository-set-step')).toBeTruthy();
     expect(screen.queryByTestId('plan-review-canvas')).toBeNull();
@@ -236,11 +247,13 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     // `useState(() => …)` seed runs once and would leave the approved outcome
     // with no code line at all, which is the second half of the reported defect.
     const { rerender } = renderWithIntl(
-      <PlanDetail initialReview={approved()} repositorySet={null} />,
+      <PlanDetail projectKey="PRJ" initialReview={approved()} repositorySet={null} />,
     );
     expect(screen.queryByTestId('plan-code-outcome')).toBeNull();
 
-    rerender(<PlanDetail initialReview={approved()} repositorySet={repositorySet()} />);
+    rerender(
+      <PlanDetail projectKey="PRJ" initialReview={approved()} repositorySet={repositorySet()} />,
+    );
 
     expect(screen.getByTestId('plan-code-outcome').textContent).toContain(
       'Finish setting up repositories',
@@ -248,7 +261,9 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
   });
 
   it('lets the step OVERRIDE the derived outcome once it reports its own', async () => {
-    renderWithIntl(<PlanDetail initialReview={approved()} repositorySet={repositorySet()} />);
+    renderWithIntl(
+      <PlanDetail projectKey="PRJ" initialReview={approved()} repositorySet={repositorySet()} />,
+    );
 
     expect(screen.getByTestId('plan-code-outcome').textContent).toContain(
       'Finish setting up repositories',
@@ -262,7 +277,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
   it('refreshes on a 409 too — a concurrent reviewer approved, so the step is just as due', async () => {
     mocks.approvePlanRequest.mockRejectedValueOnce(new PlanRequestError(409, 'ALREADY_DECIDED'));
 
-    renderWithIntl(<PlanDetail initialReview={review()} repositorySet={null} />);
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Approve/i }));
 
@@ -272,7 +287,7 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
   it('DECLINE does not refresh — it reveals no server-rendered surface', async () => {
     mocks.fetchPlanReview.mockResolvedValue(review({ status: 'declined' as PlanStatusDto }));
 
-    renderWithIntl(<PlanDetail initialReview={review()} repositorySet={null} />);
+    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Decline/i }));
 
@@ -281,15 +296,9 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('the proposal INLINE EDIT does not refresh — surface kind 1 must keep its own value', async () => {
-    mocks.fetchPlanReview.mockResolvedValue(review());
-
-    renderWithIntl(<PlanDetail initialReview={review()} repositorySet={null} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'edit proposal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'save proposal' }));
-
-    await waitFor(() => expect(mocks.updateProposalRequest).toHaveBeenCalled());
-    expect(mocks.refresh).not.toHaveBeenCalled();
-  });
+  // The proposal INLINE EDIT test was REMOVED with the feature (MOTIR-3084):
+  // MOTIR-1370's edit modal is gone, so there is no longer an inline-edit
+  // surface to assert the no-refresh contract on. That contract is unchanged and
+  // still covered here by the approve / decline cases above, which are the other
+  // mutations this island makes.
 });

@@ -114,11 +114,21 @@ export const planReviewService = {
     // One batched, workspace-scoped read of every existing target (modify/remove)
     // — includes archived rows, so a "will be archived" / drifted target still
     // resolves; a hard-deleted / cross-tenant id simply doesn't come back.
-    const targetIds = Array.from(
-      new Set(plan.items.filter((i) => i.op !== 'add' && i.workItemId).map((i) => i.workItemId!)),
-    );
+    const targetIds = plan.items
+      .filter((i) => i.op !== 'add' && i.workItemId)
+      .map((i) => i.workItemId!);
+    // …AND every COMMITTED parent (MOTIR-3083). A `parentRef` is either an
+    // intra-plan temp-ref (`planItem:<id>`, which already has a node in the
+    // proposed set) or a real work-item id — and the second kind is the one the
+    // canvas has to open a LEVEL at and the breadcrumb has to name. It rides the
+    // SAME batched read rather than a per-item query: a plan of thirty proposals
+    // under one parent must still cost one round trip.
+    const committedParentIds = plan.items
+      .map((i) => i.parentRef)
+      .filter((ref): ref is string => !!ref && !ref.startsWith(TEMP_REF_PREFIX));
+    const lookupIds = Array.from(new Set([...targetIds, ...committedParentIds]));
     const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.findByIdsInWorkspace(targetIds, ctx.workspaceId, tx),
+      workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
     );
     const targetById = new Map(targets.map((t) => [t.id, t]));
 
@@ -143,11 +153,23 @@ export const planReviewService = {
 
       const targetMissing = item.op !== 'add' && !target;
 
+      // The COMMITTED parent, when there is one. A `planItem:` parent already has
+      // a node in the proposed set, so it needs no resolution; an archived or
+      // hard-deleted parent simply does not come back from the read, and the item
+      // then reads as a root — degrade, never throw (MOTIR-3083 AC 5).
+      const committedParent =
+        item.parentRef && !item.parentRef.startsWith(TEMP_REF_PREFIX)
+          ? targetById.get(item.parentRef)
+          : undefined;
+
       return {
         planItemId: item.id,
         op: item.op,
         nodeId,
         parentNodeId: parentNodeIdOf(item),
+        parentIdentifier: committedParent?.identifier ?? null,
+        parentTitle: committedParent?.title ?? null,
+        parentKind: committedParent?.kind ?? null,
         blockedByNodeIds: item.blockedByRefs.map(resolveRef),
         identifier: item.op === 'add' ? null : (target?.identifier ?? null),
         title:
@@ -160,6 +182,18 @@ export const planReviewService = {
         priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
         type: item.op === 'add' ? (proposed?.type ?? null) : null,
         descriptionMd: item.op === 'add' ? (proposed?.descriptionMd ?? null) : null,
+        // The rest of the proposed set (MOTIR-3084) — everything `materialize`
+        // writes onto the created item, so the reviewer sees what approval will
+        // make. Read off `proposed` rather than enumerated by hand anywhere else;
+        // the parity test is what keeps this list honest as the type grows.
+        explanationMd: item.op === 'add' ? (proposed?.explanationMd ?? null) : null,
+        explanationSource: item.op === 'add' ? (proposed?.explanationSource ?? null) : null,
+        storyPoints: item.op === 'add' ? (proposed?.storyPoints ?? null) : null,
+        estimateMinutes: item.op === 'add' ? (proposed?.estimateMinutes ?? null) : null,
+        targetRepo: item.op === 'add' ? (proposed?.targetRepo ?? null) : null,
+        targetRepoRole: item.op === 'add' ? (proposed?.targetRepoRole ?? null) : null,
+        executor: item.op === 'add' ? (proposed?.executor ?? null) : null,
+        planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
         status: item.op === 'add' ? null : (target?.status ?? null),
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],

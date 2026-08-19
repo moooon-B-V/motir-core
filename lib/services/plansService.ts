@@ -224,7 +224,7 @@ function validateProposal(p: ProposalInput): void {
  * clears it. The result is re-validated by the caller (title must stay non-empty).
  *
  * ⚠️ `executor` JOINED the editable set on 2026-08-19 (`agent-authored-plans.md`
- * AMENDMENT 3 D3a · MOTIR-3089). This comment used to read "`executor` is never
+ * AMENDMENT 4 D3a · MOTIR-3089). This comment used to read "`executor` is never
  * touched (not in the editable set)", which was true and is now the opposite of
  * true. The reason it moved: `type` was always deepenable, `executor` is DERIVED
  * from `type` by `defaultExecutorForType`, and `materialize` writes
@@ -253,7 +253,7 @@ function mergeProposedFields(
   if (input.storyPoints !== undefined) next.storyPoints = input.storyPoints;
   if (input.estimateMinutes !== undefined) next.estimateMinutes = input.estimateMinutes;
   if (input.explanationMd !== undefined) next.explanationMd = input.explanationMd;
-  // AMENDMENT 3 D3a (MOTIR-3089) — the deepen turn's one widening. Sparse like
+  // AMENDMENT 4 D3a (MOTIR-3089) — the deepen turn's one widening. Sparse like
   // every key above it: absent leaves the proposal's executor alone, an explicit
   // `null` clears it back to unassigned.
   if (input.executor !== undefined) next.executor = input.executor;
@@ -1825,7 +1825,7 @@ export const plansService = {
     //
     // ⚠️ THAT SECOND CLAUSE IS LOAD-BEARING — do not widen `mergeProposedFields`
     // to carry `targetRepo` without revisiting this snapshot. The deepen turn's
-    // widening (AMENDMENT 3 D3a, MOTIR-3089) was `executor` alone, and one of the
+    // widening (AMENDMENT 4 D3a, MOTIR-3089) was `executor` alone, and one of the
     // reasons the repo pin was left out is right here: a pin editable on a
     // `planned` plan would make this pre-transaction resolution non-authoritative.
     const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);

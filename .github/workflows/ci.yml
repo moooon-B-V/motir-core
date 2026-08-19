@@ -5,12 +5,48 @@ on:
   push:
     branches: [main]
 
-# Cancel older runs on the same ref when a new commit lands (saves CI minutes).
+# Supersede an older run of the same ref when a new commit lands (saves CI
+# minutes) — on a PR branch, where `github.ref` is `refs/pull/<n>/merge`, so a
+# force-push cancels only its own predecessor.
+#
+# ⚠️ NOT on `main`, and that exception is the whole point (MOTIR-3106). Every
+# merge pushes the SAME ref, so an unconditional `cancel-in-progress: true` put
+# all of them in one group where the newest always wins.
+#
+# The loss is NOT that a given merge's run dies. A later run contains the
+# earlier commits, so it would apply their migrations too — cancelling one run
+# costs nothing on its own. The defect is that the run inheriting that
+# obligation is itself cancelled by the merge after it, and so on: the deploy is
+# STARVED, never reached. `deploy` sits behind every gate, so a run needs ~35
+# minutes of clear air on a quiet day and far more under load — run 32233900851
+# ran 08:42:13 → 10:01:30, 79 minutes, and was still going when the next merge
+# killed it. Measured 2026-08-19: twelve merges between 08:24 and 11:05, largest
+# gap 77 minutes, eleven cancelled runs, no release for ten hours — so
+# MOTIR-3078's schema migration sat merged and unapplied on production, along
+# with eleven other merges.
+#
+# The deploy job's own `fly-deploy` group protects a release already IN FLIGHT;
+# nothing there can protect a run that never arrives.
+#
+# Newest-wins is KEPT wherever it costs nothing, so this does not queue merges
+# up without bound. GitHub holds at most ONE pending run per group and cancels
+# the previously pending one, so the newest merge still claims the queued slot
+# and still carries every commit before it. The only thing that changes is that
+# the RUNNING one is allowed to finish.
+#
+# The expression is deliberately the one `acceptance-video.yml` already carries
+# — that lane reached the same conclusion for its own reason (a blanket cancel
+# destroys the per-merge baseline that tells you WHICH merge broke it), and one
+# idiom across the repo is worth more than a second way of saying it. This
+# workflow's only two triggers are a PR and a push to `main`, so "cancel iff
+# pull_request" and "cancel iff not the default branch" are the same predicate
+# here; the event form is the conservative one if a trigger is ever added.
+#
 # Safe interpolation: github.workflow is a fixed workflow name; github.ref is a
 # validated git ref identifier (not user-controlled free-form input).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:

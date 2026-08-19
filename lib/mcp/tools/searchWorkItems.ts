@@ -4,6 +4,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { projectedSearchDelta } from '@/lib/services/planProjectionService';
+import type { ProjectedRowDto } from '@/lib/services/planProjectionService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDependencyEdgesDto, WorkItemListItemDto } from '@/lib/dto/workItems';
 import {
@@ -22,6 +24,7 @@ import { presentMcpWorkItemRow, searchWorkItemsPayload } from '../payloads/workI
 import { decodeSearchCursor, encodeSearchCursor } from '../searchCursor';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { commentCountMarker, COMMENT_COUNT_DESCRIPTION } from '../commentCounts';
+import { planIdField } from './planRef';
 
 // `search_work_items` (Story 7.8 · Subtask 7.8.6) — the agent's arbitrary
 // query tool, deliberately SECOND to the dispatch tools (7.8.4): the planner
@@ -40,6 +43,21 @@ import { commentCountMarker, COMMENT_COUNT_DESCRIPTION } from '../commentCounts'
 // set, and the registry's safe (parameterized-only) compiler is the single
 // place an AST becomes SQL (injection probes bind as parameters → match
 // nothing, never escape).
+//
+// `planId` (MOTIR-3096) answers over the PROJECTION — the project's live tree ⊕
+// that plan's proposals — so an agent can search the tree INCLUDING what it has
+// already proposed, instead of merging `get_plan` against this call by hand
+// every turn.
+//
+// ⚠️ THE FILTER DOES NOT REACH PROPOSALS, and that is the decision rather than a
+// gap. The FilterAST compiles to parameterized SQL over `work_item` rows through
+// the ONE registry that makes it injection-safe; a proposal is not such a row, so
+// the choices were to reimplement the whole grammar in memory (a second
+// compiler, guaranteed to drift from the one the /items page uses) or to say
+// plainly what the filter covers. MOTIR-3096 says it: `items` is the FILTERED
+// committed page, `proposals` is the plan's WHOLE `add` set, `filterAppliesTo`
+// names which is which, and that answer is the same every time rather than an
+// accident of which fields a given proposal happens to carry.
 //
 // Pagination wraps that read's 1-based LIMIT/OFFSET page in an opaque cursor
 // (`searchCursor.ts`) so the surface matches the sibling read tools: paginated
@@ -141,6 +159,7 @@ const inputSchema = {
     .max(50)
     .optional()
     .describe('Page size (1–50, default 50; the List’s server cap).'),
+  planId: planIdField,
 };
 
 type SearchFilterArg = z.infer<typeof filterSchema>;
@@ -150,6 +169,13 @@ interface SearchArgs {
   filter?: SearchFilterArg;
   cursor?: string;
   limit?: number;
+  planId?: string;
+}
+
+/** One PROPOSAL as a compact line for the human-readable text block — spelled so
+ *  a person watching the session cannot read it as a work item. */
+function proposalLine(row: ProjectedRowDto): string {
+  return `${row.tempRef} [${row.kind ?? '?'}/${row.priority ?? '—'}] ${row.title ?? '(untitled)'} — PROPOSED (no key until approved)`;
 }
 
 /** One result row as a compact line for the human-readable text block, with its
@@ -230,20 +256,62 @@ export async function runSearchWorkItems(
     ),
   ]);
 
+  // The plan's delta, when one was named. Committed rows the plan REMOVES drop
+  // out of the page — a projected search must not return a card the plan is
+  // deleting — and the plan's `add`s ride their own array.
+  const delta = args.planId === undefined ? null : await projectedSearchDelta(args.planId, ctx);
+  const removed = new Set(delta?.removedIds ?? []);
+  const modified = new Set(delta?.modifiedIds ?? []);
+  const visible = delta === null ? items : items.filter((i) => !removed.has(i.id));
+
   const header =
-    items.length === 0
+    visible.length === 0
       ? 'No work items match.'
-      : `${items.length} of ${result.total} matching work item${result.total === 1 ? '' : 's'}:`;
-  const body = items.map((item) => line(item, edges[item.id], commentCounts[item.id])).join('\n');
+      : `${visible.length} of ${result.total} matching work item${result.total === 1 ? '' : 's'}:`;
+  const body = visible.map((item) => line(item, edges[item.id], commentCounts[item.id])).join('\n');
+  const projected =
+    delta === null
+      ? ''
+      : '\n\n' +
+        [
+          delta.proposals.length === 0
+            ? `Plan ${delta.planId} proposes nothing to add.`
+            : `Plan ${delta.planId} additionally PROPOSES ${delta.proposals.length} item(s) — not work items, and NOT filtered by your query (the filter runs over committed rows only):`,
+          ...delta.proposals.map(proposalLine),
+          removed.size > 0
+            ? `This plan REMOVES ${removed.size} committed item(s), which are omitted above.`
+            : '',
+          modified.size > 0 ? `This plan MODIFIES ${modified.size} committed item(s).` : '',
+          'Nothing was created: approving the plan in Motir is the only path from a proposal to a work item.',
+        ]
+          .filter(Boolean)
+          .join('\n');
   const footer = nextCursor ? `\n\nMore available — pass cursor: ${nextCursor}` : '';
   return toolOk(
-    `${header}${body ? '\n' + body : ''}${footer}`,
+    `${header}${body ? '\n' + body : ''}${projected}${footer}`,
     derived(searchWorkItemsPayload, {
-      items: items.map((item) =>
+      items: visible.map((item) =>
         presentMcpWorkItemRow(item, edges[item.id], commentCounts[item.id] ?? 0),
       ),
       total: result.total,
       nextCursor,
+      // ⚠️ ONLY present when a plan was named, so a call without `planId` is
+      // byte-identical to what it returned before this existed.
+      ...(delta === null
+        ? {}
+        : {
+            projection: {
+              planId: delta.planId,
+              // Named rather than assumed: `items` is the FILTERED committed
+              // page and `proposals` is the plan's whole add set. A caller that
+              // reads the two as one filtered list would be wrong, and this is
+              // the field that stops it.
+              filterAppliesTo: 'items' as const,
+              removedIds: delta.removedIds,
+              modifiedIds: delta.modifiedIds,
+            },
+            proposals: delta.proposals,
+          }),
     }),
   );
 }
@@ -263,7 +331,15 @@ export function registerSearchWorkItems(
         'and a nextCursor. Honors the same access checks as the UI. ' +
         EDGE_BLOCK_DESCRIPTION +
         ' ' +
-        COMMENT_COUNT_DESCRIPTION,
+        COMMENT_COUNT_DESCRIPTION +
+        ' Pass `planId` to search the tree INCLUDING a plan you are authoring: `items` then holds ' +
+        'the committed rows the plan does not remove, and a separate `proposals` array holds that ' +
+        'plan’s proposed cards — each with `proposal: true` and a null `key`, because a proposal ' +
+        'has no key until the plan is approved in Motir. ⚠️ The FILTER applies to `items` ONLY ' +
+        '(`projection.filterAppliesTo` says so): it compiles to SQL over committed rows, so the ' +
+        'proposals come back UNFILTERED rather than silently matched on whichever fields they ' +
+        'happen to carry. Omit `planId` for the committed tree — that call is unchanged. ' +
+        'Read-only either way: it creates nothing and persists nothing.',
       inputSchema,
     },
     async (args, extra) => {

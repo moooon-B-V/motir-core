@@ -363,7 +363,7 @@ export interface UpdateProposalInput {
   explanationMd?: string | null;
   /**
    * WHO executes the leaf (`coding_agent` / `human`) — the ONE field the deepen
-   * turn added to this set (`agent-authored-plans.md` AMENDMENT 3 D3a,
+   * turn added to this set (`agent-authored-plans.md` AMENDMENT 4 D3a,
    * MOTIR-3089). It is here because `type` is deepenable and `executor` is
    * DERIVED from it, while `plansService.materialize` writes
    * `pf.executor ?? null` and never consults `defaultExecutorForType` — so a
@@ -379,7 +379,7 @@ export interface UpdateProposalInput {
    * The human review route (`PATCH /api/plans/[id]/items/[itemId]`) ENUMERATES
    * the keys it accepts and does not pick this one up — the same way it already
    * does not pick up `explanationMd` — so widening this interface leaves that
-   * surface byte-identical (AMENDMENT 3 D3a).
+   * surface byte-identical (AMENDMENT 4 D3a).
    */
   executor?: string | null;
 }

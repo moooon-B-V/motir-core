@@ -48,7 +48,7 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // mapping — the shape `planSession.ts` and `getPlan.ts` are built to.
 //
 // ── The TWO AUTHORING tools, and why not one (ADR Q1) ──────────────────────
-// (A THIRD tool, `update_plan_item`, joined them in 2026-08-19's AMENDMENT 3 —
+// (A THIRD tool, `update_plan_item`, joined them in 2026-08-19's AMENDMENT 4 —
 // see its own header below. Q1 is about how a tree is APPENDED; the deepen is a
 // different act on a proposal that already landed, so it does not reopen this.)
 // The shipped producer contract is `createPlan` → repeated `addProposals` →
@@ -108,7 +108,7 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // grep: nothing under `lib/mcp/` names that repository method, and this comment
 // is deliberately written not to.)
 //
-// The CONTRACT is `docs/decisions/agent-authored-plans.md` AMENDMENT 3:
+// The CONTRACT is `docs/decisions/agent-authored-plans.md` AMENDMENT 4:
 // D1 `generating` only (a plan in the review queue must hold still while a person
 // reads it), D2 `ai:view_plan` (the key `editAddProposal` itself asserts),
 // D3 the editable set gains `executor` and NOTHING else, D4 withdrawing a
@@ -276,7 +276,7 @@ const addPlanItemsInputSchema = {
  * disagree about what a title is. It is the ONE non-nullable member: a proposal
  * with no title is not a proposal.
  *
- * `executor` is here because AMENDMENT 3 D3a put it in the editable set, and it
+ * `executor` is here because AMENDMENT 4 D3a put it in the editable set, and it
  * is constrained by the SAME enum `proposedFieldsSchema` uses. `targetRepo` /
  * `targetRepoRole`, `parentRef` and `blockedByRefs` are deliberately absent —
  * D3b and D3c argue both refusals on the record.

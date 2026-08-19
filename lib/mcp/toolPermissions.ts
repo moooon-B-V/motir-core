@@ -58,6 +58,20 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   list_sprints: 'project:browse',
   validate_sprint: 'project:browse',
   validate_work_item: 'project:browse',
+  // The PLAN-level finishability verdict (MOTIR-3095), and the entry most
+  // likely to be filed under `ai:view_plan` by analogy with its neighbour
+  // `add_plan_items`. It is not. `planValidityService.validateProjectedPlan`
+  // reads the plan through `plansService.getPlan`, which runs
+  // `projectAccessService.assertCanBrowse` — the same key its two sibling
+  // validators name. `ai:view_plan` gates the plan DECISIONS (`approvePlan` /
+  // `declinePlan` / `addProposals`); a projection decides nothing, writes
+  // nothing and persists nothing, so filing it there would narrow a read below
+  // the gate that actually runs — §3's no-fiction rule in the other direction
+  // (`docs/decisions/agent-authored-plans.md` AMENDMENT 3, Q8). The same
+  // reasoning is why `validate_work_item` / `validate_sprint` keep
+  // `project:browse` after gaining their optional `planId`: the projected reach
+  // is exactly the reach of the two browse-gated calls it replaces.
+  validate_plan: 'project:browse',
   // The two plan READS resolve through `plansService.getPlan` /
   // `findPlanIdForJob`, both `assertCanBrowse`. They are NOT `ai:view_plan`:
   // that key gates the plan DECISIONS (`approvePlan` / `declinePlan` /
@@ -145,7 +159,7 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // delegates to `editAddProposal`, whose FIRST act is
   // `assertPermission(plan.projectId, ctx, 'ai:view_plan')`. That the answer
   // coincides with its sibling's is a check, not the argument
-  // (`docs/decisions/agent-authored-plans.md` AMENDMENT 3 D2). Not billable — it
+  // (`docs/decisions/agent-authored-plans.md` AMENDMENT 4 D2). Not billable — it
   // starts no model job — and `CLI_TOKEN_GRANT` below is deliberately NOT widened
   // for it, exactly as it was not for `add_plan_items`.
   update_plan_item: 'ai:view_plan',
