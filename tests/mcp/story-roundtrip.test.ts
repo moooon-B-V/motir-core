@@ -776,11 +776,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(integrated.isError).toBeFalsy();
 
       // The committed effects are real, not just gate-passed: the item moved off
-      // todo and is unarchived, and mark_integrated landed it in_review with the
+      // todo and is unarchived, and mark_integrated landed it `implemented` with the
       // session branch stamped (its documented one-transaction effect). The
       // sprint was created too.
       const detail = await workItemsService.getIssueDetail(fx.projectId, key, fx.ctx);
-      expect(detail.item.status).toBe('in_review');
+      expect(detail.item.status).toBe('implemented');
       expect(detail.item.sessionBranch).toBe('feat/default');
       expect(detail.item.archivedAt).toBeNull();
       const sprintCount = await adminDb.sprint.count({ where: { projectId: fx.projectId } });

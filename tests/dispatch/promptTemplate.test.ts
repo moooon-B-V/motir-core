@@ -456,14 +456,43 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     }
   });
 
-  it('the FINISHED signal names in_review and says it is REQUIRED', () => {
+  it('the FINISHED signal names implemented and says it is REQUIRED', () => {
     const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
-    expect(outcome).toContain('status in_review');
+    expect(outcome).toContain('status implemented');
     expect(outcome).toContain('REQUIRED, not a courtesy');
     // The reason, not just the rule: an agent told only "do this" treats it as
     // ceremony, and the loop's whole ability to tell success from a quiet death
     // rests on it.
     expect(outcome).toContain('died quietly');
+  });
+
+  it('states the ORDER — commit, push, open the PR, THEN transition (MOTIR-3004)', () => {
+    // Asserted as an ORDER on the assembled string, not as four strings that
+    // happen to be present: an agent handed an unordered list does the cheap
+    // status call first, and then the card claims built work that exists only in
+    // a worktree the run is about to delete.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    const at = (needle: string) => outcome.indexOf(needle);
+    expect(at('1. commit')).toBeGreaterThan(-1);
+    expect(at('2. push the branch')).toBeGreaterThan(at('1. commit'));
+    expect(at('3. open the pull request')).toBeGreaterThan(at('2. push the branch'));
+    expect(at('status implemented')).toBeGreaterThan(at('3. open the pull request'));
+    // …and it says WHAT the status claims, which is the whole reason for the order.
+    expect(outcome).toContain('THE CODE IS ON THE REMOTE');
+  });
+
+  it('tells the agent that In Review belongs to CI, not to it (MOTIR-3004)', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('Do NOT set In Review');
+    expect(outcome).toContain('CI does');
+  });
+
+  it("no assembled text still claims the agent's pull request causes In Review", () => {
+    // The GIT WORKFLOW step used to say the title reference "is what moves this
+    // work item to In Review". After this story that half is false, and a prompt
+    // that says both things teaches the agent the wrong owner of the status.
+    const prompt = assembleDispatchPrompt(source()).prompt;
+    expect(prompt).not.toContain('moves this work item to In Review');
   });
 
   it('the defect signal names Planning and NEVER offers `blocked`', () => {

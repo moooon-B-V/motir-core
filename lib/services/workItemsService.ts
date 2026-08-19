@@ -709,13 +709,18 @@ async function resolveDescriptionMentionable(
 }
 
 // The default-workflow status keys the integration tools target (Subtask
-// 7.8.11). `mark_integrated` moves an item to `in_review`; `complete_session`
+// 7.8.11). `mark_integrated` moves an item to `implemented` (MOTIR-3004 — built,
+// pushed, waiting on CI; it used to say `in_review`); `complete_session`
 // moves each recorded item to `done`. Both are the canonical default keys
 // (lib/workflows/defaultWorkflow.ts). A project whose CUSTOM workflow lacks the
 // key surfaces `UnknownStatusError` from the transition (mark_integrated → a tool
 // error; complete_session → a per-item `failed` result) — the honest outcome
 // rather than a silent miss.
-const IN_REVIEW_STATUS_KEY = 'in_review';
+/** Where an INTEGRATED item lands (MOTIR-3004): built, pushed onto the session
+ *  branch, and waiting on CI. `mark_integrated` used to write `in_review`, which
+ *  claimed a human should look at work nothing had compiled yet — In Review is
+ *  now written by the CI-feedback consumer alone, on a green run (MOTIR-3006). */
+const IMPLEMENTED_STATUS_KEY = 'implemented';
 const DONE_STATUS_KEY = 'done';
 
 export const workItemsService = {
@@ -1936,7 +1941,7 @@ export const workItemsService = {
 
     // No-op STATUS move: succeed without a revision (idempotent) and emit no
     // transition. But still honor a branch-only write — re-marking an item
-    // ALREADY in `in_review` to a new session branch changes the field without a
+    // ALREADY in `implemented` to a new session branch changes the field without a
     // status transition (no revision, since sessionBranch is dispatch bookkeeping
     // not a content edit on the activity feed).
     if (fromKey === toStatusKey) {
@@ -2021,7 +2026,7 @@ export const workItemsService = {
     // integration branch (Subtask 7.8.11 invariant: done ⇒ sessionBranch null,
     // so a merged dep never leaves a stale lineage for dependents to inherit —
     // `complete_session` rides this, as does any board drag to done). Otherwise
-    // apply the explicit branch directive (`mark_integrated`'s move to in_review
+    // apply the explicit branch directive (`mark_integrated`'s move to implemented
     // sets it). The revision diff stays status-only — `sessionBranch` is dispatch
     // bookkeeping, not a content edit, so it never lands in the activity feed (and
     // keeping it out avoids the activity totality guard).
@@ -2334,7 +2339,7 @@ export const workItemsService = {
     const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const res = await workItemsService.applyStatusTransition(
         workItemId,
-        IN_REVIEW_STATUS_KEY,
+        IMPLEMENTED_STATUS_KEY,
         ctx,
         tx,
         { sessionBranch },
