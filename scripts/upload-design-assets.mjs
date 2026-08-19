@@ -121,45 +121,6 @@ export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
   return { base, source: 'event-base' };
 }
 
-/**
- * Branch prefixes a CONTAINER run produces (MOTIR-3105).
- *
- * `motir run <parent>` executes a story / task / bug whose children are all
- * leaves, and names its branch after the PARENT — deliberately, so the status
- * sync links the pull request to the card being completed. `parent/*` is the
- * current name; `story/*` is the pre-2026-08-04 one, still swept so an
- * in-flight branch is never treated differently.
- */
-const CONTAINER_RUN_PREFIXES = ['parent/', 'story/'];
-
-/**
- * Does this branch ref belong to a CONTAINER run — one whose key can never name
- * a leaf, and therefore can never be a legal design-result target?
- *
- * ⚠️ Answered from the REF rather than from the server's refusal, and that is
- * the whole design of this check. Three shipped facts collide here: a
- * container run always names its branch after a story; `resolveTargetKey`
- * prefers the branch ref; and `designEvidenceService` refuses a non-leaf
- * (`DESIGN_EVIDENCE_NOT_A_LEAF`) because a story has MANY designs, one per
- * design subtask, and rolling them onto one panel would lose which card
- * produced which (`docs/decisions/design-result.md` §3). Every one of those is
- * correct; together they guarantee a failure this job can never resolve.
- *
- * So the impossible case is skipped BEFORE the request, and a server refusal
- * stays FATAL. That split is the point: MOTIR-2499 removed a
- * `continue-on-error` from this pipeline after it reported success for days
- * while receipts were lost, and the property it bought — red here means a
- * publish that should have happened did not — must survive this fix. Treating
- * the 422 itself as a skip would have thrown it away, because a `design/*`
- * branch that genuinely targets the wrong card would then fail silently.
- *
- * @param {string | undefined} ref
- */
-export function isContainerRunRef(ref) {
-  const value = (ref ?? '').trim();
-  return CONTAINER_RUN_PREFIXES.some((prefix) => value.startsWith(prefix));
-}
-
 /** Which asset kind a path is, or null when it is not a publishable artifact. */
 export function classifyDesignPath(filePath) {
   if (filePath.endsWith('.mock.html')) return 'mock';
@@ -331,6 +292,31 @@ export function authHeadersFor(oidcToken, token) {
 }
 
 /**
+ * The target resolved to a CONTAINER (a story or an epic), which the service
+ * refuses with `DESIGN_EVIDENCE_NOT_A_LEAF`.
+ *
+ * ⚠️ THIS IS A NO-OP, NOT A FAILURE, and the distinction is the one the step's
+ * "no `continue-on-error`" note draws: red means "a publish that should have
+ * happened and did not". A design result addressed to a story is a publish that
+ * must NEVER happen — the same class as "no resolvable target card", which this
+ * script already exits 0 on. It is reachable on any PR whose branch or title
+ * names a container and whose diff happens to touch `design/**`: the PARENT-RUN
+ * pull request (`parent/MOTIR-<story>-…`), which carries a design child's asset
+ * amendments alongside the code they document (MOTIR-3009). Failing there tells
+ * the operator to remove a correct amendment to satisfy a publisher that had
+ * nothing to publish.
+ */
+export class NotALeafError extends Error {
+  /** @param {string} targetKey @param {string} body */
+  constructor(targetKey, body) {
+    super(`${targetKey} is not a leaf; a design result attaches to the card that produced it`);
+    this.name = 'NotALeafError';
+    this.targetKey = targetKey;
+    this.body = body;
+  }
+}
+
+/**
  * Mint grants, PUT every artifact, then register the result. Returns the
  * registered evidence.
  *
@@ -367,7 +353,15 @@ export async function publishDesignResult({
     },
   );
   if (!mintRes.ok) {
-    throw new Error(`Minting upload grants failed: ${mintRes.status} ${await mintRes.text()}`);
+    const body = await mintRes.text();
+    // The service refuses a design result addressed to a CONTAINER — a result
+    // attaches to the leaf that produced it, never to a story or an epic. That
+    // is not a failed publish, it is a publish that must not happen; see the
+    // `NotALeafError` note in the header for why it exits 0.
+    if (mintRes.status === 422 && body.includes('DESIGN_EVIDENCE_NOT_A_LEAF')) {
+      throw new NotALeafError(targetKey, body);
+    }
+    throw new Error(`Minting upload grants failed: ${mintRes.status} ${body}`);
   }
   const { targets } = await mintRes.json();
 
@@ -493,22 +487,6 @@ export async function main(env = process.env, log = console, deps = {}) {
     return 0;
   }
 
-  // MOTIR-3105. A container-run branch names a story, and a design result
-  // attaches to the card that PRODUCED it. Nothing here can succeed, so say what
-  // is happening and exit clean rather than fail a code PR on an impossible
-  // target. `run.md`'s parent flow already routes a `design` child to its OWN
-  // `design/MOTIR-<n>-<slug>` branch, so a design asset reaching this branch is
-  // a mis-placed commit, not a publish to attempt.
-  if (source === 'branch' && isContainerRunRef(env['DESIGN_PR_REF'])) {
-    log.log(
-      `${targetKey} came from a container-run branch (${env['DESIGN_PR_REF']}), which names a ` +
-        `story — a design result attaches to the card that produced it, so there is nothing to ` +
-        `publish. Put the design child on its own design/MOTIR-<n>-<slug> branch. Would have ` +
-        `published: ${assets.map((a) => `${a.kind}:${a.sourcePath}`).join(', ')}`,
-    );
-    return 0;
-  }
-
   const oidcToken = await requestOidc(env['MOTIR_OIDC_AUDIENCE'] ?? DEFAULT_OIDC_AUDIENCE, env);
   const patToken = (env['MOTIR_UPLOAD_TOKEN'] ?? '').trim();
   if (!oidcToken && !patToken) {
@@ -517,19 +495,33 @@ export async function main(env = process.env, log = console, deps = {}) {
   }
 
   const baseUrl = (env['MOTIR_BASE_URL'] ?? 'https://app.motir.co').replace(/\/$/, '');
-  const evidence = await publish({
-    baseUrl,
-    targetKey,
-    assets,
-    noteMd,
-    headers: authHeadersFor(oidcToken, patToken),
-    commitSha: env['GITHUB_SHA'] ?? null,
-    ciRunUrl:
-      env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
-        ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
-        : null,
-    producedByKey: targetKey,
-  });
+  let evidence;
+  try {
+    evidence = await publish({
+      baseUrl,
+      targetKey,
+      assets,
+      noteMd,
+      headers: authHeadersFor(oidcToken, patToken),
+      commitSha: env['GITHUB_SHA'] ?? null,
+      ciRunUrl:
+        env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
+          ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
+          : null,
+      producedByKey: targetKey,
+    });
+  } catch (err) {
+    if (!(err instanceof NotALeafError)) throw err;
+    // See NotALeafError: a container-addressed result is a publish that must not
+    // happen, which is the same exit as an unresolvable target — reported, not red.
+    log.log(
+      `${targetKey} is a CONTAINER, not the card that produced these assets — NOT publishing. ` +
+        `The design child's own pull request is what publishes them. Would have published: ${assets
+          .map((a) => `${a.kind}:${a.sourcePath}`)
+          .join(', ')}`,
+    );
+    return 0;
+  }
 
   log.log(
     `Published ${assets.length} design artifact(s) to ${targetKey} (target from ${source}); evidence ${evidence.id}.`,

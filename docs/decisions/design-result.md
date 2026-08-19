@@ -244,43 +244,51 @@ open-in-new-tab remain as escapes.
 | **Unresolvable target card** | Log the would-be publish set and **exit 0 without publishing.** **No fallback constant.** The acceptance uploader falls back to its dogfood story, which is right for a receipt better attached somewhere than nowhere; a design attached to the **wrong** card is worse than one attached to none — it makes another card look designed when it is not, and the design gate that reads it would pass on a lie. |
 | **`continue-on-error`**      | **Forbidden on this step.** MOTIR-2499 removed it from the acceptance publish after it rewrote a failing step's conclusion to `success` for days while two stories silently lost their receipts. Both cases that justified it are handled inside the script (above), so the only remaining meaning of red is _a publish that should have happened did not_. Guarded by `tests/ci-design-guards-lane.test.ts`.   |
 
-### 6a. A CONTAINER-RUN branch is skipped, and a server refusal stays fatal (MOTIR-3105)
+### 6a. A CONTAINER target is a NO-OP, and the PR's own diff is measured from where its branch diverged (MOTIR-3124 / MOTIR-3104)
 
-Three decisions in this document and its neighbours are individually right and
-collectively guarantee a failure:
+Two independent defects made this job fail on pull requests that had no design
+result to publish at all. Both are fixed; they are recorded together because
+each one alone still leaves the other reachable.
 
-|                                                                     |                                                                        |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `motir run <parent>` names its branch `parent/MOTIR-<story>-<slug>` | so the status sync links the PR to the card being completed (`run.md`) |
-| `resolveTargetKey` prefers the branch ref over the PR title         | the branch is the more reliable signal (§6)                            |
-| the service refuses a non-leaf — `DESIGN_EVIDENCE_NOT_A_LEAF`       | §3: a story has MANY designs, one per design subtask                   |
+**(a) A container target is a no-op, not a red build (MOTIR-3124).** A parent run
+opens one pull request per repository on `parent/MOTIR-<story>-…`, and carries a
+design child's asset amendments alongside the code they document (MOTIR-3009).
+`resolveTargetKey` prefers the branch ref, so the target is a STORY — and the
+service refuses a design result addressed to one, correctly, because a result
+attaches to the leaf that produced it (§3). The refusal now exits 0 rather than
+red.
 
-So **every parent-run PR carrying a `design/**` change fails this job, and cannot
-succeed however the change got there.\*\* Observed on PR #2145.
+**The distinction that keeps §6's `continue-on-error` prohibition intact:** red
+means _a publish that should have happened and did not_. A design result
+addressed to a story is a publish that must **never** happen — the same class as
+_no resolvable target card_, which this script already exits 0 on. It is not a
+failure being swallowed.
 
-**DECIDED: skip on the branch REF, before the request; keep the server's refusal
-FATAL.** The uploader recognises the container-run prefixes (`parent/`, and the
-pre-2026-08-04 `story/`), logs what it would have published and where the design
-belongs instead, and exits 0.
+> Rejected: skipping on the branch PREFIX before the request. It reads as
+> cheaper — no round trip — but it only recognises the refs it enumerates, so a
+> container named in the PR TITLE, or a prefix nobody thought of, still reddens
+> the build. The service's own answer covers every way a target can turn out to
+> be a container, which is the property worth having.
 
-**Why the ref and not the 422.** Treating the refusal as a skip would also
-swallow a `design/*` branch that genuinely targets the wrong card — and that is
-exactly the class §6's `continue-on-error` prohibition exists to keep visible.
-Red here must go on meaning _a publish that should have happened did not_. The
-ref is knowable before the request, so the impossible case costs nothing and the
-real one keeps its teeth.
+**(b) The publish set is measured from where the BRANCH diverged (MOTIR-3104).**
+`collectChangedDesignFiles` diffed `github.event.pull_request.base.sha` against
+the checkout — but on a `pull_request` event the checkout is the MERGE COMMIT, so
+every `design/**` change the base branch made between the event snapshot and the
+merge was attributed to the pull request. Observed on PR #2145, a story PR
+touching no design file, which reported two changed note sections belonging to
+someone else's merged design PR.
 
-**Two alternatives rejected.** _Skip unless the branch is `design/_`* is narrower
-than the problem and would silently stop publishing from any other branch that
-legitimately carries an asset. *Derive the leaf from the changed paths* is the
-precise answer and needs a `design/<area>/<surface>` → design-subtask mapping the
-repository does not keep; it is not ruled out, it is unbuilt.
+⚠️ **On a `subtask/*` branch this does not even fail** — the target resolves to a
+leaf and the publish SUCCEEDS, putting another card's design on this card with a
+real evidence id under a green check. The design-reference rule reads that asset,
+so a wrong attribution can make an undesigned surface look designed. That is the
+outcome §6's no-fallback-target rule already refuses; this closes the other way
+in.
 
-**This is not a licence to put design assets on a parent branch.** The parent
-flow already routes a `design` child to its own `design/MOTIR-<n>-<slug>` branch
-and its own PR (`run.md` step 5a), and step 6 says the parent→main PR contains
-only the code/test child commits. An asset reaching a parent branch is a
-mis-placed commit; the skip's log line says so.
+`resolveDiffBase` picks, most trustworthy first: the merge commit's FIRST PARENT
+(the base it was merged with — needs no ancestry, which matters in this job's
+depth-1 clone where `merge-base` may have no shared history); else
+`git merge-base`; else the supplied base, logged rather than silent.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
