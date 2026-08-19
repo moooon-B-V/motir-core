@@ -182,6 +182,18 @@ export const planReviewService = {
         priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
         type: item.op === 'add' ? (proposed?.type ?? null) : null,
         descriptionMd: item.op === 'add' ? (proposed?.descriptionMd ?? null) : null,
+        // The rest of the proposed set (MOTIR-3084) — everything `materialize`
+        // writes onto the created item, so the reviewer sees what approval will
+        // make. Read off `proposed` rather than enumerated by hand anywhere else;
+        // the parity test is what keeps this list honest as the type grows.
+        explanationMd: item.op === 'add' ? (proposed?.explanationMd ?? null) : null,
+        explanationSource: item.op === 'add' ? (proposed?.explanationSource ?? null) : null,
+        storyPoints: item.op === 'add' ? (proposed?.storyPoints ?? null) : null,
+        estimateMinutes: item.op === 'add' ? (proposed?.estimateMinutes ?? null) : null,
+        targetRepo: item.op === 'add' ? (proposed?.targetRepo ?? null) : null,
+        targetRepoRole: item.op === 'add' ? (proposed?.targetRepoRole ?? null) : null,
+        executor: item.op === 'add' ? (proposed?.executor ?? null) : null,
+        planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
         status: item.op === 'add' ? null : (target?.status ?? null),
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],

@@ -52,7 +52,6 @@ export function mergePlanLevel(
   committed: PlanCanvasLevel,
   items: PlanReviewItemDto[],
   parentId: string | null,
-  onEditAdd?: (planItemId: string) => void,
 ): PlanCanvasLevel {
   const atLevel = proposalsAtLevel(items, parentId);
   const pending = new Map(atLevel.map((i) => [i.nodeId, i]));
@@ -63,7 +62,7 @@ export function mergePlanLevel(
     const proposal = pending.get(node.id);
     if (!proposal) return node;
     pending.delete(node.id);
-    return { ...node, content: <PlanItemNode item={proposal} onEdit={onEditAdd} /> };
+    return { ...node, content: <PlanItemNode item={proposal} /> };
   });
 
   // Whatever is left is proposed and has no committed node yet: every `add`, plus
@@ -76,7 +75,7 @@ export function mergePlanLevel(
       searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
       crumbLabel: item.identifier ?? item.title,
       drillable: item.hasChildren,
-      content: <PlanItemNode item={item} onEdit={onEditAdd} />,
+      content: <PlanItemNode item={item} />,
     });
   }
 

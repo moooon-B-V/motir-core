@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
@@ -8,6 +8,8 @@ import {
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
+import { ProposalQuickView } from '@/components/planning/ProposalQuickView';
+import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // The canvas pane of the plan detail (7.4.5 / MOTIR-847, redrawn by MOTIR-3083).
@@ -37,9 +39,6 @@ export interface PlanReviewCanvasProps {
   /** Bumped by the parent on each poll update so the canvas refetches its level. */
   version: number;
   ariaLabel?: string;
-  /** Open the inline-edit form for a proposed `add` (7.21.6 · MOTIR-1370). Passed
-   *  only while the plan is `planned` (editable); each `add` node shows its trigger. */
-  onEditAdd?: (planItemId: string) => void;
 }
 
 /**
@@ -68,18 +67,31 @@ export function arrivalLevel(items: PlanReviewItemDto[]): { id: string; label: s
   return best ? { id: best.id, label: best.label } : null;
 }
 
-export function PlanReviewCanvas({
-  items,
-  projectKey,
-  version,
-  ariaLabel,
-  onEditAdd,
-}: PlanReviewCanvasProps) {
+export function PlanReviewCanvas({ items, projectKey, version, ariaLabel }: PlanReviewCanvasProps) {
   const arrival = useMemo(() => arrivalLevel(items), [items]);
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
     () => (arrival ? [{ id: arrival.id, label: arrival.label }] : undefined),
     [arrival],
   );
+
+  // The DOOR (MOTIR-1351/1352): select a node → View → a peek. On every op.
+  // An `add` peeks its PROPOSAL — there is no work item yet; anything else is an
+  // ordinary committed node (a sibling, or a modify/remove's live target) and
+  // gets the SHIPPED work-item peek, unchanged.
+  const [peeked, setPeeked] = useState<{ proposal: PlanReviewItemDto | null; key: string | null }>({
+    proposal: null,
+    key: null,
+  });
+  const byNodeId = useMemo(() => new Map(items.map((i) => [i.nodeId, i])), [items]);
+  const onView = useCallback(
+    (nodeId: string) => {
+      const proposal = byNodeId.get(nodeId);
+      if (proposal && proposal.op === 'add') setPeeked({ proposal, key: null });
+      else setPeeked({ proposal: null, key: proposal?.identifier ?? nodeId });
+    },
+    [byNodeId],
+  );
+  const closePeek = useCallback(() => setPeeked({ proposal: null, key: null }), []);
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
@@ -92,7 +104,7 @@ export function PlanReviewCanvas({
         // No project to read a level from — a pre-project discovery run
         // (`GenerationFlow`) proposes a tree before one exists, so there is no
         // committed neighbourhood and the proposals legitimately stand alone.
-        if (!projectKey) return mergePlanLevel(committed, items, parentId, onEditAdd);
+        if (!projectKey) return mergePlanLevel(committed, items, parentId);
         const qs = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';
         const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/roadmap${qs}`);
         if (res.ok) {
@@ -105,19 +117,24 @@ export function PlanReviewCanvas({
       } catch {
         // Degraded above; nothing to add.
       }
-      return mergePlanLevel(committed, items, parentId, onEditAdd);
+      return mergePlanLevel(committed, items, parentId);
     },
-    [items, projectKey, onEditAdd],
+    [items, projectKey],
   );
 
   return (
-    <ProjectRoadmapCanvas
-      loadLevel={loadLevel}
-      reloadKey={`${version}:${proposalsAtLevel(items, null).length}`}
-      initialTrail={initialTrail}
-      searchable
-      rootLabel="Plan"
-      ariaLabel={ariaLabel ?? 'Proposed plan'}
-    />
+    <>
+      <ProjectRoadmapCanvas
+        onView={onView}
+        loadLevel={loadLevel}
+        reloadKey={`${version}:${proposalsAtLevel(items, null).length}`}
+        initialTrail={initialTrail}
+        searchable
+        rootLabel="Plan"
+        ariaLabel={ariaLabel ?? 'Proposed plan'}
+      />
+      <ProposalQuickView item={peeked.proposal} onClose={closePeek} />
+      <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
+    </>
   );
 }

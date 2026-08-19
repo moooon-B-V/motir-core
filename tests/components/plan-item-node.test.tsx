@@ -32,6 +32,14 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     priority: null,
     type: null,
     descriptionMd: null,
+    explanationMd: null,
+    explanationSource: null,
+    storyPoints: null,
+    estimateMinutes: null,
+    targetRepo: null,
+    targetRepoRole: null,
+    executor: null,
+    planningProvenance: null,
     status: null,
     hasChildren: false,
     changes: [],
@@ -105,32 +113,16 @@ describe('PlanItemNode', () => {
     expect(badge.getAttribute('title')).toContain('Parent removed');
   });
 
-  it('renders an Edit trigger on an add node when onEdit is supplied; click fires it (7.21.6)', () => {
-    const onEdit = vi.fn();
-    renderWithIntl(
-      <PlanItemNode item={item({ op: 'add', planItemId: 'pi_42' })} onEdit={onEdit} />,
-    );
-    const trigger = screen.getByTestId('edit-proposal');
-    fireEvent.click(trigger);
-    expect(onEdit).toHaveBeenCalledWith('pi_42');
-  });
-
-  it('shows NO Edit trigger on a modify/remove node (only an add is editable)', () => {
-    const onEdit = vi.fn();
-    renderWithIntl(
-      <PlanItemNode item={item({ op: 'modify', nodeId: 'wi_1', title: 'X' })} onEdit={onEdit} />,
-    );
-    expect(screen.queryByTestId('edit-proposal')).toBeNull();
-    cleanup();
-    renderWithIntl(
-      <PlanItemNode item={item({ op: 'remove', nodeId: 'wi_2', title: 'Y' })} onEdit={onEdit} />,
-    );
-    expect(screen.queryByTestId('edit-proposal')).toBeNull();
-  });
-
-  it('shows NO Edit trigger when onEdit is omitted (an approved/declined plan is immutable)', () => {
-    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} />);
-    expect(screen.queryByTestId('edit-proposal')).toBeNull();
+  // ⚠️ EDITING IS REMOVED (MOTIR-3084). MOTIR-1370's inline-edit pencil and its
+  // modal are gone: a proposal is READ (the canvas peek) and changed by
+  // re-planning, not hand-corrected. Guarded on ABSENCE, on every op — the
+  // affordance must not come back on any of them.
+  it('carries NO edit affordance on any op', () => {
+    for (const op of ['add', 'modify', 'remove'] as const) {
+      renderWithIntl(<PlanItemNode item={item({ op, nodeId: `wi_${op}`, title: op })} />);
+      expect(screen.queryByTestId('edit-proposal')).toBeNull();
+      cleanup();
+    }
   });
 });
 

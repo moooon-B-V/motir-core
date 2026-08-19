@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   approvePlanRequest: vi.fn(async () => ({})),
   declinePlanRequest: vi.fn(async () => ({})),
-  updateProposalRequest: vi.fn(async () => ({})),
   fetchPlanReview: vi.fn(),
 }));
 
@@ -42,7 +41,6 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
     ...actual,
     approvePlanRequest: mocks.approvePlanRequest,
     declinePlanRequest: mocks.declinePlanRequest,
-    updateProposalRequest: mocks.updateProposalRequest,
     fetchPlanReview: mocks.fetchPlanReview,
   };
 });
@@ -128,6 +126,14 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
         priority: null,
         type: null,
         descriptionMd: null,
+        explanationMd: null,
+        explanationSource: null,
+        storyPoints: null,
+        estimateMinutes: null,
+        targetRepo: null,
+        targetRepoRole: null,
+        executor: null,
+        planningProvenance: null,
         status: null,
         hasChildren: false,
         changes: [],
@@ -290,15 +296,9 @@ describe('PlanDetail — approving refreshes the SERVER surface too (MOTIR-1947)
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('the proposal INLINE EDIT does not refresh — surface kind 1 must keep its own value', async () => {
-    mocks.fetchPlanReview.mockResolvedValue(review());
-
-    renderWithIntl(<PlanDetail projectKey="PRJ" initialReview={review()} repositorySet={null} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'edit proposal' }));
-    fireEvent.click(screen.getByRole('button', { name: 'save proposal' }));
-
-    await waitFor(() => expect(mocks.updateProposalRequest).toHaveBeenCalled());
-    expect(mocks.refresh).not.toHaveBeenCalled();
-  });
+  // The proposal INLINE EDIT test was REMOVED with the feature (MOTIR-3084):
+  // MOTIR-1370's edit modal is gone, so there is no longer an inline-edit
+  // surface to assert the no-refresh contract on. That contract is unchanged and
+  // still covered here by the approve / decline cases above, which are the other
+  // mutations this island makes.
 });
