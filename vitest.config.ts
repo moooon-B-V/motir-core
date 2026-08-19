@@ -68,10 +68,16 @@ export default defineConfig({
     // React flush passive effects synchronously inside RTL's act scopes, which
     // REMOVES the effect-ordering race class MOTIR-1736/1737 hit — see that file
     // for the mechanism and the contract it imposes on component tests.
+    // `inFlightProbe` is LAST and is a no-op unless `MOTIR_INFLIGHT_PROBE=1`
+    // (MOTIR-3077): it registers one `afterEach` that reads `pg_stat_activity`
+    // for work this worker started and did not wait for. Off by default — it
+    // costs a round trip per test and its import is dynamic, so an ordinary run
+    // does not even construct the admin client.
     setupFiles: [
       './tests/helpers/perWorkerDb.ts',
       './tests/helpers/inngestSetup.ts',
       './tests/helpers/actEnvironment.ts',
+      './tests/helpers/inFlightProbe.ts',
     ],
     // Cross-FILE parallelism is now safe (each worker has its own DB, above).
     // `sequence.concurrent` stays false so test()s WITHIN a file still run
@@ -455,6 +461,17 @@ export default defineConfig({
         // into workItemsService's number it would be invisible.
         'lib/workItems/repoDelivery.ts',
         'components/workItems/RepositorySetField.tsx',
+        // The repository REFERENCE's data-access leaf (Story MOTIR-2732 ·
+        // MOTIR-3039). Gated on its own for the same reason `repoDelivery.ts`
+        // above is: it is the ONE place a card's repositories are read and
+        // written, so a regression here moves where an agent is dispatched, and
+        // blended into `workItemsService`'s number it would be invisible.
+        'lib/repositories/workItemRepoRepository.ts',
+        // The PROJECT repository set on the planning-job envelope (MOTIR-3044).
+        // Gated on its own because it is a CROSS-REPO contract: the consumer is in
+        // motir-ai, so a regression here is invisible from this side until a plan
+        // comes back unpinned.
+        'lib/ai/projectRepoContext.ts',
         'lib/mcp/tools/createSprint.ts',
         'lib/mcp/tools/updateSprint.ts',
         'lib/mcp/tools/deleteSprint.ts',
@@ -521,6 +538,13 @@ export default defineConfig({
         'lib/repositories/planTargetLockRepository.ts',
         'lib/planChange/targetLock.ts',
         'lib/jobs/definitions/planTargetLockSweep.ts',
+        // MOTIR-3064 — the abandoned-plan reconciler. Its decision table is the
+        // whole card: which job states mean "the producer is not coming back",
+        // and which of them mean "we do not know yet". A missed branch there is
+        // either a project whose auto-planning stays paused for good or a live
+        // generation cut off mid-run, and neither surfaces as an error.
+        'lib/services/abandonedPlanService.ts',
+        'lib/jobs/definitions/abandonedPlanSweep.ts',
         // Story 7.12 · Subtask 7.12.5 (MOTIR-911) — the CONFIRMATION GATE at the
         // persist boundary. This module decides whether an approved proposal set
         // may become rows at all (the kind-parent grammar, the intra-plan ref
@@ -1630,6 +1654,8 @@ export default defineConfig({
         'lib/workItems/proseVsGraph.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/proseGraphAdvisoryService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workItems/repoDelivery.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemRepoRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ai/projectRepoContext.ts': { branches: 90, functions: 90, lines: 90 },
         'components/workItems/RepositorySetField.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/services/backlogService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemRepository.ts': { branches: 90, functions: 90, lines: 90 },
@@ -1948,6 +1974,9 @@ export default defineConfig({
         },
         'lib/planChange/targetLock.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/planTargetLockSweep.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3064 — the abandoned-plan reconciler and its sweep job.
+        'lib/services/abandonedPlanService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/abandonedPlanSweep.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.5 (MOTIR-911) — the persist-time confirmation gate.
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask 7.12.6 (MOTIR-912) — the shared review/confirm seam.

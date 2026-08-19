@@ -135,6 +135,30 @@ export interface JobContextBag {
   // design (the reserved-hole convention, like `discovery`) — each side
   // declares its own types against the shared contract.
   code?: unknown;
+  // The PROJECT's repository SET (Story MOTIR-2732 · MOTIR-3044 producer ↔
+  // MOTIR-3045 consumer) — `{ repos: [{ ref, name, role, label, state }] }`
+  // (`JobProjectRepoContext`, lib/ai/projectRepoContext.ts), one entry per
+  // `project_repository` row, in set order.
+  //
+  // ⚠️ BESIDE `code` above, deliberately, and not merged into it. That field is
+  // the WORKSPACE's connected grant list and exists for code-graph reads; this one
+  // is the PROJECT's own set. They differ in scope, in shape and in what they can
+  // express: a grant list has no role, no establish state, and no entry at all for
+  // a repository the plan is about to ask for — which is most of them at the
+  // moment a tree is generated. Collapsing them is the confusion MOTIR-3044 exists
+  // to end.
+  //
+  // The `ref` is the load-bearing field: a role MAY REPEAT (`ProjectRepo.role`'s
+  // own comment — two services are two `api` rows), so a role pin on such a
+  // project resolves to null and the planner cannot mean the billing API rather
+  // than the search API. The row's identity is what makes it sayable.
+  //
+  // ABSENT (not empty) when the project records no repositories — the reserved-hole
+  // convention, so "this project has none" and "nobody asked" stay tellable apart.
+  // Loosely typed here by design, like `discovery` and `code`: each side declares
+  // its own types against the shared contract. Optional in BOTH directions, so the
+  // two repositories' halves merge in either order.
+  repositories?: unknown;
   // The bug-analysis unit an `analyze_bug` job carries — the user bug + its
   // plan-tree neighborhood the OUTWARD classifier reasons over, assembled by the
   // trigger (MOTIR-1481) and sent inline (see BugAnalysisContext above).

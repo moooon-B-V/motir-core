@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from './helpers/adminDb';
+import { describeInFlight, inFlightBackends } from './helpers/inFlightWork';
 import type {
   RawConvention,
   RawConventionSurface,
@@ -329,5 +330,20 @@ describe('/code-health initial read — an audit report for EVERY repo (MOTIR-22
     await expect(loadCodeHealthSurfaces(projectId, svcCtx, REPOS)).rejects.toThrow(
       'not an ai error',
     );
+
+    // MOTIR-3077 — …AND it abandons nothing on its way out. This is the site the
+    // card's empirical sweep of shard 3 found, from THIS test: the probe logged
+    // one backend left `idle in transaction` on a `workspace_membership` SELECT.
+    // The gate rejects on an ordinary path (a non-admin on an admin-only page)
+    // while the sibling audit reads and every convention read hold their own
+    // transactions, so under `Promise.all` the page returned and they kept
+    // running — MOTIR-3066's shape, one directory over from where the card's
+    // source scan could look. Repaired with `allSettledOrThrow`; this assertion
+    // is what holds it.
+    const leftover = await inFlightBackends();
+    expect(
+      leftover,
+      `a propagated gate error left ${leftover.length} backend(s) in flight:\n${describeInFlight(leftover)}`,
+    ).toEqual([]);
   });
 });

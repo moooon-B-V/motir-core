@@ -7,6 +7,7 @@ import type {
 } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -320,7 +321,11 @@ export async function syncChangeRequestStatus(
       workItem !== null
         ? repoSetShortfall(
             classifyRepoDelivery(
-              workItem.targetRepos,
+              // RESOLVED through the references, not the stored name projection
+              // (Story MOTIR-2732 · MOTIR-3043). The projection goes stale the
+              // moment a repository is renamed on the host, and a gate reading
+              // it compares a name no pull request will ever report again.
+              await resolveExpectedRepos(workItem.id, workItem.targetRepos, tx),
               await githubPullRequestRepository.listCompletionFactsByWorkItem(workItem.id, tx),
             ),
           )
@@ -604,6 +609,20 @@ function incompleteRepoSetCommentBody(args: {
         `cannot tell whether the work reached the trunk. An operator can repair this without a new ` +
         `merge — \`pnpm db:backfill:pr-base-ref\` reads the base back from the provider and re-runs ` +
         `this decision (MOTIR-3034).`,
+    );
+  }
+  if (args.shortfall.unestablished.length > 0) {
+    // The third kind of shortfall (Story MOTIR-2732 · ADR §A5) — and the one
+    // whose answer is NOT "open a pull request". The card points at a
+    // `project_repository` row that names no repository yet, so telling the
+    // reader to merge something would send them somewhere that does not exist.
+    lines.push(
+      `Not created yet: ${list(args.shortfall.unestablished)} — ` +
+        `${args.shortfall.unestablished.length === 1 ? 'that repository is' : 'those repositories are'} ` +
+        `still proposed on the project, so there is nothing to open a ${args.noun} against. ` +
+        `Establish the ${args.shortfall.unestablished.length === 1 ? 'row' : 'rows'} in the ` +
+        `project's repository settings, or skip ${args.shortfall.unestablished.length === 1 ? 'it' : 'them'} ` +
+        `if the work does not ship there.`,
     );
   }
   lines.push(

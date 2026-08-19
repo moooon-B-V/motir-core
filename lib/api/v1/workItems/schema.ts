@@ -381,6 +381,26 @@ export const workItemDetailSchema = workItemFieldsSchema.extend({
    *  shape keeps reading the repository dispatch routes to; `V1_CONTRACT_VERSION`
    *  moves for the addition (Amendment 8). */
   targetRepos: z.array(z.string()),
+  /** The same repositories as RESOLVED REFERENCES (Story MOTIR-2732 · MOTIR-3041,
+   *  ADR "Amendment 2026-08-18" §A4) — one entry per `project_repository` row the
+   *  item points at, in set order, `primary` on element 0.
+   *
+   *  ADDITIVE, so the two name fields above keep their shape and meaning: they are
+   *  the NAMES these references resolve to, which is why a repository RENAME
+   *  changes what every field displays and nothing about what the card points at.
+   *  A client that never learns about this field under-reports rather than
+   *  mis-reports, and §8's "a client MUST tolerate unknown fields" is the other
+   *  half of the promise. `V1_CONTRACT_VERSION` moves for the addition. */
+  targetRepositories: z.array(
+    z.object({
+      ref: z.string(),
+      name: z.string(),
+      role: z.string(),
+      label: z.string().nullable(),
+      state: z.string(),
+      primary: z.boolean(),
+    }),
+  ),
   executor: executorSchema.nullable(),
   planningSource: planningSourceSchema.nullable(),
   planningHarness: z.string().nullable(),
@@ -591,6 +611,7 @@ export function presentWorkItemDetail(
     sprintId: item.sprintId,
     targetRepo: item.targetRepo,
     targetRepos: item.targetRepos,
+    targetRepositories: item.targetRepositories ?? [],
     executor: item.executor,
     planningSource: item.planningSource,
     planningHarness: item.planningHarness,
@@ -736,6 +757,14 @@ export const createWorkItemBodySchema = z
     // twice and the service raises `CONFLICTING_TARGET_REPO_INPUT` (422) rather
     // than silently picking a winner (ADR §3.4).
     targetRepos: z.array(z.string()).optional(),
+    // The repository REFERENCES (MOTIR-3039) — `project_repository` row ids,
+    // ordered, element 0 the primary. The reference-native form of the two fields
+    // above and the AUTHORED state; the names are what they resolve to, so a
+    // rename changes what a card displays and nothing about what it points at.
+    // MUTUALLY EXCLUSIVE with BOTH of them (§3.4 widened to three): supplying two
+    // raises `CONFLICTING_TARGET_REPO_INPUT` (422). An id outside the item's own
+    // project raises `UNKNOWN_PROJECT_REPO_REF` (422).
+    targetRepositories: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })
@@ -768,6 +797,10 @@ export const updateWorkItemBodySchema = z
      *  exclusive with `targetRepo`, exactly as on create — the patch surface is
      *  never looser than the create one. */
     targetRepos: z.array(z.string()).optional(),
+    /** Replace the repository REFERENCES wholesale, or clear them with `[]`
+     *  (MOTIR-3039). Mutually exclusive with BOTH name fields, exactly as on
+     *  create — the patch surface is never looser than the create one. */
+    targetRepositories: z.array(z.string()).optional(),
     assigneeId: z.string().nullish(),
     dueDate: z.string().datetime().nullish(),
   })

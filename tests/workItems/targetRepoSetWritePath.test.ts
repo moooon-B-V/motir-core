@@ -64,7 +64,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, defaultBranch = 'm
 async function row(id: string) {
   const found = await adminDb.workItem.findUnique({
     where: { id },
-    select: { targetRepo: true, targetRepos: true, targetRepoRole: true },
+    select: { targetRepo: true, targetRepos: true },
   });
   if (!found) throw new Error(`work item ${id} vanished`);
   return found;
@@ -355,7 +355,9 @@ describe("the MIGRATION's backfill — driven with the shipped statement itself"
     });
     await adminDb.workItem.update({
       where: { id: rolePinned.id },
-      data: { targetRepo: null, targetRepos: [], targetRepoRole: 'web' },
+      // ⚠️ `targetRepoRole` retired by MOTIR-3040 (§A3) — this fixture row is now
+      // simply the UNPINNED shape, which is what the backfill assertion reads.
+      data: { targetRepo: null, targetRepos: [] },
     });
 
     await adminDb.$executeRawUnsafe(backfillSql());
@@ -369,12 +371,13 @@ describe("the MIGRATION's backfill — driven with the shipped statement itself"
       targetRepos: ['motir-ai'],
     });
     expect(await row(unpinned.id)).toMatchObject({ targetRepo: null, targetRepos: [] });
-    // The role column is NOT widened and NOT backfilled (ADR §1.3) — the
-    // migration must not touch it, and a role-pinned row keeps its empty set.
+    // The role column is NOT widened and NOT backfilled (ADR §1.3) — and it is
+    // now RETIRED outright (MOTIR-3040, §A3), so what this row asserts is the
+    // half that survives: a row with no NAME pin keeps its empty set, and the
+    // MOTIR-2725 backfill never invented one for it.
     expect(await row(rolePinned.id)).toMatchObject({
       targetRepo: null,
       targetRepos: [],
-      targetRepoRole: 'web',
     });
   });
 
@@ -419,11 +422,6 @@ describe("DISPATCH is unchanged for every row shape the migration leaves — ADR
       { projectId: fx.projectId, kind: 'task', title: 'Unpinned', assigneeId: null },
       fx.ctx,
     );
-    await adminDb.workItem.update({
-      where: { id: unpinnedItem.id },
-      data: { targetRepoRole: 'web' },
-    });
-
     // An N-repo card routes to its PRIMARY, with that repository's own mirrored
     // default branch — never a hard-coded 'main'.
     const pinnedRow = await row(pinnedItem.id);

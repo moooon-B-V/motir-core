@@ -343,6 +343,11 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     sprintId: null,
     targetRepo: null,
     targetRepos: [],
+    // The REFERENCES the two name fields above resolve to (Story MOTIR-2732 ·
+    // MOTIR-3041). Required on the detail body, so a double that omits it
+    // publishes a response the generated client rightly refuses — which is this
+    // seam working, not a schema that is too strict.
+    targetRepositories: [],
     executor: 'coding_agent',
     planningSource: null,
     planningHarness: null,

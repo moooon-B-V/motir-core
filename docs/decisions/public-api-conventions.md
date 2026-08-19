@@ -1562,8 +1562,9 @@ half the time — `runOpenPlanSession` itself chooses between "Opened" and
 
 **Status is a sub-resource rather than a field because it is a different read
 against a different source.** `getOutcome` reaches motir-ai for the JOB's
-liveness — a job can die and leave its plan `generating` forever, which the plan
-row alone cannot report — so folding it into the plan would make one endpoint's
+liveness — a job can die and leave its plan `generating` until a background
+reconciler settles it (MOTIR-3064), which the plan row alone cannot report at the
+moment a client needs it — so folding it into the plan would make one endpoint's
 latency and failure modes depend on a cross-service call a client asking only for
 proposals never wanted.
 

@@ -811,6 +811,7 @@ model Workspace {
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos                ProjectRepo[]
+  workItemRepos               WorkItemRepo[]
   /// The per-member collaborator records on this workspace's repositories
   /// (MOTIR-1910). Cascade: they are tenant-scoped rows with no life of their own.
   projectRepoCollaborators    ProjectRepoCollaborator[]
@@ -1706,27 +1707,21 @@ model WorkItem {
   // camelCase, no `@map`, matching this table's columns; unindexed (never a
   // lookup key — the completion gate reads it off a row it already has).
   //
-  // ⚠️ `targetRepoRole` below is deliberately NOT widened to a set (ADR §1.3) —
-  // two parallel Prisma scalar lists cannot represent an element whose name is
-  // known and whose role is not, the gate's expected side is NAMES, and nothing
-  // can author a multi-element role list until MOTIR-2732. Deferred as MOTIR-2978.
+  // ⚠️ §1.3's deferral of a role SET resolved by DECLINING it (MOTIR-2732 ·
+  // MOTIR-3037 §A3): no node ever carries two roles, so there was never a role
+  // list to widen. MOTIR-2978 — the card that deferral filed — became the
+  // container ROLLUP instead, and the role column below is retired outright.
   targetRepos           String[]                      @default([])
-  // The PORTABLE half of the same pin (Story MOTIR-1775 · MOTIR-1912, ADR
-  // `docs/decisions/project-repository-set.md` §5.2) — WHICH ROLE of the project's
-  // repository set this item's work belongs to, or NULL when the planner pinned
-  // none. The role exists because at generation the repositories DO NOT: the set
-  // is derived from the tree and the user may rename any row before it is
-  // created, so a NAME pinned then is stale the moment a row is edited and
-  // meaningless before the row exists at all. A role is stable across both.
-  // Recorded at materialize and RESOLVED to a `targetRepo` name later, when the
-  // role's row becomes established (MOTIR-1913) — the two columns are therefore
-  // complements, not alternatives, and `targetRepo` remains the only thing
-  // dispatch reads. The Prisma enum (not a String) because the vocabulary is
-  // ADR §1.1's fixed six and `project_repository.role` already models it that way
-  // — one spelling of the role across the two tables that must agree. camelCase,
-  // no `@map`, matching this table's columns; unindexed (the resolution pass
-  // scans a single project's items).
-  targetRepoRole        ProjectRepoRole?
+  // ⚠️ `targetRepoRole` WAS HERE AND IS RETIRED (Story MOTIR-2732 · MOTIR-3040,
+  // ADR `docs/decisions/work-item-repository-set.md` "Amendment 2026-08-18" §A3).
+  // It was the PORTABLE stand-in for a pin: at generation the repositories do not
+  // exist, so a NAME is stale or meaningless and only a role was stable. A row
+  // REFERENCE is stable across both — the row exists before the repository does,
+  // its id does not move when its name is edited, and it survives the rename on
+  // the host — so the role's reason to exist was discharged, and MOTIR-1913's
+  // resolution pass went with it. `PlanItemProposedFields.targetRepoRole` REMAINS:
+  // a plan still pins by role before any row exists; it is resolved to a reference
+  // at materialize instead of being copied onto the item.
   // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
   // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
   // webhook so "did the dispatched work actually pass?" lives in Motir, not only
@@ -1841,6 +1836,15 @@ model WorkItem {
   // a deleted item cannot be held. Modelled both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   planTargetLock       PlanTargetLock?
+  // WHERE this item's work ships, as REFERENCES to the project's repository rows
+  // (Story MOTIR-2732 · MOTIR-3039, ADR `docs/decisions/work-item-repository-set.md`
+  // "Amendment 2026-08-18"). Ordered by `WorkItemRepo.position`; position 0 is the
+  // PRIMARY the dispatch routes to. This REPLACES the `targetRepos` name array as
+  // the authored state — see that column's own note and the amendment's §A7 for
+  // the expand -> contract sequence the columns retire through. Cascade: a deleted
+  // item's references are not a fact about anything. Modelled both sides per the
+  // FK-`@relation` rule.
+  repositories         WorkItemRepo[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -4169,6 +4173,12 @@ model Plan {
   /// cadence tick, so it gets its own composite index rather than riding the
   /// (projectId, createdAt) one and filtering status in the heap.
   @@index([projectId, status])
+  /// The ABANDONED-PLAN sweep's discovery read (MOTIR-3064): "which `generating`
+  /// plans, in ANY project, are older than the grace?" — cross-workspace, so
+  /// neither index above helps it (both lead with `project_id`). Status first,
+  /// then age, which is the order the predicate narrows in: `generating` is a
+  /// small tail of the table, and the sweep then takes the oldest N of it.
+  @@index([status, createdAt])
   @@map("plan")
 }
 
@@ -5201,9 +5211,17 @@ model ProjectRepo {
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
 
-  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  githubRepo GithubRepo? @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubRepo GithubRepo?    @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+  /// The WORK ITEMS pinned to this repository row (Story MOTIR-2732 · MOTIR-3039).
+  /// Cascade on delete: removing a row from the project's set removes the cards'
+  /// references to it, because the project no longer has that repository. `Restrict`
+  /// would make the set uneditable the moment any card pinned a row, which ADR
+  /// `project-repository-set.md` §4.4 forbids. A pin's survival across a repository
+  /// being DISCONNECTED is a different edge and is preserved by `githubRepoId`'s
+  /// `SetNull` above. Modelled both sides per the FK-`@relation` rule.
+  workItems  WorkItemRepo[]
 
   /// The first uniqueness guarantee: at most one row per `(project, name)`, so two
   /// rows can never race for one repo name. Enforced in the DATABASE — the service
@@ -5229,6 +5247,66 @@ model ProjectRepo {
   @@index([workspaceId])
   @@index([projectId])
   @@map("project_repository")
+}
+
+/// WHERE a work item's work ships — ONE ROW PER REPOSITORY the item is pinned to,
+/// pointing at the project's own `project_repository` row (Story MOTIR-2732 ·
+/// MOTIR-3039, ADR `docs/decisions/work-item-repository-set.md` "Amendment
+/// 2026-08-18" §A2).
+///
+/// This REPLACES `work_item.targetRepos` — an ordered array of repository NAMES —
+/// as the authored state, and the amendment's §A1 answers §1.1's costed rejection
+/// of a join table on its own terms rather than around it. The short version: the
+/// foreign key §1.1 declined was to `github_repo`, whose row a disconnect removes;
+/// this one is to `project_repository`, whose row a disconnect LEAVES
+/// (`github_repo_id` is SET NULL), so the property that rejection protected — a pin
+/// survives its repository being briefly disconnected — is preserved BY the
+/// reference. And the shape here is neither of the (B)/(C) §1.1 rejected: the join
+/// table is the only WRITABLE representation, and every repository NAME the product
+/// publishes is a read projection of it, so nothing published is dropped and there
+/// is no second writable copy to keep in step by convention.
+///
+/// ORDERED by `position`, ascending, and **position 0 is the PRIMARY** — the
+/// repository `resolveDispatchRepo` routes to (ADR §2). A plain `Int` and not the
+/// fractional-index `String` this schema uses on `work_item.position` /
+/// `project_repository.position`: a fractional index buys a cheap insert-between on
+/// a list a user re-orders one element at a time, and a repository set is REPLACED
+/// wholesale by one service write with no incremental re-order. The ordinal is
+/// therefore sufficient AND assertable — `@@unique([workItemId, position])` makes a
+/// gap or a collision a database error rather than a rendering question.
+///
+/// Workspace-scoped tenant data, so `workspace_id` is carried on the ROW (RLS does
+/// not traverse foreign keys) and the policy ships in the same migration.
+///
+/// A reference to a row in ANOTHER PROJECT is rejected at the WRITE layer with a
+/// typed error, not by a constraint: `project_repository.project_id` and
+/// `work_item.project_id` are two columns nothing relates, so no foreign key can
+/// see the mismatch. That is the same write-layer check
+/// `docs/decisions/target-repo-attribution.md` §2 already applies to an authored
+/// NAME, moved from a string comparison onto an id.
+model WorkItemRepo {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  workItemId    String   @map("work_item_id")
+  projectRepoId String   @map("project_repo_id")
+  /// The element's index in the ordered set; 0 is the PRIMARY. Contiguous from 0
+  /// by the write path, and unique per item so a gap cannot be written silently.
+  position      Int
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  projectRepo ProjectRepo @relation(fields: [projectRepoId], references: [id], onDelete: Cascade)
+
+  /// One reference per repository per item — duplicates COLLAPSE at the write
+  /// layer (first occurrence wins, exactly as the name path's `matchAuthoredTargetRepos`
+  /// already does), and this index is that rule's backstop rather than the rule.
+  @@unique([workItemId, projectRepoId])
+  /// Ordering is a fact about the row, not a rendering decision — see `position`.
+  @@unique([workItemId, position])
+  @@index([workspaceId])
+  @@index([projectRepoId])
+  @@map("work_item_repository")
 }
 
 /// What a collaborator may DO with the repository (Story MOTIR-1775 · MOTIR-1910,

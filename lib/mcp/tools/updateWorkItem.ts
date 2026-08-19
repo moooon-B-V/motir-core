@@ -107,6 +107,17 @@ const inputSchema = {
         "set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first " +
         'element: supplying both is rejected rather than silently resolved.',
     ),
+  targetRepositories: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Replace the repository set wholesale, as REFERENCES to the project's " +
+        'repository ROWS — their ids, ORDERED, the FIRST being the PRIMARY the CLI ' +
+        'is dispatched into. Prefer this over targetRepos when you have the ids: a ' +
+        'reference survives a rename and can name one of two rows sharing a role. ' +
+        'Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with ' +
+        'BOTH targetRepo and targetRepos.',
+    ),
   assigneeId: z
     .string()
     .nullable()
@@ -131,6 +142,7 @@ interface UpdateWorkItemArgs {
   storyPoints?: number | null;
   targetRepo?: string | null;
   targetRepos?: string[];
+  targetRepositories?: string[];
   assigneeId?: string | null;
   dueDate?: string | null;
 }
@@ -148,6 +160,7 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
   if (args.targetRepo !== undefined) patch.targetRepo = args.targetRepo;
   if (args.targetRepos !== undefined) patch.targetRepos = args.targetRepos;
+  if (args.targetRepositories !== undefined) patch.targetRepositories = args.targetRepositories;
   if (args.assigneeId !== undefined) patch.assigneeId = args.assigneeId;
   if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
   return patch;

@@ -12,7 +12,6 @@ import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository'
 import { projectRepoCollaboratorRepository } from '@/lib/repositories/projectRepoCollaboratorRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectRepoPinService } from '@/lib/services/projectRepoPinService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import {
   toProjectRepoDto,
@@ -785,20 +784,20 @@ export const projectRepoSetService = {
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
     const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx);
-    try {
-      // A SEPARATE transaction, deliberately: the pass locks the project's WHOLE
-      // set, and taking that lock while `inLockedRow` still held one row of it
-      // would let two concurrent attaches on different rows acquire the set in
-      // different orders — a deadlock. Sequencing them is what keeps one lock
-      // order (set, then work items) for every writer.
-      await projectRepoPinService.resolvePins(attached.projectId, ctx);
-    } catch (err) {
-      console.error(
-        `[projectRepoSetService] could not resolve repo pins for project ${attached.projectId} ` +
-          `after establishing row ${rowId}:`,
-        err,
-      );
-    }
+    // ⚠️ MOTIR-1913's PIN RESOLUTION PASS USED TO RUN HERE, AND IT IS GONE
+    // (Story MOTIR-2732 · MOTIR-3040, ADR `work-item-repository-set.md`
+    // "Amendment 2026-08-18" §A3's RETIRE branch).
+    //
+    // It existed because a card pinned a repository by ROLE — a name being
+    // meaningless before the repository was created — so something had to fill the
+    // name in at the moment a row became established. Under the reference model a
+    // card points at the ROW, from birth, and a row is a legal target in ANY
+    // state. So establishing a row now makes every card that points at it resolve
+    // to a name ON THE NEXT READ, because the name is derived: there is nothing
+    // left for a pass to write.
+    //
+    // Nothing replaces it. If you are here looking for where the pin gets filled,
+    // the answer is that it no longer needs filling.
 
     // POST-COMMIT, BEST-EFFORT — grant the actor ACCESS to the repository that
     // now exists (MOTIR-1900). Wired at this same seam, and for the same reason

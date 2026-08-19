@@ -130,6 +130,7 @@ export const POST = withV1Route<{ projectKey: string }>(
           'estimateMinutes',
           'targetRepo',
           'targetRepos',
+          'targetRepositories',
           'assigneeId',
           'dueDate',
         ]),

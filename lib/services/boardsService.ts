@@ -393,6 +393,9 @@ export const boardsService = {
     // The sprint scope (4.5.2) composes with the lanes + the total exactly as it
     // does with the columns — lanes are computed over the scoped issue set.
     const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
+    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+    // The board read is already gated, and all three arms are bounded reads
+    // over a row set resolved above — none of them refuses.
     const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
       resolveSwimlaneKeys(groupBy, allRows, ctx),
       buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId, boardFilter),

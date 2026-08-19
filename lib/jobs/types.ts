@@ -410,6 +410,11 @@ export interface JobEventDataMap {
    *  every `plan_target_lock` whose window has run out, so a crashed planner can
    *  never leave an item permanently unplannable. Cross-tenant by design. */
   'system.plan-target-lock-sweep': SystemScheduledData;
+  /** The abandoned-plan reconciler (MOTIR-3064) — asks motir-ai what became of
+   *  the job behind every empty `generating` plan past its grace, and declines
+   *  the ones whose producer is gone, so a dead generation can no longer pause a
+   *  project's auto-plan cadence for good. Cross-tenant by design. */
+  'system.abandoned-plan-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;

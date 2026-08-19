@@ -20,6 +20,7 @@ import {
   currentWindowStart,
   waitForWindowHeadroom,
 } from '@/tests/helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
 
 // The route-edge guard: the 429's SHAPE, the headers, the exclusions, and the
 // multi-limb contract (Subtask 8.5.9 / MOTIR-1165).
@@ -61,10 +62,32 @@ import {
 //       counter, no window, no clock.
 //   every case under 'the never-limited paths'
 //       pure path matching against `RATE_LIMIT_EXCLUDED_PATHS`.
+//
+// ── AND THE STORE DEADLINE IS PINNED (MOTIR-3067) ────────────────────────────
+// The window was one of TWO ways this file's `expected null not to be null` can
+// fire; MOTIR-3016 closed that one and said in its own body that a recurrence
+// would not be it. It recurred on 2026-08-19, and the job log named the other:
+//
+//   [rateLimit] store unavailable; allowing the request
+//   RateLimitStoreTimeoutError: The rate-limit store did not answer within 250ms.
+//
+// `__resetSharedRateLimitStoreForTest()` below drops the memo so the next call
+// re-reads the env — and what it then builds is the PRODUCTION store, with the
+// production 250 ms deadline. `consumeSharedRateLimit` fails OPEN on that
+// deadline by design, so the refused call is served and `:47` goes red. The
+// shard that caught it ran 5 136 tests in 753 s against a shared Postgres; 250 ms
+// is a live-request budget, not a test-runner one.
+//
+// So the deadline is now STATED rather than inherited — see
+// `tests/helpers/rateLimitStore.ts` for the sizing, and
+// `tests/rateLimit/storeDeadline.test.ts` for the guard that keeps the next
+// suite from inheriting it silently.
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
   __resetSharedRateLimitStoreForTest();
+  // AFTER the reset — the reset drops exactly the override this installs.
+  pinSharedRateLimitStoreDeadline();
   delete process.env[RATE_LIMIT_DISABLE_ENV];
 });
 afterEach(() => __resetSharedRateLimitStoreForTest());

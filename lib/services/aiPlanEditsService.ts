@@ -1,6 +1,7 @@
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -134,6 +135,17 @@ async function submitPlanEditJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // The PROJECT's repository SET (MOTIR-3044), on THIS shared submit rather than
+  // per operation — for the same reason `generateExplanations` is set here: the
+  // anchor set makes the submitted kind only a FALLBACK, so a per-kind site would
+  // still drop the field on the contextual path. One site therefore covers
+  // `augment`, `expand_item`, `replan` and every contextual turn, which is what
+  // makes "every planning operation carries it" a property of the code rather
+  // than of the test that happened to drive one.
+  const repositories = await resolveProjectRepoContext(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   const tenant = buildTenant(ctx, organizationId, isMeta);
   const { jobId } = await submitJob(
     kind,
@@ -159,6 +171,7 @@ async function submitPlanEditJob(
       // exactly as the `generate_tree` submit sends it.
       generateExplanations: ctx.project.aiGenerateExplanations,
       ...(code ? { code } : {}),
+      ...(repositories ? { repositories } : {}),
     },
     { userId: ctx.userId },
   );
@@ -195,14 +208,35 @@ export type PlanOutcomeRef = { planId: string } | { jobId: string };
 /**
  * Resolve the motir-ai job behind a still-`generating` plan.
  *
- * This is the ONLY way to tell a run that is still working from one that DIED:
- * a failed job leaves its plan at `generating` forever (nothing writes a
- * terminal plan state on failure), so a caller polling the plan alone would wait
- * on it indefinitely. A motir-ai outage is reported as `reachable: false` rather
- * than thrown, because the PLAN read already succeeded — degrading the job block
- * beats failing an answer we largely have.
+ * This is the ONLY way to tell a run that is still working from one that DIED —
+ * the plan row cannot answer it. A job that fails writes NO terminal plan state
+ * of its own (motir-ai's inbound seams are the success path: `appendProposals` /
+ * `patchProposal`), so nothing about the plan changes when its producer stops.
+ * A caller polling the plan alone would therefore wait on it indefinitely.
+ *
+ * ⚠️ IT IS NO LONGER *FOREVER*, AND THIS FUNCTION IS WHY (MOTIR-3064). Such a
+ * plan is now reconciled OUT of `generating` by
+ * `abandonedPlanService.reconcileAbandoned`, a cron sweep that calls THIS
+ * resolver for every empty, producer-bearing plan past its grace and writes
+ * `declined` on the ones whose job is terminal or gone. So the state is
+ * eventually terminal — but only eventually, on the sweep's cadence, and this
+ * remains the only way to know NOW. That is exactly why the `job` block stays on
+ * `getOutcome`: a client polling a live submit must not have to wait for a cron
+ * tick to learn its run died.
+ *
+ * A motir-ai outage is reported as `reachable: false` rather than thrown,
+ * because the PLAN read already succeeded — degrading the job block beats
+ * failing an answer we largely have. The sweep leans on the same distinction in
+ * the other direction: unreachable is NOT evidence of death, so it terminates
+ * nothing on that arm.
+ *
+ * Exported (MOTIR-3064) so the sweep asks the job through the ONE resolver the
+ * product already uses, rather than deriving a second opinion from `getJob`.
  */
-async function resolveJobState(jobId: string, coreProjectId: string): Promise<PlanJobStateDto> {
+export async function resolveJobState(
+  jobId: string,
+  coreProjectId: string,
+): Promise<PlanJobStateDto> {
   try {
     const job = await getJob(jobId, coreProjectId);
     return {

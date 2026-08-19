@@ -1168,7 +1168,9 @@
     "repositoryDelivery": {
       "delivered": "已交付",
       "awaiting": "待交付",
-      "unknown": "未知"
+      "unknown": "未知",
+      "unestablished": "尚未创建",
+      "excluded": "已跳过"
     }
   },
   "comments": {
@@ -5195,8 +5197,13 @@
       "mergedBranchUnknown": "已合并 —— 未记录分支",
       "repoState": {
         "awaiting": "待交付",
-        "unknown": "未知"
-      }
+        "unknown": "未知",
+        "delivered": "已交付",
+        "unestablished": "尚未创建",
+        "excluded": "已跳过"
+      },
+      "repositoryNotCreated": "仓库尚未创建",
+      "repositorySkipped": "此项目已跳过"
     }
   },
   "aiPlanning": {

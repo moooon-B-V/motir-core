@@ -104,6 +104,7 @@ export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit'
         'estimateMinutes',
         'targetRepo',
         'targetRepos',
+        'targetRepositories',
         'assigneeId',
         'dueDate',
       ]),

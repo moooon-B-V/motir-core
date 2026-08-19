@@ -225,6 +225,9 @@ describe("MOTIR-2725's own case — one repository, one merged PR, null base", (
     expect(report.reevaluated[0]!.shortfall).toEqual({
       outstanding: ['motir-core'],
       unknownBase: [],
+      // Widened by Story MOTIR-2732 (ADR §A5) — a repository that does not
+      // EXIST yet is a third kind of shortfall. Empty here: this one exists.
+      unestablished: [],
     });
     expect(await statusOf(item.id)).toBe('in_review');
   });
@@ -491,6 +494,7 @@ describe('the re-evaluation path, without any delivery', () => {
     expect((await repoSetCompletionService.reevaluateItem(item.id)).shortfall).toEqual({
       outstanding: [],
       unknownBase: ['motir-ai'],
+      unestablished: [],
     });
 
     serveBases({ 91: 'trunk' });

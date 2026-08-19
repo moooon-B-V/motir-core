@@ -27,6 +27,7 @@ import {
   ALIGNED_WINDOW_MS,
   waitForWindowHeadroom,
 } from '@/tests/helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
 
 // The SHARED rate-limit store (Subtask 8.5.9 / MOTIR-1165) against the REAL
 // Postgres — the store's whole purpose is that two processes share one window, so
@@ -52,6 +53,24 @@ import {
 // The disable-flag case loops five times and does not wait, because with the
 // limiter disabled nothing is counted at all — and an assertion that a request
 // was ALLOWED cannot be broken by a reset, which only ever grants more budget.
+//
+// ── THE STORE DEADLINE IS PINNED PER CASE, NOT IN `beforeEach` (MOTIR-3067) ──
+// The other unstated precondition of a refusal: `consumeSharedRateLimit` FAILS
+// OPEN when one increment outlives the store's deadline, and the production
+// deadline is 250 ms. Exactly two cases here are exposed to it — the two that
+// spend a budget and assert the last call was REFUSED — and each pins the
+// deadline itself rather than inheriting a suite-wide override, because THIS
+// file's subject includes which store `sharedRateLimitStore()` RESOLVES:
+// `honours MOTIR_RATE_LIMIT_STORE=memory` and `memoizes, so one process cannot
+// split a window across two backends` both read that function, and an override
+// installed in `beforeEach` would answer them before the code under test could.
+//
+// ⚠️ AND THE TWO CASES WITH A TINY DEADLINE KEEP IT. `a HANGING store times out
+// and still allows the request` (20 ms) and `a store that answers within the
+// deadline is NOT treated as a failure` (5 s) EXERCISE the deadline — it is
+// their subject, not their environment. Handing them a generous one would
+// delete the coverage. They are named for that reason in
+// `tests/rateLimit/storeDeadline.test.ts`'s `DEADLINE_IS_THE_SUBJECT` map.
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
@@ -230,6 +249,9 @@ describe('the store adapter fails OPEN — on an error AND on a hang', () => {
   });
 
   it('over-limit fails CLOSED — the one thing that must not fail open', async () => {
+    // ⚠️ `degraded: false` below is the assertion a fail-open falsifies most
+    // directly, and it is the one this case exists for (MOTIR-3067).
+    pinSharedRateLimitStoreDeadline();
     const budget = { limit: 2, windowMs: ALIGNED_WINDOW_MS };
     const key = 'closed';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
@@ -311,6 +333,9 @@ describe('the disable flag', () => {
   });
 
   it('any other value leaves the limiter ON', async () => {
+    // A fail-open serves the second call, which reads as "the flag turned the
+    // limiter off" — the exact opposite of what this case asserts (MOTIR-3067).
+    pinSharedRateLimitStoreDeadline();
     process.env[RATE_LIMIT_DISABLE_ENV] = '0';
     const budget = { limit: 1, windowMs: ALIGNED_WINDOW_MS };
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);

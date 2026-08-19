@@ -624,7 +624,7 @@ export interface paths {
         };
         /**
          * Read what became of a submitted planning job
-         * @description Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many PROPOSALS it bundles, and — while it is still generating — whether the producing job is alive or already FAILED. That last distinction is the point of this endpoint: a failed job leaves its plan `generating` forever, so the plan status alone cannot tell you to stop polling. `job.reachable: false` means motir-ai could not be asked, not that the job died. A pure read; the proposal count is NOT a count of created work items.
+         * @description Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many PROPOSALS it bundles, and — while it is still generating — whether the producing job is alive or already FAILED. That last distinction is the point of this endpoint: a failed job writes no terminal plan state of its own — a background reconciler declines an empty one within the hour, so the plan status alone cannot tell you to stop polling NOW. `job.reachable: false` means motir-ai could not be asked, not that the job died. A pure read; the proposal count is NOT a count of created work items.
          *
          *     Requires the `project:browse` permission.
          */
@@ -949,6 +949,14 @@ export interface components {
             sprintId: string | null;
             targetRepo: string | null;
             targetRepos: string[];
+            targetRepositories: {
+                ref: string;
+                name: string;
+                role: string;
+                label: string | null;
+                state: string;
+                primary: boolean;
+            }[];
             executor: ("coding_agent" | "human") | null;
             planningSource: ("native" | "mcp" | "manual" | "api") | null;
             planningHarness: string | null;
@@ -1691,6 +1699,7 @@ export interface operations {
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
                     targetRepos?: string[];
+                    targetRepositories?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };
@@ -2141,6 +2150,7 @@ export interface operations {
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
                     targetRepos?: string[];
+                    targetRepositories?: string[];
                     assigneeId?: string | null;
                     dueDate?: string | null;
                 };

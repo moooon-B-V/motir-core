@@ -494,6 +494,21 @@ export interface RepoStraddleCriterion extends CriterionRepoPath {
  * Returns the first offender only, for gate 14's reason: the remedy is one
  * number, and the criteria after it are consequences rather than findings.
  */
+/**
+ * ⚠️ `targetRepos` is a list of NAMES, and stays one under the reference model
+ * (Story MOTIR-2732 · MOTIR-3041, ADR "Amendment 2026-08-18" §A4.2).
+ *
+ * This comparison has a name on BOTH sides by necessity: the other side is a path
+ * written in a card's PROSE, and prose contains names, not row ids. So nothing
+ * here changes shape. What changes is only where the card's side COMES FROM — the
+ * references, resolved once through §A4's rule, rather than read off a column
+ * that happened to hold the answer.
+ *
+ * Stated rather than left implicit because the two look identical at this call
+ * site and are not: a resolved name follows a repository rename and a stored one
+ * does not, so an advisory reading the wrong source would start reporting a
+ * straddle the moment somebody renamed a repository on the host.
+ */
 export function firstRepoStraddleCriterion(
   md: string | null | undefined,
   targetRepos: readonly string[],

@@ -14,6 +14,7 @@ import { getPreplanState } from '@/lib/ai/motirAiClient';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
 import { projectRepoEstablishService } from '@/lib/services/projectRepoEstablishService';
 import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvisioningService';
 import {
@@ -415,30 +416,56 @@ describe('a plan that pins ROLES, from approval to a dispatchable repo', () => {
       ['web', 'proposed', 'plan-item-role'],
       ['api', 'proposed', 'plan-item-role'],
     ]);
-    // …and at approve time NOTHING is pinned: the repositories do not exist yet.
-    expect([...(await itemsByTitle(fx.projectId)).values()].map((i) => i.targetRepo)).toEqual([
-      null,
-      null,
-    ]);
+    // …and at approve time the items ALREADY POINT AT THEIR ROWS (MOTIR-3040 ·
+    // §A3). This used to assert nothing was pinned — "the repositories do not
+    // exist yet" — which was true of a NAME and is not true of a REFERENCE: the
+    // rows are proposed BEFORE materialize now, and a `proposed` row is a legal
+    // thing to point at. The NAME column stays null, because a proposed row names
+    // no repository that exists.
+    const atApprove = await itemsByTitle(fx.projectId);
+    expect([...atApprove.values()].map((i) => i.targetRepo)).toEqual([null, null]);
+    for (const item of atApprove.values()) {
+      expect(await adminDb.workItemRepo.findMany({ where: { workItemId: item.id } })).toHaveLength(
+        1,
+      );
+    }
 
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    // The rows as they are AFTER establishment — realized, so their names are the
+    // host's own (§A4's resolved-name rule).
+    const rows = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
 
     // Establishing the rows is what resolves the pins — each item to ITS role's
     // repository, not to the primary and not to a guess.
     const items = await itemsByTitle(fx.projectId);
     const web = items.get('The web half')!;
     const api = items.get('The API half')!;
-    expect(web.targetRepoRole).toBe('web');
-    expect(api.targetRepoRole).toBe('api');
-    expect(web.targetRepo).toBe(proposed[0]!.name);
-    expect(api.targetRepo).toBe(proposed[1]!.name);
-    expect(web.targetRepo).not.toBe(api.targetRepo);
+    // ⚠️ REWRITTEN by MOTIR-3040 (§A3's RETIRE branch). This used to read the
+    // `targetRepo` COLUMN, which MOTIR-1913's pass filled when a row became
+    // established. That pass is gone — establishing a row now resolves every card
+    // pointing at it on the next READ, because the name is DERIVED — so the
+    // column stays null and the claim has to be asserted where it is now true.
+    //
+    // The substance is unchanged and is what this gate exists for: each item ends
+    // up on ITS role's repository, not the primary and not a guess.
+    const refName = async (id: string) =>
+      (
+        await adminDb.workItemRepo.findMany({
+          where: { workItemId: id },
+          include: { projectRepo: { include: { githubRepo: true } } },
+        })
+      ).map((r) => r.projectRepo.githubRepo?.name ?? r.projectRepo.name);
+
+    expect(await refName(web.id)).toEqual([rows[0]!.name]);
+    expect(await refName(api.id)).toEqual([rows[1]!.name]);
+    expect(await refName(web.id)).not.toEqual(await refName(api.id));
 
     // And the agent is told where to build — through the dispatch payload, which
-    // is the only surface that claim is true on.
+    // is the only surface that claim is true on, and the one the retirement had
+    // to keep working (AC 2's "through to a dispatch").
     const dispatch = await workItemsService.getNextReady(fx.projectId, {}, fx.ctx);
-    expect(dispatch!.targetRepo).toBe(web.targetRepo);
-    expect(dispatch!.targetRepoCloneUrl).toContain(web.targetRepo!);
+    expect(dispatch!.targetRepo).toBe(rows[0]!.name);
+    expect(dispatch!.targetRepoCloneUrl).toContain(rows[0]!.name);
   });
 
   it('a one-role plan proposes ONE row, named without a role suffix', async () => {
@@ -453,8 +480,22 @@ describe('a plan that pins ROLES, from approval to a dispatchable repo', () => {
 
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
+    // Both items point at the ONE row (MOTIR-3040: the pin is a reference; the
+    // `targetRepo` column is no longer filled by an establishment pass), and both
+    // therefore DISPATCH to it — which is the claim that matters.
     const items = await itemsByTitle(fx.projectId);
-    expect([...items.values()].map((i) => i.targetRepo)).toEqual([rows[0]!.name, rows[0]!.name]);
+    for (const item of items.values()) {
+      const refs = await adminDb.workItemRepo.findMany({
+        where: { workItemId: item.id },
+        include: { projectRepo: { include: { githubRepo: true } } },
+      });
+      expect(refs.map((r) => r.projectRepo.githubRepo?.name ?? r.projectRepo.name)).toEqual([
+        rows[0]!.name,
+      ]);
+    }
+    expect((await workItemsService.getNextReady(fx.projectId, {}, fx.ctx))!.targetRepo).toBe(
+      rows[0]!.name,
+    );
   });
 
   it('a plan pinning NO role behaves exactly as a pre-role project did', async () => {
@@ -472,7 +513,6 @@ describe('a plan that pins ROLES, from approval to a dispatchable repo', () => {
     // No role, so the ROLE pass pins nothing — and the item still dispatches,
     // because a single-repo project resolves by its set, exactly as before.
     const items = await itemsByTitle(fx.projectId);
-    expect([...items.values()].every((i) => i.targetRepoRole === null)).toBe(true);
     expect([...items.values()].every((i) => i.targetRepo === null)).toBe(true);
     expect((await workItemsService.getNextReady(fx.projectId, {}, fx.ctx))!.targetRepo).toBe(
       rows[0]!.name,
@@ -488,10 +528,26 @@ describe('a plan that pins ROLES, from approval to a dispatchable repo', () => {
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
 
     const items = await itemsByTitle(fx.projectId);
-    // The role that established is pinned; the one that failed is honestly null —
-    // NOT fallen back onto its sibling's repository.
-    expect(items.get('The web half')!.targetRepo).toBe(rows[0]!.name);
-    expect(items.get('The API half')!.targetRepo).toBeNull();
+    // ⚠️ REWRITTEN by MOTIR-3040. Both items point at their own ROW from
+    // materialize — pointing at a row is legal in ANY state, which is the change.
+    // What §5.3's outcome now governs is the NAME each one RESOLVES to: the row
+    // that established has a realized repository and resolves to its host name;
+    // the row whose creation was refused has none, so it resolves to its authored
+    // intent and DISPATCHES to nothing — honestly null, and NOT fallen back onto
+    // its sibling's repository, which is the claim this case exists for.
+    const dispatchOf = async (title: string) => {
+      const row = items.get(title)!;
+      return (
+        (
+          await resolveDispatchRepoForItem(
+            { id: row.id, targetRepo: row.targetRepo, projectId: fx.projectId },
+            fx.ctx,
+          )
+        )?.cloneUrl ?? null
+      );
+    };
+    expect(await dispatchOf('The web half')).toContain(rows[0]!.name);
+    expect(await dispatchOf('The API half')).toBeNull();
   });
 
   it('leaves a role carried by TWO rows unpinned — §5.3’s second null outcome', async () => {

@@ -488,6 +488,10 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
   });
   const userIds = members.map((m) => m.userId);
 
+  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
+  // `resolveCanEditForUsers` does throw `ProjectNotFoundError` — but
+  // `resolveCandidates` has already read the project and returned `[]` for a
+  // missing or foreign one, so that arm cannot reach its refusal here.
   const [identities, eligibility] = await Promise.all([
     withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId, projectId }, (tx) =>
       githubIdentityRepository.findLoginsByUserIds(userIds, tx),
