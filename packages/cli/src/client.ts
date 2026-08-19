@@ -1115,13 +1115,19 @@ export class MotirClient {
    */
   async dispatchPrompt(
     key: string,
-    opts: { sessionBranch?: string | null } = {},
+    opts: { sessionBranch?: string | null; findingsPolicy?: string | undefined } = {},
   ): Promise<DispatchPrompt> {
     // A GET, which is what a pure read should have looked like all along: the
     // MCP tool took a POST-shaped call because that is the only shape MCP has.
     const body = await this.v1.request('getWorkItemDispatchPrompt', {
       path: { key },
-      query: { ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}) },
+      query: {
+        ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}),
+        // OMITTED when nothing is disabled (MOTIR-3022): an absent parameter is
+        // how the server is told to render the COMPLETE protocol, so a run with
+        // no flags sends the request it sent before the flag existed.
+        ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
+      },
     });
     return toDispatchPrompt(body);
   }

@@ -13,7 +13,10 @@ import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessi
 import {
   agentSubmittedReplan,
   checkBootstrapCheckout,
+  contradictoryReplanFlags,
   cwdReasonLabel,
+  findingsPolicyOf,
+  renderFindingsPolicy,
   renderReplanSubmitted,
   renderRepositoriesBlock,
   resolveDispatchTarget,
@@ -87,6 +90,20 @@ export interface AutoOptions extends DeliveryOptions {
   /** `--include-planning` — fire an AI expansion for each unexpanded epic/story
    *  the ready set hands back, instead of skipping it (MOTIR-886). */
   includePlanning?: boolean;
+  /**
+   * `--auto-approve-replan` — approve a re-plan the agent submitted and KEEP
+   * LOOPING, instead of stopping for a human (MOTIR-3022).
+   *
+   * ⚠️ `auto` ONLY, and the reason is the mechanism rather than taste: this is
+   * the one command that re-asks `next_ready` each iteration, so a
+   * newly-approved card genuinely enters the run. `run` / `next` exit after one
+   * item and `batch` froze its list before starting; all three REGISTER the flag
+   * in order to refuse it with that reason.
+   *
+   * This card registers, validates and passes it through. What the loop DOES
+   * with it is MOTIR-3023.
+   */
+  autoApproveReplan?: boolean;
 }
 
 /** Injectable seams; never overridden in production. */
@@ -250,6 +267,19 @@ class RepoSessions {
 // ── the command ─────────────────────────────────────────────────────────────
 
 export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promise<void> {
+  // ⚠️ CONTRADICTORY FLAGS ARE REFUSED, not resolved by precedence (MOTIR-3022).
+  // `--auto-approve-replan` with `--disable-replan` says approve a submission the
+  // agent was told not to make; honouring either one silently leaves the operator
+  // believing the other. Refused BEFORE the agent is resolved, so nothing is
+  // claimed for a run that cannot mean what it says.
+  if (opts.autoApproveReplan) {
+    const contradiction = contradictoryReplanFlags(opts);
+    if (contradiction) {
+      throw new CliError(contradiction, {
+        hint: 'Drop one: `--auto-approve-replan` to keep the agent from re-planning at all, or `--disable-replan` to approve what it submits.',
+      });
+    }
+  }
   const run = deps.run ?? execCommand;
   const clock = deps.clock ?? Date.now;
   const kinds = parseKinds(opts.kinds);
@@ -278,6 +308,7 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
     closeOutRepos(summary, run);
     info('');
     info(renderAutoSummary(summary));
+    info(renderFindingsPolicy(opts));
     process.exitCode = autoExitCode(summary);
   });
 }
@@ -418,7 +449,10 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // first: the prompt is a pure READ that neither claims the item nor moves
       // its status, so asking before knowing whether a checkout exists costs
       // nothing and keeps the common path at ONE request.
-      let dispatch = await client.dispatchPrompt(item.key, { sessionBranch: branch });
+      let dispatch = await client.dispatchPrompt(item.key, {
+        sessionBranch: branch,
+        findingsPolicy: findingsPolicyOf(opts),
+      });
       // One target per repository the card ships in (MOTIR-3133), primary first.
       // An older server sends no set, and the empty array falls back to the
       // single-repository resolve — exactly the shape this loop had before.
@@ -450,7 +484,9 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // names a branch that does not exist here. Re-read WITHOUT the seed and
         // hand the agent the per-item-pull-request text instead. The extra
         // request buys correctness on a path that was already the exception.
-        dispatch = await client.dispatchPrompt(item.key);
+        dispatch = await client.dispatchPrompt(item.key, {
+          findingsPolicy: findingsPolicyOf(opts),
+        });
       }
 
       const record = await dispatchOne({
