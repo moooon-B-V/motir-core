@@ -798,6 +798,18 @@ export default defineConfig({
         'app/**/settings/project/repositories/_components/TakeoverRow.tsx',
         'app/**/settings/project/repositories/_components/TakeoverModal.tsx',
         'app/**/settings/project/repositories/_components/RepositoriesRoom.tsx',
+        // MOTIR-3126 — the room's SECOND registry. Same argument as the block
+        // above, one registry over: the surface's claims are that a
+        // workspace-connected repository is NAMED, SOURCED and carries no action,
+        // and that the empty state belongs to a project with neither registry.
+        // Every one of those is a branch, and the defect being fixed here is
+        // precisely a branch nobody could take. The reader and the section split
+        // are gated for the same reason — they are now the ONE definition the
+        // resolver and every surface share, so an unexercised branch in them is a
+        // disagreement waiting to happen.
+        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx',
+        'lib/projectRepos/effectiveDomain.ts',
+        'lib/projectRepos/roomSections.ts',
         // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
         // BACKFILL's decision table. It shipped ungated, and it is the one file
         // in that subtask whose branches ARE the safety argument: each branch is
@@ -1936,6 +1948,13 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/projectRepos/effectiveDomain.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/projectRepos/roomSections.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/repositorySetClient.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/repositories/RepositorySetStep.tsx': {
           branches: 90,
