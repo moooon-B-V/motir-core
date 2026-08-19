@@ -20,6 +20,7 @@ import { GET_PLAN_TOOL_NAME, registerGetPlan } from './tools/getPlan';
 import {
   ADD_PLAN_ITEMS_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
+  UPDATE_PLAN_ITEM_TOOL_NAME,
   registerAuthorPlan,
 } from './tools/authorPlan';
 import {
@@ -94,6 +95,7 @@ export const MCP_TOOL_NAMES = [
   GET_PLAN_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   ADD_PLAN_ITEMS_TOOL_NAME,
+  UPDATE_PLAN_ITEM_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
   APPEND_PLAN_TURN_TOOL_NAME,
   SUBMIT_PLAN_SESSION_TOOL_NAME,
