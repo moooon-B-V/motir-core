@@ -13,7 +13,9 @@ import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessi
 import {
   checkBootstrapCheckout,
   cwdReasonLabel,
+  renderRepositoriesBlock,
   resolveDispatchTarget,
+  resolveDispatchTargets,
   type DispatchTarget,
 } from '../dispatch.js';
 import {
@@ -154,7 +156,47 @@ class RepoSessions {
     private readonly run: CommandRunner,
   ) {}
 
-  ensure(target: DispatchTarget): RepoSession | null {
+  /**
+   * The session(s) an item's whole repository SET routes into (MOTIR-3135).
+   *
+   * ⚠️ ALL-OR-NOTHING per card, and that is the decision this method carries. A
+   * lineage in SOME of a card's repositories and not others is the one outcome
+   * that cannot be closed out: `closeOutRepos` opens a pull request per TOUCHED
+   * repository, so a repository holding the work but not the branch is invisible
+   * to it — the work sits on a local branch nothing will ever push or review. So
+   * if any repository of the card cannot carry the lineage, the CARD gets none,
+   * and the server hands it the per-item-pull-request prompt for all of them.
+   *
+   * For a multi-repository card the un-carryable case is settled BEFORE any
+   * branch is created, so a card that falls back leaves no stray branch behind
+   * in the repositories that could have carried it.
+   *
+   * Returns `null` when this card gets no seed.
+   */
+  ensure(targets: readonly DispatchTarget[]): RepoSession[] | null {
+    if (targets.length <= 1) {
+      const single = this.ensureOne(targets[0]!);
+      return single === null ? null : [single];
+    }
+    // The cheap pass first: a target with no checkout to branch in, or one an
+    // earlier item already found un-carryable, decides this without touching git.
+    for (const target of targets) {
+      const cached = this.byPath.get(target.cwd);
+      if (cached === null || (cached === undefined && target.reason !== 'repo_checkout')) {
+        info(
+          `No session branch possible in ${target.cwd} (${target.targetRepo ?? 'unpinned'}).` +
+            ' This card carries more than one repository, so it ships as its own pull' +
+            ' requests in all of them rather than a lineage in some.',
+        );
+        return null;
+      }
+    }
+    // Every element is a real checkout: create or reuse, and a git failure in one
+    // of them is the same run-ending problem it is for a single-repository card.
+    return targets.map((target) => this.ensureOne(target)!);
+  }
+
+  private ensureOne(target: DispatchTarget): RepoSession | null {
     const existing = this.byPath.get(target.cwd);
     if (existing !== undefined) return existing;
 
@@ -373,14 +415,22 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // its status, so asking before knowing whether a checkout exists costs
       // nothing and keeps the common path at ONE request.
       let dispatch = await client.dispatchPrompt(item.key, { sessionBranch: branch });
-      const target = resolveDispatchTarget(
+      // One target per repository the card ships in (MOTIR-3133), primary first.
+      // An older server sends no set, and the empty array falls back to the
+      // single-repository resolve — exactly the shape this loop had before.
+      const targets = resolveDispatchTargets(
         session.link.dir,
         session.link.config,
-        dispatch.targetRepo,
+        (dispatch.targetRepos ?? []).map((r) => r.name),
       );
-      let repo: RepoSession | null;
+      const resolved =
+        targets.length > 0
+          ? targets
+          : [resolveDispatchTarget(session.link.dir, session.link.config, dispatch.targetRepo)];
+      const target = resolved[0]!;
+      let repo: RepoSession[] | null;
       try {
-        repo = repos.ensure(target);
+        repo = repos.ensure(resolved);
       } catch (err) {
         // A git failure in a REAL checkout is a run-ending problem, and it
         // happens before any status flip — the item is untouched. Stop, but
@@ -404,11 +454,15 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         item,
         dispatch,
         target,
+        targets: resolved,
+        repos: resolved.map((t) => t.targetRepo).filter((n): n is string => n !== null),
         agent,
         clock,
         runAgentFn,
         ownerId,
-        onIntegrated: (key) => repo?.keys.push(key),
+        // The card is integrated in EVERY repository of its lineage, so it is
+        // carried by every one of their pull requests (MOTIR-3135).
+        onIntegrated: (key) => repo?.forEach((s) => s.keys.push(key)),
       });
       records.push(record);
 
@@ -468,6 +522,12 @@ interface DispatchOneInput {
    *  note there. Passed in so this function makes no second prompt request. */
   dispatch: DispatchPrompt;
   target: DispatchTarget;
+  /** Every repository the card ships in, primary first (MOTIR-3135) — recorded
+   *  so a FAILED card reaches every repository's session pull request. */
+  repos: string[];
+  /** The RESOLVED targets behind {@link DispatchOneInput.repos}, so the loop's
+   *  per-item output names every checkout the card will be worked in. */
+  targets: DispatchTarget[];
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
@@ -485,6 +545,9 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
   info('');
   info(`── ${item.key} — ${item.title}`);
   info(`   ${target.cwd}  (${cwdReasonLabel(target)})`);
+  // Every OTHER repository the card ships in, from the same renderer `run` /
+  // `next` / `batch` use (MOTIR-3133) — nothing at all for a one-repository card.
+  for (const line of renderRepositoriesBlock(input.targets)) info(`   ${line.trimStart()}`);
   info(
     dispatch.sessionBranch
       ? `   integrating into ${dispatch.sessionBranch}`
@@ -504,6 +567,9 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     title: item.title,
     durationMs,
     repo: dispatch.targetRepo,
+    // The whole set, so a FAILED record reaches the pull-request body of every
+    // repository it half-touched, not only the primary's (MOTIR-3135).
+    repos: input.repos,
     // Off the prompt the loop already fetched — no extra request (MOTIR-2445).
     parentKey: dispatch.parentKey,
   };
@@ -589,7 +655,11 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
     // the ones that were attempted in the same repo.
     const mine = summary.records.filter(
       (r) =>
-        r.sessionBranch === repo.branch || (r.outcome === 'failed' && r.repo === repo.repoName),
+        r.sessionBranch === repo.branch ||
+        // A failed card belongs in the body of EVERY repository it was attempted
+        // in, not only its primary (MOTIR-3135). `repos` is absent on records
+        // written before it existed, and the scalar is that record's whole set.
+        (r.outcome === 'failed' && (r.repos ?? [r.repo]).includes(repo.repoName)),
     );
     const carried = mine.filter((r) => r.outcome !== 'failed');
     const result = openSessionPr(
