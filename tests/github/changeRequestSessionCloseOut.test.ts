@@ -287,7 +287,9 @@ describe('the single-card path is untouched', () => {
 
     const headRef = `subtask/${item.identifier}-an-ordinary-card`;
     await open(headRef, `feat: a change (${item.identifier})`, 8);
-    expect((await rowOf(item.id)).status).toBe('in_review');
+    // An OPEN pull request means `implemented` since MOTIR-3005 — the code
+    // exists and CI has not spoken for it.
+    expect((await rowOf(item.id)).status).toBe('implemented');
 
     const result = await merge(headRef, `feat: a change (${item.identifier})`, 8);
     expect(result).toMatchObject({

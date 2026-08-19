@@ -178,7 +178,7 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     const result = await merge(item.identifier, CORE, 1);
 
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 
   it('NAMES the outstanding repository on the item, so the hold is not a mystery', async () => {
@@ -207,7 +207,7 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     );
     await open(item.identifier, CORE, 1);
     await merge(item.identifier, CORE, 1);
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
 
     await open(item.identifier, AI, 2);
     // `trunk`, not `main` — the mirrored default branch, never a hard-coded guess.
@@ -235,7 +235,7 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     const result = await merge(item.identifier, CORE, 1);
 
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
     expect((await commentBodies(item.id)).at(-1)).toContain('motir-ai');
   });
 
@@ -257,7 +257,7 @@ describe('the repository-SET gate — the case the shipped gates cannot see', ()
     const result = await merge(item.identifier, CORE, 1);
 
     expect(result).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
     const note = (await commentBodies(item.id)).at(-1)!;
     // UNKNOWN in both directions: it must not claim the repository is outstanding
     // (the merge may well have reached the trunk), and it must not claim a branch.
@@ -314,7 +314,7 @@ describe('the gate ABSTAINS wherever the product behaves as it does today', () =
     // Both gates hold here. `deferred_open_pr` names an artifact the reader can go
     // and look at, which is strictly more actionable than "motir-ai has no merge".
     expect(result).toMatchObject({ outcome: 'deferred_open_pr' });
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });
 
@@ -332,7 +332,7 @@ describe('the hold is idempotent under redelivery', () => {
 
     expect(third).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
     expect(await commentBodies(item.id)).toHaveLength(1);
-    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });
 

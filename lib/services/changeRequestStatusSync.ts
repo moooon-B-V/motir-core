@@ -79,7 +79,10 @@ const LIFECYCLE_TARGET: Record<
   ChangeRequestLifecycle,
   { key: string; category: StatusCategoryDto }
 > = {
-  in_review: { key: 'in_review', category: 'in_progress' },
+  // OPENED (MOTIR-3005). The `category` fallback is what a CUSTOM workflow with
+  // no `implemented` status lands on — the same in-progress bucket `in_review`
+  // resolved to before, so such a project keeps exactly the behaviour it had.
+  implemented: { key: 'implemented', category: 'in_progress' },
   done: { key: 'done', category: 'done' },
   todo: { key: 'in_progress', category: 'in_progress' },
 };

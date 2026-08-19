@@ -231,7 +231,9 @@ export const githubProvider: GitProvider = {
   changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle {
     if (cr.merged) return 'done';
     if (cr.state === 'closed') return 'todo'; // closed WITHOUT merging — not done
-    return 'in_review'; // open
+    // OPEN — the code exists and CI has not spoken for it (MOTIR-3005). NOT
+    // `in_review`: that state is written by the CI-feedback consumer alone.
+    return 'implemented';
   },
 
   parseCiStatusEvent(rawPayload: unknown): NormalizedStatusEvent | null {
