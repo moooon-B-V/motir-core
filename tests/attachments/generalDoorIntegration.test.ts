@@ -5,6 +5,7 @@ import {
   ALIGNED_HEADROOM_MS,
   waitForWindowHeadroom,
 } from '../helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
 
 const putCalls = vi.hoisted(() => ({ count: 0 }));
 vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
@@ -102,6 +103,13 @@ beforeEach(async () => {
   );
   await truncateAuthTables();
   putCalls.count = 0;
+  // ⚠️ The throttle case below asserts a REFUSAL counted through the shared
+  // Postgres store, and `consumeSharedRateLimit` FAILS OPEN when one increment
+  // outlives the production 250 ms deadline. On a loaded runner the call this
+  // suite expects refused would be SERVED, and the assertion would go red on a
+  // diff that touched no rate-limiting code (MOTIR-3067). Pinning a test-time
+  // deadline removes the class rather than lowering its odds.
+  pinSharedRateLimitStoreDeadline();
   caller = await createV1ProjectCaller({ permissions: ['project:browse', 'work_item:edit'] });
   session.current = { user: { id: caller.fixture.ownerId } };
   activeProject.current = {
