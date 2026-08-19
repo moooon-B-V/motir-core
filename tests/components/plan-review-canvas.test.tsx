@@ -323,6 +323,59 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
     );
   });
 
+  // ── The PROPOSED half of the same contract ────────────────────────────────
+  // `viewable` is what surfaces the View pill, and `mergePlanLevel` pushed every
+  // proposal without it. So MOTIR-3084's proposal peek — the whole read view for
+  // a proposed card — was unreachable from the canvas it was built for: the
+  // handler existed, the modal existed, and no affordance opened either. Same
+  // missing flag as the committed nodes above, other half of the merge.
+  it('offers View on a selected PROPOSAL and opens its peek — no work item needed', async () => {
+    const fetchMock = stubRoadmap();
+    mount();
+    await screen.findByText('A proposed subtask');
+
+    selectNode('pi_1');
+    fireEvent.click(within(el('pi_1') as HTMLElement).getByTestId('view-button'));
+
+    // The PROPOSAL peek, not the work-item one: an `add` has no work item, so
+    // nothing may be asked of `/api/work-items/peek` on its behalf.
+    const peek = await screen.findByTestId('proposal-quick-view');
+    expect(within(peek).getByText('A proposed subtask')).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek'))).toBe(
+      false,
+    );
+  });
+
+  it('peeks a DRIFTED modify by the live target it names, not as a proposal', async () => {
+    // A `modify` whose target is not at this level is pushed as its own node by
+    // the same branch as an `add` — it is viewable too, and it names a real work
+    // item, so View opens the SHIPPED work-item peek keyed by that identifier.
+    const fetchMock = stubRoadmap();
+    mount([
+      proposal({
+        planItemId: 'pi_mod',
+        nodeId: 'pi_mod',
+        op: 'modify',
+        identifier: 'MOTIR-3083',
+        title: 'A drifted modify',
+        changes: [],
+      }),
+    ]);
+    await screen.findByText('A drifted modify');
+
+    selectNode('pi_mod');
+    fireEvent.click(within(el('pi_mod') as HTMLElement).getByTestId('view-button'));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([u]) =>
+          String(u).includes('/api/work-items/peek?key=MOTIR-3083'),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+  });
+
   it('degrades to the proposals alone when there is no project to read a level from', async () => {
     const fetchMock = stubRoadmap();
     render(<PlanReviewCanvas items={[proposal()]} projectKey="" version={0} />);
