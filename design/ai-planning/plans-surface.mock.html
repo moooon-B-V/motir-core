@@ -1464,6 +1464,320 @@
         letter-spacing: 0.02em;
         text-transform: none;
       }
+
+      /* ==================================================================
+         PART VI (MOTIR-3159 / bug MOTIR-3154) — the DECIDED axis.
+
+         The outcome CROSSES the three op languages rather than joining
+         them: every op can be accepted and every op can be declined, so
+         there are six renderings and a fourth `op` member could only
+         express three. It therefore rides two channels the op treatments
+         never touch — the chip's second SEGMENT (the word, which carries
+         the whole meaning) and a solid leading-edge SPINE (decorative
+         reinforcement for a zoom-out where 10.5px text is gone).
+
+         The spine's two values are the review rail's OWN outcome colours
+         one component down (`--el-success` on "Added N items to your
+         backlog"; the neutral on "Plan declined — your tree was left
+         untouched"), so this introduces no vocabulary. No reserved
+         language is approached: each of those is a border STYLE (dashed
+         pending / dotted skippable / dashed not-in-sprint) or a red CHIP
+         (blocked elsewhere / not in sprint), and this axis is neither.
+      ================================================================== */
+      .node.dec-ok,
+      .node.dec-no {
+        position: absolute;
+        overflow: hidden;
+      }
+      .node.dec-ok::before,
+      .node.dec-no::before {
+        content: '';
+        position: absolute;
+        inset-inline-start: 0;
+        inset-block: 0;
+        width: 3px;
+      }
+      .node.dec-ok::before {
+        background: var(--success);
+      }
+      .node.dec-no::before {
+        background: var(--muted);
+      }
+      /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
+         is about to happen"; on a decided card it either already happened
+         or never will, and the fade would also desaturate the outcome
+         spine — the one signal that settles which. The muted frame, the
+         strike and the strong border all stay. */
+      .node.remove.dec-ok,
+      .node.remove.dec-no {
+        opacity: 1;
+        filter: none;
+      }
+
+      /* The op badge with the outcome fused to its trailing edge, so the
+         chip reads op × outcome. Segment 1 is the shipped OpBadge tone,
+         byte for byte; segment 2 is the outcome. */
+      /* The op badge sits on the node's OWN top row — where the shipped
+         `PlanItemNode` puts it (badge left, status pill right) — because the
+         fused chip is wider than the badge it extends and the node footprint
+         is fixed at NODE_W. */
+      .decrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .decrow .pill {
+        margin-left: auto;
+      }
+      .opchip {
+        display: inline-flex;
+        align-items: stretch;
+        border-radius: var(--r-pill);
+        overflow: hidden;
+        flex: none;
+      }
+      .opchip .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        font-size: 10.5px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .opchip .seg + .seg {
+        border-inline-start: 1px solid var(--hair);
+      }
+      .opchip .seg svg {
+        width: 11px;
+        height: 11px;
+      }
+      .opchip .seg.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .opchip .seg.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .opchip .seg.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .opchip .seg.ok {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .opchip .seg.no {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      /* The level caption becomes the plan's outcome, stated once — same
+         primitive and placement as Panel E's "Proposed by this plan". */
+      .lvlcap.decided-ok {
+        color: #0f5e29;
+      }
+      .lvlcap.decided-no {
+        color: var(--secondary);
+      }
+
+      /* ---- Panel H — the pane STACKS: band above, canvas below -------- */
+      .stack {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .cmp {
+        min-width: 0;
+        border-inline-end: 1px solid var(--border);
+      }
+      .cmp:last-child {
+        border-inline-end: 0;
+      }
+      .cmp-cap {
+        padding: 9px 14px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--border);
+      }
+      .cmp-cap.bad {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      .cmp-cap.good {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .cmp-note {
+        padding: 11px 14px;
+        font-size: 11.5px;
+        line-height: 1.6;
+        color: var(--secondary);
+        border-top: 1px solid var(--border);
+      }
+      /* The establish step, composed from its SHIPPED markup (MOTIR-1782).
+         Panel H changes its CONTAINER and not one pixel inside it. */
+      .estep {
+        padding: 20px 22px;
+        background: var(--surface);
+      }
+      .estep .eyebrow {
+        font: 700 10.5px var(--mono);
+        letter-spacing: 0.09em;
+        color: var(--secondary);
+      }
+      .estep h3 {
+        margin: 8px 0 6px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      .estep p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--secondary);
+        line-height: 1.55;
+      }
+      .estep .callout {
+        margin: 12px 0;
+        display: flex;
+        gap: 9px;
+        padding: 11px 12px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: var(--r-card);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--secondary);
+      }
+      .estep .callout svg {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        color: var(--muted);
+      }
+      .estep .callout b {
+        color: var(--strong);
+      }
+      .estep .erow {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .estep .ebtn {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--r-btn);
+        padding: 7px 14px;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .estep .ebtn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .estep .ebtn-quiet {
+        color: var(--info);
+      }
+      /* The BAND: the same step, at the top of the pane, on a hairline. */
+      .estep.band {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+      .estep.band h3 {
+        margin: 6px 0 0;
+        font-size: 16px;
+      }
+      .estep.band .erow {
+        margin-top: 10px;
+      }
+      /* The canvas takes the REMAINDER, with min-h-0 so it shrinks rather
+         than pushing the band out (the shrinking-list rule). */
+      .bandcanvas {
+        min-height: 0;
+        padding: 12px 18px 16px;
+      }
+      .minirow {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .mini {
+        position: relative;
+        overflow: hidden;
+        flex: 1 1 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 9px 10px 9px 13px;
+        border-radius: var(--r-card);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: var(--sh-subtle);
+      }
+      .mini::before {
+        content: '';
+        position: absolute;
+        inset-inline-start: 0;
+        inset-block: 0;
+        width: 3px;
+      }
+      .mini.dec-ok::before {
+        background: var(--success);
+      }
+      .mini.add {
+        border-color: var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+      }
+      .mini.modify {
+        border-color: var(--info);
+      }
+      .mini .mid {
+        font: 600 10.5px var(--mono);
+        color: var(--secondary);
+        white-space: nowrap;
+      }
+      .mini .mchip {
+        display: inline-flex;
+        border-radius: var(--r-pill);
+        overflow: hidden;
+        flex: none;
+      }
+      .mini .mchip i {
+        font-style: normal;
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 2px 6px;
+      }
+      .mini .mchip i.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .mini .mchip i.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .mini .mchip i.ok {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .whyrow {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+        padding: 16px 18px 18px;
+        border-top: 1px solid var(--border);
+        font-size: 11.5px;
+        line-height: 1.65;
+        color: var(--secondary);
+      }
+      .whyrow strong {
+        color: var(--strong);
+      }
     </style>
   </head>
   <body>
@@ -3473,6 +3787,364 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL G — a DECIDED node: the outcome as a FOURTH AXIS         -->
+      <!-- crossing the three op languages (MOTIR-3159 / bug MOTIR-3154)  -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">G</span>
+          <h2>A decided node — the outcome CROSSES the three ops, it is not a fourth one</h2>
+          <span class="note"
+            >every op can be accepted and every op can be declined, so there are SIX renderings ·
+            the op frame is untouched · the outcome rides two channels the ops never use: a second
+            chip segment (the WORD) and a solid leading-edge spine</span
+          >
+        </div>
+        <div class="frame">
+          <div class="viewport" style="height: 700px">
+            <div class="ovl" style="top: 14px; left: 16px">
+              <span class="crumb"
+                ><span class="dot"></span>MOTIR-2200 · The Motir agent loop
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                MOTIR-3154 · A DECIDED plan's cards vanish…</span
+              >
+            </div>
+
+            <!-- The LEVEL CAPTION is the plan's outcome, stated ONCE, so the page
+                 reads at a zoom where no 10.5px chip does. Same primitive and
+                 placement as Panel E's "Proposed by this plan". -->
+            <span class="lvlcap decided-ok" style="left: 44px; top: 66px"
+              >Approved · 4 items added to your backlog</span
+            >
+
+            <!-- ACCEPTED add — the op frame it had, the green spine, `add ·
+                 accepted`, and its REAL identifier where a pending add shows
+                 `new` (MOTIR-3160 keys a materialized add by workItemId). The
+                 target has a status now, so it carries a status pill. -->
+            <div class="node lvl add dec-ok" style="left: 44px; top: 92px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg add"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                      <path d="M12 5v14M5 12h14" /></svg
+                    >add</span
+                  ><span class="seg ok">accepted</span></span
+                ><span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3166</div>
+                  <div class="ttl">A declined plan keeps its proposals</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DECLINED add — same op frame, neutral spine, `add · declined`,
+                 and it KEEPS `new`. It never became anything, and inventing a key
+                 for it would be the surface asserting a work item that does not
+                 exist. No status pill, for the same reason. -->
+            <div class="node lvl add dec-no" style="left: 44px; top: 330px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg add"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                      <path d="M12 5v14M5 12h14" /></svg
+                    >add</span
+                  ><span class="seg no">declined</span></span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">A declined plan keeps its proposals</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ACCEPTED modify — the committed node, its info ring, green spine.
+                 The diff overlay STAYS and now reads as history: what this plan
+                 changed, old → new. -->
+            <div class="node lvl modify dec-ok" style="left: 300px; top: 92px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg modify"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                    >change</span
+                  ><span class="seg ok">accepted</span></span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3161</div>
+                  <div class="ttl">The plan-detail canvas draws a decided plan</div>
+                </div>
+              </div>
+              <div class="diff">
+                <span class="dl">Story points</span>
+                <span class="old">3</span>
+                <span class="new"><b>5</b></span>
+              </div>
+            </div>
+
+            <span class="lvlcap decided-no" style="left: 44px; top: 304px"
+              >Declined · nothing was created — the same three ops, the other outcome</span
+            >
+
+            <!-- ACCEPTED remove — muted frame + strike, green spine. The target
+                 IS archived, so the strike is now a statement of fact rather than
+                 a proposal. -->
+            <div class="node lvl remove dec-ok" style="left: 556px; top: 92px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg remove"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg
+                    >remove</span
+                  ><span class="seg ok">accepted</span></span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--mutedfill)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-2904</div>
+                  <div class="ttl">Retire the proposal edit modal</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DECLINED remove — THE ONE PLACE A READER COULD BE MISLED. The
+                 strike says "will be archived" about a card that was NOT. The
+                 chip's `declined` segment is what corrects it — which is exactly
+                 why the outcome must never be colour-only. -->
+            <div class="node lvl remove dec-no" style="left: 556px; top: 330px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg remove"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg
+                    >remove</span
+                  ><span class="seg no">declined</span></span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--mutedfill)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-2904</div>
+                  <div class="ttl">Retire the proposal edit modal</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- DECLINED modify — the committed node unchanged; the diff reads as
+                 what was proposed and refused. -->
+            <div class="node lvl modify dec-no" style="left: 300px; top: 330px">
+              <div class="decrow">
+                <span class="opchip"
+                  ><span class="seg modify"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                    >change</span
+                  ><span class="seg no">declined</span></span
+                >
+              </div>
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3161</div>
+                  <div class="ttl">The plan-detail canvas draws a decided plan</div>
+                </div>
+              </div>
+              <div class="diff">
+                <span class="dl">Story points</span>
+                <span class="old">3</span>
+                <span class="new"><b>5</b></span>
+              </div>
+            </div>
+
+            <div
+              style="
+                position: absolute;
+                left: 44px;
+                top: 508px;
+                max-width: 760px;
+                font-size: 11.5px;
+                line-height: 1.65;
+                color: var(--secondary);
+              "
+            >
+              <strong style="color: var(--strong)">The op frame is untouched in all six.</strong>
+              The outcome rides two channels no op language uses: the chip's second SEGMENT (the
+              word <code>accepted</code> / <code>declined</code>, which is the whole of the meaning)
+              and a solid 3px spine on the leading edge (decorative reinforcement, so the outcome
+              survives a zoom-out where the chip does not). Nothing is carried by colour alone.
+              <br /><br />
+              <strong style="color: var(--strong)"
+                >The spine's colours are borrowed, not new.</strong
+              >
+              They are the review rail's own outcome colours one component down — the
+              <code>--el-success</code> mark on “Added N items to your backlog”, and the neutral one
+              on “Plan declined — your tree was left untouched”. Node and rail say the same thing in
+              the same colour, four inches apart. And no reserved language is approached: every one
+              of them is a border STYLE (dashed pending / dotted skippable / dashed not-in-sprint)
+              or a red CHIP (blocked elsewhere), and this axis touches neither.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL H — what the canvas pane holds AFTER APPROVE:            -->
+      <!-- BOTH, STACKED. Re-decides MOTIR-1775 / MOTIR-1782 on the       -->
+      <!-- record (MOTIR-3159 / bug MOTIR-3154)                           -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">H</span>
+          <h2>After approve — the establish step takes a BAND, not the pane</h2>
+          <span class="note"
+            >re-decides MOTIR-1775 / MOTIR-1782 in the open · the step is a TASK and the canvas is a
+            RECORD, so they stack · nothing inside the step changes</span
+          >
+        </div>
+        <div class="frame">
+          <div class="stack">
+            <!-- LEFT: SHIPPED TODAY — the render off origin/main c57daef8. The
+                 approve created the repository-set rows, and RepositorySetStep
+                 took the whole canvas pane. The four cards just approved are
+                 nowhere on the page. -->
+            <div class="cmp">
+              <div class="cmp-cap bad">Shipped today — the pane is REPLACED</div>
+              <div class="viewport" style="height: 300px">
+                <div class="estep">
+                  <div class="eyebrow">YOUR PROJECT'S CODE</div>
+                  <h3>Motir will host your code</h3>
+                  <p>Your project's code lives with Motir, ready for your agents to start work.</p>
+                  <div class="callout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <span
+                      ><b>It's yours.</b> Motir keeps it safe and private — move it to your own
+                      GitHub whenever you want.</span
+                    >
+                  </div>
+                  <div class="erow">
+                    <span class="ebtn ebtn-primary">Continue</span>
+                    <span class="ebtn ebtn-quiet">I already have code</span>
+                  </div>
+                </div>
+              </div>
+              <div class="cmp-note">
+                The four cards the user approved a second earlier are not on this page. “What did I
+                just say yes to?” has no answer on the surface that asked the question.
+              </div>
+            </div>
+
+            <!-- RIGHT: PANEL H — the step keeps the TOP of the pane at its own
+                 natural height; the canvas takes the remainder and is never
+                 replaced. Not one pixel INSIDE the step changes. -->
+            <div class="cmp">
+              <div class="cmp-cap good">Panel H — the pane STACKS: band above, canvas below</div>
+              <div class="viewport" style="height: 300px">
+                <div class="estep band">
+                  <div class="eyebrow">YOUR PROJECT'S CODE</div>
+                  <h3>Motir will host your code</h3>
+                  <div class="erow">
+                    <span class="ebtn ebtn-primary">Continue</span>
+                    <span class="ebtn ebtn-quiet">I already have code</span>
+                  </div>
+                </div>
+                <div class="bandcanvas">
+                  <span class="lvlcap decided-ok" style="position: static; margin: 0 0 8px 0"
+                    >Approved · 4 items added to your backlog</span
+                  >
+                  <div class="minirow">
+                    <div class="mini add dec-ok">
+                      <span class="mid">MOTIR-3166</span
+                      ><span class="mchip"><i class="add">add</i><i class="ok">accepted</i></span>
+                    </div>
+                    <div class="mini add dec-ok">
+                      <span class="mid">MOTIR-3167</span
+                      ><span class="mchip"><i class="add">add</i><i class="ok">accepted</i></span>
+                    </div>
+                    <div class="mini modify dec-ok">
+                      <span class="mid">MOTIR-3161</span
+                      ><span class="mchip"
+                        ><i class="modify">change</i><i class="ok">accepted</i></span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="cmp-note">
+                The step keeps its own height and its own content — MOTIR-1782 keeps every decision
+                it made about what the step SAYS. The canvas takes the remainder with
+                <code>min-h-0</code> so it shrinks rather than pushing the band out, and it is never
+                replaced. Once the step settles it collapses to its shipped one-line form and the
+                canvas has the pane, with no extra rule.
+              </div>
+            </div>
+          </div>
+          <div class="whyrow">
+            <div>
+              <strong>Why this re-opens a decision instead of editing a file.</strong>
+              MOTIR-1775 / MOTIR-1782 decided the swap deliberately, and the shipped prop doc says
+              why:
+              <em
+                >“once the plan has materialized, the canvas of proposals has served its purpose,
+                and replacing it is the truthful use of the space.”</em
+              >
+              That is correct on its own premise — a proposal IS spent by the decision that resolves
+              it. This report overturns the premise, not the conclusion: after MOTIR-3160 and
+              MOTIR-3161 the pane holds the RECORD of the decision, not the proposals, and a record
+              is produced by the decision rather than spent by it.
+            </div>
+            <div>
+              <strong>And they are different KINDS of thing.</strong> The establish step is a TASK —
+              MOTIR-1782's own central claim is that its default path is one sentence, one primary,
+              one quiet secondary. The canvas is a RECORD. A task and a record can share a pane
+              vertically; only two records compete for it. That is why replacing was reasonable when
+              the pane held a spent artifact and is not once it holds a record. MOTIR-3073 already
+              trimmed this swap for a project that ARRIVES with code; Panel H finishes the same
+              sentence for a project that does not. <br /><br />
+              <span style="color: var(--secondary)"
+                >A DECLINED plan proposes no repository set, so there is no band at all and the
+                canvas has the pane. Panel H changes nothing for a decline — Panel G is the whole of
+                that state's fix.</span
+              >
             </div>
           </div>
         </div>
