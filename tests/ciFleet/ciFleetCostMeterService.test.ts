@@ -59,7 +59,9 @@ interface Fixture {
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "ci_container_usage", "ci_container_period_cost", "ci_period_usage" RESTART IDENTITY CASCADE',
+    // MOTIR-3066 — `ci_period_usage` first, matching the suite's other two
+    // ci-usage truncates; opposite orders on shared tables deadlock (40P01).
+    'TRUNCATE TABLE "ci_period_usage", "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
   // The meter is a CLOUD meter (§8.5). Every test that expects a write says so;

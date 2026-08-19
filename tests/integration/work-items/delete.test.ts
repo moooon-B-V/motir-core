@@ -28,7 +28,11 @@ import type { WorkItemFixture } from '../../fixtures';
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "work_item_link", "work_item_revision", "work_item" RESTART IDENTITY CASCADE',
+    // MOTIR-3066 — the table order here is not free: every other truncate in the
+    // suite names `work_item_revision` before `work_item_link`, and two truncates
+    // that take shared tables in opposite orders deadlock the moment they meet on
+    // one database. `tests/truncate-lock-order.test.ts` asserts the agreement.
+    'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
 }
