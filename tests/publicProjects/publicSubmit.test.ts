@@ -18,6 +18,7 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
 
 // Service-layer tests for Story 6.12 · Subtask 6.12.5 — the public submit-to-
 // triage path + the duplicate-detection pre-check. Real Postgres, no DB mocks;
@@ -51,6 +52,14 @@ const SIX_SUBMISSION_WINDOW_MS = 8_000;
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
+  // ⚠️ PIN THE STORE DEADLINE (MOTIR-3067). The submission throttle counts through the SHARED
+  // Postgres store, whose production deadline is 250 ms for one increment — and
+  // `consumeSharedRateLimit` FAILS OPEN when that expires, serving the call this
+  // suite expects to be refused. On a CI shard running thousands of tests against
+  // one database that is a real outcome, and it presents as a refusal assertion
+  // failing on a diff that touched no rate-limiting code. See
+  // `tests/helpers/rateLimitStore.ts`.
+  pinSharedRateLimitStoreDeadline();
   for (const key of SUBMIT_BUDGET_ENVS) delete process.env[key];
 });
 
