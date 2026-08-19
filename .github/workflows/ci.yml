@@ -49,6 +49,113 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # ── What the diff can actually reach (MOTIR-3148) ───────────────────────────
+  #
+  # Every expensive lane below used to decide whether to run from the BRANCH
+  # NAME — a `startsWith` test against the `seed/` / `design/` / `docs/`
+  # prefixes. That is a claim about the diff inferred from a naming convention,
+  # and it was wrong in
+  # BOTH directions: a `subtask/…` PR touching only `docs/**` paid for the full
+  # E2E matrix, and a `docs/…` branch that touched app code SKIPPED the entire
+  # test suite and merged unverified. The second half is the one that matters —
+  # it is a hole in the merge gate, not a cost problem.
+  #
+  # So the predicate now reads the diff. `app` is false only when EVERY changed
+  # path is documentation, a design asset, or plan-seed data — the three sets
+  # the branch prefixes stood for. `images` is true only when something the
+  # container images are actually built from changed.
+  #
+  # ⚠️ BOTH DEFAULT TO `true`, AND THAT DIRECTION IS THE WHOLE SAFETY ARGUMENT.
+  # A predicate that fails open costs a wasted lane; one that fails closed
+  # merges untested code, which is the defect this job was written to remove.
+  # So a non-pull_request event, an unavailable base commit, a failed `git
+  # diff`, or an empty file set all run EVERYTHING.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    # Reads the diff, writes two booleans. Nothing else.
+    permissions:
+      contents: read
+    outputs:
+      app: ${{ steps.classify.outputs.app }}
+      images: ${{ steps.classify.outputs.images }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The three-dot diff below needs the merge base, which a shallow
+          # clone does not have.
+          fetch-depth: 0
+      - id: classify
+        # Through `env:`, never spliced into the script — a branch name is
+        # attacker-controlled text and `${{ }}` in a `run:` body is textual
+        # substitution (the same rule `ci-complete` follows for `needs`).
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            echo "app=$1" >>"$GITHUB_OUTPUT"
+            echo "images=$2" >>"$GITHUB_OUTPUT"
+            echo "app=$1 images=$2"
+          }
+
+          if [ "$EVENT" != 'pull_request' ]; then
+            echo 'Not a pull request — every lane runs.'
+            emit true true
+            exit 0
+          fi
+
+          # Capture first, THEN test. A `git diff | while` pipeline would hide
+          # the diff's own exit status, which is the thing being guarded on.
+          if ! files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
+            echo '::warning::Could not diff against the merge base — running every lane.'
+            emit true true
+            exit 0
+          fi
+          if [ -z "$files" ]; then
+            echo '::warning::Empty changed-file set — running every lane.'
+            emit true true
+            exit 0
+          fi
+          echo "$files"
+
+          app=false
+          images=false
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            # Anything that is NOT docs / design / plan-seed makes this a code
+            # change. Written as "no exclusion matched" so a path nobody
+            # anticipated counts as code — the fail-open direction again.
+            case "$f" in
+              docs/*|design/*|scripts/plan-seed/*|*.md) ;;
+              *) app=true ;;
+            esac
+            # ⚠️ WIDER THAN THE SANDBOX FOLDER, AND DELIBERATELY SO.
+            # `sandbox-images.yml` builds with `context: .` and the Dockerfile's
+            # builder stage is `COPY . .` — it runs `pnpm install
+            # --frozen-lockfile` against every workspace manifest and packs the
+            # CLI. So the image's inputs are the whole packages/ tree, the
+            # lockfile, the root manifests and prisma/ — NOT just
+            # packages/cli/sandbox/**. Gating on the sandbox folder alone would
+            # skip the lane on exactly the changes most able to break it.
+            # (`infra/ci-runner` is the other image and IS self-contained:
+            # `context: infra/ci-runner`, one COPY of its own entrypoint.)
+            # `tests/ci-changed-paths-gate.test.ts` re-derives this from the two
+            # image workflows so the list cannot quietly go stale.
+            case "$f" in
+              packages/*|prisma/*|infra/ci-runner/*) images=true ;;
+              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc) images=true ;;
+              Dockerfile|.dockerignore) images=true ;;
+              .github/workflows/sandbox-images.yml|.github/workflows/runner-image.yml) images=true ;;
+              .github/workflows/ci.yml|.github/actions/buildx/*) images=true ;;
+            esac
+          done <<<"$files"
+
+          emit "$app" "$images"
+
   lint:
     name: Lint + Prettier
     runs-on: ubuntu-latest
@@ -69,6 +176,52 @@ jobs:
         if: steps.cache-node-modules-lint.outputs.cache-hit != 'true'
       - run: pnpm lint
       - run: pnpm format:check
+
+  # ── The whole-tree STRUCTURAL GUARDS (MOTIR-3144) ────────────────────────────
+  #
+  # These specs parse `lib/` + `app/` through the TypeScript compiler API and
+  # assert structural facts: no service arrives unbound, a bare `$transaction`
+  # cannot enclose a policy-gated statement, a second rate-limit counter cannot
+  # appear. They are lint, in the shape of tests.
+  #
+  # They used to run inside `test` — sharded, database-backed and
+  # `--coverage`-instrumented — where they competed for CPU with the suites that
+  # make that job slow. `bare-transaction-guard` cost 8.1 s alone on a quiet box
+  # and blew a 120 s hook budget on `Vitest (2/3)` TWICE in a row, with zero
+  # assertion failures, on a branch that had not grown the scan by one file.
+  # That is a contention multiplier above 14x, so no budget measured on a quiet
+  # box was ever going to hold. Three earlier cards raised a budget or made a
+  # scan faster (MOTIR-2815, MOTIR-3067, and this card's own first instance);
+  # each fixed one guard and left the environment for the next one to find.
+  #
+  # Here the whole lane is ~18 s, deterministic, and its cost is a function of
+  # the tree rather than of what else happens to be running.
+  #
+  # No Postgres and no `prisma generate`, deliberately: nothing in the lane
+  # opens a database, and adding either would put it back in the cost class it
+  # was moved out of. `tests/ci-structural-guards-lane.test.ts` guards this job's
+  # presence, its config, and the completeness of the lane's membership.
+  structural-guards:
+    name: Structural guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-structural-guards
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-structural-guards.outputs.cache-hit != 'true'
+        env:
+          HUSKY: '0'
+      - run: pnpm test:guards
 
   typecheck:
     name: TypeScript
@@ -366,15 +519,15 @@ jobs:
     # job below to avoid cross-shard merge complexity.
     name: Vitest (${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
-    # Skip the integration suite on plan-seed, design, and docs PRs, same as E2E
-    # below. A `seed/*` PR only edits scripts/plan-seed/** and a `design/*` PR
-    # only edits design/**, and a `docs/*` PR only edits docs/** + *.md —
-    # none touch app code, services, or
-    # repositories, so the integration tests (which run against a real Postgres
-    # to exercise that code) have nothing new to cover. lint/typecheck/build
-    # still run. github.head_ref is the PR source branch (empty on
-    # push-to-main, where the suite runs normally).
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    needs: changes
+    # Skip the integration suite when the diff touches only documentation,
+    # design assets or plan-seed data — none of them reach app code, services
+    # or repositories, so tests that run against a real Postgres to exercise
+    # that code have nothing new to cover. lint/typecheck/build still run.
+    # The `changes` job computes this from the DIFF (MOTIR-3148); it used to be
+    # read off the branch prefix, which let a `docs/…` branch carrying app code
+    # skip this suite entirely. Every non-pull_request event runs it.
+    if: ${{ needs.changes.outputs.app == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -458,8 +611,8 @@ jobs:
   coverage:
     name: Vitest coverage
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
-    needs: test
+    if: ${{ needs.changes.outputs.app == 'true' }}
+    needs: [test, changes]
     env:
       # The merge step (`vitest --mergeReports`) does NOT run any tests, so it
       # needs no Postgres service / migrate -- it only combines the shard blobs
@@ -571,19 +724,16 @@ jobs:
     # that actually publishes.
     permissions:
       contents: read
-    # Skip E2E on plan-seed, design, and docs PRs. A `seed/*` PR only edits
-    # scripts/plan-seed/** (the plan data the seed loads — see MOTIR.md "Plan
-    # seed"); a `design/*` PR only edits design/** (mockups / .pen / PNG /
-    # design-notes.md from a `type: design` subtask); a `docs/*` PR only edits
-    # docs/** + *.md (ADRs / decision records). None touch app code in
-    # the Next bundle, so the Playwright suite has nothing new to exercise.
-    # lint/typecheck/build/test still run. github.head_ref is the PR source branch
-    # (empty on push-to-main, where E2E runs normally).
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    # Skip E2E when the diff touches only documentation, design assets or
+    # plan-seed data — none of them reach app code in the Next bundle, so the
+    # Playwright suite has nothing new to exercise. lint/typecheck/build/test
+    # still run. The `changes` job computes this from the DIFF (MOTIR-3148);
+    # the branch-prefix test it replaces was wrong in both directions.
+    if: ${{ needs.changes.outputs.app == 'true' }}
     # Wait for the build job — E2E is more expensive than a build failure
     # surfaces and there's no point burning Playwright minutes if `next
     # build` is red.
-    needs: build
+    needs: [build, changes]
     strategy:
       # One leg failing must NOT cancel the others — we want the full E2E
       # picture (and all Playwright reports) from a single run, not a race to
@@ -637,42 +787,6 @@ jobs:
             args: '--grep "@a11y" --shard=1/2'
           - id: a11y-2
             args: '--grep "@a11y" --shard=2/2'
-          # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
-          # specs self-seed; these overrides lower the issue cap + Done-age
-          # window so the over-cap banner + Done-age trim are reachable with tens
-          # of rows instead of 5,000.
-          - id: board-at-scale
-            args: '--grep "board(-scrum)?-at-scale"'
-            board_issue_cap: '40'
-            done_age_window_days: '7'
-          # Story 5.6 — the collaboration-LOADED issue AT SCALE. These knobs keep
-          # the lane fast while every large collection still EXCEEDS its page size
-          # (comments 40>20, attachments 64>50, revisions 60+>20) so paging
-          # actually engages — the spec's beforeAll fails loud otherwise.
-          - id: collab-at-scale
-            args: '--grep "collab-at-scale"'
-            collab_comments: '40'
-            collab_churn_edits: '60'
-            collab_spread_issues: '2'
-          # Story 6.7 — search / reporting / automation AT SCALE (Subtask 6.7.3).
-          # The corpus seed (`db:seed:reporting`) is cap-parameterised; this lane
-          # lowers SEED_REPORTING_ITEMS to ~1,000 (still ≫ the 50-row list page,
-          # so paging vs. load-all stays distinguishable — the spec's beforeAll
-          # fails loud otherwise) and trims the rich subset to keep the seed
-          # inside the webServer window. Full 10k runs locally.
-          - id: reporting-at-scale
-            args: '--grep "epic6-at-scale"'
-            seed_reporting_items: '1000'
-            seed_reporting_rich_items: '200'
-          # Story 8.1 — the billing journeys (Subtask 8.1.10), CLOUD-ON. Billing is
-          # MOTIR_CLOUD-gated and turning it on globally would break unrelated specs
-          # (the §4 caps + the billing menu row), so it runs as its OWN lane with
-          # its OWN cloud-on server (playwright.cloud.config.ts: MOTIR_CLOUD=true +
-          # E2E_TEST_BILLING boundary mock, isolated ports). The bulk legs never see
-          # billing-cloud.spec.ts (testIgnore'd from the main config); the off-cloud
-          # self-host spec (billing-selfhost) rides a normal bulk shard.
-          - id: billing-cloud
-            args: '--config playwright.cloud.config.ts'
           # NOTE: the acceptance-video lane is NOT a leg here (MOTIR-1949). It
           # is its own WORKFLOW — `.github/workflows/acceptance-video.yml`, with
           # a `paths:` filter on `tests/e2e/acceptance*.spec.ts` — so that a PR
@@ -787,9 +901,182 @@ jobs:
   # pull request cannot change what the image does, and a docker matrix is the
   # most expensive thing in this file.
 
+  # ── The AT-SCALE E2E legs, split out of `e2e` (MOTIR-3148) ──────────────────
+  #
+  # These four legs are self-seeding, cap-parameterised journeys that exercise
+  # volume rather than behaviour, and they cost a runner each on every pull
+  # request. They now run on push-to-`main` (where they gate `deploy`) and on a
+  # pull request that opts in with the `e2e-at-scale` label.
+  #
+  # WHY A SEPARATE JOB rather than a condition on the legs: a matrix leg cannot
+  # be dropped by an expression — the `matrix` context is not available to a
+  # job-level `if:` — so the only way to gate a SUBSET of legs is to make that
+  # subset its own job. The `e2e` job's comment on the acceptance-video lane
+  # records the same constraint from the other side.
+  #
+  # The bulk legs' `--grep-invert` still excludes these tags, and this job's
+  # `--grep` still selects them, so the partition is unchanged: no spec runs
+  # twice and none stops being reachable. `tests/e2e-shard-plan.test.ts` reads
+  # BOTH job bodies and asserts exactly that.
+  e2e-at-scale:
+    name: Playwright E2E at-scale (${{ matrix.id }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    needs: [build, changes]
+    if: ${{ needs.changes.outputs.app == 'true' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
+          # specs self-seed; these overrides lower the issue cap + Done-age
+          # window so the over-cap banner + Done-age trim are reachable with tens
+          # of rows instead of 5,000.
+          - id: board-at-scale
+            args: '--grep "board(-scrum)?-at-scale"'
+            board_issue_cap: '40'
+            done_age_window_days: '7'
+          # Story 5.6 — the collaboration-LOADED issue AT SCALE. These knobs keep
+          # the lane fast while every large collection still EXCEEDS its page size
+          # (comments 40>20, attachments 64>50, revisions 60+>20) so paging
+          # actually engages — the spec's beforeAll fails loud otherwise.
+          - id: collab-at-scale
+            args: '--grep "collab-at-scale"'
+            collab_comments: '40'
+            collab_churn_edits: '60'
+            collab_spread_issues: '2'
+          # Story 6.7 — search / reporting / automation AT SCALE (Subtask 6.7.3).
+          # The corpus seed (`db:seed:reporting`) is cap-parameterised; this lane
+          # lowers SEED_REPORTING_ITEMS to ~1,000 (still ≫ the 50-row list page,
+          # so paging vs. load-all stays distinguishable — the spec's beforeAll
+          # fails loud otherwise) and trims the rich subset to keep the seed
+          # inside the webServer window. Full 10k runs locally.
+          - id: reporting-at-scale
+            args: '--grep "epic6-at-scale"'
+            seed_reporting_items: '1000'
+            seed_reporting_rich_items: '200'
+          # Story 8.1 — the billing journeys (Subtask 8.1.10), CLOUD-ON. Billing is
+          # MOTIR_CLOUD-gated and turning it on globally would break unrelated specs
+          # (the §4 caps + the billing menu row), so it runs as its OWN lane with
+          # its OWN cloud-on server (playwright.cloud.config.ts: MOTIR_CLOUD=true +
+          # E2E_TEST_BILLING boundary mock, isolated ports). The bulk legs never see
+          # billing-cloud.spec.ts (testIgnore'd from the main config); the off-cloud
+          # self-host spec (billing-selfhost) rides a normal bulk shard.
+          - id: billing-cloud
+            args: '--config playwright.cloud.config.ts'
+    # Postgres is started by ./.github/actions/postgres (first step below), NOT
+    # by a `services:` block — see that action's header for why (MOTIR-1742).
+    env:
+      # In CI Postgres runs on the standard 5432.
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      # See the build job for the rationale on these throwaway values.
+      # Better-Auth's module-load requiredEnv check needs them present;
+      # the actual OAuth round-trip is intercepted by the undici MockAgent
+      # in instrumentation.ts (E2E_TEST_OAUTH=1 below).
+      BETTER_AUTH_SECRET: ci-e2e-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-e2e-placeholder
+      GOOGLE_CLIENT_SECRET: ci-e2e-placeholder
+      # Dev-only file email provider — emails appended as JSON lines to
+      # EMAIL_OUTBOX_PATH so the credentials spec can capture the reset
+      # link. The playwright.config.ts's webServer.env block ALSO sets
+      # these on the dev server it spawns, but setting them at the job
+      # level too keeps them visible to anyone reading the workflow file.
+      EMAIL_PROVIDER: file
+      EMAIL_OUTBOX_PATH: /tmp/motir-test-emails.jsonl
+      E2E_TEST_OAUTH: '1'
+      E2E_TEST_OAUTH_USER_PATH: /tmp/motir-test-oauth-user.json
+      # Skip the husky install postinstall — CI has no .git/hooks to wire.
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      # pnpm + Node, the three caches, the pre-built `.next/`, migrate deploy and
+      # the retrying Playwright install — shared verbatim with the acceptance
+      # lane in `acceptance-video.yml` (MOTIR-1949).
+      - uses: ./.github/actions/e2e-setup
+      # NOTE: the Inngest dev-server binary (E2E's second webServer) is now a
+      # pinned `inngest-cli` devDependency — `pnpm install` above runs its
+      # postinstall (allowlisted in pnpm-workspace.yaml `allowBuilds`) to fetch
+      # the binary, so it's present before any spec runs. This replaced the old
+      # npx-cache + pre-warm steps, which existed only to keep the 95MB cold
+      # download out of Playwright's 120s webServer window (the timeout flake).
+      # ONE run step per matrix leg. `matrix.args` selects the slice (a
+      # --grep-invert+--shard bulk slice, or a --grep at-scale lane); the
+      # override env is per-leg and empty ('') on bulk legs — playwright.config
+      # treats empty as unset, so bulk legs keep the shipped board/collab
+      # defaults. workers=1, so this leg's own DB resets never race.
+      - name: Run E2E (${{ matrix.id }})
+        run: pnpm test:e2e ${{ matrix.args }}
+        env:
+          # MOTIR-2617 — which cost-derived slice this leg runs. Empty on the
+          # a11y / at-scale / billing lanes, which select by --grep instead and
+          # must keep seeing every spec file.
+          E2E_SHARD: ${{ matrix.shard }}
+          BOARD_ISSUE_CAP_OVERRIDE: ${{ matrix.board_issue_cap }}
+          DONE_AGE_WINDOW_DAYS_OVERRIDE: ${{ matrix.done_age_window_days }}
+          SEED_COLLAB_COMMENTS: ${{ matrix.collab_comments }}
+          SEED_COLLAB_CHURN_EDITS: ${{ matrix.collab_churn_edits }}
+          SEED_COLLAB_SPREAD_ISSUES: ${{ matrix.collab_spread_issues }}
+          SEED_REPORTING_ITEMS: ${{ matrix.seed_reporting_items }}
+          SEED_REPORTING_RICH_ITEMS: ${{ matrix.seed_reporting_rich_items }}
+
+      # Always upload the report — pass-runs are useful for debugging flakes, and
+      # the report is small. The trace/video/screenshot artifacts only exist for
+      # failures (config above). The artifact name MUST be unique per leg or the
+      # matrix legs collide on upload (upload-artifact@v4+ errors on a dup name).
+      #
+      # The path is a GLOB because the non-default lanes write to SUFFIXED report
+      # folders: the bulk/at-scale legs use `out/playwright-report`
+      # (playwright.config.ts), but the billing lane uses
+      # `out/playwright-report-billing`. The old hardcoded
+      # `out/playwright-report` matched only the former, so the billing leg
+      # silently uploaded NOTHING ("No files were found with the provided path")
+      # — a red billing leg left no trace, screenshot, or report to debug from.
+      # (The acceptance lane's own `-acceptance` report is uploaded by the
+      # `acceptance-video.yml` workflow, which owns that lane since MOTIR-1949.)
+      #
+      # `out/e2e-harness` is the MOTIR-2617 watchdog series — one JSONL per leg
+      # carrying MemAvailable + the webServer's RSS sampled on a timer and at
+      # every test boundary, plus each spec's duration. It is what makes a
+      # recurrence of the bulk-shard degradation NAME its cliff (and what
+      # tests/e2e/shard-plan.ts is re-measured from) instead of being diagnosed
+      # from scratch a fourth time. Uploaded on every leg, green or red.
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.id }}
+          path: |
+            out/playwright-report*
+            out/e2e-harness
+          retention-days: 7
+
+  # ── The sandbox image (Story 7.9 · 7.9.7c MOTIR-885 · 7.9.7e MOTIR-1788) ──
+  # The BYOK sandbox (`packages/cli/sandbox/`) is the confined container an
+  # unattended `motir auto` runs in. Its two claims — "the loop works in here"
+  # and "in here is confined" — are only checkable by BUILDING the image and
+  # RUNNING it, which is what the called workflow's jobs do. The unit lane's
+  # `test/sandbox.test.ts` + `test/sandboxCi.test.ts` guard the sources against
+  # drift; these guard the artifact.
+  #
+  # The matrix itself lives in `sandbox-images.yml` because the RELEASE lane
+  # (`release-sandbox.yml`, on a `cli-v*` tag) runs the very same one with its
+  # push steps switched on — one definition, two entry points, so nothing can be
+  # published that this gate did not build and smoke-test. `publish: false` and
+  # the absence of `packages: write` here mean the pull-request lane cannot push
+  # even if it tried.
+  #
+  # Same branch-prefix skip as the Vitest / E2E lanes: a design- or docs-only
+  # pull request cannot change what the image does, and a docker matrix is the
+  # most expensive thing in this file.
+
   sandbox:
     name: Sandbox images
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    needs: changes
+    if: ${{ needs.changes.outputs.images == 'true' }}
     permissions:
       contents: read
     uses: ./.github/workflows/sandbox-images.yml
@@ -817,7 +1104,8 @@ jobs:
 
   runner-image:
     name: Runner image
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
+    needs: changes
+    if: ${{ needs.changes.outputs.images == 'true' }}
     permissions:
       contents: read
     uses: ./.github/workflows/runner-image.yml
@@ -856,7 +1144,7 @@ jobs:
   deploy:
     name: Deploy to Fly
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, build, test, coverage, e2e]
+    needs: [lint, typecheck, build, test, coverage, e2e, e2e-at-scale]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     # A release must NOT be cancelled mid-flight by a newer push — the
     # workflow-level `cancel-in-progress` is right for a test run and wrong for
@@ -1000,7 +1288,9 @@ jobs:
     if: always()
     needs:
       [
+        changes,
         lint,
+        structural-guards,
         typecheck,
         design-system,
         design-guards,
@@ -1009,6 +1299,7 @@ jobs:
         test,
         coverage,
         e2e,
+        e2e-at-scale,
         sandbox,
         runner-image,
         deploy,

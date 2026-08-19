@@ -157,6 +157,31 @@ export interface PlanItemProposedFields {
 export interface PlanItemPatch {
   title?: string;
   descriptionMd?: string | null;
+  /**
+   * REWRITE the target's WHY (MOTIR-3111) — the `modify` mirror of the `add`
+   * path's {@link PlanItemProposedFields.explanationMd}, and the second half of
+   * the two-body pair `descriptionMd` opens.
+   *
+   * Sparse like every key here: absent (`undefined`) leaves the existing
+   * explanation untouched, an explicit `null` CLEARS it. Normalized through
+   * `normalizeBodyRefs` in the SAME resolve as the patched description
+   * (`applyModify`), so a bare `MOTIR-<n>` in a patched explanation chips
+   * exactly as it does in a patched description and as it already does on the
+   * `add` path.
+   *
+   * ⚠️ There is deliberately NO `explanationSource` twin. That column is not the
+   * caller's to set — it defaults to `user_authored` and the service path
+   * auto-transitions an `ai_draft` to `user_edited` — so a patch that could write
+   * it would let a plan forge provenance. `applyModify` leaves it alone whatever
+   * its prior value.
+   *
+   * Why it exists: THE REPLAN ACTION requires the surviving card's rationale to be
+   * rewritten (*"a survivor keeps its OLD `explanationMd` unless you rewrite it,
+   * and a stale WHY is worse than a null one"*), and since MOTIR-3047 a run's
+   * re-plan writes through the PROPOSAL door. Without this key the runbook
+   * mandates a patch the proposal API cannot express.
+   */
+  explanationMd?: string | null;
   priority?: string | null;
   type?: string | null;
   /**

@@ -69,6 +69,10 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       'acceptance-video.yml:build',
       'ci.yml:build',
       'ci.yml:e2e',
+      // The volume legs, split out of `e2e` by MOTIR-3148 so they can be gated
+      // off the pull-request lane. Same steps, same per-leg ephemeral database
+      // — the split changed WHEN they run, not what they need.
+      'ci.yml:e2e-at-scale',
       'ci.yml:test',
     ]);
   });

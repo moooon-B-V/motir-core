@@ -187,6 +187,7 @@ export const FIELD_KEYS: Record<string, string> = {
   storyPoints: 'field_storyPoints',
   estimateMinutes: 'field_estimateMinutes',
   description: 'field_description',
+  explanation: 'field_explanation',
   links: 'field_links',
 };
 
