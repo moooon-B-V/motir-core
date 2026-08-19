@@ -197,6 +197,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   transition_status: 'work_items:write',
   claim_next_ready: 'work_items:write',
   add_comment: 'work_items:write',
+  // A WRITE: it puts a row on the item and spends the org's storage quota.
+  attach_file: 'work_items:write',
   expand_item: 'work_items:write',
   append_plan_turn: 'work_items:write',
   submit_plan_session: 'work_items:write',

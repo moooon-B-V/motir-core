@@ -8,6 +8,7 @@ import {
 } from './sharedResources';
 import {
   addCommentPayload,
+  attachFilePayload,
   claimNextReadyPayload,
   getWorkItemPayload,
   listReadyPayload,
@@ -81,6 +82,7 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // NARROWING of `WorkItemRef`, so it derives (and carries no probe) for the
   // same reason the search row does.
   skeleton: skeletonPayload as unknown as PayloadDefinition<never>,
+  attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
   // 11.6.4 — project / sprint / backlog / identity
   list_projects: listProjectsPayload as unknown as PayloadDefinition<never>,
   whoami: whoamiPayload as unknown as PayloadDefinition<never>,

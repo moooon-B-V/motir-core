@@ -150,6 +150,13 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '4. Draw the ACCESS PATH: the affordance in the parent surface that opens this',
     '   one. Naming the route in prose is not enough — the reader must see the door.',
     '5. Stop at the asset. A design is reviewed before anything is built on it.',
+    '6. CONFIRM the design result reached the work item — CI publishes it from the',
+    '   design-asset guards job, and that step is SKIPPED when the guards fail. Look',
+    '   for "Published N design artifact(s)" in the job log, or the result on the',
+    '   card. If it is not there, publish it yourself: POST the design-evidence',
+    '   upload-token route, PUT each file, then POST the register route. The',
+    '   REPOSITORY stays the source of truth — the published result is the card’s',
+    '   view of the asset, never a replacement for committing the three files.',
   ],
   test: [
     '1. Read the card description above and the behaviour under test.',

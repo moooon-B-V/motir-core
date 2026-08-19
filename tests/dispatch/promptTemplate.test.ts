@@ -207,6 +207,76 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
+  // ── MOTIR-3059: the design step that closes the loop ──────────────────────
+  //
+  // The gap this pins is specific: the design result is published by CI, from a
+  // step that SHARES a job with the design-asset guards and runs after them — so
+  // a guard failure skips it silently. The run sees a green pull request and the
+  // card stays empty, which has happened (MOTIR-2413, filed as MOTIR-2981). That
+  // fix was a change to the human runbook; the agent reads THIS file.
+  describe('WHAT_TO_DO.design tells the agent to confirm the publish', () => {
+    const designPrompt = (): string =>
+      assembleDispatchPrompt(source({ type: 'design', executor: 'coding_agent' })).prompt;
+
+    it('names the CHECK before the action — not "publish it", but "confirm it arrived"', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('CONFIRM the design result reached the work item');
+      // The log line is what makes the check performable rather than vague.
+      expect(prompt).toContain('Published N design artifact(s)');
+      // …and WHY it can be absent, so the agent knows this is a real case and
+      // not a formality.
+      expect(prompt).toContain('SKIPPED when the guards fail');
+    });
+
+    it('names the SHIPPED publisher, never the general attach tool', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('design-evidence');
+      // ⚠️ The general door would put the .png in the ATTACHMENTS panel while CI
+      // puts it in the Design result panel — one artifact, two surfaces. The
+      // which-door rule is docs/decisions/attachment-api-door.md §3, and this is
+      // where an agent would otherwise pick the wrong one.
+      expect(prompt).not.toContain('attach_file');
+    });
+
+    it('keeps the repository the source of truth', () => {
+      const prompt = designPrompt();
+      expect(prompt).toContain('REPOSITORY stays the source of truth');
+      expect(prompt).toContain('never a replacement for committing the three files');
+    });
+
+    it('"Stop at the asset" SURVIVES as the stopping condition', () => {
+      // The new step must not read as permission to continue building. If step 5
+      // ever disappears, the agent gains a publish instruction and loses the
+      // gate that made the design reviewable first.
+      const prompt = designPrompt();
+      expect(prompt).toContain('Stop at the asset. A design is reviewed before anything is built');
+      expect(prompt.indexOf('Stop at the asset')).toBeLessThan(
+        prompt.indexOf('CONFIRM the design result'),
+      );
+    });
+
+    it('carries the step in BOTH workflow variants', () => {
+      // A step added to one dispatch path only is the classic half-shipped
+      // prompt change: it works when you test it and is missing where it runs.
+      for (const sessionBranch of [null, 'session/MOTIR-1-lineage']) {
+        const { prompt } = assembleDispatchPrompt(
+          source({ type: 'design', executor: 'coding_agent', sessionBranch }),
+        );
+        expect(prompt).toContain('CONFIRM the design result reached the work item');
+      }
+    });
+
+    it('changes NO other type’s steps', () => {
+      // Asserted as a set difference rather than by eye: a broad edit to the
+      // WHAT_TO_DO record would otherwise pass every marker test above.
+      for (const type of Object.keys(MARKERS) as WorkItemTypeDto[]) {
+        if (type === 'design') continue;
+        const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));
+        expect(prompt).not.toContain('CONFIRM the design result');
+      }
+    });
+  });
+
   it('every type produces a DISTINCT WHAT TO DO block', () => {
     const blocks = (Object.keys(MARKERS) as WorkItemTypeDto[]).map((type) => {
       const { prompt } = assembleDispatchPrompt(source({ type, executor: 'coding_agent' }));

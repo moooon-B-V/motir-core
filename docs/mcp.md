@@ -817,6 +817,58 @@ MCP-specific wiring.
 
 **Output** — `structuredContent`: the created `CommentDTO`.
 
+#### `attach_file`
+
+Put a **file on a work item** — so a reader sees the deliverable on the card
+instead of hunting for a pull request. Use it for a deliverable that has no home
+of its own: a `research` card's findings document, a `review`'s notes, a
+`verification`'s evidence.
+
+The **repository stays the source of truth** for anything that also lives in one.
+The attachment is the card's view of that file, never a second home for it.
+
+⚠️ **Not for a design asset.** A design result has its own publisher and its own
+panel on the work item, and `text/html` is refused here — the three layers that
+make HTML safe to serve belong to that lifecycle. The rule, in the form a prompt
+author can act on: _a deliverable a LIFECYCLE owns goes through that lifecycle's
+publisher; everything else goes through this tool. If you are unsure, the test is
+whether a dedicated panel exists for it._ (`docs/decisions/attachment-api-door.md` §3.)
+
+Bytes arrive base64-encoded because MCP carries JSON, not multipart — the
+transport's constraint, not a second upload path. A payload that is not valid
+base64 is refused rather than salvaged: `Buffer.from(s, 'base64')` discards
+characters outside the alphabet instead of failing, so an unchecked decode would
+attach garbage that only fails when a human opens it.
+
+| Input           | Type   | Required | Notes                                                              |
+| --------------- | ------ | -------- | ------------------------------------------------------------------ |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                             |
+| `filename`      | string | yes      | The name a reader sees, e.g. `"findings.md"`.                      |
+| `contentType`   | string | yes      | Media type. Must be on the upload allowlist; `text/html` is a 415. |
+| `contentBase64` | string | yes      | The file's bytes, base64-encoded.                                  |
+
+**Output** — `structuredContent`: the created attachment — `id`, `workItemKey`,
+`filename`, `mimeType`, `sizeBytes`, `source`, `contentPath`, `uploader`,
+`createdAt`. `source` is `api` for anything through this tool or the equivalent
+`/api/v1` route: it records the DOOR, not the actor, because Motir cannot
+distinguish an agent from a person holding a token. The row appears in the work
+item's ordinary attachments panel, attributed to the token owner — the same
+component, with no special treatment.
+
+**Refusals** — every one comes from the shipped attachment service, so this tool
+and the browser upload answer one rule with one status: a file over the
+organization's per-file limit, a media type off the allowlist, an exhausted
+per-user upload budget, the organization's total storage cap, and a work item the
+token cannot reach (indistinguishable from one that does not exist). The size and
+type limits are defined once, in `lib/blob/allowlist.ts` and the plan
+entitlements — this page deliberately quotes no number that would drift.
+
+**Permission** — `work_item:edit`. Attaching a file to a card is editing that
+card, and this is a permission the token `motir auth login` mints **does** carry,
+so a dispatched run can call it. (Worth checking for any tool you write: a
+permission outside that grant produces a tool that works perfectly for an
+interactive operator and not at all for the agent it was built for.)
+
 #### `link_work_items`
 
 Create a relationship between two work items — the primitive for the **dependency

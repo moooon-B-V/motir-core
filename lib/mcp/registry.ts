@@ -32,6 +32,7 @@ import {
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
+import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -102,6 +103,7 @@ export const MCP_TOOL_NAMES = [
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
+  ATTACH_FILE_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
@@ -212,6 +214,9 @@ export function registerMcpTools(
   registerCreateWorkItem(target, resolveContext);
   registerTransitionStatus(target, resolveContext);
   registerAddComment(target, resolveContext);
+  // The general attachment door (MOTIR-3058) — the agent-facing half of
+  // MOTIR-3057's `/api/v1` route, over the same service path.
+  registerAttachFile(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
   // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,
