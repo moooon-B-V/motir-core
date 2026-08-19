@@ -6,30 +6,28 @@ import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
-import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { MarkdownView } from '@/components/ui/MarkdownView';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { PublicTabNav } from '@/app/(public)/_components/PublicTabNav';
 import { PublicRoadmapVote } from '@/app/(public)/_components/PublicRoadmapVote';
 import { PublicRequestComments } from '@/app/(public)/_components/PublicRequestComments';
+import { StatusPill } from '@/components/issues/StatusPill';
 
 // The public REQUEST DETAIL page (Story 6.12 · Subtask 6.12.12 · design Panel 5)
 // — the crawlable, server-rendered detail for one public request, reached from
 // the roadmap cards + the dedupe candidates. It runs the anonymous browse gate
 // (a non-public / unknown project or a missing / archived request → 404, never
-// 403) and renders the public PROJECTION: the upvote head, status Pill, title,
+// 403) and renders the public PROJECTION: the upvote head, status title,
 // meta, body, and the PUBLIC comment thread (the request's `isPublic` comments
 // only — no assignee / estimate / internal discussion crosses the projection).
 // READ is fully public — no sign-in; `signedIn` only drives the reused
 // PublicRoadmapVote's sign-in-to-act prompt and the comment composer.
 
-const STATUS_TONE: Record<StatusCategoryDto, 'planned' | 'in-progress' | 'done'> = {
-  todo: 'planned',
-  in_progress: 'in-progress',
-  done: 'done',
-};
+// The status chip's tone + glyph live in `components/issues/StatusPill`
+// (MOTIR-3103). This file used to keep its own copy of the category map —
+// one of five — which is how `implemented` could share a chip with three
+// other statuses in every one of them at once.
 
 const KIND_LABEL: Record<WorkItemKindDto, string> = {
   epic: 'kindEpic',
@@ -84,7 +82,11 @@ export default async function PublicRequestDetailPage({
               size="lg"
             />
             <div className="min-w-0 flex-1">
-              <Pill status={STATUS_TONE[detail.statusCategory]}>{detail.statusLabel}</Pill>
+              <StatusPill
+                statusKey={detail.status}
+                category={detail.statusCategory}
+                label={detail.statusLabel}
+              />
               <h1 className="mt-2 font-serif text-2xl font-semibold leading-tight text-(--el-text)">
                 {detail.title}
               </h1>

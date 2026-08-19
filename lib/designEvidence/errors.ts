@@ -38,8 +38,20 @@ export class DesignEvidenceNotFoundError extends DesignEvidenceError {
 export class DesignEvidenceNotALeafError extends DesignEvidenceError {
   readonly code = 'DESIGN_EVIDENCE_NOT_A_LEAF' as const;
   readonly status = 422;
-  constructor(kind: string) {
-    super(`A design result attaches to the card that produced it, not to a ${kind}.`);
+  /**
+   * @param kind the target's kind
+   * @param byKind true when the KIND can never be a leaf (`epic` / `story`);
+   *   false when a leaf-CAPABLE kind is a container because it has children.
+   *   The two send an operator to different places, so they read differently
+   *   (MOTIR-3146).
+   */
+  constructor(kind: string, byKind = true) {
+    super(
+      byKind
+        ? `A design result attaches to the card that produced it, not to a ${kind}.`
+        : `A design result attaches to the card that produced it; this ${kind} has ` +
+            `children, so it is a container. Address the child that produced the assets.`,
+    );
     this.name = 'DesignEvidenceNotALeafError';
   }
 }

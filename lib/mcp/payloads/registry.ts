@@ -14,6 +14,7 @@ import {
   listReadyPayload,
   nextReadyPayload,
   searchWorkItemsPayload,
+  skeletonPayload,
   workItemWritePayload,
 } from './workItems';
 import {
@@ -77,6 +78,10 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   change_kind: workItemWritePayload as unknown as PayloadDefinition<never>,
   move_to_parent: workItemWritePayload as unknown as PayloadDefinition<never>,
   add_comment: addCommentPayload as unknown as PayloadDefinition<never>,
+  // MOTIR-3100 — the plan-tree breadth projection. Its row is a declared
+  // NARROWING of `WorkItemRef`, so it derives (and carries no probe) for the
+  // same reason the search row does.
+  skeleton: skeletonPayload as unknown as PayloadDefinition<never>,
   attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
   // 11.6.4 — project / sprint / backlog / identity
   list_projects: listProjectsPayload as unknown as PayloadDefinition<never>,

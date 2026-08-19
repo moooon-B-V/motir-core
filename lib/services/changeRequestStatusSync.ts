@@ -16,12 +16,17 @@ import {
   type RepoSetShortfall,
 } from '@/lib/workItems/repoDelivery';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import {
+  resolveChangeRequestWorkItemSet,
+  type ChangeRequestWorkItemSet,
+} from './changeRequestWorkItems';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { CompleteSessionItemResultDto } from '@/lib/dto/workItems';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
@@ -75,7 +80,10 @@ const LIFECYCLE_TARGET: Record<
   ChangeRequestLifecycle,
   { key: string; category: StatusCategoryDto }
 > = {
-  in_review: { key: 'in_review', category: 'in_progress' },
+  // OPENED (MOTIR-3005). The `category` fallback is what a CUSTOM workflow with
+  // no `implemented` status lands on — the same in-progress bucket `in_review`
+  // resolved to before, so such a project keeps exactly the behaviour it had.
+  implemented: { key: 'implemented', category: 'in_progress' },
   done: { key: 'done', category: 'done' },
   todo: { key: 'in_progress', category: 'in_progress' },
 };
@@ -88,6 +96,7 @@ export type ChangeRequestSyncResult = {
   event: 'pull_request';
   outcome:
     | 'transitioned'
+    | 'session_closed' // a merged SESSION-branch delivery — every card on the branch closed (MOTIR-3007)
     | 'noop'
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
     | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
@@ -102,6 +111,13 @@ export type ChangeRequestSyncResult = {
     | 'malformed';
   workItemId?: string;
   toStatus?: string;
+  /** The session branch a `session_closed` delivery closed out (MOTIR-3007). */
+  sessionBranch?: string;
+  /** How the session close-out went, per item: moved to done / already there /
+   *  reported-and-skipped. Present only on `session_closed`, because a delivery
+   *  that closes N cards has to SAY N — reporting one of them is what this
+   *  outcome exists to stop. */
+  sessionItems?: { completed: number; alreadyDone: number; failed: number };
 };
 
 /** The connection + repo + resolved author a provider hands the shared sync, once
@@ -182,6 +198,7 @@ export async function syncChangeRequestStatus(
       workItem = manual
         ? {
             id: manual.id,
+            identifier: manual.identifier,
             projectId: manual.projectId,
             status: manual.status,
             targetRepos: manual.targetRepos,
@@ -229,7 +246,31 @@ export async function syncChangeRequestStatus(
       prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
     }
 
-    if (!workItem) return { kind: 'no_work_item' as const };
+    // MOTIR-3007 — WHICH ITEMS does this delivery carry? A `motir auto` run
+    // integrates every card onto ONE session branch and opens ONE pull request,
+    // whose branch deliberately carries no `MOTIR-<n>` (see
+    // `resolveChangeRequestWorkItemSet`) — so the 1:1 resolve above returns null
+    // and, before this, a merge closed nothing at all.
+    //
+    // Resolved ONLY on a `done` delivery, deliberately: an `opened` /
+    // closed-unmerged delivery is byte-for-byte the path it always was, which is
+    // the AC "the single-card path is untouched" taken literally. The read is one
+    // indexed lookup inside the transaction already open, under the row lock taken
+    // above, so a concurrent redelivery serializes on it exactly as the gates do.
+    const delivery: ChangeRequestWorkItemSet | null =
+      lifecycle === 'done'
+        ? await resolveChangeRequestWorkItemSet({
+            workspaceId: repo.workspaceId,
+            headRef: cr.headRef,
+            linked: workItem,
+            tx,
+          })
+        : null;
+    const sessionBranch = delivery?.kind === 'session_branch' ? delivery.sessionBranch : null;
+
+    // A delivery that resolves NEITHER a linked item NOR a session branch is the
+    // unchanged no-op it always was.
+    if (!workItem && !sessionBranch) return { kind: 'no_work_item' as const };
 
     // MOTIR-1873 — a merge only COMPLETES the item when it landed on the trunk.
     // Compare the change request's base against the MIRRORED default branch, never
@@ -245,8 +286,19 @@ export async function syncChangeRequestStatus(
     // change requests — non-zero means DEFER. Only a `done` delivery can complete,
     // and a stranded merge is already held by the gate above, so skip the read for
     // either.
+    //
+    // ⚠️ BOTH ITEM-SCOPED GATES ARE SKIPPED ON A SESSION CLOSE-OUT, and that is a
+    // boundary rather than an omission (MOTIR-3007). They answer "is THIS item
+    // finished", and a session delivery closes N items whose repository sets and
+    // sibling change requests differ; `completeSession` walks the branch itself,
+    // so there is no per-item exclusion to hand it. Composing the two is the
+    // multi-repo axis MOTIR-2725 / MOTIR-2731 own, and this card's scope
+    // deliberately stops short of it. Nothing is weakened by the skip: before
+    // this card a session merge closed NOTHING, so the gates were never reached
+    // on this path at all. The branch-scoped gate above (a merge that never
+    // landed on the trunk) DOES still run, and holds the whole close-out.
     const hasOtherOpenLinkedPr =
-      lifecycle === 'done' && !mergedIntoNonDefaultBase
+      lifecycle === 'done' && !mergedIntoNonDefaultBase && !sessionBranch && workItem !== null
         ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
         : false;
 
@@ -262,7 +314,11 @@ export async function syncChangeRequestStatus(
     // cannot complete at all — the read costs nothing to skip and the outcome
     // would be discarded.
     const shortfall =
-      lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
+      lifecycle === 'done' &&
+      !mergedIntoNonDefaultBase &&
+      !hasOtherOpenLinkedPr &&
+      !sessionBranch &&
+      workItem !== null
         ? repoSetShortfall(
             classifyRepoDelivery(
               // RESOLVED through the references, not the stored name projection
@@ -279,9 +335,11 @@ export async function syncChangeRequestStatus(
     return {
       kind: 'resolved' as const,
       workspaceId: repo.workspaceId,
-      projectId: workItem.projectId,
-      workItemId: workItem.id,
-      currentStatus: workItem.status,
+      projectId: workItem?.projectId ?? null,
+      workItemId: workItem?.id ?? null,
+      currentStatus: workItem?.status ?? null,
+      // Non-null ⇒ this merge closes out a whole run's branch (MOTIR-3007).
+      sessionBranch,
       provider: installation.provider as GitProviderId,
       defaultBranch: repo.defaultBranch,
       mergedIntoNonDefaultBase,
@@ -319,7 +377,7 @@ export async function syncChangeRequestStatus(
     // read the card (or the next `motir run` that treats it as a prerequisite) will
     // see it. Posted once per merge, and best-effort: a failed note must not turn a
     // correct hold into a 500 the host retries forever.
-    if (resolved.actorUserId && !resolved.mergeAlreadyRecorded) {
+    if (resolved.actorUserId && resolved.workItemId && !resolved.mergeAlreadyRecorded) {
       try {
         await commentsService.addComment(
           resolved.workItemId,
@@ -345,18 +403,23 @@ export async function syncChangeRequestStatus(
     return {
       event: 'pull_request',
       outcome: 'deferred_non_default_base',
-      workItemId: resolved.workItemId,
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+      ...(resolved.sessionBranch ? { sessionBranch: resolved.sessionBranch } : {}),
     };
   }
 
   if (!resolved.actorUserId)
     // No workspace owner and no bound author — nothing can author the move.
-    return { event: 'pull_request', outcome: 'access_denied', workItemId: resolved.workItemId };
+    return {
+      event: 'pull_request',
+      outcome: 'access_denied',
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+    };
 
   // A merged change request that is NOT the item's last open linked one leaves the
   // item In Review — a cross-repo (two-PR) card completes only when its LAST linked
   // change request merges (MOTIR-1604).
-  if (lifecycle === 'done' && resolved.hasOtherOpenLinkedPr) {
+  if (lifecycle === 'done' && resolved.hasOtherOpenLinkedPr && resolved.workItemId) {
     return { event: 'pull_request', outcome: 'deferred_open_pr', workItemId: resolved.workItemId };
   }
 
@@ -366,7 +429,7 @@ export async function syncChangeRequestStatus(
   // protection every unpinned card in the product has. Where both hold, the one
   // above wins on purpose — "a sibling change request is still open" names an
   // artifact the reader can go and look at.
-  if (lifecycle === 'done' && hasRepoSetShortfall(resolved.shortfall)) {
+  if (lifecycle === 'done' && resolved.workItemId && hasRepoSetShortfall(resolved.shortfall)) {
     // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
     // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
     // row lock) and best-effort — a failed note must not turn a correct hold into
@@ -399,6 +462,45 @@ export async function syncChangeRequestStatus(
       workItemId: resolved.workItemId,
     };
   }
+
+  // ── The SESSION close-out (MOTIR-3007) ────────────────────────────────────
+  // A merged delivery whose head ref is a session branch carrying work items
+  // closes EVERY card on that branch, not the one a title happened to name.
+  //
+  // It runs through the shipped `completeSession` — the same authority
+  // `motir done --session` calls — so every closure goes through
+  // `applyStatusTransition` and records a revision, an item already `done` is an
+  // idempotent no-op, and an item with no legal edge to `done` is REPORTED and
+  // skipped rather than failing the delivery. The card named in the pull request
+  // title is on the branch like every other, so it is closed exactly once, here;
+  // there is no separate pass for it.
+  //
+  // IDEMPOTENT UNDER REDELIVERY by construction, with nothing added: the close-out
+  // CLEARS `session_branch` as it goes, so a second delivery of the same merge
+  // resolves an empty branch, falls through to the single-item path, and finds
+  // either no work item at all or one already in `done`. The same is true of a
+  // merge that arrives after a human already ran `motir done --session`.
+  if (resolved.sessionBranch) {
+    const summary = await closeOutSession(resolved.sessionBranch, {
+      workspaceId: resolved.workspaceId,
+      actorUserId: resolved.actorUserId,
+      ownerUserId: resolved.ownerUserId,
+    });
+    return {
+      event: 'pull_request',
+      outcome: 'session_closed',
+      sessionBranch: resolved.sessionBranch,
+      sessionItems: summary,
+      // The linked item, when the pull request also named one — it is IN the set
+      // above, reported here only so a log line still points at a card.
+      ...(resolved.workItemId ? { workItemId: resolved.workItemId } : {}),
+    };
+  }
+
+  // Past this point the delivery is the ordinary single-item one, which only
+  // exists when a work item resolved.
+  if (!resolved.workItemId || !resolved.projectId || resolved.currentStatus === null)
+    return { event: 'pull_request', outcome: 'no_work_item' };
 
   // Phase 2 — the status transition through the SHIPPED authority. Resolve the
   // concrete target status key by category against the project's live workflow.
@@ -560,6 +662,9 @@ function strandedMergeCommentBody(args: {
  *  sync's transition decision and for the mirror's link column. */
 export interface ResolvedChangeRequestWorkItem {
   id: string;
+  /** `PROD-42` — carried so the shared delivery resolver (MOTIR-3007) can report
+   *  the single-item path in the same shape as the session one. */
+  identifier: string;
   projectId: string;
   status: string;
   /** The repositories this item ships in — the EXPECTED side of MOTIR-2729's
@@ -596,12 +701,60 @@ export async function resolveChangeRequestWorkItem(
     if (workItem)
       return {
         id: workItem.id,
+        identifier: workItem.identifier,
         projectId: workItem.projectId,
         status: workItem.status,
         targetRepos: workItem.targetRepos,
       };
   }
   return null;
+}
+
+/** Close out one session branch — every card a run integrated onto it (MOTIR-3007).
+ *
+ *  Attribution mirrors the single-item path exactly: the change request's author
+ *  when they are a bound member with edit rights, else the workspace owner. The
+ *  difference is HOW a denial surfaces — `completeSession` catches a per-item
+ *  `ProjectAccessDeniedError` and reports the item as `failed` rather than
+ *  throwing, so the single path's try/catch retry has nothing to catch. The retry
+ *  is therefore driven off the RESULTS, and it is naturally scoped: a failed item
+ *  still carries its branch (only a closed one is cleared), so the second pass
+ *  sees exactly the items the first could not close and nothing else.
+ *
+ *  Returns the per-outcome counts, because a delivery that closes N cards has to
+ *  say N — reporting one of them is the defect this whole card is about. */
+async function closeOutSession(
+  sessionBranch: string,
+  actors: { workspaceId: string; actorUserId: string; ownerUserId: string | null },
+): Promise<{ completed: number; alreadyDone: number; failed: number }> {
+  const tally = (results: CompleteSessionItemResultDto[]) => ({
+    completed: results.filter((r) => r.outcome === 'completed').length,
+    alreadyDone: results.filter((r) => r.outcome === 'already_done').length,
+    failed: results.filter((r) => r.outcome === 'failed').length,
+  });
+
+  const first = await workItemsService.completeSession(sessionBranch, {
+    userId: actors.actorUserId,
+    workspaceId: actors.workspaceId,
+  });
+  const counts = tally(first.results);
+  if (counts.failed === 0 || !actors.ownerUserId || actors.ownerUserId === actors.actorUserId) {
+    return counts;
+  }
+
+  // The author could not close some of them (a viewer, typically). Retry as the
+  // owner — a manager, always edit-capable — exactly as the single-item path does,
+  // and merge the two passes: the second only ever sees the first's failures.
+  const retry = await workItemsService.completeSession(sessionBranch, {
+    userId: actors.ownerUserId,
+    workspaceId: actors.workspaceId,
+  });
+  const retried = tally(retry.results);
+  return {
+    completed: counts.completed + retried.completed,
+    alreadyDone: counts.alreadyDone + retried.alreadyDone,
+    failed: retried.failed,
+  };
 }
 
 /** The status write — through the shipped authority, never a raw update. */

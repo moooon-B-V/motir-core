@@ -164,7 +164,14 @@ runs:
     # match its own command line and kill itself. `dpkg --configure -a` repairs
     # the one case a SIGKILL can leave behind (a wedge during install rather
     # than during `apt-get update`).
-    - name: Install Playwright browser + OS deps (cache miss)
+    # ⚠️ NO `--with-deps` HERE ANY MORE (MOTIR-3128). This step downloads the
+    # BROWSER BINARY, which comes from Playwright's own CDN; `--with-deps` bolted
+    # an apt round-trip onto it, so a cache miss took BOTH failure domains at
+    # once. The OS deps are now handled once, below, and only when a probe says
+    # they are actually missing — which keeps this step's failure surface to the
+    # CDN it genuinely depends on. Retry + timeout are unchanged (MOTIR-2970);
+    # the apt-orphan cleanup goes with the apt call, to the step that now owns it.
+    - name: Install the Playwright browser (cache miss)
       shell: bash
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       env:
@@ -172,23 +179,67 @@ runs:
       run: |
         for attempt in 1 2 3; do
           status=0
-          timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install --with-deps chromium || status=$?
+          timeout --kill-after=30s "$PLAYWRIGHT_INSTALL_TIMEOUT" pnpm exec playwright install chromium || status=$?
           if [ "$status" -eq 0 ]; then exit 0; fi
           if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
-            echo "::warning::playwright install --with-deps attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; clearing the apt it orphaned, retrying in 15s"
-            sudo pkill -9 -x apt-get || true
-            sudo pkill -9 -x apt || true
-            sudo dpkg --configure -a >/dev/null 2>&1 || true
+            echo "::warning::playwright install attempt $attempt TIMED OUT after $PLAYWRIGHT_INSTALL_TIMEOUT; retrying in 15s"
           else
-            echo "::warning::playwright install --with-deps attempt $attempt failed (exit $status); retrying in 15s"
+            echo "::warning::playwright install attempt $attempt failed (exit $status); retrying in 15s"
           fi
           sleep 15
         done
-        echo "::error::playwright install --with-deps failed after 3 attempts"
+        echo "::error::playwright install failed after 3 attempts"
         exit 1
-    - name: Install Playwright OS deps (cache hit)
+    # ⚠️ DO NOT REACH FOR apt UNTIL SOMETHING SAYS YOU MUST (MOTIR-3128). The
+    # retry loop below is now the ONLY thing in this action that touches the
+    # Ubuntu archive, and it no longer runs on the common path at all — which is
+    # where every occurrence of this flake has landed since MOTIR-2970 bounded
+    # it: seven legs
+    # across three PRs on 2026-08-19 alone (#2151 bulk-2/bulk-5/collab-at-scale,
+    # #2155 board-at-scale, #2156 a11y-2/bulk-4/collab-at-scale), each burning
+    # 3 x 300s and then reporting red with `Run E2E` SKIPPED and ZERO tests run.
+    # Earlier ones took `main` down and blocked the Fly deploy.
+    #
+    # The reason it kept happening is that the apt call was UNCONDITIONAL: on a
+    # cache hit via `install-deps`, on a cache miss via `install --with-deps`. It
+    # is a no-op in the overwhelming majority of runs — the ubuntu-24.04 image
+    # already ships Chromium's shared libraries — so every leg was paying an apt
+    # round-trip, and taking an apt outage, in order to install nothing.
+    #
+    # So: MEASURE instead of assume. Launch the browser. If it starts, its OS deps
+    # are present BY DEFINITION and there is nothing to install; skip the step and
+    # never open a socket to the archive. If it does NOT start, the deps really
+    # are missing and the retry loop below runs exactly as it did before.
+    #
+    # It runs on BOTH cache paths, which is what makes this a fix rather than a
+    # narrowing: the cache-miss leg downloads the browser from Playwright's CDN
+    # (above, now without `--with-deps`) and then arrives here like any other.
+    #
+    # This is a PROBE, not a guess, and that distinction is the whole design: a
+    # blind `if: false` would be indistinguishable from this on a green day and
+    # would silently ship a broken leg the day the runner image drops a library.
+    # The probe fails closed — any error, any timeout, and we install.
+    - name: Probe the browser — apt only if it cannot launch
+      id: browser-probe
       shell: bash
-      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: |
+        if timeout 120s node -e "
+          const { chromium } = require('@playwright/test');
+          chromium
+            .launch()
+            .then((b) => b.close())
+            .then(() => process.exit(0))
+            .catch((err) => { console.error(String(err)); process.exit(1); });
+        "; then
+          echo 'the browser launched — its OS deps are present, skipping apt'
+          echo 'needs-deps=false' >> "$GITHUB_OUTPUT"
+        else
+          echo '::warning::the browser could not launch; installing OS deps via apt'
+          echo 'needs-deps=true' >> "$GITHUB_OUTPUT"
+        fi
+    - name: Install Playwright OS deps (only when the probe says they are missing)
+      shell: bash
+      if: steps.browser-probe.outputs.needs-deps == 'true'
       env:
         PLAYWRIGHT_INSTALL_TIMEOUT: 300s
       run: |

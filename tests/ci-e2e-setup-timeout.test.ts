@@ -23,8 +23,9 @@ import { join } from 'node:path';
 const ACTION_PATH = join(process.cwd(), '.github/actions/e2e-setup/action.yml');
 const CI_PATH = join(process.cwd(), '.github/workflows/ci.yml');
 
-const CACHE_MISS_STEP = 'Install Playwright browser + OS deps (cache miss)';
-const CACHE_HIT_STEP = 'Install Playwright OS deps (cache hit)';
+const CACHE_MISS_STEP = 'Install the Playwright browser (cache miss)';
+const APT_STEP = 'Install Playwright OS deps (only when the probe says they are missing)';
+const PROBE_STEP = 'Probe the browser — apt only if it cannot launch';
 
 interface Step {
   name: string;
@@ -95,12 +96,17 @@ function envBlockOf(body: string[]): Record<string, string> {
   return env;
 }
 
-const steps = stepsOf(readFileSync(ACTION_PATH, 'utf8'));
-const installSteps = [CACHE_MISS_STEP, CACHE_HIT_STEP].map((name) => {
+const ACTION_SOURCE = readFileSync(ACTION_PATH, 'utf8');
+const steps = stepsOf(ACTION_SOURCE);
+const stepNamed = (name: string): Step => {
   const step = steps.find((s) => s.name === name);
   if (!step) throw new Error(`e2e-setup has no step named "${name}"`);
   return step;
-});
+};
+/** Both retrying installs — the shape MOTIR-2970 pinned holds for each. */
+const installSteps = [CACHE_MISS_STEP, APT_STEP].map(stepNamed);
+/** The ONE step that still shells out to apt (MOTIR-3128). */
+const aptStep = stepNamed(APT_STEP);
 
 /**
  * A PATH directory holding only the fakes this test needs plus the real
@@ -152,7 +158,7 @@ describe('e2e-setup install retry bounds each attempt (MOTIR-2970)', () => {
   it('finds both install steps, each with a 3-attempt loop', () => {
     // Anti-vacuous: a manifest restructure (or a parser regression) would
     // otherwise make every assertion below pass against an empty string.
-    expect(installSteps.map((s) => s.name)).toEqual([CACHE_MISS_STEP, CACHE_HIT_STEP]);
+    expect(installSteps.map((s) => s.name)).toEqual([CACHE_MISS_STEP, APT_STEP]);
     for (const step of installSteps) {
       expect(step.run).toMatch(/^for attempt in 1 2 3; do$/m);
       expect(step.run).toMatch(/playwright install/);
@@ -237,7 +243,7 @@ describe('e2e-setup install retry, executed (MOTIR-2970)', () => {
     15_000,
   );
 
-  it.each(installSteps.map((s) => [s.name, s] as const))(
+  it.each([[aptStep.name, aptStep]] as const)(
     '%s: a TIMED-OUT attempt kills the apt it orphaned before retrying',
     (_name, step) => {
       // `timeout` signals `pnpm`; the `sudo apt-get` underneath is root-owned
@@ -253,7 +259,7 @@ describe('e2e-setup install retry, executed (MOTIR-2970)', () => {
     15_000,
   );
 
-  it.each(installSteps.map((s) => [s.name, s] as const))(
+  it.each([[aptStep.name, aptStep]] as const)(
     '%s: a plain non-zero exit does NOT kill apt',
     (_name, step) => {
       // A command that RETURNED left nothing behind; killing a healthy apt a
@@ -288,6 +294,85 @@ describe('e2e-setup install retry, executed (MOTIR-2970)', () => {
     },
     15_000,
   );
+});
+
+describe('apt is OFF the common path — the probe decides (MOTIR-3128)', () => {
+  // MOTIR-1679 removed a bad apt source; MOTIR-2970 bounded the wedge. Both were
+  // right and the class survived both, because the apt call was UNCONDITIONAL:
+  // seven legs across three PRs on 2026-08-19, each burning 3 x 300s and then
+  // reporting red with `Run E2E` SKIPPED and zero tests run. The remaining fix
+  // is not another retry — it is not calling apt when there is nothing to
+  // install, which is nearly always.
+
+  /** The step body's `if:` expression, as declared in the manifest. */
+  function ifOf(name: string): string {
+    const lines = ACTION_SOURCE.split('\n');
+    const at = lines.findIndex((l) => l === `    - name: ${name}`);
+    expect(at, `e2e-setup has no step named "${name}"`).toBeGreaterThanOrEqual(0);
+    const collected: string[] = [];
+    let inIf = false;
+    for (const line of lines.slice(at + 1)) {
+      if (/^ {4}- name: /.test(line)) break;
+      const start = /^ {6}if: (.*)$/.exec(line);
+      if (start) {
+        inIf = true;
+        collected.push(start[1]!.trim());
+        continue;
+      }
+      if (inIf) {
+        if (/^ {8}\S/.test(line)) {
+          collected.push(line.trim());
+          continue;
+        }
+        inIf = false;
+      }
+    }
+    return collected
+      .join(' ')
+      .replace(/^>-\s*/, '')
+      .trim();
+  }
+
+  it('the ONLY step that shells out to apt is gated on the probe', () => {
+    const aptCallers = steps.filter(
+      (st) => /playwright install-deps|apt-get (update|install)/.test(st.run) && st.run !== '',
+    );
+    // Exactly one, so "gated" is a statement about the whole action rather than
+    // about the one step someone remembered to look at.
+    expect(aptCallers.map((st) => st.name)).toEqual([APT_STEP]);
+    expect(ifOf(APT_STEP)).toBe("steps.browser-probe.outputs.needs-deps == 'true'");
+  });
+
+  it('the browser download no longer drags apt along with it', () => {
+    // `--with-deps` bolted an apt round-trip onto a CDN download, so a cache
+    // MISS took both failure domains at once. The browser binary comes from
+    // Playwright's CDN; the OS deps are the probe's business.
+    expect(stepNamed(CACHE_MISS_STEP).run).toMatch(/playwright install chromium/);
+    expect(stepNamed(CACHE_MISS_STEP).run).not.toMatch(/--with-deps/);
+    expect(ACTION_SOURCE).not.toMatch(/playwright install --with-deps/);
+  });
+
+  it('the probe runs on BOTH cache paths — otherwise it only narrows the class', () => {
+    // Gating the probe on a cache hit would leave the miss path calling apt
+    // unconditionally, which is the difference between closing this and
+    // postponing it.
+    expect(ifOf(PROBE_STEP)).toBe('');
+  });
+
+  it('the probe FAILS CLOSED — anything but a clean launch installs the deps', () => {
+    const probe = stepNamed(PROBE_STEP);
+    // A launch that throws, and a launch that hangs, must both land in the
+    // install branch. The `if …; then … else …` shape has no third arm, and the
+    // `timeout` is what makes a hang reach the else rather than the job budget.
+    expect(probe.run).toMatch(/^\s*if timeout \d+s node -e/m);
+    expect(probe.run).toMatch(/needs-deps=false/);
+    expect(probe.run).toMatch(/needs-deps=true/);
+    // It must actually LAUNCH the browser. Asserting the binary exists on disk
+    // would pass on precisely the machine this guard exists for: one whose
+    // cache is warm and whose shared libraries are missing.
+    expect(probe.run).toMatch(/chromium\s*\n?\s*\.launch\(\)/);
+    expect(probe.run).toMatch(/\.catch\(/);
+  });
 });
 
 describe('the E2E legs cannot hold CI complete for a job budget (MOTIR-2970)', () => {

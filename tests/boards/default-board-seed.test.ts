@@ -22,6 +22,9 @@ const WORKFLOW_ORDER = [
   'To Do',
   'Blocked',
   'In Progress',
+  // MOTIR-3003 — built, pull request open, CI not yet green; before `planning`
+  // because slot 4 is the last board column a laptop shows in full.
+  'Implemented',
   'Planning',
   'In Review',
   'Done',
@@ -68,7 +71,7 @@ describe('createProject seeds the default board (same transaction)', () => {
     expect(boards[0]?.workspaceId).toBe(workspaceId);
   });
 
-  it('seeds seven columns in workflow order, each mapped 1:1 to its status', async () => {
+  it('seeds eight columns in workflow order, each mapped 1:1 to its status', async () => {
     const { userId, workspaceId } = await makeWorkspaceAndUser();
     const project = await projectsService.createProject({
       workspaceId,
@@ -94,7 +97,7 @@ describe('createProject seeds the default board (same transaction)', () => {
     const mappings = await adminDb.boardColumnStatus.findMany({ where: { boardId: board.id } });
     // Seven since MOTIR-2425 added `planning`. The count is stated rather than
     // derived so adding a status is a deliberate edit here.
-    expect(mappings).toHaveLength(7);
+    expect(mappings).toHaveLength(WORKFLOW_ORDER.length);
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const columnById = new Map(columns.map((c) => [c.id, c]));
@@ -104,8 +107,8 @@ describe('createProject seeds the default board (same transaction)', () => {
       expect(statusById.get(m.statusId)?.label).toBe(columnById.get(m.columnId)?.name);
     }
     // Every status is mapped exactly once (no unmapped status in the default).
-    expect(new Set(mappings.map((m) => m.statusId)).size).toBe(7);
-    expect(new Set(mappings.map((m) => m.columnId)).size).toBe(7);
+    expect(new Set(mappings.map((m) => m.statusId)).size).toBe(WORKFLOW_ORDER.length);
+    expect(new Set(mappings.map((m) => m.columnId)).size).toBe(WORKFLOW_ORDER.length);
   });
 
   it('does not leak the board into another project in the same workspace', async () => {
@@ -151,11 +154,11 @@ describe('boardsService.backfillDefaultBoard (one-off, idempotent)', () => {
     const boardCount2 = await adminDb.board.count({ where: { projectId: project.id } });
     expect(boardCount2).toBe(1);
     const boardColumnCount = await adminDb.boardColumn.count({ where: { projectId: project.id } });
-    expect(boardColumnCount).toBe(7);
+    expect(boardColumnCount).toBe(WORKFLOW_ORDER.length);
     const boardColumnStatusCount = await adminDb.boardColumnStatus.count({
       where: { projectId: project.id },
     });
-    expect(boardColumnStatusCount).toBe(7);
+    expect(boardColumnStatusCount).toBe(WORKFLOW_ORDER.length);
 
     // Idempotent — already has a board, so the second call is a no-op and adds
     // no duplicate board/columns.
@@ -164,7 +167,7 @@ describe('boardsService.backfillDefaultBoard (one-off, idempotent)', () => {
     const boardCount3 = await adminDb.board.count({ where: { projectId: project.id } });
     expect(boardCount3).toBe(1);
     const boardColumnCount2 = await adminDb.boardColumn.count({ where: { projectId: project.id } });
-    expect(boardColumnCount2).toBe(7);
+    expect(boardColumnCount2).toBe(WORKFLOW_ORDER.length);
   });
 
   it('leaves an already-boarded project untouched (no second board)', async () => {

@@ -26,6 +26,7 @@ import type {
   SubtreeResponse,
   BlockingClosureResponse,
   SearchWorkItemsResponse,
+  SemanticSearchResponse,
   SimilarWorkItemsResponse,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
@@ -330,6 +331,103 @@ export const aiBoundaryService = {
       results,
       model: opts.model,
       coverage: { embedded: ranked.rankable, total: ranked.total },
+    };
+  },
+
+  /**
+   * Semantic search from TEXT — what {@link findSimilarWorkItems} is once the
+   * caller no longer has a vector (Story MOTIR-3098 · Subtask MOTIR-3101, per
+   * `docs/decisions/plan-tree-embeddings.md` **Amendment 2**).
+   *
+   * §6.1's route takes a vector because its only caller, `motir-ai`, owns the
+   * embedding seam. An MCP agent holds a Motir PAT and nothing else, so Amendment
+   * 2 decides that `motir-core` embeds the query through the SAME
+   * `POST /v1/embeddings` seam §6.2 already mandates for the write path. This
+   * method is that composition and nothing more: embed, then rank through the
+   * method above, which keeps the access gate, the degradation arm and the §2
+   * `key`/`title`/`score` DTO in ONE place.
+   *
+   * ⚠️ THE ORDER OF THE FIRST TWO STEPS IS THE POINT. `assertCanBrowse` runs
+   * BEFORE the embed, so a caller who may not browse the project never spends the
+   * deployment's gateway budget — the same ordering `enforceInternalServiceRateLimit`
+   * applies for the same reason. Its 404 also still beats an empty 200, which
+   * would read as "I looked and there was nothing here."
+   *
+   * ⚠️ AND THE THREE NON-`ranked` STATES STAY APART. Collapsing them is the exact
+   * defect the story exists to remove, so the discriminator is computed here —
+   * once, server-side — rather than left to each caller's arithmetic over
+   * `coverage`. See {@link SemanticSearchResponse}.
+   */
+  async searchSimilarWorkItemsByText(
+    projectId: string,
+    opts: { query: string; limit: number; minScore?: number },
+    ctx: ServiceContext,
+  ): Promise<SemanticSearchResponse> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const embedded = await workItemEmbeddingsService.embedQuery(opts.query);
+    if (!embedded) {
+      return {
+        outcome: 'unavailable',
+        results: [],
+        model: null,
+        coverage: null,
+        message:
+          'The query could not be embedded, so no semantic search ran — this deployment has no ' +
+          'AI backend configured, or it is unreachable. This is NOT evidence that nothing ' +
+          'similar exists. Fall back to `search_work_items`, remembering that it matches on ' +
+          'SUBSTRINGS and cannot see a card that says the same thing in different words.',
+      };
+    }
+
+    const ranked = await this.findSimilarWorkItems(
+      projectId,
+      {
+        queryEmbedding: embedded.embedding,
+        model: embedded.model,
+        limit: opts.limit,
+        ...(opts.minScore !== undefined ? { minScore: opts.minScore } : {}),
+      },
+      ctx,
+    );
+
+    if (ranked.results.length > 0) {
+      return {
+        outcome: 'ranked',
+        results: ranked.results,
+        model: ranked.model,
+        coverage: ranked.coverage,
+        message:
+          `${ranked.results.length} candidate(s) ranked over ${ranked.coverage.embedded} of ` +
+          `${ranked.coverage.total} indexed item(s). Read each one through \`get_work_item\` ` +
+          'before concluding anything about it — this names candidates, it does not report them.',
+      };
+    }
+
+    // Nothing ranked. WHICH nothing decides what the caller may conclude, and
+    // `coverage.embedded` is the only thing that can tell them apart.
+    if (ranked.coverage.embedded === 0) {
+      return {
+        outcome: 'not-indexed',
+        results: [],
+        model: ranked.model,
+        coverage: ranked.coverage,
+        message:
+          `No item in this project is indexed for \`${ranked.model}\` (0 of ` +
+          `${ranked.coverage.total}), so this search could not tell you anything. This is NOT ` +
+          'evidence that nothing similar exists. Fall back to `search_work_items`, remembering ' +
+          'that it matches on SUBSTRINGS.',
+      };
+    }
+
+    return {
+      outcome: 'nothing-similar',
+      results: [],
+      model: ranked.model,
+      coverage: ranked.coverage,
+      message:
+        `Searched ${ranked.coverage.embedded} of ${ranked.coverage.total} indexed item(s) and ` +
+        'nothing ranked. This IS an answer: the project is indexed and nothing close was found.',
     };
   },
 };

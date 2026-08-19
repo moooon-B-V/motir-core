@@ -340,8 +340,11 @@ export const githubWebhookService = {
     const provider = getGitProvider(PROVIDER);
     const cr = provider.parseChangeRequestEvent(body);
     if (!cr) return { event: 'pull_request', outcome: 'malformed' };
-    // The canonical lifecycle this delivery maps to (opened → in_review, merged →
-    // done, closed-unmerged → todo).
+    // The canonical lifecycle this delivery maps to (opened → IMPLEMENTED,
+    // merged → done, closed-unmerged → todo). `opened` emitted `in_review` until
+    // MOTIR-3005: an open pull request means the code exists and CI has not
+    // spoken for it, and In Review now has exactly one writer — the CI-feedback
+    // consumer, on a green run.
     const lifecycle = provider.changeRequestLifecycle(cr);
 
     // Drive the linked work item through THE shared status-sync state machine
