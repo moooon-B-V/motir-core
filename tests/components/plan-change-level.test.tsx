@@ -184,3 +184,72 @@ describe('decoratePlanChangeLevel', () => {
     expect(top.nodes.find((n) => n.id === 'wi-14')!.drillable).toBeFalsy();
   });
 });
+
+// ── MOTIR-3162 (bug MOTIR-3154) — ONE decided language across BOTH canvases ──
+//
+// The workspace canvas draws through `decoratePlanChangeLevel` and the plan
+// detail through `mergePlanLevel`; they are different paths to the same product
+// promise. `ProposedAddNode` already reuses the shipped `PlanItemNode`, so
+// threading the outcome makes the two agree BY CONSTRUCTION rather than by a
+// second implementation that has to be kept in step.
+describe('decoratePlanChangeLevel — the decided outcome', () => {
+  const withProposal = indexPlanReview(
+    planReview([
+      planReviewItem({
+        planItemId: 'pi_new',
+        nodeId: 'pi_new',
+        parentNodeId: null,
+        title: 'A proposed card',
+      }),
+      planReviewItem({
+        planItemId: 'pi_mod',
+        nodeId: 'wi-21',
+        op: 'modify',
+        identifier: 'PAY-21',
+        title: 'Payment reminders',
+      }),
+    ]),
+  );
+
+  it('draws NOTHING decided while the plan is still pending', () => {
+    const level = decoratePlanChangeLevel(buildWorkItemLevel(LEVEL), LEVEL, withProposal, null);
+    const proposed = level.nodes.find((n) => n.id.endsWith('pi_new'))!;
+    renderWithIntl(<>{proposed.content}</>);
+    expect(screen.queryByTestId('plan-change-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+  });
+
+  it.each(['accepted', 'declined'] as const)(
+    'names the %s outcome on a PROPOSED add',
+    (outcome) => {
+      const level = decoratePlanChangeLevel(
+        buildWorkItemLevel(LEVEL),
+        LEVEL,
+        withProposal,
+        null,
+        outcome,
+      );
+      const proposed = level.nodes.find((n) => n.id.endsWith('pi_new'))!;
+      renderWithIntl(<>{proposed.content}</>);
+
+      // The frame says it AND the node inside says it — and the node's chip is the
+      // SHIPPED `PlanItemNode` one from MOTIR-3161, reused verbatim. That is what
+      // makes "one language across both canvases" true rather than asserted.
+      expect(screen.getByTestId('plan-change-outcome').textContent).toBe(outcome);
+      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(outcome);
+    },
+  );
+
+  it('names the outcome on a CHANGED committed node too', () => {
+    const level = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL),
+      LEVEL,
+      withProposal,
+      null,
+      'accepted',
+    );
+    const changed = level.nodes.find((n) => n.id === 'wi-21')!;
+    renderWithIntl(<>{changed.content}</>);
+    expect(screen.getByTestId('plan-change-outcome').textContent).toBe('accepted');
+  });
+});

@@ -149,7 +149,7 @@ export function PlanningWorkspaceHost({
 
   const index = useMemo(() => indexPlanReview(state.review), [state.review]);
   // One key for "what the canvas is drawing": a new proposal, or a fresh commit.
-  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
+  const diffKey = `${treeVersion}:${state.jobId ?? 'none'}:${state.decided ?? 'pending'}:${index.counts.added}-${index.counts.changed}-${index.counts.removed}`;
 
   const close = useCallback(() => router.push(backHref), [router, backHref]);
 
@@ -216,6 +216,7 @@ export function PlanningWorkspaceHost({
               projectKey={projectKey}
               index={index}
               diffKey={diffKey}
+              outcome={state.decided}
               targetIds={targetIds}
               initialTrail={initialCanvasTrail}
               ariaLabel={t('canvasAria', { project: projectName })}
@@ -231,7 +232,11 @@ export function PlanningWorkspaceHost({
           </div>
 
           {/* The gate — visible only while a proposal is pending on the canvas. */}
-          {state.review && !index.isEmpty ? (
+          {/* …and only while it is still PENDING (MOTIR-3162). The review now
+              survives the decision so the canvas can keep drawing it, so
+              "there is a review" no longer means "there is a decision to
+              take" — `state.decided` is what does. */}
+          {state.review && !state.decided && !index.isEmpty ? (
             <PlanChangeConfirmBar
               index={index}
               deciding={state.phase === 'deciding'}
