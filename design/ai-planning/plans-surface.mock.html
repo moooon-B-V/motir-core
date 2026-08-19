@@ -1272,51 +1272,6 @@
       }
 
       /* ===== Part IV (MOTIR-3082) — the plan-review DETAIL surfaces ========= */
-      /* Panel E — the out-of-plan PARENT chip. NOT a border, NOT a fill, and no
-         semantic hue: the node's frame is owned by the three op treatments, red
-         dashed+hatch is the dependency TANGLE signal, and dashed is "not in
-         sprint". A parent outside the plan is the ordinary case, so it gets a
-         separate, quieter OBJECT above the node instead of a restyled node. */
-      .pchip {
-        position: absolute;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        max-width: 236px;
-        padding: 4px 9px;
-        border: 1px solid var(--hair);
-        border-radius: 999px;
-        background: var(--soft);
-        color: var(--secondary);
-        font-size: 11.5px;
-        line-height: 1.1;
-        white-space: nowrap;
-      }
-      .pchip .k {
-        color: var(--faint);
-      }
-      .pchip .pid {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        color: var(--muted);
-      }
-      .pchip .ptitle {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 132px;
-      }
-      .pchip svg {
-        width: 12px;
-        height: 12px;
-        flex: none;
-      }
-      /* The stem: 1px, solid, neutral. Solid so it cannot read as a proposed or
-         not-in-sprint dash; neutral so it cannot read as a dependency edge, all
-         of which are hued and arrow-headed. */
-      .pstem {
-        position: absolute;
-        width: 1px;
-        background: var(--border-strong);
-      }
       /* The View button — the canvas detail-surface door (MOTIR-1351/1352),
          placed LEFT of MOTIR-1370's edit pencil so the pair reads View · Edit. */
       .viewbtn {
@@ -3149,47 +3104,74 @@
         </div>
       </div>
       <!-- ============================================================= -->
-      <!-- PANEL E — the OUT-OF-PLAN PARENT signal (MOTIR-3082)           -->
+      <!-- PANEL E — a proposal renders AT ITS PARENT'S LEVEL (MOTIR-3082) -->
       <!-- ============================================================= -->
       <div class="panel">
         <div class="panel-cap">
           <span class="n">E</span>
-          <h2>A proposal parented under a COMMITTED item — named, not mistaken for a root</h2>
+          <h2>A proposed card is a NORMAL card on the roadmap — only its style differs</h2>
           <span class="note"
-            >a separate object above the node · no border, no fill, no semantic hue · the genuine
-            root beside it is unchanged</span
+            >the shipped drill-down level: breadcrumb + the parent's real children, dependency or
+            not · the proposal sits among them in `add` style · nothing else changes</span
           >
         </div>
         <div class="frame">
-          <div class="viewport" style="height: 310px">
+          <div class="viewport" style="height: 330px">
+            <!-- The SHIPPED roadmap breadcrumb (design/roadmap "MULTI-LEVEL CHAINS
+                 — DRILL-DOWN"): the committed ancestor path down to this level.
+                 THIS is what names the parent — not a badge on the node. -->
             <div class="ovl" style="top: 14px; left: 16px">
               <span class="crumb"
-                ><span class="dot"></span>Plans · Marketplace payouts
+                ><span class="dot"></span>MOTIR-2200 · The Motir agent loop
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="m9 6 6 6-6 6" />
                 </svg>
-                Top level</span
+                MOTIR-3070 · The plan review surface is narrower…</span
               >
             </div>
 
-            <!-- PARENTED: the chip names the committed parent this add will be
-                 created under; the stem joins it to the node. -->
-            <div class="pchip" style="left: 44px; top: 92px">
-              <span class="k">in</span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
-                <path d="M4 4h16v5H4zM4 13h10v5H4z" />
-              </svg>
-              <span class="pid">MOTIR-2200</span>
-              <span class="ptitle">The Motir agent loop</span>
-            </div>
-            <div class="pstem" style="left: 96px; top: 116px; height: 22px"></div>
-
-            <div class="node add" style="left: 44px; top: 138px; width: 216px">
+            <!-- SIBLINGS: the focused parent's REAL children, rendered as ordinary
+                 committed nodes — present because they are the parent's children,
+                 NOT because anything depends on them. -->
+            <div class="node" style="left: 44px; top: 82px; width: 210px">
               <div class="top">
-                <span class="tile" style="background: var(--peach)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-bug)" stroke-width="2">
-                    <circle cx="12" cy="12" r="7" />
-                    <path d="M12 9v4M12 16h.01" /></svg
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3082</div>
+                  <div class="ttl">The plan-review detail surfaces</div>
+                </div>
+                <span class="pill" style="background: var(--sky); color: var(--info)"
+                  >in review</span
+                >
+              </div>
+            </div>
+
+            <div class="node" style="left: 286px; top: 82px; width: 210px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-3083</div>
+                  <div class="ttl">PlanReviewItemDto carries the parent</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+
+            <!-- THE PROPOSAL: same node, same footprint, same level. The ONLY
+                 difference is the `add` style Panel B already specifies. -->
+            <div class="node add" style="left: 528px; top: 82px; width: 210px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-subtask-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
                   <div class="id">new</div>
@@ -3203,62 +3185,67 @@
               </div>
             </div>
 
-            <!-- GENUINE ROOT: no chip, no stem. Unchanged from Panel B — the
-                 contrast is the whole point of drawing them side by side. -->
-            <div class="node add" style="left: 300px; top: 138px; width: 216px">
-              <div class="top">
-                <span class="tile" style="background: var(--t-story-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-story)" stroke-width="2">
-                    <path d="M5 4h11l3 3v13H5z" /></svg
-                ></span>
-                <div>
-                  <div class="id">new</div>
-                  <div class="ttl">Billing portal</div>
-                </div>
-                <span class="opbadge add"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
-                    <path d="M12 5v14M5 12h14" /></svg
-                  >add</span
+            <!-- Same-level dependency edge between two committed siblings — the
+                 shipped edge language, unchanged. The THIRD sibling has no edge
+                 at all and is on the canvas regardless: being a child of the
+                 focused parent is the reason a node is here. -->
+            <svg
+              class="edges"
+              viewBox="0 0 760 330"
+              preserveAspectRatio="none"
+              style="position: absolute; inset: 0"
+            >
+              <defs>
+                <marker
+                  id="e4Firm"
+                  viewBox="0 0 10 10"
+                  refX="8.5"
+                  refY="5"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto"
                 >
-              </div>
-            </div>
-
-            <!-- ARCHIVED / MISSING parent: NO chip. The card degrades to the root
-                 treatment (MOTIR-3083 AC 5) — naming a parent the reader cannot
-                 open is worse than naming none, and an "error" chip would put the
-                 danger language back on the ordinary path by the side door. -->
-            <div class="node add" style="left: 556px; top: 138px; width: 200px">
-              <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
-                    <path d="M5 12h14M5 7h9M5 17h9" /></svg
-                ></span>
-                <div>
-                  <div class="id">new</div>
-                  <div class="ttl">Webhook retry ledger</div>
-                </div>
-                <span class="opbadge add"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
-                    <path d="M12 5v14M5 12h14" /></svg
-                  >add</span
-                >
-              </div>
-            </div>
+                  <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
+                </marker>
+              </defs>
+              <path
+                d="M254 108 L286 108"
+                stroke="var(--border-strong)"
+                stroke-width="1.6"
+                fill="none"
+                marker-end="url(#e4Firm)"
+              />
+            </svg>
 
             <div
               style="
                 position: absolute;
                 left: 44px;
-                bottom: 14px;
-                display: flex;
-                gap: 18px;
-                font-size: 11px;
+                top: 190px;
+                max-width: 690px;
+                font-size: 11.5px;
+                line-height: 1.65;
                 color: var(--muted);
               "
             >
-              <span>1 · parented under a committed item — chip + stem</span>
-              <span>2 · a genuine root — nothing added</span>
-              <span>3 · parent archived or missing — degrades to root</span>
+              <strong style="color: var(--strong)">Nothing here is new.</strong> This is the shipped
+              roadmap level — the breadcrumb walks the committed ancestors, the parent's children
+              fill the canvas whether or not anything depends on them, and same-level
+              <code>blocked_by</code> edges draw as they always do. The proposal is one more card at
+              that level wearing the <code>add</code> style Panel B already specifies. <br /><br />
+              <strong style="color: var(--strong)"
+                >So "root or parented?" stops being a question the reader has to ask.</strong
+              >
+              A proposal under a committed parent is drawn INSIDE that parent's level, among its
+              siblings, with the parent named in the breadcrumb. A genuine root is drawn at the top
+              level, where there is no breadcrumb to walk. The two cases look different because they
+              ARE in different places — no badge, no chip, no extra signal to learn.
+              <br /><br />
+              <span style="color: var(--faint)"
+                >Edge case — a parent that is archived or hard-deleted: the level cannot be opened,
+                so the proposal falls back to the top level and the breadcrumb has nothing to walk.
+                That is the honest rendering, and it is the same one a genuine root gets.</span
+              >
             </div>
           </div>
         </div>

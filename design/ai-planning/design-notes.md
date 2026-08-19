@@ -14,9 +14,9 @@ Both review the same way — nothing is real until approve, and the approve CTA 
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
 Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
 and its AUTHOR, to a shipped row and a shipped header, and redraws nothing.
-**Part IV amends it again** — two panels on the plan DETAIL surface (the parent a proposal will
-be created under, and a read view for one proposal), composing the shipped canvas peek rather than
-drawing a second one.
+**Part IV amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
+parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
+differing), and a read view for one proposal composing the shipped canvas peek.
 
 ---
 
@@ -689,7 +689,7 @@ Per `notes.html` **#82** and **#95**: cite the asset, the COMPONENT, and its con
 | The dependency **ghost anchor**            | `design/roadmap/design-notes.md`, cross-level dependency                                                                                          | The red dashed + hatched off-level anchor and its `blocked elsewhere` flag — **cited here only to stay away from it** (§2)                         |
 | The edit path                              | `ProposalEditModal.tsx` (MOTIR-1370)                                                                                                              | Editing an `add`. Unchanged, and still the ONLY writer                                                                                             |
 
-## 2. Panel E — the out-of-plan PARENT signal
+## 2. Panel E — a proposed card is a NORMAL card on the roadmap level
 
 ### The problem in one sentence
 
@@ -698,54 +698,67 @@ _a node whose parent is not in the rendered set_, so a proposal parented under a
 item draws at the top level, identical to a genuine root — and where a card lands in the tree is one
 of the things approval decides.
 
-### The decision: ADD AN OBJECT, do not restyle the node
+### The decision: render the LEVEL, don't signal the parent (Yue, 2026-08-19)
 
-The node's frame is fully spoken for. Four languages already live on this canvas, and each was
-chosen so it cannot be confused with the others:
+**An earlier revision of this panel got this wrong and is recorded here rather than quietly
+replaced.** It added a new element — a neutral "parent chip" pinned above the node — to _name_ the
+parent the reader could not see. That answers the question by inventing vocabulary: a reader has one
+more thing to learn, the canvas has one more language to keep from colliding, and the proposal still
+sits alone on an otherwise empty canvas with no idea what it will live beside.
 
-| Existing language                                           | Means                                                  | Where                           |
-| ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------- |
-| Dashed **accent** border + lavender tint                    | `add` — proposed, not yet real                         | Part I §3 Panel B               |
-| Solid **info / sky** ring                                   | `modify` — a change to an existing item                | Part I §3 Panel B               |
-| Muted grey + strike-through title                           | `remove` — will be archived                            | Part I §3 Panel B               |
-| **Red** dashed + **hatched** chip, `blocked elsewhere` flag | a bad-plan TANGLE — a dependency the level cannot show | `design/roadmap`                |
-| Dashed border, `not in sprint`                              | outside the current sprint                             | `design/roadmap` (sprint scope) |
+The right answer needs nothing new. **The plan-detail canvas is the roadmap, drilled to the level the
+proposal lands in** — and `design/roadmap/design-notes.md` § _MULTI-LEVEL CHAINS — DRILL-DOWN_ already
+specifies that surface completely:
 
-So the parent signal is **not a border, not a fill, and not a hue on the node**. It is a separate,
-quieter object: a **parent chip** pinned above the node and joined to it by a short neutral stem —
-`↳ MOTIR-2200 · The Motir agent loop`, with the parent's kind glyph, in `--soft` on `--secondary`
-ink with a `--hair` border.
+> _"Click a node and the canvas REFRESHES to that node's children, laid out as their own chain; a
+> breadcrumb (`Plan ▸ Invoices ▸ Create invoice`) + a **Back** control walks you up."_ … _"the
+> consumer re-feeds the engine the children of the focused node + their same-level `blocked_by`
+> edges, and tracks the breadcrumb path; **the engine is unchanged**."_
 
-**Why it cannot be read as any of the five.** It is not on the node, so it cannot be mistaken for an
-op treatment. It carries no semantic hue at all — the ghost anchor's whole signal is `--danger`, and
-the reason this must not borrow it is that **a proposal parented under a committed item is the
-normal, endorsed case**: `lib/dto/planReview.ts` states that a real work-item `parentRef` _"stays
-as-is"_, and MOTIR-2982's MCP door emits exactly this shape by design. Painting the ordinary case in
-the colour reserved for a broken plan teaches a reviewer to stop trusting the colour. It is solid,
-not dashed, so it does not read as _not in sprint_ or as _proposed_.
+So the plan detail shows:
 
-**It deliberately borrows the ghost anchor's STRUCTURE while inverting its TONE** — both name an
-off-canvas thing beside the node it belongs to, because that is the shape a reader already knows.
-Structure is the reusable part; the alarm is not.
+1. **The breadcrumb** — the committed ancestor path down to the focused level, exactly as the roadmap
+   draws it. **This is what names the parent.** Not a badge, not a chip.
+2. **The parent's real children** — every one of them, as ordinary committed nodes with their real
+   identifiers and status pills. **They are on the canvas because they are the parent's children, NOT
+   because anything depends on them**; a sibling with no `blocked_by` relationship to the proposal is
+   still a sibling, and seeing the company a proposed card will keep is most of what "is this the
+   right place for it?" means.
+3. **The proposal**, at that same level, in the `add` style Panel B already specifies.
+4. **Same-level `blocked_by` edges**, in the shipped edge language, unchanged.
 
-### States drawn
+**Nothing differs from the roadmap except the proposed card's style.**
 
-1. **One parented proposal** — chip above the node, stem down to it.
-2. **A genuine root** — no chip, no stem, unchanged from Panel B. This is the contrast the panel
-   exists to make legible; the two nodes sit side by side.
-3. **A parent that is archived or missing** — **no chip.** The card degrades to the root treatment
-   (MOTIR-3083 AC 5). Naming a parent the reader cannot open is worse than naming none, and the
-   alternative — a chip in an error state — would put the danger language back on the ordinary path
-   by the side door.
-4. **Mixed roots** — a level holding both kinds at once, which is the only state in which the
-   distinction actually earns its pixels.
+### Why this dissolves the defect instead of flagging it
 
-### What it is NOT
+_Root or parented?_ stops being a question the reader has to ask. A proposal under a committed parent
+is drawn **inside that parent's level**, among its siblings, with the parent in the breadcrumb; a
+genuine root is drawn at the **top** level, where there is no breadcrumb to walk. The two read
+differently because they **are** in different places — which is a distinction the reader already
+understands from the roadmap, rather than one this surface teaches them.
 
-It is **not** an edge, and it draws no line into the parent's own node: the parent has no node at
-this level, which is the whole premise. It does **not** change `isRoot` — that predicate is correct
-for its stated purpose (a partial subtree rendering with its top nodes as roots) and the distinction
-belongs in the plan's own forest model (`buildPlanForest`), per MOTIR-3083 AC 4.
+It is also why no new visual language is introduced, and therefore why none of the canvas's reserved
+languages (the three op treatments, the red hatched dependency tangle, the dashed _not in sprint_)
+had to be worked around. The earlier revision spent a section arguing its way past them. The right
+design never approaches them.
+
+### States
+
+- **A proposal under a committed parent** — drawn at that parent's level, breadcrumb walking to it.
+- **A genuine root proposal** — the top level, no breadcrumb.
+- **An archived or hard-deleted parent** — the level cannot be opened, so the proposal falls back to
+  the top level and the breadcrumb has nothing to walk. That is the honest rendering, and it is the
+  same one a genuine root gets (MOTIR-3083 AC 5's _degrade rather than throw_).
+- **A plan whose proposals sit under SEVERAL committed parents** — they are at different levels, so
+  the canvas cannot show them at once; that is the drill-down model working, not a gap. The review
+  rail remains the whole-plan list, and selecting an item there drills the canvas to its level.
+
+### What this does NOT change
+
+`isRoot` keeps its contract — it is correct for its stated purpose. What changes is what the plan
+canvas is FED: the committed level plus the plan's proposals, rather than a forest built from
+`PlanItem`s alone (`buildPlanForest`). The canvas engine is untouched, per the roadmap's own build
+note.
 
 ## 3. Panel F — the proposal READ view, and its door
 
@@ -835,4 +848,8 @@ its own design subtask.
 | MOTIR-1351 / MOTIR-1352                         | neither — this composes the shipped detail-surface pattern and adds no second one          | none                                  |
 | MOTIR-847 / MOTIR-850 / MOTIR-2982 / MOTIR-2985 | neither — cited as history / provenance                                                    | none                                  |
 
-**Nothing is TAKEN from any card**, so no acceptance criteria elsewhere are invalidated by this pass.
+**One card is TAKEN from — MOTIR-3083, a STRUCTURE rather than an element** — and it was amended in
+the same pass, per the design limb's rule that the design and the AC amendment ship together. Nothing
+else in the subtree is invalidated: MOTIR-3084's read view is untouched by the Panel E redesign, and
+MOTIR-3070's criterion 2 still holds (_distinguish, and name the parent_) — the level model satisfies
+it by placement and breadcrumb rather than by a badge.
