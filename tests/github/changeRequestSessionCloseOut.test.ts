@@ -321,7 +321,9 @@ describe('the branch-scoped gate still runs on a session delivery', () => {
     });
     for (const item of [a, b]) {
       const row = await rowOf(item.id);
-      expect(row.status).toBe('in_review');
+      // `mark_integrated` lands a card at `implemented` since MOTIR-3004; the
+      // hold leaves it exactly where it was.
+      expect(row.status).toBe('implemented');
       expect(row.sessionBranch).toBe(SESSION_BRANCH);
     }
   });

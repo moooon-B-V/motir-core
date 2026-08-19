@@ -723,6 +723,45 @@ async function resolveDescriptionMentionable(
 const IMPLEMENTED_STATUS_KEY = 'implemented';
 const DONE_STATUS_KEY = 'done';
 
+/**
+ * THE CI-GREEN LATCH (MOTIR-3006) — a card that ARRIVES at `implemented` asks
+ * whether its build already went green, and promotes itself if it did.
+ *
+ * The run pushes BEFORE it transitions (MOTIR-3004), so on a fast pipeline the
+ * green verdict lands while the card is still In Progress and the CI-side edge
+ * finds nothing to promote. The verdict is durable — the check rows are
+ * persisted — so this RE-READS it rather than queueing anything.
+ *
+ * ⚠️ BEST-EFFORT, POST-COMMIT, and never able to fail the transition it follows
+ * (`notes.html` #39: a side effect after a durable write may never propagate an
+ * error that fails it). A card left at `implemented` because this threw is a card
+ * the next CI delivery promotes anyway.
+ *
+ * ⚠️ The import is DYNAMIC on purpose: `ciPromotion` moves cards through this
+ * very service, so a static import would close a module cycle. Deferring it to
+ * the call keeps the graph one-directional at load time, and this path runs once
+ * per transition into one status — never in a hot loop.
+ */
+async function latchCiGreen(
+  workItemId: string,
+  toStatusKey: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  if (toStatusKey !== 'implemented') return;
+  try {
+    const { promoteIfCiAlreadyGreen } = await import('./ciPromotion');
+    await promoteIfCiAlreadyGreen(workItemId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    console.error('[workItemsService] the CI-green latch failed; the card stays implemented', {
+      workItemId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
+
 export const workItemsService = {
   /**
    * Create a work item: allocate the per-project key + insert the row + emit
@@ -1792,6 +1831,7 @@ export const workItemsService = {
         // can't loop. Absent on a user-driven transition.
         ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
+      await latchCiGreen(dto.id, transition.toStatusKey, ctx);
     }
     return dto;
   },
@@ -2372,6 +2412,9 @@ export const workItemsService = {
         revisionId: transition.revisionId,
         ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
       });
+      // The session-lineage arm arrives at `implemented` through THIS write, not
+      // through `updateStatus`, so the latch is owed here too (MOTIR-3006).
+      await latchCiGreen(dto.id, transition.toStatusKey, ctx);
     }
     return dto;
   },
