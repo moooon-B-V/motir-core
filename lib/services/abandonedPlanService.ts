@@ -1,0 +1,267 @@
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { resolveJobState } from '@/lib/services/aiPlanEditsService';
+import type { PlanJobStateDto } from '@/lib/dto/plans';
+
+// ABANDONED-PLAN reconciliation (MOTIR-3064) — the recovery half of the
+// generation lifecycle, and the answer to a hole MOTIR-3051 named and left open
+// on purpose.
+//
+// THE DEFECT. Nothing writes a terminal `Plan` status when a motir-ai job dies:
+// motir-ai's inbound seams into core are the success path (`appendProposals` /
+// `patchProposal`), so a job that fails, is canceled, or whose process vanishes
+// changes nothing about the plan it was producing into. That plan sits at
+// `generating` — and `planRepository.findUndecidedByProject` reads `generating`
+// as UNDECIDED, which is the pending-proposal gate `autoPlanCadenceService`
+// checks FIRST. So a dead job silently paused that project's auto-plan cadence
+// permanently, with the AI-planning settings page reporting a proposal waiting
+// for a decision nobody could make.
+//
+// WHY IT IS A SWEEP AND NOT A CALLBACK. The card offered two shapes, and only one
+// of them exists. Writing the terminal status "on job failure" needs a failure
+// callback, and there is none: core learns a job's outcome by ASKING
+// (`resolveJobState` → `GET /v1/jobs/:id`) or by holding an SSE stream open.
+// Adding an inbound failure route would still not cover the case that matters
+// most — a motir-ai process that dies mid-job writes no callback at all
+// (`src/jobs/worker.ts` marks `failed` only when the HANDLER throws; a claimed
+// job whose worker vanishes stays `running`). A sweep that asks covers both, so
+// it is the whole fix rather than half of one.
+//
+// WHY IT CANNOT BE A WIDER GATE PREDICATE — the thing MOTIR-3051 could do and
+// this cannot. That card excluded the orphan with NO producer, which is judgeable
+// from the row itself. This orphan carries a `sourceJobId`, so it is byte-for-byte
+// what a healthy generation looks like between `createPlan` and its first append.
+// The discriminator is not in the plan table; it is whether the job behind it is
+// still alive. `docs/decisions/agent-authored-plans.md` AMENDMENT 2 records the
+// decision and the rejected alternatives.
+//
+// System-scoped: the discovery read spans workspaces (the plan policy's
+// `FOR SELECT` `app.system_admin` arm, added by this card's migration for exactly
+// this), and every WRITE then re-binds `app.workspace_id` to that row's own
+// workspace — so no write is ever untenanted and the cross-tenant write refusal
+// stays load-bearing.
+
+/**
+ * How old an empty, producer-bearing plan must be before the sweep will even ASK
+ * about it.
+ *
+ * A CORRECTNESS bound, not a performance one. Between `submitExpand`'s
+ * `createPlan` and motir-ai's first append, a perfectly healthy plan holds zero
+ * items with a live job — the exact shape this sweep selects. The grace keeps it
+ * out of that window, so it can never be asking about a submit that happened
+ * milliseconds ago. Fifteen minutes is far longer than any observed
+ * submit→first-append gap and far shorter than the hourly cadence tick whose
+ * pause it exists to lift.
+ */
+export const ABANDONED_PLAN_GRACE_MINUTES = 15;
+
+/**
+ * How long an empty plan may sit behind a job that never reaches a terminal
+ * state before the sweep treats it as abandoned anyway.
+ *
+ * This is the arm for the failure the ASK cannot see: a motir-ai worker that
+ * dies mid-job leaves its row `running` forever, so `resolveJobState` answers
+ * "still working" for all time and the plan would gate for all time with it. It
+ * is the same argument `planTargetLockSweep` makes about a crashed planner —
+ * "the only signal left is the passage of time" — applied to the row that crash
+ * strands here.
+ *
+ * Deliberately a DAY rather than an hour: a long-running generation is a normal
+ * thing and cutting one off would destroy work, while a paused cadence costs a
+ * project one day of suggestions. The asymmetry picks the number.
+ */
+export const ABANDONED_PLAN_MAX_AGE_HOURS = 24;
+
+/** Plans reconciled per pass — bounded, so a backlog drains over successive
+ *  ticks rather than holding one long pass over a large slice of the table. */
+export const ABANDONED_PLAN_SWEEP_BATCH_SIZE = 50;
+
+/** Why a candidate was terminated. Every one of these means the producer is not
+ *  coming back; they differ only in how we found out. */
+export type AbandonReason =
+  /** The job reached a terminal state — the reported case (`failed`), plus the
+   *  two that are equally final (`canceled`, and a `succeeded` job that
+   *  nonetheless appended nothing and never marked the plan `planned`). */
+  | 'job_terminal'
+  /** motir-ai has no such job (404). The producer is gone, not merely quiet. */
+  | 'job_gone'
+  /** The job never reached a terminal state and the plan is older than
+   *  {@link ABANDONED_PLAN_MAX_AGE_HOURS} — the crashed-worker arm. */
+  | 'max_age';
+
+/** Why a candidate was left alone. */
+export type KeepReason =
+  /** `queued` / `running` inside the max age — a live run, which MUST keep
+   *  gating (the tick's `retryPolicy: 'idempotent'` depends on it). */
+  | 'job_in_flight'
+  /** motir-ai could not be reached. Unreachable is not evidence of death, and
+   *  the next tick asks again. */
+  | 'ai_unreachable'
+  /** The row changed under us between discovery and the write — proposals
+   *  arrived, or somebody decided it. */
+  | 'row_moved';
+
+export type AbandonedPlanOutcome =
+  | { planId: string; projectId: string; outcome: 'declined'; reason: AbandonReason }
+  | { planId: string; projectId: string; outcome: 'left_as_is'; reason: KeepReason };
+
+export interface AbandonedPlanSweepSummary {
+  /** Candidate plans examined this pass. */
+  scanned: number;
+  /** Candidates moved to `declined`. */
+  declined: number;
+  outcomes: AbandonedPlanOutcome[];
+}
+
+/** The job resolver, behind a seam so a unit test can drive the decision table
+ *  without a live motir-ai. Production uses the shipped one. */
+export interface AbandonedPlanDeps {
+  resolveJobState: typeof resolveJobState;
+}
+
+const defaultDeps: AbandonedPlanDeps = {
+  resolveJobState: (jobId, coreProjectId) => resolveJobState(jobId, coreProjectId),
+};
+
+/** motir-ai's terminal job states. A job in ANY of them is done talking — the
+ *  plan it left empty will never be filled, whichever way it ended. */
+const TERMINAL_JOB_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
+
+/**
+ * The DECISION TABLE, pure and separated from the I/O so it can be read as one
+ * thing: given what the job said and how old the plan is, is the producer coming
+ * back?
+ */
+export function classifyAbandonedCandidate(
+  job: PlanJobStateDto,
+  ageMs: number,
+): { abandoned: true; reason: AbandonReason } | { abandoned: false; reason: KeepReason } {
+  // A 404 is the one unreachable-shaped answer that IS evidence: motir-ai
+  // answered, and its answer was that no such job exists.
+  if (!job.reachable) {
+    if (job.failure?.code === 'MOTIR_AI_JOB_NOT_FOUND') {
+      return { abandoned: true, reason: 'job_gone' };
+    }
+    return { abandoned: false, reason: 'ai_unreachable' };
+  }
+  if (job.status && TERMINAL_JOB_STATUSES.has(job.status)) {
+    return { abandoned: true, reason: 'job_terminal' };
+  }
+  if (ageMs >= ABANDONED_PLAN_MAX_AGE_HOURS * 60 * 60 * 1000) {
+    return { abandoned: true, reason: 'max_age' };
+  }
+  return { abandoned: false, reason: 'job_in_flight' };
+}
+
+export const abandonedPlanService = {
+  /**
+   * One reconciliation pass: find every empty `generating` plan whose producer
+   * has had its grace, ask motir-ai what became of that producer, and DECLINE
+   * the ones it is not coming back to.
+   *
+   * WHY `declined` AND NOT A NEW `failed` STATE — the decision this card was
+   * asked to make, recorded in full in AMENDMENT 2 and in one line here because
+   * this is where a reader meets it. `PlanStatus` is a PUBLIC vocabulary: the v1
+   * work-loop `planStatusSchema`, the MCP tool descriptions, `PlanStatusDto` and
+   * four display switches plus the i18n catalogue and its zh-parity gate. A new
+   * member is a product decision about what people are shown, larger than this
+   * defect and owed its own card — and nothing downstream would branch on it,
+   * because every consumer of this row is asking "is it decided?", which
+   * `declined` answers. The honesty lives in the ACTOR: `decidedById` is NULL,
+   * which on this very table already means *nobody* (`Plan.createdById` is null ⟺
+   * nobody asked, the cadence case, documented in the schema). The failure itself
+   * is not lost — `sourceJobId` still points at the job, whose state and error
+   * stay readable through {@link resolveJobState}, and each outcome is logged.
+   *
+   * PLANNING-TARGET LOCKS are deliberately not released here. `plansService`
+   * releases them on approve/decline through a best-effort helper that needs an
+   * acting user this sweep does not have, and its own fallback is already the
+   * right one: "the lease will expire and the sweep will clear it"
+   * (`planTargetLockSweep`, every 10 minutes). Two recovery paths for one lease
+   * is how they drift.
+   */
+  async reconcileAbandoned(
+    opts: { now?: Date; batchSize?: number; deps?: AbandonedPlanDeps } = {},
+  ): Promise<AbandonedPlanSweepSummary> {
+    const now = opts.now ?? new Date();
+    const batchSize = opts.batchSize ?? ABANDONED_PLAN_SWEEP_BATCH_SIZE;
+    const deps = opts.deps ?? defaultDeps;
+    const olderThan = new Date(now.getTime() - ABANDONED_PLAN_GRACE_MINUTES * 60 * 1000);
+
+    const candidates = await withSystemContext((tx) =>
+      planRepository.listAbandonedCandidates(olderThan, batchSize, tx),
+    );
+    if (candidates.length === 0) return { scanned: 0, declined: 0, outcomes: [] };
+
+    const outcomes: AbandonedPlanOutcome[] = [];
+    for (const plan of candidates) {
+      // `plan.sourceJobId` is a `string`, not `string | null`: the repository's
+      // `AbandonedPlanCandidate` states its own WHERE clause in the type, so
+      // there is no defensive branch here for a case the query cannot return.
+      //
+      // ASK, outside any transaction — this is a network call to motir-ai, and a
+      // slow one must never be holding a row.
+      const job = await deps.resolveJobState(plan.sourceJobId, plan.projectId);
+      const verdict = classifyAbandonedCandidate(job, now.getTime() - plan.createdAt.getTime());
+
+      if (!verdict.abandoned) {
+        outcomes.push({
+          planId: plan.id,
+          projectId: plan.projectId,
+          outcome: 'left_as_is',
+          reason: verdict.reason,
+        });
+        continue;
+      }
+
+      const written = await withWorkspaceServiceContext(plan.workspaceId, async (tx) => {
+        // RE-READ under the transaction that will act. The candidate came out of
+        // a different transaction's snapshot and the network call above took real
+        // time — a late append (which would make this a PARTIAL plan the card
+        // forbids touching) or a human decision could both have landed since.
+        const fresh = await planRepository.findById(plan.id, plan.workspaceId, tx);
+        if (!fresh || fresh.status !== 'generating') return false;
+        const items = await tx.planItem.count({ where: { planId: plan.id } });
+        if (items > 0) return false;
+        await planRepository.update(
+          plan.id,
+          // No `decidedById`: nobody decided this. See the method doc.
+          { status: 'declined', decidedAt: now },
+          tx,
+        );
+        return true;
+      });
+
+      if (!written) {
+        outcomes.push({
+          planId: plan.id,
+          projectId: plan.projectId,
+          outcome: 'left_as_is',
+          reason: 'row_moved',
+        });
+        continue;
+      }
+
+      // `warn`, not `info`: the repo's lint allows only warn/error, and the level
+      // is right anyway — a plan terminated with nobody's decision behind it is
+      // the operator-visible record of a job that died, not routine chatter.
+      console.warn(
+        `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}, job ${plan.sourceJobId}) declined — ${verdict.reason}; job status ${job.status ?? 'unreachable'}${
+          job.failure ? ` (${job.failure.code})` : ''
+        }`,
+      );
+      outcomes.push({
+        planId: plan.id,
+        projectId: plan.projectId,
+        outcome: 'declined',
+        reason: verdict.reason,
+      });
+    }
+
+    return {
+      scanned: outcomes.length,
+      declined: outcomes.filter((o) => o.outcome === 'declined').length,
+      outcomes,
+    };
+  },
+};

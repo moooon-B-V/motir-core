@@ -142,6 +142,17 @@ export const autoPlanCadenceService = {
    * the silence visible instead of mysterious. The MOTIR-3051 exclusion does not
    * reach that case and is not meant to: a plan with proposals in it is a
    * decision somebody owes, however long they take.
+   *
+   * THE THIRD SHAPE — an EMPTY plan whose producer DIED — is not visible from
+   * this predicate either, and unlike the paragraph above that one was never
+   * acceptable: nobody owes a decision on a container the producer will never
+   * fill. It cannot be excluded HERE because the row carries a `sourceJobId` and
+   * is therefore identical to a healthy in-flight generation; the answer lives in
+   * the job, not the plan. `abandonedPlanService.reconcileAbandoned` (MOTIR-3064)
+   * asks the job hourly and writes `declined` on the ones that are gone, so such
+   * a plan leaves `generating` and stops reaching this gate at all. This method
+   * is deliberately UNCHANGED by that fix — a gate that guessed at liveness is
+   * exactly what `agent-authored-plans.md` AMENDMENT 2 rejected.
    */
   async getPendingPlan(projectId: string, ctx: ServiceContext): Promise<PlanDto | null> {
     const row = await withWorkspaceContext(

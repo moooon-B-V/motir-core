@@ -1276,8 +1276,11 @@ passing both (or neither) returns `BAD_REQUEST`.
 - **`job`** — the motir-ai job's state, present **only while `status` is
   `generating`** (a settled plan's job already delivered, so it is never probed):
   `{ status, reachable, failure }`. This block exists because **a failed job
-  leaves its plan at `generating` forever** — nothing writes a terminal plan
-  state on failure — so the plan status alone would strand a poller.
+  writes no terminal plan state of its own** — so the plan status alone would
+  strand a poller. An abandoned plan is settled to `declined` by a background
+  reconciler within the hour (MOTIR-3064), but only eventually and only when it
+  holds no proposals; this block is how a client polling a live submit learns
+  its run died _now_.
   `reachable: false` means motir-ai itself could not be asked and `failure`
   describes _that_ outage, not a job failure; the plan read still answers.
 

@@ -334,9 +334,12 @@ export function planStatusUrl(planId: string): string {
 // Plans — the two reads (11.7.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A plan's own lifecycle state. There is deliberately no synthetic `failed`:
- *  a failed job leaves its plan `generating` forever, which is what `job` below
- *  is for. */
+/** A plan's own lifecycle state. There is deliberately no synthetic `failed`, and
+ *  MOTIR-3064 re-affirmed that rather than adding one: a failed job writes no
+ *  terminal plan state of its own, which is what `job` below is for in the
+ *  moment, and a background reconciler settles an abandoned plan to `declined`
+ *  (with a null decider — nobody decided it) rather than widening this
+ *  vocabulary. See `docs/decisions/agent-authored-plans.md` AMENDMENT 2. */
 export const planStatusSchema = z.enum(['generating', 'planned', 'approved', 'declined']);
 
 /** WHY the plan was started — someone clicked, or the cadence watcher fired. */

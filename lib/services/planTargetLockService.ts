@@ -415,9 +415,11 @@ export const planTargetLockService = {
    *
    * This is the path that reaches the case nothing else can. A planner that
    * crashes, a machine that vanishes mid-job, a redeploy, a user who closes the
-   * tab: none of them produce an event. The plan stays `generating` forever
-   * (`PlanStatus` has no `failed` member), so there is no product signal to hang
-   * a release on — only the passage of time.
+   * tab: none of them produce an event. The plan stays `generating` until the
+   * MOTIR-3064 abandoned-plan sweep asks its job about it (`PlanStatus` still has
+   * no `failed` member — that reconciler writes `declined`), and that answer
+   * arrives hourly and only for an EMPTY plan, so there is still no product
+   * signal to hang a release on — only the passage of time.
    *
    * CROSS-TENANT discovery, PER-TENANT release. The expired set spans workspaces,
    * so the read runs under `withSystemContext` (the table's `FOR SELECT`
