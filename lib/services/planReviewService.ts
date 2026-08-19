@@ -6,6 +6,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 
 import type {
   PlanItemDto,
@@ -212,6 +213,18 @@ export const planReviewService = {
 
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
+    // The project's WORKFLOW, so a target's status can carry its own identity —
+    // label + lifecycle category — to the canvas chip (bug MOTIR-3170). The chip
+    // used to receive a bare key and narrow it against a six-member literal,
+    // which drew a `modify` whose target sits at `implemented` as "To Do". One
+    // read per plan page; the statuses are per-project and there is one project.
+    const statusByKey = new Map(
+      (await workflowsService.listStatusesByProject(plan.projectId, ctx.workspaceId)).map((s) => [
+        s.key,
+        s,
+      ]),
+    );
+
     // Resolve node ids first, so `hasChildren` can be computed across the forest.
     const withNodeIds = plan.items.map((item) => ({
       item,
@@ -274,6 +287,10 @@ export const planReviewService = {
         executor: item.op === 'add' ? (proposed?.executor ?? null) : null,
         planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
         status: item.op === 'add' ? null : (target?.status ?? null),
+        statusLabel:
+          item.op === 'add' ? null : (statusByKey.get(target?.status ?? '')?.label ?? null),
+        statusCategory:
+          item.op === 'add' ? null : (statusByKey.get(target?.status ?? '')?.category ?? null),
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
         stale: reasons.length > 0,

@@ -14,6 +14,7 @@
 // intra-plan temp-ref (`planItem:<id>`) is stripped to the referenced add's
 // node id; a real work-item ref stays as-is.
 
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
   PlanStatusDto,
@@ -163,6 +164,14 @@ export interface PlanReviewItemDto {
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;
   /** The target's current status key — null for a proposed `add` (none yet). */
   status: string | null;
+  /** The target status's own display LABEL, from the project's workflow (bug
+   *  MOTIR-3170). Null for an `add`, and for a target whose status the workflow
+   *  no longer holds. The canvas chip cannot name a CUSTOM status out of the
+   *  `labels.defaultStatus` catalog, so the identity travels beside the key. */
+  statusLabel: string | null;
+  /** The target status's lifecycle CATEGORY — the chip's fallback tone when the
+   *  canvas has no per-key treatment (see `statusLabel`). */
+  statusCategory: StatusCategoryDto | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */
   hasChildren: boolean;
   /** The `modify` diff (old→new) — empty for `add` / `remove`. */

@@ -3404,6 +3404,14 @@ export const workItemsService = {
     // active sprint; the canvas renders a drilled-in NON-member "not in sprint".
     // In project scope `sprintId` is null, so every node is `false` (the flag is
     // inert — the whole-project view ignores it).
+    // The status's OWN IDENTITY on the wire (bug MOTIR-3170) — its label and its
+    // lifecycle category, from the SAME `statuses` list this read already loaded
+    // to compute `isDone` and `ready`, so it costs no extra query. Without it the
+    // canvas had to name a status out of the `labels.defaultStatus` catalog and
+    // could only draw the six keys it had hard-coded; everything else — a custom
+    // workflow status, and `implemented` / `planning` once they were added to the
+    // default one — collapsed to `todo` and rendered as "To Do".
+    const statusByKey = new Map(statuses.map((s) => [s.key, s]));
     const nodes = rows.map((r) =>
       toRoadmapNodeDto(
         r,
@@ -3411,6 +3419,7 @@ export const workItemsService = {
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0, verified: 0 }) : null,
         startableKeys.has(r.status) && (readyById.get(r.id) ?? true),
         sprintId != null && r.sprintId === sprintId,
+        statusByKey.get(r.status) ?? null,
       ),
     );
 

@@ -182,6 +182,11 @@ export function buildWorkItemLevel(
             title: item.title,
             kind: item.kind,
             status: item.status,
+            // The status's own LABEL + CATEGORY (bug MOTIR-3170) — without them
+            // the chip can only name a default key out of the i18n catalog, and
+            // every other status rendered as "To Do".
+            statusLabel: item.statusLabel ?? null,
+            statusCategory: item.statusCategory ?? null,
             type: item.type ?? null,
             executor: item.executor ?? null,
           }}

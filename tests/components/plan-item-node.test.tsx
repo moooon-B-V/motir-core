@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { WorkItemNode } from '@/components/planning/WorkItemNode';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -42,6 +43,8 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     executor: null,
     planningProvenance: null,
     status: null,
+    statusLabel: null,
+    statusCategory: null,
     hasChildren: false,
     changes: [],
     stale: false,
@@ -69,6 +72,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-14',
           title: 'Seller onboarding',
           status: 'in_progress',
+          statusLabel: null,
+          statusCategory: null,
           changes: [
             { field: 'priority', from: 'medium', to: 'high' },
             { field: 'title', from: 'old', to: 'new' },
@@ -93,12 +98,99 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-19',
           title: 'Manual payout export',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
         })}
       />,
     );
     expect(screen.getByText('remove')).toBeTruthy();
     const title = screen.getByText('Manual payout export');
     expect(title.className).toContain('line-through');
+  });
+
+  // ── The STATUS chip is the SHARED one (bug MOTIR-3170) ──────────────────
+  //
+  // This node used to keep its OWN six-member status literal and coerce
+  // anything else to `todo`, so a `modify` whose live target had an open pull
+  // request drew as "To Do" on the plan-detail canvas. There is now ONE
+  // resolver — `WorkItemStatusPill` → `lib/workflows/canvasStatusMeta.ts` —
+  // and these assert on the rendered TEXT, which is what a reviewer reads.
+  it('renders a modify whose live target is at `implemented` as "Implemented"', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_impl',
+          identifier: 'PROD-31',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    expect(screen.getByText('Implemented')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it("renders a target at a CUSTOM workflow status with that status's own label", () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_custom',
+          identifier: 'PROD-32',
+          title: 'Seller onboarding',
+          status: 'awaiting_legal',
+          statusLabel: 'Awaiting legal',
+          statusCategory: 'todo',
+        })}
+      />,
+    );
+    expect(screen.getByText('Awaiting legal')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it('draws the chip from the SAME resolver as the roadmap node — same key, same fill', () => {
+    // The AC is "no second copy of the mapping in `components/planning/`". A
+    // rendered comparison is what proves it: if this file ever grows its own map
+    // again, the two fills diverge here rather than in production.
+    const proposal = renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    const onProposal = proposal.container.querySelector(
+      '[data-status="implemented"]',
+    ) as HTMLElement;
+    const chipClass = onProposal.className;
+    const chipText = onProposal.textContent;
+    cleanup();
+
+    const node = renderWithIntl(
+      <WorkItemNode
+        item={{
+          id: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          kind: 'subtask',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        }}
+      />,
+    );
+    const onNode = node.container.querySelector('[data-status="implemented"]') as HTMLElement;
+    expect(onNode.className).toBe(chipClass);
+    expect(onNode.textContent).toBe(chipText);
   });
 
   it('shows a stale badge with the reasons in the tooltip', () => {
@@ -134,6 +226,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-21',
           title: 'Seller onboarding',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
           changes: [{ field, from, to }],
         })}
       />,

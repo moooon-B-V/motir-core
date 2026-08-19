@@ -21,6 +21,7 @@ import type {
   WorkItemTreeRowDto,
   WorkItemRepositoryDto,
 } from '@/lib/dto/workItems';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
@@ -257,6 +258,7 @@ export function toRoadmapNodeDto(
   progress: RoadmapProgressDto | null,
   ready: boolean,
   inActiveSprint: boolean,
+  status: Pick<WorkflowStatusDto, 'label' | 'category'> | null,
 ): RoadmapNodeDto {
   return {
     id: row.id,
@@ -268,6 +270,13 @@ export function toRoadmapNodeDto(
     identifier: row.identifier,
     title: row.title,
     status: row.status,
+    // The status's OWN identity (bug MOTIR-3170), resolved from the project's
+    // workflow by the service — the same list it already loads to compute
+    // `isDone` / `ready`. A row whose status the workflow no longer holds
+    // degrades to the raw key + no category, which the canvas draws as the
+    // neutral chip rather than as To Do.
+    statusLabel: status?.label ?? row.status,
+    statusCategory: status?.category ?? null,
     isDone,
     hasChildren: row.hasChildren,
     progress,
