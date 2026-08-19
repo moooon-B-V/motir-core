@@ -421,12 +421,78 @@ Neither is a deliverable this decision produces and leaves homeless.
 
 ---
 
+## AMENDMENT 1 — an EMPTY plan is not a pending proposal (MOTIR-3051, 2026-08-19)
+
+Q2's answer is unchanged: `create_plan: 'work_item:edit'` · `add_plan_items: 'ai:view_plan'`,
+each the key its own service asserts, §3's rule total and its exception list still empty.
+**What is amended is one sentence of Q2's reasoning** — the clause that priced the split's
+consequence:
+
+> _"A token holding only `work_item:edit` can open an empty plan **and nothing more**."_
+
+It was more than nothing. `planRepository.findUndecidedByProject` reads `generating` as
+UNDECIDED, and that read is the pending-proposal gate MOTIR-916 pauses auto-plan cadence on —
+so the empty plan Q2 waved through **stopped that project planning itself, indefinitely, with
+nothing on any surface saying why.** Q2 reasoned about what the token could DO and not about
+what the row it left behind would MEAN to a consumer one service away.
+
+### The decision: fix the GATE, not the door
+
+MOTIR-3051 offered three repairs. **Chosen: an undecided plan with no producer and no
+proposals does not gate cadence** (`planRepository.findUndecidedByProject`). The other two are
+rejected on the record, because the reasoning is what a future reader needs:
+
+- **Rejected — make `create_plan` require BOTH keys.** It is neither sufficient nor
+  necessary. _Not sufficient_: the same orphan arrives with no permission involved at all,
+  because a generation job that dies before its first append leaves its plan `generating`
+  forever — `aiPlanEditsService.resolveJobState` says exactly that in its own doc comment, and
+  that path holds every key. _Not necessary_: once the gate stops reading a zero-item plan as a
+  decision, the hole the door was going to close is not a hole. And it is not free: the rule it
+  would break is §3's, whose `Record<McpToolName, PermissionKey>` totality is what makes an
+  unmapped tool a compile error, what `lib/tokens/grant.ts` derives the grantable set from, and
+  what groups the public `/docs/mcp/tools` page — one key per tool, three consumers.
+  Asserting the second key in `plansService.createPlan` instead is worse still: `expand_item`
+  reaches that service, and `CLI_TOKEN_GRANT` holds `ai:plan` **without** `ai:view_plan`, so it
+  would 403 a capability the device grant deliberately confers.
+- **Rejected — widen `CLI_TOKEN_GRANT`.** Unchanged, as the card required and as §7 and Q2(b)
+  already argued: an unattended credential on a remote box does not gain plan authoring because
+  of a modelling artifact.
+
+### The discriminator is the PRODUCER, not the count
+
+`autoPlanCadenceTick` is `retryPolicy: 'idempotent'` on the stated ground that _"a project that
+already fired now HAS an undecided plan, so the gate skips it on the re-run"_. Between
+`submitExpand`'s `createPlan` and motir-ai's first append, that plan holds **zero items** — so a
+rule keyed on the count alone would let an Inngest retry fire a second job at the same stub, and
+would have replaced a permanent pause with the stacked proposal the gate exists to prevent.
+
+`sourceJobId` separates the two cleanly and already exists for provenance: every generator
+submit sets it (`aiGenerationService.startGeneration`, `aiPlanEditsService.submitPlanEditJob`),
+and the MCP door leaves it null (`lib/mcp/tools/authorPlan.ts`). So **an empty plan with a job
+still gates; an empty plan with no job does not.** The exclusion is a WHERE clause rather than a
+caller-side filter, because the read returns one row newest-first and dropping the orphan after
+the fact would answer _not paused_ for a project whose real `planned` proposal sits one row down.
+
+### What this does NOT do
+
+- It does not expire or auto-decline anything. A plan **with** proposals is a decision somebody
+  owes, however long they take; `declinePlan` remains the release valve and MOTIR-1740 remains
+  what makes the wait visible.
+- It does not reach an empty plan left by a **crashed generation job** — that row carries a
+  `sourceJobId`, so it still gates, and it still pauses cadence for good. Filed separately
+  rather than absorbed here: the fix is a terminal plan state on job failure, which is job
+  lifecycle, not a gate predicate.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
   existing plan reads _unattributed_; no producer changes behaviour.
 - **A token needs two permissions to author a plan** (`work_item:edit` + `ai:view_plan`), and
-  a device-minted CLI token has neither path — deliberately.
+  a device-minted CLI token has neither path — deliberately. **The empty plan a
+  `work_item:edit`-only token can still open no longer pauses that project's auto-plan cadence**
+  (AMENDMENT 1, MOTIR-3051): a plan with no producer and no proposals is not a pending proposal.
 - **Neither tool is billable.** Authoring a plan never draws on the owner's generation
   allowance.
 - **The materialize pin is lifted, and the safety property is now held by the WRITE SEAMS

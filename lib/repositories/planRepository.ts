@@ -48,6 +48,41 @@ export const planRepository = {
    * (`planStalenessService` warns but never blocks). So any undecided plan
    * pauses cadence for the project, whatever its `origin`.
    *
+   * ⚠️ ONE SHAPE IS EXCLUDED, AND IT IS NOT A NARROWING OF THE ABOVE
+   * (MOTIR-3051): a `generating` plan with **no producer and no proposals** is
+   * not a decision anybody can make. Nothing is in it to review, and nothing is
+   * on its way in either — so counting it as pending pauses the project's
+   * cadence permanently, with no surface saying why (`autoPlanCadenceService`'s
+   * gate 1 is the only consumer, and MOTIR-1740's indicator reads the same
+   * verdict).
+   *
+   * TWO shipped paths produce exactly that row. `create_plan` asserts
+   * `work_item:edit` while its partner `add_plan_items` asserts `ai:view_plan`
+   * (`docs/decisions/agent-authored-plans.md` Q2), so a grant holding the first
+   * and not the second — `CLI_TOKEN_GRANT` — opens a plan and is refused on its
+   * first append. And a motir-ai generation that DIES before its first append
+   * leaves the same orphan: "a failed job leaves its plan at `generating`
+   * forever (nothing writes a terminal plan state on failure)"
+   * (`aiPlanEditsService.resolveJobState`). The second path holds whatever the
+   * permission map says, which is why the exclusion lives here rather than at
+   * the door.
+   *
+   * ⚠️ THE DISCRIMINATOR IS THE PRODUCER, NOT THE COUNT. Every generator submit
+   * sets `sourceJobId` (`aiGenerationService.startGeneration`,
+   * `aiPlanEditsService.submitPlanEditJob`) and every agent-authored plan leaves
+   * it null (`lib/mcp/tools/authorPlan.ts`). Between a submit's `createPlan` and
+   * motir-ai's first append the plan legitimately holds ZERO items — and
+   * `autoPlanCadenceTick` is `retryPolicy: 'idempotent'` on precisely the ground
+   * that "a project that already fired now HAS an undecided plan, so the gate
+   * skips it on the re-run". A rule keyed on the count alone would let an
+   * Inngest retry fire a second job at the same stub. So an empty plan with a
+   * job still gates; only an empty plan with NO job does not.
+   *
+   * ⚠️ AND IT IS A WHERE CLAUSE, NOT A CALLER-SIDE FILTER. This returns ONE row,
+   * newest first: dropping the orphan after the read would answer "not paused"
+   * for a project whose real `planned` proposal sits one row down — trading a
+   * permanent pause for the stacked proposal the gate exists to prevent.
+   *
    * Newest first, so the ONE row returned is the plan a caller would show. Takes
    * an optional `tx` because both consumers read it inside a workspace context
    * (correct under the non-bypass `motir_app` role, where the plan policy keys
@@ -60,7 +95,12 @@ export const planRepository = {
   ): Promise<Plan | null> {
     const client = tx ?? db;
     return client.plan.findFirst({
-      where: { projectId, workspaceId, status: { in: ['generating', 'planned'] } },
+      where: {
+        projectId,
+        workspaceId,
+        status: { in: ['generating', 'planned'] },
+        NOT: { status: 'generating', sourceJobId: null, items: { none: {} } },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   },

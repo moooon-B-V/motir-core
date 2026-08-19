@@ -175,6 +175,19 @@ held on an exception list.
 > is the rule the next such row gets read against, and because an exception that
 > vanishes without a trace reads as one that was never noticed.
 
+> **A second candidate was raised and DECLINED (MOTIR-3051, 2026-08-19).** `create_plan` is
+> gated by `work_item:edit` while its partner `add_plan_items` is gated by `ai:view_plan`, so a
+> grant holding the first and not the second — `CLI_TOKEN_GRANT` — can open a plan it can never
+> fill. The proposal was to make that one tool declare BOTH keys, i.e. the first entry on a new
+> exception list and a widening of `TOOL_PERMISSIONS`' value type. It was declined: the harm was
+> not the empty plan but a downstream consumer reading it as a pending review, the same row
+> arrives from a generation job that dies before its first append (which holds every key), and
+> the totality this map buys — an unmapped tool is a compile error, `lib/tokens/grant.ts` derives
+> the grantable set from it, `/docs/mcp/tools` groups by it — is worth more than closing a door
+> whose room was the actual defect. Fixed at the gate instead; the reasoning is on the record in
+> `agent-authored-plans.md` AMENDMENT 1. **§3 and the map still agree, and the exception list is
+> still empty.**
+
 ### 4. Composition is unchanged: the grant NARROWS, the role decides
 
 `granted ∩ role`, exactly as `scope ∩ role` is today. An operation is permitted
