@@ -99,6 +99,12 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // `.extend` of it rather than a second description of a plan.
   create_plan: planPayload as unknown as PayloadDefinition<never>,
   add_plan_items: planAppendPayload as unknown as PayloadDefinition<never>,
+  // The DEEPEN turn (MOTIR-3090) returns the whole plan, exactly as `get_plan`
+  // and `create_plan` do — `deepenProposal` hands back a `PlanWithItemsDto` so a
+  // caller sees the patched proposal in place without a second read. So it
+  // derives through the very same definition rather than describing a plan a
+  // third time. No `planItemIds`: this call creates no proposal.
+  update_plan_item: planPayload as unknown as PayloadDefinition<never>,
   open_plan_session: planSessionPayload as unknown as PayloadDefinition<never>,
   append_plan_turn: planSessionPayload as unknown as PayloadDefinition<never>,
   submit_plan_session: planSubmitPayload as unknown as PayloadDefinition<never>,

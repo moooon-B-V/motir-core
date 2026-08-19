@@ -361,6 +361,27 @@ export interface UpdateProposalInput {
    *  (`mergeProposedFields`). `explanationSource` is not deepened here —
    *  materialize defaults it to `ai_draft` when an explanation is present. */
   explanationMd?: string | null;
+  /**
+   * WHO executes the leaf (`coding_agent` / `human`) — the ONE field the deepen
+   * turn added to this set (`agent-authored-plans.md` AMENDMENT 4 D3a,
+   * MOTIR-3089). It is here because `type` is deepenable and `executor` is
+   * DERIVED from it, while `plansService.materialize` writes
+   * `pf.executor ?? null` and never consults `defaultExecutorForType` — so a
+   * titles-first proposal that gains its type on the deepen turn would otherwise
+   * materialize unassignable. An explicit `null` clears it.
+   *
+   * ⚠️ The value is validated at the TRANSPORT, exactly as on the append path:
+   * `add_plan_items` constrains `executor` with a zod enum in its own argument
+   * schema and `validateProposal` does not check it, so the deepen tool
+   * constrains it identically rather than growing a service-level rule the
+   * append path does not have.
+   *
+   * The human review route (`PATCH /api/plans/[id]/items/[itemId]`) ENUMERATES
+   * the keys it accepts and does not pick this one up — the same way it already
+   * does not pick up `explanationMd` — so widening this interface leaves that
+   * surface byte-identical (AMENDMENT 4 D3a).
+   */
+  executor?: string | null;
 }
 
 /** Options for `plansService.listPlans`. */
