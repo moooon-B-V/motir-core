@@ -106,6 +106,10 @@ const DERIVED_TOOLS = new Set<string>([
   'change_kind',
   'move_to_parent',
   'add_comment',
+  // MOTIR-3058 — the general attachment door. Derives from v1's own
+  // `attachmentSchema` through `presentAttachment`; the payload is that shape
+  // verbatim, with no widening at all.
+  'attach_file',
   // 11.6.4 — project / sprint / backlog / identity (MOTIR-2230)
   'list_projects',
   'whoami',

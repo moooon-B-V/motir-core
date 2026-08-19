@@ -8,6 +8,7 @@ import {
 } from './sharedResources';
 import {
   addCommentPayload,
+  attachFilePayload,
   claimNextReadyPayload,
   getWorkItemPayload,
   listReadyPayload,
@@ -76,6 +77,7 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   change_kind: workItemWritePayload as unknown as PayloadDefinition<never>,
   move_to_parent: workItemWritePayload as unknown as PayloadDefinition<never>,
   add_comment: addCommentPayload as unknown as PayloadDefinition<never>,
+  attach_file: attachFilePayload as unknown as PayloadDefinition<never>,
   // 11.6.4 — project / sprint / backlog / identity
   list_projects: listProjectsPayload as unknown as PayloadDefinition<never>,
   whoami: whoamiPayload as unknown as PayloadDefinition<never>,

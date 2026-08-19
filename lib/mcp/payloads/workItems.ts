@@ -2,6 +2,8 @@ import { z } from 'zod/v4';
 import {
   commentSchema,
   dependencyEdgesSchema,
+  attachmentSchema,
+  presentAttachment,
   presentComment,
   workItemChildSchema,
   workItemKeySchema,
@@ -15,6 +17,7 @@ import type {
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
 import { definePayload } from './define';
 
@@ -478,6 +481,29 @@ export function presentMcpComment(dto: CommentDTO): McpComment {
     author: dto.author,
   };
 }
+
+/**
+ * An ATTACHMENT, as `attach_file` returns it — v1's attachment shape verbatim.
+ *
+ * No widening at all, deliberately. The v1 projection already carries everything
+ * an agent needs to report what it attached (the id, the filename, the size, the
+ * authenticated content path), and the two fields the PANEL's DTO has on top —
+ * `isImage` / `isPdf` — are a presentation split, not data. A payload that
+ * widened here would make the two doors describe one row differently.
+ */
+export const mcpAttachmentSchema = attachmentSchema;
+export type McpAttachment = z.infer<typeof mcpAttachmentSchema>;
+
+/** Map one `AttachmentDTO` through v1's own presenter — one shape, one mapper. */
+export function presentMcpAttachment(dto: AttachmentDTO, workItemKey: string): McpAttachment {
+  return presentAttachment(dto, workItemKey);
+}
+
+/** The `attach_file` confirmation. */
+export const attachFilePayload = definePayload({
+  schema: mcpAttachmentSchema as unknown as z.ZodType<McpAttachment & Record<string, unknown>>,
+  probes: [{ resource: 'Attachment', select: (p) => [p] }],
+});
 
 /** The `add_comment` confirmation. */
 export const addCommentPayload = definePayload({

@@ -387,6 +387,12 @@ export interface McpToolSummary {
  * the server ships.
  */
 const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
+  attach_file: {
+    summary:
+      'Put a file ON a work item — a research findings document, a review’s notes — so a reader sees the deliverable on the card instead of hunting for a pull request.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '138c5dd702b3',
+  },
   get_work_item: {
     summary:
       'One item in full — description, status, parent and children, dependency edges, and a readiness verdict.',

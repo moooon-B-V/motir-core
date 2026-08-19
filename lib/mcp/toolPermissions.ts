@@ -106,6 +106,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `CommentForbiddenError`. Under the six scopes this hid inside
   // `work_items:write`; commenting is now withholdable on its own.
   add_comment: 'comment:add',
+  // Attaching a file to a card is EDITING that card — the same permission both
+  // evidence publishers assert, and one CLI_TOKEN_GRANT carries, so a
+  // dispatched agent can actually call it (MOTIR-3058; MOTIR-3051 is the
+  // counter-example this deliberately avoids).
+  attach_file: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

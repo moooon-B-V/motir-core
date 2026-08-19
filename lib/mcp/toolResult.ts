@@ -67,6 +67,8 @@ import {
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
+import { AttachmentError } from '@/lib/blob/errors';
+import { EntitlementExceededError } from '@/lib/billing/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -259,6 +261,22 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof ReplyDepthExceededError ||
     err instanceof CommentNotFoundError
   ) {
+    return toolError(err.code, err.message);
+  }
+  // Attachment tools (MOTIR-3058) — mapped on the ABSTRACT BASE rather than
+  // member by member, deliberately. Every `AttachmentError` carries a `code` and
+  // every one is something the agent can act on: too large, wrong media type,
+  // rate-limited, not found, forbidden, editor-sourced. Enumerating them would
+  // mean a subclass added later silently becomes an opaque internal error at the
+  // exact moment an agent most needs to be told what to fix — the same failure
+  // shape `docs/decisions/attachment-api-door.md` §1 rejects for gates.
+  if (err instanceof AttachmentError) {
+    return toolError(err.code, err.message);
+  }
+  // The organization's storage cap. Not an AttachmentError (it is a billing
+  // one), but it reaches an agent through the same call and is equally
+  // actionable — the message names the entitlement and the limit.
+  if (err instanceof EntitlementExceededError) {
     return toolError(err.code, err.message);
   }
   if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {

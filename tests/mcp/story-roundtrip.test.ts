@@ -274,6 +274,15 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'leak?' },
+        // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
+        // cross-tenant caller must read the key as not-found — never a 403 that
+        // confirms it exists, and never a file landing in another workspace.
+        attach_file: {
+          key: item1,
+          filename: 'findings.md',
+          contentType: 'text/markdown',
+          contentBase64: 'eA==',
+        },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },
@@ -653,6 +662,15 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'scoped comment' },
+        // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
+        // cross-tenant caller must read the key as not-found — never a 403 that
+        // confirms it exists, and never a file landing in another workspace.
+        attach_file: {
+          key: item1,
+          filename: 'findings.md',
+          contentType: 'text/markdown',
+          contentBase64: 'eA==',
+        },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },
