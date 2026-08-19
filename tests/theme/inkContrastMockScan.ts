@@ -1,6 +1,6 @@
 import { SAFE_SURFACE_TOKENS } from './inkContrastScan';
 
-// The DESIGN-ASSET arm of the ink-contrast guard (MOTIR-3014).
+// The DESIGN-ASSET arm of the ink-contrast guard (MOTIR-3014, MOTIR-3054).
 //
 // ── The hole this closes ────────────────────────────────────────────────────
 // `inkContrastLint` scans `components/**`, `app/**`, `lib/**` and the design
@@ -34,52 +34,62 @@ import { SAFE_SURFACE_TOKENS } from './inkContrastScan';
 // background for every element that has one, and an abstention means the asset
 // genuinely paints no background above the ink (the page white).
 //
-// ── The TWO boundaries, both measured, neither an oversight ────────────────
-// A mock paints in two layers, and this arm ENFORCES one of them. Read
-// `violations()` below with this: `scanMock` reports every finding it can see,
-// and only the class-layer ones fail the guard.
+// ── THE MUTED ARM IS ENFORCED OVER BOTH LAYERS (MOTIR-3054) ────────────────
+// A mock paints in two layers — a `text-(--el-text-muted)` utility written on
+// the element, and a `.tbtn { color: var(--el-text-muted) }` rule in the file's
+// own `<style>` block — and both are ruled on, at zero, across the whole tree.
 //
-//   1. THE UTILITY-CLASS LAYER — `text-(--el-text-muted)` written on the
-//      element — is ENFORCED, at zero, across the whole mock tree. This is the
-//      layer the design-asset rule (`CLAUDE.md` § design assets) says a mock is
-//      built from: "the `components/ui/*` primitives' markup + the `globals.css`
-//      `--el-*` tokens". It is also exactly what `inkContrastScan` reads out of
-//      a component, so the two guards enforce one rule over one layer, in two
-//      trees. Its whole population was 26 findings in 4 files, and MOTIR-3014
-//      swept them; the guard has been green since.
+// MOTIR-3014 shipped enforcing only the first (26 findings, 4 files, swept
+// there) and DECLINED the second (277 findings, 51 files), on the grounds that
+// a mock's stylesheet paints the board a design is PRESENTED on — the panel
+// captions, the numbered annotations, the fold measurements — as well as the
+// product surface it specifies, so ruling on it meant first deciding whether a
+// design board's own chrome owes AA. MOTIR-3054 answered that question NO
+// EXEMPTION, swept all 277, and closed the boundary. The reasoning is in
+// `docs/decisions/design-board-chrome-aa.md`; the two loads it actually bears
+// here are:
 //
-//   2. THE MOCK'S OWN `<style>` BLOCK — `.tbtn { color: var(--el-text-muted) }`
-//      — is READ (so the surface walk is accurate, below) but NOT ruled on.
-//      277 findings across 51 files, measured. It is declined for a reason that
-//      is about the artefact rather than the budget: a mock's stylesheet paints
-//      BOTH the product surface it specifies AND the board it is presented on —
-//      the panel captions, the numbered annotations, the fold measurements — and
-//      nothing in the markup separates them. `design/work-items/
-//      repository-set-quick-view.mock.html`'s `.foldNote` is the shape: muted
-//      text on a tinted strip, carrying "MEASURED at 1280×900: the modal is
-//      680px", which no user will ever see. Ruling on that population means
-//      first deciding what a design board IS, which is a card that can make that
-//      decision, not a contrast question this one can settle.
-//      **`inkContrastScan` draws the same line from the other side**: its own
-//      header says a background "painted from a stylesheet rather than a
-//      `bg-(--el-…)` class" is outside it, because "the scanner never opens a
-//      `.css` file". So this is the sibling guard's boundary, not a new one.
+//   1. **The declined population was never mostly chrome.** Classified by the
+//      class that carried the ink, the 277 are dominated by the PRODUCT
+//      surface — `.meta`, `.icon-btn`, `.tbtn`, `.chev`, `.lane-chevron`,
+//      `.col-count`, `.pr-meta` — the rows and controls the mock exists to
+//      specify. `.foldNote` was 5 of 277. An exemption sized for the whole
+//      population would have been granted on the strength of its clearest
+//      example rather than its actual contents.
+//   2. **The exemption cost more than compliance.** Marking chrome
+//      structurally (`data-mock-chrome` on the annotation layer) is an edit to
+//      every annotation in 126 mocks plus a standing authoring obligation, and
+//      it opens a hole exactly where the guard is load-bearing: an element that
+//      inherits the marker stops being ruled on, silently. Swapping the ink is
+//      one token per rule, 86 lines, and it makes the board more legible.
 //
-// The census in (2) is asserted NON-EMPTY by `design-ink-contrast.test.ts`, so
-// the boundary stays load-bearing: if a sweep ever empties it, the assertion
-// fails and this comment gets revisited rather than quietly outliving its
-// subject.
+// So there is no `via` filter on the muted arm any more, and no allowlist. The
+// only exemptions are the two 1.4.3 grants below, which are declared ON the
+// element and are the same two `inkContrastScan` takes.
 //
-// ── And the FAINT arm is not here at all ───────────────────────────────────
-// `--el-text-faint` clears AA on no surface, so the code guard treats every
-// non-decorative, non-disabled use as a violation. In a mock the dominant
-// population of faint text is the board chrome above, at a scale that makes the
-// judgement call unavoidable rather than incidental. Same decision, same owner,
-// and stated here so that its absence reads as a choice.
+// ── The FAINT arm is COUNTED, not ruled on — and the reason is SIZE ─────────
+// `--el-text-faint` clears AA on no surface (2.37–2.61:1), so the code guard
+// treats every non-decorative, non-disabled use as a violation. Read out of
+// this tree the same way, it is **1745 findings across 101 files** — an order
+// of magnitude past the muted arm and a backlog rather than a sweep. It is
+// declined here for that, and for nothing else: the chrome question that used
+// to hold this boundary up has been answered, and answered against the
+// exemption, so it is not available as a reason a second time.
+//
+// That distinction is worth keeping straight, because the two declines look
+// identical from the outside and only one of them can be discharged by a
+// person. `scanMock` therefore REPORTS the faint findings — `ink: 'faint'` —
+// and `violations()` returns the muted ones. `design-ink-contrast.test.ts`
+// asserts the faint population is non-empty, so the boundary cannot outlive its
+// subject, and MOTIR-3068 owns emptying it.
 
-/** The ink this arm rules on, as it appears in an arbitrary-value class. */
+/** The ink this arm RULES ON, as it appears in an arbitrary-value class. */
 export const MUTED_CLASS = 'text-(--el-text-muted)';
 export const MUTED_TOKEN = '--el-text-muted';
+
+/** The ink this arm COUNTS. Same spellings, same two layers, no verdict. */
+export const FAINT_CLASS = 'text-(--el-text-faint)';
+export const FAINT_TOKEN = '--el-text-faint';
 
 /**
  * The backgrounds on which `--el-text-muted` drops below 4.5:1 — CLAUDE.md's
@@ -98,8 +108,18 @@ export { SAFE_SURFACE_TOKENS };
 export interface MockFinding {
   file: string;
   line: number;
-  /** The `--el-*` background the surface walk resolved under the ink. */
-  surface: string;
+  /**
+   * Which ink. `muted` is the ruled-on arm; `faint` is the counted one (the
+   * header's remaining boundary). `violations()` is the only place that
+   * distinction is applied — everything else treats a finding as a finding.
+   */
+  ink: 'muted' | 'faint';
+  /**
+   * The `--el-*` background the surface walk resolved under the ink, or `null`
+   * on the faint arm — where the verdict is a property of the ink alone, so no
+   * walk is performed and no surface can excuse it.
+   */
+  surface: string | null;
   /** The element the ink landed on. */
   element: string;
   /** How the ink was declared — a utility class, or a rule in the mock's own stylesheet. */
@@ -403,26 +423,46 @@ function ownSurface(element: MockElement, paint: ClassPaint): string | null {
   return null;
 }
 
-/** How this element takes `--el-text-muted`, or null if it does not. */
-function mutedVia(element: MockElement, paint: ClassPaint): 'class' | 'stylesheet' | null {
-  if (element.classes.includes(MUTED_CLASS)) return 'class';
+/**
+ * How this element takes `token`, or null if it does not — the utility class
+ * written on the element, an inline `style`, or the mock's own stylesheet.
+ *
+ * An inline `style="color: var(--el-text-muted)"` is reported as `stylesheet`
+ * rather than as a fourth `via`: the distinction the field records is whether
+ * the ink is written in the Tailwind-shaped layer a mock is SUPPOSED to be
+ * built from, and an inline declaration is not.
+ */
+function inkVia(
+  element: MockElement,
+  paint: ClassPaint,
+  utility: string,
+  token: string,
+): 'class' | 'stylesheet' | null {
+  if (element.classes.includes(utility)) return 'class';
   const inline = element.attrs.get('style');
-  if (inline && declaredToken(inline, /(?:^|[;\s])color\s*:\s*([^;]+)/i) === MUTED_TOKEN) {
+  if (inline && declaredToken(inline, /(?:^|[;\s])color\s*:\s*([^;]+)/i) === token) {
     return 'stylesheet';
   }
   for (const className of element.classes) {
-    if (paint.color.get(className) === MUTED_TOKEN) return 'stylesheet';
+    if (paint.color.get(className) === token) return 'stylesheet';
   }
   return null;
 }
 
 /**
- * Every place this mock puts `--el-text-muted` over a tinted surface.
+ * Every finding this mock carries — the muted ink over a tinted surface, which
+ * the guard rules on, and the faint ink anywhere it carries text, which it
+ * counts.
  *
- * The surface walk starts at the ink's own element (an element painting its own
- * background is the surface its ink sits on) and stops at the first ancestor
- * that paints one — so a white `--el-card` nested inside a tinted panel
- * correctly ends the search, exactly as the code scanner's walk does.
+ * The muted surface walk starts at the ink's own element (an element painting
+ * its own background is the surface its ink sits on) and stops at the first
+ * ancestor that paints one — so a white `--el-card` nested inside a tinted
+ * panel correctly ends the search, exactly as the code scanner's walk does.
+ *
+ * The faint arm performs no walk. `--el-text-faint` measures 2.37–2.61:1
+ * against every surface in the table, so there is no background that would
+ * change the answer, and an abstention on an unresolvable one would be a false
+ * negative rather than an honest gap.
  */
 export function scanMock(file: string, html: string): MockFinding[] {
   const paint = classPaint(stylesheetText(html));
@@ -430,42 +470,78 @@ export function scanMock(file: string, html: string): MockFinding[] {
   const findings: MockFinding[] = [];
 
   for (const element of elements) {
-    const via = mutedVia(element, paint);
-    if (!via) continue;
-    const decorative = decorativeReason(element);
-    if (decorative) continue;
+    // The two 1.4.3 grants are properties of the ELEMENT, so they are read
+    // once and applied to both inks — an aria-hidden glyph is exempt whichever
+    // ink it takes.
+    if (decorativeReason(element)) continue;
     if (disabledReason(element)) continue;
 
-    let surface: string | null = null;
-    for (let node: MockElement | undefined = element; node; ) {
-      surface = ownSurface(node, paint);
-      if (surface) break;
-      node = node.parent === -1 ? undefined : elements[node.parent];
+    const mutedVia = inkVia(element, paint, MUTED_CLASS, MUTED_TOKEN);
+    if (mutedVia) {
+      let surface: string | null = null;
+      for (let node: MockElement | undefined = element; node; ) {
+        surface = ownSurface(node, paint);
+        if (surface) break;
+        node = node.parent === -1 ? undefined : elements[node.parent];
+      }
+      if (surface && TINTED_SURFACE_TOKENS.includes(surface)) {
+        findings.push({
+          file,
+          line: element.line,
+          ink: 'muted',
+          surface,
+          element: element.tag,
+          via: mutedVia,
+          reason:
+            `--el-text-muted is 4.12–4.34:1 on ${surface}; it clears AA only on the white ` +
+            `page/card (CLAUDE.md's measured table)`,
+          snippet: element.snippet,
+        });
+      }
     }
-    if (!surface || !TINTED_SURFACE_TOKENS.includes(surface)) continue;
 
-    findings.push({
-      file,
-      line: element.line,
-      surface,
-      element: element.tag,
-      via,
-      reason:
-        `--el-text-muted is 4.12–4.34:1 on ${surface}; it clears AA only on the white ` +
-        `page/card (CLAUDE.md's measured table)`,
-      snippet: element.snippet,
-    });
+    const faintVia = inkVia(element, paint, FAINT_CLASS, FAINT_TOKEN);
+    // `hasText` is what separates an ink from a text ink here. The muted arm
+    // needs no such test because its surface walk already requires a painted
+    // ancestor; the faint arm has no walk, so without this every container
+    // that merely INHERITS the ink down to a labelled glyph would be counted.
+    if (faintVia && element.hasText) {
+      findings.push({
+        file,
+        line: element.line,
+        ink: 'faint',
+        surface: null,
+        element: element.tag,
+        via: faintVia,
+        reason:
+          `--el-text-faint is 2.37–2.61:1 and clears AA on NO surface, so <${element.tag}> ` +
+          `paints active informational text with an ink no background can rescue`,
+        snippet: element.snippet,
+      });
+    }
   }
   return findings;
 }
 
 /**
- * The findings that FAIL the guard — the utility-class layer only. The
- * stylesheet layer is reported by `scanMock` for the census, and is boundary
- * (2) in the header: read, measured, and deliberately not ruled on.
+ * The findings that FAIL the guard: the muted arm, over BOTH layers.
+ *
+ * The `via === 'class'` filter that used to live here was boundary (2) in the
+ * header, and MOTIR-3054 removed it. What remains is a filter on the INK, not
+ * on how it was written — the faint arm is reported for the census and is the
+ * header's one remaining boundary.
  */
 export function violations(findings: MockFinding[]): MockFinding[] {
-  return findings.filter((finding) => finding.via === 'class');
+  return findings.filter((finding) => finding.ink === 'muted');
+}
+
+/**
+ * The findings the guard COUNTS and does not rule on. Asserted non-empty by
+ * `design-ink-contrast.test.ts`, so the boundary fails on the day it stops
+ * having a subject rather than quietly outliving it.
+ */
+export function counted(findings: MockFinding[]): MockFinding[] {
+  return findings.filter((finding) => finding.ink === 'faint');
 }
 
 export function formatMockFinding(finding: MockFinding): string {

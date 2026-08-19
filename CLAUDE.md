@@ -595,6 +595,23 @@ notes), is **incomplete** — do not open the design PR / mark the subtask done
 until all three are committed. (The `motir-meta` `MOTIR.md` design-reference rule
 carries the same definition-of-done for the planner side.)
 
+**Re-export the `.png` with `node scripts/render-design-mock.mjs <mock.html>`,
+AFTER `prettier --write` on the mock.** It recovers the viewport width from the
+committed export, renders the asset as it stands at `HEAD` first, and tells you
+whether what changed in the PNG is your diff or the render environment
+(`EXACT` / `DIMS` / `DRIFT`). A new asset with no committed export takes
+`--width` (~1200 is the tree's convention).
+
+**⚠️ The ink rules apply to a mock's OWN `<style>` block and its board chrome,
+not only to its utility classes.** `--el-text-muted` fails AA on `--el-surface` /
+`--el-surface-soft` / `--el-muted` (4.12–4.34:1), and that is true of a
+`.panelNote { color: var(--el-text-muted) }` rule and a panel caption exactly as
+it is of `text-(--el-text-muted)` on a row — a design board's annotations owe AA
+too (`docs/decisions/design-board-chrome-aa.md`). Reach for
+`--el-text-secondary`, which is 6.18–6.80:1 on all four surfaces in both themes
+and so is right whichever surface the element lands on.
+`tests/design-ink-contrast.test.ts` enforces this at zero over the whole tree.
+
 ---
 
 ## ⚠️ E2E tests wait on the AUTHORITATIVE signal — never race optimistic / async UI

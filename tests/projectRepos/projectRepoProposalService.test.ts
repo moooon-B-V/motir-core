@@ -20,6 +20,7 @@ import {
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
@@ -370,6 +371,111 @@ describe('projectRepoProposalService.proposeRepositorySet — IDEMPOTENCE', () =
     // The emptiness guard runs FIRST, which is what keeps firing this on every
     // re-plan approve cheap.
     expect(getPreplanState).not.toHaveBeenCalled();
+  });
+});
+
+describe('projectRepoProposalService.proposeRepositorySet — a project that ALREADY has code (MOTIR-3073)', () => {
+  // The gate above this one answers "has this project's own set been proposed
+  // before?". These prove the SECOND question the proposer has to ask — "does this
+  // project have a codebase at all?" — which is the one that decides whether
+  // proposing a repository makes any sense. They read identically for a project
+  // born in Motir and diverge completely for one that ARRIVED with its code: the
+  // migrate path records the connected repo on the onboarding run and never writes
+  // the repo-set table, so before this gate such a project proposed a starter repo
+  // on its first plan approval, took the canvas the approved plan's items belong
+  // on, and made every real repo unpinnable (MOTIR-3073's three consequences).
+
+  /** An onboarding run for the fixture's project, connected to `repoRef` or not. */
+  async function seedOnboardingRun(
+    fx: WorkItemFixture,
+    connectedRepoRef: string | null,
+  ): Promise<void> {
+    await adminDb.migrateOnboarding.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        step: 'done',
+        status: 'completed',
+        connectedRepoRef,
+        codeGraphReady: connectedRepoRef !== null,
+      },
+    });
+  }
+
+  it('proposes NOTHING for a migrated project — the question is already answered', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedOnboardingRun(fx, 'acme/existing-app');
+
+    const result = await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    expect(result).toEqual({ proposed: false, reason: 'project_has_code' });
+    // And the set stays EMPTY — the visible half of the defect was a row that
+    // should never have existed, not merely a screen that should not have shown.
+    expect(await readSet(fx)).toHaveLength(0);
+  });
+
+  it('does not call the motir-ai boundary for a project that already has code', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedOnboardingRun(fx, 'acme/existing-app');
+    vi.mocked(getPreplanState).mockClear();
+
+    await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    // Same reason the emptiness guard is cheap: this fires on every approve.
+    expect(getPreplanState).not.toHaveBeenCalled();
+  });
+
+  it('STILL proposes when the onboarding run connected nothing — an unfinished run is not code', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedOnboardingRun(fx, null);
+
+    const result = await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    expect(result.proposed).toBe(true);
+    expect(await readSet(fx)).toHaveLength(1);
+  });
+
+  it('STILL proposes for a project with no onboarding run at all — the project this proposer is FOR', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const result = await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    expect(result.proposed).toBe(true);
+  });
+
+  it('STILL proposes for a SECOND project in a workspace whose code is already connected', async () => {
+    // The false-negative this gate must not introduce, and the reason it reads the
+    // ONBOARDING RUN rather than the installation mirror or the index ledger: both
+    // of those are WORKSPACE-scoped, so gating on either would silence the proposer
+    // for every project after the first in any workspace that has ever connected a
+    // repo — and the second project in a workspace genuinely does need one.
+    const fx = await makeWorkItemFixture();
+    await seedOnboardingRun(fx, 'acme/existing-app');
+    await connectRepo(fx.workspaceId, 'existing-app');
+
+    const sibling = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'SIB',
+    });
+    const result = await projectRepoProposalService.proposeRepositorySet(sibling.id, fx.ctx);
+
+    expect(result.proposed).toBe(true);
+    expect(await projectRepoSetService.listByProject(sibling.id, fx.ctx)).toHaveLength(1);
+  });
+
+  it('leaves an EXISTING set alone even when the project also has code — set_exists still wins', async () => {
+    // Ordering matters: `set_exists` is the access-gated guard and must answer
+    // first, so a project that has code AND a deliberate set is reported as the
+    // untouchable set it is, not as a project that was skipped for having code.
+    const fx = await makeWorkItemFixture();
+    await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+    await seedOnboardingRun(fx, 'acme/existing-app');
+
+    const result = await projectRepoProposalService.proposeRepositorySet(fx.projectId, fx.ctx);
+
+    expect(result).toEqual({ proposed: false, reason: 'set_exists' });
+    expect(await readSet(fx)).toHaveLength(1);
   });
 });
 

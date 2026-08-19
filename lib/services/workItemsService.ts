@@ -36,6 +36,7 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { watchersService } from '@/lib/services/watchersService';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import { autoRelateWorkItemMentions, writeWorkItemLink } from '@/lib/workItems/autoRelateMentions';
 import { embeddingDocumentChanged } from '@/lib/workItems/embeddingDocument';
@@ -4209,7 +4210,18 @@ export const workItemsService = {
     // `issueCount` — 1+N on a `no-store` payload fetched on every row click, for
     // a field the picker never reads. (It also re-asserts `project:browse`,
     // which `getIssueDetail` has already done in this same call.)
-    const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
+    // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-3066). Arm 0 is the ACCESS
+    // GATE, and it rejects on the ordinary 404 path — a foreign, unknown or
+    // deleted key. `Promise.all` would reject the moment it does and return,
+    // leaving the four sibling arms running with nobody awaiting them; each is a
+    // `withWorkspaceServiceContext` INTERACTIVE TRANSACTION, so each abandoned arm
+    // holds locks past the point where the caller believes the peek is over. In
+    // the test suite that is what the next test's `TRUNCATE … CASCADE` reset
+    // deadlocked against (`40P01`, killing a `beforeEach` in an innocent file);
+    // in production it is a pool connection and a row lock held after the 404 has
+    // been sent, on a path that runs on every row click. Settling all five costs
+    // nothing on the happy path and makes the refusal path bounded.
+    const [detail, members, sprintRows, componentRows, estimationConfig] = await allSettledOrThrow([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

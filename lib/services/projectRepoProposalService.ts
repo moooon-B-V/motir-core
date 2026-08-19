@@ -1,7 +1,8 @@
 import { getPreplanState } from '@/lib/ai/motirAiClient';
+import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { ProjectRepoNameTakenError } from '@/lib/projectRepos/errors';
 import { deriveRepoSetProposal, type ProposedRepoRow } from '@/lib/projectRepos/proposal';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -65,12 +66,14 @@ export type ProposeRepositorySetResult =
       proposed: false;
       /**
        * `set_exists` — the project already has a set, which this run must not
-       * touch. `raced` — a concurrent run won the name; the DB's unique index
-       * arbitrated and this run stopped rather than duplicating. `no_project` —
-       * the project vanished between the gate and the read, so there is nothing
-       * to name a repository after.
+       * touch. `project_has_code` — the project ALREADY HAS a codebase of its own,
+       * so the question this proposer exists to answer is already answered
+       * (MOTIR-3073). `raced` — a concurrent run won the name; the DB's unique
+       * index arbitrated and this run stopped rather than duplicating.
+       * `no_project` — the project vanished between the gate and the read, so
+       * there is nothing to name a repository after.
        */
-      reason: 'set_exists' | 'raced' | 'no_project';
+      reason: 'set_exists' | 'project_has_code' | 'raced' | 'no_project';
     };
 
 export const projectRepoProposalService = {
@@ -114,6 +117,36 @@ export const projectRepoProposalService = {
     // project gets its 404/403 here rather than after a derivation.
     const existing = await projectRepoSetService.listByProject(projectId, ctx);
     if (existing.length > 0) return { proposed: false, reason: 'set_exists' };
+
+    // ══ THE PROJECT ALREADY HAS CODE ══ (MOTIR-3073)
+    //
+    // The gate above answers "has this project's own set been proposed before?" —
+    // NOT "does this project have a codebase?", which is the question that decides
+    // whether proposing one makes any sense. They read the same for a project born
+    // in Motir and diverge completely for one that ARRIVED with its code: the
+    // migrate path records the connected repository on its own onboarding run and
+    // never writes this table, so such a project reads as set-less forever, and its
+    // first plan approval proposes a starter repo it does not need — then the
+    // establish step takes the canvas the approved plan's items should be on, and
+    // the created row becomes the project's whole repo-pin domain.
+    //
+    // ⚠️ The signal has to be PROJECT-scoped, and only one of the three the card
+    // proposed actually is. `GithubRepo` and the code-index ledger are keyed on the
+    // WORKSPACE (`resolveCodeState` in `projectStateService` says so in its own
+    // header — "the workspace-scoped half"), so gating on "an installation repo
+    // exists" or "something is indexed" would silence this proposer for every
+    // project after the first in any workspace that has ever connected code — the
+    // second project in a workspace genuinely does need a repository, and would
+    // never be offered one. The onboarding run is the project-scoped record, and
+    // `connectedRepoRef` on it is the mechanism by which a project acquires code it
+    // did not get from us.
+    //
+    // Keyed on the FIELD, not on `kind === 'migrate'`: any future onboarding path
+    // that connects an existing repository records it in the same place, and this
+    // gate covers it the day it ships without an edit here.
+    if (await projectHasItsOwnCode(projectId, ctx)) {
+      return { proposed: false, reason: 'project_has_code' };
+    }
 
     const project = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
@@ -175,6 +208,25 @@ export const projectRepoProposalService = {
     return { proposed: true, rows, created };
   },
 };
+
+/**
+ * Does this project ALREADY have a codebase of its own (MOTIR-3073)?
+ *
+ * Reads the project's onboarding run and asks whether it names a connected
+ * repository. That row is the ONLY project-scoped record of a repository this
+ * project did not get from the repo set itself — see the gate's comment for why
+ * the installation mirror and the index ledger, both workspace-scoped, must not
+ * be used here.
+ *
+ * ABSENT is the answer for a project with no run at all (seeded, or created
+ * straight in Motir), which is exactly the project this proposer is for.
+ */
+async function projectHasItsOwnCode(projectId: string, ctx: ServiceContext): Promise<boolean> {
+  const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId, tx),
+  );
+  return (run?.connectedRepoRef ?? null) !== null;
+}
 
 /**
  * Read ADR §0.1's secondary signals — `platform` and `designStarter` — from the
