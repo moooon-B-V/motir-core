@@ -274,3 +274,52 @@ describe('motir batch — a whole run through the real session', () => {
     expect(process.exitCode).toBe(1);
   });
 });
+
+describe('motir batch — a MULTI-REPOSITORY card (MOTIR-3133)', () => {
+  it('resolves every repository, prints the same block `deliver()` does, and runs ONE agent in the primary', async () => {
+    // Batch prints its own per-item lines rather than going through `deliver()`,
+    // which is exactly how the two would drift — so the block comes from the
+    // SAME renderer, and this test is what says so.
+    mkdirSync(join(root, 'motir-ai'), { recursive: true });
+    const stderr: string[] = [];
+    (process.stderr.write as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (chunk: string) => {
+        stderr.push(String(chunk));
+        return true;
+      },
+    );
+    server.scriptV1({
+      ...planScripts(['PROD-1']).v1,
+      'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
+        body: v1DispatchPrompt(String(req.params['key']), {
+          prompt: `PROMPT ${String(req.params['key'])}`,
+          targetRepo: 'motir-core',
+          targetRepos: [
+            { name: 'motir-core', cloneUrl: null, defaultBranch: 'main', delivery: 'awaiting' },
+            { name: 'motir-ai', cloneUrl: null, defaultBranch: 'trunk', delivery: 'awaiting' },
+          ],
+        }),
+      }),
+    });
+
+    const cwds: string[] = [];
+    await batchCommand(
+      { ...AGENT },
+      {
+        clock: () => 0,
+        runAgentFn: async ({ cwd }) => {
+          cwds.push(cwd);
+          return { exitCode: 0, signal: null, model: null };
+        },
+      },
+    );
+
+    // ONE agent, in the PRIMARY's checkout — unchanged from a single-repo card.
+    expect(cwds).toEqual([join(root, 'motir-core')]);
+    const text = stderr.join('');
+    expect(text).toContain('2 — this item ships in every one of them');
+    expect(text).toContain('motir-core  (the working directory)');
+    expect(text).toContain('motir-ai  (a sibling checkout)');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+});

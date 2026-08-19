@@ -173,13 +173,18 @@ describe('changedFields', () => {
           changes: [
             { field: 'title', from: 'a', to: 'b' },
             { field: 'type', from: 'code', to: null },
+            { field: 'description', from: null, to: 'updated' },
+            // The second body (MOTIR-3111) — a `modify` can rewrite the WHY, so
+            // the whitelist has to name it or the canvas silently drops the one
+            // change a reviewer most needs to see.
+            { field: 'explanation', from: null, to: 'updated' },
             { field: 'estimateMinutes', from: '20', to: '30' },
             { field: 'storyPoints', from: '2', to: '3' },
             { field: 'links', from: null, to: '+1' },
           ],
         }),
       ),
-    ).toEqual(['title', 'type', 'estimate', 'points', 'links']);
+    ).toEqual(['title', 'type', 'description', 'explanation', 'estimate', 'points', 'links']);
   });
 
   it('DROPS a field it has no copy for, rather than rendering a missing key', () => {

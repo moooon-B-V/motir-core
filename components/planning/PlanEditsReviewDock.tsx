@@ -172,12 +172,22 @@ const OP_CHIP: Record<PlanReviewItemDto['op'], { key: string; tint: string }> = 
 };
 
 /** The named field labels the dock can localize; anything else (a field added
- *  later) falls back to its own id rather than rendering a missing-key error. */
-const FIELD_KEYS: Record<string, string> = {
+ *  later) falls back to its own id rather than rendering a missing-key error.
+ *
+ *  EXPORTED so `tests/components/plan-change-field-labels.test.tsx` can hold it
+ *  against `PLAN_ITEM_CHANGE_FIELDS` — the map is the second place a new wire
+ *  field has to be named, and nothing but that test notices when it isn't. */
+export const FIELD_KEYS: Record<string, string> = {
   title: 'field_title',
   priority: 'field_priority',
   type: 'field_type',
+  // The sizing pair (MOTIR-3151). `buildChanges` has emitted these since
+  // MOTIR-1532; unmapped they fell through to the bare wire name, so the dock
+  // read "storyPoints" — readable, and still not a translation.
+  storyPoints: 'field_storyPoints',
+  estimateMinutes: 'field_estimateMinutes',
   description: 'field_description',
+  explanation: 'field_explanation',
   links: 'field_links',
 };
 

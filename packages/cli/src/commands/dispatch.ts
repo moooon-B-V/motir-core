@@ -18,9 +18,12 @@ import {
   renderNothingPushed,
   renderDispatchAdvisories,
   renderDispatchSummary,
+  renderResumeNotice,
   renderSessionOutcomes,
   resolveDispatchTarget,
+  resolveDispatchTargets,
   type AgentSource,
+  type DispatchTarget,
 } from '../dispatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
@@ -172,12 +175,23 @@ async function deliver(input: DeliverInput): Promise<void> {
   const { client, link, serverUrl, projectKey } = session;
 
   const agent = resolveAgent(opts);
-  const target = resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
+  // MOTIR-3133 — one target per repository the card ships in, resolved by the
+  // SAME rule, in the payload's order. The agent's cwd is element 0's — one
+  // dispatch, one agent process, standing in the primary's checkout exactly as
+  // it does today. An older server sends no `targetRepos`, and the empty set
+  // falls straight back to the single-repository resolve.
+  const targets = resolveDispatchTargets(
+    link.dir,
+    link.config,
+    (dispatch.targetRepos ?? []).map((repo) => repo.name),
+  );
+  const target = targets[0] ?? resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
   const summary = renderDispatchSummary({
     key,
     title,
     dispatch,
     target,
+    targets,
     agent: agent ? { command: agent.parsed.command, source: agent.source } : null,
   });
 
@@ -187,6 +201,10 @@ async function deliver(input: DeliverInput): Promise<void> {
   // WARNING: nothing below branches on it, no exit code changes, and no `--force`
   // is involved (see `renderDispatchAdvisories` for why a refusal would be wrong).
   const advisory = renderDispatchAdvisories(dispatch);
+  // MOTIR-3136 — a partially delivered card is a legitimate resting state, and
+  // a resumed run that reads like a fresh one is how an agent re-opens a pull
+  // request in a repository that has already merged.
+  const resume = renderResumeNotice(dispatch);
 
   if (!agent) {
     // PRINT mode: the prompt is the PAYLOAD (stdout, byte-identical), the
@@ -194,6 +212,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     // `motir next --print | pbcopy` copy the prompt and nothing else, while the
     // user still sees the repo + resolved path on screen.
     info(summary);
+    if (resume) info(resume);
     if (advisory) info(advisory);
     info('');
     outVerbatim(dispatch.prompt);
@@ -201,6 +220,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   }
 
   info(summary);
+  if (resume) info(resume);
   if (advisory) info(advisory);
   info('');
   const result = await runAgent({
@@ -214,7 +234,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     // the next `motir next` moves past it instead of re-picking the failure.
     addExclude(serverUrl, projectKey, { key });
     info('');
-    info(renderAgentFailure(key, result.exitCode));
+    info(renderAgentFailure(key, result.exitCode, dispatch));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
     process.exitCode = result.exitCode;
@@ -256,14 +276,24 @@ async function deliver(input: DeliverInput): Promise<void> {
   }
   removeExclude(serverUrl, projectKey, key);
 
-  const suspect = checkBootstrapCheckout(target);
+  // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
+  // second half had no checkout to happen in is exactly the run that otherwise
+  // exits 0 with half the work missing.
+  const suspects = suspectCheckouts(targets, target);
   info('');
   info(renderAgentSuccess(key, dispatch));
-  if (suspect) {
+  for (const suspect of suspects) {
     info('');
     info(suspect.message);
     info(`Hint: ${suspect.hint}`);
   }
+}
+
+/** The bootstrap post-condition, over the whole set — falling back to the
+ *  primary alone when the server sent no set (MOTIR-3133). */
+function suspectCheckouts(targets: DispatchTarget[], primary: DispatchTarget) {
+  const over = targets.length > 0 ? targets : [primary];
+  return over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
 }
 
 // ── motir next ──────────────────────────────────────────────────────────────

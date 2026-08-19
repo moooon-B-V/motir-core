@@ -411,6 +411,25 @@ convenient. GitHub's `ubuntu-latest` on a **private** repository is **2 vCPU, 8 
 SSD** — that is the thing to be equivalent to, and the private-repo row is the right one
 because every Motir-created repository is private.
 
+> **⚠️ NARROWED 2026-08-19 (MOTIR-3149) — the premise is true of a Motir-CREATED repo and false
+> of the repo people actually ask about.** _"Every Motir-created repository is private"_ is
+> correct and the private-repo row remains right **for the metered customer workload this ADR
+> prices**. It does not hold for `moooon-B-V`'s own repos, and `motir-core` — the heaviest CI
+> Motir has, and the one anybody proposing to move work onto the fleet has in mind — is
+> **`public`**. Two consequences, both pointing the same way:
+>
+> - **The basis below UNDERSTATES that repo.** A public repository's `ubuntu-latest` is the
+>   larger hosted runner, so parity would be roughly **2× the $0.00195/min** computed here, not
+>   $0.00195. Any figure quoted from this section for `motir-core` must say which row it used.
+> - **The saving is not a saving there at all.** GitHub-hosted minutes on a public repository are
+>   **free**, so moving that workload converts **$0** into real Fly spend — against §9's finding
+>   that Fly offers neither a cap nor an alert.
+>
+> This changes **no number in the table below**, which prices the customer workload it was
+> written for. It fixes the reader's inference. `ci-minutes-allowance.md` **§J.4** carries the
+> measurement and the decision that came out of it (option (a): the starvation was removed by a
+> plan tier and a fan-out cut, and the fleet was rejected on §J's own three reasons).
+
 **The mapping onto Fly, and its price** (published table, Amsterdam shown; a per-region ratio
 applies and **MOTIR-1924 must read the `iad` row from the same table**):
 

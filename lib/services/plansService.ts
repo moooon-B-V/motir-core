@@ -1186,17 +1186,44 @@ async function applyModify(
   // link tokens (bug MOTIR-1440) so the patched body chips. The prefix is the
   // target's own identifier minus its `-<key>` suffix (same derivation the
   // quick-view read uses); a key that doesn't resolve is left plain.
+  //
+  // BOTH bodies travel through ONE resolve (MOTIR-3111) — the same `fields:
+  // [descriptionMd, explanationMd]` pair the `add`-path materialize passes, not a
+  // second call. The explanation is a chip-rendering surface too, and one resolve
+  // is what keeps a patch that mentions the same key in both bodies from costing
+  // two lookups. `normalizeBodyRefs` preserves the presence shape, so `undefined`
+  // still means "the patch did not carry this key" on the way out.
   const prefix = current.identifier.slice(
     0,
     current.identifier.length - String(current.key).length - 1,
   );
-  const [normalizedDescriptionMd] = await normalizeBodyRefs(
-    { projectId: current.projectId, projectIdentifier: prefix, fields: [patch.descriptionMd] },
+  const [normalizedDescriptionMd, normalizedExplanationMd] = await normalizeBodyRefs(
+    {
+      projectId: current.projectId,
+      projectIdentifier: prefix,
+      fields: [patch.descriptionMd, patch.explanationMd],
+    },
     tx,
   );
   if (normalizedDescriptionMd !== undefined && normalizedDescriptionMd !== current.descriptionMd) {
     update.descriptionMd = normalizedDescriptionMd;
     diff.descriptionMd = { from: current.descriptionMd, to: normalizedDescriptionMd };
+  }
+  // REWRITE the WHY (MOTIR-3111) — the `modify` mirror of the `add` path's
+  // explanation, so THE REPLAN ACTION's "patch BOTH bodies" has a door. Sparse
+  // exactly like the description above: absent leaves it alone, an explicit
+  // `null` clears it. `explanationMd` already has an `editedField()` disposition
+  // in lib/activity/renderers.ts (`buildAddDiff` emits the same key), so this
+  // revision renders with no new registry entry.
+  //
+  // ⚠️ `explanationSource` is NOT written here, deliberately: it is not the
+  // caller's to set (`user_authored` default, `ai_draft` → `user_edited` on the
+  // service edit path), and a patch that could write it would let a plan forge
+  // provenance. Its column is also undispositioned in the renderer registry — the
+  // same rule the `add` path's `buildAddDiff` follows when it omits it.
+  if (normalizedExplanationMd !== undefined && normalizedExplanationMd !== current.explanationMd) {
+    update.explanationMd = normalizedExplanationMd;
+    diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
   }
   if (patch.priority !== undefined && patch.priority !== current.priority) {
     update.priority = patch.priority as Prisma.WorkItemUncheckedUpdateInput['priority'];

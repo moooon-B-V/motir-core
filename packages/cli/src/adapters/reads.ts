@@ -468,6 +468,22 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
     prompt: body.prompt,
     parentKey: body.parentKey,
     targetRepo: body.targetRepo,
+    // MOTIR-3133 — the SET, carried because the launcher resolves a checkout per
+    // element; and MOTIR-3136 — `delivery` with it, because the run REPORTS what
+    // has already shipped, which is the only thing that distinguishes a resume
+    // from a fresh card. (MOTIR-3133 dropped `delivery` under the field-with-no-
+    // reader rule; this card is the reader, so it is carried.) Absent from an
+    // older server stays absent, so the single-repository path is what runs.
+    ...(body.targetRepos === undefined
+      ? {}
+      : {
+          targetRepos: body.targetRepos.map((repo) => ({
+            name: repo.name,
+            cloneUrl: repo.cloneUrl,
+            defaultBranch: repo.defaultBranch,
+            delivery: repo.delivery,
+          })),
+        }),
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,
     advisories: body.advisories as DispatchAdvisory[],

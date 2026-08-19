@@ -161,10 +161,15 @@ function gitRunner(
 ): {
   run: CommandRunner;
   log: string[];
+  cwds: string[];
 } {
   const log: string[] = [];
-  const run: CommandRunner = (bin, args) => {
+  /** The working directory each command ran in — the only evidence that says
+   *  WHICH repository a git command touched (MOTIR-3135). */
+  const cwds: string[] = [];
+  const run: CommandRunner = (bin, args, cwd) => {
     log.push(`${bin} ${args.join(' ')}`);
+    cwds.push(cwd);
     const custom = over(bin, args);
     if (custom) return custom;
     if (bin === 'git' && args[0] === 'rev-parse') return { exitCode: 1, stdout: '', stderr: '' };
@@ -174,7 +179,7 @@ function gitRunner(
     }
     return { exitCode: 0, stdout: '', stderr: '' };
   };
-  return { run, log };
+  return { run, log, cwds };
 }
 
 describe('motir auto refuses to start without an agent', () => {
@@ -498,5 +503,178 @@ describe('motir auto — a whole run through the real session', () => {
     expect(v1CallsTo('POST', '/transitions').length).toBeGreaterThan(0);
     expect(v1CallsTo('POST', '/integration')).toEqual([]);
     expect(process.exitCode).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A MULTI-REPOSITORY card in an unattended run (Story MOTIR-2731 · MOTIR-3135)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// `RepoSessions` was keyed by ONE resolved target, built from the primary — so a
+// two-repository card got the run's session branch in the primary's checkout
+// only. The prompt then instructed the agent to integrate into that branch in
+// EVERY repository, and in the second one no such branch existed: the agent
+// either invented one locally (which the close-out never pushes or opens a pull
+// request for, because that repository was never `touched()`) or failed outright.
+//
+// The rule this pins is ALL-OR-NOTHING per card. A lineage in some of a card's
+// repositories and not others is the one outcome that cannot be closed out, so
+// a card whose set includes a repository that cannot carry the branch is
+// dispatched with NO seed and ships as its own pull requests everywhere.
+
+/** The plan, with both cards carrying `repos` (primary first). */
+function multiRepoScripts(repos: string[]): { v1: V1Script } {
+  const base = planScripts();
+  return {
+    v1: {
+      ...base.v1,
+      'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => {
+        const key = String(req.params['key']);
+        const seed = req.query.get('sessionBranch');
+        return {
+          body: v1DispatchPrompt(key, {
+            prompt: `PROMPT ${key}`,
+            targetRepo: repos[0],
+            targetRepos: repos.map((name) => ({
+              name,
+              cloneUrl: null,
+              defaultBranch: 'main',
+              delivery: 'awaiting',
+            })),
+            workflowMode: seed ? 'session_lineage' : 'per_item_pr',
+            sessionBranch: seed,
+          }),
+        };
+      },
+    },
+  };
+}
+
+describe('motir auto — a card that ships in more than one repository (MOTIR-3135)', () => {
+  it('creates the run’s session branch on origin in EVERY checkout the card carries', async () => {
+    mkdirSync(join(root, 'motir-ai'), { recursive: true });
+    server.scriptV1(multiRepoScripts(['motir-core', 'motir-ai']).v1);
+    const git = gitRunner();
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    const branch = 'motir/auto-20260729-010203';
+    // ONE branch NAME, created on origin in BOTH checkouts — asserted by the
+    // CWD each git ran in, which is the only thing that distinguishes "branched
+    // in two repositories" from "branched twice in one".
+    expect(new Set(git.cwds.filter((c) => c.includes('motir-')))).toEqual(
+      new Set([join(root, 'motir-core'), join(root, 'motir-ai')]),
+    );
+    expect(
+      git.log.filter((cmd) => cmd.includes('push origin') && cmd.includes(branch)),
+    ).toHaveLength(2);
+    // …and the close-out opened one session pull request PER repository.
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(2);
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('branches a shared repository ONCE across two cards — the path-keyed cache holds', async () => {
+    mkdirSync(join(root, 'motir-ai'), { recursive: true });
+    server.scriptV1(multiRepoScripts(['motir-core', 'motir-ai']).v1);
+    const git = gitRunner();
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    // Two cards, two repositories each — FOUR (card, repository) pairs, and
+    // still exactly TWO branch creations and TWO pull requests, because the
+    // second card reused both branches rather than re-creating them.
+    const branch = 'motir/auto-20260729-010203';
+    expect(
+      git.log.filter((cmd) => cmd.includes('push origin') && cmd.includes(branch)),
+    ).toHaveLength(2);
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(2);
+    // Both cards were integrated, so the reuse is not "the second card was
+    // skipped" wearing this assertion's clothes.
+    expect(v1CallsTo('POST', '/integration').map((c) => c.params['key'])).toEqual([
+      'PROD-1',
+      'PROD-2',
+    ]);
+  });
+
+  it('falls back to NO seed when one repository cannot carry the lineage, and says which', async () => {
+    // `motir-ai` is never created, so its target is a bootstrap dispatch with no
+    // checkout to branch in. All-or-nothing: the card ships as its own pull
+    // requests in BOTH repositories rather than a lineage in one of them.
+    server.scriptV1(multiRepoScripts(['motir-core', 'motir-ai']).v1);
+    const git = gitRunner();
+    const stderr: string[] = [];
+    (process.stderr.write as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (chunk: string) => {
+        stderr.push(String(chunk));
+        return true;
+      },
+    );
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    const text = stderr.join('');
+    expect(text).toContain('No session branch possible in');
+    expect(text).toContain('motir-ai');
+    expect(text).toContain('ships as its own pull requests in all of them');
+    // No lineage was claimed for the card: the integration route was never called.
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
+    // …and no branch was left behind in the repository that COULD have carried
+    // one — the un-carryable case is settled before anything is created.
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(0);
+  });
+
+  it('leaves a SINGLE-repository card’s lineage exactly as it was', async () => {
+    // The back-compatibility claim: every card in the tenant today pins one
+    // repository, and none of them can tell that this shipped.
+    server.scriptV1(multiRepoScripts(['motir-core']).v1);
+    const git = gitRunner();
+
+    await autoCommand(
+      { ...AGENT },
+      {
+        run: git.run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    const branch = 'motir/auto-20260729-010203';
+    expect(v1CallsTo('POST', '/integration').map((c) => c.params['key'])).toEqual([
+      'PROD-1',
+      'PROD-2',
+    ]);
+    expect(
+      new Set(
+        v1CallsTo('POST', '/integration').map(
+          (c) => (c.body as Record<string, unknown>)['sessionBranch'],
+        ),
+      ),
+    ).toEqual(new Set([branch]));
+    expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
   });
 });

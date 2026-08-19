@@ -70,6 +70,17 @@ export interface DispatchRecord {
   sessionBranch: string | null;
   repo: string | null;
   /**
+   * EVERY repository the card ships in (MOTIR-3135), primary first — `[]` when
+   * it names none, so `repo` is `repos[0] ?? null`.
+   *
+   * The scalar alone is not enough at close-out: a FAILED record is matched to a
+   * repository's session pull request by name, and a card that failed while
+   * carrying two repositories belongs in BOTH of their bodies. Matching on the
+   * primary would silently drop it from the other one — a half-done card missing
+   * from the review surface of the repository it half-touched.
+   */
+  repos?: string[];
+  /**
    * The card's PARENT key, or `null` for a top-level item (MOTIR-2422).
    *
    * Carried on the record because the TITLE is decided at close-out, from the
