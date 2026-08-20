@@ -6229,7 +6229,14 @@ model CiContainerUsageSlice {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   /// One slice per unit of work per handle — the key the upsert is idempotent on.
-  @@unique([containerProvider, handleId, sliceRef])
+  ///
+  /// ⚠️ THE NAME IS PINNED, and it has to be: the derived name for three columns
+  /// on a table with this prefix is 67 characters, over Postgres's 63-byte
+  /// identifier limit, so the database and Prisma each truncate it — to DIFFERENT
+  /// strings. `migrate diff` then reports a permanent rename, and the drift never
+  /// resolves however many times the migration is re-applied. An explicit short
+  /// map is the only form both sides agree on.
+  @@unique([containerProvider, handleId, sliceRef], map: "ci_container_usage_slice_handle_ref_key")
   /// The reconciliation read: every slice of one handle.
   @@index([containerProvider, handleId])
   /// The attribution reads: what one org, or one project, cost in a period.

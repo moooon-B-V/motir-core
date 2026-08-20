@@ -34,7 +34,12 @@ CREATE TABLE "ci_container_usage_slice" (
 
 -- The idempotency key: supervision replays, so every slice write is an upsert on
 -- (provider, handle, ref) and a replayed checkpoint costs nothing.
-CREATE UNIQUE INDEX "ci_container_usage_slice_container_provider_handle_id_slice_ref_key"
+-- ⚠️ THE NAME IS PINNED SHORT ON PURPOSE. The derived name for these three
+-- columns is 67 characters, over Postgres's 63-byte identifier limit — and the
+-- database and Prisma truncate it to DIFFERENT strings, so `migrate diff` reports
+-- a rename that no re-apply can ever settle. Both sides are given the same short
+-- literal instead (`@@unique(map:)` in the schema).
+CREATE UNIQUE INDEX "ci_container_usage_slice_handle_ref_key"
     ON "ci_container_usage_slice"("container_provider", "handle_id", "slice_ref");
 -- The reconciliation read: every slice of one handle.
 CREATE INDEX "ci_container_usage_slice_container_provider_handle_id_idx"
