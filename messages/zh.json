@@ -240,6 +240,7 @@
     "listEmptyTitle": "没有提案",
     "listEmptyBody": "此计划生成结束但没有提出任何内容。批准它不会改变任何东西。",
     "proposedCrumb": "新",
+    "showChangesPast": "显示已变更内容",
     "actionError": "出了点问题，请重试。",
     "approvedOutcome": "已将 {n} 个工作项加入待办列表",
     "declinedOutcome": "计划已拒绝 — 你的工作项树未作改动",
@@ -5161,7 +5162,9 @@
         "noDocs": "暂无文档",
         "docsCount": "4 份文档中的 {count} 份",
         "crumb": "规划"
-      }
+      },
+      "showChanges": "显示变更",
+      "showChangesNone": "此层级没有提案变更"
     }
   },
   "github": {

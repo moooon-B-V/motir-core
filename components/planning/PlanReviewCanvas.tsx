@@ -188,6 +188,12 @@ export function PlanReviewCanvas({
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
+  // A DECIDED plan keeps the control, in the PAST tense (Part IX §L7): *"what did
+  // this plan change?"* is a better question after approve than before — the
+  // cards are real now and sit among neighbours that were always there. A
+  // DECLINED plan reads the same, because the record is of what the plan WOULD
+  // have changed and the reader is asking the same thing.
+  const decided = outcome !== null;
   const arrival = useMemo(() => arrivalLevel(items, tPlan('proposedCrumb')), [items, tPlan]);
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
     () => arrival?.trail ?? undefined,
@@ -268,6 +274,25 @@ export function PlanReviewCanvas({
         reloadKey={`${version}:${proposalsAtLevel(items, null).length}`}
         initialTrail={initialTrail}
         searchable
+        // SHOW CHANGES (MOTIR-3261) — the set is EVERY proposal's node id,
+        // whatever its `op`, which is what the request's *added / updated /
+        // archived* names. A `modify` / `remove` shares its node id with the
+        // committed card it targets, so the ring lands ON that card rather than
+        // beside it — already how `mergePlanLevel` re-skins them, which is why
+        // the emphasis needs no per-op special case.
+        //
+        // The op languages stay exactly as panel B draws them: they say WHICH
+        // change this is, the emphasis says THAT there is one. Orthogonal, and
+        // neither an alternative to the other.
+        //
+        // The COPY comes from here rather than the foundation, which has no idea
+        // it is showing a plan and cannot name what "the plan's changes" are.
+        emphasis={{
+          ids: items.map((i) => i.nodeId),
+          total: items.length,
+          label: decided ? tPlan('showChangesPast') : t('showChanges'),
+          emptyLabel: t('showChangesNone'),
+        }}
         // The root crumb goes where the ROADMAP's does — `parentId = null`, the
         // project's top level — so it is labelled the way the roadmap labels it
         // (bug MOTIR-3152). It used to read "Plan" while navigating to the project
