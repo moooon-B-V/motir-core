@@ -176,6 +176,40 @@ export interface ContainerStatus {
  * and the margin readout each inventing their own shape; the model's columns
  * mirror this interface one-for-one, and they have to stay that way.
  */
+/**
+ * WHAT A HANDLE'S SECONDS WERE SPENT ON, when one handle serves more than one
+ * repo (MOTIR-3255).
+ *
+ * ⚠️ WHY THE PORT NEEDS A SHAPE FOR THIS AT ALL. `ContainerUsage` carries ONE
+ * `projectId` and ONE `repoFullName`, and the cost meter states that its columns
+ * *"mirror this interface one-for-one, and they have to stay that way."* That is
+ * exact while a container serves one repo. The warm sync worker
+ * (`code-graph-index-fleet.md` §16) is one machine, one ORG, many repos over its
+ * life — so a handle that cannot say which project's work it did makes *"what did
+ * indexing cost us for project X"* unanswerable, which is the failure MOTIR-1995
+ * was filed over.
+ *
+ * ⚠️ AND THE ADAPTER REPORTS ONLY **WORK**. Idle is DERIVED by the meter, from the
+ * handle's lifetime minus the work reported, so the reconciliation Σslices =
+ * lifetime holds by construction rather than by trusting a caller to subtract.
+ * There is deliberately no way to report an idle slice from out here.
+ */
+export interface ContainerWorkSlice {
+  /**
+   * The unit of work — one sync, named by the id its dispatch already carries.
+   * It is the IDEMPOTENCY KEY: supervision replays, so a slice is upserted on
+   * `(provider, handle, sliceRef)` and a replayed checkpoint costs nothing.
+   */
+  readonly sliceRef: string;
+  /** Whose work it was. A slice always names a project; a null belongs to idle,
+   *  which this shape cannot express. */
+  readonly projectId: string;
+  readonly repoFullName: string;
+  /** ⚠️ ABSOLUTE-TO-DATE, never a delta — the same discipline as
+   *  {@link ContainerAccrual.accruedSeconds}, and for the same reason. */
+  readonly seconds: number;
+}
+
 export interface ContainerUsage {
   readonly handleId: string;
   readonly provider: OrchestratorProvider;
@@ -185,7 +219,14 @@ export interface ContainerUsage {
   readonly orgId: string;
   readonly workspaceId: string;
   readonly projectId: string;
-  readonly repoFullName: string;
+  /**
+   * `owner/name`, or NULL for a handle that served an ORG rather than one repo
+   * (MOTIR-3255). The null is a statement, not a gap: a warm sync worker
+   * (`code-graph-index-fleet.md` §16) lives across many repos of one org, and a
+   * record naming the last one it touched would read as a fact. What it served is
+   * in {@link ContainerUsage.slices}.
+   */
+  readonly repoFullName: string | null;
   /** WHICH workload this container ran. The fleet org is SHARED — runners, index
    *  containers and Epic 9's agents all bill the same uncapped account — so a
    *  cost row that cannot say which workload it was merges three margins into
@@ -215,6 +256,18 @@ export interface ContainerUsage {
 
   readonly terminalState: string; // provider-reported
   readonly teardownReason: TeardownReason;
+
+  /**
+   * What this handle's seconds were spent on, when it served more than one repo
+   * (MOTIR-3255). ABSENT for every one-container-one-repo workload, which is all
+   * of them today — those rows are already exactly attributed by the fields
+   * above, and an empty array would claim something different from "not
+   * applicable".
+   *
+   * When present, `repoFullName` above is expected to be null: the handle served
+   * an ORG, and naming the last repo it happened to touch would read as a fact.
+   */
+  readonly slices?: readonly ContainerWorkSlice[];
 }
 
 /**
@@ -254,7 +307,8 @@ export interface ContainerAccrual {
   readonly orgId: string;
   readonly workspaceId: string;
   readonly projectId: string;
-  readonly repoFullName: string;
+  /** As {@link ContainerUsage.repoFullName} — null when the handle served an ORG. */
+  readonly repoFullName: string | null;
   readonly workload: FleetWorkloadKind;
   readonly workflowJobId: number | null;
 
@@ -273,6 +327,10 @@ export interface ContainerAccrual {
   readonly usdPerSecond: string; // decimal string — never a float
   readonly costUsd: string; // accruedSeconds × usdPerSecond
   readonly rateEffectiveFrom: Date | null;
+
+  /** As {@link ContainerUsage.slices} — a checkpoint attributes what the handle
+   *  has served SO FAR, on the same absolute-to-date terms as `accruedSeconds`. */
+  readonly slices?: readonly ContainerWorkSlice[];
 }
 
 /**

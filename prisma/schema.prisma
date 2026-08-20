@@ -675,6 +675,8 @@ model Organization {
   // these are what serving it cost. Both org-denormalized so margin per org is
   // one read of each.
   ciContainerUsages           CiContainerUsage[]
+  /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
+  ciContainerUsageSlices      CiContainerUsageSlice[]
   ciContainerPeriodCosts      CiContainerPeriodCost[]
   // What that consumption has been CHARGED (Story MOTIR-1775 · MOTIR-1901) — one
   // row per org per period. Org-scoped rather than workspace-scoped, unlike the
@@ -834,6 +836,8 @@ model Workspace {
   // in both directions, so it is tenant data with a system-admin escape for the
   // orchestrator, never an untenanted operator table.
   ciContainerUsages           CiContainerUsage[]
+  /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
+  ciContainerUsageSlices      CiContainerUsageSlice[]
   ciContainerPeriodCosts      CiContainerPeriodCost[]
 
   @@index([organizationId])
@@ -1180,6 +1184,8 @@ model Project {
   /// the same reason: real money was spent, and deleting the project must not
   /// erase what it cost.
   ciContainerUsages           CiContainerUsage[]
+  /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
+  ciContainerUsageSlices      CiContainerUsageSlice[]
   /// The API tokens BOUND to this project (MOTIR-2605 Amendment 1). Modelled on
   /// both sides per the FK-`@relation` rule: a raw-SQL-only FK puts the datamodel
   /// and the migration-built DB in permanent drift. Cascade — a token bound to a
@@ -5006,15 +5012,15 @@ model PlanChangeSession {
 ///                nothing happened. System turns are NOT part of the intent.
 /// Workspace-scoped tenant data (RLS in the same migration).
 model PlanChangeTurn {
-  id          String             @id @default(cuid())
-  workspaceId String             @map("workspace_id")
-  sessionId   String             @map("session_id")
+  id              String                @id @default(cuid())
+  workspaceId     String                @map("workspace_id")
+  sessionId       String                @map("session_id")
   /// 0-based position in the thread. Unique per session — the DB backstop for the
   /// locked allocation; a violation means a lost append race and surfaces as a
   /// typed domain error, never a raw P2002.
-  seq         Int
-  role        PlanChangeTurnRole
-  body        String             @db.Text
+  seq             Int
+  role            PlanChangeTurnRole
+  body            String                @db.Text
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
@@ -5024,18 +5030,18 @@ model PlanChangeTurn {
   /// the settle is then a single keyed, replayable lookup rather than "the most
   /// recent user turn". Null on a `user` turn of the shipped plan-change path,
   /// whose submission is a separate gesture writing a `system` marker.
-  jobId       String?            @map("job_id")
+  jobId           String?               @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.
   /// It is what makes the awaiting-your-answer state DERIVABLE from the persisted
   /// thread rather than held in client state — so re-opening the workspace hours
   /// later comes back to the same pending question. Null on every other role.
-  question    String?            @db.Text
+  question        String?               @db.Text
   /// A `user` turn sent as the REPLY to the pending question (through the answer
   /// bar), as opposed to one that changed the subject and SUPERSEDED it. The two
   /// dispositions render different markers (design state C vs E), and neither may
   /// rest on reading the words — so which affordance sent it is recorded here.
-  isAnswer    Boolean            @default(false) @map("is_answer")
+  isAnswer        Boolean               @default(false) @map("is_answer")
   /// What this turn ASKED FOR — `ask` (answer my question, change nothing) or
   /// `plan_change` (propose a plan delta), MOTIR-1816 /
   /// `docs/decisions/conversation-turn-intent.md`. Set on `user` turns only
@@ -5047,13 +5053,13 @@ model PlanChangeTurn {
   /// disposition — what actually ran for this turn — not a stored guess, which
   /// is why a re-run under the other intent MOVES it rather than adding a second
   /// row (the `isAnswer` posture: the thread records what Motir DID).
-  intent      PlanChangeTurnIntent? @map("intent")
+  intent          PlanChangeTurnIntent? @map("intent")
   /// Whether this turn was RE-RUN under the other intent after Motir read it
   /// wrong (ADR §3). `intent` alone cannot say so — it holds what finally ran —
   /// and the transcript is a record, so the correction has to survive as a fact
   /// rather than as the absence of the first reading. Also the one number that
   /// says whether ADR §4's default ever needs revisiting.
-  intentCorrected Boolean         @default(false) @map("intent_corrected")
+  intentCorrected Boolean               @default(false) @map("intent_corrected")
   /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
   /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
   /// role and on an answer the graphs could not support.
@@ -5065,12 +5071,12 @@ model PlanChangeTurn {
   /// WRITE time (`workItemRepository.findByIdentifiers`), so a cross-project or
   /// unresolvable key is dropped rather than persisted as a chip that renders
   /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
-  citations   String[]           @default([])
+  citations       String[]              @default([])
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
-  authorId    String?            @map("author_id")
-  createdAt   DateTime           @default(now()) @map("created_at")
+  authorId        String?               @map("author_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
 
   workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   /// COMPOSITE FK (MOTIR-1735) — the turn points at `(session_id, workspace_id)`,
@@ -6027,7 +6033,18 @@ model CiContainerUsage {
 
   /// `owner/name` AS THE INTENT RECORDED IT (§5.5's posture) — the port carries
   /// one string, so the row stores one. The fleet reconciliation splits it.
-  repoFullName  String  @map("repo_full_name")
+  ///
+  /// ⚠️ NULLABLE SINCE MOTIR-3255, AND THE NULL IS A STATEMENT: *this handle
+  /// served an ORG, not a repo.* A warm sync worker (`code-graph-index-fleet.md`
+  /// §16) lives across many repos of one org, so no single value here could be
+  /// true — and a row naming the last repo it happened to serve would be worse
+  /// than a null, because it would read as a fact. Which repos it served, and for
+  /// how long, is in `ci_container_usage_slice`; this row keeps the handle's
+  /// LIFETIME, which is what the org-and-workload rollup reads.
+  ///
+  /// Every one-container-one-repo workload still writes it, and the writer
+  /// requires it for those — the column is permissive, the writer is not.
+  repoFullName  String? @map("repo_full_name")
   /// GitHub's job id (a STRING — never do math on it), matching
   /// `CiRunnerProvisioningIntent.jobId`. One job, one container.
   ///
@@ -6128,6 +6145,104 @@ model CiContainerUsage {
   @@index([periodStart])
   @@index([projectId])
   @@map("ci_container_usage")
+}
+
+/// WHAT ONE HANDLE'S SECONDS WERE SPENT ON, when the handle served more than one
+/// repo (Story MOTIR-3249 · Subtask MOTIR-3255).
+///
+/// ⚠️ WHY THIS EXISTS. `ci_container_usage` is one row per CONTAINER carrying one
+/// `project_id` and one `repo_full_name`, and that was exact while every container
+/// served exactly one repo. The warm sync worker (`code-graph-index-fleet.md` §16)
+/// breaks the assumption: one machine, one ORG, many repos over its life. A row
+/// that cannot say which project's syncs it performed makes *"what did indexing
+/// cost us for project X"* unanswerable — the precise failure MOTIR-1995 was filed
+/// over, reached this time through an attribution hole rather than a missing route.
+///
+/// ⚠️ IT DOES NOT REPLACE THE HANDLE ROW, AND THE TWO ARE NOT TWO INTERPRETATIONS
+/// OF ONE RECORD. The handle row stays the ONE record of what the machine cost —
+/// its lifetime seconds, its rate, its period — and it alone feeds the org ×
+/// workload rollup. A slice is a finer READ of that same lifetime, never a second
+/// source for the total. What keeps them honest is arithmetic, and it is asserted:
+/// **Σ slices = the handle's `billable_seconds`, idle included.**
+///
+/// ⚠️ IDLE IS A SLICE, AND ITS OWNER IS THE ORG. A worker that waits costs money on
+/// nobody's behalf in particular, and *"idle is a real cost and it belongs to
+/// somebody"* is settled here by giving it a row of its own with a null project and
+/// a null repo. It is DERIVED by the writer (lifetime − Σ reported work), never
+/// reported by the container — so the reconciliation holds by construction rather
+/// than by trusting a caller to do subtraction.
+model CiContainerUsageSlice {
+  id String @id @default(cuid())
+
+  /// The handle this slice belongs to — the same `(provider, handle)` pair that
+  /// identifies the parent row. Denormalized rather than a foreign key onto the
+  /// parent's `id` for the reason the parent denormalizes attribution: the writer
+  /// holds these two values before it holds the parent's cuid, and a slice must be
+  /// idempotently upsertable in the same transaction that materializes the parent.
+  containerProvider String @map("container_provider")
+  handleId          String @map("handle_id")
+
+  /// The unit of work this slice covers — one SYNC, named by the id the dispatch
+  /// already carries (`runId`). It is the idempotency key: supervision runs as
+  /// durable steps that re-execute on replay, so every write is an upsert on
+  /// `(provider, handle, slice_ref)` and a replay costs nothing.
+  ///
+  /// The DERIVED idle slice uses the reserved ref `__idle__` — a slice the writer
+  /// owns needs a key the writer owns, and no run id can collide with it.
+  sliceRef String @map("slice_ref")
+
+  /// `work` or `idle`. An explicit kind rather than "a work slice whose repo is
+  /// null": the two are different claims, and a reader forced to infer one from a
+  /// null would be inventing the second interpretation this model exists to avoid.
+  kind String
+
+  /// WHO the slice is attributed to. Both are NULL on an `idle` slice — the org
+  /// owns it, and the org is on the row already. `project_id` is nullable + SetNull
+  /// for the reason the parent's is: a deleted project must not erase the record
+  /// that Motir paid for this compute.
+  workspaceId    String  @map("workspace_id")
+  organizationId String  @map("organization_id")
+  projectId      String? @map("project_id")
+  repoFullName   String? @map("repo_full_name")
+
+  /// ABSOLUTE-TO-DATE, NEVER A DELTA — the same discipline as the parent's
+  /// `billable_seconds` and for the same reason: a replayed checkpoint states the
+  /// slice's total so far and the writer overwrites, so replaying is free and
+  /// double-counting is not expressible.
+  seconds Int
+
+  /// The commercial mapping, copied from the parent at write time so a slice reads
+  /// without a join and cannot drift if the rate table is later re-dated. DECIMAL
+  /// for the reason the parent gives.
+  usdPerSecond Decimal @map("usd_per_second") @db.Decimal(20, 12)
+  costUsd      Decimal @map("cost_usd") @db.Decimal(20, 12)
+
+  /// The parent's period, copied — pinned at the parent's first write and never
+  /// moved, so a slice can never land in a bucket its own handle is not in.
+  periodStart DateTime @map("period_start")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// One slice per unit of work per handle — the key the upsert is idempotent on.
+  ///
+  /// ⚠️ THE NAME IS PINNED, and it has to be: the derived name for three columns
+  /// on a table with this prefix is 67 characters, over Postgres's 63-byte
+  /// identifier limit, so the database and Prisma each truncate it — to DIFFERENT
+  /// strings. `migrate diff` then reports a permanent rename, and the drift never
+  /// resolves however many times the migration is re-applied. An explicit short
+  /// map is the only form both sides agree on.
+  @@unique([containerProvider, handleId, sliceRef], map: "ci_container_usage_slice_handle_ref_key")
+  /// The reconciliation read: every slice of one handle.
+  @@index([containerProvider, handleId])
+  /// The attribution reads: what one org, or one project, cost in a period.
+  @@index([organizationId, periodStart])
+  @@index([projectId, periodStart])
+  @@map("ci_container_usage_slice")
 }
 
 /// The PER-PERIOD fleet-COST rollup (Story MOTIR-1916 · MOTIR-1924 ·

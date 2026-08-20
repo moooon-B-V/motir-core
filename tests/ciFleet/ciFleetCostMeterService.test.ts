@@ -7,6 +7,11 @@ import { projectsService } from '@/lib/services/projectsService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { ciContainerUsageRepository } from '@/lib/repositories/ciContainerUsageRepository';
+import {
+  ciContainerUsageSliceRepository,
+  IDLE_SLICE_REF,
+} from '@/lib/repositories/ciContainerUsageSliceRepository';
+import { periodStartFor } from '@/lib/ciMetering/period';
 import { containerWorkloadFor, FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import { buildContainerAccrual } from '@/lib/orchestrator/usage';
 import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator/usageSink';
@@ -1138,5 +1143,303 @@ describe('the seam the orchestrator actually calls', () => {
     );
     const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
     expect(ciContainerUsageCount).toBe(0);
+  });
+});
+
+describe('ATTRIBUTION when ONE handle serves MANY repos (MOTIR-3255)', () => {
+  // The warm sync worker (`code-graph-index-fleet.md` §16) is one machine, one
+  // ORG, many repos over its life. `ci_container_usage` carries one project and
+  // one repo per handle, so a worker's row cannot say which project's syncs it
+  // performed — the exact unanswerable-cost failure MOTIR-1995 was filed over,
+  // reached through an attribution hole instead of a missing route.
+  //
+  // What is asserted here is the arithmetic that makes the two levels honest:
+  // the handle row still owns the TOTAL and still feeds the rollup, and the
+  // slices divide that same total exactly, idle included.
+
+  /** A second project in the SAME org — a worker serves one org's repos. */
+  async function secondProject(fx: Fixture): Promise<{ projectId: string; repoFullName: string }> {
+    const membership = await adminDb.workspaceMembership.findFirstOrThrow({
+      where: { workspaceId: fx.workspaceId },
+    });
+    const other = await projectsService.createProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: membership.userId,
+      name: `Other ${randomToken(4)}`,
+      identifier: `B${randomInt(100, 1000)}`,
+    });
+    expect(other.id).not.toBe(fx.projectId);
+    return { projectId: other.id, repoFullName: 'motir-projects/acme-api' };
+  }
+
+  async function slicesFor(handleId: string) {
+    return withSystemContext((tx) =>
+      ciContainerUsageSliceRepository.listForHandle('fake', handleId, tx),
+    );
+  }
+
+  it('divides the handle EXACTLY — Σ slices = the handle figure, idle included', async () => {
+    // THE CENTRAL CLAIM. Everything else about this record is bookkeeping; if the
+    // parts do not add up to the whole, the rollup and the per-project read are
+    // two different answers to one question, which is the outcome the card
+    // forbids in as many words.
+    const fx = await seedTenant();
+    const other = await secondProject(fx);
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 300,
+      costUsd: costFor(300),
+      // The worker names no repo of its own: it served an ORG.
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 120 },
+        {
+          sliceRef: 'run-b',
+          projectId: other.projectId,
+          repoFullName: other.repoFullName,
+          seconds: 60,
+        },
+      ],
+    });
+
+    const result = await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    expect(result.outcome).toBe('accrued');
+    if (result.outcome !== 'accrued') return;
+    expect(result.attributedSeconds).toBe(180);
+    expect(result.idleSeconds).toBe(120);
+
+    const slices = await slicesFor(accrual.handleId);
+    expect(slices.reduce((total, slice) => total + slice.seconds, 0)).toBe(300);
+    expect(slices.map((s) => [s.kind, s.projectId, s.seconds])).toEqual([
+      ['idle', null, 120],
+      ['work', fx.projectId, 120],
+      ['work', other.projectId, 60],
+    ]);
+
+    // …and the money divides with it, from the SAME rate the handle was costed at.
+    expect(slices.map((s) => s.costUsd)).toEqual([costFor(120), costFor(120), costFor(60)]);
+
+    // The handle row is unchanged in kind: it still owns the lifetime, and it is
+    // still what the rollup counts. Slices are a finer read, never a second total.
+    const row = await withSystemContext((tx) =>
+      ciContainerUsageRepository.lockAccruedState('fake', accrual.handleId, tx),
+    );
+    expect(row?.billableSeconds).toBe(300);
+  });
+
+  it('gives IDLE to the ORG — a null project, on its own row, derived not reported', async () => {
+    // "Idle is a real cost and it belongs to somebody — decide to whom, and write
+    // it down." It belongs to the org: a machine waiting for work is costing money
+    // on nobody's behalf in particular. Spreading it across the projects it
+    // happened to serve would invent an attribution nobody measured.
+    const fx = await seedTenant();
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 200,
+      costUsd: costFor(200),
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 50 },
+      ],
+    });
+
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    const idle = (await slicesFor(accrual.handleId)).find((s) => s.kind === 'idle');
+    expect(idle).toBeDefined();
+    expect(idle?.projectId).toBeNull();
+    expect(idle?.repoFullName).toBeNull();
+    expect(idle?.seconds).toBe(150);
+
+    // DERIVED, not reported: the port has no shape for an idle slice, so a
+    // container cannot report one — which is what makes the sum hold by
+    // construction rather than by trusting a caller to subtract.
+    expect(idle?.sliceRef).toBe(IDLE_SLICE_REF);
+  });
+
+  it('RECONCILES across checkpoints — idle shrinks as work is attributed', async () => {
+    // A worker checkpoints while it runs. Each observation states absolute totals,
+    // so idle is re-derived every time rather than accumulated — and the sum holds
+    // at every intermediate state, not only at the end.
+    const fx = await seedTenant();
+    const other = await secondProject(fx);
+    const handleId = `m-${randomToken(8)}`;
+
+    const first = await ciFleetCostMeterService.recordContainerAccrual(
+      accrualFor(fx, {
+        handleId,
+        accruedSeconds: 100,
+        costUsd: costFor(100),
+        repoFullName: null,
+        slices: [
+          {
+            sliceRef: 'run-a',
+            projectId: fx.projectId,
+            repoFullName: fx.repoFullName,
+            seconds: 40,
+          },
+        ],
+      }),
+    );
+    expect(first.outcome === 'accrued' && first.idleSeconds).toBe(60);
+
+    // A LATER checkpoint: the handle has lived longer and served a second repo.
+    // `run-a` is not repeated — an earlier checkpoint already attributed it, and
+    // the writer reads the sum back from the table rather than from this call.
+    const second = await ciFleetCostMeterService.recordContainerAccrual(
+      accrualFor(fx, {
+        handleId,
+        accruedSeconds: 260,
+        costUsd: costFor(260),
+        repoFullName: null,
+        slices: [
+          {
+            sliceRef: 'run-b',
+            projectId: other.projectId,
+            repoFullName: other.repoFullName,
+            seconds: 90,
+          },
+        ],
+      }),
+    );
+    expect(second.outcome === 'accrued' && second.attributedSeconds).toBe(130);
+    expect(second.outcome === 'accrued' && second.idleSeconds).toBe(130);
+
+    const slices = await slicesFor(handleId);
+    expect(slices.reduce((total, s) => total + s.seconds, 0)).toBe(260);
+  });
+
+  it('is IDEMPOTENT under replay — a repeated checkpoint changes no slice', async () => {
+    // Supervision runs as durable steps that re-execute on replay. A slice write
+    // states the slice's TOTAL and upserts on its ref, so a replay rewrites the
+    // same number rather than adding a second row.
+    const fx = await seedTenant();
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 150,
+      costUsd: costFor(150),
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 70 },
+      ],
+    });
+
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+
+    const slices = await slicesFor(accrual.handleId);
+    expect(slices).toHaveLength(2); // one work, one idle — not four
+    expect(slices.reduce((total, s) => total + s.seconds, 0)).toBe(150);
+  });
+
+  it('answers "what did this cost project X" — the read MOTIR-1995 demanded stays answerable', async () => {
+    const fx = await seedTenant();
+    const other = await secondProject(fx);
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 300,
+      costUsd: costFor(300),
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 200 },
+        {
+          sliceRef: 'run-b',
+          projectId: other.projectId,
+          repoFullName: other.repoFullName,
+          seconds: 40,
+        },
+      ],
+    });
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+
+    const byProject = await withSystemContext((tx) =>
+      ciContainerUsageSliceRepository.sumByProjectForOrgPeriod(
+        fx.organizationId,
+        periodStartFor(accrual.observedAt),
+        tx,
+      ),
+    );
+    const seconds = new Map(byProject.map((row) => [row.projectId, row.seconds]));
+    expect(seconds.get(fx.projectId)).toBe(200);
+    expect(seconds.get(other.projectId)).toBe(40);
+    // The org's own line — idle — is RETURNED rather than filtered out, or a
+    // reader would find the project totals mysteriously short of the rollup.
+    expect(seconds.get(null)).toBe(60);
+  });
+
+  it('writes NOTHING for a one-repo handle — no empty set, no whole-lifetime idle row', async () => {
+    // Every workload shipping today is one container, one repo, and its row already
+    // attributes its whole figure exactly. A slice table that also held those rows
+    // would be a second place to read the same fact.
+    const fx = await seedTenant();
+    const usage = usageFor(fx);
+    await ciFleetCostMeterService.recordContainerUsage(usage);
+    expect(await slicesFor(usage.handleId)).toEqual([]);
+  });
+
+  it('SAYS SO when a handle claims more work than it lived, and still records both', async () => {
+    // A reporting bug, not a shape. Idle floors at zero so the row cannot go
+    // negative, the slices are kept because what was reported is the evidence, and
+    // the discrepancy is logged rather than silently clamped away.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 60,
+      costUsd: costFor(60),
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 500 },
+      ],
+    });
+
+    const result = await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    expect(result.outcome === 'accrued' && result.idleSeconds).toBe(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('more work than it lived'));
+
+    const slices = await slicesFor(accrual.handleId);
+    expect(slices.find((s) => s.kind === 'work')?.seconds).toBe(500);
+    warn.mockRestore();
+  });
+
+  it('meters a META org identically — slices and all', async () => {
+    // `isMeta` is a BILLING flag, and this meter charges nobody. Read every
+    // `isMeta` branch as "should this be un-CHARGED?", never "un-MEASURED?".
+    const fx = await seedTenant({ isMeta: true });
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 120,
+      costUsd: costFor(120),
+      repoFullName: null,
+      slices: [
+        { sliceRef: 'run-a', projectId: fx.projectId, repoFullName: fx.repoFullName, seconds: 30 },
+      ],
+    });
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+
+    const slices = await slicesFor(accrual.handleId);
+    expect(slices.reduce((total, s) => total + s.seconds, 0)).toBe(120);
+    expect(slices.find((s) => s.kind === 'idle')?.seconds).toBe(90);
+  });
+
+  it('touches NO credit ledger, balance or user-facing surface', async () => {
+    // The boundary this meter is emphatic about, re-asserted for the new writes:
+    // slices are COGS telemetry and nothing else.
+    const fx = await seedTenant();
+    const chargesBefore = await adminDb.ciPeriodCharge.count();
+    const usageBefore = await adminDb.ciPeriodUsage.count();
+    await ciFleetCostMeterService.recordContainerAccrual(
+      accrualFor(fx, {
+        accruedSeconds: 90,
+        costUsd: costFor(90),
+        repoFullName: null,
+        slices: [
+          {
+            sliceRef: 'run-a',
+            projectId: fx.projectId,
+            repoFullName: fx.repoFullName,
+            seconds: 30,
+          },
+        ],
+      }),
+    );
+    // `ci_period_charge` is the entitlement half's only durable state and
+    // `ci_period_usage` is the customer-facing meter; the credit ledger itself
+    // lives in motir-ai, which this process cannot reach at all. Untouched.
+    expect(await adminDb.ciPeriodCharge.count()).toBe(chargesBefore);
+    expect(await adminDb.ciPeriodUsage.count()).toBe(usageBefore);
   });
 });
