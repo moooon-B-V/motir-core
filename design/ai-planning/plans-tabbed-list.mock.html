@@ -1,0 +1,1419 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Plans list, tabbed by status — MOTIR-3233</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock uses
+         the same VALUES so it renders without the Tailwind build, exactly as the
+         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
+         Nothing here re-defines shape/colour semantics — it re-states them so a
+         plain browser paints the real palette.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        /* tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --danger-surface: #fde0ec;
+        --warning-surface: #ffe8d4;
+        /* work-item type hues */
+        --t-epic: #ff64c8;
+        --t-epic-soft: #ffe3f5;
+        --t-story: #1aae39;
+        --t-story-soft: #d9f3e1;
+        --t-task: #0075de;
+        --t-task-soft: #dcecfa;
+        --t-bug: #e03131;
+        --t-subtask: #2a9d99;
+        --t-subtask-soft: #d6f0ee;
+        /* shape */
+        --r-card: 12px;
+        --r-btn: 10px;
+        --r-control: 8px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 4px 14px #00000014;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 70ch;
+      }
+      .doc-head .refs {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 11px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap span.note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .frame {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--sh-card);
+        overflow: hidden;
+      }
+
+      /* ---- app shell: left nav + main ---- */
+      .app {
+        display: grid;
+        grid-template-columns: 212px 1fr;
+        height: 560px;
+      }
+      .nav a.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .nav a.on svg {
+        color: var(--accent);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        height: 50px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 18px;
+        flex: none;
+      }
+      .topbar h3 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .topbar .sub {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .topbar .grow {
+        margin-left: auto;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: var(--r-btn);
+        padding: 8px 13px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.secondary {
+        background: transparent;
+        color: var(--strong);
+        border: 1px solid var(--border-strong);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--secondary);
+      }
+      .btn.sm {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      /* ---- plans list ---- */
+      .list {
+        padding: 14px 18px;
+        overflow: auto;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 22px 1fr auto;
+        gap: 13px;
+        align-items: center;
+        padding: 13px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        margin-bottom: 9px;
+        box-shadow: var(--sh-subtle);
+      }
+      .row:hover {
+        border-color: var(--border-strong);
+      }
+      .row .ic {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+      }
+      .row .ic svg {
+        width: 13px;
+        height: 13px;
+      }
+      .row .idea {
+        min-width: 0;
+      }
+      .row .idea .t {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--strong);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .row .idea .m {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 2px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .row .idea .m b {
+        color: var(--secondary);
+        font-weight: 600;
+      }
+      .row .meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.generating {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .pill.planned {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.approved {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.declined {
+        background: var(--mutedfill);
+        color: var(--muted);
+      }
+      .pill.stale {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      /* --- MOTIR-2985: the authorship attribution (amends A + B) ---------
+         An entry in the row's EXISTING meta line, not new chrome: same
+         `--el-text-secondary` ink, same 11.5px, same 12px gap. The GLYPH is what
+         makes it a different KIND of fact from the count and the timestamp
+         beside it (a bare "by X" reads as one more timestamp at a glance), and
+         it is decorative — the words carry the meaning, so meaning is never
+         colour- or icon-only. */
+      .attrib {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+      .attrib svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--faint);
+      }
+      .attrib b {
+        color: var(--secondary);
+        font-weight: 600;
+      }
+      /* ONLY the harness truncates — the title above keeps its own ellipsis and
+         is never shortened by this line. */
+      .attrib .harness {
+        max-width: 12rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .attrib .model {
+        color: var(--muted);
+      }
+      /* WHO ASKED — the person. The shipped initial-letter `Avatar`
+         (app/(authed)/items/_components/issueCellPrimitives.tsx), at the 18px
+         meta-line size rather than its 22px row size. */
+      .who-av {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--text);
+        color: #fff;
+        font-size: 9.5px;
+        font-weight: 600;
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+      }
+      .attrib .person {
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The hairline that separates WHO ASKED from WHO WROTE inside one entry —
+         they are one sentence about provenance, not two facts to scan apart. */
+      .attrib .sep {
+        color: var(--faint);
+      }
+      /* WHY the plan started — `Plan.origin = cadence`. A separate entry, never
+         merged into the WHO one. */
+      .attrib.origin {
+        color: var(--muted);
+      }
+      .hdrtop .pill {
+        align-self: flex-start;
+        max-width: 100%;
+      }
+
+      .pill.count {
+        background: var(--hub);
+        color: var(--secondary);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      @keyframes sp {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .stale {
+        margin-top: 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #8a3d00;
+        background: var(--warning-surface);
+        border-radius: var(--r-pill);
+        padding: 2px 8px;
+      }
+      .stale svg {
+        width: 12px;
+        height: 12px;
+      }
+      .summary .idea {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--strong);
+        line-height: 1.3;
+      }
+
+      /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
+         treatment and would read as one. */
+      .note-box {
+        margin: 14px 18px 4px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        border-radius: var(--r-card);
+        padding: 11px 13px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .note-box b {
+        color: var(--strong);
+      }
+      .note-box code {
+        font: 600 11.5px var(--mono);
+        background: var(--hub);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .decide .btn {
+        justify-content: center;
+        padding: 11px;
+      }
+      .estate .glyph {
+        width: 46px;
+        height: 46px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        background: var(--hub);
+        border: 1px solid var(--border);
+      }
+      .estate .glyph svg {
+        width: 22px;
+        height: 22px;
+        color: var(--muted);
+      }
+      .estate.fail .glyph {
+        background: #fdeae3;
+        border-color: #f3b4a0;
+      }
+      .estate.fail .glyph svg {
+        color: var(--warning);
+      }
+      .estate.credits .glyph {
+        background: var(--accent-soft);
+        border-color: #e3def8;
+      }
+      .estate.credits .glyph svg {
+        color: var(--accent);
+      }
+      @keyframes scan {
+        0% {
+          background-position: -40% 0;
+        }
+        100% {
+          background-position: 140% 0;
+        }
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .decrow .pill {
+        margin-left: auto;
+      }
+      /* ---- Part VII (MOTIR-3233): the STATUS TAB STRIP ----------------
+         The shipped `Segmented` primitive, restated in this mock's local tokens:
+         an `--el-tabnav-track` track (== `--surface`) with a 1px border and a
+         2px inset at `--radius-btn`; each option a real button at
+         `calc(--radius-btn - 2px)` so it NESTS in the track at any style;
+         the pressed option takes the `--el-page-bg` raised fill +
+         `--shadow-subtle` and `--el-text-strong` ink. Nothing new is invented —
+         these are the primitive's own rules with the token names resolved. */
+      .tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-btn);
+        background: var(--surface);
+        padding: 2px;
+      }
+      .tabs .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 36px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: calc(var(--r-btn) - 2px);
+        background: transparent;
+        color: var(--secondary);
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .tabs .tab.on {
+        background: var(--page);
+        color: var(--strong);
+        box-shadow: var(--sh-subtle);
+      }
+      .tabs .tab .n {
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary);
+      }
+      .tabs .tab.on .n {
+        color: var(--accent);
+      }
+      /* The below-`sm` strip: the same control with its counts dropped. The
+         `.narrow` wrapper is the MEASURING RIG — a 343px box is exactly a 375px
+         viewport minus the authed shell's `px-4` gutters. */
+      .narrow {
+        /* 343px of CONTENT + 2 × 10px padding + 2 × 1px border (`box-sizing:
+           border-box`): the inner box is exactly a 375px viewport minus the
+           authed shell's `px-4` gutters, so an overflow measured against this
+           border is the overflow the real page would have. */
+        width: 365px;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--r-control);
+        padding: 10px;
+        background: var(--soft);
+      }
+      .narrow .cap {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--secondary);
+        margin-bottom: 7px;
+      }
+      .narrow.over {
+        border-color: var(--danger);
+      }
+      .measure {
+        font: 600 11px var(--mono);
+        color: var(--secondary);
+        margin-top: 7px;
+      }
+      .measure em {
+        font-style: normal;
+        color: var(--danger);
+      }
+      /* The per-tab EMPTY state — quieter than the whole-surface one, and with
+         no CTA. Composed from the shipped `EmptyState`'s structure at the
+         smaller of its two sizes. */
+      .tabempty {
+        border: 1px dashed var(--border);
+        border-radius: var(--r-card);
+        background: var(--soft);
+        padding: 26px 18px;
+        text-align: center;
+        color: var(--secondary);
+      }
+      .tabempty h4 {
+        margin: 0 0 4px;
+        font-size: 13.5px;
+        color: var(--strong);
+      }
+      .tabempty p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      /* The whole-surface empty state — the shipped `EmptyState` with its
+         Sparkles glyph and its Plan-with-AI CTA, which this Part RETAINS. */
+      .surfempty {
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        padding: 34px 18px;
+        text-align: center;
+      }
+      .surfempty .glyph {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+      }
+      .surfempty .glyph svg {
+        width: 34px;
+        height: 34px;
+      }
+      .surfempty h4 {
+        margin: 0 0 5px;
+        font-size: 15px;
+        color: var(--strong);
+      }
+      .surfempty p {
+        margin: 0 auto 14px;
+        max-width: 46ch;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      /* The page HEADER as it actually ships — h1 + subtitle, and (before this
+         Part) a Plan-with-AI pill in its right slot. Drawn at both widths so the
+         removal is visible rather than asserted. */
+      .pghead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px 0;
+      }
+      .pghead h2 {
+        margin: 0 0 3px;
+        font-size: 20px;
+        letter-spacing: -0.01em;
+        color: var(--text);
+      }
+      .pghead p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--secondary);
+      }
+      /* The DECIDER half of a decided row's attribution (Part VII §3). Same
+         entry, same inks, one more glyph — nothing new in the palette. */
+      .attrib .role {
+        color: var(--secondary);
+      }
+      .decided-strip {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 0 18px 4px;
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>The Plans list, tabbed by status</h1>
+        <p>
+          The <code>/plans</code> index, answering <i>which</i> plan you want before it answers
+          <i>what is in it</i>: one tab per member of the shipped four-member
+          <code>PlanStatus</code> enum with <b>Planned</b> selected by default, the two different
+          emptinesses tabs create, a decided row that names the requester AND the decider, and a
+          page header carrying one Plan-with-AI entrance instead of two.
+        </p>
+        <p>
+          <b>This is its own asset, and it draws the target — not a migration.</b> It does not amend
+          <code>plans-surface.mock.html</code>, which records the moment MOTIR-843 / 2985 / 3074 /
+          3082 / 3159 drew and is not re-exported here. Where a row below is one of that asset's
+          rows, it is reproduced so the two are diffable by reading them side by side.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-3233</span>
+          <span class="ref">Part VII</span>
+          <span class="ref muted">story MOTIR-3232</span>
+          <span class="ref muted">composes plans-surface.mock.html panels A + A2</span>
+          <span class="ref muted">Segmented</span>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 1 — The PLANNED tab — the default, and the header without its second pill -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The PLANNED tab — the default, and the header without its second pill</h2>
+          <span class="note"
+            >· the tab strip below the header · Planned selected · the page header with no
+            Plan-with-AI pill</span
+          >
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="pghead">
+                <div>
+                  <h2>Plans</h2>
+                  <p>every plan Motir AI proposed for Motir</p>
+                </div>
+              </div>
+              <div class="list" style="padding-bottom: 4px">
+                <div class="tabs" role="group" aria-label="Filter plans by status">
+                  <button type="button" class="tab" aria-pressed="false">
+                    Generating<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab on" aria-pressed="true">
+                    Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Approved<span class="n">9</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Declined<span class="n">8</span>
+                  </button>
+                </div>
+              </div>
+              <div class="list" style="padding-top: 6px">
+                <div
+                  class="row"
+                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                >
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M9 11l3 3 8-8" />
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Stripe Connect payouts for marketplace sellers</div>
+                    <div class="m">
+                      <span><b>14</b> items</span><span>+9 add · 4 modify · 1 remove</span
+                      ><span>planned <b>2h ago</b></span
+                      ><span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b>
+                        <span class="sep">·</span
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via <b class="harness">Claude Code</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill stale"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                        /></svg
+                      >3 may be out of date</span
+                    >
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="ic" style="background: var(--sky)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#0a4fa0"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Fill the ready set — expansion of “Marketplace payouts”</div>
+                    <div class="m">
+                      <span><b>6</b> items</span><span>+6 add</span
+                      ><span>planned <b>20m ago</b></span>
+                      <span class="attrib"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-3-6.7" />
+                          <path d="M21 3v6h-6" /></svg
+                        >auto-planned <span class="sep" aria-hidden="true">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
+                          />
+                          <path
+                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                          /></svg
+                        >via <b>Motir AI</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Refund flow for partially-captured payments</div>
+                    <div class="m">
+                      <span><b>9</b> items</span><span>+7 add · 2 modify</span
+                      ><span>planned <b>1h ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">P</span><b class="person">Priya</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+                <div class="row" style="width: 430px">
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 6v6l4 2" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">
+                      Migrate the invoicing pipeline off the legacy scheduler and onto the queue
+                    </div>
+                    <div class="m">
+                      <span><b>23</b> items</span><span>planned <b>5m ago</b></span>
+                      <span class="attrib"
+                        ><span class="who-av">A</span
+                        ><b class="person" title="Alexandra Buchholz-Nakamura"
+                          >Alexandra Buchholz-Nakamura</b
+                        >
+                        <span class="sep" aria-hidden="true">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via
+                        <b class="harness" title="acme-internal-planning-harness v4 (nightly build)"
+                          >acme-internal-planning-harness v4 (nightly build)</b
+                        ></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill planned">Planned</span>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>The header carries ONE Plan-with-AI entrance, and this is it — the top bar's.</b>
+                The page header's own <code>PlanWithAILauncher</code> pill is drawn nowhere above:
+                <code>TopNav</code> already renders one on every authed screen, so the two sat a few
+                hundred pixels apart offering the same thing.
+                <b>The EMPTY state's CTA stays</b> (panel 3) — <code>/roadmap</code>'s empty state
+                carries the same one and the two must not diverge, and an empty page has no
+                top-bar-adjacent context to lean on.<br /><br />
+                <b>The strip sits BELOW the header, not inside it.</b> It is a filter over the list,
+                not a property of the page: putting it in the header's right slot would make it
+                compete with the slot the pill just vacated, and would break the reading order a
+                screen reader takes (title → subtitle → filter → results).
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 2 — A DECIDED row names BOTH people -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>A DECIDED row names BOTH people</h2>
+          <span class="note"
+            >· the decider in the WHEN entry, the requester in the ATTRIBUTION entry — and the
+            null-decider state</span
+          >
+        </div>
+
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>Approved</h3>
+                <span class="sub">· a decided row names WHO ASKED and WHO DECIDED</span>
+              </div>
+              <div class="list" style="padding-bottom: 4px">
+                <div class="tabs" role="group" aria-label="Filter plans by status">
+                  <button type="button" class="tab" aria-pressed="false">
+                    Generating<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Planned<span class="n">2</span>
+                  </button>
+                  <button type="button" class="tab on" aria-pressed="true">
+                    Approved<span class="n">9</span>
+                  </button>
+                  <button type="button" class="tab" aria-pressed="false">
+                    Declined<span class="n">8</span>
+                  </button>
+                </div>
+              </div>
+              <div class="list" style="padding-top: 6px">
+                <div class="row">
+                  <span class="ic" style="background: var(--mint)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#0f5e29"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m20 6-11 11-5-5" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Email digest &amp; weekly summaries</div>
+                    <div class="m">
+                      <span><b>8</b> items</span><span>all added to backlog</span
+                      ><span>approved <b>yesterday</b> by Mara</span
+                      ><span class="attrib"
+                        ><span class="who-av">J</span><b class="person">Jonas</b>
+                        <span class="sep" aria-hidden="true">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z"
+                          />
+                          <path
+                            d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                          /></svg
+                        >via <b>Motir AI</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill approved"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m20 6-11 11-5-5" /></svg
+                      >Approved</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="decided-strip">Declined</div>
+              <div class="list" style="padding-top: 0">
+                <div class="row" style="opacity: 0.78">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Crypto wallet checkout</div>
+                    <div class="m">
+                      <span><b>11</b> items</span><span>dropped — nothing changed</span
+                      ><span>declined <b>3 days ago</b> by Mara</span
+                      ><span class="attrib"
+                        ><span class="who-av">P</span><b class="person">Priya</b>
+                        <span class="sep" aria-hidden="true">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via <b class="harness">Claude Code</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
+                <!-- 8 — DECLINED with NO decider: the sweep terminated it
+                     (decidedById null, decisionReason 'abandoned' — MOTIR-3236).
+                     A state A2 has no row for, and the one that proves the
+                     decider cannot be assumed present. -->
+                <div class="row" style="opacity: 0.78">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">MOTIR-3158 — split the self-blocking-design remedy per repo</div>
+                    <div class="m">
+                      <span><b>3</b> items</span><span>declined <b>2 days ago</b></span
+                      ><span class="attrib"
+                        ><span class="who-av">M</span><b class="person">Mara</b>
+                        <span class="sep" aria-hidden="true">·</span>
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="11" width="18" height="10" rx="2" />
+                          <circle cx="12" cy="5" r="2" />
+                          <path d="M12 7v4M8 16h.01M16 16h.01" /></svg
+                        >via <b class="harness">Claude Code</b></span
+                      >
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b
+                  >Part III §3's rule is REVERSED here, and the reasoning that failed is worth
+                  keeping.</b
+                >
+                It read: <i>“A DECIDED row shows the DECIDER, not the requester”</i>, on the ground
+                that two bare person names in one line are ambiguous — the two-chips-read-as-one
+                hazard applied to people. That hazard is real. What was wrong was the assumption
+                that the two names would land in the SAME entry.<br /><br />
+                <b>They land in different ones, and the entry is what says the role.</b> The decider
+                rides the WHEN entry, where panel A has drawn it since 843 —
+                <code>approved yesterday by Mara</code> — with the verb in front of it. The
+                requester rides the ATTRIBUTION entry, behind its avatar, exactly as on an undecided
+                row. So the line reads
+                <code>8 items · approved yesterday by Mara · ⟨av⟩ Jonas · via Motir AI</code>, and
+                no reader has to work out which name is which: one is preceded by
+                <i>approved … by</i> and the other by a face.
+                <b>Part III's three-entry cap is untouched</b> — the requester goes INSIDE entry 3,
+                it does not add a fourth.<br /><br />
+                <b>And Part III's own ⚠️ is what makes this a fix rather than a preference:</b> the
+                decider was drawn in panel A and NEVER SHIPPED — <code>PlanRow</code> renders
+                <code>t(view.whenKey, { when })</code>, so today a decided row names NOBODY. The
+                rule was protecting a collision that could not happen because half of it did not
+                exist. <b>Building the decider is this Part's other half</b>, and row 8 is why it
+                cannot be assumed present: a plan the abandoned-plan sweep terminated (MOTIR-3236)
+                is <code>declined</code> with <code>decidedById</code> NULL, and its row correctly
+                reads <code>declined 2 days ago</code> with no <i>by</i> at all — the same
+                <b>absence, never a placeholder</b> rule Part III set for the attribution itself.
+                Neither party is ever carried by colour or glyph alone: every one of them is a name.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 3 — Two emptinesses, which must not say the same thing -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>Two emptinesses, which must not say the same thing</h2>
+          <span class="note"
+            >· no plans in this PROJECT (keeps its CTA) vs no plans in this TAB (keeps the strip,
+            drops the CTA)</span
+          >
+        </div>
+
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>Two emptinesses</h3>
+                <span class="sub">· “this project has no plans” is not “this tab has none”</span>
+              </div>
+              <div class="list" style="display: grid; gap: 16px">
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    No plans at all — the whole surface
+                  </div>
+                  <div class="surfempty">
+                    <div class="glyph">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+                        <path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z" />
+                      </svg>
+                    </div>
+                    <h4>No plans yet</h4>
+                    <p>
+                      Motir AI plans from your direction docs. Generate your first plan to see
+                      proposed work here.
+                    </p>
+                    <button class="btn primary" type="button">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9Z" />
+                        <path
+                          d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8L16.5 17.5l1.8-.7Z"
+                        /></svg
+                      >Plan with AI
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    Nothing in THIS tab — the strip stays, the CTA does not
+                  </div>
+                  <div class="tabs" role="group" aria-label="Filter plans by status">
+                    <button type="button" class="tab on" aria-pressed="true">
+                      Generating<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Planned<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Approved<span class="n">9</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Declined<span class="n">8</span>
+                    </button>
+                  </div>
+                  <div class="tabempty" style="margin-top: 10px">
+                    <h4>Nothing generating</h4>
+                    <p>
+                      No plan is being written right now. Approved and Declined hold this project's
+                      history.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>The two must not say the same thing, and only one carries a CTA.</b> The
+                whole-surface state is the shipped <code>EmptyState</code> unchanged (<code
+                  >aiPlanning.emptyTitle</code
+                >
+                / <code>emptyDescription</code> + the Plan-with-AI CTA) and is reached exactly as it
+                is today — the project has no plans at all. An empty TAB is a different fact: this
+                project HAS plans, just none in this one. Repeating
+                <i>Generate your first plan</i> there would be false on its face, and offering a
+                generate CTA is the wrong answer to <i>nothing is generating</i> — the reader's next
+                move is another tab, which is why the strip stays above it and the copy names where
+                the plans actually are.<br /><br />
+                <b>The strip is never hidden by an empty tab</b>, and it never disappears with the
+                list: hiding the control that got you here is how a reader gets stuck in a tab. It
+                IS hidden on the whole-surface empty state, where there is nothing to filter and
+                four zeroes would be four ways of saying the same thing.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 4 — The strip below `sm` — MEASURED -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>The strip below `sm` — MEASURED</h2>
+          <span class="note"
+            >· 310.3px with labels · 358.8px with counts · a 343px content box at 375px</span
+          >
+        </div>
+
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>The strip below <code style="font-size: 12px">sm</code></h3>
+                <span class="sub">· measured from this mock, not eyeballed</span>
+              </div>
+              <div class="list" style="display: grid; gap: 14px; justify-items: start">
+                <div class="narrow">
+                  <div class="cap">
+                    inner box 343px = a 375px viewport − px-4 gutters · labels only
+                  </div>
+                  <div class="tabs" role="group" aria-label="Filter plans by status">
+                    <button type="button" class="tab" aria-pressed="false">Generating</button>
+                    <button type="button" class="tab on" aria-pressed="true">Planned</button>
+                    <button type="button" class="tab" aria-pressed="false">Approved</button>
+                    <button type="button" class="tab" aria-pressed="false">Declined</button>
+                  </div>
+                  <div class="measure">strip 310.3px · fits, 32.7px to spare</div>
+                </div>
+                <div class="narrow over">
+                  <div class="cap">the same box · labels + counts</div>
+                  <div class="tabs" role="group" aria-label="Filter plans by status">
+                    <button type="button" class="tab" aria-pressed="false">
+                      Generating<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab on" aria-pressed="true">
+                      Planned<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Approved<span class="n">9</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Declined<span class="n">8</span>
+                    </button>
+                  </div>
+                  <div class="measure">strip 358.8px · <em>overflows by 15.8px</em></div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    ≥ sm (640px, gutters px-6 → 592px) — counts render
+                  </div>
+                  <div class="tabs" role="group" aria-label="Filter plans by status">
+                    <button type="button" class="tab" aria-pressed="false">
+                      Generating<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab on" aria-pressed="true">
+                      Planned<span class="n">2</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Approved<span class="n">9</span>
+                    </button>
+                    <button type="button" class="tab" aria-pressed="false">
+                      Declined<span class="n">8</span>
+                    </button>
+                  </div>
+                  <div class="measure">strip 358.8px · fits, 233px to spare</div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>The measurement, and what it decides.</b> Rendered headlessly from the REAL
+                shipped <code>Segmented</code> with the four real labels, through the real
+                <code>app/globals.css</code> + <code>@motir/design-system</code> theme, at 375 / 700
+                / 1200px in both themes. The strip's width is intrinsic and identical at every
+                viewport: <b>310.3px</b> with labels alone (segments 84.3 / 67.7 / 75.7 / 70.6) and
+                <b>358.8px</b> once each carries a count. The authed shell is
+                <code>px-4</code> below <code>sm</code>, so a 375px viewport gives the page a
+                <b>343px</b> content box.<br /><br />
+                <b>So the LABELS fit at phone width and the COUNTS do not</b> — 310.3 &lt; 343 &lt;
+                358.8, which is a 15.8px overflow, not a near miss. The disposition follows from the
+                number rather than from taste:
+                <b
+                  >all four tabs keep their labels at every width, and the counts render from
+                  <code>sm</code> up</b
+                >. Not a scroller (the fourth tab would sit off-screen on the surface whose whole
+                job is to show you which statuses exist), not glyphs (four lifecycle states have no
+                icons a reader could tell apart), and not a <code>&lt;select&gt;</code> (a second
+                control grammar for one breakpoint). Counts are an ORNAMENT on a filter — dropping
+                them costs a number that the tab's own result set immediately supplies.<br /><br />
+                <b>The header measurement, for the record.</b> At 375px the shipped header WRAPS —
+                <code>flex-wrap</code> drops the Plan-with-AI pill onto its own line under a
+                subtitle that has already wrapped to two. Removing the pill (panel 1) removes that
+                wrap, which is a second reason for the removal beyond the duplication.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
