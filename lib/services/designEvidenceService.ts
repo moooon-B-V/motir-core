@@ -13,6 +13,7 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
   DesignEvidenceBlobMissingError,
   DesignEvidenceEmptyError,
+  DesignEvidenceNotAChildError,
   DesignEvidenceNotALeafError,
   DesignEvidenceNotFoundError,
   DesignEvidencePathnameError,
@@ -64,6 +65,12 @@ export interface RecordDesignResultInput {
   commitSha?: string | null;
   ciRunUrl?: string | null;
   producedByKey?: string | null;
+  /**
+   * The container whose PARENT-RUN branch this publish belongs to (MOTIR-3177).
+   * Present only on that path; it asserts the target is one of that container's
+   * children, and is never persisted.
+   */
+  withinParentKey?: string | null;
 }
 
 /** The private-store key prefix that scopes one item's design artifacts. */
@@ -114,8 +121,41 @@ async function isLeafPosition(item: WorkItem, ctx: ServiceContext): Promise<bool
   return children.length === 0;
 }
 
+/**
+ * A PARENT-RUN publisher declares the container whose branch it is publishing
+ * for, and the target must be one of that container's own children (MOTIR-3177).
+ *
+ * The publisher reads the producing card's key out of a COMMIT SUBJECT, which is
+ * prose: a mistyped key resolves to a real, unrelated leaf that would otherwise
+ * accept the publish. Only the tenant can see the tree, so only the tenant can
+ * refuse. Absent (the ordinary one-card publish, where the branch names the card
+ * directly) this check does not run at all.
+ *
+ * A container key that resolves to nothing is refused for the same reason a
+ * non-child is: it is a claim about the tree that the tree does not support.
+ */
+async function assertChildOf(
+  item: WorkItem,
+  containerIdentifier: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  const container = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    // Same project by construction: both keys carry the project's prefix, and a
+    // cross-project identifier simply does not resolve here.
+    (tx) => workItemRepository.findByIdentifier(item.projectId, containerIdentifier, tx),
+  );
+  if (!container || item.parentId !== container.id) {
+    throw new DesignEvidenceNotAChildError(item.identifier, containerIdentifier);
+  }
+}
+
 /** Resolve + validate the design target is a visible LEAF (RLS-scoped). */
-async function resolveTarget(workItemId: string, ctx: ServiceContext): Promise<WorkItem> {
+async function resolveTarget(
+  workItemId: string,
+  ctx: ServiceContext,
+  withinParentKey?: string | null,
+): Promise<WorkItem> {
   const item = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
     (tx) => workItemRepository.findById(workItemId, tx),
@@ -124,6 +164,7 @@ async function resolveTarget(workItemId: string, ctx: ServiceContext): Promise<W
   if (!(await isLeafPosition(item, ctx))) {
     throw new DesignEvidenceNotALeafError(item.kind, !LEAF_KINDS.has(item.kind));
   }
+  if (withinParentKey) await assertChildOf(item, withinParentKey.trim().toUpperCase(), ctx);
   // Attaching a design result to an item is editing that item; the project is
   // resolved from the ITEM, never from the actor's active project (the gate
   // MOTIR-2365 added to the acceptance resolver after a token-minting endpoint
@@ -354,10 +395,12 @@ export const designEvidenceService = {
     input: {
       workItemId: string;
       files: Array<{ kind: DesignAssetKindDTO; sourcePath: string; contentType: string }>;
+      /** The container whose parent-run branch this publish belongs to, if any. */
+      withinParentKey?: string | null;
     },
     ctx: ServiceContext,
   ): Promise<DesignUploadTokensDTO> {
-    const item = await resolveTarget(input.workItemId, ctx);
+    const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
     if (!input.files || input.files.length === 0) throw new DesignEvidenceEmptyError();
 
     const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
@@ -407,7 +450,7 @@ export const designEvidenceService = {
     input: RecordDesignResultInput,
     ctx: ServiceContext,
   ): Promise<DesignEvidenceDTO> {
-    const item = await resolveTarget(input.workItemId, ctx);
+    const item = await resolveTarget(input.workItemId, ctx, input.withinParentKey);
 
     if (!input.assets || input.assets.length === 0) throw new DesignEvidenceEmptyError();
 

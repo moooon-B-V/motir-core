@@ -13,8 +13,13 @@ import type { DesignAssetKindDTO } from '@/lib/dto/designEvidence';
 // cap and cannot repeat the 413 the acceptance video hit (MOTIR-1681). Thin HTTP
 // layer (CLAUDE.md § 4-layer): shared auth gate → parse JSON → one service call.
 //
-// JSON body: `files` — `[{ kind, sourcePath, contentType }]`. CI then PUTs each
-// grant and reports the resulting pathnames to the sibling register route.
+// JSON body: `files` — `[{ kind, sourcePath, contentType }]`, plus the optional
+// `withinParentKey` a PARENT-RUN publish declares so the tenant can check the
+// target really is that container's child (MOTIR-3177). CI then PUTs each grant
+// and reports the resulting pathnames to the sibling register route.
+
+const strOrNull = (v: unknown): string | null =>
+  typeof v === 'string' && v.trim() !== '' ? v : null;
 
 interface FileRequest {
   kind: DesignAssetKindDTO;
@@ -54,7 +59,10 @@ export async function POST(
 
   // The `.catch` guarantees an object, so `body.files` needs no optional chain —
   // an unparseable body simply yields no files and falls into the 400 below.
-  const body = (await req.json().catch(() => ({}))) as { files?: unknown };
+  const body = (await req.json().catch(() => ({}))) as {
+    files?: unknown;
+    withinParentKey?: unknown;
+  };
   const files = parseFiles(body.files);
   if (files.length === 0) {
     return NextResponse.json(
@@ -65,7 +73,7 @@ export async function POST(
 
   try {
     const tokens = await designEvidenceService.createUploadTokens(
-      { workItemId: item.id, files },
+      { workItemId: item.id, files, withinParentKey: strOrNull(body.withinParentKey) },
       ctx,
     );
     return NextResponse.json(tokens, { status: 200 });
