@@ -277,12 +277,14 @@ describe('the settle door’s own gates', () => {
   });
 
   it('maps a TYPED motir-ai failure through the shared taxonomy', async () => {
-    const { MotirAiError } = await import('@/lib/ai/errors');
+    // A CONCRETE subclass: `MotirAiError` is abstract, and the taxonomy is
+    // matched on the base class — so any real member exercises the mapping.
+    const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
     submitJobMock.mockResolvedValue({ jobId: 'job-ask-1' });
     const submitted = (await (await ask(post('/api/ai/ask', { body: 'why?' }))).json()) as {
       jobId: string;
     };
-    getJobMock.mockRejectedValue(new MotirAiError('upstream_error', 'upstream said no'));
+    getJobMock.mockRejectedValue(new MotirAiUnavailableError('upstream said no'));
 
     const res = await settle(post('/api/ai/ask/settle', { jobId: submitted.jobId }));
 
