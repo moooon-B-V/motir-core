@@ -47,6 +47,15 @@ import { loadTokenLayer, declaredIn, resolveValue, type ThemeContext } from './p
 const ROOT = process.cwd();
 const FAB = readFileSync(join(ROOT, 'components/planning/PlanWithAIFab.tsx'), 'utf8');
 const MOCK = readFileSync(join(ROOT, 'design/ai-chat/ai-callout-menu.mock.html'), 'utf8');
+// The OLDER sketch of the same orb (MOTIR-3217). It painted the fill, rim, glow
+// and mark in three invented hexes that no token reached, so it could not
+// follow a `data-palette` swap and its first stop measured 2.995:1 against the
+// white mark — the very defect the asset beside it was filed to fix. Now it
+// reproduces the shipped recipe by reference, and this file is what keeps it
+// there: a third copy of the number is a third place for the mark to go
+// illegible, and it is the copy a reader reaches for when they want the
+// overview rather than the detail.
+const SKETCH = readFileSync(join(ROOT, 'design/ai-chat/planning-workspace.mock.html'), 'utf8');
 const NOTES = readFileSync(join(ROOT, 'design/ai-chat/design-notes.md'), 'utf8');
 
 const { rules } = loadTokenLayer();
@@ -106,15 +115,33 @@ function shippedGradient(): string {
  * that explains the token reference contains a `;`, and a declaration read up
  * to the first semicolon would otherwise end inside the prose.
  */
-const MOCK_CSS = MOCK.replace(/\/\*[\s\S]*?\*\//g, ' ');
+const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
+const MOCK_CSS = stripComments(MOCK);
+const SKETCH_CSS = stripComments(SKETCH);
 
-function mockGradient(): string {
-  const rule = /\.orb\s*\{([\s\S]*?)\}/.exec(MOCK_CSS);
-  expect(rule, 'the mock must carry an `.orb` rule').toBeTruthy();
-  const declaration = /background-image:\s*([\s\S]*?);/.exec(rule![1]!);
-  expect(declaration, 'the mock `.orb` must set a background-image').toBeTruthy();
+/**
+ * One rule's body, by selector.
+ *
+ * The selector is anchored to the start of its line (`\n\s*`) rather than
+ * matched anywhere: `.palstrip .orb { … }` is a real rule in the sketch and it
+ * is DECLARED FIRST, so an unanchored `\.orb\s*\{` returns the 46px strip
+ * override instead of the orb itself — green, and measuring nothing.
+ */
+function ruleBody(css: string, selector: string, asset: string): string {
+  const rule = new RegExp(
+    `\\n\\s*\\.${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([\\s\\S]*?)\\}`,
+  ).exec(css);
+  expect(rule, `${asset} must carry a \`.${selector}\` rule`).toBeTruthy();
+  return rule![1]!;
+}
+
+function gradientOf(css: string, selector: string, asset: string): string {
+  const declaration = /background-image:\s*([\s\S]*?);/.exec(ruleBody(css, selector, asset));
+  expect(declaration, `${asset} \`.${selector}\` must set a background-image`).toBeTruthy();
   return declaration![1]!;
 }
+
+const mockGradient = () => gradientOf(MOCK_CSS, 'orb', 'ai-callout-menu.mock.html');
 
 const normalise = (css: string) =>
   css
@@ -277,6 +304,38 @@ describe('the floating orb’s glyph (MOTIR-3207)', () => {
     expect(contrast(glyph, evaluate(firstStop!.replace(/\s+[\d.]+%$/, '')))).toBeCloseTo(2.78, 2);
   });
 
+  it('is reproduced in the OLDER sketch by reference too — both of its copies', () => {
+    // `planning-workspace.mock.html` sheet 4 draws the same orb twice: `.fab`
+    // (the floating button on the faux page) and `.orb` (the anatomy close-up +
+    // the palette strip). Both used to carry the literal
+    // `radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd)`,
+    // which reached no token at all — so `--orb-lit-mix` could move and this
+    // sheet would keep painting the pre-MOTIR-3207 orb, at 2.995:1 (MOTIR-3217).
+    for (const selector of ['fab', 'orb'] as const) {
+      const gradient = gradientOf(SKETCH_CSS, selector, 'planning-workspace.mock.html');
+      expect(normalise(gradient), `.${selector}`).toBe(normalise(shippedGradient()));
+      expect(gradient, `.${selector}`).toContain(`var(${MIX_TOKEN})`);
+    }
+  });
+
+  it('paints the sketch’s orb — fill, rim, glow and mark — with no raw hex', () => {
+    // The other half of MOTIR-3217, and the half a gradient comparison alone
+    // does not cover: an asset can read the token for its fill and still freeze
+    // its halo and its glyph to the default palette, which is what made the
+    // sheet's own closing note ("`--el-*` palette-derived colour") false.
+    // Every rule the orb is made of is checked, not just the one that carries
+    // the measured stop.
+    const ORB_RULES = ['fab', 'orb', 'fab::before', 'orb::before', 'fab .spark', 'mlogo path'];
+    const offenders = ORB_RULES.flatMap((selector) => {
+      const body = ruleBody(SKETCH_CSS, selector, 'planning-workspace.mock.html');
+      return (body.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map((hex) => `.${selector}: ${hex}`);
+    });
+    expect(
+      offenders,
+      'a raw hue here cannot follow a `data-palette` swap — route it through `--el-*`',
+    ).toEqual([]);
+  });
+
   it('agrees with the design asset — 3.77:1 light, 3.09:1 dark, both recorded', () => {
     // The asset half of the card: `design-notes.md` § B and the mock's panel 9
     // record the orb's numbers, and a recorded number that no longer describes
@@ -290,6 +349,7 @@ describe('the floating orb’s glyph (MOTIR-3207)', () => {
     for (const [name, asset] of [
       ['design-notes.md § B', NOTES],
       ['ai-callout-menu.mock.html panel 9', MOCK],
+      ['planning-workspace.mock.html sheet 4', SKETCH],
     ] as const) {
       expect(asset, `${name} records the light ratio`).toContain(`${light.toFixed(2)}:1`);
       expect(asset, `${name} records the dark ratio`).toContain(`${dark.toFixed(2)}:1`);

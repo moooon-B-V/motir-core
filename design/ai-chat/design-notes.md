@@ -371,6 +371,60 @@ faithfully (the `StationCard` node + the `PlanningCanvas` neutral firm /
 dashed-pending edges + the cross-story `--el-warning` edge), **never a new
 canvas**.
 
+### The orb's colour is READ from the token layer, not painted (MOTIR-3217)
+
+Sheet 4's floating orb is drawn twice (`.fab` on the faux page, `.orb` in the
+anatomy close-up and the palette strip). Until 2026-08-20 both carried the same
+literal —
+`radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd)` plus a
+`#ffffff6e` rim, a `#5645d4cc` drop and a `#ff64c895` glow — three invented hues
+that reached **no token at all**. Two consequences, and the second is the one
+that lasts:
+
+- **It could not follow a `data-palette` swap.** `data-palette` re-points
+  `--color-primary-fill` / `--color-primary-foreground` / `--color-accent` across
+  ten palettes; a hex follows none of them, so this sheet depicted the `motir`
+  palette while its own closing note claimed "`--el-*` palette-derived colour".
+- **Its first stop measured 2.995:1 against the white mark** — the same WCAG
+  1.4.11 miss MOTIR-3207 was filed for, in the asset next door, one week after
+  that asset recorded the finding.
+
+Both rules now reproduce the shipped `PlanWithAIFab` `ORB_STYLE` **stop for
+stop**, in the tokens the app uses:
+
+```css
+background-image: radial-gradient(
+  circle at 33% 27%,
+  color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+  var(--el-accent) 56%,
+  color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+);
+```
+
+with the rim, drop and glow as `--el-accent-text` / `--el-accent` /
+`--el-highlight` mixes, the mark's stroke as `--el-accent-text`, and the first
+stop's mix READ from `--orb-lit-mix` — the contrast knob § _B_ documents, never
+retyped here. The geometry moved with it: the old sketch's `58%` body stop is
+now the shipped `56%`, and the third stop is the shipped
+`--el-highlight`-leaning mix rather than a flat `#4733bd`. **Recorded ratios,
+default palette: 3.77:1 light · 3.09:1 dark**, with every one of the twenty
+palette × theme contexts clearing 3:1.
+
+Only the tokens the orb reads are inlined (Tier-0 `--color-*` → Tier-3
+`--el-*` → the paint, extracted verbatim from
+`packages/design-system/theme.css`, plus each palette's Tier-0 triplet). **The
+rest of this sheet is still an older light-only sketch that inlines the default
+palette by hand** as `--accent` / `--border` / `--muted`; that is left alone
+deliberately — this card re-expresses colours that already exist, it is not a
+re-skin of the board. Sheet 4's palette strip is the visible proof: the same
+rule under all ten `data-palette` values, including the four whose
+`--color-primary-foreground` is not white.
+
+`tests/theme/orb-glyph-contrast.test.ts` holds both halves — the gradient must
+equal the shipped one and contain `var(--orb-lit-mix)`, and no rule the orb is
+made of may carry a raw hex. It runs on `design/*` branches via
+`vitest.design.config.ts` (MOTIR-2442), which is the only lane that sees them.
+
 ### ⭐ Built on SHIPPED REALITY (design-against-shipped-reality)
 
 The shell is **already shipped** and reused, not reinvented:

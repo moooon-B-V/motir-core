@@ -69,14 +69,15 @@ export default defineConfig({
       // oldest for ten weeks — a design PR is both the only thing that can
       // break this and the only thing that can fix it, so it belongs here.
       'tests/design-three-file-set.test.ts',
-      // `theme/orb-glyph-contrast` (MOTIR-3207) measures the floating orb's
-      // white mark against its own gradient in all twenty palette x theme
-      // contexts, and one of its assertions is that
-      // `design/ai-chat/ai-callout-menu.mock.html` panel 9 reproduces the
-      // shipped recipe by REFERENCE — it reads the same `--orb-lit-mix` token
-      // instead of copying the number. A design PR editing that panel is
-      // therefore the thing most likely to break it, and would otherwise skip
-      // the root config that runs it.
+      // `theme/orb-glyph-contrast` (MOTIR-3207, widened by MOTIR-3217) measures
+      // the floating orb's white mark against its own gradient in all twenty
+      // palette x theme contexts, and it also rules on the TWO design assets
+      // that draw the same orb — `ai-callout-menu.mock.html` panel 9 and
+      // `planning-workspace.mock.html` sheet 4 — asserting each reproduces the
+      // shipped recipe by REFERENCE (the same `--orb-lit-mix` token, no copied
+      // number) and paints no raw hue in its fill, rim, glow or mark. A design
+      // PR editing either is therefore the thing most likely to break it, and
+      // would otherwise skip the root config that runs it.
       'tests/theme/orb-glyph-contrast.test.ts',
     ],
   },
