@@ -98,7 +98,7 @@ let replanned: Set<string>;
 /** Keys whose per-card claim re-assert is REFUSED (defensive; see the test). */
 let claimRefuses: Set<string>;
 /** Per-key repository SET, for the multi-repository card (MOTIR-3135). */
-let repoSets: Record<string, { name: string }[]>;
+let repoSets: Record<string, NonNullable<DispatchPrompt['targetRepos']>>;
 /** Per-key primary repository, so a card can be routed at a missing checkout. */
 let repoOf: Record<string, string>;
 
@@ -504,7 +504,14 @@ describe('drainScope — the shapes an older or richer server produces', () => {
     // has to carry all of them, because a FAILED card belongs in the pull-request
     // body of every repository it half-touched — not only the primary's.
     mkdirSync(join(fake.root, 'motir-ai'), { recursive: true });
-    repoSets['PROD-2'] = [{ name: 'motir-core' }, { name: 'motir-ai' }];
+    // ⚠️ THE WHOLE ROW, not just the name. `targetRepos` carries the clone URL,
+    // the default branch and the delivery state alongside it, and a fixture that
+    // supplied a name-only object would be typing a shape the server never
+    // sends — which is exactly what `packages/cli`'s own typecheck catches.
+    repoSets['PROD-2'] = [
+      { name: 'motir-core', cloneUrl: null, defaultBranch: null, delivery: null },
+      { name: 'motir-ai', cloneUrl: null, defaultBranch: null, delivery: null },
+    ];
 
     const summary = await drive([member('PROD-2')], {});
 

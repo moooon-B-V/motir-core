@@ -238,7 +238,10 @@ export function renderClaimedScope(
     blocks.push(
       formatTable(
         CLAIMED_HEADERS,
-        ready.map((r) => [r.key, r.status.key, truncate(r.title ?? '', titleWidth)]),
+        // No `?? ''`: `DispatchItem.title` is a non-nullable `string`, so a
+        // coalesce here would be an unreachable arm — dead code that exists only
+        // to be covered, which is worse than the absent defence it imitates.
+        ready.map((r) => [r.key, r.status.key, truncate(r.title, titleWidth)]),
       ),
     );
   }

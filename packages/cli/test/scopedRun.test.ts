@@ -350,15 +350,6 @@ describe('the DEFENSIVE arms — a server that answers with an outcome and no de
     expect(out).toContain('Claimed The active sprint "Sprint 44" — 2 cards');
     expect(out).not.toContain('null');
   });
-
-  it('renders a row whose TITLE is null without printing the word', () => {
-    const out = renderClaimedScope(
-      claim({ members: [member('PROD-1', 'The story'), member('PROD-2')] }),
-      [{ ...readyRow('PROD-2'), title: null }],
-    );
-    expect(out).toContain('PROD-2');
-    expect(out).not.toContain('null');
-  });
 });
 
 describe('renderEmptyScope', () => {
