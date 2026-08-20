@@ -94,8 +94,15 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
  *     MCP tool to assert it, and this map must confer whatever `TOOL_SCOPES`
  *     files under a scope or a legacy row silently loses a tool
  *     (`tests/tokens/story-gate.test.ts` asserts exactly that). It confers no
- *     other reach: `approvePlan` / `declinePlan` assert the same key and are not
- *     token-reachable at all, so the widening is one tool wide.
+ *     other reach: `approvePlan` / `declinePlan` are not token-reachable at all,
+ *     so the widening is one tool wide.
+ *
+ *     ⚠️ AMENDED by MOTIR-3188. That sentence read "`approvePlan` /
+ *     `declinePlan` assert the same key and are not token-reachable at all".
+ *     They no longer assert the same key — the DECISIONS moved to
+ *     `ai:decide_plan` — and the conclusion is unchanged and now holds for a
+ *     second, stronger reason: a legacy scope cannot confer `ai:decide_plan` at
+ *     all, because no tool asserts it.
  *   * `work_items:archive` / `work_items:delete` — both archive and delete
  *     assert `work_item:delete`, so the old two-scope split has no counterpart
  *     in the gates.

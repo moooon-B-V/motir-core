@@ -222,10 +222,15 @@ describe('every member-facing key answers through ONE resolution, the same way',
     );
   });
 
-  it('ai:view_plan — the key that governs a plan write, refused for a viewer', async () => {
+  it('ai:view_plan — the key that governs a plan AUTHOR write, refused for a viewer', async () => {
     const s = await buildScenario('viewplan');
+    // ⚠️ THE PROBE MOVED (MOTIR-3188), and the key under test did not. This
+    // asserted on `approvePlan`, which now asserts `ai:decide_plan` — so keeping
+    // it would have quietly turned this row into coverage of a DIFFERENT key
+    // while its name still said `ai:view_plan`. `addProposals` is an AUTHOR
+    // write, which is what the key gates after the split.
     await expectKeyRefusal(
-      plansService.approvePlan('plan_does_not_exist', s.viewerCtx),
+      plansService.addProposals('plan_does_not_exist', [], s.viewerCtx),
       'ai:view_plan',
       { allowNotFound: true },
     );

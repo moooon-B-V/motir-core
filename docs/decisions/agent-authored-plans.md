@@ -1067,6 +1067,126 @@ op is worth its own card rather than a clause here.
 
 ---
 
+---
+
+## AMENDMENT 5 — AUTHOR and DECIDE are two permissions, not one (MOTIR-3188, 2026-08-20)
+
+Q2 gave `add_plan_items` the key `ai:view_plan`, and gave a reason that is still the right reason:
+a row names **the key its own service asserts**, and `plansService.addProposals` asserts that one.
+What Q2 did not ask is whether the key it was naming describes a single authority. It does not, and
+by the time Q2 was written the conditions that made the conflation safe had already gone.
+
+> Every reading below was taken off `origin/main` at `a1f8aaad` on 2026-08-20.
+
+### The key gates no view
+
+Every plan READ runs on `project:browse`:
+
+- `planReviewService.getPlanReview` — the plan-detail read — is enforced by `canBrowse`, and its own
+  doc comment says so.
+- `GET /api/v1/plans/[planId]` and `.../status` both declare `permission: 'project:browse'`.
+- The MCP `get_plan` / `get_plan_status` rows in `lib/mcp/toolPermissions.ts` are `project:browse`.
+
+So the name has never described the gate. Every call site that asserts `ai:view_plan` is a WRITE —
+and **two different authorities sit inside it**:
+
+| call site                                          | what it does                             | authority  |
+| -------------------------------------------------- | ---------------------------------------- | ---------- |
+| `plansService.addProposals`                        | appends proposals to a `generating` plan | author     |
+| `plansService.markPlanned` (the `final: true` arm) | closes the generation frontier           | author     |
+| `plansService.editAddProposal` (both its callers)  | edits a proposal in place                | author     |
+| `plansService.approvePlan`                         | MATERIALIZES the subtree into work items | **decide** |
+| `plansService.declinePlan`                         | ends the plan                            | **decide** |
+
+`approvePlan` asserted `ai:view_plan` and **nothing else** — no `work_item:edit`, no
+`work_item:triage`. The key that creates work items in bulk was the key whose name says _can look at
+a plan_.
+
+### The shipped rationale, and why it expired
+
+`editAddProposal` stated it in terms, and it was sound when written:
+
+> THE NAME IS THE MISLEADING PART: this key governs reading a generated plan AND acting on it,
+> because they are the same surface and a reviewer who may not act has nothing to review for.
+
+That premise held while the only reviewer was a person under a **built-in** role: `member` holds
+`ai:plan` + `ai:view_plan`, `viewer` holds neither, so nobody could see a plan without being able to
+act on it and the conflation was unobservable. Two shipped changes broke it.
+
+1. **Custom roles (MOTIR-2257).** `builtinRoles.ts` states the rule: _"a custom role grants EXACTLY
+   WHAT IT LISTS, on every access level […] a permission set an admin enumerated by hand is not
+   coarse."_ An admin who ticks `ai:view_plan` meaning the thing its label said has handed that role
+   bulk work-item creation — while deliberately leaving `work_item:edit` unticked. A privilege
+   escalation reachable entirely from the Roles & permissions screen, with no code change and no
+   warning.
+2. **The reviewer is no longer only a person (MOTIR-2984 / -2988, and MOTIR-3021 in flight).**
+   Authoring a proposal and deciding a plan are now done by different actors holding different
+   tokens. One key cannot express that, and _"a reviewer who may not act"_ is exactly the actor an
+   agent-authoring token is supposed to be.
+
+### Decision: `ai:view_plan` keeps the AUTHOR writes; a new `ai:decide_plan` gates the two decisions
+
+`approvePlan` and `declinePlan` assert **`ai:decide_plan`**. `addProposals`, `markPlanned` and
+`editAddProposal` are untouched, and so are the `add_plan_items` / `update_plan_item` rows in
+`lib/mcp/toolPermissions.ts` — Q2 and AMENDMENT 4 D2 are unchanged, because both named the key
+their own service asserts and their services still assert it.
+
+**Behaviour-neutral on the built-in roles by construction.** `ai:decide_plan` enters
+`ROLE_GATED_PERMISSIONS` (so `admin` and both workspace-manager rails hold it) and
+`BUILTIN_ROLE_PERMISSIONS.member`, and enters neither `viewer` nor
+`IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. `levelGrants` names only the three edit-ish keys, so the new
+key takes the default arm and resolves identically to `ai:view_plan` on all four access levels and
+both rails. Every actor who could approve a plan before can approve one after. What changes is that a
+**custom** role can now withhold one without the other — the same property MOTIR-2256's twelve
+administrative keys claimed.
+
+**It is not grantable to a token, and that is derived rather than chosen.**
+`GRANTABLE_PERMISSIONS` is computed from the operations a token can reach; no MCP tool and no
+`/api/v1` operation asserts `ai:decide_plan`, so it lands in `UNGRANTABLE_PERMISSIONS` on its own.
+MOTIR-3021's public approve entrance is the card that would change that, and when it lands it must
+name `ai:decide_plan` and add the key to `V1_ONLY_PERMISSIONS` with a reason — the derivation guard in
+`tests/tokens/grant.test.ts` will name it if it does not.
+
+### Rejected: rename `ai:view_plan` to `ai:author_plan` instead
+
+The honest name for what survives in `ai:view_plan` is `ai:author_plan`, and renaming it is the
+option that fixes the label without adding a key. It was rejected **for this card**, not on the
+merits:
+
+- The key id is a **persisted value** — `role_definition.permissions` is a `String[]` of catalog keys
+  — so a rename is a data migration over every custom role in every workspace, plus every stored
+  `api_token.scopes` row that expanded to it. `expandStoredGrant` drops values it cannot interpret,
+  by design, so a missed row degrades to LESS access silently.
+- A rename does not close the escalation. A custom role that holds the renamed key still approves
+  plans; only the split does.
+- Bundling both makes one change irreversible: a rename is a migration to write backwards, while
+  adding a key and moving two assertions is a revert.
+
+So the split ships alone, the key id is left exactly as it is, and the rename is a second card.
+
+**One thing this card DID change about the name, deliberately and without touching the key id:** the
+`permissions.ai_view_plan` **label and description** in `en` / `zh`. They read _"View AI plans" /
+"Open a generated plan and read its proposals"_ — a description of a gate that does not exist, on the
+one surface where the whole escalation happens (an admin reading names off a grid). They now describe
+the AUTHOR writes. That is display copy, not the persisted key, so it carries none of the migration
+cost above; leaving it would have meant shipping the split while the screen still told the admin the
+old lie.
+
+### What this amendment does NOT do
+
+- **It does not rename `ai:view_plan`.** The key id is unchanged, in the catalog, in every role set,
+  and in every persisted row.
+- **It does not change any AUTHOR gate.** `addProposals`, `markPlanned` and `editAddProposal` assert
+  `ai:view_plan` exactly as before, and `create_plan` still asserts `work_item:edit` (Q2).
+- **It does not change any plan READ.** They were `canBrowse` before and are `canBrowse` after; this
+  amendment records that fact rather than altering it.
+- **It does not widen `CLI_TOKEN_GRANT`,** and it adds no route. `approvePlan` reaches the public
+  surface only if MOTIR-3021 lands, which is that card's decision to argue.
+- **It does not touch `PLANNED_PERMISSIONS`.** The new key is `enforced` on arrival, because the gate
+  and the key land in the same change.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -1104,3 +1224,10 @@ op is worth its own card rather than a clause here.
   the repo pin and the ref graph stay structural and stay settled at append. `remove` is still
   unreachable, and an abandoned MCP-authored plan that already holds proposals is still a debt
   nobody has paid.
+- **AUTHOR and DECIDE are two permissions** (AMENDMENT 5, MOTIR-3188): `ai:view_plan` keeps the
+  author writes and a new `ai:decide_plan` gates `approvePlan` / `declinePlan`. Behaviour-neutral on
+  every built-in role by construction — both keys sit at `admin` and `member` and at neither `viewer`
+  nor the implicit workspace-member grant — so what the split buys is a CUSTOM role that can follow a
+  plan without being able to enact one. Q2 and D2 are unchanged: both named the key their own service
+  asserts, and both services still assert it. The key id `ai:view_plan` is knowingly wrong and its
+  rename is a persisted-value migration left to its own card.

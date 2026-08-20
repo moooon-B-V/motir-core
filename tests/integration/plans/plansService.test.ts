@@ -1022,8 +1022,9 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
 
   it('enforces ai:view_plan — a non-member is denied (MOTIR-2363)', async () => {
     // Was `canEdit` → `ProjectAccessDeniedError`. Editing a PROPOSAL is acting on
-    // a generated plan, not on the tree, so it moved to `ai:view_plan` with
-    // approve and decline — a write key wearing a read's name.
+    // a generated plan, not on the tree, so it moved to `ai:view_plan` (with
+    // approve and decline, which MOTIR-3188 has since split onto
+    // `ai:decide_plan` — this path is an AUTHOR write and stays here).
     //
     // The refusal is now the 404-shaped one, and that is the point: this actor
     // holds no workspace membership, so `assertPermission` rejects them as a
