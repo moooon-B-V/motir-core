@@ -33,7 +33,7 @@
 // citations, the next answers honestly with none, the third redirects to a plan
 // change — without a second harness and without a timing assumption.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 /** What the next `ask_project` job should settle as. */
@@ -64,7 +64,7 @@ function readFixture(): AiJobsFixture {
   const p = fixturePath();
   if (!p) return {};
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as AiJobsFixture;
+    return JSON.parse(readFixtureFileSync(p)) as AiJobsFixture;
   } catch {
     // An unreadable/absent fixture reads as "nothing declared" rather than
     // throwing: the ask then settles as an answer with no citations, which is a
@@ -81,7 +81,7 @@ function recordSubmit(kind: string): number {
   if (!p) return index;
   try {
     f.submitted = [...(f.submitted ?? []), { kind }];
-    writeFileSync(p, JSON.stringify(f, null, 2));
+    writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
   }

@@ -129,7 +129,7 @@ describe('Dockerfile — the runner image', () => {
     expect(runnerStage).not.toMatch(/COPY --from=builder[^\n]*\/app\/node_modules(\s|$)/);
   });
 
-  it('prunes the standalone output in the BUILDER, before the runner copies it', () => {
+  it('checks the standalone output in the BUILDER, before the runner copies it', () => {
     // Docker layers are additive: `COPY --from=builder … .next/standalone` in the
     // runner commits every byte it copies, and a later `RUN rm -rf` only writes a
     // whiteout over them. The image would not shrink at all. Pruning before the
@@ -143,7 +143,7 @@ describe('Dockerfile — the runner image', () => {
     for (const d of ['design', 'tests', 'docs', 'scripts']) {
       expect(runnerStage, d).not.toMatch(new RegExp(String.raw`rm -rf[^\n]*\b${d}\b`));
     }
-    // …and after `next build`, which is what produces the directory it prunes.
+    // …and after `next build`, which is what produces the directory it reads.
     expect(builderStage.indexOf('RUN pnpm exec next build')).toBeLessThan(
       builderStage.indexOf('RUN set -eu;'),
     );
@@ -263,21 +263,22 @@ describe('Dockerfile — the migration toolchain', () => {
   });
 });
 
-describe('Dockerfile — the standalone prune, RUN rather than read (MOTIR-2403)', () => {
-  const ALL = ['design', 'tests', 'docs', 'scripts'];
-  /** Directories the running server needs — the prune must not touch them. */
+describe('Dockerfile — the standalone SCOPE ASSERTION, RUN rather than read (MOTIR-2403 → MOTIR-3219)', () => {
+  /** Directories nothing serving a request reads. None may reach the output. */
+  const NEVER_SERVED = ['design', 'tests', 'docs', 'scripts'];
+  /** Directories the running server needs — the step must not care about them. */
   const KEEP = ['app/_brand/fonts', 'node_modules', 'prisma'];
 
   /**
    * Build a fake `.next/standalone` holding `present` (plus the KEEP set), run
-   * the real prune script over it, and hand the result + the tree to `assert`
+   * the real step's shell over it, and hand the result + the tree to `assert`
    * before the temp directory goes away.
    */
-  function withPrune(
+  function withScopeCheck(
     present: string[],
     assert: (res: { status: number; stdout: string; stderr: string }, standalone: string) => void,
   ): void {
-    const dir = mkdtempSync(join(tmpdir(), 'standalone-prune-'));
+    const dir = mkdtempSync(join(tmpdir(), 'standalone-scope-'));
     try {
       const standalone = join(dir, '.next/standalone');
       for (const d of [...present, ...KEEP]) {
@@ -294,40 +295,46 @@ describe('Dockerfile — the standalone prune, RUN rather than read (MOTIR-2403)
     }
   }
 
-  it('removes every payload directory and leaves the runtime ones alone', () => {
-    // The behavioural assertion the old `outputFileTracingExcludes` could never
-    // pass: it named these same four directories and removed none of them. The
-    // KEEP set matters as much — the OG cards read `app/_brand/fonts/*.ttf` off
-    // disk at request time, so a prune that reached `app/` would 404 the cards.
-    withPrune(ALL, (res, standalone) => {
+  it('PASSES on the output the fixed build produces, and touches nothing', () => {
+    // MOTIR-3219 removed the sweep that made a prune necessary: the E2E boundary
+    // mocks' unresolvable fixture reads were what made Turbopack trace the whole
+    // project, and with those marked `turbopackIgnore` none of NEVER_SERVED is
+    // traced in at all. Measured on this Dockerfile's own `next build`:
+    // `instrumentation.js.nft.json` 4510 → 168 files, `.next/standalone`
+    // 464 → 124 MB.
+    //
+    // The KEEP set is asserted for the same reason it always was — the OG cards
+    // read `app/_brand/fonts/*.ttf` off disk at request time — but now against a
+    // step that must not DELETE anything, which is the stronger property: there
+    // is no `rm` left in it to reach the wrong path.
+    withScopeCheck([], (res, standalone) => {
       expect(res.status, res.stderr).toBe(0);
-      for (const d of ALL) expect(existsSync(join(standalone, d)), d).toBe(false);
       for (const d of KEEP) expect(existsSync(join(standalone, d)), d).toBe(true);
+    });
+    expect(extractPruneScript()).not.toMatch(/\brm -rf\b/);
+  });
+
+  it.each(NEVER_SERVED)('FAILS when %s is back in the standalone output', (returned) => {
+    // The regression this replaces the prune with. A widened trace used to be
+    // invisible — the prune deleted the evidence and the image was merely
+    // rebuilt from a sweep nobody saw. Now it stops the build, on the one path
+    // that ships the bytes, and `flyctl deploy` runs only AFTER a merge.
+    withScopeCheck([returned], (res) => {
+      expect(res.status).not.toBe(0);
+      expect(res.stderr).toContain(`'${returned}/' is in the standalone output`);
+      // The message must route the reader to the check that names the CAUSE,
+      // rather than to a prune that would hide it again.
+      expect(res.stderr).toContain('pnpm assert:nft-trace');
+      expect(res.stderr).toContain('do not re-add a prune here');
     });
   });
 
-  it.each(ALL)('FAILS instead of silently pruning nothing when %s is absent', (missing) => {
-    // The bug this card is about, in its general form: `rm -rf` on a path that
-    // does not exist exits 0 in silence, exactly as the inert config key did. If
-    // a Next upgrade stops sweeping one of these directories into the standalone
-    // output, the build must stop and say so rather than quietly become a step
-    // that reads as pruning and prunes nothing.
-    withPrune(
-      ALL.filter((d) => d !== missing),
-      (res) => {
-        expect(res.status).not.toBe(0);
-        expect(res.stderr).toContain(`prune target '${missing}'`);
-      },
-    );
-  });
-
-  it('reports the before and after size, so the log carries the evidence', () => {
-    // A number in the build log is what lets the next person confirm the prune
-    // is still doing something, without reproducing a build to find out.
-    withPrune(ALL, (res) => {
+  it('reports the size, so the log carries the evidence', () => {
+    // A number in the build log is what lets the next person confirm the output
+    // is still small, without reproducing a build to find out.
+    withScopeCheck([], (res) => {
       expect(res.status, res.stderr).toBe(0);
-      expect(res.stdout).toMatch(/standalone before prune: \d+ MB/);
-      expect(res.stdout).toMatch(/standalone after prune:\s+\d+ MB/);
+      expect(res.stdout).toMatch(/standalone: \d+ MB/);
     });
   });
 });

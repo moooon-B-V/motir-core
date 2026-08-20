@@ -33,7 +33,7 @@
 // this + the OAuth/Blob mocks — a second setGlobalDispatcher would silently
 // disconnect the others).
 
-import { readFileSync } from 'node:fs';
+import { readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 /** The synthetic hosted-session URLs the boundary returns (the spec's `page.route`
@@ -76,7 +76,7 @@ function readFixture(): BillingFixture {
   const path = process.env['MOTIR_AI_BILLING_FIXTURE_PATH'];
   if (!path) return {};
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as BillingFixture;
+    return JSON.parse(readFixtureFileSync(path)) as BillingFixture;
   } catch {
     // Absent / mid-write — treat as "no org configured", i.e. everyone free. A
     // spec writes the file before it navigates, so a real read always sees it.

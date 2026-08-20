@@ -498,6 +498,27 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
       - run: pnpm build
+      # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
+      # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly
+      # that list in `output: 'standalone'`. A filesystem read whose path it
+      # cannot resolve makes it give up and trace the ENTIRE repository — which
+      # is what `instrumentation.ts`'s E2E boundary mocks did for months: 4510
+      # traced files, a 464 MB `.next/standalone`, and every check green.
+      #
+      # Next warns about it once per build and does NOT fail, which is exactly
+      # how it survived — so the gate reads the `.nft.json` files rather than
+      # the build log. That is the stronger signal on three counts: it fails,
+      # it names EVERY offending entry (the warning names only the first module
+      # it reaches, so a partial fix reads like none), and it cannot be
+      # silenced by `experimental.turbopack.ignoreIssue`, which matches on the
+      # message and would leave the bundle exactly as large. See the script's
+      # header and `lib/test-fixture-file.ts`.
+      #
+      # It lives here, after `pnpm build`, because `.next/server` is this job's
+      # own output — the artifact upload below hands the same `.next` to the
+      # e2e job, so a widened trace is caught before anything consumes it.
+      - name: Assert no entry traced the whole project into the NFT list
+        run: pnpm assert:nft-trace
       # MOTIR-1960 — the SCHEMA-DRIFT gate. `pnpm build` above ran
       # `prisma migrate deploy` against this job's ephemeral Postgres, so the
       # database here is a replay of every migration from empty — exactly what
@@ -1140,8 +1161,10 @@ jobs:
   #     are NOT in the list: each is released by its own tag and none of them is
   #     part of this service's artifact — the same reasoning motir-ai's deploy
   #     uses to exclude `indexer-image`. `design-guards` is out for that same
-  #     reason and not by oversight: the Dockerfile prunes `design/` out of the
-  #     standalone bundle, so a stale mockup cannot reach the running service.
+  #     reason and not by oversight: `design/` is not in the standalone bundle,
+  #     so a stale mockup cannot reach the running service. (It used to be
+  #     PRUNED there; since MOTIR-3219 it is never traced in, and the Dockerfile
+  #     step asserts that rather than deleting it. Same guarantee, earlier.)
   #     It still gates the MERGE — `ci-complete` needs it like everything else.
   #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
   #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.

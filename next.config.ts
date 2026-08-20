@@ -179,6 +179,22 @@ const nextConfig: NextConfig = {
   // Re-adding an exclusion here will not shrink anything while this repo builds
   // with Turbopack. If that ever changes, the Dockerfile step is written to fail
   // loudly rather than quietly stop mattering.
+  //
+  // ⚠️ AMENDED 2026-08-20 (MOTIR-3219) — THE CAUSE OF THAT SWEEP, and it was
+  // never the tracer being coarse. Turbopack traced `design/` (and `tests/`,
+  // `docs/`, `scripts/`, `packages/cli/`, `prisma/migrations/`) because
+  // `instrumentation.ts`'s E2E boundary mocks each read a fixture from a path it
+  // could not resolve statically, and its fallback for an unresolvable read is to
+  // trace the ENTIRE project. Marking those reads `turbopackIgnore`
+  // (`lib/test-fixture-file.ts`) took `instrumentation.js.nft.json` from **4510
+  // files to 168** and `.next/standalone` from **464 MB to 124 MB** — so the 381
+  // MB / 324-design-files figures above are a record of the BUG, not of what a
+  // Turbopack build costs.
+  //
+  // Two consequences for anyone re-reading this block: the paragraph above is
+  // still correct that these keys are inert, so do not re-add them; and the
+  // Dockerfile step no longer PRUNES — it asserts the sweep has not returned.
+  // `pnpm assert:nft-trace` makes the same assertion on every pull request.
 };
 
 export default withNextIntl(nextConfig);
