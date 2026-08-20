@@ -8,6 +8,7 @@ import {
 } from './_helpers/github-seed';
 import { boardViewportWidth, getBoard, columnByStatus, cardIdsIn } from './_helpers/board';
 import { signUp } from './_helpers/shell-session';
+import { resetDatabase } from './_helpers/db-reset';
 import { test, expect } from './_helpers/acceptance-video';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
@@ -205,6 +206,18 @@ test('a card reaches In Review only when CI is green, and one merge closes every
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-2999');
+  // ISOLATION (Bug MOTIR-3248). Pull-request numbers are a namespace SHARED
+  // across the whole lane: `github_pull_request` is @@unique([repoId, number])
+  // and every spec's `seedGithubInstallation` upserts the SAME mirrored repo
+  // row, so a spec that does not reset inherits its predecessors' deliveries —
+  // and WHICH specs precede it is a shard partition that moves whenever any
+  // file is added to the lane. This spec used to rely on landing in a friendly
+  // partition; it no longer does. The cascade that makes the reset reach those
+  // rows is measured in `tests/db-reset-cascade.test.ts`, and the thousand-block
+  // this file owns is enforced by `tests/e2e-pull-request-number-blocks.test.ts`.
+  // Both layers on purpose: the reset makes this spec independent of what ran
+  // before it, the block makes it independent of anyone else remembering to.
+  await resetDatabase();
 
   // Every default status gets a column, and the story ADDS one — so the width
   // comes from the status count rather than a number that silently stops fitting.
