@@ -197,17 +197,26 @@ describe('Epic-2 lifecycle — multi-hop status walk under the restricted defaul
   it('rejects an illegal jump mid-walk without mutating, then forward + block/unblock + reopen each record a revision', async () => {
     const fx = await makeWorkItemFixture();
     const t = await buildTree(fx);
+    // ⚠️ THE SUBJECT IS THE LEAF, NOT THE TASK (Bug MOTIR-3229). What this test
+    // measures is the TRANSITION GRAPH — which hops the restricted default policy
+    // allows and what each one records — and `buildTree`'s `task` happens to carry
+    // two `todo` children. A container's `in_review` is now a CLAIM about its
+    // children and is refused while any of them is below `implemented`, so walking
+    // the task would be measuring the new gate rather than the graph. The subtask
+    // is childless, which is what a status-walk fixture wants; the gate has its own
+    // suite in `tests/workflows/container-completeness-gate.test.ts`.
+    const subject = t.subtask;
 
     // Illegal jump from the initial status: todo → done is not a default edge.
-    await expect(workItemsService.updateStatus(t.task.id, 'done', fx.ctx)).rejects.toBeInstanceOf(
+    await expect(workItemsService.updateStatus(subject.id, 'done', fx.ctx)).rejects.toBeInstanceOf(
       IllegalTransitionError,
     );
-    expect((await workItemsService.getWorkItem(t.task.id, fx.ctx)).status).toBe('todo');
+    expect((await workItemsService.getWorkItem(subject.id, fx.ctx)).status).toBe('todo');
     // No status revision was written for the rejected jump.
     expect(
       statusWalk(
         await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-          workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+          workItemRevisionRepository.listByWorkItem(subject.id, {}, tx),
         ),
       ),
     ).toEqual([]);
@@ -222,23 +231,23 @@ describe('Epic-2 lifecycle — multi-hop status walk under the restricted defaul
       ['done', 'in_progress'], // reopen
     ];
     for (const [, to] of walk) {
-      await workItemsService.updateStatus(t.task.id, to, fx.ctx);
+      await workItemsService.updateStatus(subject.id, to, fx.ctx);
     }
 
-    const ended = await workItemsService.getWorkItem(t.task.id, fx.ctx);
+    const ended = await workItemsService.getWorkItem(subject.id, fx.ctx);
     expect(ended.status).toBe('in_progress');
 
     // Each hop wrote exactly one 'updated' status revision, in walk order.
     const revs = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-      workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+      workItemRevisionRepository.listByWorkItem(subject.id, {}, tx),
     );
     expect(statusWalk(revs)).toEqual(walk.map(([from, to]) => ({ from, to })));
     // A no-op self-transition writes nothing extra.
-    await workItemsService.updateStatus(t.task.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(subject.id, 'in_progress', fx.ctx);
     expect(
       statusWalk(
         await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
-          workItemRevisionRepository.listByWorkItem(t.task.id, {}, tx),
+          workItemRevisionRepository.listByWorkItem(subject.id, {}, tx),
         ),
       ),
     ).toHaveLength(walk.length);

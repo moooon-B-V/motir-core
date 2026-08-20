@@ -8,7 +8,11 @@ import { workItemsService } from './workItemsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import {
+  LADDER as SHARED_LADDER,
+  rankOfStatus,
+  type LadderRung,
+} from '@/lib/workItems/statusLadder';
 
 // The UPWARD half of bidirectional status derivation (Story MOTIR-1615 · Subtask
 // MOTIR-1620, AMENDED by Story MOTIR-2888 · Subtask MOTIR-2891;
@@ -17,13 +21,21 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 //
 // A RECOMPUTE, NOT A RATCHET (the 2026-08-17 amendment, settling MOTIR-2885).
 // The parent's status is a pure function of its children's CURRENT statuses over
-// a FOUR-rung ladder, and the result is applied whether it lands ahead of or
+// a FIVE-rung ladder, and the result is applied whether it lands ahead of or
 // behind where the parent stands. Reopening a child brings its parent back with
 // it; a `done` parent given a fresh `todo` child returns to `todo`. The fourth
 // (`todo`) rung is what lets the ladder say "there is open, unstarted work down
 // here" at all — adding it without dropping the forward-only filter would have
 // changed nothing, and dropping the filter without it would have had nowhere to
 // land. No work item is exempt: there is no per-item or per-kind carve-out.
+//
+// ⚠️ AND THE LADDER GAINED AN `implemented` RUNG (Bug MOTIR-3229). `implemented`
+// (MOTIR-3003) sits in the `in_progress` CATEGORY, so a parent whose children
+// were ALL implemented derived to `in_progress`: the ladder could not express
+// "everything below me is BUILT", which is exactly the state a story run ends in.
+// The rungs and the rank now live in `lib/workItems/statusLadder.ts`, shared with
+// the gate that refuses a container's claim to be built while a child is not —
+// two readers of one ordering, rather than two orderings.
 //
 // THE DIRECTION DECIDES THE AUTHORITY (ADR §3). The rank comparison still
 // happens — it just picks the CALL instead of vetoing the move:
@@ -59,7 +71,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // the whole of the termination argument, which no longer appeals to forward-only:
 // a pass over an unchanged child set computes the same target and finds the
 // parent already in it. The forward WALK is inside one pass and cannot disturb
-// that: it only ever steps to a STRICTLY higher rung on a four-point scale, so it
+// that: it only ever steps to a STRICTLY higher rung on a five-point scale, so it
 // takes at most three hops and lands on the target it computed before it started.
 // The downward mirror is `childStatusCascadeService`
 // (MOTIR-1647), which fires only on ENTRY into a done-category status — which is
@@ -95,18 +107,13 @@ export interface RecomputeTrigger {
  *  workflow by `workflowsService.resolveStatusKey`, so a renamed workflow still
  *  derives.
  *
- *  The fourth (`todo`) rung is the amendment's (MOTIR-2891): it matches when NO
- *  rung above it does, i.e. there is open work under the parent and none of it has
- *  started. It is last precisely so "first match wins" reads it as the fallthrough. */
-const LADDER: ReadonlyArray<{
-  rung: 'done' | 'in_review' | 'in_progress' | 'todo';
-  target: { key: string; category: StatusCategoryDto };
-}> = [
-  { rung: 'done', target: { key: 'done', category: 'done' } },
-  { rung: 'in_review', target: { key: 'in_review', category: 'in_progress' } },
-  { rung: 'in_progress', target: { key: 'in_progress', category: 'in_progress' } },
-  { rung: 'todo', target: { key: 'todo', category: 'todo' } },
-];
+ *  The `todo` rung is MOTIR-2891's: it matches when NO rung above it does, i.e.
+ *  there is open work under the parent and none of it has started. It is last
+ *  precisely so "first match wins" reads it as the fallthrough.
+ *
+ *  The `implemented` rung is MOTIR-3229's — see the shared module for why the set
+ *  lives there now rather than here. */
+const LADDER = SHARED_LADDER;
 
 /** What a rollup pass did, for the caller's log. Every outcome is a NORMAL
  *  result — the rollup never throws on a shape it cannot act on, because it runs
@@ -154,7 +161,10 @@ export const parentStatusRollupService = {
    *   * **done** — every child is in a done-category status;
    *   * **in_review** — every child is in review or done, and at least one is in
    *     review;
-   *   * **in_progress** — at least one child is in an in-progress-category status;
+   *   * **implemented** — every child is implemented-or-better, and at least one
+   *     is at `implemented` (MOTIR-3229);
+   *   * **in_progress** — at least one child has STARTED, i.e. sits in an
+   *     in-progress-category status (which includes the two split-out buckets);
    *   * **todo** — none of the above matched, i.e. there is open work under the
    *     parent and none of it has started.
    *
@@ -267,10 +277,32 @@ export const parentStatusRollupService = {
 
     // Resolve the ladder's candidate keys ONCE, outside the locked transaction —
     // they depend only on the project's workflow, not on the children.
+    //
+    // BOTH split-out lifecycle keys, since MOTIR-3229: `in_review` and
+    // `implemented` share the `in_progress` category, so neither the aggregate
+    // nor the rank can tell them apart from a plain in-progress status without
+    // being told which key each is.
     const reviewKey = await workflowsService.resolveStatusKey(projectId, workspaceId, {
       key: 'in_review',
       category: 'in_progress',
     });
+    const implementedKey = await workflowsService.resolveStatusKey(projectId, workspaceId, {
+      key: 'implemented',
+      category: 'in_progress',
+    });
+    // The project's status vocabulary, read ONCE. `rankOfStatus` is a pure
+    // function over it (MOTIR-3229) — it used to issue a `getStatusByKey` per
+    // comparison from inside the locked transaction below, which is one query per
+    // rung per pass for an answer that never changes within a pass.
+    const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+    const ladderKeys = { reviewKey, implementedKey };
+    // ⚠️ A DEGENERATE PROJECT CAN ALIAS THE TWO RUNGS ONTO ONE KEY. With no
+    // `implemented` status of its own, `resolveStatusKey` falls back to the first
+    // `in_progress`-category status — which on such a project is also what the
+    // in-progress rung resolves to, and can be what the review rung resolves to.
+    // That is handled where it matters: `stones`/`candidates` de-duplicate BY KEY
+    // below, and `rankOfStatus` fixes a precedence when one key wears two hats.
+    const rank = (statusKey: string) => rankOfStatus(statusKey, statuses, ladderKeys);
 
     /** The transaction returns its outcome AND, when it really moved the parent,
      *  the transition metadata the post-commit emit needs. */
@@ -286,9 +318,13 @@ export const parentStatusRollupService = {
       const parent = await workItemRepository.findById(parentId, tx);
       if (!parent) return { outcome: { outcome: 'unresolvable' }, emit: null };
 
-      const agg = await workItemRepository.aggregateChildrenStatus(parentId, reviewKey, tx);
+      const agg = await workItemRepository.aggregateChildrenStatus(
+        parentId,
+        { reviewStatusKey: reviewKey, implementedStatusKey: implementedKey },
+        tx,
+      );
       const rungs = matchingRungs(agg);
-      // With the fourth rung in place this is reachable ONLY for a parent with no
+      // With the `todo` fallthrough rung in place this is reachable ONLY for a parent with no
       // LIVE children — none at all, or every one archived / triaged. An empty
       // aggregate must not satisfy "every child is done" vacuously, and must not
       // fall through to the todo rung either: there is nothing to derive FROM.
@@ -307,16 +343,13 @@ export const parentStatusRollupService = {
       //     it is always a rung the ladder itself can produce — so the walk can
       //     never park the parent in a status the derivation was not entitled to
       //     choose in the first place.
-      const resolved = new Map<(typeof LADDER)[number]['rung'], { key: string; rank: number }>();
+      const resolved = new Map<LadderRung, { key: string; rank: number }>();
       const stones: Array<{ key: string; rank: number }> = [];
       for (const entry of LADDER) {
         const key = await workflowsService.resolveStatusKey(projectId, workspaceId, entry.target);
         if (!key) continue;
         const known = stones.find((s) => s.key === key);
-        const stone = known ?? {
-          key,
-          rank: await rankOfStatus(projectId, workspaceId, key, reviewKey),
-        };
+        const stone = known ?? { key, rank: rank(key) };
         if (!known) stones.push(stone);
         resolved.set(entry.rung, stone);
       }
@@ -334,7 +367,7 @@ export const parentStatusRollupService = {
       // The HIGHEST matching rung is what the recompute says the parent IS. Where
       // it sits relative to the parent's current status decides only WHICH CALL
       // performs the move — never whether the move happens (ADR §3, MOTIR-2891).
-      const currentRank = await rankOfStatus(projectId, workspaceId, parent.status, reviewKey);
+      const currentRank = rank(parent.status);
 
       // Already exactly there: the no-op that emits nothing, and therefore the
       // fixed point the whole termination argument rests on.
@@ -436,7 +469,7 @@ export const parentStatusRollupService = {
         // The parent therefore ends where the recompute says it is, having taken
         // precisely the moves a person would have had to make by hand.
         //
-        // Termination: each hop moves to a STRICTLY higher rank on a four-point
+        // Termination: each hop moves to a STRICTLY higher rank on a five-point
         // scale bounded above by the target, so the loop runs at most
         // `stones.length` times and cannot revisit a stone. It never walks
         // BACKWARDS either — a stone at or below the cursor is skipped rather
@@ -602,38 +635,37 @@ function matchingRungs(agg: {
   total: number;
   todo: number;
   inProgress: number;
+  implemented: number;
   inReview: number;
   done: number;
 }): Array<(typeof LADDER)[number]> {
   if (agg.total === 0) return [];
+  const started = agg.inProgress + agg.implemented + agg.inReview;
   const out: Array<(typeof LADDER)[number]> = [];
-  if (agg.done === agg.total) out.push(LADDER[0]!); // done
-  if (agg.inReview > 0 && agg.done + agg.inReview === agg.total) out.push(LADDER[1]!); // in_review
-  if (agg.inProgress > 0 || agg.inReview > 0) out.push(LADDER[2]!); // in_progress
-  if (out.length === 0) out.push(LADDER[3]!); // todo — the fallthrough
+  if (agg.done === agg.total) out.push(rungEntry('done'));
+  if (agg.inReview > 0 && agg.done + agg.inReview === agg.total) out.push(rungEntry('in_review'));
+  // THE `implemented` RUNG (MOTIR-3229) — "everything below me is BUILT". Every
+  // child is implemented-or-better and at least one is at `implemented` itself;
+  // the `at least one` clause is what the in-review rung above has, and for the
+  // same reason: without it an all-in-review set would match here too and the
+  // first-match-wins scan would be the only thing separating them.
+  if (agg.implemented > 0 && agg.done + agg.inReview + agg.implemented === agg.total) {
+    out.push(rungEntry('implemented'));
+  }
+  // ⚠️ `started` IS THE THREE BUCKETS, NOT `inProgress` ALONE. The aggregate
+  // splits `implemented` and `inReview` OUT of the in-progress category, so
+  // asking `inProgress > 0` alone would answer "nothing has started" for a
+  // parent whose every child is implemented — the exact reading MOTIR-3229 is
+  // about, one rung lower.
+  if (started > 0) out.push(rungEntry('in_progress'));
+  if (out.length === 0) out.push(rungEntry('todo')); // the fallthrough
   return out;
 }
 
-/**
- * Where a status sits on the ladder's scale. Ranked by CATEGORY — so it follows a
- * project's own workflow — with review pulled out of the `in_progress` category
- * as its own, later rung, matching the ladder. An unknown key ranks lowest.
- *
- * The rank no longer VETOES a move (it did, under forward-only); it chooses which
- * call performs it — the ordinary legality-gated transition when the target ranks
- * ahead, the privileged system set when it ranks behind, and no move at all on a
- * tie. See the direction-decides-the-authority block at the call site.
- */
-async function rankOfStatus(
-  projectId: string,
-  workspaceId: string,
-  statusKey: string,
-  reviewKey: string | null,
-): Promise<number> {
-  if (reviewKey && statusKey === reviewKey) return 2;
-  const status = await workflowsService.getStatusByKey(projectId, statusKey, workspaceId);
-  if (!status) return 0;
-  if (status.category === 'done') return 3;
-  if (status.category === 'in_progress') return 1;
-  return 0;
+/** The ladder entry for a rung — a lookup rather than an index, so the shared
+ *  LADDER can grow a rung without silently re-pointing an index here. */
+function rungEntry(rung: LadderRung): (typeof LADDER)[number] {
+  /* istanbul ignore next -- every rung named here is in the shared LADDER; the
+     non-null assertion narrows the type only */
+  return LADDER.find((entry) => entry.rung === rung)!;
 }

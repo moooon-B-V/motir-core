@@ -198,6 +198,13 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // and only its own code can say that. No new STATUS, so no ADR §4 row — 422
   // already covers a request refused on the resource's own rules.
   MISSING_ARTIFACT_EVIDENCE: 422,
+  // MOTIR-3229 — the container-completeness gate: an item with open children
+  // moved into a status that claims its work is built. A FOURTH distinct code on
+  // this sub-resource, for the reason the three above are distinct: the caller's
+  // fix is neither a different status, a different spelling, nor a recorded
+  // artifact — it is to land (or re-parent, or deliberately complete) the
+  // children the error names. No new STATUS, so no ADR §4 row.
+  CONTAINER_HAS_OPEN_CHILDREN: 422,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,

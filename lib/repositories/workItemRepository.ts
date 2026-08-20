@@ -2773,15 +2773,25 @@ export const workItemRepository = {
    *
    * Buckets come from the project's OWN `workflow_status.category`, joined on the
    * status key, so a team that renamed or added statuses still aggregates
-   * correctly — no hardcoded key list. The one exception is `inReview`, which
-   * cannot be derived from the category (review shares the `in_progress`
-   * category): the CALLER resolves which status means "in review" for this project
-   * — through the same `workflowsService.resolveStatusKey` the rest of the
-   * derivation uses — and passes its key here. `inProgress` then EXCLUDES those
-   * children, so the two buckets partition the `in_progress` category. Pass `null`
-   * when the project's workflow has no review status: `inReview` is 0 and every
-   * in-progress child counts under `inProgress`, which is the correct degenerate
-   * reading (that project simply never reaches the in-review rung).
+   * correctly — no hardcoded key list. The exceptions are `inReview` and
+   * `implemented`, NEITHER of which can be derived from the category (both share
+   * the `in_progress` one): the CALLER resolves which status means each for this
+   * project — through the same `workflowsService.resolveStatusKey` the rest of the
+   * derivation uses — and passes both keys here. `inProgress` then EXCLUDES those
+   * children, so the three buckets partition the `in_progress` category. Pass
+   * `null` for either when the project's workflow has no such status: that bucket
+   * is 0 and those children count under `inProgress`, which is the correct
+   * degenerate reading (that project simply never reaches that rung).
+   *
+   * ⚠️ `implemented` JOINED THE SPLIT IN MOTIR-3229, and the reason is the same
+   * one that put `inReview` here — one rung further along the loop. `implemented`
+   * (MOTIR-3003) is what a run sets when it has pushed and opened a pull request,
+   * so "every child is implemented" is the precise state a story run ends in, and
+   * while it collapsed into `inProgress` the ladder could not express it at all:
+   * MOTIR-1343 claimed `implemented`, then `in_review`, then `done` over two
+   * `todo` children, and the merge cascaded both closed. A caller that only wants
+   * the shipped four buckets passes `implementedStatusKey: null` and gets exactly
+   * the previous behaviour.
    *
    * Excludes archived + triage rows, the uniform child-read exclusion
    * `findChildren` applies. Read-only → `db` singleton unless a `tx` is supplied
@@ -2806,23 +2816,34 @@ export const workItemRepository = {
    */
   async aggregateChildrenStatus(
     parentId: string,
-    reviewStatusKey: string | null,
+    ladderKeys: { reviewStatusKey: string | null; implementedStatusKey: string | null },
     tx?: Prisma.TransactionClient,
   ): Promise<{
     total: number;
     todo: number;
     inProgress: number;
+    implemented: number;
     inReview: number;
     done: number;
     lastChangedAt: Date | null;
   }> {
     const client = tx ?? db;
+    const { reviewStatusKey, implementedStatusKey } = ladderKeys;
     const rows = await client.$queryRaw<
-      Array<{ category: string; is_review: boolean; count: number; last_changed_at: Date | null }>
+      Array<{
+        category: string;
+        is_review: boolean;
+        is_implemented: boolean;
+        count: number;
+        last_changed_at: Date | null;
+      }>
     >`
       SELECT ws."category"::text AS "category",
              (${reviewStatusKey}::text IS NOT NULL AND w."status" = ${reviewStatusKey}::text)
                AS "is_review",
+             (${implementedStatusKey}::text IS NOT NULL
+               AND w."status" = ${implementedStatusKey}::text)
+               AS "is_implemented",
              COUNT(*)::int AS "count",
              MAX(GREATEST(w."createdAt", w."updatedAt")) AS "last_changed_at"
         FROM "work_item" w
@@ -2831,12 +2852,13 @@ export const workItemRepository = {
         WHERE w."parentId" = ${parentId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
-        GROUP BY ws."category", "is_review"`;
+        GROUP BY ws."category", "is_review", "is_implemented"`;
 
     const out = {
       total: 0,
       todo: 0,
       inProgress: 0,
+      implemented: 0,
       inReview: 0,
       done: 0,
       lastChangedAt: null as Date | null,
@@ -2856,7 +2878,21 @@ export const workItemRepository = {
       // A review status is reported as `inReview` whatever category it sits in —
       // it is the caller's declared review stage, and splitting it out is the
       // entire reason this method takes the key.
+      //
+      // ⚠️ `implemented` is split out the SAME WAY, and for the same reason
+      // (Bug MOTIR-3229). It is an `in_progress`-category status, so without its
+      // own bucket a parent whose children are all implemented is indistinguishable
+      // from one whose children merely STARTED — which is exactly why the ladder
+      // could not express "everything below me is built" and a container could
+      // claim `implemented` over `todo` children. REVIEW takes precedence on the
+      // (pathological) project that aliased both onto one key, matching
+      // `rankOfStatus`'s ordering in `lib/workItems/statusLadder.ts`.
+      //
+      // ⚠️ AND `inProgress` NO LONGER COUNTS THEM. A reader asking "has any child
+      // started?" must ask `inProgress > 0 || implemented > 0 || inReview > 0` —
+      // the same obligation the review split already imposed, now on two buckets.
       if (r.is_review) out.inReview += r.count;
+      else if (r.is_implemented) out.implemented += r.count;
       else if (r.category === 'todo') out.todo += r.count;
       else if (r.category === 'in_progress') out.inProgress += r.count;
       else if (r.category === 'done') out.done += r.count;

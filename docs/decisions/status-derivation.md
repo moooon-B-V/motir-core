@@ -64,6 +64,23 @@
   change to the ladder, no new toggle and NO `workflow_transition` row** — the arm declines
   a move it was making, and reports `stale_backward`. §3's BACKWARD bullet gains the date
   clause; §5 gains the parent-side half of its concurrency bullet.
+- **Amended:** 2026-08-20 (Yue · Bug MOTIR-3229, from MOTIR-1343's close-out) — **the
+  ladder gains an `implemented` RUNG, a container's CLAIM is gated at the transition, and
+  the downward cascade EXEMPTS a `bug` child.** Three changes, one defect: MOTIR-1343
+  reached `implemented`, then In Review, then Done — carrying two merged pull requests —
+  while two of its direct children sat at `todo` the whole time, and the merge then
+  cascaded both closed, mid-investigation. §3's ladder becomes **five rungs**
+  (`implemented` sits between in-progress and in-review; it is an `in_progress`-CATEGORY
+  status, so the four-rung ladder collapsed it into rung 3 and could not express
+  _"everything below me is BUILT"_ — exactly the state a story run ends in). §3 gains a
+  new **§3b** recording the transition GATE, because the measurement below proves a rung
+  change alone cannot fix this: the Inngest run for the offending transition returned
+  `rollup: { outcome: "already_there" }` / `cascade: { outcome: "not_done" }`, both
+  directions doing precisely what they are specified to do and **neither looking down at
+  the transitioning item's own children**, so no trigger exists that would ever contradict
+  such a claim. §4 gains the **defect-report exemption**. **NO new toggle, NO new
+  `workflow_transition` row**, and `done` is deliberately left ungated — completing a
+  parent is a decision that completes its children, which is what §4 IS.
 
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
@@ -191,13 +208,33 @@ parent stands, backward if it is behind. Evaluated against the **direct**,
 non-archived, non-triaged children of the parent whose child set changed. Rungs, highest
 first — **the first matching rung wins**:
 
-| Rung            | Condition on the children's aggregate                                                          | Parent target                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **done**        | **every** child is in a `done`-category status                                                 | the `done` status (prefer key `done`, else first `done`-category)                      |
-| **in-review**   | every child is in `in_review` **or** a `done`-category status, **and** ≥ 1 is in `in_review`   | the `in_review` status (prefer key `in_review`, else first `in_progress`-category)     |
-| **in-progress** | ≥ 1 child is in an `in_progress`-category status (`in_review` is in that category)             | the `in_progress` status (prefer key `in_progress`, else first `in_progress`-category) |
-| **todo**        | **no rung above matches** — i.e. ≥ 1 child is in a `todo`-category status and none has started | the `todo` status (prefer key `todo`, else first `todo`-category)                      |
-| —               | **no children at all**                                                                         | **no derivation** — the parent is not touched                                          |
+| Rung            | Condition on the children's aggregate                                                                         | Parent target                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **done**        | **every** child is in a `done`-category status                                                                | the `done` status (prefer key `done`, else first `done`-category)                      |
+| **in-review**   | every child is in `in_review` **or** a `done`-category status, **and** ≥ 1 is in `in_review`                  | the `in_review` status (prefer key `in_review`, else first `in_progress`-category)     |
+| **implemented** | every child is `implemented`-or-better (`implemented` / `in_review` / done), **and** ≥ 1 is at `implemented`  | the `implemented` status (prefer key `implemented`, else first `in_progress`-category) |
+| **in-progress** | ≥ 1 child has STARTED — i.e. sits in an `in_progress`-category status (`in_review` and `implemented` both do) | the `in_progress` status (prefer key `in_progress`, else first `in_progress`-category) |
+| **todo**        | **no rung above matches** — i.e. ≥ 1 child is in a `todo`-category status and none has started                | the `todo` status (prefer key `todo`, else first `todo`-category)                      |
+| —               | **no children at all**                                                                                        | **no derivation** — the parent is not touched                                          |
+
+**The `implemented` rung is MOTIR-3229's** _(added 2026-08-20)_. `implemented`
+(MOTIR-3003) is an `in_progress`-CATEGORY status, so before this rung the ladder had
+exactly one thing to say about a parent whose every child was BUILT: _"something has
+started"_ — indistinguishable from a parent whose children had merely been picked up.
+That is the state a story run ends in, on every card, which is why the gap was not
+academic: MOTIR-1343 claimed `implemented` over two `todo` children and nothing in the
+system could contradict it. The rung reads the same way the in-review rung above it does
+(**every** child at-or-above, **and ≥ 1** exactly there), and it takes the same
+prefer-key-then-category resolution — so a project whose workflow has no `implemented`
+status resolves the rung onto a key it already has and the ladder de-duplicates, leaving
+the shipped four-rung behaviour in place.
+
+⚠️ **The in-progress rung's condition was RESTATED, not changed.** It always meant _"≥ 1
+child has started"_, and it read `inProgress > 0 || inReview > 0` because the aggregate
+splits review OUT of the in-progress category. With `implemented` split out too, the same
+question is now three buckets. A reader who asks only `inProgress > 0` gets _"nothing has
+started"_ for a parent whose every child is implemented — which would send it BACK to
+`todo`, a worse failure than the one being fixed.
 
 **The empty aggregate matches NOTHING, and rung 4 must not fire on it.** A parent with
 zero live children (none, or every one archived / triaged) is left exactly where it
@@ -362,6 +399,70 @@ Three constraints that are decisions, not detail:
   move that does not actually change the parent is a cheap no-op — these events fire on
   every item creation in the workspace.
 
+### 3b. The container-completeness GATE — a CLAIM is refused at the transition _(added 2026-08-20)_
+
+§3 and §3a are about what a parent's status is DERIVED to be. This is about what a
+parent is allowed to CLAIM, and it is a different mechanism because derivation
+structurally cannot enforce it.
+
+**The rule.** An item with live children may not enter **`implemented`** or
+**`in_review`** while any of those children is below `implemented` on §3's ladder. The
+refusal is `CONTAINER_HAS_OPEN_CHILDREN` (422), raised by
+`workItemsService.applyStatusTransition` — the single choke-point every status change
+passes through — and it NAMES the children that are not landed.
+
+**Why a gate and not a rung.** MOTIR-1343 was set `in_progress → implemented` at
+11:24:59 with two `todo` children. The derivation run for that event (started 11:25:14,
+`Completed`) returned:
+
+```json
+"rollup":  { "outcome": "already_there", "parentId": "<the epic>", "toStatus": "in_progress" }
+"cascade": { "outcome": "not_done" }
+```
+
+Both directions did precisely what §3 and §4 specify, and **neither looks down at the
+transitioning item's own children**: the upward direction recomputes the item's PARENT,
+and the downward cascade fires only on entry into a done-category status, which
+`implemented` is not. A container can therefore be set to `implemented` over `todo`
+children and **no trigger exists that would ever contradict it**. Derivation was not
+failing; it was never asked the question. Adding the rung above changes what a parent is
+DERIVED to — it cannot refuse what a person, a webhook or a run SETS.
+
+**Why those two statuses and not `done`.** `implemented` says the branch is pushed and
+the pull request is open; `in_review` says a human should look at it. Both are claims
+about everything under the item, and **the pull request is opened on that claim** — so
+if it can be made with open children, the review gate rests on nothing. `done` is
+deliberately left ungated: completing a parent is a DECISION that completes its
+children, and §4 is the shipped expression of it. Gating `done` would break the feature
+rather than the defect; §4's own exemption is where that case is answered instead.
+
+**ONE bar for both claim rungs — `implemented`-or-better — rather than the target's own
+rank.** Reading In Review's rank as the bar would also refuse a parent whose children
+are all built but whose individual builds have not been promoted, which is the ordinary
+shape of a parent run: ONE pull request carries every child and the green verdict is a
+single promotion over the set (MOTIR-3006). Refusing there would gate a TRUE claim on an
+artifact of how CI reports.
+
+**Two exemptions, both stated rather than incidental:**
+
+- **`opts.system`.** The importer, the downward cascade and the recompute's backward arm
+  are background writes behind a change somebody already made successfully, and a
+  business rule must not fail them. The FORWARD recompute arm is not `system` and needs
+  no exemption — it only ever targets a rung its children actually match.
+- **A project that has RENAMED these statuses away.** The gate matches the two status
+  KEYS literally rather than through the prefer-key-then-category resolver, because both
+  live in the `in_progress` category and that resolver falls back to the FIRST such
+  status — `in_progress` itself — which claims nothing at all. A project that renamed
+  them has redefined what the claim means, and letting the move through is the honest
+  answer there. (The same literal-key choice `ciPromotion.ts` already makes.)
+
+**What each refusing caller does with it** — none of them 500s, and none of them retries
+forever: the board SNAPS BACK with the refusal as its reason (`IllegalBoardMoveError`);
+the change-request status sync reports `open_children` and leaves the item where it is;
+the CI-green promotion treats it as SKIPPABLE, per-card, exactly like a workflow with no
+legal edge; the MCP maps it to a self-correctable tool error naming the open children;
+the v1 transitions route answers 422 with its own code.
+
 ### 4. The DOWNWARD cascade (parent → children)
 
 **Trigger:** an item transitions **into a `done`-category status** — by a user, by the
@@ -369,8 +470,42 @@ upward rollup, or by the change-request webhook when its PR merges. **Read off t
 TRANSITION** (`toStatusKey` in a done category, `fromStatusKey` not), never off the item's
 current status — see the 2026-08-17 / MOTIR-2957 amendment above for the failure the row
 read produced once rung 4 could move that row underneath it. **Effect:** every
-**not-done DIRECT child** (non-archived, non-triaged) is set to the project's `done`
-status. Grandchildren are reached by re-emission, never by a subtree walk.
+**not-done DIRECT child** (non-archived, non-triaged, **and not a `bug`** — see the
+exemption below) is set to the project's `done` status. Grandchildren are reached by re-emission, never by a subtree walk.
+
+**⚠️ ONE EXEMPTION, BY CHILD KIND: a `bug` is NOT completed** _(added 2026-08-20,
+MOTIR-3229)_. The promise above — _"the parent is done, so its children are done"_ — is
+honest for every kind that DECOMPOSES its parent: a `subtask` or a `task` under a story
+is part of the story's scope, so completing the story really does complete it. A **`bug`
+is not a decomposition** — it is a defect RECORD, parented where it was FOUND rather than
+where its work belongs (`run-findings-protocol.md` Q3, which this amendment deliberately
+leaves standing). Sweeping one destroys the finding, and the loop that files defects while
+shipping is the loop that produces them.
+
+Measured, not predicted. From the Inngest REST API for MOTIR-1343's `in_review → done`:
+
+```json
+"cascade": { "outcome": "cascaded", "itemId": "<MOTIR-1343>",
+             "childIds": ["<MOTIR-3218>", "<MOTIR-3219>"], "toStatus": "done" }
+```
+
+Both of those were bug reports that story's own run had filed while shipping it, and both
+were closed by the merge of that story's own pull request — while a session was three
+minutes into investigating them. **A story closing itself silently closed the defects
+found while shipping it.**
+
+_Why kind and not "a child created DURING the run", which MOTIR-3229's card also offers:_
+the cascade has no notion of a run and no instant to date one from, and the nearest proxy
+(the child's `createdAt` against the parent's status history) would exempt an ordinary
+subtask added late while sweeping a bug filed early — i.e. answer a different question
+badly. _The cost, stated rather than hidden:_ a bug that genuinely WAS fixed by the
+parent's pull request now stays open and is closed by hand. That is the recoverable
+direction; a swept defect report leaves no trace at all.
+
+_Reported, not silent:_ the pass returns `exemptIds` alongside `cascaded`, and
+`exempt_only` when every open child was exempt — distinct from `no_open_children`, because
+a log that cannot tell _nothing to do_ from _declined to do it_ cannot answer why a done
+parent still has open children.
 
 **Mechanism — the privileged SYSTEM set, reusing the shipped `opts.system` bypass.**
 Forcing an unstarted `todo` / `blocked` child straight to `done` is **not a legal user
