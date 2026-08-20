@@ -5258,7 +5258,14 @@
       "declined": "已拒绝"
     },
     "listAria": "计划",
-    "loadMore": "加载更多",
+    "statusFilterAria": "按状态筛选计划",
+    "tabEmpty": {
+      "generatingTitle": "暂无正在生成的计划",
+      "plannedTitle": "暂无待你决定的计划",
+      "approvedTitle": "暂无已批准的计划",
+      "declinedTitle": "暂无已拒绝的计划",
+      "description": "该项目的其他计划在其余标签页中。"
+    },
     "loadingMore": "加载中…",
     "generation": {
       "canvasAria": "提议的计划",

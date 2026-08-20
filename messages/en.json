@@ -5262,7 +5262,14 @@
       "declined": "Declined"
     },
     "listAria": "Plans",
-    "loadMore": "Load more",
+    "statusFilterAria": "Filter plans by status",
+    "tabEmpty": {
+      "generatingTitle": "Nothing generating",
+      "plannedTitle": "Nothing waiting on you",
+      "approvedTitle": "Nothing approved yet",
+      "declinedTitle": "Nothing declined",
+      "description": "This project's other plans are in the remaining tabs."
+    },
     "loadingMore": "Loading…",
     "generation": {
       "canvasAria": "Proposed plan",

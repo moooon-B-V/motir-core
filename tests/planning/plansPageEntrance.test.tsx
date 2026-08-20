@@ -19,14 +19,21 @@ import type { ReactElement, ReactNode } from 'react';
 // it returns. Nothing is rendered — the launcher is a client component and its
 // PRESENCE, not its markup, is what this card decides.
 
-const { getSession, getActiveProject, getCapabilities, listPlans, isMotirAiConfigured } =
-  vi.hoisted(() => ({
-    getSession: vi.fn(),
-    getActiveProject: vi.fn(),
-    getCapabilities: vi.fn(),
-    listPlans: vi.fn(),
-    isMotirAiConfigured: vi.fn(),
-  }));
+const {
+  getSession,
+  getActiveProject,
+  getCapabilities,
+  listPlans,
+  countPlansByStatus,
+  isMotirAiConfigured,
+} = vi.hoisted(() => ({
+  getSession: vi.fn(),
+  getActiveProject: vi.fn(),
+  getCapabilities: vi.fn(),
+  listPlans: vi.fn(),
+  countPlansByStatus: vi.fn(),
+  isMotirAiConfigured: vi.fn(),
+}));
 
 const { redirect } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
@@ -44,7 +51,9 @@ vi.mock('@/lib/ai/availability', () => ({ isMotirAiConfigured }));
 vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
-vi.mock('@/lib/services/plansService', () => ({ plansService: { listPlans } }));
+vi.mock('@/lib/services/plansService', () => ({
+  plansService: { listPlans, countPlansByStatus },
+}));
 // The row view-model builder reads users + staleness; the entrance is not its
 // business, so it is stubbed to the identity of "one row per plan".
 vi.mock('@/app/(authed)/plans/planRowView', () => ({
@@ -95,6 +104,9 @@ beforeEach(() => {
   getActiveProject.mockResolvedValue(PROJECT);
   getCapabilities.mockResolvedValue({ canBrowse: true });
   isMotirAiConfigured.mockReturnValue(true);
+  // The default project HAS plans — the counts, not the page in hand, are what
+  // decide the project-level empty state since MOTIR-3241.
+  countPlansByStatus.mockResolvedValue({ generating: 0, planned: 2, approved: 0, declined: 0 });
 });
 
 afterEach(() => {
@@ -130,6 +142,7 @@ describe('/plans carries ONE Plan-with-AI entrance (MOTIR-3237)', () => {
 
   it('a project with NO plans renders EXACTLY ONE launcher, in the empty state', async () => {
     listPlans.mockResolvedValue({ plans: [], nextCursor: null });
+    countPlansByStatus.mockResolvedValue({ generating: 0, planned: 0, approved: 0, declined: 0 });
 
     const tree = await PlansPage();
     const found = launchers(tree);
@@ -144,6 +157,7 @@ describe('/plans carries ONE Plan-with-AI entrance (MOTIR-3237)', () => {
 
   it('with AI unconfigured, the empty state offers no launcher either', async () => {
     listPlans.mockResolvedValue({ plans: [], nextCursor: null });
+    countPlansByStatus.mockResolvedValue({ generating: 0, planned: 0, approved: 0, declined: 0 });
     isMotirAiConfigured.mockReturnValue(false);
 
     const tree = await PlansPage();
@@ -156,6 +170,7 @@ describe('/plans carries ONE Plan-with-AI entrance (MOTIR-3237)', () => {
     // `isMotirAiConfigured()` as newly-unused, the empty state silently offers
     // its CTA to a workspace that has no AI configured.
     listPlans.mockResolvedValue({ plans: [], nextCursor: null });
+    countPlansByStatus.mockResolvedValue({ generating: 0, planned: 0, approved: 0, declined: 0 });
 
     await PlansPage();
 

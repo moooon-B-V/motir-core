@@ -13,6 +13,7 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 import { buildPlanRowViews } from './planRowView';
 import { PlansList } from './_components/PlansList';
+import { PlanStatusTabs, planStatusFromParam } from './_components/PlanStatusTabs';
 
 // The Plans surface (Story 7.21 · Subtask 7.21.1 / MOTIR-1338) — the index of
 // every AI plan (a generation proposal bundle) for the project. The ACCESS PATH
@@ -30,7 +31,18 @@ import { PlansList } from './_components/PlansList';
 // configured, exactly like the roadmap empty state. The plan DETAIL each row
 // links into is MOTIR-847 (`/plans/[id]`).
 
-export default async function PlansPage() {
+export default async function PlansPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
+  // THE URL IS THE SINGLE SOURCE OF TRUTH for which tab is in view (MOTIR-3241),
+  // derived on every render exactly as `ChildPanel` derives `?children=`: a deep
+  // link, a reload and browser Back/forward all agree, and there is no local
+  // state that can disagree with the address bar. An unknown value falls back to
+  // the default rather than erroring — this comes from a URL a person can type.
+  const raw = (await searchParams)?.status;
+  const status = planStatusFromParam(Array.isArray(raw) ? raw[0] : raw);
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -71,10 +83,25 @@ export default async function PlansPage() {
     );
   }
 
-  const firstPage = await plansService.listPlans(ctx.projectId, wsCtx);
+  // The rows are THIS TAB's, filtered by the query (MOTIR-3235's predicate) and
+  // ten a page from that read's own default — never a literal here, and never a
+  // client-side filter over a cursor page, which would return a short page while
+  // `nextCursor` claimed there was more.
+  const [firstPage, counts] = await Promise.all([
+    plansService.listPlans(ctx.projectId, wsCtx, { status }),
+    plansService.countPlansByStatus(ctx.projectId, wsCtx),
+  ]);
   const views = await buildPlanRowViews(firstPage.plans, wsCtx);
-  const isEmpty = views.length === 0;
   const aiConfigured = isMotirAiConfigured();
+
+  // TWO EMPTINESSES, and they must not say the same thing (Part VII §6). The
+  // project-level one is "this project has no plans at all" — which is a fact
+  // about the COUNTS, not about the page in hand, now that the page is one tab's
+  // slice. The per-tab one is "this project HAS plans, just none in this tab",
+  // and it keeps the strip so a reader is never stuck in a tab.
+  const totalPlans = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const projectIsEmpty = totalPlans === 0;
+  const tabIsEmpty = views.length === 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -98,7 +125,11 @@ export default async function PlansPage() {
         </p>
       </header>
 
-      {isEmpty ? (
+      {projectIsEmpty ? (
+        // No plans at all. The strip is HIDDEN here: there is nothing to filter,
+        // and four zeroes are four ways of saying the same thing. This state is
+        // the shipped `EmptyState` unchanged, CTA included — `/roadmap`'s empty
+        // state carries the same one and the two must not diverge.
         <EmptyState
           icon={<Sparkles className="h-12 w-12" aria-hidden />}
           title={t('emptyTitle')}
@@ -110,7 +141,31 @@ export default async function PlansPage() {
           }
         />
       ) : (
-        <PlansList initialViews={views} initialCursor={firstPage.nextCursor} />
+        <div className="flex flex-col gap-4">
+          <PlanStatusTabs value={status} counts={counts} />
+          {tabIsEmpty ? (
+            // Nothing in THIS tab. No generate CTA: repeating "generate your
+            // first plan" would be false on its face, and a generate CTA is the
+            // wrong answer to *nothing is generating* — the reader's next move
+            // is a different tab, which is why the strip stays above this and
+            // the copy names where the plans actually are.
+            <EmptyState
+              title={t(`tabEmpty.${status}Title`)}
+              description={t('tabEmpty.description')}
+            />
+          ) : (
+            // KEYED ON THE STATUS so React REMOUNTS rather than reconciling two
+            // different result sets: the island seeds its rows and cursor from
+            // props in `useState`, which a re-render cannot revisit, so without
+            // this a switched tab would append to the previous tab's list.
+            <PlansList
+              key={status}
+              status={status}
+              initialViews={views}
+              initialCursor={firstPage.nextCursor}
+            />
+          )}
+        </div>
       )}
     </div>
   );
