@@ -160,6 +160,36 @@ function ownerCtx(tenant: Tenant) {
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * Assert page-level copy that must exist EXACTLY ONCE — settle first, read second
+ * (MOTIR-3272).
+ *
+ * The prod-build harness (`next build` + `next start`, what `playwright.config.ts`
+ * drives) can hold TWO copies of a resolved subtree in the DOM for one instant, so
+ * an unscoped `getByText` resolves to 2 nodes and Playwright's strict mode refuses
+ * the match OUTRIGHT — `expect(...).toBeVisible()` then fails hard rather than
+ * retrying, because a strict-mode violation is an error and not an unmet condition.
+ * That is MOTIR-3272 (`No components yet`, both nodes an identical
+ * `EmptyState` `<h2>`), MOTIR-2982 on `/settings/project/fields`, and MOTIR-2033 on
+ * `/explore` — three specs, one shape.
+ *
+ * `toHaveCount(1)` POLLS, so it waits that window out; the visibility assertion then
+ * reads a locator that resolves to one node. Both halves carry weight, which is why
+ * this is not a tautology: the count fails at **0** when the copy is genuinely absent,
+ * and at **2** if the page ever really renders it twice — the defect a `.first()`
+ * would silently hide. Scoping is not an alternative here: both duplicates are the
+ * same element with the same role, so `getByRole('heading', …)` matches two as well.
+ */
+async function expectSoleText(
+  scope: Page,
+  text: string,
+  opts?: { exact?: boolean },
+): Promise<void> {
+  const node = scope.getByText(text, opts);
+  await expect(node).toHaveCount(1);
+  await expect(node).toBeVisible();
+}
+
 /** The FieldCard chevron that opens a rail card's picker. */
 function editToggle(page: Page, label: string): Locator {
   return page.getByRole('button', { name: `Edit ${label}`, exact: true });
@@ -222,7 +252,7 @@ test('@smoke the PM type-creates labels, reuses them case-insensitively, and the
   // ── Type-create on issue A ─────────────────────────────────────────────────
   await page.goto(`/items/${issueA.identifier}`);
   await expect(page.getByRole('heading', { name: 'Label holder' })).toBeVisible();
-  await expect(page.getByText('No labels')).toBeVisible();
+  await expectSoleText(page, 'No labels');
 
   await editToggle(page, 'Labels').click();
   const labelsInput = page.getByRole('combobox', { name: 'Labels' });
@@ -267,7 +297,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
 
   // ── Admin CRUD: API (default assignee Bo) + Web (no default) ──────────────
   await gotoComponentsSettings(page);
-  await expect(page.getByText('No components yet')).toBeVisible();
+  await expectSoleText(page, 'No components yet');
   await createComponentViaUi(page, { name: 'API', defaultAssignee: 'Bo Philips' });
   await createComponentViaUi(page, { name: 'Web' });
 
@@ -295,8 +325,12 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
   await page.goto(`/items/${fresh.identifier}`);
   await expect(page.getByRole('heading', { name: 'Fresh defaulted issue' })).toBeVisible();
   // The component chip rendered, and the assignee auto-filled to Bo.
-  await expect(page.getByText('API', { exact: true })).toBeVisible();
-  await expect(page.getByText('Bo Philips').first()).toBeVisible();
+  await expectSoleText(page, 'API', { exact: true });
+  // `.first()` used to sit here and would have SWALLOWED a transient duplicate
+  // (the very defect this file's other assertions now catch). Measured on the
+  // prod-build harness, this page carries the assignee's name exactly once, so
+  // the settling form is both safe and strictly stronger (MOTIR-3272).
+  await expectSoleText(page, 'Bo Philips');
   const freshRow = await db.workItem.findUnique({ where: { id: fresh.id } });
   expect(freshRow!.assigneeId).toBe(bo.id);
 
@@ -331,7 +365,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
 
   // Both issues survived with Web exactly once.
   await page.goto(`/items/${fresh.identifier}`);
-  await expect(page.getByText('Web', { exact: true })).toBeVisible();
+  await expectSoleText(page, 'Web', { exact: true });
   const joins = await db.workItemComponent.findMany({
     where: { workItemId: { in: [issue.id, fresh.id] } },
   });
@@ -471,8 +505,8 @@ test('a viewer gets read-only chips but CAN watch; a non-admin member is REFUSED
   const viewerPage = await viewerCtx.newPage();
   await signIn(viewerPage, viewer.email, PWD);
   await viewerPage.goto(`/items/${issue.identifier}`);
-  await expect(viewerPage.getByText('perf-q3')).toBeVisible();
-  await expect(viewerPage.getByText('Web', { exact: true })).toBeVisible();
+  await expectSoleText(viewerPage, 'perf-q3');
+  await expectSoleText(viewerPage, 'Web', { exact: true });
   await expect(viewerPage.getByRole('button', { name: 'Edit Labels' })).toHaveCount(0);
   await expect(viewerPage.getByRole('button', { name: 'Edit Components' })).toHaveCount(0);
 
