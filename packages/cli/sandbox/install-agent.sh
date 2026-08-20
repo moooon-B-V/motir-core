@@ -75,38 +75,19 @@ CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
 # Install an npm-published agent globally. `--no-fund --no-audit` keeps the
 # build log down to the failure that actually matters.
 #
-# ⚠️ THE SECOND ARGUMENT IS AN INSTALL-SCRIPT GRANT, AND IT IS NOT OPTIONAL
-# POLISH (MOTIR-3192). Since npm made `allow-scripts` a policy, a package's
-# `postinstall` does NOT run unless that package is named — npm warns and
-# carries on, so an agent whose native half is placed by its postinstall
-# installs *successfully* and is then not there. `@anthropic-ai/claude-code`
-# tolerated that until 2.1.237 and stopped: the arm below installed cleanly and
-# died on its own `claude --version` with "claude native binary not installed."
+# The optional SECOND argument is a DIST-TAG to install from, defaulting to
+# whatever the registry calls `latest` (see the `claude` arm for why that
+# default is not always the right channel).
 #
-# So the grant is per package and BY NAME. `--allow-scripts` takes a
-# comma-separated list, is intended for exactly this `npm install -g` case, and
-# a BARE NAME is a name-only allow that matches any version of that registry
-# package — verified against npm 12.0.2's own `script-allowed.js`, where a bare
-# name parses to a range of `*` and returns a match without pinning. What it is
-# NOT is `--dangerously-allow-all-scripts`, which would hand the same permission
-# to every transitive dependency the agent drags in; the whole value of the
-# policy is that this list is short and readable.
-#
-# An arm passes NOTHING when its package publishes no install script — `codex`
-# is the one such arm today — so the grant stays a statement about a package
-# that actually needs it rather than a line every arm copies.
+# ⚠️ It also PRINTS THE RESOLVED VERSION, and that line is not decoration
+# (MOTIR-3192). `added N packages` names nothing, so when a third-party publish
+# broke this build on 2026-08-20, working out WHICH version each side had
+# installed meant diffing two job logs twelve minutes apart. `|| true`: this is
+# a log line, and a log line must never be the thing that fails a build.
 npm_agent() {
-    local spec="$1" allow_scripts="${2:-}"
-    if [ -n "$allow_scripts" ]; then
-        npm install -g --no-fund --no-audit --allow-scripts="$allow_scripts" "$spec"
-    else
-        npm install -g --no-fund --no-audit "$spec"
-    fi
-    # Print the RESOLVED version. The install output says "added N packages" and
-    # names nothing, which is why the 2.1.236 → 2.1.237 break cost a comparison
-    # of two job logs twelve minutes apart to place. `|| true`: this is a log
-    # line, and it must never be the thing that fails a build.
-    npm ls -g --depth=0 "$spec" || true
+    local name="$1" tag="${2:-}"
+    npm install -g --no-fund --no-audit "${name}${tag:+@${tag}}"
+    npm ls -g --depth=0 "$name" || true
 }
 
 # Wire the codegraph MCP server into the agent just installed (7.9.7d).
@@ -161,9 +142,24 @@ case "$AGENT" in
         # Anthropic Claude Code. Credential dir: ~/.claude (plus the
         # ~/.claude.json project file). Unattended flag:
         # --dangerously-skip-permissions.
-        # The postinstall places the platform-native binary, so the grant is
-        # what makes the smoke test below pass at all (MOTIR-3192).
-        npm_agent '@anthropic-ai/claude-code' '@anthropic-ai/claude-code'
+        #
+        # ⚠️ FROM THE `stable` DIST-TAG, NOT `latest` (MOTIR-3192). The native
+        # binary ships as a per-platform OPTIONAL dependency, and on
+        # 2026-08-19T23:57Z `latest` moved to 2.1.237 with the two x64 platform
+        # packages never published — `@anthropic-ai/claude-code-linux-x64` and
+        # `-linux-x64-musl` are both 404 at that version while both arm64
+        # siblings exist. An absent OPTIONAL dependency is not an error, so npm
+        # installs one package, says so cheerfully, and the launcher then
+        # reports "claude native binary not installed." Every amd64 build in the
+        # repository went red 56 minutes after that publish.
+        #
+        # `stable` is upstream's OWN curated channel and is what a partial
+        # publish to `latest` cannot reach. It is deliberately not a hand-pinned
+        # version: a pin has to be bumped by somebody, and the version nobody
+        # remembers to bump is the one that rots. The cost is lag — `stable` sat
+        # ~9 days behind `latest` when this was written — which is the right
+        # trade for an image whose build gates every pull request in the repo.
+        npm_agent '@anthropic-ai/claude-code' 'stable'
         claude --version
         # Wired into the IMAGE-OWNED home like opencode, not the runtime home
         # (7.9.7g / MOTIR-1840). codegraph's claude target writes three files:
@@ -181,9 +177,6 @@ case "$AGENT" in
         # OpenAI Codex CLI (Apache-2.0). Credential dir: ~/.codex. Unattended:
         # `codex exec` with --sandbox/--ask-for-approval — NOT --full-auto,
         # which upstream has deprecated (see the README matrix).
-        # No grant: `@openai/codex` publishes no install script, so there is
-        # nothing for the policy to permit (checked in the build log — it is the
-        # one npm arm here that raises no `allow-scripts` warning).
         npm_agent '@openai/codex'
         codex --version
         # Wired into the RUNTIME home on purpose, unlike opencode above: codex
@@ -200,11 +193,7 @@ case "$AGENT" in
         # install script: the script unpacks a release under $HOME and would
         # land in /root here, while the npm package resolves the same
         # platform binary straight onto the global PATH.
-        # Granted for the same reason as claude: `opencode-ai` publishes a
-        # `postinstall`, which npm was skipping. It smoke-tested green anyway,
-        # which is the quieter half of MOTIR-3192 — an agent can install with
-        # its own setup step never run and only fail somewhere later.
-        npm_agent 'opencode-ai' 'opencode-ai'
+        npm_agent 'opencode-ai'
         opencode --version
         # Wired into the IMAGE-OWNED home, not ~/.config/opencode: that path is
         # bind-mounted read-only from the host, which used to shadow the stanza
@@ -218,8 +207,7 @@ case "$AGENT" in
         # Moonshot Kimi Code CLI (MIT). The published package is
         # @moonshot-ai/kimi-code; its engines floor is Node >= 22.19, which the
         # base image's asserted >= 24.15 already clears.
-        # Granted: `@moonshot-ai/kimi-code` publishes a `postinstall` too.
-        npm_agent '@moonshot-ai/kimi-code' '@moonshot-ai/kimi-code'
+        npm_agent '@moonshot-ai/kimi-code'
         kimi --version
         # codegraph has no `kimi` target (checked against the shipped version's
         # own target list), so this profile gets no MCP wiring.

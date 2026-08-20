@@ -36,17 +36,6 @@ const directivesOf = (source: string): string =>
 
 const dockerfile = read('Dockerfile');
 const installAgent = read('install-agent.sh');
-
-/**
- * `install-agent.sh` with its COMMENTS stripped — the view a guard about what
- * the script DOES must read. The file is heavily commented by design, and a
- * comment that names a forbidden flag in order to rule it out is
- * indistinguishable from a use of it to a whole-file grep (MOTIR-3192).
- */
-const installAgentCode = installAgent
-  .split('\n')
-  .filter((line) => !/^\s*#/.test(line))
-  .join('\n');
 const entrypoint = read('entrypoint.sh');
 const compose = read('docker-compose.yml');
 const readme = read('README.md');
@@ -228,56 +217,26 @@ describe('the per-agent layer seam', () => {
     }
   });
 
-  it('names every npm arm whose package publishes an install script — and nothing else (MOTIR-3192)', () => {
-    // npm's `allow-scripts` policy skips a package's `postinstall` unless that
-    // package is NAMED, and it only warns. `@anthropic-ai/claude-code` survived
-    // that until 2.1.237 started placing its native binary there, at which
-    // point the arm installed cleanly and died on its own `--version`.
+  it('installs claude from the `stable` dist-tag, not `latest` (MOTIR-3192)', () => {
+    // claude-code's native binary ships as a per-platform OPTIONAL dependency,
+    // and on 2026-08-19 `latest` moved to a version whose two x64 platform
+    // packages were never published. An absent optional dependency is not an
+    // error, so the install succeeded, installed one package, and the launcher
+    // then reported "claude native binary not installed" — red-lighting every
+    // amd64 build in the repository 56 minutes after the publish.
     //
-    // The grant is asserted per arm rather than as "the file mentions
-    // allow-scripts", because the failure mode this guards is an arm that
-    // silently loses its grant while a sibling keeps one.
-    const grantedByPackage: Record<string, string | null> = {
-      claude: '@anthropic-ai/claude-code',
-      opencode: 'opencode-ai',
-      kimi: '@moonshot-ai/kimi-code',
-      // `@openai/codex` publishes no install script; a grant here would widen
-      // the policy for nothing.
-      codex: null,
-    };
-
-    for (const [id, pkg] of Object.entries(grantedByPackage)) {
-      const arm = armOf(id);
-      expect(arm, `arm for ${id}`).not.toBe('');
-      if (pkg === null) {
-        expect(arm, `${id} needs no install-script grant`).toMatch(/npm_agent '[^']+'\n/);
-        continue;
-      }
-      expect(arm, `install-script grant for ${id}`).toContain(`npm_agent '${pkg}' '${pkg}'`);
-    }
-  });
-
-  it('grants install scripts BY PACKAGE — never to everything the agent drags in', () => {
-    // The whole value of the policy is that the list is short and readable. A
-    // blanket switch would hand the same permission to every transitive
-    // dependency, which is the supply-chain surface the policy exists to shrink.
-    //
-    // ⚠️ Asserted over the CODE, not the file. The helper's own comment names
-    // `--dangerously-allow-all-scripts` in order to say the script does not use
-    // it, and a guard that greps the whole file cannot tell that apart from the
-    // thing it forbids — it would fail on the sentence explaining why it passes.
-    expect(installAgentCode).not.toContain('dangerously-allow-all-scripts');
-    expect(installAgentCode).not.toMatch(/--allow-scripts(=\*|\s|$)/m);
-    // The one place the flag is spelled is the shared helper, so a new arm
-    // cannot invent its own looser form.
-    expect(installAgentCode.match(/--allow-scripts=/g) ?? []).toHaveLength(1);
+    // `stable` is upstream's own curated channel, which a partial publish to
+    // `latest` cannot reach. Asserted because the failure it prevents is
+    // invisible here: a floating install looks identical in the diff and breaks
+    // on somebody else's release schedule.
+    expect(armOf('claude')).toContain("npm_agent '@anthropic-ai/claude-code' 'stable'");
   });
 
   it('logs the RESOLVED version of every npm-installed agent (MOTIR-3192)', () => {
-    // `added N packages` names nothing, so placing the 2.1.236 → 2.1.237 break
-    // meant comparing two job logs twelve minutes apart. One `npm ls` line in
-    // the shared helper makes the next version-driven break a grep.
-    expect(installAgent).toMatch(/npm ls -g --depth=0 "\$spec"/);
+    // `added N packages` names nothing, so placing that outage meant diffing
+    // two job logs twelve minutes apart to find which version each had. One
+    // `npm ls` line in the shared helper makes the next one a grep.
+    expect(installAgent).toMatch(/npm ls -g --depth=0 "\$name"/);
   });
 
   it('smoke-tests the binary it installed, so a broken profile fails the BUILD', () => {
