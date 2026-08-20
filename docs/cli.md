@@ -740,14 +740,14 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 
 ### Work loop
 
-| Command                | Flags                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `motir next`           | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
-| `motir run <scope>`    | `--print`¹ · `--agent <cmd>` · `--force`¹ · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`                                |
-| `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
-| `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                  |
-| `motir plan [args...]` | `--detach`                                                                                                                                                                |
-| `motir done [key]`     | `--session <branch>` · `--via <status>`                                                                                                                                   |
+| Command                | Flags                                                                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motir next`           | `--kinds <list>` · `--print` · `--print-prompt` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
+| `motir run <scope>`    | `--print`¹ · `--print-prompt` · `--agent <cmd>` · `--force`¹ · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`                                |
+| `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--print-prompt` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
+| `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--print-prompt` · `--disable-log-bug` · `--disable-replan`                                                  |
+| `motir plan [args...]` | `--detach`                                                                                                                                                                                   |
+| `motir done [key]`     | `--session <branch>` · `--via <status>`                                                                                                                                                      |
 
 ```sh
 motir next --kinds subtask --print
@@ -758,6 +758,7 @@ motir run MOTIR-40 --agent "…"              # a whole STORY: claim its leaves,
 motir run sprint --agent "…" --max 5        # the ACTIVE sprint, first five cards
 motir auto --agent "claude --dangerously-skip-permissions" --max 5 --keep-going
 motir auto --agent "…" --include-planning   # also fire expansions for unexpanded containers
+motir auto --agent "…" --print-prompt 2> prompts.log   # keep the transcript, leave stdout alone
 motir batch --agent "codex exec --sandbox workspace-write --ask-for-approval never"
 motir plan                                  # resume the project-wide conversation
 motir plan MOTIR-42 "size these" --detach   # anchored, one turn, don't wait
@@ -778,6 +779,54 @@ run has nobody to paste a prompt, so the flag fails with guidance rather than
 commander's bare "unknown option". `--auto-approve-replan` is refused the same
 way on `run`, `next` and `batch` — see **What a run does when it finds trouble**
 below, which is where the three findings flags are explained.
+
+#### ⚠️ `--print-prompt` is NOT `--print` — one prints INSTEAD, the other ALONGSIDE
+
+The two are one word apart and mean opposite kinds of thing, so read this once
+rather than guessing from the name:
+
+|                  | `--print`                                                                                    | `--print-prompt`                                          |
+| ---------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `run` · `next`   | print the prompt **instead of** launching an agent — the default when no agent is configured | print the prompt **and** launch the agent                 |
+| `auto` · `batch` | **refused**, with the guidance above                                                         | **supported**, and most useful precisely here             |
+| stream           | **stdout** — the prompt IS the output, meant to be piped                                     | **stderr** — narration about a run that is also happening |
+| leaf-only?       | yes — a scope has no single prompt to paste                                                  | no — a scoped run prints one block per dispatched leaf    |
+
+`--print-prompt` echoes each assembled prompt **verbatim to stderr at the moment
+it is dispatched**, on all four dispatch commands. It exists because the prompt is
+the entire contract with a sandboxed agent and is otherwise the one part of a run
+nobody can see: it is assembled server-side, written to the temp file
+`$MOTIR_PROMPT_FILE` points at, and **deleted when the dispatch ends** — so by the
+time you want to know why an agent did something strange, it is gone.
+
+Four things it guarantees, each of which is the reason for one of its choices:
+
+- **stderr, not stdout.** stdout during a run may carry the run's own structured
+  output, and a ~200-line prompt dumped into it would corrupt anything piping or
+  parsing it. The two flags therefore **compose**:
+  `motir run KEY --print --print-prompt` puts the prompt once on each stream
+  rather than twice on one.
+- **`2> prompts.log` is the shape people want** —
+  `motir auto --agent "…" --print-prompt 2> prompts.log` keeps the whole run's
+  transcript and leaves stdout intact.
+- **What was SENT, never a re-assembly.** The CLI echoes the string it hands the
+  agent, byte for byte. A transcript regenerated for display is one that can
+  disagree with the run it claims to describe.
+- **Printed BEFORE the agent starts**, so the prompt is on the stream even when
+  the agent then fails, times out or is killed — the run you most want the
+  transcript for is the one that went wrong.
+
+Each block opens with a header naming the work item, and the **session branch**
+as well when the dispatch is in `session_lineage` mode (`auto`, and a scoped
+`run`), because there the prompt's git instructions are only interpretable
+against the branch they name:
+
+```
+──── PROMPT SENT · MOTIR-42 · motir/auto-20260820-011830 ────
+```
+
+In `auto`, `batch` and a scoped `run` that is one block per dispatched item, in
+dispatch order.
 
 ### Help and topics
 

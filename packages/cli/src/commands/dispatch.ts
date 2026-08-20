@@ -1,5 +1,5 @@
 import { CliError } from '../errors.js';
-import { info, outVerbatim } from '../output.js';
+import { errVerbatim, info, outVerbatim } from '../output.js';
 import { parseKinds } from './read.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { getAgentCommand } from '../config/userConfig.js';
@@ -39,6 +39,7 @@ import {
   renderReplanSubmitted,
   renderDispatchAdvisories,
   renderDispatchSummary,
+  renderPromptEchoHeader,
   renderResumeNotice,
   renderSessionOutcomes,
   resolveDispatchTarget,
@@ -46,6 +47,7 @@ import {
   type AgentSource,
   type DispatchTarget,
   type FindingsPolicyOptions,
+  type PromptEchoOptions,
 } from '../dispatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient, WorkItemClaim } from '../client.js';
 
@@ -101,7 +103,7 @@ const CLOSE_OUT_SOURCE = 'byok' as const;
 
 // ── agent resolution ────────────────────────────────────────────────────────
 
-export interface DeliveryOptions extends FindingsPolicyOptions {
+export interface DeliveryOptions extends FindingsPolicyOptions, PromptEchoOptions {
   /** `--agent <cmd>` — launch THIS agent on the prompt. */
   agent?: string;
   /** `--print` — print the prompt and stop (the default when no agent). */
@@ -203,6 +205,41 @@ export function claimAllowsDispatch(claim: WorkItemClaim): boolean {
   return claim.outcome === 'claimed' || claim.outcome === 'mine';
 }
 
+/**
+ * Echo the prompt this dispatch is about to send, if the run asked for it
+ * (`--print-prompt`, MOTIR-3052).
+ *
+ * ⚠️ ONE implementation for every dispatch site, and it lives HERE rather than
+ * beside its renderer in `../dispatch.js` because that module is the PURE half
+ * and writes to no stream. `motir auto` and `motir batch` already import this
+ * module for `ensureInProgress` / `claimAllowsDispatch`, so the four commands
+ * share one writer instead of four `process.stderr.write` calls that could
+ * drift on the byte that matters.
+ *
+ * ⚠️ IT ECHOES `dispatch.prompt` AND NEVER RE-ASSEMBLES. The prompt is already
+ * in memory at every call site — the CLI has never assembled prompt text and
+ * must not start here — because a transcript regenerated for display is one that
+ * can disagree with the run it claims to describe, which is worse than none.
+ *
+ * ⚠️ AND EVERY CALLER INVOKES IT BEFORE THE AGENT STARTS. The run you most want
+ * a transcript for is the one that went wrong, so the prompt must already be on
+ * the stream when the agent then fails, times out, or is killed.
+ *
+ * The header goes through `info` (narration); the prompt through `errVerbatim`,
+ * which terminates it with exactly one newline and changes nothing else — so a
+ * reader slicing the header off a captured stderr holds the string the agent
+ * received, byte for byte.
+ */
+export function echoPromptIfAsked(
+  opts: PromptEchoOptions,
+  key: string,
+  dispatch: DispatchPrompt,
+): void {
+  if (!opts.printPrompt) return;
+  info(renderPromptEchoHeader(key, dispatch));
+  errVerbatim(dispatch.prompt);
+}
+
 interface DeliverInput {
   session: ProjectSession;
   key: string;
@@ -272,6 +309,13 @@ async function deliver(input: DeliverInput): Promise<void> {
     if (advisory) info(advisory);
     info(policyLine);
     info('');
+    // ⚠️ BOTH STREAMS, and exactly once each. `--print` and `--print-prompt`
+    // COMPOSE (MOTIR-3052): the payload copy goes to stdout because that is what
+    // `--print` is for, and the transcript copy to stderr because that is where
+    // this flag always puts it. Emitting the stderr copy first keeps the echo in
+    // the same position relative to the summary as it holds on the agent path
+    // below, so `2> prompts.log` reads the same either way.
+    echoPromptIfAsked(opts, key, dispatch);
     outVerbatim(dispatch.prompt);
     return;
   }
@@ -281,6 +325,9 @@ async function deliver(input: DeliverInput): Promise<void> {
   if (advisory) info(advisory);
   info(policyLine);
   info('');
+  // BEFORE the spawn, so the prompt is on the stream even when the agent then
+  // fails, times out or is killed — the run you most want the transcript for.
+  echoPromptIfAsked(opts, key, dispatch);
   const result = await runAgent({
     command: agent.parsed,
     prompt: dispatch.prompt,

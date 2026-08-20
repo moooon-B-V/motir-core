@@ -5,6 +5,7 @@ import {
   claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
+  echoPromptIfAsked,
   resolveOwnerId,
   type DeliveryOptions,
 } from './dispatch.js';
@@ -510,6 +511,11 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   info(`   ${target.cwd}  (${cwdReasonLabel(target)})`);
   for (const line of renderRepositoriesBlock(targets)) info(`   ${line.trimStart()}`);
   info('   its own branch off origin/main, its own pull request');
+
+  // BEFORE the spawn (MOTIR-3052), so the prompt is on the stream even when the
+  // agent then fails, times out or is killed — and one block per dispatched
+  // item, in the drain's own order.
+  echoPromptIfAsked(input.opts, entry.key, dispatch);
 
   const started = clock();
   const result = await runAgentFn({
