@@ -12,6 +12,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`            | MOTIR-3082           | Part V   |
 | A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`            | MOTIR-3159           | Part VI  |
 | What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`            | MOTIR-3159           | Part VI  |
+| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`              | MOTIR-3233           | Part VII |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -20,9 +21,45 @@ and its AUTHOR, to a shipped row and a shipped header, and redraws nothing.
 Part IV amends the same asset again, and is the one place either amendment MOVES a shipped
 element: the review rail's status tag leaves the title's line for its own.
 
+## ⚠️ A design result is a MOMENT — a new surface gets a NEW asset (Yue, 2026-08-20)
+
+**Parts III–VI amended `plans-surface.mock.html` IN PLACE and re-exported its PNG each time. Part
+VII stops doing that, and the earlier Parts are not a precedent to follow.**
+
+A design asset records the moment it was drawn, the way a commit does. Amending it for every later
+surface has three costs, and the third is the one that matters:
+
+1. **The export stops being reviewable.** By Part VI the board was 14 950px tall; adding one panel
+   took it past 20 000. The design RESULT published onto the card — the thing a reviewer actually
+   opens — was then fifteen screens of already-approved work with the new surface somewhere inside
+   it. _"I only need to see the new tabbed list design."_
+2. **Every amendment re-exports pixels nobody changed.** A binary diff of a 20 000px PNG says
+   nothing about what moved, so the one guard that could catch an accidental change to an older
+   panel cannot.
+3. **It reads as though the old design were still current.** It is not: `plans-surface.mock.html`
+   is what MOTIR-843 / 2985 / 3074 / 3082 / 3159 decided, on the days they decided it, and the
+   product has moved since. Re-exporting it every time quietly claims otherwise.
+
+**So: a NEW surface gets a NEW `<surface>.mock.html` + `.png`, and the older assets are left
+frozen.** What stays shared is `design-notes.md` — one per area, indexing that area's surfaces, and
+the right home for a decision that AMENDS an earlier Part's rule (§3 below reverses Part III §3;
+the reversal belongs in the notes precisely because the asset it corrects is frozen).
+
+Where a new asset reproduces rows or elements from an older one so the two are diffable, it says so
+and cites the file — it does not re-render the original.
+
+**This does NOT retroactively re-cut Parts III–VI.** Those panels stay where they are; splitting
+them now would re-export the very asset this rule exists to leave alone.
+
 **Part V amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
 parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
 differing), and a read view for one proposal composing the shipped quick view.
+
+**Part VII is the first Part with its OWN asset, and the first to REVERSE a rule this area
+records.** `plans-tabbed-list.mock.html` tabs the list by status, draws the two different
+emptinesses tabs create, restores the requester to a decided row beside the decider Part III kept
+(and nobody ever built), and takes the page header's duplicate Plan-with-AI pill away.
+**It does not amend `plans-surface.mock.html`** — see _A design result is a MOMENT_ below.
 
 **Part VI amends it once more, and is the first Part to draw the state AFTER the decision** — the
 accepted / declined node treatments (a fourth axis CROSSING the three `op` languages, not a fourth
@@ -1186,3 +1223,264 @@ REPLACED with the stacked rule and a citation of this Part, never deleted.
 Unchanged — the "Plans" left-nav entry → the Plans list → a row → the plan detail (Part I §5). A decided
 plan is reached exactly as an undecided one is; the only difference is what the pane holds when you get
 there, which is the subject of Panels G and H.
+
+---
+
+# Part VII — The Plans list, TABBED by status (MOTIR-3233 / Story MOTIR-3232)
+
+**Its OWN asset**: `design/ai-planning/plans-tabbed-list.mock.html` + `plans-tabbed-list.png`,
+four panels, plus this section in the area's shared `design-notes.md`.
+
+**It does NOT amend `plans-surface.mock.html`, and that asset is not re-exported** — see _A design
+result is a MOMENT_ above. What Part VII takes from it, it takes by CITATION: panel A's row shape
+and panel A2's attribution entry are composed as drawn, and panel A2's rows are reproduced in
+panel 2 so the decided-row change is diffable by reading the two files side by side.
+
+It draws the `/plans` LIST surface and nothing else. The plan DETAIL is
+[Part VIII](motir:cmt1lb9w600cci3phl3e3aysq)'s and the canvas's own behaviour is Part IX's; neither
+is drawn here.
+
+## 0. Why tabs, and why `Planned` is the default
+
+The statuses are not categories somebody invented for a page — **they are the plan lifecycle**, and
+each asks the reader a different question. `Planned` is _decide this_. `Generating` is _wait_.
+`Approved` and `Declined` are _what happened_. A single reverse-chronological stream mixes all four,
+so the one plan waiting on a decision sits below however many spinners the week produced — which is
+the state the request came out of. **Defaulting to `Planned` is the surface saying what it is for.**
+
+The tab set IS the shipped four-member `PlanStatus` enum. No member is added: the three histories
+`declined` now covers stay a `decisionReason`, exactly as MOTIR-3189 decided.
+
+## 1. What is UNCHANGED — composed, not redrawn
+
+- **The row's own shape**: the 32px status icon-square, the title line, the meta line, the
+  right-hand pill cluster, the accent border on a `planned` row awaiting review.
+- **The status pills** and their tones; **the staleness flag**; the rule that status is carried by
+  TEXT, not colour alone.
+- **The left-nav access path** (Part I §5) and the row as a single `<Link>` into `/plans/[id]`. No
+  new door.
+- **The plan DETAIL surface entirely** — the canvas, the review rail, the history timeline, the
+  approve / decline bar, the establish band.
+
+## 2. Drawn against SHIPPED PIXELS — what was RENDERED first, and what it settled
+
+Part III §2 bundled the real `PlanRow` with the real `messages/en.json` through a
+`NextIntlClientProvider`, styled it with the real `app/globals.css` + `@motir/design-system` theme,
+and screenshotted it headlessly before a word was written. The same was done here, adding the real
+`Segmented` primitive and the real page header's markup, at **375 / 700 / 1200px in both themes**.
+Four things that render settled, none of which is legible in the `.tsx`:
+
+1. **The four-tab strip is 310.3px wide with labels alone** — segments 84.3 / 67.7 / 75.7 / 70.6 —
+   **and 358.8px once each carries a count.** The width is INTRINSIC: identical at all three
+   viewports, because the control is `inline-flex` and never stretches.
+2. **The authed shell is `px-4` below `sm`**, so a 375px viewport gives the page a **343px** content
+   box. `310.3 < 343 < 358.8`. **The labels fit and the counts do not**, by 15.8px — a real
+   overflow, not a near miss. §4 is that disposition.
+3. **At 375px the shipped header WRAPS.** `flex-wrap` drops the Plan-with-AI pill onto its own line,
+   under a subtitle that has already wrapped to two. Removing that pill (§5) removes the wrap — a
+   second reason for the removal beyond the duplication it exists to fix.
+4. **A `planned` row's meta line already takes SIX lines at 375px** (138px tall) with title,
+   item count, timestamp and attribution — while the same row is one line at 700px and above. The
+   meta line is the phone-width pressure on this surface, which is exactly why §3 puts the second
+   person INSIDE an existing entry rather than adding a fourth.
+
+**And the mock reproduces the primitive to the pixel.** The asset's `.tabs` block measures **310.3px
+and 358.8px, with segment widths 84.3 / 67.7 / 75.7 / 70.6 and 96.5 / 79.8 / 87.8 / 82.7** — the
+same numbers as the real `Segmented` render, at every viewport. That agreement is what makes the
+measurements in §4 readable off the asset rather than only off a throwaway harness.
+
+## 3. A DECIDED row names BOTH people — this REVERSES Part III §3
+
+**The superseded rule, quoted in full so the reversal is legible:**
+
+> ### A DECIDED row shows the DECIDER, not the requester
+>
+> Panel A's rows 3 and 4 already end **`approved yesterday by Mara`** / **`declined 3 days ago by
+Mara`** — the THIRD party, drawn since 843. A decided row that also gained a requester would
+> therefore carry **two bare person names in one line**, and a reader cannot tell which one holds
+> which role; it is the two-chips-read-as-one hazard applied to people.
+>
+> The rule that resolves it is also the one that matches how the list is read: **while a plan is
+> UNDECIDED, _who asked_ is what you weigh — you are about to approve their request. Once it is
+> decided, _who decided_ is the operative fact and the requester is history.**
+
+**It is reversed, and the hazard it names is real.** What was wrong is the premise underneath it:
+that the two names would land in the SAME entry. They do not have to.
+
+**The decision: the two roles live in DIFFERENT meta entries, and the entry is what says the role.**
+
+- **The DECIDER rides the WHEN entry**, where panel A has drawn it since 843 —
+  `approved yesterday by Mara` — with the verb in front of it.
+- **The REQUESTER rides the ATTRIBUTION entry**, behind its avatar, exactly as it does on an
+  undecided row. Nothing about that entry changes: same avatar, same `·`, same agent half.
+
+So an approved row's meta line reads
+`8 items · approved yesterday by Mara · ⟨av⟩ Jonas · via Motir AI`, and no reader has to work out
+which name is which: one is preceded by _approved … by_, the other by a face. **Part III's
+three-entry cap is untouched** — the requester goes INSIDE entry 3 and adds no fourth entry, which
+is why finding 4 above (six meta lines at phone width) does not get worse.
+
+### ⚠️ And the other half of this Part is that the decider was NEVER BUILT
+
+Part III recorded the gap in its own warning paragraph and left the rule standing on top of it:
+
+> ⚠️ **`by Mara` is drawn in panel A and is NOT shipped.** `PlanRow` renders
+> `t(view.whenKey, { when })` — _"approved yesterday"_, with no name.
+
+So today's decided row names **nobody**: the rule was protecting a collision that could not occur,
+because half of it did not exist. Part VII specifies **both** halves — the decider is drawn AND
+built ([the decided-row card](motir:cmt1lba1600cgi3ph9crmidd1) owns it), and the requester comes
+back.
+
+### The decider is OPTIONAL, and row 8 is why
+
+A plan the abandoned-plan sweep terminated is `declined` with **`decidedById` NULL** and
+`decisionReason: 'abandoned'` (MOTIR-3236) — nobody decided it. Panel 2's row 8 draws that state:
+`3 items · declined 2 days ago · ⟨av⟩ Mara · via Claude Code`, with **no `by` at all**. This is
+Part III's own _absence, never a placeholder_ rule applied one axis over: no em-dash, no `Unknown`,
+no greyed name. A `decidedById` that is null renders the plain
+`aiPlanning.declinedAt` string the row uses today.
+
+**Neither party is ever conveyed by colour or glyph alone.** Every one of them is a name; the
+avatar is `aria-hidden` and the agent glyph is decorative, exactly as Part III §4 set them.
+
+## 4. The TAB STRIP, per element — and its below-`sm` disposition
+
+| element               | primitive / markup                                                                                | colour token                                                | shape / size                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| the strip             | the shipped **`Segmented`** (`packages/design-system/src/components/ui/Segmented.tsx`), unchanged | track `--el-tabnav-track`, border `--el-border`             | `--radius-btn`, 2px inset (`p-0.5`)                                   |
+| one tab               | its `<button aria-pressed>` — a real button, keyboard-operable, announced as a toggle             | inactive ink `--el-text-secondary`; hover `--el-text`       | `--height-control`, `--spacing-control-x`, `calc(--radius-btn - 2px)` |
+| the SELECTED tab      | the same button, `aria-pressed="true"`                                                            | fill `--el-page-bg`, ink `--el-text-strong`                 | `--shadow-subtle`                                                     |
+| the count             | the primitive's own **`trailing`** slot (the notification drawer's unread count uses it)          | inactive `--el-text-secondary`; active `--el-tabnav-active` | `text-[11px] font-semibold tabular-nums`                              |
+| the group's a11y name | `role="group"` + `aria-label`                                                                     | —                                                           | not rendered visually                                                 |
+
+- **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*`.** Every value above is a
+  token the primitive already reaches for; the mock restates their VALUES only because it renders
+  without the Tailwind build, as every asset in this area does.
+- **The segment radius NESTS**: `calc(var(--radius-btn) - 2px)` against a 2px inset, so the control
+  stays right when a style pills `--radius-btn`. That is the primitive's rule, not a new one.
+- **How the selection is ANNOUNCED.** Each tab is a `<button aria-pressed>`, so a screen reader says
+  _"Planned, toggle button, pressed"_. This is deliberately **not** an ARIA `tablist`: the panel
+  below is not a tabpanel whose content is swapped client-side — the tab is a URL-addressable FILTER
+  over a server-rendered list, and `aria-pressed` describes a filter honestly where `aria-selected`
+  would promise a tabpanel relationship the DOM does not have. It is also what the shipped primitive
+  already does everywhere else in the product (the board group-by, the Children List/Graph
+  switcher), so the grammar is one grammar.
+- **The URL carries the tab.** The strip's state is a query parameter, not component state, so a tab
+  is linkable and survives a reload — [the tabbed-list card](motir:cmt1lba4800cji3phjm6pvixz) owns
+  the parameter's name and its default.
+- **Placement: BELOW the header, above the list.** It is a filter over the list, not a property of
+  the page. In the header's right slot it would compete with the slot §5 just emptied, and it would
+  break the reading order a screen reader takes: title → subtitle → filter → results.
+
+### The below-`sm` disposition, MEASURED (panel 4)
+
+| box                                           | strip            | verdict                   |
+| --------------------------------------------- | ---------------- | ------------------------- |
+| 343px (a 375px viewport − the shell's `px-4`) | 310.3px, labels  | **fits**, 32.7px to spare |
+| the same 343px box                            | 358.8px, +counts | **overflows by 15.8px**   |
+| 592px (a 640px viewport − `sm:px-6`)          | 358.8px, +counts | fits, 233px to spare      |
+
+**So all four tabs keep their LABELS at every width, and the COUNTS render from `sm` up.** The
+number decides it, not taste:
+
+- **Not a horizontal scroller.** The fourth tab would sit off-screen on the one surface whose job is
+  to show you which statuses exist — and `Declined`, the tab that would be hidden, is the one a
+  reader reaches for when reconstructing what happened.
+- **Not condensed to glyphs.** Four lifecycle states have no four icons a reader could tell apart;
+  the status pills already carry glyphs and they are recognised BY their labels.
+- **Not a `<select>` below `sm`.** A second control grammar for one breakpoint is two things to
+  build, test and translate.
+- **The counts are the right thing to drop** because they are an ORNAMENT on a filter: the number a
+  tab promises is supplied by the result set the moment you press it. A count of **zero** still
+  renders (`Declined 0`) wherever counts render at all — a tab that silently loses its number reads
+  as a loading state, and the zero is a fact worth telling a reader before they press.
+
+## 5. The header carries ONE Plan-with-AI entrance
+
+`app/(authed)/plans/page.tsx` renders a `PlanWithAILauncher` in its header's right slot, and
+`TopNav` renders one on every authed screen — two entrances to the same thing, a few hundred pixels
+apart. **The page header's goes.** Panel 1 draws the header without it: `<h1>` + subtitle,
+and nothing in the right slot.
+
+**The EMPTY state's CTA STAYS.** `/roadmap`'s empty state carries the same one and the two must not
+diverge; an empty page also has no populated surface for the top bar's entrance to sit in context
+with, and the empty state is exactly where a first-time reader needs the door drawn for them.
+
+## 6. Two EMPTINESSES, and they must not say the same thing
+
+| state                        | when                                       | copy                                                        | CTA                         |
+| ---------------------------- | ------------------------------------------ | ----------------------------------------------------------- | --------------------------- |
+| **the project has no plans** | the unfiltered project holds zero plans    | `aiPlanning.emptyTitle` / `emptyDescription`, unchanged     | **Plan with AI** — retained |
+| **this TAB has none**        | the project HAS plans, none in this status | `aiPlanning.tabEmpty.<status>Title` / `tabEmptyDescription` | **none**                    |
+
+- **The whole-surface state is the shipped `EmptyState`, untouched** — same glyph, same strings,
+  same CTA, reached exactly as it is today. **The tab strip is HIDDEN there**: there is nothing to
+  filter, and four zeroes are four ways of saying the same thing.
+- **An empty TAB keeps the strip above it** and offers no generate CTA. Repeating _Generate your
+  first plan_ would be false on its face, and a generate CTA is the wrong answer to _nothing is
+  generating_ — the reader's next move is a different tab, so the copy names where the plans
+  actually are (_"Approved and Declined hold this project's history"_).
+- **The strip is never hidden by an empty tab.** Hiding the control that got you there is how a
+  reader gets stuck in a tab.
+
+## 7. Copy — every string this Part introduces (namespace `aiPlanning`)
+
+Both catalogues are owed — `messages/en.json` AND `messages/zh.json` (the zh-parity gate). The four
+tab labels REUSE the shipped `aiPlanning.status.*` strings rather than adding a second set of words
+for the same four states.
+
+| key                        | en                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| `statusFilterAria`         | Filter plans by status                                                           |
+| `tabEmpty.generatingTitle` | Nothing generating                                                               |
+| `tabEmpty.plannedTitle`    | Nothing waiting on you                                                           |
+| `tabEmpty.approvedTitle`   | Nothing approved yet                                                             |
+| `tabEmpty.declinedTitle`   | Nothing declined                                                                 |
+| `tabEmpty.description`     | This project's other plans are in the remaining tabs.                            |
+| `decidedBy`                | {verb} {when} by {name} _(the existing `approvedAt` / `declinedAt` with a name)_ |
+
+The decided-row string is a **variant of the shipped `approvedAt` / `declinedAt` keys, not a new
+grammar**: `approved {when}` gains `approvedByName` → `approved {when} by {name}`, and the row picks
+the plain key when `decidedByName` is null. That keeps the _absence, never a placeholder_ rule a
+choice between two whole sentences rather than a name-shaped hole in one.
+
+## 8. GIVES / TAKES
+
+**TAKES — from other Parts and cards** (premises as well as elements):
+
+- **Part III §3's _A DECIDED row shows the DECIDER_ rule — a PREMISE, and it is REVERSED** (§3).
+  Amended on the record above, with the superseded text quoted and the reason it failed named.
+- **Part III §4's inks, avatar and glyph treatment — an ELEMENT set, unchanged.** The requester's
+  entry is byte-for-byte Part III's.
+- **Part III's _absence, never a placeholder_ rule — a PREMISE, EXTENDED** to the decider (§3).
+- **Part I panel A's `approved … by <name>` drawing — an ELEMENT**, which this Part finally makes
+  buildable rather than aspirational.
+- **Part I §5's left-nav access path and the row's `<Link>` — STRUCTURE, untouched.**
+- **The page header's `PlanWithAILauncher` — a PREMISE removed** (§5): _the Plans page offers its
+  own AI entrance_ stops being true. `TopNav`'s and the empty state's remain.
+- **[MOTIR-2373](motir:cmsinu308000404la81khtv8y)'s below-`md` measurement discipline — a PREMISE**:
+  a width claim is asserted only with a render behind it (§2, §4).
+- **[MOTIR-3189](motir:cmt0sn4qq01hni2phocm94qwc)'s `decisionReason` decision — a PREMISE**: the tab
+  set is the four-member enum and gains nothing.
+- **[MOTIR-3236](motir:cmt1lba3600cii3phn69q6h8h)'s sibling — the null-decider STATE** row 8 draws
+  (`decidedById` NULL on an abandoned plan).
+
+**GIVES — to the cards built to this Part:**
+
+- **[The tabbed, streamed list](motir:cmt1lba4800cji3phjm6pvixz)** takes the strip (§4), its
+  primitive, its tokens, its a11y contract, its placement, the counts-from-`sm` rule, and both
+  empty states (§6). It owns the URL parameter's name and the ten-a-page streaming this Part does
+  not draw.
+- **[The decided row](motir:cmt1lba1600cgi3ph9crmidd1)** takes §3 whole: the requester restored to
+  the attribution entry, the decider BUILT into the when-entry, and the null-decider fallback.
+- **[The header pill](motir:cmt1lba0000cfi3ph0gdrpk6n)** takes §5, including the explicit
+  instruction that the empty state's CTA is retained.
+
+## 9. What Part VII does NOT draw
+
+The plan DETAIL surface and its List ↔ Canvas switcher (Part VIII); the canvas, its arrival level,
+its breadcrumb and the Show-changes control (Part IX); the review rail; the establish band; the
+left-nav entry itself; the row's own shape, its pills and its staleness flag; the ten-a-page
+streaming mechanics and the scroll sentinel (drawn nowhere — they have no pixels of their own
+beyond the list this Part already shows).
