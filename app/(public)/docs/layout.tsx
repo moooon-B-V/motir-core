@@ -66,7 +66,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function ApiDocsLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-(--el-page-bg)">
+    <div className="flex min-h-dvh flex-col bg-(--el-page-bg)">
       <ExploreTopBar current="docs" />
       <div className="flex flex-1 flex-col lg:flex-row">{children}</div>
       {/* No topics: see the note above — documentation makes no database read. */}

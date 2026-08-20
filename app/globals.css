@@ -24,7 +24,18 @@ body {
     background-color var(--transition-duration) ease,
     color var(--transition-duration) ease;
   margin: 0;
-  min-height: 100vh;
+  /* The document floor — the ONLY viewport-sized length outside the shell, and
+     the one place the document's height is stated (MOTIR-3208).
+
+     It is `dvh`, not `vh`, because `components/ui/AppLayout.tsx` sizes the
+     signed-in shell at exactly `h-dvh` and clips it, making `<main>` the only
+     scroller on any signed-in surface. `vh` is the LARGE viewport (browser UI
+     retracted); `dvh` is the DYNAMIC one. On a browser where the two differ, a
+     `vh` floor exceeds the shell's height by that difference, the document gains
+     that many scrollable pixels, and they are EMPTY — nothing lays out there, so
+     all that shows is this canvas below the shell's bottom edge. A viewport unit
+     is shell geometry wherever it is written. */
+  min-height: 100dvh;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
