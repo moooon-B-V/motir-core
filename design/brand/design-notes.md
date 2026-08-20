@@ -191,6 +191,36 @@ rejected for reading plainly as the letter Z, the very thing this card ruled out
 
 ---
 
+### ⚠️ Refined 2026-08-19 — the contour, not the shape (MOTIR-3181)
+
+Yue: _"the contour of the logo is not good, the left/right vertical line is maybe 1px out."_ It was.
+**The curve is unchanged** — same control points, same silhouette, same approval. Two artifacts of
+the hand-derivation were removed:
+
+1. **A stray `+0.54` on every `y`**, and a `768.54` viewBox height, so no coordinate sat on a whole
+   unit. Every number is now exact (`M0 0Q224 496 416 134…` at native size; the 24-grid cut
+   terminates exactly at `15.5 / 4.1875 / −7.125 / 5.125 / 18.5625`).
+2. **A ~1-unit MARGIN in the 24-grid cut** (caps at `x = 1.008` and `22.992` inside a 24 box) that
+   the native artwork never had.
+
+**The margin was the defect, and the reason is worth stating because it is counter-intuitive.** An
+INSET vertical edge lands on a whole device pixel only at exact multiples of the grid; the **viewBox
+boundary is pixel-aligned at every scale**. So a straight cap that sits ON the edge is crisp at every
+size, and one that sits just inside it is not. Measured left/right cap alpha (0–255), before → after:
+
+| size   | 16      | 24      | 26      | 28      | 32      | 48      | 56      | 64      |
+| ------ | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- |
+| before | 84      | 254     | 233     | 211     | 168     | 255     | 166     | 80      |
+| after  | **255** | **255** | **255** | **255** | **255** | **255** | **255** | **255** |
+
+Before, only 24 px and 48 px — the exact grid multiples — were clean; everywhere else each cap
+antialiased across two columns into a soft, uneven seam. That is the "about a pixel out".
+
+**So: do not "tidy" a margin back into the artwork.** Whitespace around the mark belongs to the
+CONSUMER — that is what §5's glyph-box scales are for. Both assets are now the same geometry at a
+1:32 ratio, so the mark renders at the same relative size whichever file a surface reads; before this
+they disagreed (native: no margin; 24-grid: 4.2%).
+
 ## 2. Construction
 
 **Source of truth: `design/brand/motir-logo.drawio.svg`** — Yue's editable draw.io file, kept beside
@@ -325,13 +355,19 @@ Everything else is new — and Next.js only auto-wires files it _finds_, so each
   icons are cropped to an arbitrary OS shape, so the glyph must sit inside the centred circle of
   diameter **0.8 × canvas**. The band's extreme point is its **bounding-box corner** — the end cap at
   (22.992, 23.0) on the 24-grid — so its circumradius from the centre is the full diagonal,
-  `15.55 / 24 = 0.648 × the glyph box`. It pays the √2 penalty that the earlier rhombus mark avoided,
-  and **the 0.66 scale written here for that rhombus does not carry over**: at 0.66 the glyph spans
-  `2 × 0.648 × 0.66 = 0.855 × canvas` and is **clipped** by the mask.
+  the full diagonal of the glyph box. It pays the √2 penalty that the earlier rhombus mark avoided,
+  and **the 0.66 scale written here for that rhombus does not carry over.**
 
-  **Maskable icons render the glyph at 0.60 × canvas** (0.777 across — inside 0.8, with margin for
-  the OS shapes that crop tighter than a circle). The arithmetic ceiling is 0.617; 0.60 is the round
-  number below it. **Non-maskable icons keep 0.66**, centred — they are not cropped, so the safe
+  **⚠️ Both numbers were RE-DERIVED on 2026-08-19 when the artwork lost its margin (§1).** The 24-grid
+  asset used to inset by ~1 unit, so its bbox was `21.984 / 24` and the circumradius `0.648 × the
+glyph box`. Edge to edge the glyph spans the FULL square, so the circumradius is now
+  `√2 / 2 = 0.7071` and the safe-circle ceiling tightens to `0.8 / (2 × 0.7071) = 0.5657`. The scales
+  are ALSO divided by `24 / 21.984 = 1.092`, so the icons render at the size they already did rather
+  than jumping 9.2% on a refinement that was not asked to resize anything.
+
+  **Maskable icons render the glyph at 0.55 × canvas** (0.778 across — inside 0.8, with margin for
+  the OS shapes that crop tighter than a circle). The arithmetic ceiling is 0.5657; 0.55 is the round
+  number below it, and it is also the compensated size. **Non-maskable icons use 0.605**, centred — they are not cropped, so the safe
   circle does not apply and the mark should read as large as the tile allows.
 
 - **`app/manifest.ts`** declares both maskable entries plus `name: 'Motir'`, `short_name: 'Motir'`,
@@ -459,8 +495,9 @@ the band to a constant width** — the pinch and swell is deliberate (§1) · do
   **baked-colour** export of the same path for the contexts where `currentColor` cannot reach it —
   `<img>`, favicon, email, `next/og` (§2). That is a colour bake, not a second artwork; do not let it
   become one.
-- **⚠️ Maskable icons render at 0.60 × canvas, not 0.66** (§5). The band's extreme point is its
-  bounding-box corner, so at 0.66 it overflows the 0.8 safe circle and the OS mask clips it.
+- **⚠️ Maskable icons render at 0.55 × canvas, not 0.605** (§5). The band's extreme point is its
+  bounding-box corner, so at the non-maskable scale it overflows the 0.8 safe circle and the OS mask
+  clips it. (Both numbers moved on 2026-08-19 with the margin removal — §1.)
 - **Neither prior-art check nor trademark clearance covers this mark.** §1's visual-similarity table
   was run against the _lattice_, which is a different shape. **MOTIR-2267** searches the wave band in
   classes 9 and 42 and must land before launch — it does not block this card.

@@ -4,11 +4,32 @@
   SOURCE: design/brand/motir-logo.drawio.svg (draw.io / diagrams.net, editable).
   That file draws the mark as four open strokes — an upper curve, a lower curve
   and two straight end caps. This file is the same geometry CLOSED and FILLED:
-  upper curve, right cap, lower curve reversed, left cap. It uses the source's
-  own control points, so it is exact by construction — no tracing, no fitting
-  error. Four quadratic curves and two straight caps — six segments, ~110 bytes of path data.
-  To change the mark, edit the .drawio.svg and re-derive this file; do not hand-edit
-  the path.
+  upper curve, right cap, lower curve reversed, left cap. To change the SHAPE,
+  edit the .drawio.svg and re-derive; do not hand-edit the path.
+
+  ⚠️ REFINED, NOT RE-DRAWN (MOTIR-3181). The curve is UNCHANGED — the same control
+  points, the same silhouette. Two hand-derivation artifacts were removed so the
+  contour lands on whole pixels:
+
+    1. A stray +0.54 on every y, and a 768.54 viewBox height, so nothing sat on a
+       whole unit. Every coordinate is now exact.
+    2. A ~1-unit MARGIN in the 24-grid cut (caps at x=1.008 / 22.992 inside a
+       24 box) that the native artwork never had. That margin is what made the
+       vertical caps read "about a pixel out": an INSET vertical edge lands on a
+       whole device pixel only at exact multiples of the grid, so at 16 / 26 / 28 /
+       32 / 56 / 64 px each cap straddled two columns and antialiased into a soft,
+       uneven seam. Measured left/right edge alpha at those sizes: 84 / 233 / 211 /
+       168 / 166 / 80 out of 255.
+
+  ⚠️ THE CAPS SIT ON THE viewBox EDGE, AND THAT IS THE FIX — not an oversight.
+  The viewport boundary is pixel-aligned at EVERY scale, so an edge that coincides
+  with it is crisp at every size; an inset edge cannot be. Measured after: alpha
+  253–255 at 16 / 24 / 26 / 28 / 32 / 48 / 56 / 64 px. Do not "tidy" a margin back
+  in — padding belongs to the CONSUMER (the icon generator's glyph-box scale), never
+  to the artwork.
+
+  Both assets are now the same geometry at a 1:32 ratio, so the mark renders at the
+  same relative size whichever file a surface reads. Before this they disagreed.
 
   fill="currentColor" is deliberate: the mark carries NO colour of its own, so it
   follows the theme and the palette from whatever renders it. Set the colour on the
@@ -19,6 +40,6 @@
 
   See design/brand/design-notes.md sections 1 and 2.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768.00 768.54" width="768.00" height="768.54" role="img" aria-label="Motir">
-  <path d="M0 0.54Q224 496.54 416 134.54Q608 -227.46 768 384.54L768 768.54Q608 164.54 416 594.54Q224 1024.54 0 384.54Z" fill="currentColor" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768" width="768" height="768" role="img" aria-label="Motir">
+  <path d="M0 0Q224 496 416 134Q608 -228 768 384L768 768Q608 164 416 594Q224 1024 0 384Z" fill="currentColor" />
 </svg>

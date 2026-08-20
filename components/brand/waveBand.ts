@@ -19,9 +19,21 @@ export const WAVE_BAND_VIEW_BOX = '0 0 24 24';
 /**
  * One closed path — four quadratic curves + two straight caps, six segments.
  * Filled, never stroked (design-notes.md §2 "paint").
+ *
+ * ⚠️ IT SPANS THE viewBox EDGE TO EDGE (0..24 on both axes), and that is the
+ * fix rather than an oversight (MOTIR-3181). The viewport boundary is
+ * pixel-aligned at EVERY scale, so a straight cap that coincides with it renders
+ * crisp at every size; an INSET cap lands on a whole device pixel only at exact
+ * multiples of the grid. The previous path carried a ~1-unit margin (caps at
+ * 1.008 / 22.992) and its vertical edges measured alpha 84 / 233 / 211 / 168 /
+ * 166 / 80 at 16 / 26 / 28 / 32 / 56 / 64 px — the contour reading "about a pixel
+ * out". Edge to edge it measures 255 at all of them.
+ *
+ * So do NOT re-introduce padding here. Whitespace around the mark belongs to the
+ * CONSUMER — that is exactly what the icon generator's glyph-box scales are for.
  */
 export const WAVE_BAND_PATH =
-  'M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z';
+  'M0 0Q7 15.5 13 4.1875Q19 -7.125 24 12L24 24Q19 5.125 13 18.5625Q7 32 0 12Z';
 
 // ── The baked-colour literals ───────────────────────────────────────────────
 //
