@@ -39,12 +39,20 @@ import {
 const ROOT = process.cwd();
 const REAL_NOTES = join(ROOT, 'design/work-items/design-notes.md');
 
-// ⚠️ SINCE MOTIR-3213 A PUBLISH REQUIRES A TRUSTED DIFF BASE, so every `main`
-// test that expects a publish must supply one. These tests pass a
-// `DESIGN_BASE_SHA` that is not a real revision, so the default resolver walks
-// all three rungs and lands on `event-base` — from which `main` now refuses to
-// publish, correctly. Declaring the base is also the honest thing: what these
-// tests are about is the note loop and the publish call, not base resolution.
+// ⚠️ EVERY `main` TEST DECLARES ITS DIFF BASE, for two reasons (MOTIR-3213).
+//
+// 1. A publish now requires a TRUSTED base. These tests pass a
+//    `DESIGN_BASE_SHA` that is not a real revision, so the default resolver
+//    walks all three rungs and lands on `event-base` — from which `main`
+//    correctly refuses to publish. What they are about is the note loop and the
+//    publish call, not base resolution, so they should say so.
+// 2. The default resolver runs REAL git in `process.cwd()`, and in the
+//    `design-guards` job that is a genuinely SHALLOW checkout of the whole
+//    repository — so an un-injected test makes a NETWORK FETCH against
+//    `motir-core` from inside the suite. That is how this block came to exist:
+//    one such test took 104 s in CI and timed out. A unit test must not reach
+//    the network, and a spec that resolves a base for real belongs in the
+//    fixture block below, where the repository is one it built itself.
 const TRUSTED_BASE = ({ base }: { base: string }) => ({ base, source: 'merge-parent' as const });
 
 describe('parseWorkItemKey / resolveTargetKey', () => {
@@ -859,6 +867,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main({ DESIGN_BASE_SHA: 'base' }, log as never, {
       collect: () => ({ assets: [], notes: [], ignored: [], deleted: [] }),
       publish,
+      resolveBase: TRUSTED_BASE,
     });
 
     expect(code).toBe(0);
@@ -872,6 +881,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main({ DESIGN_BASE_SHA: 'base' }, log as never, {
       collect: () => oneMock,
       publish,
+      resolveBase: TRUSTED_BASE,
     });
 
     expect(code).toBe(0);
@@ -1110,7 +1120,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main(
       { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x' },
       log as never,
-      { collect: () => oneMock, requestOidc: async () => null, publish },
+      { collect: () => oneMock, requestOidc: async () => null, publish, resolveBase: TRUSTED_BASE },
     );
 
     expect(code).toBe(0);

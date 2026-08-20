@@ -277,13 +277,15 @@ function headParents(git, cwd) {
  * the behaviour MOTIR-3104 existed to replace. Measured, in a depth-1 clone of a
  * merge commit:
  *
- *     git rev-list --parents -n 1 HEAD      →  <sha>                      1 field
- *     git fetch --deepen=1 origin
- *     git rev-list --parents -n 1 HEAD      →  <sha> <parent1> <parent2>  3 fields
+ *     git rev-list --parents -n 1 HEAD          →  <sha>                      1 field
+ *     git fetch --depth=2 --no-tags origin <sha>
+ *     git rev-list --parents -n 1 HEAD          →  <sha> <parent1> <parent2>  3 fields
  *
- * `--deepen=1` moves the shallow boundary one commit outward, which materializes
- * both parents AND their trees — enough for the diff, and a fixed one-commit cost
- * paid only when the clone is actually shallow and HEAD actually looks grafted.
+ * Fetching HEAD's own sha at `--depth=2` moves the shallow boundary one commit
+ * outward for that commit alone, which materializes both parents AND their trees
+ * — enough for the diff, at a bounded cost, paid only when the clone is actually
+ * shallow and HEAD actually looks grafted. See the body for why this is not
+ * `--deepen=1`.
  * It is done HERE rather than in `ci.yml` so the property holds for any caller in
  * a shallow checkout, and so a test can assert it against a real shallow clone —
  * a full-clone test cannot tell an inert rung from a working one, which is why
@@ -298,25 +300,26 @@ export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
   // than three in a SHALLOW clone is unproven rather than false: deepen by one
   // and ask again. A full clone has already given its final answer.
   if (parents.length < 3 && isShallowRepository(git, cwd)) {
-    // TWO attempts, because which one works depends on how the checkout was
-    // configured. `--deepen=1` extends the shallow boundary along the remote's
-    // existing refspec, which is the ordinary case; naming HEAD's own sha at
-    // `--depth=2` needs no refspec at all, which covers a checkout fetched by
-    // sha into a ref the configured refspec does not cover. Either failing is
-    // not an error — a local shallow clone has no reachable remote, and the
-    // rungs below still apply — so each is guarded and the caller learns from
-    // `source` what it actually got.
-    for (const args of [
-      ['fetch', '--deepen=1', 'origin'],
-      ['fetch', '--depth=2', 'origin', parents[0] || 'HEAD'],
-    ]) {
-      try {
-        git(args, cwd);
-      } catch {
-        continue;
-      }
+    // ⚠️ ONE BOUNDED FETCH, NAMING HEAD'S OWN SHA — deliberately NOT
+    // `git fetch --deepen=1 origin`. `--deepen` walks the remote's CONFIGURED
+    // REFSPEC, so its cost is a property of the checkout rather than of this
+    // one commit: measured against `motir-core`, it is ~2 s under the
+    // single-branch refspec `actions/checkout` usually leaves, and does not
+    // finish in 100 s under the `+refs/heads/*` refspec it sometimes leaves,
+    // because it deepens EVERY branch. Asking for HEAD's sha at `--depth=2` is
+    // ~2 s under either: it names one commit and takes its parents, and that
+    // is all the diff needs.
+    //
+    // Failure is not an error and is deliberately not retried with a wider
+    // form: a local shallow clone has no reachable remote, and a server that
+    // will not serve the sha leaves us on rung 3 — which since MOTIR-3213
+    // publishes nothing and reddens the step. Degrading to a refused publish is
+    // safe; degrading to an unbounded fetch is not.
+    try {
+      git(['fetch', '--depth=2', '--no-tags', 'origin', parents[0] || 'HEAD'], cwd);
       parents = headParents(git, cwd);
-      if (parents.length === 3) break;
+    } catch {
+      // Fall through to rung 2, then to the refusal.
     }
   }
   if (parents.length === 3 && parents[1]) return { base: parents[1], source: 'merge-parent' };
