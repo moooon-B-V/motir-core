@@ -1602,12 +1602,42 @@ So motir-core reaching a freshly-woken motir-ai instance is **correct**, not a
 bug. What it costs is cold start, not consistency — and the floor of 1 (§14)
 already means no caller pays an unmeasured boot.
 
-**`motir-gateway` is machine-agnostic too, but conditionally.** Sessions are
-cookie-backed and signed with the same `SessionSecret` on every machine; token,
-quota and channel reads go straight to the shared Postgres. **That second half
-holds only while Redis is off** (§16). Recording both here so that the absence of
-affinity is protected as a property and the condition under which it holds is not
-forgotten.
+**`motir-gateway` is machine-agnostic in PART, and the part that is not is worth
+naming precisely — because the card that raised this question got it wrong, and
+so did the first draft of this section.** Read from `origin/main` 2026-08-20:
+
+| state                                                      | gated on                                                  | at a pool of 2                                                                               |
+| ---------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| sessions                                                   | `cookie.NewStore(SessionSecret)` — same secret everywhere | **shared.** No affinity needed                                                               |
+| tokens, user quota, user group, user enabled, group models | `common.RedisEnabled` — **false** here                    | **shared.** Every one of these falls through to `DB.Where(...)` against the same Postgres    |
+| **channel selection** (`CacheGetRandomSatisfiedChannel`)   | `config.MemoryCacheEnabled`                               | ⚠️ **PER PROCESS.** An in-memory map, refreshed by `SyncChannelCache` every `SYNC_FREQUENCY` |
+| **options** (`SyncOptions`)                                | `config.MemoryCacheEnabled`                               | ⚠️ **PER PROCESS**, same refresh                                                             |
+
+**The correction is that `MemoryCacheEnabled` is NOT derived from Redis.**
+`common/config/config.go` reads it straight from the environment —
+`strings.ToLower(os.Getenv("MEMORY_CACHE_ENABLED")) == "true"` — and
+`motir-gateway`'s `fly.toml` sets `MEMORY_CACHE_ENABLED = "true"`. `main.go`
+additionally forces it on when Redis is enabled, which is what makes _"Redis off
+⇒ the caches are off"_ such a natural and wrong inference. **The caches are ON
+today, with Redis off.**
+
+**So the consequence, stated as a duration rather than a category:** with
+`SYNC_FREQUENCY = 600`, two running machines can disagree about which channels
+and options exist for up to **ten minutes** after an admin edit. Not about who a
+token belongs to, or what quota they have left — those are read-through. About
+which upstream a completion is routed to.
+
+`fly.toml`'s `MEMORY_CACHE_ENABLED` comment already anticipated exactly this —
+_"Safe on a single warm machine (`min_machines_running = 1`); revisit if scaled
+out (needs `REDIS_CONN_STRING` for cross-instance cache coherency)"_ — and the
+pool is now 2, so **the revisit is due**. It is not urgent for the same reason the
+rate-limiter exposure is not: at a floor of 1 only one machine runs in steady
+state, so there is one cache. **And it is a THIRD independent reason the floor
+must not go to 2 before the shared-store work lands** (§14), alongside the
+doubled rate limits. All three resolve together, or none of them does.
+
+**No affinity, still** — that would paper over a divergence rather than remove
+it, and it would break the read-through half for no benefit.
 
 ### §18 — Q16: the mid-job autostop hazard, MEASURED
 
