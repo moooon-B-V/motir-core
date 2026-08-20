@@ -898,15 +898,17 @@ export default defineConfig({
         // launcher it derives its href from is already gated above.
         'lib/planning/aiCallout.ts',
         'components/planning/AiCalloutMenu.tsx',
-        // MOTIR-3208 — the orb's drag + throw. `orbPhysics.ts` is pure and is
-        // GATED below (100 statements / branches / functions / lines, measured on
-        // this branch). `useDraggableOrb.ts` is REPORT-ONLY, and the reason is the
-        // one this block prescribes rather than a shortfall being hidden: it is at
-        // 100% LINES and 84% branches, and what remains are DOM-capability guards
-        // (`el.setPointerCapture?.()`, `pos.current ?? …`) that a single test
-        // environment cannot drive both ways — happy-dom either has the method or
-        // does not. Pinning 90 would invite mocking the DOM into having and not
-        // having a capability, which tests the mock.
+        // MOTIR-3208, corrected by MOTIR-3214 — the orb's drag + throw.
+        // `orbPhysics.ts` is pure and is GATED below (measured at 100 statements /
+        // branches / functions / lines on this branch, against a 90 floor).
+        // `useDraggableOrb.ts` is REPORT-ONLY, and the reason is the one this block
+        // prescribes rather than a shortfall being hidden: it is at 100% LINES and
+        // 82% branches, and what remains are DOM-capability guards
+        // (`el.setPointerCapture?.()`, `pos.current ?? …`, the null arm of a
+        // callback ref) that a single test environment cannot drive both ways —
+        // happy-dom either has the method or does not. Pinning 90 would invite
+        // mocking the DOM into having and not having a capability, which tests the
+        // mock.
         'lib/planning/orbPhysics.ts',
         'lib/hooks/useDraggableOrb.ts',
         'components/planning/PlanWithAIFab.tsx',

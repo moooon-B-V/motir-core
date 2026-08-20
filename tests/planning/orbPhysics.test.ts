@@ -139,25 +139,110 @@ describe('stepOrb — a thrown orb travels, bounces and settles', () => {
     const before = { x: B.maxX - 5, y: 300, vx: 1800, vy: 0 };
     const r = stepOrb(before, 1 / 60, B);
     expect(r.bounced).toBe(true);
-    expect(r.state.x).toBe(B.maxX);
     expect(r.state.vx).toBeLessThan(0); // reversed
     expect(Math.abs(r.state.vx)).toBeLessThan(1800 * RESTITUTION + 1); // and damped
+    // ⚠️ AND IT IS ALREADY ON ITS WAY BACK (MOTIR-3214). It hits the wall 5px in,
+    // ~3ms into a 16ms frame, and spends the other 13ms travelling away from it —
+    // so it ends the frame well INSIDE the box, not pinned to the wall. The
+    // version that clamped x to `maxX` here deleted that travel at every hit, and
+    // the orb visibly stuck to the edge for a frame before setting off.
+    expect(r.state.x).toBeLessThan(B.maxX - 5);
+    expect(r.state.x).toBeGreaterThan(B.minX);
+  });
+
+  it('DELETES NO TRAVEL at a bounce — one big step equals 64 small ones', () => {
+    // The invariant the frame-boundary clamp broke, stated as the thing a
+    // continuous solver is FOR: the answer must not depend on where the frame
+    // boundaries fall. Sixty-four sub-steps put a boundary practically on the
+    // impact, so they are the reference the single step has to match.
+    //
+    // This is the assertion that fails loudest on the old code: clamping pinned
+    // the single step to `maxX` and threw its remaining 13ms of travel away, while
+    // the 64-step run bounced properly and ended ~19px back inside the box.
+    const dt = 1 / 60;
+    const start: OrbState = { x: B.maxX - 5, y: 300, vx: 1800, vy: 0 };
+
+    const one = stepOrb(start, dt, B).state;
+    let many: OrbState = start;
+    for (let i = 0; i < 64; i++) many = stepOrb(many, dt / 64, B).state;
+
+    expect(one.x).toBeCloseTo(many.x, 3);
+    expect(one.vx).toBeCloseTo(many.vx, 3);
+    // And it really did bounce in there, rather than both agreeing on "stuck".
+    expect(one.vx).toBeLessThan(0);
+    expect(one.x).toBeLessThan(B.maxX - 5);
   });
 
   it('bounces off BOTH walls in one frame at a corner', () => {
-    // Resolving each axis independently is what makes a corner work; clamping the
-    // velocity first would make it stick.
+    // Resolving the earliest impact first — and then the next one — is what makes
+    // a corner work; clamping the velocity first would make it stick.
     const r = stepOrb({ x: B.maxX - 2, y: B.maxY - 2, vx: 1500, vy: 1500 }, 1 / 60, B);
-    expect(r.state.x).toBe(B.maxX);
-    expect(r.state.y).toBe(B.maxY);
+    expect(r.bounced).toBe(true);
     expect(r.state.vx).toBeLessThan(0);
     expect(r.state.vy).toBeLessThan(0);
+    // Both axes turned round and both are travelling back into the box.
+    expect(r.state.x).toBeLessThan(B.maxX - 2);
+    expect(r.state.y).toBeLessThan(B.maxY - 2);
   });
 
-  it('does NOT bounce a slow drift into the wall — it clamps, so nothing buzzes', () => {
+  it('GIVES UP GRACEFULLY on a frame with more impacts than it will solve', () => {
+    // A 40px-wide slot at 4200px/s is ~7 crossings in a 1/15s frame, past the
+    // solver's per-step budget. The orb must still end up inside its bounds and
+    // still be moving sanely; what it must NOT do is loop, or exit the box.
+    const slot = { minX: 20, maxX: 60, minY: 20, maxY: 720 };
+    const r = stepOrb({ x: 40, y: 400, vx: MAX_THROW_SPEED, vy: 0 }, 1 / 15, slot);
+    expect(r.state.x).toBeGreaterThanOrEqual(slot.minX);
+    expect(r.state.x).toBeLessThanOrEqual(slot.maxX);
+    expect(Number.isFinite(r.state.vx)).toBe(true);
+  });
+
+  it('does not invent an impact the orb can never reach — the decay runs out first', () => {
+    // A nudge, not a throw, aimed at a wall 1000px away. The exponential decay
+    // caps total travel at `v / -ln(DRAG_PER_SECOND)`, so this one dies in free
+    // flight — and the solver must say "no impact" rather than solve for a
+    // crossing that never happens.
+    const r = stepOrb({ x: 200, y: 400, vx: 50, vy: 0 }, 1 / 60, B);
+    expect(r.bounced).toBe(false);
+    expect(r.state.x).toBeGreaterThan(200);
+    expect(r.state.x).toBeLessThan(B.maxX);
+  });
+
+  it('RECOVERS an orb the walls moved past — a resize does not strand it outside', () => {
+    // Nothing collides on the way OUT, because it was already out: the window got
+    // narrower under a resting orb. The step has no impact to solve and must fall
+    // back to putting it back inside and killing the axis that was stranded.
+    const r = stepOrb({ x: B.maxX + 300, y: B.maxY + 120, vx: 0, vy: 0 }, 1 / 60, B);
+    expect(r.state.x).toBe(B.maxX);
+    expect(r.state.y).toBe(B.maxY);
+    expect(r.state.vx).toBe(0);
+    expect(r.state.vy).toBe(0);
+
+    // And the same orb still DRIFTING further out: the wall it would be tested
+    // against is behind it, so there is no crossing to solve for — it must be
+    // recovered by the same fallback rather than by an impact.
+    const moving = stepOrb({ x: B.maxX + 300, y: 400, vx: 200, vy: 0 }, 1 / 60, B);
+    expect(moving.state.x).toBe(B.maxX);
+    expect(moving.state.vx).toBe(0);
+    expect(moving.bounced).toBe(false);
+  });
+
+  it('resolves SEVERAL impacts inside one frame — a slow display is not a different game', () => {
+    // 1/15s at 3800px/s is 250px of travel in a 200px-wide box: the orb must cross
+    // it, turn, cross back and turn again within the single step. The clamping
+    // version resolved at most one wall per axis per frame and simply lost the
+    // rest, which is why the same throw landed somewhere else at 30fps.
+    const narrow = { minX: 20, maxX: 220, minY: 20, maxY: 720 };
+    const r = stepOrb({ x: 100, y: 400, vx: 3800, vy: 0 }, 1 / 15, narrow);
+    expect(r.bounced).toBe(true);
+    expect(r.state.x).toBeGreaterThanOrEqual(narrow.minX);
+    expect(r.state.x).toBeLessThanOrEqual(narrow.maxX);
+  });
+
+  it('does NOT bounce a slow drift into the wall — it stops there, so nothing buzzes', () => {
     const r = stepOrb({ x: B.maxX - 0.5, y: 300, vx: MIN_BOUNCE_SPEED - 10, vy: 0 }, 1 / 60, B);
     expect(r.state.x).toBe(B.maxX);
     expect(r.state.vx).toBe(0);
+    expect(r.bounced).toBe(false);
   });
 
   it('applies the same slow-drift rule on the VERTICAL axis', () => {
@@ -214,17 +299,17 @@ describe('stepOrb — a thrown orb travels, bounces and settles', () => {
     expect(a.y).toBeCloseTo(b.y, 0);
   });
 
-  it('lands a BOUNCING throw in materially the same place at 30 and 144 fps', () => {
-    // With walls in play the agreement is no longer exact and it would be
-    // dishonest to assert that it is: a collision is resolved at a frame
-    // boundary, so the overshoot clamped away differs slightly by frame rate.
-    // What must hold is that the outcome does not depend on the display — a few
-    // pixels apart, not a different corner. (Continuous collision detection would
-    // close the gap; it is not worth it for a 56px control.)
+  it('lands a BOUNCING throw in the same place at 30 and 144 fps', () => {
+    // ⚠️ THIS TOLERANCE USED TO BE 24px (MOTIR-3214). A collision resolved at the
+    // FRAME BOUNDARY deletes however much overshoot that frame happened to have,
+    // and a 30fps frame overshoots four times as far as a 144fps one — so the
+    // display genuinely changed where the orb ended up. Resolving at the instant
+    // of contact removes the frame rate from the answer, and the residue left is
+    // the same sub-pixel rest cut-off the free-throw case above measures.
     const start: OrbState = { x: 300, y: 300, vx: 2400, vy: -1500 };
     const a = settle(start, 30).state;
     const b = settle(start, 144).state;
-    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(24);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(2);
   });
 
   it('always reaches rest — the decay has a floor, so the loop terminates', () => {
