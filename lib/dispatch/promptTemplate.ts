@@ -4,6 +4,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
@@ -357,6 +358,7 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const straddles = advisories.filter(isRepoStraddleAdvisory);
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
+  const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -449,6 +451,30 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  split and STOP; do not start a run whose own sizing says it will not finish. If the',
       '  card is genuinely one unit and the numbers are wrong, say so and correct them on the',
       '  record — but do not simply proceed past this line.',
+    );
+  }
+
+  // THE DESIGN GATE (MOTIR-3178). Addressed to the agent because the agent is the
+  // one holding both halves: the card in its hand asks it to draw a design and
+  // then build the files that match it, in one pull request, with nobody looking
+  // in between. That is Principle #13 exactly inverted, and the agent is the last
+  // point at which it is still cheap to say so.
+  if (selfBlocking.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD IS ITS OWN DESIGN BLOCKER — it draws the design AND builds it:',
+      ...selfBlocking.map(
+        (a) =>
+          `    - criterion ${a.designCriterionIndex} produces a design asset; criterion ` +
+          `${a.surfaceCriterionIndex} builds a rendered surface against it.`,
+      ),
+      '  Design before code, WITHIN every story (Principle #13) means somebody sees the drawing',
+      '  before the files written to match it. Read literally the design gate is satisfied here —',
+      '  the type: design subtask this card must be linked to IS this card — which is exactly the',
+      '  reading this check exists to catch. The remedy is a LIFT, not a cut: propose the design',
+      '  criterion as its OWN type: design card, leave the rest blocked_by it, and STOP. Do not',
+      '  draw and build in one pass. If the composition is genuinely right — the asset is a small',
+      '  amendment nobody needs to approve separately — say so on the record and proceed.',
     );
   }
 

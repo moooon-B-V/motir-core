@@ -1255,6 +1255,13 @@ export interface components {
                 estimateMinutes: number | null;
             } | {
                 /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                designCriterionIndex: number;
+                surfaceCriterionIndex: number;
+            } | {
+                /** @constant */
                 kind: "subsumption";
                 item: string;
                 severity: string;

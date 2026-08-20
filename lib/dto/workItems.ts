@@ -1297,21 +1297,24 @@ export type WorkItemProseAdvisorySeverityDto = 'advisory' | 'likely-missing-edge
 
 /**
  * The severity of a SHAPE advisory (MOTIR-2175) — a defect the card asserts
- * about ITSELF, with no second work item involved. Three members: gate 14's
- * ORDERING axis, gate 1's repo column (MOTIR-2177), and the ESTIMATION GATE's
- * two sizing ceilings (MOTIR-3110).
+ * about ITSELF, with no second work item involved. Four members: gate 14's
+ * ORDERING axis, gate 1's repo column (MOTIR-2177), the ESTIMATION GATE's two
+ * sizing ceilings (MOTIR-3110), and the DESIGN gate's degenerate reading — a
+ * card that is its own design blocker (MOTIR-3178).
  *
- * ⚠️ The first two are defects in what the card's acceptance criteria ASK FOR
- * and carry the `criterionIndex` their remedy cuts at; the third is a defect in
- * two of the card's own COLUMNS and has no criterion to point at. That is why
- * {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all three share
- * and the criterion index sits one level down — see
+ * ⚠️ Only the first two carry the single `criterionIndex` their remedy cuts at.
+ * The sizing member is a defect in two of the card's own COLUMNS and has no
+ * criterion to point at; the self-blocking-design member has TWO, because its
+ * remedy LIFTS one criterion out rather than cutting the list at a line. That is
+ * why {@link WorkItemProseShapeAdvisoryBaseDto} carries only what all four share
+ * and the single criterion index sits one level down — see
  * {@link WorkItemProseCriterionShapeAdvisoryBaseDto}.
  */
 export type WorkItemProseShapeSeverityDto =
   | 'likely-ordering-violation'
   | 'likely-repo-straddle'
-  | 'likely-over-gate-sizing';
+  | 'likely-over-gate-sizing'
+  | 'likely-self-blocking-design';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1492,16 +1495,64 @@ export interface WorkItemProseSizingAdvisoryDto extends WorkItemProseShapeAdviso
 }
 
 /**
+ * THE DESIGN GATE'S DEGENERATE READING, mechanized (MOTIR-3178) — a CHILDLESS
+ * card one of whose acceptance criteria produces a DESIGN ASSET while another
+ * builds the RENDERED SURFACE that drawing decides.
+ *
+ * The planning-time design gate (`plan-rules/kind-leaf.md`) requires a
+ * UI-touching card to be linked to the asset AND to *"the `type: design` subtask
+ * that produced (or will produce) it"*. On a card that draws its own design that
+ * second link resolves to the card itself — literally satisfied, and Principle
+ * #13 exactly inverted: the drawing and the files written to match it arrive in
+ * one pull request, approved by one click. MOTIR-3154 was `ready: true`,
+ * `openBlockers: []` and `valid: true` in precisely that shape (`notes.html`
+ * #329; planning bug MOTIR-3158).
+ *
+ * ⚠️ TWO criterion indices, which is why this extends the plain base rather than
+ * {@link WorkItemProseCriterionShapeAdvisoryBaseDto}. The other criterion members
+ * report ONE number because their remedy is a cut — *every criterion below this
+ * line belongs to a different card*. This one's remedy is a LIFT: the design
+ * criterion becomes its own `type: design` card, and what is left is `blocked_by`
+ * it. A reader needs BOTH ends of the inversion to make that move, and reusing
+ * the singular field would have named the half they already knew about.
+ *
+ * ⚠️ **Never a gate, and here the false-positive class is real** (decided on
+ * MOTIR-3158). The predicate is lexical over criterion prose, so a card that
+ * amends an asset and adjusts the one rendered surface reading it can fire.
+ * Blocking would hold such a card out of the ready set with no override — and a
+ * card that is its own design blocker is exactly the card a re-plan is in the
+ * middle of splitting. The enforcement that must bite already does: `run.md`
+ * guard #3 PAUSES a run about to build UI with no drawing. This advisory makes
+ * the composition VISIBLE where acting on it is cheap — at seal time and at
+ * claim time — instead of leaving a session to work out for itself that the
+ * drawing it needs is criterion one of the card in its hand.
+ *
+ * ⚠️ **CHILDLESS is the condition, not the kind.** A `bug` or `task` that HOLDS
+ * children is gated by its subtree — its design child can be reviewed before its
+ * code children run — so it is out of scope by construction, exactly as the
+ * estimation gate scopes itself by POSITION rather than by kind.
+ */
+export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'likely-self-blocking-design';
+  /** 1-based index of the criterion whose deliverable is the DESIGN ASSET. */
+  designCriterionIndex: number;
+  /** 1-based index of the criterion that BUILDS the surface that drawing decides. */
+  surfaceCriterionIndex: number;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
- * ⚠️ Not every member carries `criterionIndex` since MOTIR-3110 — narrow to a
- * SEVERITY before reading it, which the three predicates below already force.
+ * ⚠️ Not every member carries `criterionIndex` since MOTIR-3110, and since
+ * MOTIR-3178 one member carries a PAIR of indices under different names —
+ * narrow to a SEVERITY before reading either, which the predicates below force.
  */
 export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseOrderingAdvisoryDto
   | WorkItemProseRepoStraddleAdvisoryDto
-  | WorkItemProseSizingAdvisoryDto;
+  | WorkItemProseSizingAdvisoryDto
+  | WorkItemProseSelfBlockingDesignAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). One member today, named
@@ -1562,8 +1613,9 @@ export interface WorkItemProseSubsumptionAdvisoryDto {
  *  - **`reference`** — the card NAMES a not-done work item it has no
  *    `blocked_by` edge to ({@link WorkItemProseReferenceAdvisoryDto}).
  *  - **`shape`** — the card contradicts itself; there is no far end at all
- *    ({@link WorkItemProseShapeAdvisoryDto}). Its criteria are mis-shaped, or
- *    (MOTIR-3110) its own sizing columns are over the estimation gate.
+ *    ({@link WorkItemProseShapeAdvisoryDto}). Its criteria are mis-shaped, its
+ *    own sizing columns are over the estimation gate (MOTIR-3110), or it is its
+ *    OWN design blocker (MOTIR-3178).
  *  - **`subsumption`** — a path the card's body names is already in a merged
  *    diff, so its deliverable may be shipped ({@link WorkItemProseSubsumptionAdvisoryDto}).
  *
@@ -1645,4 +1697,18 @@ export function isRepoStraddleAdvisory(
  */
 export function isSizingAdvisory(a: WorkItemProseAdvisoryDto): a is WorkItemProseSizingAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'likely-over-gate-sizing';
+}
+
+/**
+ * Narrow an advisory to the SELF-BLOCKING-DESIGN shape (MOTIR-3178).
+ *
+ * Earns its keep the same way {@link isSizingAdvisory} does: it narrows to the
+ * one shape member whose criterion indices are a PAIR, so a renderer that
+ * reached for the singular `criterionIndex` on the whole `shape` family stops
+ * compiling rather than printing `undefined`.
+ */
+export function isSelfBlockingDesignAdvisory(
+  a: WorkItemProseAdvisoryDto,
+): a is WorkItemProseSelfBlockingDesignAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'likely-self-blocking-design';
 }

@@ -368,7 +368,8 @@ item they return:
   { "item": "ACME-7", "referenced": "ACME-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
-  { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 }
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 }
 ]
 ```
 
@@ -383,14 +384,15 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card contradicts itself. Three
+A **`shape`** entry has no far end at all: the card contradicts itself. Four
 severities, each with its own remedy:
 
-| severity                    | what it found                                                                                        | remedy                                     |
-| --------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `likely-ordering-violation` | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged | CUT the card at that criterion             |
-| `likely-repo-straddle`      | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY      | SPLIT the card per repo (one repo, one PR) |
-| `likely-over-gate-sizing`   | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                        | SPLIT the card by size                     |
+| severity                      | what it found                                                                                                                | remedy                                                     |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                             |
+| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                 |
+| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                                                | SPLIT the card by size                                     |
+| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card |
 
 **`likely-over-gate-sizing` is the one member that carries no `criterionIndex`**,
 because its finding is about two COLUMNS rather than a criterion and its remedy
@@ -404,6 +406,19 @@ only for a card that is **childless** (a container is sized by rollup) and whose
 not agent run time); the two thresholds are `storyPoints >= 13` — the split
 signal read literally — and `estimateMinutes > 60`, a run that must fit in an
 hour.
+
+**`likely-self-blocking-design` carries a PAIR of indices and no `criterionIndex`
+either** — `designCriterionIndex` and `surfaceCriterionIndex`, because its remedy
+is a LIFT rather than a cut: the design criterion becomes its own `type: design`
+card and what is left is `blocked_by` it, so somebody sees the drawing before the
+files written to match it (Principle #13). It fires only for a **childless** card
+— a container's design child can be reviewed before its code children run, which
+is exactly the shape the finding asks for — and a criterion whose own deliverable
+is a design asset is never also read as the rendered surface, so a `design` card
+describing what its own mock shows stays quiet. Read literally the planning-time
+design gate is SATISFIED on such a card, because the `type: design` subtask a UI
+card must be linked to is the card itself; that degenerate reading is what this
+member exists to say out loud.
 
 `likely-repo-straddle` carries `reason`: `"contradiction"` when the card CARRIES
 repositories and the criterion's path is in none of them, or `"unpinnable"` when
@@ -1324,10 +1339,13 @@ ITSELF, with no second work item involved: `likely-ordering-violation` (a
 criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
 (a criterion naming a path outside the card's `targetRepo` — split per repo), or
 `likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
-or `estimateMinutes > 60` — split by size). The first two carry the
-`criterionIndex` they cut at; the third carries `threshold`, `storyPoints` and
-`estimateMinutes` and no criterion index, so narrow on `severity` before reading
-one.
+or `estimateMinutes > 60` — split by size), or `likely-self-blocking-design` (a
+childless card one of whose criteria produces a design asset while another builds
+the rendered surface it draws — LIFT the design criterion onto its own
+`type: design` card). The first two carry the `criterionIndex` they cut at; the
+third carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth
+carries `designCriterionIndex` and `surfaceCriterionIndex`. Only two of the four
+carry `criterionIndex`, so narrow on `severity` before reading one.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it
@@ -1343,6 +1361,11 @@ document it produces, not in its card body — are outside its reach; and
 repo a reader happens to know. `likely-over-gate-sizing` has no blind spot of
 that kind — its input is two integer columns and an enum — but for the same
 reason it has no opt-out either: a card that fires is over the gate.
+`likely-self-blocking-design` reads criterion PROSE, so it has the opposite
+profile: a real false-positive class (a card amending an asset and adjusting the
+one surface that reads it), accepted deliberately because the channel never
+gates — a blocking version would hold out of the ready set exactly the card a
+re-plan is in the middle of splitting.
 
 #### `create_sprint`
 
