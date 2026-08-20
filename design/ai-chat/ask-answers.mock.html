@@ -723,6 +723,17 @@
         min-width: 0;
         flex-direction: column;
       }
+      /* ⚠️ BOTH LINES TRUNCATE, in both states — this is what makes the two
+         heights equal, and it is the shipped bar's own recipe (`truncate` on
+         each line). A title allowed to wrap makes the gate one line taller than
+         the resting slot, and the jump this whole panel exists to remove comes
+         back. Measured: 57 px in both states; 64 px when the title wraps. */
+      .footerslot .t1,
+      .footerslot .t2 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .footerslot .t1 {
         font-size: 13px;
         font-weight: 650;
@@ -1673,8 +1684,12 @@
               <td><b>box</b></td>
               <td colspan="2">
                 identical — <code>border-t --el-border</code>, <code>bg --el-surface</code>,
-                <code>px-4 py-2.5</code>, a two-line text column, min-height fixed to the bar's own
-                measured height. <b>One element, always mounted.</b>
+                <code>px-4 py-2.5</code>, and a two-line text column whose lines BOTH
+                <code>truncate</code>. <b>57 px, measured, in both states</b> — the height matches
+                structurally rather than by a pinned <code>min-h</code>, which would drift the
+                moment the bar's own content changed. The truncation is load-bearing: let the title
+                wrap and the gate measures 64 px, and the jump is back.
+                <b>One element, always mounted.</b>
               </td>
             </tr>
             <tr>

@@ -1419,12 +1419,18 @@ to the **box** and costs nothing else.
 
 **The answer: ONE footer slot, always mounted, two contents.**
 
-|             | Resting (post-answer, and every state with no pending proposal)                                                                         | Proposal pending                         |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| **box**     | identical — `border-t --el-border`, `bg --el-surface`, `px-4 py-2.5`, a two-line text column, min-height pinned to the bar's own height |
-| **line 1**  | "Roadmap — as saved" · `--el-text-secondary`, 600                                                                                       | "1 added · 1 changed" · `--el-text`, 650 |
-| **line 2**  | "Nothing proposed. The conversation has changed nothing."                                                                               | "Nothing is saved yet."                  |
-| **actions** | none                                                                                                                                    | Discard (ghost) · Approve (primary)      |
+|             | Resting (post-answer, and every state with no pending proposal)                                                                                                    | Proposal pending                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| **box**     | identical — `border-t --el-border`, `bg --el-surface`, `px-4 py-2.5`, and a two-line text column whose lines BOTH `truncate`. **57 px, measured, in both states.** |
+| **line 1**  | "Roadmap — as saved" · `--el-text-secondary`, 600                                                                                                                  | "1 added · 1 changed" · `--el-text`, 650 |
+| **line 2**  | "Nothing proposed. The conversation has changed nothing."                                                                                                          | "Nothing is saved yet."                  |
+| **actions** | none                                                                                                                                                               | Discard (ghost) · Approve (primary)      |
+
+**The truncation is load-bearing.** The heights match STRUCTURALLY — same box,
+same two type sizes — rather than by a pinned `min-h`, which would drift the
+moment the bar's own content changed. Both lines truncate (the shipped bar's own
+recipe), so neither state can grow a third line: let the title wrap and the gate
+measures 64 px against the resting slot's 57, and the jump is back.
 
 The bar does **not** animate out, because it never leaves: a 120 ms opacity
 cross-fade of the contents, no transform and no height animation. What this costs
