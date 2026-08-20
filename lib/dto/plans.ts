@@ -9,8 +9,15 @@ import type { WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 
+/** Wire form of the Prisma `PlanStatus` enum, as a VALUE — so a surface that
+ *  must be total over the lifecycle (the tab strip, the per-status counts) can
+ *  iterate it instead of restating it. The type below is DERIVED from this
+ *  array, so the two cannot drift: adding a member here widens `PlanStatusDto`,
+ *  and there is no second place to forget. */
+export const PLAN_STATUS_DTO_VALUES = ['generating', 'planned', 'approved', 'declined'] as const;
+
 /** Wire form of the Prisma `PlanStatus` enum. */
-export type PlanStatusDto = 'generating' | 'planned' | 'approved' | 'declined';
+export type PlanStatusDto = (typeof PLAN_STATUS_DTO_VALUES)[number];
 
 /**
  * WHY a `declined` plan ended (MOTIR-3189) — the three histories that one status
@@ -460,7 +467,27 @@ export interface UpdateProposalInput {
 export interface ListPlansOptions {
   cursor?: string | null;
   limit?: number;
+  /**
+   * Narrow the page to ONE lifecycle status — the tabbed Plans list
+   * (MOTIR-3241) asks for exactly one tab at a time. **Omit it for the whole
+   * project**, which is what every caller predating the tabs does and what
+   * keeps their pages byte-identical.
+   *
+   * Applied as a `where` predicate in the repository, never after the read: a
+   * caller-side filter would take the cursor page and then shrink it, so a
+   * `planned` page would come back short while `nextCursor` claimed there was
+   * more.
+   */
+  status?: PlanStatusDto | null;
 }
+
+/** How many plans a project holds in EACH lifecycle status — the counts the
+ *  tab strip renders beside its labels (MOTIR-3241).
+ *
+ *  TOTAL over `PlanStatusDto` by construction: a status with no rows reads `0`,
+ *  never an absent key, so a caller cannot render `undefined` for the tab a
+ *  project happens to have nothing in. */
+export type PlanStatusCountsDto = Record<PlanStatusDto, number>;
 
 // --- Plan staleness (Story 7.21 · MOTIR-1340) -------------------------------
 // Computed at REVIEW time from the CURRENT work-item tree + the plan's

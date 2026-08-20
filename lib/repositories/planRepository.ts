@@ -1,4 +1,4 @@
-import { Prisma, type Plan } from '@/generated/prisma/client';
+import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 /** A plan the abandoned-plan sweep may act on — a `Plan` whose `sourceJobId` the
@@ -245,6 +245,17 @@ export const planRepository = {
    * the last plan on the previous page (omitted for the first page); `limit`
    * rows are returned. Ordered (createdAt desc, id desc) so the cursor is
    * stable even when two plans share a `createdAt`.
+   *
+   * `status` NARROWS the page to one lifecycle status (MOTIR-3235, for the
+   * tabbed list) and is applied HERE, in the `where` — not by the caller after
+   * the read. A caller-side filter would take the `limit + 1` cursor page and
+   * then shrink it, so a `planned` page would come back short while
+   * `nextCursor` still claimed there was more. `null` / omitted ⇒ the whole
+   * project, exactly as before this argument existed.
+   *
+   * Served by `@@index([projectId, status, createdAt])`: the narrowed set is
+   * already in `createdAt` order under the index, so the keyset walk never
+   * sorts a status in the heap.
    */
   async listByProject(
     projectId: string,
@@ -252,13 +263,40 @@ export const planRepository = {
     limit: number,
     cursorId: string | null,
     tx?: Prisma.TransactionClient,
+    status?: PlanStatus | null,
   ): Promise<Plan[]> {
     const client = tx ?? db;
     return client.plan.findMany({
-      where: { projectId, workspaceId },
+      where: { projectId, workspaceId, ...(status ? { status } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     });
+  },
+
+  /**
+   * How many plans this project holds per lifecycle status, in ONE `groupBy`
+   * (MOTIR-3235) — the numbers the tab strip renders beside its labels.
+   *
+   * Returns only the statuses that HAVE rows; zero-filling over the enum is the
+   * service's job, because the enum the surface must be total over is the DTO
+   * vocabulary and this layer does not map DTOs.
+   *
+   * One query for the whole strip rather than four counts: four round-trips to
+   * render four numbers on one page is the shape `countByWorkItemIds` already
+   * rejected one surface over.
+   */
+  async countByStatus(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ status: PlanStatus; count: number }>> {
+    const client = tx ?? db;
+    const rows = await client.plan.groupBy({
+      by: ['status'],
+      where: { projectId, workspaceId },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ status: row.status, count: row._count._all }));
   },
 };

@@ -4268,7 +4268,15 @@ model Plan {
   /// UNDECIDED plan (`generating` / `planned`)?" runs per project on every
   /// cadence tick, so it gets its own composite index rather than riding the
   /// (projectId, createdAt) one and filtering status in the heap.
-  @@index([projectId, status])
+  ///
+  /// EXTENDED with `createdAt` by MOTIR-3235, rather than adding a fifth index.
+  /// The tabbed Plans list reads ONE status at a time and still orders by
+  /// `createdAt desc` — which `(project_id, status)` alone cannot serve: it
+  /// narrows and then sorts the narrowed set in the heap, on the read that runs
+  /// on every tab switch and every scroll-to-load page. `(projectId, status)`
+  /// survives as a LEFTMOST PREFIX of this one, so `findUndecidedByProject`
+  /// keeps exactly the index it had; nothing about the gate's read changes.
+  @@index([projectId, status, createdAt])
   /// The ABANDONED-PLAN sweep's discovery read (MOTIR-3064): "which `generating`
   /// plans, in ANY project, are older than the grace?" — cross-workspace, so
   /// neither index above helps it (both lead with `project_id`). Status first,
