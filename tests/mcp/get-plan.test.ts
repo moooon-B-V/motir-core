@@ -292,14 +292,18 @@ describe('get_plan — the proposed tree survives the wire', () => {
     // marker, and the leaf sizing rides along.
     expect(rendered).toContain('  + [story/code] Parent');
     expect(rendered).toContain(`    + [subtask] Nested (2 pts · 30m) · blocked_by: ${stale.id}`);
-    expect(rendered).toContain(`  ~ modify ${stale.id} — priority`);
-    expect(rendered).toContain(`  - remove ${doomed.id}`);
+    // A `modify` / `remove` names its target by the KEY the reviewer knows it as
+    // (MOTIR-3191). It used to print the cuid, which is an identifier for the
+    // database and for nobody reading a plan. Both targets are root cards here,
+    // so they still sit at the top level — correctly, this time.
+    expect(rendered).toContain(`  ~ modify ${stale.identifier} — priority`);
+    expect(rendered).toContain(`  - remove ${doomed.identifier}`);
     // And it is told, in the same breath, that none of it exists yet.
     expect(rendered).toContain('These are PROPOSALS, not work items');
     await client.close();
   });
 
-  it('an `add` under a REAL parent renders at the top level, not nested', async () => {
+  it('an `add` under a REAL parent hangs off a NAMED branch of the live tree', async () => {
     const fx = await makeWorkItemFixture();
     const story = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'story', title: 'Live story' },
@@ -314,11 +318,104 @@ describe('get_plan — the proposed tree survives the wire', () => {
 
     const client = await connectClient(fx.ctx);
     const rendered = text(await call(client, { planId: plan.id }));
-    // Its parent is outside the plan, so there is nothing to nest it under —
-    // it is a new branch off the live tree, and reads as one.
-    expect(rendered).toContain('  + [task] Hangs off a live item');
+    // ⚠️ This used to assert `  + [task] Hangs off a live item` at the TOP level,
+    // on the reasoning that a parent outside the plan gives nothing to nest under
+    // (MOTIR-3191). But the top level of a plan is where a ROOT card is proposed,
+    // and the plan rules reserve that for epics — so "there is nothing to nest it
+    // under" rendered as "this proposes a new root". The branch is nameable; name
+    // it, and hang the proposal off it.
+    expect(rendered).toContain(`  under ${story.identifier} — Live story:`);
+    expect(rendered).toContain('    + [task] Hangs off a live item');
     // A plan with no job never claims one.
     expect(rendered).not.toContain('job ');
+    await client.close();
+  });
+
+  // ── bug MOTIR-3191 — an amendment reads as an amendment ────────────────────
+  //
+  // A `modify` carries no `parentRef` (its parent is the live card's, and a
+  // proposal may not re-parent anything), so it rendered un-indented beside the
+  // root-level `add`s — where the plan rules put epics. A plan of two modifies
+  // therefore read as two new root cards and was declined on that reading, which
+  // was a correct reading of what the surface showed and a wrong description of
+  // what the plan did.
+
+  it('lists a `modify` under its target’s committed ANCESTRY, not beside root adds', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'The agent loop' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Plan review', parentId: epic.id },
+      fx.ctx,
+    );
+    const first = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'The canvas', parentId: story.id },
+      fx.ctx,
+    );
+    const second = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'The rail', parentId: story.id },
+      fx.ctx,
+    );
+
+    const plan = await makePlan(fx, null);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: first.id, patch: { descriptionMd: 'Rewritten.' } },
+        { op: 'modify', workItemId: second.id, patch: { descriptionMd: 'Rewritten too.' } },
+      ],
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const rendered = text(await call(client, { planId: plan.id }));
+
+    // The whole committed chain names the branch, exactly as the canvas
+    // breadcrumb does — and BOTH amendments sit under it.
+    expect(rendered).toContain(`  under ${epic.identifier} ▸ ${story.identifier} — Plan review:`);
+    expect(rendered).toContain(`    ~ modify ${first.identifier} — descriptionMd`);
+    expect(rendered).toContain(`    ~ modify ${second.identifier} — descriptionMd`);
+    // Nothing is left at the top level — the reading that got the fixture plan
+    // declined ("don't put the cards in the project root, that's for epics").
+    const lines = rendered.split('\n');
+    expect(lines.filter((l) => /^ {2}[+~-] /.test(l))).toEqual([]);
+    await client.close();
+  });
+
+  it('places a mixed plan’s add and modify under their OWN branches', async () => {
+    const fx = await makeWorkItemFixture();
+    const storyA = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Where the add goes' },
+      fx.ctx,
+    );
+    const storyB = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Where the target lives' },
+      fx.ctx,
+    );
+    const target = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'An existing card', parentId: storyB.id },
+      fx.ctx,
+    );
+
+    const plan = await makePlan(fx, null);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', parentRef: storyA.id, proposedFields: { title: 'A brand new card' } },
+        { op: 'modify', workItemId: target.id, patch: { title: 'Re-scoped' } },
+      ],
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const rendered = text(await call(client, { planId: plan.id }));
+
+    expect(rendered).toContain(`  under ${storyA.identifier} — Where the add goes:`);
+    expect(rendered).toContain('    + [task] A brand new card');
+    expect(rendered).toContain(`  under ${storyB.identifier} — Where the target lives:`);
+    expect(rendered).toContain(`    ~ modify ${target.identifier} — title`);
     await client.close();
   });
 });
