@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { COMMAND_CATALOG, type CommandCatalogEntry } from './commandCatalog.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
@@ -58,6 +58,22 @@ const CATALOG_BY_PATH = new Map<string, CommandCatalogEntry>(
  * record is the source, so a command that is not in it is a bug in this file,
  * not a command the catalog is missing.
  */
+/**
+ * A `--no-*` spelling that is ACCEPTED and never listed (MOTIR-3022).
+ *
+ * ⚠️ ITS DESCRIPTION IS STILL REQUIRED, and it still lives in the catalog.
+ * `test/commandCatalog.test.ts` compares the registered tree against
+ * `commandCatalog.ts` exactly — flags, descriptions and order — so an alias that
+ * existed only here would fail that audit, and loosening the audit to a subset
+ * match to fit one flag would spend the property that makes the record worth
+ * having. The catalog row carries `hidden: true`, which is what keeps it out of
+ * the published `/docs/cli` table; `hideHelp()` is what keeps it out of
+ * `motir help`. Two renderers, one decision, stated once on the row.
+ */
+function hiddenAlias(flags: string, primary: string): Option {
+  return new Option(flags, `Hidden alias for ${primary}.`).hideHelp();
+}
+
 function register(parent: Command, path: string): Command {
   const entry = CATALOG_BY_PATH.get(path);
   if (!entry) {
@@ -209,11 +225,63 @@ export function buildProgram(): Command {
     .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
     .option('--reset', 'Clear this project’s session exclude list before picking.')
+    // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
+    // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
+    // come back as different PROMPT TEXT, because the prompt is the entire
+    // contract with a sandboxed agent — a flag it never reads cannot change what
+    // it does. `docs/decisions/run-findings-protocol.md` Q1.
+    .option(
+      '--disable-log-bug',
+      'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+    )
+    .option(
+      '--disable-replan',
+      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+    )
+    // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
+    // on instinct gets what they meant instead of `unknown option`; hiding it is
+    // what keeps this from becoming a second documented spelling.
+    .addOption(hiddenAlias('--no-log-bug', '--disable-log-bug'))
+    .addOption(hiddenAlias('--no-replan', '--disable-replan'))
+    // Registered PRECISELY so it can be refused properly — the MOTIR-1828 /
+    // MOTIR-1830 rule, applied to a THIRD flag. The guard in the command module
+    // carries the reason; without this line commander answers `unknown option`
+    // and the reason is unreachable.
+    .option(
+      '--auto-approve-replan',
+      'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+    )
     .action(nextCommand);
   register(program, 'run')
     .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
     .option('--force', 'Dispatch even though the item is not ready (dependencies unmet).')
+    // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
+    // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
+    // come back as different PROMPT TEXT, because the prompt is the entire
+    // contract with a sandboxed agent — a flag it never reads cannot change what
+    // it does. `docs/decisions/run-findings-protocol.md` Q1.
+    .option(
+      '--disable-log-bug',
+      'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+    )
+    .option(
+      '--disable-replan',
+      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+    )
+    // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
+    // on instinct gets what they meant instead of `unknown option`; hiding it is
+    // what keeps this from becoming a second documented spelling.
+    .addOption(hiddenAlias('--no-log-bug', '--disable-log-bug'))
+    .addOption(hiddenAlias('--no-replan', '--disable-replan'))
+    // Registered PRECISELY so it can be refused properly — the MOTIR-1828 /
+    // MOTIR-1830 rule, applied to a THIRD flag. The guard in the command module
+    // carries the reason; without this line commander answers `unknown option`
+    // and the reason is unreachable.
+    .option(
+      '--auto-approve-replan',
+      'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+    )
     .action(runCommand);
   register(program, 'auto')
     .option('--agent <cmd>', 'Run THIS agent command on every prompt (overrides MOTIR_AGENT).')
@@ -232,6 +300,30 @@ export function buildProgram(): Command {
     // carrying the "use `motir next --print` instead" hint, unreachable from the
     // command line. A rejected flag with guidance beats an unknown flag.
     .option('--print', 'Not supported — an unattended loop has nobody to paste a prompt.')
+    // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
+    // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
+    // come back as different PROMPT TEXT, because the prompt is the entire
+    // contract with a sandboxed agent — a flag it never reads cannot change what
+    // it does. `docs/decisions/run-findings-protocol.md` Q1.
+    .option(
+      '--disable-log-bug',
+      'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+    )
+    .option(
+      '--disable-replan',
+      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+    )
+    // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
+    // on instinct gets what they meant instead of `unknown option`; hiding it is
+    // what keeps this from becoming a second documented spelling.
+    .addOption(hiddenAlias('--no-log-bug', '--disable-log-bug'))
+    .addOption(hiddenAlias('--no-replan', '--disable-replan'))
+    // The one command with a loop to continue into (`auto` re-asks `next_ready`
+    // each iteration). The other three REGISTER it in order to refuse it.
+    .option(
+      '--auto-approve-replan',
+      'Approve a re-plan the agent submitted and keep looping, instead of stopping for you.',
+    )
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `autoCommand`'s injectable-deps parameter.
     .action((opts) => autoCommand(opts));
@@ -248,6 +340,32 @@ export function buildProgram(): Command {
     // the command line. `test/optionRegistrationAudit.test.ts` now enforces it
     // across every command, so this cannot go unswept a third time.
     .option('--print', 'Not supported — a frozen snapshot has nobody to paste a prompt.')
+    // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
+    // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
+    // come back as different PROMPT TEXT, because the prompt is the entire
+    // contract with a sandboxed agent — a flag it never reads cannot change what
+    // it does. `docs/decisions/run-findings-protocol.md` Q1.
+    .option(
+      '--disable-log-bug',
+      'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+    )
+    .option(
+      '--disable-replan',
+      'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+    )
+    // The house `--no-*` convention, ACCEPTED and unpublished. Someone typing it
+    // on instinct gets what they meant instead of `unknown option`; hiding it is
+    // what keeps this from becoming a second documented spelling.
+    .addOption(hiddenAlias('--no-log-bug', '--disable-log-bug'))
+    .addOption(hiddenAlias('--no-replan', '--disable-replan'))
+    // Registered PRECISELY so it can be refused properly — the MOTIR-1828 /
+    // MOTIR-1830 rule, applied to a THIRD flag. The guard in the command module
+    // carries the reason; without this line commander answers `unknown option`
+    // and the reason is unreachable.
+    .option(
+      '--auto-approve-replan',
+      'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+    )
     // Arity-1 wrapper: commander appends the Command object, which must not land
     // in `batchCommand`'s injectable-deps parameter.
     .action((opts) => batchCommand(opts));

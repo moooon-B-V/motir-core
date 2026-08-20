@@ -18,7 +18,13 @@ import {
 } from '@/lib/permissions/catalog';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
-import { GRANTABLE_PERMISSIONS, UNGRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
+import {
+  DEFAULT_TOKEN_GRANT,
+  GRANTABLE_PERMISSIONS,
+  IRREVERSIBLE_PERMISSIONS,
+  UNGRANTABLE_PERMISSIONS,
+  V1_ONLY_PERMISSIONS,
+} from '@/lib/tokens/grant';
 
 // THE AUTHOR/DECIDE SPLIT (Bug MOTIR-3188) — `ai:view_plan` gated no view, and
 // held two authorities: authoring a plan, and deciding one. `approvePlan` is the
@@ -327,15 +333,37 @@ describe('the gates in plansService', () => {
     expect(TOOL_PERMISSIONS.get_plan_status).toBe('project:browse');
   });
 
-  it('no MCP tool asserts the decide key — so it is UNGRANTABLE, by derivation', () => {
-    // Not a choice: `GRANTABLE_PERMISSIONS` is computed from the operations a
-    // token can reach. MOTIR-3021's public approve entrance is the card that
-    // changes this, and when it lands it must name the key here AND add it to
-    // `V1_ONLY_PERMISSIONS` — `tests/tokens/grant.test.ts` fails by name if it
-    // does one without the other.
+  it('no MCP tool asserts the decide key — the agent surface cannot approve', () => {
+    // The sharpest bound in the design, and it is structural rather than checked:
+    // MCP is the AGENT's surface, and the agent is the one party that must never
+    // approve its own re-plan. A tool here would put approval in reach of the
+    // credential a sandboxed agent holds.
     expect(Object.values(TOOL_PERMISSIONS)).not.toContain(DECIDE_KEY);
-    expect(GRANTABLE_PERMISSIONS).not.toContain(DECIDE_KEY);
-    expect(UNGRANTABLE_PERMISSIONS).toContain(DECIDE_KEY);
+  });
+
+  it('is GRANTABLE through exactly one v1 operation, and that is derived not chosen', () => {
+    // ⚠️ THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACED, and the flip is
+    // the merge race resolving. Written before MOTIR-3021 merged, it read
+    // `expect(GRANTABLE_PERMISSIONS).not.toContain(DECIDE_KEY)` — true while no
+    // token-reachable operation asserted the key, and it said in its own comment
+    // that 3021's approve entrance was the card that would change it. 3021 landed
+    // first (`POST /api/v1/work-items/{key}/plan-approval`), so the key IS
+    // token-reachable and the entry in `V1_ONLY_PERMISSIONS` is what keeps the
+    // derivation total.
+    //
+    // `GRANTABLE_PERMISSIONS` is computed, never hand-listed, so this is a
+    // statement about the operation existing — not a decision taken here.
+    expect(GRANTABLE_PERMISSIONS).toContain(DECIDE_KEY);
+    expect(UNGRANTABLE_PERMISSIONS).not.toContain(DECIDE_KEY);
+    // It is grantable ONLY through v1: no MCP tool asserts it (above), and the
+    // two publish routes assert `work_item:edit`. If that stops being true the
+    // entry is redundant, and `tests/tokens/grant.test.ts`'s both-directions
+    // derivation is what will say so.
+    expect(V1_ONLY_PERMISSIONS).toContain(DECIDE_KEY);
+    // …and it is NOT irreversible, so a default-grant token carries it. Approving
+    // a plan creates work items, which archive; it does not cascade a delete.
+    expect(IRREVERSIBLE_PERMISSIONS).not.toContain(DECIDE_KEY);
+    expect(DEFAULT_TOKEN_GRANT).toContain(DECIDE_KEY);
   });
 });
 

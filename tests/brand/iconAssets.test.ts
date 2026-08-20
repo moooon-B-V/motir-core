@@ -34,16 +34,31 @@ function pngSize(buf: Buffer): { width: number; height: number } {
 }
 
 describe('the two scales, and why they differ (§5 safe zone)', () => {
-  it('renders maskable icons at 0.60 x canvas and non-maskable at 0.66', () => {
-    // The band's extreme point is its BOUNDING-BOX corner — the end cap at
-    // (22.992, 23.0) — so its circumradius from the centre is the full diagonal,
-    // 0.648 of the glyph box. At the 0.66 the earlier rhombus mark used, a
-    // maskable icon would span 2 x 0.648 x 0.66 = 0.855 of the canvas and be
-    // CLIPPED by the 0.8 safe circle. This is the number the card calls out.
-    expect(MASKABLE_SCALE).toBe(0.6);
-    expect(NON_MASKABLE_SCALE).toBe(0.66);
-    expect(2 * 0.648 * MASKABLE_SCALE).toBeLessThan(0.8);
-    expect(2 * 0.648 * NON_MASKABLE_SCALE).toBeGreaterThan(0.8); // the clip it avoids
+  it('renders maskable icons at 0.55 x canvas and non-maskable at 0.605', () => {
+    // The band's extreme point is its BOUNDING-BOX corner, so its circumradius
+    // from the centre is the full diagonal of the glyph box.
+    //
+    // ⚠️ BOTH NUMBERS MOVED WITH THE ARTWORK (MOTIR-3181). The 24-grid asset used
+    // to carry a ~1-unit margin, so its bbox was 21.984 of the 24 box and the
+    // circumradius 0.648 of it. That margin is what made the vertical caps render
+    // soft at most sizes; removing it makes the glyph span the FULL square, so the
+    // circumradius is now root-2 / 2 = 0.7071 and the safe-circle ceiling tightens
+    // to 0.8 / (2 x 0.7071) = 0.5657.
+    //
+    // The scales are ALSO divided by 24 / 21.984 = 1.092, so the icons render at
+    // the size they already did rather than jumping 9.2% on a refinement nobody
+    // asked to resize anything. 0.66 -> 0.605, and the maskable one lands on 0.55
+    // — which is both the compensated size and inside the new ceiling.
+    const CIRCUMRADIUS = Math.SQRT2 / 2;
+    expect(MASKABLE_SCALE).toBe(0.55);
+    expect(NON_MASKABLE_SCALE).toBe(0.605);
+    // Inside the 0.8 safe circle — the constraint that exists at all.
+    expect(2 * CIRCUMRADIUS * MASKABLE_SCALE).toBeLessThan(0.8);
+    // …and the non-maskable one is deliberately outside it: it is never cropped,
+    // so it reads as large as the tile allows. This is the clip the split avoids.
+    expect(2 * CIRCUMRADIUS * NON_MASKABLE_SCALE).toBeGreaterThan(0.8);
+    // The visible mark is the same size it was before the margin came off.
+    expect(NON_MASKABLE_SCALE).toBeCloseTo(0.66 * (21.984 / 24), 3);
   });
 
   it('gives every maskable icon square corners and every tiled one 0.22 x canvas', () => {

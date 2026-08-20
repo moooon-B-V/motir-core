@@ -138,5 +138,45 @@
  *   criterion-carrying one, because it carries a PAIR of indices
  *   (`designCriterionIndex` / `surfaceCriterionIndex`) and no `criterionIndex`
  *   at all. Every existing member is byte-identical.
+ * - `1.17.0` — MOTIR-3017 adds two things a run needs in order to report what it
+ *   found, both additive. (1) An optional `findingsPolicy` query parameter on
+ *   `GET …/dispatch-prompt`: a comma-separated list of the capabilities this run
+ *   switches OFF for its agent. Omitted renders the protocol byte-identically to
+ *   today, so no existing caller moves; an unrecognised capability is refused
+ *   (`INVALID_FINDINGS_POLICY`, 422) rather than ignored, which is a new
+ *   CONDITION getting a status on an existing operation — §8's allowed shape.
+ *   (2) `approveWorkItemPlan` — `POST /api/v1/work-items/{key}/plan-approval`,
+ *   the bounded public entrance to `plansService.approvePlan` that
+ *   `motir auto --auto-approve-replan` drives: a new operation, gated by the key
+ *   the service already asserts, with no declared shape changed. Its 409
+ *   additionally carries
+ *   `planStatus`, an enrichment on a NEW condition rather than a change to an
+ *   existing one. See `docs/decisions/run-findings-protocol.md`.
+ *
+ *   ⚠️ THAT KEY IS NOW `ai:decide_plan`, AND THE VERSION DOES NOT MOVE FOR IT
+ *   (MOTIR-3188, 2026-08-20). The entry above named `ai:view_plan`; that key
+ *   gated no view and held AUTHOR and DECIDE at once, and the decisions were
+ *   split onto `ai:decide_plan`. `approveWorkItemPlan` follows the service, as it
+ *   always did. **No §8 clause moves:** no field is removed, renamed or retyped,
+ *   no error `code` is repurposed, no existing condition changes status, no limit
+ *   tightens and no optional parameter becomes required — the operation is byte-
+ *   identical in shape. §8 governs the CONTRACT's surface, and a gate is not on
+ *   it; inventing a clause for one here would be a policy change of its own
+ *   (and would bind `POLICY_FORBIDDEN` in `lib/apiDocs/guide.ts`), not a note.
+ *
+ *   ⚠️ THE ONE THING A READER SHOULD KNOW ANYWAY, stated rather than buried: a
+ *   token holding an EXPLICIT grant of `ai:view_plan` and not `ai:decide_plan`
+ *   loses this operation. Every built-in role resolves the two keys identically,
+ *   and `DEFAULT_TOKEN_GRANT` is derived at mint from the grantable set, so the
+ *   affected population is tokens minted with a hand-picked grant in the window
+ *   between MOTIR-3021 landing and this change — hours, on one deployment. Re-mint
+ *   or edit such a token's grant; nothing about the request or response changes.
+ *
+ *   ⚠️ RENUMBERED 1.14.0 → 1.17.0 ON MERGE, which is the process working rather
+ *   than a correction. This number is a SERIALIZED RESOURCE: every in-flight
+ *   additive pull request claims the next MINOR, and three landed while this one
+ *   was open (MOTIR-3157, MOTIR-2961, MOTIR-3178). The entry above names the
+ *   OPERATIONS rather than a position precisely so renumbering stays one line,
+ *   and it did.
  */
-export const V1_CONTRACT_VERSION = '1.16.0';
+export const V1_CONTRACT_VERSION = '1.17.0';

@@ -13,11 +13,13 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  landedWork,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
   type AutoSummary,
+  type DispatchRecord,
 } from '../src/autoLoop.js';
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
@@ -26,6 +28,7 @@ import { parseAgentCommand } from '../src/agentProfiles.js';
 import { CLI_VERSION } from '../src/version.js';
 import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
 
 // `motir auto` — the sequential WHILE loop (Subtask 7.9.4 · MOTIR-882).
 //
@@ -85,8 +88,19 @@ class FakeServer {
   readonly integrated: { key: string; sessionBranch: string }[] = [];
   /** The implementation provenance each integration carried (MOTIR-2419). */
   readonly provenance: { key: string; harness: string | null; model: string | null }[] = [];
-  /** Every claim the run wrote, in order (MOTIR-2427). */
+  /** Every claim the run ATTEMPTED, in order (MOTIR-2427/MOTIR-3048). */
   readonly claims: { key: string; ownerId: string }[] = [];
+  /** What each of those attempts resolved to — the discrimination this loop
+   *  now has to act on rather than collapse. */
+  readonly claimOutcomes: { key: string; outcome: string }[] = [];
+  /** WHO this run's token belongs to. A test flips it to make a row that is
+   *  in progress under somebody else's name genuinely somebody else's. */
+  caller = 'user_me';
+  /** Fired just before a claim resolves, so a test can make a SIBLING win the
+   *  race in the exact gap the lock closes — between the pick and the claim.
+   *  There is no other way to reach the refusal from here: the pick already
+   *  narrows to rows this run may take. */
+  beforeClaim: ((key: string) => void) | null = null;
   /** The `ownerId` each pick was narrowed by — undefined means UNNARROWED. */
   readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
@@ -206,10 +220,28 @@ class FakeServer {
         this.byKey(args.key).status = args.status;
         return {};
       },
-      claimWorkItem: async (args: { key: string; ownerId: string }) => {
-        this.claims.push(args);
-        this.byKey(args.key).assigneeId = args.ownerId;
-        return {};
+      // The ATOMIC claim (MOTIR-3048): one call that assigns AND flips, and
+      // that can refuse. The fake answers by the server's own rule so a
+      // `taken` / `not_claimable` row is reachable from a test without
+      // hand-building a result.
+      claimWorkItem: async (args: { key: string }) => {
+        this.beforeClaim?.(args.key);
+        const item = this.byKey(args.key);
+        const { claim, apply } = resolveFakeClaim(item, {
+          id: this.caller,
+          name: 'Me',
+        });
+        this.claims.push({ key: args.key, ownerId: this.caller });
+        this.claimOutcomes.push({ key: args.key, outcome: claim.outcome });
+        if (apply) {
+          // The row moves, but NOT through `transitionStatus` — the whole point
+          // of MOTIR-3048 is that the dispatch flip happens inside this one
+          // locked call, so `transitions` (which records wire transitions) must
+          // stay empty for it or the tests could no longer tell the two apart.
+          item.status = apply.status;
+          item.assigneeId = apply.assigneeId;
+        }
+        return claim;
       },
       markIntegrated: async (args: {
         key: string;
@@ -507,8 +539,12 @@ describe('motir auto — the WHILE loop', () => {
       { key: 'PROD-5', title: 'Item PROD-5', reason: 'needs_planning' },
       { key: 'PROD-6', title: 'Item PROD-6', reason: 'needs_human' },
     ]);
-    // Skipped means UNTOUCHED — no status flip, no prompt fetched.
-    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-7']);
+    // Skipped means UNTOUCHED — not claimed, no status flip, no prompt fetched.
+    // The dispatch flip is the CLAIM's now (MOTIR-3048), so the claim list is
+    // what carries the "only PROD-7 was started" half of this property.
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-7']);
+    expect(server.integrated.map((r) => r.key)).toEqual(['PROD-7']);
+    expect(server.transitions).toEqual([]);
     expect(server.promptCalls.map((c) => c.key)).toEqual(['PROD-7']);
 
     const text = renderAutoSummary(summary);
@@ -671,6 +707,7 @@ describe('motir auto --include-planning', () => {
       ],
       repos: [],
       prs: [],
+      approvals: [],
       stopReason: 'drained',
     });
 
@@ -796,6 +833,63 @@ describe('motir auto — failure policy', () => {
     expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
   });
 
+  // MOTIR-3048 — the pick narrows to rows this run may take, but the pick and
+  // the claim are not one act. The card can be taken in between, and until the
+  // claim could REFUSE, the loop had no way to find out.
+  it('a card a SIBLING took between the pick and the claim is a SKIP, not a failure', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    server.beforeClaim = (key) => {
+      if (key !== 'PROD-2') return;
+      const stolen = server.byKey('PROD-2');
+      stolen.status = 'in_progress';
+      stolen.assigneeId = 'user_them';
+    };
+
+    const { summary, dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(server.claimOutcomes).toEqual([
+      { key: 'PROD-1', outcome: 'claimed' },
+      { key: 'PROD-2', outcome: 'taken' },
+    ]);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    // Not a RECORD, so not a failure — the loop drained cleanly and the exit
+    // code never saw it.
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-1']);
+    expect(summary.stopReason).toBe('drained');
+    expect(autoExitCode(summary)).toBe(0);
+    // …and it is held out, so the very next `next_ready` cannot offer it back.
+    expect(server.byKey('PROD-2').assigneeId).toBe('user_them');
+  });
+
+  it('a refused claim does not HALT the loop, even without --keep-going', async () => {
+    // The failure policy stops on the first FAILED agent. A refusal is not one:
+    // no agent ran, so there is nothing half-done to protect.
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1'),
+      leaf('idB', 'PROD-2'),
+      leaf('idC', 'PROD-3'),
+    ]);
+    server.beforeClaim = (key) => {
+      if (key === 'PROD-2') server.byKey('PROD-2').status = 'done';
+    };
+
+    const { summary, dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1', 'PROD-3']);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    expect(server.transitions.map((t) => t.key)).not.toContain('PROD-2');
+    expect(autoExitCode(summary)).toBe(0);
+  });
+
   it('claims BEFORE the status moves — a claim written at the end is history', async () => {
     // The ordering is the point: a teammate reads the board WHILE the work is
     // happening, and a claim recorded afterwards tells them nothing in time.
@@ -807,7 +901,11 @@ describe('motir auto — failure policy', () => {
       },
     });
 
-    expect(server.transitions[0]).toEqual({ key: 'PROD-1', status: 'in_progress' });
+    // There is no separate status write to be BEFORE any more — the claim IS
+    // the flip (MOTIR-3048). What the property becomes: the claim landed, and
+    // it landed before anything the agent did.
+    expect(server.claimOutcomes).toEqual([{ key: 'PROD-1', outcome: 'claimed' }]);
+    expect(server.transitions.map((t) => t.status)).not.toContain('in_progress');
   });
 
   it('--keep-going finishes the remainder and never re-dispatches the failure', async () => {
@@ -936,6 +1034,9 @@ describe('the summary reports every pull-request outcome distinctly', () => {
       // the `motir auto` default (`--include-planning` is what fills it).
       planning: [],
       prs,
+      // MOTIR-3023's approvals lane, empty for the same reason
+      // (`--auto-approve-replan` is what fills it).
+      approvals: [],
       stopReason: 'drained',
     });
 
@@ -1076,6 +1177,7 @@ describe('records with missing pieces still render honestly', () => {
         { repoName: 'motir-ai', branch: BRANCH, url: null, outcome: 'existing' },
         { repoName: 'motir-gateway', branch: BRANCH, url: null, outcome: 'failed' },
       ],
+      approvals: [],
       stopReason: 'drained',
     };
 
@@ -1343,5 +1445,134 @@ describe('renderSessionPrBody — the commits, not the card titles', () => {
     const out = renderSessionPrBody('20260729-010203', BRANCH, [record('PROD-1', 'A')], []);
     expect(out).not.toContain('## What the commits say');
     expect(out).toContain('- PROD-1 — A');
+  });
+});
+
+describe('landedWork — the partition that used to be `!== failed` (MOTIR-3018)', () => {
+  const rec = (
+    over: Partial<DispatchRecord> & Pick<DispatchRecord, 'key' | 'outcome'>,
+  ): DispatchRecord => ({
+    title: `Item ${over.key}`,
+    durationMs: 1000,
+    sessionBranch: 'motir/run-1',
+    repo: 'motir-core',
+    parentKey: null,
+    ...over,
+  });
+
+  it.each([
+    ['integrated', true],
+    ['implemented', true],
+    ['failed', false],
+    // The member the old spelling got wrong: a refused card put no code
+    // anywhere, so it is not carried by a branch and not named in a pull
+    // request.
+    ['replanned', false],
+  ] as const)('%s → %s', (outcome, expected) => {
+    expect(landedWork({ outcome })).toBe(expected);
+  });
+
+  it('keeps a re-planned card out of the pull-request body and title', () => {
+    const records: DispatchRecord[] = [
+      rec({ key: 'PROD-1', title: 'Built it', outcome: 'integrated' }),
+      rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+    ];
+    const body = renderSessionPrBody('20260819-010203', 'motir/run-1', records);
+    expect(body).toContain('Work items carried (1)');
+    expect(body).toContain('PROD-1');
+    expect(body).not.toContain('PROD-2');
+    // One carried card, so the title names it — not "2 work items".
+    expect(sessionPrTitle('20260819-010203', records.filter(landedWork))).toContain('PROD-1');
+  });
+
+  it('names the re-planned card in the summary, as an outcome rather than a failure', () => {
+    const summary: AutoSummary = {
+      runId: '20260819-010203',
+      records: [
+        rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+      ],
+      skipped: [],
+      planning: [],
+      repos: [],
+      prs: [],
+      approvals: [],
+      stopReason: 'replanned',
+    };
+    const text = renderAutoSummary(summary);
+    expect(text).toContain('an agent refused its card and submitted a re-plan');
+    expect(text).toContain('Re-planned');
+    expect(text).toContain('PROD-2');
+    // Not listed as delivered work, and not as a failure.
+    expect(text).not.toContain('Implemented — CI decides');
+    expect(text).not.toContain('Failed — still In Progress');
+    // A correct outcome exits 0.
+    expect(autoExitCode(summary)).toBe(0);
+  });
+});
+
+describe('the summary says what the run APPROVED (MOTIR-3023)', () => {
+  const rec = (
+    over: Partial<DispatchRecord> & Pick<DispatchRecord, 'key' | 'outcome'>,
+  ): DispatchRecord => ({
+    title: `Item ${over.key}`,
+    durationMs: 1000,
+    sessionBranch: null,
+    repo: 'motir-core',
+    parentKey: null,
+    ...over,
+  });
+
+  const summary = (approvals: AutoSummary['approvals']): AutoSummary => ({
+    runId: '20260819-010203',
+    records: [rec({ key: 'PROD-7', outcome: 'replanned' })],
+    skipped: [],
+    planning: [],
+    repos: [],
+    prs: [],
+    approvals,
+    stopReason: 'drained',
+  });
+
+  it('names every plan and the card it was approved FOR', () => {
+    // ⚠️ This is the one feature where a machine changes a person's plan while
+    // they are not looking. A COUNT would tell them their tree moved without
+    // telling them where.
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 3 }]),
+    );
+    expect(text).toContain('Plans APPROVED by this run');
+    expect(text).toContain('your tree changed while you were away');
+    expect(text).toContain('plan_abc');
+    expect(text).toContain('approved for PROD-7');
+    expect(text).toContain('3 proposals materialized');
+    // And it says the card is held out, which is why re-running is what picks
+    // the new work up.
+    expect(text).toContain('held out of THIS run');
+  });
+
+  it('says nothing at all when nothing was approved', () => {
+    expect(renderAutoSummary(summary([]))).not.toContain('Plans APPROVED');
+  });
+
+  it('does not tell the operator to review a plan this run already approved', () => {
+    // The two blocks would otherwise contradict each other: one saying the plan
+    // was approved, the next saying to go and review it.
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 1 }]),
+    );
+    expect(text).toContain('its plan was approved by this run');
+    expect(text).not.toContain('review the submitted plan in Motir');
+  });
+
+  it('DOES tell them to review one it did not approve', () => {
+    const text = renderAutoSummary(summary([]));
+    expect(text).toContain('review the submitted plan in Motir');
+  });
+
+  it('singularises one proposal', () => {
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 1 }]),
+    );
+    expect(text).toContain('1 proposal materialized');
   });
 });

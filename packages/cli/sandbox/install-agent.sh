@@ -74,8 +74,20 @@ CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
 
 # Install an npm-published agent globally. `--no-fund --no-audit` keeps the
 # build log down to the failure that actually matters.
+#
+# The optional SECOND argument is a DIST-TAG to install from, defaulting to
+# whatever the registry calls `latest` (see the `claude` arm for why that
+# default is not always the right channel).
+#
+# ⚠️ It also PRINTS THE RESOLVED VERSION, and that line is not decoration
+# (MOTIR-3192). `added N packages` names nothing, so when a third-party publish
+# broke this build on 2026-08-20, working out WHICH version each side had
+# installed meant diffing two job logs twelve minutes apart. `|| true`: this is
+# a log line, and a log line must never be the thing that fails a build.
 npm_agent() {
-    npm install -g --no-fund --no-audit "$1"
+    local name="$1" tag="${2:-}"
+    npm install -g --no-fund --no-audit "${name}${tag:+@${tag}}"
+    npm ls -g --depth=0 "$name" || true
 }
 
 # Wire the codegraph MCP server into the agent just installed (7.9.7d).
@@ -130,7 +142,24 @@ case "$AGENT" in
         # Anthropic Claude Code. Credential dir: ~/.claude (plus the
         # ~/.claude.json project file). Unattended flag:
         # --dangerously-skip-permissions.
-        npm_agent '@anthropic-ai/claude-code'
+        #
+        # ⚠️ FROM THE `stable` DIST-TAG, NOT `latest` (MOTIR-3192). The native
+        # binary ships as a per-platform OPTIONAL dependency, and on
+        # 2026-08-19T23:57Z `latest` moved to 2.1.237 with the two x64 platform
+        # packages never published — `@anthropic-ai/claude-code-linux-x64` and
+        # `-linux-x64-musl` are both 404 at that version while both arm64
+        # siblings exist. An absent OPTIONAL dependency is not an error, so npm
+        # installs one package, says so cheerfully, and the launcher then
+        # reports "claude native binary not installed." Every amd64 build in the
+        # repository went red 56 minutes after that publish.
+        #
+        # `stable` is upstream's OWN curated channel and is what a partial
+        # publish to `latest` cannot reach. It is deliberately not a hand-pinned
+        # version: a pin has to be bumped by somebody, and the version nobody
+        # remembers to bump is the one that rots. The cost is lag — `stable` sat
+        # ~9 days behind `latest` when this was written — which is the right
+        # trade for an image whose build gates every pull request in the repo.
+        npm_agent '@anthropic-ai/claude-code' 'stable'
         claude --version
         # Wired into the IMAGE-OWNED home like opencode, not the runtime home
         # (7.9.7g / MOTIR-1840). codegraph's claude target writes three files:

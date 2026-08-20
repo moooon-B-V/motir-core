@@ -98,6 +98,27 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `ai:view_plan` entry below is a mistake — so it is corrected here rather
   // than left to age. The reads are still `project:browse`; what changed is that
   // one of the DECISIONS now has a door.
+  //
+  // ⚠️ AMENDED AGAIN 2026-08-19 (MOTIR-3021), for the same reason: a SECOND
+  // decision now has a door. `approvePlan` is reachable by a bearer token
+  // through `POST /api/v1/work-items/{key}/plan-approval`, BOUNDED to the plan a
+  // run's own refused card produced (`docs/decisions/run-findings-protocol.md`
+  // Q2). It is deliberately NOT an MCP tool — MCP is the agent's surface and an
+  // agent must never approve its own re-plan — so this MAP is unchanged; only
+  // the claim that the decisions are unreachable would now be wrong.
+  // `declinePlan` still has no door of any kind.
+  //
+  // ⚠️ AND AMENDED ONCE MORE 2026-08-20 (MOTIR-3188), where the two met at a
+  // merge. The paragraph above said that route was gated by "this same
+  // `ai:view_plan` key", and it no longer is: the DECISIONS were split onto
+  // `ai:decide_plan`, so the route declares that. The bound the paragraph ends on
+  // is unchanged and now rests on something stronger than an omission —
+  // `CLI_TOKEN_GRANT` omits the decide key too, AND no tool in this map asserts
+  // it, so a token minted FOR a dispatched agent is out of the route by
+  // construction (MOTIR-3051). Do not widen that grant. The key IS grantable to
+  // an operator's token, through that one v1 operation and no other:
+  // `lib/tokens/grant.ts`'s `V1_ONLY_PERMISSIONS` carries it, which is the first
+  // entry that array has ever held.
   get_plan_status: 'project:browse',
   get_plan: 'project:browse',
 

@@ -18,13 +18,25 @@
  * ── THE TWO SCALES, AND WHY THEY DIFFER ─────────────────────────────────────
  * A MASKABLE icon is cropped to an arbitrary OS shape, so the glyph must sit
  * inside the centred circle of diameter 0.8 x canvas. The wave band's extreme
- * point is its BOUNDING-BOX CORNER (the end cap at 22.992, 23.0 on the 24-grid),
- * so its circumradius is the full diagonal: 0.648 of the glyph box. It pays the
- * root-2 penalty the earlier rhombus mark avoided, and at the 0.66 that mark
- * used the glyph would span 2 x 0.648 x 0.66 = 0.855 of the canvas and be
- * CLIPPED. The arithmetic ceiling is 0.617; 0.60 is the round number below it.
- * A non-maskable icon is not cropped, so it keeps 0.66 and reads as large as the
- * tile allows.
+ * point is its BOUNDING-BOX CORNER, so its circumradius is the full diagonal. It
+ * pays the root-2 penalty the earlier rhombus mark avoided.
+ *
+ * ⚠️ BOTH NUMBERS WERE RE-DERIVED WHEN THE ARTWORK LOST ITS MARGIN (MOTIR-3181).
+ * The 24-grid asset used to carry a ~1-unit inset, so its bbox was 21.984 of the
+ * 24 box and its circumradius 0.648 of it. That margin was the reason the mark's
+ * vertical caps rendered soft at most sizes, and removing it makes the glyph span
+ * the FULL square: circumradius = root-2 / 2 = 0.7071.
+ *
+ * Two consequences, and neither is optional:
+ *   - the maskable ceiling tightens to 0.8 / (2 x 0.7071) = 0.5657, so the round
+ *     number below it is 0.55 (it was 0.60 under a 0.617 ceiling);
+ *   - at any given scale the mark now renders 24 / 21.984 = 9.2% LARGER, so both
+ *     scales are divided by that factor to keep the icons the size they already
+ *     are. 0.66 -> 0.605 for non-maskable; the maskable one lands at 0.55, which
+ *     is both the compensated size and inside the new ceiling.
+ *
+ * A non-maskable icon is not cropped, so it keeps the larger of the two and reads
+ * as large as the tile allows.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -36,8 +48,8 @@ import {
 } from '../../components/brand/waveBand.js';
 
 /** Glyph box as a fraction of the canvas, by whether the OS will crop it. */
-export const NON_MASKABLE_SCALE = 0.66;
-export const MASKABLE_SCALE = 0.6;
+export const NON_MASKABLE_SCALE = 0.605;
+export const MASKABLE_SCALE = 0.55;
 /** 0.22 is `--radius-lg` (12) over a 56px tile — the app's own container ratio. */
 export const TILE_RADIUS_RATIO = 0.22;
 

@@ -19,15 +19,25 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
   deleteAttachmentBlob: vi.fn(async () => {}),
 }));
 
+const { jobSeq } = vi.hoisted(() => ({ jobSeq: { n: 0 } }));
+
 vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/ai/motirAiClient')>()),
-  submitJob: vi.fn(async () => ({ jobId: 'job_drift_guard' })),
+  // ⚠️ A DISTINCT job id PER SUBMIT, which is what the real planner returns and
+  // what this suite now depends on: a plan binds to its job through
+  // `sourceJobId`, and the plan-change session that submitted it binds through
+  // `lastJobId` — so two submits sharing one id make the plan→conversation
+  // lookup `approvePlan`'s anchor check walks ambiguous, and it resolves to
+  // whichever session was found first (MOTIR-3021).
+  submitJob: vi.fn(async () => ({ jobId: `job_drift_guard_${++jobSeq.n}` })),
 }));
 import { z } from 'zod/v4';
 import { V1_OPERATIONS, findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
+import { plansService } from '@/lib/services/plansService';
+import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { v1RouteFiles } from '../../helpers/v1RouteAudit';
@@ -189,6 +199,27 @@ describe('every operation’s REAL response validates against its declared schem
     return record;
   }
 
+  /**
+   * Call a route WITHOUT recording it as a driven operation — for the calls that
+   * SET UP another operation's preconditions rather than being the thing under
+   * test. Recording them would be wrong twice: an operation would be marked
+   * exercised by a request made for a different purpose, and a second record for
+   * an already-driven id would overwrite the one that matters.
+   */
+  async function handlerFor(
+    load: () => Promise<Record<string, unknown>>,
+    method: string,
+    request: Request,
+    params: Record<string, string> = {},
+  ): Promise<Response> {
+    const mod = await load();
+    const handler = mod[method] as (
+      req: Request,
+      args?: { params: Promise<Record<string, string>> },
+    ) => Promise<Response>;
+    return handler(request, { params: Promise.resolve(params) });
+  }
+
   function get(path: string): Request {
     return new Request(`${ORIGIN}${path}`, { headers: caller.headers });
   }
@@ -233,8 +264,45 @@ describe('every operation’s REAL response validates against its declared schem
   beforeAll(async () => {
     await truncateAuthTables();
     resetRateLimitStore();
+    // The legacy five, PLUS the one key no legacy scope can confer.
+    //
+    // ⚠️ THE `permissions` ARM IS WHY THIS IS SPELLED OUT (MOTIR-3188). The
+    // fixture's `scopes` arm expands through `LEGACY_SCOPE_PERMISSIONS`, and the
+    // whole point of driving the suite that way is that it exercises the
+    // compatibility promise on every run. But `approveWorkItemPlan` is gated by
+    // `ai:decide_plan`, which NO legacy scope expands to — deliberately: that key
+    // gates plan APPROVAL, whose only token entrance was created in 2026, long
+    // after those six strings stopped being written, and a legacy row may never
+    // WIDEN access (`docs/decisions/token-permissions.md` §5, amended).
+    //
+    // So the caller is expressed in the modern vocabulary: the legacy five
+    // expanded through the shipped map — so the compatibility path is still
+    // exercised and every other operation's grant is byte-identical to before —
+    // plus the one key added by name. Handing it `DEFAULT_TOKEN_GRANT` instead
+    // would have been shorter and wrong: that set omits `work_item:delete`, which
+    // `work_items:archive` confers and this suite's archive/delete operations
+    // need.
+    //
+    // ⚠️ AND THE PREVIOUS GREEN WAS ITSELF THE BUG. Until this change the route
+    // was gated on `ai:view_plan`, which `work_items:write` DOES expand to — so a
+    // legacy-scoped token could approve a proposed subtree into somebody's tree,
+    // and this guard passed because of it. The 403 that replaced it is the fix
+    // reporting itself.
     caller = await createV1ProjectCaller({
-      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write', 'integration'],
+      permissions: [
+        ...new Set(
+          (
+            [
+              'read',
+              'work_items:write',
+              'work_items:archive',
+              'sprints:write',
+              'integration',
+            ] as const
+          ).flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]),
+        ),
+        'ai:decide_plan',
+      ],
     });
     const pk = caller.projectKey;
 
@@ -544,6 +612,46 @@ describe('every operation’s REAL response validates against its declared schem
       () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
       send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', {}),
       { projectKey: pk },
+    );
+
+    // ── Automatic plan approval (MOTIR-3021) ────────────────────────────────
+    // DRIVEN, not excused. It needs a shape the project-wide thread above does
+    // not have: the endpoint only approves a plan ANCHORED to the card it is
+    // approving for, so this opens a SECOND, anchored conversation on `key` and
+    // submits it. The plan then has to reach `planned` — the route approves a
+    // decided plan, and only a planner's appends close one — so the two service
+    // calls that a real planner's job would make are made here directly. Both
+    // are seeding; the ROUTE and its response are entirely real.
+    const anchored = { targetKeys: [key] };
+    await handlerFor(
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/turns/route'),
+      'POST',
+      send(`/api/v1/projects/${pk}/plan-session/turns`, 'POST', {
+        body: 'this card cannot be built as written',
+        ...anchored,
+      }),
+      { projectKey: pk },
+    );
+    const anchoredSubmit = await handlerFor(
+      () => import('@/app/api/v1/projects/[projectKey]/plan-session/submissions/route'),
+      'POST',
+      send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', anchored),
+      { projectKey: pk },
+    );
+    // The plan id is read HERE only to seed it into `planned` — the route itself
+    // never takes one, which is the point of addressing by the card.
+    const anchoredPlanId = ((await anchoredSubmit.json()) as { planId: string }).planId;
+    await plansService.addProposals(
+      anchoredPlanId,
+      [{ op: 'add', proposedFields: { title: 'the corrected card', kind: 'task' } }],
+      caller.ctx,
+    );
+    await plansService.markPlanned(anchoredPlanId, caller.ctx);
+    await drive(
+      'approveWorkItemPlan',
+      () => import('@/app/api/v1/work-items/[key]/plan-approval/route'),
+      send(`/api/v1/work-items/${key}/plan-approval`, 'POST'),
+      { key },
     );
 
     // ── The activity read (Story 11.7) ──────────────────────────────────────

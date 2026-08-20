@@ -347,7 +347,7 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 | **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
 | **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                             |
 | **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                  |
-| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts   |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating Motir callout; context → mode adapts              |
 | **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)       |
 | **6** | Opening & exiting — a full-screen overlay ON TOP of the app; Close (✕ / Esc / "Back to …") + the confirm-to-persist guard on close-with-pending |
 
@@ -459,16 +459,39 @@ both always-present, and both restyle with the active design style (sheet 5);
 - **A — the header "Plan with AI" pill.** A gradient hero pill in `TopNav`'s
   right cluster, present on every screen, never covering content — the direct
   **planning** entrance; opens the workspace in the current context's mode.
-- **B — the floating "M" button = the universal AI callout.** A glowing orb (the
-  **M** logo) afloat bottom-right on every screen; tapping it opens the AI
-  callout — **the home of ALL AI**, where **Plan with AI is ONE action**
+- **B — the floating Motir orb = the universal AI callout.** A glowing orb
+  wearing the **Motir mark** afloat bottom-right on every screen; tapping it opens
+  the AI callout — **the home of ALL AI**, where **Plan with AI is ONE action**
   alongside **"Ask about this project"** (Q&A over the plan / docs / work items)
   and **"Help with a task"** (draft / summarise / assist). Planning is the
   capability this design+story deliver now; project Q&A and task assistance are
-  **future capabilities reached through the same button**. **Built now with a
-  mock `M` logo** — the real brand logo replaces it later (the orb is the logo's
-  home). The callout menu composes `Card` + list rows + an "Ask Motir anything…"
-  input.
+  **future capabilities reached through the same button**. The callout menu
+  composes `Card` + list rows + an "Ask Motir anything…" input.
+
+  > **✅ Deferral discharged 2026-08-19 (MOTIR-3183).** This bullet used to read
+  > _"Built now with a mock `M` logo — the real brand logo replaces it later (the
+  > orb is the logo's home)."_ It does now. The orb renders the **wave band**,
+  > read from `design/brand/wave-band-24.svg`, at a **26 px glyph box in the 56 px
+  > circle** (the box the letter occupied, so the swap changes _what_ is in the
+  > circle and not how much of it is filled). **Centred geometrically**: the ink
+  > centroid sits at (11.705, 11.820) on the 24 grid against a bbox centre of
+  > (11.975, 11.975), an offset of 0.27 / 0.16 units = **0.29 / 0.17 px at 26 px**,
+  > below half a device pixel — so no optical nudge is applied, and the number is
+  > recorded because _"it looks centred"_ is the claim it replaces. The same mark
+  > rides the **28 px assistant avatar** in both rails at a 13 px box — the same
+  > 0.464 glyph-to-circle ratio, so the two read as one object at two sizes. The
+  > mark is `fill="currentColor"` and therefore **needs no dark variant**. Drawn in
+  > `ai-callout-menu.mock.html` panel 9; the code swap is MOTIR-3185, which composes
+  > `BrandMark` `variant="mark"` rather than inlining an `<svg>`.
+  >
+  > **⚠️ And a finding, recorded not inherited.** Measured against the orb's own
+  > gradient, white-on-accent clears 3:1 in light (**#8c81e2, 3.32:1** at the
+  > gradient's lightest point) and **misses it in dark (#9b90e8, 2.78:1** — WCAG
+  > 1.4.11 for a non-text graphic). This is **pre-existing** — the mock `M` is white
+  > on the same gradient and measures the same — but this is the pass that measured
+  > it. The remedy is one number: the highlight mix from **32% → 26%** gives
+  > `#9286e6` at 3.09:1. Not changed here: the orb's fill belongs to MOTIR-1811
+  > (`done`).
 
 **⚠️ The hero control is STYLE-AWARE — special in every design style (sheet 5).**
 It is not a fixed gradient: each `data-style` gives the "Plan with AI" control a
@@ -929,7 +952,7 @@ grounded in MOTIR-1728 / 1729 / 1730 / 1731; gates those four code subtasks.
 
 ---
 
-## ⭐ The "M" universal AI callout — the orb becomes a TRIGGER (MOTIR-1811, 2026-08-01)
+## ⭐ The Motir callout — the orb becomes a TRIGGER (MOTIR-1811, 2026-08-01)
 
 **What changes.** The shipped floating **"M"** orb (`PlanWithAIFab`, MOTIR-1299)
 navigates **straight** to the planning workspace today. It becomes the **trigger
@@ -940,6 +963,13 @@ ONLY entrance this touches** — the TopNav hero pill, ⌘K, the work-item door
 (MOTIR-910) and the roadmap door (MOTIR-1011) are all unchanged.
 
 ### ⭐ EVERY ROW OPENS THE SAME SURFACE — the menu only says what the callout CAN DO (Yue, 2026-08-01)
+
+> **UNCHANGED by the 2026-08-19 glyph amendment (MOTIR-3183).** That pass renamed the surface in
+> prose — _the Motir callout_, whose trigger is _the Motir orb_ — and swapped the letter inside the
+> circle for the mark. **It touched no mechanism**: one href shared by every row, a row is a LABEL
+> and not a route, a row appears when its capability lands, and a row may seed the composer's
+> starter phrasing without constraining the thread. The name changed because it had stopped
+> describing the thing; the contract below did not.
 
 Motir has exactly one AI conversation surface — the `PlanningWorkspace` hosted at
 `/planning` (MOTIR-1729) — and **all three rows navigate to that one surface with

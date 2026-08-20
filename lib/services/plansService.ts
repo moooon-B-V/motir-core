@@ -49,6 +49,7 @@ import {
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
+  NoPlanForWorkItemError,
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
@@ -70,6 +71,7 @@ import type {
 } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { buildScope } from '@/lib/planChange/scope';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -1802,6 +1804,63 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'generating');
+  },
+
+  /**
+   * Approve THE PLAN A CARD PRODUCED — the bounded entrance an unattended run
+   * drives (MOTIR-3021 / MOTIR-3023,
+   * `docs/decisions/run-findings-protocol.md` Q2).
+   *
+   * ⚠️ IT IS ADDRESSED BY THE CARD, NOT BY A PLAN ID, and that is not
+   * convenience — it is what makes the bound structural. The caller is a loop
+   * whose AGENT ran `motir plan --detach <KEY>` in a sandbox; the plan id came
+   * back on that agent's stdout, which the loop streams straight to the terminal
+   * and never captures. So a plan-addressed entrance would have forced either a
+   * second read to discover the id or a scrape of the agent's output, and the
+   * anchoring check would have been a check on caller-supplied data. Addressed
+   * by the card, there is no way to NAME a plan that is not the card's.
+   *
+   * ⚠️ ANCHORING IS DERIVED, and every hop is a shipped one:
+   *
+   *   the card's key → `buildScope([key])` → the plan-change session for that
+   *   anchor set → its `lastJobId` → the plan that job produced.
+   *
+   * A `motir plan --detach <KEY>` thread is anchored at exactly that scope, so
+   * this resolves the plan that card's refusal caused and nothing else.
+   *
+   * ⚠️ NO CONVERSATION MEANS NO. A cadence plan, an onboarding generation and a
+   * plan submitted from the project-wide panel all have no session at this
+   * scope — and every one of them is a plan a person is expected to decide on.
+   * Treating "no anchor" as "no restriction" would invert the bound at exactly
+   * the plans it most protects.
+   *
+   * ⚠️ IT ADDS A BOUND, NEVER A SECOND APPROVAL. Everything that decides whether
+   * a proposal may become a row — the confirmation gate, the `ai:view_plan`
+   * assertion, the one-shot status guard, the re-validation — happens in
+   * {@link plansService.approvePlan}, which this delegates to unchanged.
+   */
+  async approvePlanForWorkItem(
+    projectId: string,
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
+
+    const scope = buildScope([workItemKey]);
+    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        projectId,
+        scope.scopeKey,
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+    const planId = session?.lastJobId
+      ? await plansService.findPlanIdForJob(session.lastJobId, ctx)
+      : null;
+    if (!planId) throw new NoPlanForWorkItemError(workItemKey);
+
+    return plansService.approvePlan(planId, ctx);
   },
 
   /**

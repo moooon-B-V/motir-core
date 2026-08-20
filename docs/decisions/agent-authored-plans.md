@@ -1140,12 +1140,30 @@ both rails. Every actor who could approve a plan before can approve one after. W
 **custom** role can now withhold one without the other — the same property MOTIR-2256's twelve
 administrative keys claimed.
 
-**It is not grantable to a token, and that is derived rather than chosen.**
-`GRANTABLE_PERMISSIONS` is computed from the operations a token can reach; no MCP tool and no
-`/api/v1` operation asserts `ai:decide_plan`, so it lands in `UNGRANTABLE_PERMISSIONS` on its own.
-MOTIR-3021's public approve entrance is the card that would change that, and when it lands it must
-name `ai:decide_plan` and add the key to `V1_ONLY_PERMISSIONS` with a reason — the derivation guard in
-`tests/tokens/grant.test.ts` will name it if it does not.
+**It IS grantable to a token, through exactly one operation — and MOTIR-3021 settled that while
+this amendment was open.** An earlier draft of this paragraph said the opposite, and recording the
+correction is worth more than the tidier text:
+
+> It is not grantable to a token, and that is derived rather than chosen. `GRANTABLE_PERMISSIONS` is
+> computed from the operations a token can reach; no MCP tool and no `/api/v1` operation asserts
+> `ai:decide_plan`, so it lands in `UNGRANTABLE_PERMISSIONS` on its own. MOTIR-3021's public approve
+> entrance is the card that would change that, and when it lands it must name `ai:decide_plan` and
+> add the key to `V1_ONLY_PERMISSIONS` with a reason.
+
+MOTIR-3021 **landed first** (2026-08-20, motir-core#2191), shipping
+`POST /api/v1/work-items/{key}/plan-approval` — the bounded entrance
+`motir auto --auto-approve-replan` drives. So the obligation the paragraph named came due
+immediately, and both halves are in this change: the route declares `ai:decide_plan`, and
+`V1_ONLY_PERMISSIONS` carries the key. That array had been **empty since it was created**, held open
+as an extension point for exactly this; `ai:decide_plan` is the first key to need it, because it is
+the first key a v1 operation asserts that no MCP tool does.
+
+**Still not an MCP tool, and that bound got STRONGER rather than weaker.** The route's own comment
+argues that a sandboxed agent must never approve its own re-plan, and rested that on
+`CLI_TOKEN_GRANT` omitting `ai:view_plan` — one entry missing from one grant. After the split the
+route declares a key that grant also omits AND that no tool asserts at all, so the agent credential
+cannot reach approval by any route, and could not even if somebody widened that grant to the whole
+author key. `declinePlan` remains unreachable by any token: no tool, no v1 operation.
 
 ### Rejected: rename `ai:view_plan` to `ai:author_plan` instead
 
@@ -1181,7 +1199,16 @@ old lie.
 - **It does not change any plan READ.** They were `canBrowse` before and are `canBrowse` after; this
   amendment records that fact rather than altering it.
 - **It does not widen `CLI_TOKEN_GRANT`,** and it adds no route. `approvePlan` reaches the public
-  surface only if MOTIR-3021 lands, which is that card's decision to argue.
+  surface through MOTIR-3021's `POST /api/v1/work-items/{key}/plan-approval`, which landed first;
+  this change re-declares that route's key and nothing else about it.
+- **It does not bump `V1_CONTRACT_VERSION`.** Re-declaring an operation's gate moves no §8 clause —
+  no field removed, renamed or retyped, no `code` repurposed, no existing condition's status
+  changed, no limit tightened, no optional parameter made required. §8 governs the contract's
+  SURFACE, and a permission is not on it; adding a clause for one would be a policy decision with a
+  test binding of its own (`lib/apiDocs/guide.ts`'s `POLICY_FORBIDDEN`), not a footnote to this card.
+  The one real consequence is stated in `contractVersion.ts` rather than hidden: a token holding an
+  explicit grant of `ai:view_plan` and not `ai:decide_plan` loses that operation and needs its grant
+  edited. Every built-in role is unaffected, and `DEFAULT_TOKEN_GRANT` is derived at mint.
 - **It does not touch `PLANNED_PERMISSIONS`.** The new key is `enforced` on arrival, because the gate
   and the key land in the same change.
 

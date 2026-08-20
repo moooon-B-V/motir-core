@@ -1,7 +1,8 @@
-import { CliError } from '../errors.js';
+import { CliError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
+  claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
   resolveOwnerId,
@@ -11,8 +12,14 @@ import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
+  agentSubmittedReplan,
   checkBootstrapCheckout,
+  contradictoryReplanFlags,
   cwdReasonLabel,
+  findingsPolicyOf,
+  renderClaimRefusal,
+  renderFindingsPolicy,
+  renderReplanSubmitted,
   renderRepositoriesBlock,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -22,10 +29,12 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  landedWork,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
+  type ApprovalRecord,
   type AutoSummary,
   type DispatchRecord,
   type PlanningRecord,
@@ -84,6 +93,20 @@ export interface AutoOptions extends DeliveryOptions {
   /** `--include-planning` — fire an AI expansion for each unexpanded epic/story
    *  the ready set hands back, instead of skipping it (MOTIR-886). */
   includePlanning?: boolean;
+  /**
+   * `--auto-approve-replan` — approve a re-plan the agent submitted and KEEP
+   * LOOPING, instead of stopping for a human (MOTIR-3022).
+   *
+   * ⚠️ `auto` ONLY, and the reason is the mechanism rather than taste: this is
+   * the one command that re-asks `next_ready` each iteration, so a
+   * newly-approved card genuinely enters the run. `run` / `next` exit after one
+   * item and `batch` froze its list before starting; all three REGISTER the flag
+   * in order to refuse it with that reason.
+   *
+   * This card registers, validates and passes it through. What the loop DOES
+   * with it is MOTIR-3023.
+   */
+  autoApproveReplan?: boolean;
 }
 
 /** Injectable seams; never overridden in production. */
@@ -94,6 +117,10 @@ export interface AutoDeps {
   /** The agent launcher. Injected by the tests so the loop can be driven with a
    *  scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
+  /** The wait between approval retries while a planner is still writing
+   *  (MOTIR-3025). Injected so a test can prove the RETRY without spending a
+   *  real minute on it; never overridden in production. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** A resolved agent — `motir auto` refuses to start without one, so every
@@ -247,6 +274,19 @@ class RepoSessions {
 // ── the command ─────────────────────────────────────────────────────────────
 
 export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promise<void> {
+  // ⚠️ CONTRADICTORY FLAGS ARE REFUSED, not resolved by precedence (MOTIR-3022).
+  // `--auto-approve-replan` with `--disable-replan` says approve a submission the
+  // agent was told not to make; honouring either one silently leaves the operator
+  // believing the other. Refused BEFORE the agent is resolved, so nothing is
+  // claimed for a run that cannot mean what it says.
+  if (opts.autoApproveReplan) {
+    const contradiction = contradictoryReplanFlags(opts);
+    if (contradiction) {
+      throw new CliError(contradiction, {
+        hint: 'Drop one: `--auto-approve-replan` to keep the agent from re-planning at all, or `--disable-replan` to approve what it submits.',
+      });
+    }
+  }
   const run = deps.run ?? execCommand;
   const clock = deps.clock ?? Date.now;
   const kinds = parseKinds(opts.kinds);
@@ -271,10 +311,12 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       clock,
       runAgentFn: deps.runAgentFn ?? runAgent,
       ownerId,
+      ...(deps.sleep ? { sleep: deps.sleep } : {}),
     });
     closeOutRepos(summary, run);
     info('');
     info(renderAutoSummary(summary));
+    info(renderFindingsPolicy(opts));
     process.exitCode = autoExitCode(summary);
   });
 }
@@ -293,6 +335,8 @@ export interface LoopInput {
   /** The token owner — every card this run takes is CLAIMED for them, and rows
    *  claimed by anyone else are not taken at all (MOTIR-2427). */
   ownerId: string;
+  /** The approval-retry wait (MOTIR-3025), injected by the tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** The WHILE loop itself. Exported so it can be driven end-to-end against a
@@ -321,6 +365,8 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
+  /** What `--auto-approve-replan` approved (MOTIR-3023). */
+  const approvals: ApprovalRecord[] = [];
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
@@ -415,7 +461,10 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // first: the prompt is a pure READ that neither claims the item nor moves
       // its status, so asking before knowing whether a checkout exists costs
       // nothing and keeps the common path at ONE request.
-      let dispatch = await client.dispatchPrompt(item.key, { sessionBranch: branch });
+      let dispatch = await client.dispatchPrompt(item.key, {
+        sessionBranch: branch,
+        findingsPolicy: findingsPolicyOf(opts),
+      });
       // One target per repository the card ships in (MOTIR-3133), primary first.
       // An older server sends no set, and the empty array falls back to the
       // single-repository resolve — exactly the shape this loop had before.
@@ -447,10 +496,12 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // names a branch that does not exist here. Re-read WITHOUT the seed and
         // hand the agent the per-item-pull-request text instead. The extra
         // request buys correctness on a path that was already the exception.
-        dispatch = await client.dispatchPrompt(item.key);
+        dispatch = await client.dispatchPrompt(item.key, {
+          findingsPolicy: findingsPolicyOf(opts),
+        });
       }
 
-      const record = await dispatchOne({
+      const outcome = await dispatchOne({
         client,
         item,
         dispatch,
@@ -460,13 +511,70 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         agent,
         clock,
         runAgentFn,
-        ownerId,
         run,
         // The card is integrated in EVERY repository of its lineage, so it is
         // carried by every one of their pull requests (MOTIR-3135).
         onIntegrated: (key) => repo?.forEach((s) => s.keys.push(key)),
       });
+      if (outcome.kind === 'skipped') {
+        // The claim was refused. Recorded beside the loop's other skips — not in
+        // `records`, which is what the failure policy and the exit code read —
+        // and excluded so the next `next_ready` does not offer it straight back.
+        skipped.push({ key: item.key, title: item.title, reason: outcome.reason });
+        excludedKeys.add(item.key.toUpperCase());
+        continue;
+      }
+      const record = outcome.record;
       records.push(record);
+
+      // ⚠️ A REFUSED CARD STOPS THE RUN, and `--keep-going` does not override it
+      // (MOTIR-3018). That flag says "one agent failing is not a reason to
+      // abandon the rest"; this is not a failure — it is the agent reporting
+      // that the PLAN is wrong, and the cards the loop would take next are the
+      // ones the submitted plan may be about to change. The prompt's own branch
+      // tells the agent not to pick up other work; the loop honours the same
+      // instruction.
+      //
+      // ⚠️ UNLESS THE OPERATOR SAID OTHERWISE (MOTIR-3023). With
+      // `--auto-approve-replan` the run approves the plan the card produced and
+      // CONTINUES — which is the whole value of the flag: an overnight sweep of
+      // twenty cards should not end at card three because one premise was stale.
+      if (record.outcome === 'replanned') {
+        if (!opts.autoApproveReplan) {
+          stopReason = 'replanned';
+          break;
+        }
+        // ⚠️ HELD OUT FIRST, BEFORE the approval — and this is the guard that
+        // costs real money if it is missed. Approve → the card returns to the
+        // ready set → dispatched again → refused again → another submit, and
+        // every submit spends the token owner's AI credits. The exclusion goes
+        // in whether or not the approval succeeds, because a card that refused
+        // itself once will refuse itself again.
+        addExclude(serverUrl, projectKey, { key: item.key });
+        excludedKeys.add(item.key.toUpperCase());
+
+        const approved = await approveSubmittedPlan(client, item.key, {
+          ...(input.sleep ? { sleep: input.sleep } : {}),
+        });
+        if (!approved.ok) {
+          // ⚠️ A REFUSED APPROVAL STOPS THE RUN, with the SERVER's own message.
+          // Continuing would dispatch against a tree the operator has not agreed
+          // to — and the server's refusals are exactly the bounds that say so
+          // (no plan of this card's own, a plan already decided, a scope the
+          // token lacks). None of them is a reason to carry on regardless.
+          info('');
+          info(`${item.key}: the re-plan could NOT be approved — ${approved.message}`);
+          info('Stopping rather than continuing against a tree nobody approved.');
+          stopReason = 'replanned';
+          break;
+        }
+        approvals.push({ key: item.key, ...approved.plan });
+        info(
+          `${item.key}: its re-plan was APPROVED (plan ${approved.plan.planId}, ` +
+            `${approved.plan.proposalCount} proposal(s) materialized). Continuing.`,
+        );
+        continue;
+      }
 
       if (record.outcome === 'failed') {
         addExclude(serverUrl, projectKey, { key: item.key });
@@ -484,7 +592,16 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     process.off('SIGINT', onSigint);
   }
 
-  return { runId, records, skipped, planning, repos: repos.touched(), prs: [], stopReason };
+  return {
+    runId,
+    records,
+    skipped,
+    planning,
+    repos: repos.touched(),
+    prs: [],
+    approvals,
+    stopReason,
+  };
 }
 
 /**
@@ -534,18 +651,52 @@ interface DispatchOneInput {
   clock: () => number;
   runAgentFn: typeof runAgent;
   onIntegrated: (key: string) => void;
-  /** Claimed for this owner before the agent launches (MOTIR-2427). */
-  ownerId: string;
   /** The loop's git runner — the push check (MOTIR-3004) uses it. */
   run: CommandRunner;
 }
 
-/** Run ONE item through the single-dispatch pipeline and record how it ended. */
-async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId, run } =
-    input;
+/**
+ * How long the loop will wait for a planner to finish writing a submitted plan
+ * before giving up on approving it (MOTIR-3025).
+ *
+ * ⚠️ BOUNDED, and the bound is the decision. An unattended run must not block on
+ * a planner indefinitely — that is the reason the agent submits with `--detach`
+ * in the first place — but it must not give up in the first hundred
+ * milliseconds either, because that is where the plan almost always is when the
+ * agent exits. Roughly a minute of patience, then the run reports precisely what
+ * it was waiting for and stops.
+ */
+const APPROVE_ATTEMPTS = Number(process.env['MOTIR_APPROVE_ATTEMPTS'] ?? '') || 12;
+const APPROVE_WAIT_MS = Number(process.env['MOTIR_APPROVE_WAIT_MS'] ?? '') || 5_000;
 
-  await ensureInProgress(client, item.key, item.status?.key, ownerId);
+/**
+ * What one loop iteration's dispatch resolved to.
+ *
+ * A SKIP is not a record: nothing ran, so there is no outcome, no duration and
+ * no repo to report — and `records` is what the failure policy and the exit
+ * code read. Modelled as a union rather than a nullable record so the caller
+ * cannot forget which of the two it is holding (the same shape `motir batch`'s
+ * drain uses).
+ */
+type DispatchOneResult =
+  | { kind: 'record'; record: DispatchRecord }
+  | { kind: 'skipped'; reason: SkipRecord['reason'] };
+
+/** Run ONE item through the single-dispatch pipeline and record how it ended. */
+async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, run } = input;
+
+  // THE CLAIM, and it can say no (MOTIR-3048). The pick already narrowed to rows
+  // this loop may take, but that read and this write are not one act — so a
+  // sibling can have taken the card in between, and the server is the only thing
+  // that can tell us so. Nothing below has run yet, so a refusal costs the loop
+  // one request and no state.
+  const claim = await ensureInProgress(client, item.key);
+  if (!claimAllowsDispatch(claim)) {
+    info('');
+    info(renderClaimRefusal(claim));
+    return { kind: 'skipped', reason: 'claim_refused' };
+  }
 
   info('');
   info(`── ${item.key} — ${item.title}`);
@@ -582,10 +733,34 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
   if (result.exitCode !== 0) {
     info(`${item.key}: agent exited ${result.exitCode} — left In Progress, nothing reverted.`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+      },
+    };
+  }
+
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so ask the card which it was before deciding anything else.
+  // FIRST, ahead of the bootstrap and push checks, because a refusing agent
+  // reverts its worktree and pushes nothing BY DESIGN — those checks would
+  // otherwise report a correctly-refused card as a failed bootstrap or as work
+  // that went missing.
+  if (await agentSubmittedReplan(client, item.key)) {
+    info('');
+    info(renderReplanSubmitted(item.key));
+    // `sessionBranch: null` is the substantive claim here, not bookkeeping: the
+    // card was never integrated, so it must not appear among the cards the
+    // branch carries or in the pull request this run opens.
+    // A RECORD, not a skip — and the distinction is the point. A skip means
+    // nothing ran; here an agent ran, read its card and reported. The run has an
+    // outcome to name (MOTIR-3048 introduced the union around this).
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'replanned', sessionBranch: null },
     };
   }
 
@@ -597,10 +772,13 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     info(`${item.key}: ${suspect.message}`);
     info(`Hint: ${suspect.hint}`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: 'bootstrap checkout missing',
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: 'bootstrap checkout missing',
+      },
     };
   }
 
@@ -616,7 +794,10 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     });
     onIntegrated(item.key);
     info(`${item.key}: integrated on ${dispatch.sessionBranch} in ${formatDuration(durationMs)}.`);
-    return { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch };
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch },
+    };
   }
 
   // The server kept this item off the session lineage — a target with no repo
@@ -628,17 +809,23 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
   if (workReachedRemote(target.cwd, item.key, null, run) === 'nothing') {
     info(`${item.key}: agent exited 0 but nothing reached the remote — left In Progress.`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: 'nothing reached the remote',
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: 'nothing reached the remote',
+      },
     };
   }
   await client.transitionStatus({ key: item.key, status: 'implemented' });
   info(
     `${item.key}: Implemented via its own pull request in ${formatDuration(durationMs)} — CI decides when it is reviewable.`,
   );
-  return { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' };
+  return {
+    kind: 'record',
+    record: { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' },
+  };
 }
 
 // ── the end-of-run close-out ────────────────────────────────────────────────
@@ -680,7 +867,7 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
         // written before it existed, and the scalar is that record's whole set.
         (r.outcome === 'failed' && (r.repos ?? [r.repo]).includes(repo.repoName)),
     );
-    const carried = mine.filter((r) => r.outcome !== 'failed');
+    const carried = mine.filter(landedWork);
     const result = openSessionPr(
       repo.cwd,
       {
@@ -711,5 +898,66 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
       outcome: 'failed',
       message: err instanceof Error ? err.message : String(err),
     };
+  }
+}
+
+/**
+ * Approve the plan a refused card produced. NEVER THROWS.
+ *
+ * ⚠️ THE REFUSALS ARE THE INTERESTING RETURN VALUE, which is why this reports
+ * rather than raises. Every one of them is a BOUND the server is enforcing —
+ * there is no plan of this card's own, the plan was already decided, the token
+ * lacks `ai:view_plan` — and each means the same thing to the loop: it must not
+ * carry on against a tree nobody approved. Letting the error propagate would
+ * take the run's close-out down with it (the shape MOTIR-3018's reproduction
+ * found), abandoning work that has nothing to do with this plan.
+ *
+ * ⚠️ IT SENDS NO PLAN ID, and cannot. The plan was submitted by the AGENT, in a
+ * sandbox, with `motir plan --detach <KEY>`; its id came back on that agent's
+ * stdout, which this process streams straight to the terminal and never
+ * captures. The card IS the address, and the server derives the plan from the
+ * conversation anchored at it — so the run cannot approve a plan the card did
+ * not produce even by mistake.
+ */
+async function approveSubmittedPlan(
+  client: MotirClient,
+  key: string,
+  opts: { attempts?: number; waitMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<
+  { ok: true; plan: { planId: string; proposalCount: number } } | { ok: false; message: string }
+> {
+  const attempts = opts.attempts ?? APPROVE_ATTEMPTS;
+  const waitMs = opts.waitMs ?? APPROVE_WAIT_MS;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return { ok: true, plan: await client.approveWorkItemPlan(key) };
+    } catch (err) {
+      // ⚠️ `generating` IS "NOT YET", AND WAITING IS THE POINT. The agent
+      // submitted with `--detach` — it must not sit on a planner — and exited
+      // within milliseconds, so the loop routinely arrives while motir-ai is
+      // still writing the plan. Treating that as a refusal would make the flag
+      // useless in exactly its normal case; treating a DECIDED plan the same way
+      // would keep retrying something a person already answered. The server
+      // tells the two apart as data, which is why this branches on the field.
+      const notYet = err instanceof PlanNotDecidableError && err.planStatus === 'generating';
+      if (notYet && attempt < attempts) {
+        if (attempt === 1) {
+          info(`${key}: its plan is still being written — waiting for the planner.`);
+        }
+        await sleep(waitMs);
+        continue;
+      }
+      // The SERVER's own sentence, verbatim. A message this loop composed would
+      // describe the refusal it guessed at rather than the one it received.
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        message: notYet
+          ? `${message} (still generating after ${attempts} attempts — approve it in Motir once the planner finishes)`
+          : message,
+      };
+    }
   }
 }

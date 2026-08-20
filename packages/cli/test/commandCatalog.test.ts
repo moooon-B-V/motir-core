@@ -79,6 +79,13 @@ function walkProgram(): RegisteredCommand[] {
         options: command.options.map((option) => ({
           flags: option.flags,
           description: option.description,
+          // MOTIR-3022 — `hidden` is compared like the other two, not ignored.
+          // The catalog is what `/docs/cli` renders and commander is what
+          // `motir help` renders, so an alias hidden in one and listed in the
+          // other would publish a spelling the help deliberately omits — which
+          // is exactly the drift this audit exists to catch. Absent on a normal
+          // option, so the shapes still match without a flag on every row.
+          ...(option.hidden ? { hidden: true } : {}),
         })),
       });
       walk(command, path);
@@ -165,7 +172,15 @@ describe('commandCatalog is import-safe and serializable', () => {
     for (const entry of COMMAND_CATALOG) {
       for (const value of Object.values(entry)) expect(typeof value).not.toBe('function');
       for (const option of entry.options) {
-        for (const value of Object.values(option)) expect(typeof value).toBe('string');
+        // `hidden` is the one non-string field, and it is still a PRIMITIVE —
+        // which is the property this test is about (a row may cross to a client
+        // component). Asserted by type rather than excused by name.
+        expect(['string', 'boolean']).toContain(typeof option.flags);
+        for (const [key, value] of Object.entries(option)) {
+          expect(typeof value, `${entry.path} ${option.flags} .${key}`).toBe(
+            key === 'hidden' ? 'boolean' : 'string',
+          );
+        }
       }
     }
   });

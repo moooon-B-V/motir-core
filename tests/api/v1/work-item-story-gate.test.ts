@@ -128,6 +128,18 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // (ADR §5 records the legacy read-only token this narrows).
       if (/\/plan-session\//.test(file)) return TOOL_PERMISSIONS.open_plan_session;
       if (/\/expansions\//.test(file)) return TOOL_PERMISSIONS.expand_item;
+      // Plan APPROVAL (MOTIR-3021 / MOTIR-3023). `ai:decide_plan` — the key
+      // `plansService.approvePlan` itself asserts. It is NOT read off
+      // `TOOL_PERMISSIONS` like its neighbours above, for the reason the
+      // operation exists at all: approval is deliberately not an MCP tool, so
+      // there is no row to read (`docs/decisions/run-findings-protocol.md` Q2).
+      // Naming the key here rather than inventing a default is the same
+      // discipline — the expectation still comes from the gate that runs.
+      //
+      // ⚠️ It was `ai:view_plan` until MOTIR-3188, which split that key: it
+      // gated no view and held AUTHOR and DECIDE together. The route followed
+      // its service, which is the rule this whole map applies.
+      if (/\/plan-approval\//.test(file)) return 'ai:decide_plan';
       return 'work_item:edit';
     };
 

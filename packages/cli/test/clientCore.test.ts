@@ -5,6 +5,7 @@ import {
   startTestServer,
   v1CloseOut,
   v1CloseOutItem,
+  v1Claim,
   v1DispatchPrompt,
   v1JobHandle,
   v1Page,
@@ -305,18 +306,48 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(snapshot.map((i) => i.key)).toEqual(['PROD-1', 'PROD-4']);
   });
 
-  it('CLAIMS a card with a plain assignment — no condition, no re-read', async () => {
-    // Advisory, not a lock: there is deliberately no "assign only if unassigned"
-    // and no check-then-write. The race is accepted; simulating a guarantee is
-    // what the card forbids.
+  it('CLAIMS a card through the ATOMIC endpoint — one POST, no assignment body', async () => {
+    // MOTIR-3048: this used to be a `PATCH { assigneeId }` the caller followed
+    // with a separate `transition_status` — two unlocked writes with a race
+    // between them. It is now ONE call to the locked claim op, and the OWNER
+    // comes off the token, which is why there is no body at all: an assignment
+    // a client could name is an assignment a client could get wrong.
     const client = connected();
 
-    await client.claimWorkItem({ key: 'PROD-7', ownerId: 'user_me' });
+    const claim = await client.claimWorkItem({ key: 'PROD-7' });
 
     expect(server.v1Calls).toHaveLength(1);
-    expect(server.v1Calls[0]?.method).toBe('PATCH');
-    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-7');
-    expect(server.v1Calls[0]?.body).toEqual({ assigneeId: 'user_me' });
+    expect(server.v1Calls[0]?.method).toBe('POST');
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-7/claim');
+    // …and the OUTCOME comes back, rather than being inferred from "it did not
+    // throw" — the discrimination every caller now branches on.
+    expect(claim.outcome).toBe('claimed');
+    expect(claim.claimed).toBe(true);
+    expect(claim.status.key).toBe('in_progress');
+    expect(claim.assignee).toEqual({ id: 'user_me', name: 'Mo' });
+  });
+
+  it('carries a REFUSAL through as a value — `taken`, with the holder named', async () => {
+    // The refusal is a 200, so nothing throws; the whole point is that the loser
+    // can say WHO won without a second read.
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/claim': {
+        body: v1Claim('PROD-7', {
+          outcome: 'taken',
+          claimed: false,
+          assignee: { id: 'user_them', name: 'Ada' },
+          transitionedBy: { id: 'user_them', name: 'Ada' },
+        }),
+      },
+    });
+    const client = connected();
+
+    const claim = await client.claimWorkItem({ key: 'PROD-7' });
+
+    expect(claim.outcome).toBe('taken');
+    expect(claim.claimed).toBe(false);
+    expect(claim.assignee).toEqual({ id: 'user_them', name: 'Ada' });
+    expect(claim.transitionedBy).toEqual({ id: 'user_them', name: 'Ada' });
   });
 
   // MOTIR-2398 took the LAST method off MCP. What used to be "these still name
