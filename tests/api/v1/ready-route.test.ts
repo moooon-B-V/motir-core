@@ -45,7 +45,7 @@ async function page(caller: V1ProjectCaller, query = ''): Promise<ReadyPage> {
 async function makeItem(
   caller: V1ProjectCaller,
   title: string,
-  extra: { parentId?: string; kind?: 'task' | 'subtask' | 'story' } = {},
+  extra: { parentId?: string; kind?: 'task' | 'subtask' | 'story' | 'epic' | 'bug' } = {},
 ) {
   return workItemsService.createWorkItem(
     {
@@ -271,6 +271,79 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
     // Both, and only both — a last-value-wins read would return the bug alone,
     // and an ignored filter would drag the story in.
     expect(new Set(keys)).toEqual(new Set([task.identifier, bug.identifier]));
+  });
+
+  // MOTIR-3196 — the two SCOPE facets. The wire-level half; the narrowing
+  // semantics (and the cascade the ancestor facet must not break) are asserted
+  // at the service tier in `tests/ready/readyScopeFacets.test.ts`.
+  it('scopes to `?ancestor=`, excluding the container itself, at any depth', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const story = await makeItem(caller, 'the story', { kind: 'story' });
+    const child = await makeItem(caller, 'a child', { kind: 'task', parentId: story.id });
+    const outside = await makeItem(caller, 'unrelated');
+
+    const keys = (await page(caller, `?ancestor=${story.identifier}`)).items.map((i) => i.key);
+
+    expect(keys).toEqual([child.identifier]);
+    expect(keys).not.toContain(story.identifier);
+    expect(keys).not.toContain(outside.identifier);
+  });
+
+  it('reads `?ancestor=` as a REPEATABLE any-of set, like `kind`', async () => {
+    // The generated client types it `string[]`. A `params.get` read would take
+    // the LAST value and silently drop the first story's work — the MOTIR-2317
+    // shape, which is why this has a test of its own rather than being covered
+    // in prose.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const first = await makeItem(caller, 'story one', { kind: 'story' });
+    const second = await makeItem(caller, 'story two', { kind: 'story' });
+    const a = await makeItem(caller, 'a', { kind: 'task', parentId: first.id });
+    const b = await makeItem(caller, 'b', { kind: 'task', parentId: second.id });
+
+    const keys = (
+      await page(caller, `?ancestor=${first.identifier}&ancestor=${second.identifier}`)
+    ).items.map((i) => i.key);
+
+    expect(new Set(keys)).toEqual(new Set([a.identifier, b.identifier]));
+  });
+
+  it('422s a MALFORMED ancestor key before any read, and an UNRESOLVABLE one after', async () => {
+    // Two tiers, ONE code. The parser settles the shape; only the service can
+    // settle whether a well-formed key names anything here. A caller sees one
+    // contract — `INVALID_READY_FILTER` — and never a silently widened page.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+
+    const malformed = await req(caller, '?ancestor=not-a-key-at-all');
+    expect(malformed.status).toBe(422);
+    expect(((await malformed.json()) as { code: string }).code).toBe('INVALID_READY_FILTER');
+
+    const unresolvable = await req(caller, `?ancestor=${caller.projectKey}-999999`);
+    expect(unresolvable.status).toBe(422);
+    expect(((await unresolvable.json()) as { code: string }).code).toBe('INVALID_READY_FILTER');
+  });
+
+  it('422s `?sprintId=active` on a project with no active sprint, rather than returning everything', async () => {
+    // The whole point of refusing: a filter that quietly matches everything is
+    // how a scoped run claims the entire project.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    await makeItem(caller, 'would have been swept up');
+
+    const res = await req(caller, '?sprintId=active');
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('INVALID_READY_FILTER');
+  });
+
+  it('treats an EMPTY `?ancestor=` / `?sprintId=` as omitted, exactly as `assigneeId` does', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'still here');
+
+    // An empty value is a wire accident (a shell expanding an unset variable),
+    // not a request to scope to nothing — and answering 422 for it would make
+    // the common scripted case fail on something the caller cannot see.
+    const keys = (await page(caller, '?sprintId=&ancestor=')).items.map((i) => i.key);
+
+    expect(keys).toEqual([item.identifier]);
   });
 
   it('supports the UNASSIGNED bucket as an explicit literal', async () => {

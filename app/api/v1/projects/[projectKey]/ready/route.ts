@@ -8,7 +8,7 @@ import {
   readRowIdPosition,
 } from '@/lib/api/v1/pagination';
 import { parseReadyFilters, presentReadyItem } from '@/lib/api/v1/ready/schema';
-import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
+import { InvalidReadyCursorError, InvalidReadyFilterError } from '@/lib/workItems/readyFilter';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -39,6 +39,16 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // silently destroy that — which is exactly why 11.3.2's service-positioned
 // cursor exists. The v1 cursor here WRAPS the shipped `(kind, priority, key)`
 // seek-after token rather than replacing it.
+//
+// ── The two SCOPE facets are RESOLVED by the service, not here ─────────────
+// `?ancestor=` and `?sprintId=` (MOTIR-3196) name things rather than declaring
+// values, so unlike `kind` / `priority` they cannot be settled by a parser. The
+// route still does not resolve them: doing so would mean a work-item read and a
+// sprint read HERE, which is the third and fourth service call the rule below
+// forbids — and it would put the tenant gate in two places. `collectReadyLeaves`
+// resolves both inside the read it was already making, and throws
+// `InvalidReadyFilterError`, which this handler maps to the same 422 the
+// vocabulary facets raise.
 //
 // ── Two service calls, and that is the RULE, not an exception ───────────────
 // `listReady` for the page, then `getDependencyEdgesForItems` for that page's
@@ -81,6 +91,16 @@ export const GET = withV1Route<{ projectKey: string }>(
           'INVALID_CURSOR',
           'The `cursor` parameter is not a valid page cursor.',
         );
+      }
+      // The two SCOPE facets (MOTIR-3196) are references, so only the service
+      // can judge them — an unknown `ancestor` key, a `sprintId` that is not
+      // this project's, or `sprintId=active` on a project between sprints. The
+      // code is the SAME one `parseReadyFilters` raises for an unknown `kind`,
+      // because to a caller there is one contract: a filter value this endpoint
+      // will not silently widen. That the two halves are decided in different
+      // layers is our concern, not theirs.
+      if (err instanceof InvalidReadyFilterError) {
+        throw new InvalidRequestError('INVALID_READY_FILTER', err.message);
       }
       throw err;
     }

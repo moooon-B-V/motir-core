@@ -141,8 +141,10 @@ import {
   clampReadyLimit,
   decodeReadyCursor,
   encodeReadyCursor,
+  InvalidReadyFilterError,
   READY_KIND_RANK,
   READY_PRIORITY_ASC,
+  SPRINT_ACTIVE,
 } from '@/lib/workItems/readyFilter';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
@@ -5599,9 +5601,29 @@ async function collectReadyLeaves(
   projectId: string,
   workspaceId: string,
   ctx: ServiceContext,
-  facets: { kinds?: WorkItemKind[]; assigneeId?: string | null; priority?: WorkItemPriority[] },
+  facets: {
+    kinds?: WorkItemKind[];
+    assigneeId?: string | null;
+    priority?: WorkItemPriority[];
+    ancestorKeys?: string[];
+    sprintRef?: string;
+  },
 ): Promise<ReadyLayerRow[]> {
+  // Resolve the two REFERENCE facets BEFORE the walk, so a mistyped key costs
+  // one round-trip instead of a full traversal, and so an unresolvable one can
+  // never be mistaken for "matched nothing" (`InvalidReadyFilterError`).
+  const ancestorIds = await resolveAncestorFacet(projectId, workspaceId, facets.ancestorKeys);
+  const sprintId = await resolveSprintFacet(projectId, workspaceId, facets.sprintRef);
+
   const leaves: ReadyLayerRow[] = [];
+  // The ids of ready CONTAINERS whose children are inside the ancestor scope:
+  // a container is in scope when it IS a named ancestor, or when its own parent
+  // already was. Filled DURING the walk purely as an annotation — nothing below
+  // reads it to decide where to go next, which is what keeps the traversal, and
+  // therefore the cascade, identical with the facet and without it.
+  const scopedContainers = new Set<string>();
+  const scopedLeafIds = new Set<string>();
+
   let frontier = await withWorkspaceServiceContext(workspaceId, (tx) =>
     workItemRepository.findReadyLayer(projectId, workspaceId, null, tx),
   );
@@ -5613,9 +5635,19 @@ async function collectReadyLeaves(
     const descend: string[] = [];
     for (const row of frontier) {
       if (ownReady.get(row.id) === false) continue; // not ready → prune the subtree
-      if (row.hasChildren)
+      // STRICTLY beneath: a row is in scope because of an ANCESTOR of it, never
+      // because of itself — which is what excludes the named container from its
+      // own result, and what makes a childless one answer with an empty page.
+      const inScope = row.parentId !== null && scopedContainers.has(row.parentId);
+      if (row.hasChildren) {
         descend.push(row.id); // ready container → descend
-      else if (row.statusCategory === 'todo') leaves.push(row); // ready, childless, to-start
+        if (inScope || (ancestorIds !== null && ancestorIds.has(row.id))) {
+          scopedContainers.add(row.id);
+        }
+      } else if (row.statusCategory === 'todo') {
+        leaves.push(row); // ready, childless, to-start
+        if (inScope) scopedLeafIds.add(row.id);
+      }
     }
     frontier = descend.length
       ? await withWorkspaceServiceContext(workspaceId, (tx) =>
@@ -5636,8 +5668,84 @@ async function collectReadyLeaves(
   else if (facets.assigneeId !== undefined) {
     out = out.filter((r) => r.assigneeId === facets.assigneeId);
   }
+  // ⚠️ THE ANCESTOR FACET NARROWS THE COLLECTED SET AND NEVER RE-SEEDS THE WALK.
+  // Seeding the frontier at the named container is the cheap-looking
+  // implementation and it silently DROPS THE CASCADE: it would report leaves as
+  // ready under a container whose own ancestors are not ready, which is exactly
+  // the wrong answer for a caller about to claim and dispatch them. Filtering
+  // here means the answer is a SUBSET of the unfaceted one by construction —
+  // there is no code path by which this facet can widen it.
+  if (ancestorIds !== null) out = out.filter((r) => scopedLeafIds.has(r.id));
+  // DIRECT membership, never inherited — the same predicate `claimNextReady`
+  // has applied internally since it shipped.
+  if (sprintId !== null) out = out.filter((r) => r.sprintId === sprintId);
   out.sort(compareReadyRows);
   return out;
+}
+
+/**
+ * Resolve `?ancestor=` keys to work-item ids within THIS project, or `null`
+ * when the facet is absent.
+ *
+ * ONE round-trip for any number of keys (`findByIdentifiers` is the batched
+ * form), and project-scoped — so a key naming an item in another project or
+ * another workspace is simply absent from the result and refused with the same
+ * message as one that never existed. The existence-oracle rule is a property of
+ * the query here, not an assertion layered on top of it.
+ */
+async function resolveAncestorFacet(
+  projectId: string,
+  workspaceId: string,
+  keys: string[] | undefined,
+): Promise<Set<string> | null> {
+  if (!keys || keys.length === 0) return null;
+  // ⚠️ BOUND, like every other read on this path. `work_item` is under RLS, so
+  // the `db` singleton a repository read defaults to sees nothing at all — a
+  // key that exists comes back missing and is refused as unknown. The walk
+  // below already binds each layer; the resolver has to bind too.
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findByIdentifiers(projectId, keys, tx),
+  );
+  const byIdentifier = new Map(rows.map((r) => [r.identifier, r.id]));
+  const missing = keys.filter((k) => !byIdentifier.has(k));
+  if (missing.length > 0) {
+    throw new InvalidReadyFilterError(`Unknown \`ancestor\`: ${missing.join(', ')}.`);
+  }
+  return new Set(byIdentifier.values());
+}
+
+/**
+ * Resolve `?sprintId=` to a sprint id, or `null` when the facet is absent.
+ *
+ * The reserved literal `active` resolves to the project's active sprint; a
+ * project between sprints is a REFUSAL rather than an empty page, because the
+ * two are different answers and only one of them is about the caller's request.
+ * Any other value is treated as an id and must belong to this project.
+ */
+async function resolveSprintFacet(
+  projectId: string,
+  workspaceId: string,
+  ref: string | undefined,
+): Promise<string | null> {
+  if (ref === undefined) return null;
+  if (ref === SPRINT_ACTIVE) {
+    const active = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      sprintRepository.findActiveByProject(projectId, workspaceId, tx),
+    );
+    if (!active) {
+      throw new InvalidReadyFilterError(
+        'No sprint is active in this project, so `sprintId=active` resolves to nothing.',
+      );
+    }
+    return active.id;
+  }
+  const sprint = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    sprintRepository.findById(ref, workspaceId, tx),
+  );
+  if (!sprint || sprint.projectId !== projectId) {
+    throw new InvalidReadyFilterError(`Unknown \`sprintId\`: ${ref}.`);
+  }
+  return sprint.id;
 }
 
 /** Order two ready leaves under the dispatch sort `(type asc, priority desc, key

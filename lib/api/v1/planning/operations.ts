@@ -10,7 +10,7 @@ import {
 } from '@/lib/api/v1/openapi/operation';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import { projectSchema } from '@/lib/api/v1/projects/schema';
-import { readyItemSchema, UNASSIGNED } from '@/lib/api/v1/ready/schema';
+import { readyItemSchema, SPRINT_ACTIVE, UNASSIGNED } from '@/lib/api/v1/ready/schema';
 import {
   membershipMoveBodySchema,
   membershipMoveResultSchema,
@@ -268,6 +268,25 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
         in: 'query',
         required: false,
         description: `TRI-STATE, and all three are reachable: OMIT for any assignee, the literal \`${UNASSIGNED}\` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted.`,
+        schema: z.string().min(1),
+      },
+      {
+        name: 'ancestor',
+        in: 'query',
+        required: false,
+        description:
+          'SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result. An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other.',
+        // An ARRAY for the same reason `kind` is one: a generated client that
+        // typed it as a scalar could not express two containers, which is a
+        // legitimate ask (one run over two stories) the shape must not forbid.
+        schema: z.array(z.string().min(1)),
+        explode: true,
+      },
+      {
+        name: 'sprintId',
+        in: 'query',
+        required: false,
+        description: `SCOPE the read to the items whose OWN \`sprintId\` matches — a sprint id, or the reserved literal \`${SPRINT_ACTIVE}\` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and \`${SPRINT_ACTIVE}\` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted.`,
         schema: z.string().min(1),
       },
     ],

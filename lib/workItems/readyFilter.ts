@@ -31,11 +31,59 @@ export interface ReadyListFilter {
   /** `null` = unassigned only; `undefined` = any assignee. */
   assigneeId?: string | null;
   priority?: WorkItemPriority[];
+  /**
+   * SCOPE to the ready leaves STRICTLY BENEATH these container keys, at any
+   * depth — an any-of set, exactly like `kinds` (Story MOTIR-3001 · MOTIR-3196).
+   *
+   * ⚠️ These are unresolved `MOTIR-<n>` KEYS, not ids, and that is the one axis
+   * on this shape that cannot validate itself. `kinds` / `priority` are closed
+   * vocabularies a parser settles alone; a key is a REFERENCE, and whether it
+   * names a container in THIS project is a database question. So the ready
+   * SERVICE resolves it and raises {@link InvalidReadyFilterError} — the same
+   * split {@link InvalidReadyCursorError} already uses for a token only the
+   * codec can judge.
+   *
+   * The named container is NOT in its own result: the answer to "what is ready
+   * under this story" never includes the story. A childless one therefore
+   * returns an empty page, which is the honest answer for a story nobody has
+   * decomposed yet.
+   */
+  ancestorKeys?: string[];
+  /**
+   * SCOPE to the items whose OWN `sprintId` is this sprint — an id, or the
+   * reserved literal {@link SPRINT_ACTIVE} for the project's active one.
+   *
+   * SINGLE-VALUED because membership is a scalar column on the row: an item is
+   * in one sprint or none, so an any-of set would be a shape with no question
+   * behind it. Resolved by the service, like `ancestorKeys` above.
+   *
+   * Membership is DIRECT, never inherited — an item under an in-sprint parent
+   * but not itself in the sprint is out of scope. That is the same scoping
+   * `claimNextReady` has applied internally since it shipped
+   * (`ready.filter((r) => r.sprintId === sprintId)`), published rather than
+   * re-derived.
+   */
+  sprintRef?: string;
   /** Opaque `base64url([kind, priority, key])` seek-after token. */
   cursor?: string;
   /** Page size; defaults to 50, hard-capped at 200. */
   limit?: number;
 }
+
+/**
+ * The literal a caller sends as `sprintRef` to mean "the project's ACTIVE
+ * sprint".
+ *
+ * A sprint id is opaque, so a caller who wants the current sprint would
+ * otherwise have to read the sprint list first purely to learn one id — and
+ * then race the very activation they were asking about. The reserved literal is
+ * the same device `UNASSIGNED = 'none'` is on `assigneeId`: a value the wire
+ * form cannot otherwise carry, spelled once.
+ *
+ * It cannot collide with a real id: sprint ids are cuids, which are
+ * `c`-prefixed and 25 characters long.
+ */
+export const SPRINT_ACTIVE = 'active';
 
 export const READY_DEFAULT_LIMIT = 50;
 export const READY_MAX_LIMIT = 200;
@@ -80,6 +128,36 @@ export class InvalidReadyCursorError extends Error {
   constructor() {
     super('Invalid ready cursor.');
     this.name = 'InvalidReadyCursorError';
+  }
+}
+
+/**
+ * A caller passed a `ancestorKeys` / `sprintRef` value that does not RESOLVE
+ * inside the project being read: an unknown work-item key, a key belonging to
+ * another project or workspace, a sprint id that is not this project's, or
+ * `sprintRef: 'active'` on a project that is between sprints. The route layer
+ * maps this to `INVALID_READY_FILTER` → 422, the same code
+ * `parseReadyFilters` already raises for an unknown `kind` / `priority`.
+ *
+ * ⚠️ A REFUSAL, NEVER A SILENT MATCH-EVERYTHING. The whole point of the two
+ * scope facets is that a caller is about to CLAIM and DISPATCH what comes back;
+ * a mistyped key that quietly widened the scope to the entire project is how a
+ * run takes work it meant to exclude. The three existing facets already refuse
+ * for exactly this reason and this is the same rule one tier down.
+ *
+ * ⚠️ AND IT DOES NOT DISTINGUISH "unknown" FROM "somebody else's". A key that
+ * resolves in another project reaches the same refusal with the same message as
+ * one that never existed — the existence-oracle rule
+ * (`docs/decisions/public-api-conventions.md` §4). That falls out of the
+ * mechanism rather than being asserted on top of it:
+ * `workItemRepository.findByIdentifiers` is project-scoped, so a foreign key is
+ * simply absent from the result.
+ */
+export class InvalidReadyFilterError extends Error {
+  readonly code = 'INVALID_READY_FILTER' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidReadyFilterError';
   }
 }
 

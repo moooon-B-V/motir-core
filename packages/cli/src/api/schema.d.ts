@@ -5203,6 +5203,10 @@ export interface operations {
                 priority?: string[];
                 /** @description TRI-STATE, and all three are reachable: OMIT for any assignee, the literal `none` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted. */
                 assigneeId?: string;
+                /** @description SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result. An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other. */
+                ancestor?: string[];
+                /** @description SCOPE the read to the items whose OWN `sprintId` matches — a sprint id, or the reserved literal `active` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and `active` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted. */
+                sprintId?: string;
             };
             header?: never;
             path: {
