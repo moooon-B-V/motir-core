@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanStatusDto } from '@/lib/dto/plans';
@@ -160,6 +160,95 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+/** A plan whose proposals sit under TWO distinct containers — the shape whose
+ *  honest default is the list (MOTIR-3262). */
+function straddling() {
+  const base = review();
+  return {
+    ...base,
+    items: [
+      { ...base.items[0]!, planItemId: 'a', nodeId: 'a', parentNodeId: 'wi_story' },
+      { ...base.items[0]!, planItemId: 'b', nodeId: 'b', parentNodeId: 'wi_epic' },
+    ],
+  };
+}
+
+describe('the DEFAULT view is DERIVED from the plan (MOTIR-3262)', () => {
+  it('a STRADDLING plan opens in the LIST, with no query parameter', () => {
+    renderWithIntl(<PlanDetail initialReview={straddling()} projectKey="MOTIR" />);
+
+    expect(screen.getByTestId('plan-proposal-list')).toBeTruthy();
+    expect(screen.queryByTestId('plan-review-canvas')).toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('a SINGLE-container plan opens on the canvas, also with no parameter', () => {
+    renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
+
+    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('`?view=canvas` WINS on a straddling plan', () => {
+    mocks.search.value = 'view=canvas';
+
+    renderWithIntl(<PlanDetail initialReview={straddling()} projectKey="MOTIR" />);
+
+    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
+  });
+
+  it('`?view=list` WINS on a single-container plan', () => {
+    mocks.search.value = 'view=list';
+
+    renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
+
+    expect(screen.getByTestId('plan-proposal-list')).toBeTruthy();
+  });
+
+  it('switching AWAY from a straddling plan’s default writes the parameter', () => {
+    // The clean-URL property is about THE DEFAULT, whatever the default is: on
+    // this plan the canvas is the non-default, so choosing it writes `?view=`.
+    renderWithIntl(<PlanDetail initialReview={straddling()} projectKey="MOTIR" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1?view=canvas', { scroll: false });
+  });
+
+  it('and switching BACK to it writes a CLEAN url', () => {
+    mocks.search.value = 'view=canvas';
+
+    renderWithIntl(<PlanDetail initialReview={straddling()} projectKey="MOTIR" />);
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1', { scroll: false });
+  });
+
+  it('a POLL that crosses the threshold does NOT move the reviewer', async () => {
+    // ⚠️ The property the pinned default exists for. A `generating` plan's
+    // proposals arrive over time, so it can cross the one-container threshold
+    // WHILE somebody is reading it. The default is a SEED for the arriving
+    // reader, not a controlled value.
+    const generating = { ...review(), status: 'generating' as PlanStatusDto, plannedAt: null };
+    mocks.fetchPlanReview.mockResolvedValue({
+      ...straddling(),
+      status: 'generating' as PlanStatusDto,
+    });
+
+    renderWithIntl(<PlanDetail initialReview={generating} projectKey="MOTIR" />);
+    // It opened on the canvas — one container at mount.
+    expect(screen.getByTestId('plan-review-canvas')).toBeTruthy();
+
+    // The poll lands a straddling plan.
+    await waitFor(() => expect(mocks.fetchPlanReview).toHaveBeenCalled(), { timeout: 4000 });
+
+    // Still the canvas. Nothing moved, and nothing was pushed at the reader.
+    await waitFor(() => expect(screen.getByTestId('plan-review-canvas')).toBeTruthy());
+    expect(screen.queryByTestId('plan-proposal-list')).toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
 });
 
 describe('the List / Canvas switcher (MOTIR-3239)', () => {

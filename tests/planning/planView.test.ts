@@ -6,16 +6,22 @@ import {
   planViewFromParam,
 } from '@/lib/planning/planView';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
+import { planContainerCount } from '@/lib/planning/planShape';
+import { planReviewItem } from '../helpers/planReview';
 
-// MOTIR-3239 — the plan-detail view vocabulary, its URL parsing, and THE SEAM.
+// MOTIR-3239 / MOTIR-3262 — the plan-detail view vocabulary, its URL parsing,
+// and the DERIVED default.
 //
-// ⚠️ The seam is the point of this file. `defaultPlanView` exists as a named,
-// exported symbol so MOTIR-3262 can replace its BODY with the conditional
-// straddle rule Part IX specifies. A literal buried in the URL-derivation ternary
-// would make that card a rewrite of this card's logic, and the two would then
-// both own the same expression. So what is pinned here is that the derivation
-// GOES THROUGH the seam — not what the seam currently answers, which is expected
-// to change exactly once.
+// The seam MOTIR-3239 named is now filled: `defaultPlanView` answers Part IX §3's
+// rule — the LIST when the plan's proposals sit under more than one distinct
+// container, the canvas otherwise — reading the count from `planShape`, which is
+// the one implementation of that question.
+//
+// ⚠️ `planViewFromParam` takes the RESOLVED default rather than the review, and
+// that signature is the point: the default is a SEED for the arriving reader, and
+// a `generating` plan's item set grows under a 2.5s poll. Passing a value the
+// island pinned at mount makes "read once" structural instead of a rule somebody
+// has to remember.
 
 function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
   return {
@@ -46,7 +52,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
 describe('planViewFromParam', () => {
   it('takes each member of the vocabulary', () => {
     for (const value of PLAN_VIEW_VALUES) {
-      expect(planViewFromParam(value, review())).toBe(value);
+      expect(planViewFromParam(value, 'canvas')).toBe(value);
     }
   });
 
@@ -54,35 +60,68 @@ describe('planViewFromParam', () => {
     // The value comes from a URL a person can type; there is no reading on which
     // `?view=nonsense` is worth a failure.
     for (const raw of [undefined, null, '', 'nonsense', 'CANVAS', 'list ']) {
-      expect(planViewFromParam(raw, review())).toBe(defaultPlanView(review()));
+      expect(planViewFromParam(raw, 'list')).toBe('list');
+      expect(planViewFromParam(raw, 'canvas')).toBe('canvas');
     }
   });
 
-  it('resolves the fallback THROUGH the seam, not through a literal', () => {
-    // The assertion MOTIR-3262 depends on: swapping the seam's body must move the
-    // no-parameter answer with it. Driving it through the exported symbol is the
-    // only way to state that without asserting today's answer as if it were the
-    // contract.
-    const plan = review();
-    expect(planViewFromParam(null, plan)).toBe(defaultPlanView(plan));
-    expect(planViewFromParam('nonsense', plan)).toBe(defaultPlanView(plan));
-  });
-
   it('a `?view=` value always WINS over the default, in both directions', () => {
-    const plan = review();
-    expect(planViewFromParam('list', plan)).toBe('list');
-    expect(planViewFromParam('canvas', plan)).toBe('canvas');
+    // Including against the default a straddling plan would otherwise get.
+    expect(planViewFromParam('canvas', 'list')).toBe('canvas');
+    expect(planViewFromParam('list', 'canvas')).toBe('list');
   });
 });
 
-describe('defaultPlanView — today, the canvas for every plan', () => {
-  it('is the canvas, whatever the plan holds', () => {
-    // Today's behaviour, unchanged by this card. MOTIR-3262 replaces this with
-    // the straddle rule; until then the answer must not vary, or this card would
-    // have changed which view a reader lands in without deciding to.
-    expect(defaultPlanView(review())).toBe('canvas');
-    expect(defaultPlanView(review({ status: 'generating' }))).toBe('canvas');
-    expect(defaultPlanView(review({ status: 'approved', itemCount: 12 }))).toBe('canvas');
+describe('defaultPlanView — DERIVED from the plan’s shape (MOTIR-3262)', () => {
+  const at = (id: string, parent: string | null) =>
+    planReviewItem({ planItemId: id, nodeId: id, parentNodeId: parent });
+
+  it('a plan under ONE container opens on the CANVAS', () => {
+    expect(defaultPlanView(review({ items: [at('a', 'wi_p'), at('b', 'wi_p')] }))).toBe('canvas');
+  });
+
+  it('a plan that STRADDLES two containers opens on the LIST', () => {
+    // No single canvas level can show it, and the canvas draws one level at a
+    // time — opening on it would be the surface insisting on a view that
+    // structurally cannot answer the question.
+    expect(defaultPlanView(review({ items: [at('a', 'wi_story'), at('b', 'wi_epic')] }))).toBe(
+      'list',
+    );
+  });
+
+  it('a plan of PURE ROOTS opens on the canvas — the top level is ONE container', () => {
+    // Part IX §3 settles this: `null` counts as a container rather than being
+    // skipped, so a plan of roots does not read as straddling.
+    expect(defaultPlanView(review({ items: [at('a', null), at('b', null)] }))).toBe('canvas');
+  });
+
+  it('a PROPOSED container counts too', () => {
+    // A story under an epic plus subtasks under that story touches two
+    // containers, one of which does not exist yet.
+    const items = [
+      planReviewItem({ planItemId: 's', nodeId: 's', parentNodeId: 'wi_epic' }),
+      planReviewItem({ planItemId: 'x', nodeId: 'x', parentNodeId: 's', parentIdentifier: null }),
+    ];
+    expect(defaultPlanView(review({ items }))).toBe('list');
+  });
+
+  it('an EMPTY plan opens on the canvas', () => {
+    expect(defaultPlanView(review({ items: [] }))).toBe('canvas');
+  });
+
+  it('reads the count from `planShape` rather than re-deriving it', () => {
+    // The count has exactly one implementation after MOTIR-3262. Driving the two
+    // through the same fixtures is what states that without asserting an
+    // internal: they must agree for every shape.
+    for (const items of [
+      [at('a', 'wi_p')],
+      [at('a', 'wi_p'), at('b', 'wi_q')],
+      [at('a', null)],
+      [],
+    ]) {
+      const expected = planContainerCount(items) > 1 ? 'list' : 'canvas';
+      expect(defaultPlanView(review({ items }))).toBe(expected);
+    }
   });
 });
 

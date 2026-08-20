@@ -12,7 +12,12 @@ import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { PlanProposalList } from '@/components/planning/PlanProposalList';
 import { Segmented } from '@/components/ui/Segmented';
-import { PLAN_VIEW_PARAM, planViewFromParam, type PlanViewDto } from '@/lib/planning/planView';
+import {
+  PLAN_VIEW_PARAM,
+  defaultPlanView,
+  planViewFromParam,
+  type PlanViewDto,
+} from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { PlanReviewRail, type PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import { RepositorySetStep } from '@/components/planning/repositories/RepositorySetStep';
@@ -234,11 +239,17 @@ export function PlanDetail({
   // WHICH BODY the pane shows. THE URL IS THE SINGLE SOURCE OF TRUTH (MOTIR-3239),
   // derived on every render exactly as `ChildPanel` derives `?children=` — so a
   // deep link, a reload and browser Back/forward all agree, and no local state
-  // can disagree with the address bar. The DEFAULT comes from one named symbol
-  // (`defaultPlanView`), never a literal here: MOTIR-3262 replaces that symbol's
-  // body with the conditional straddle rule, and a literal in this expression
-  // would make that card a rewrite of this one's logic.
-  const view: PlanViewDto = planViewFromParam(searchParams.get(PLAN_VIEW_PARAM), review);
+  // can disagree with the address bar.
+  //
+  // ⚠️ THE DEFAULT IS PINNED AT MOUNT (MOTIR-3262). It is DERIVED from the plan's
+  // shape — the list when the proposals straddle more than one container — and a
+  // `generating` plan's item set grows under the 2.5s poll below, so a plan can
+  // cross that threshold while a reviewer is reading it. The default is a SEED
+  // for the arriving reader, not a controlled value: recomputing it per render
+  // would yank somebody between views on a poll tick. `useState`'s initializer
+  // runs once, which is exactly the semantics wanted here.
+  const [pinnedDefaultView] = useState<PlanViewDto>(() => defaultPlanView(initialReview));
+  const view: PlanViewDto = planViewFromParam(searchParams.get(PLAN_VIEW_PARAM), pinnedDefaultView);
 
   const onViewChange = useCallback(
     (next: PlanViewDto) => {
@@ -246,14 +257,14 @@ export function PlanDetail({
       // THE DEFAULT WRITES A CLEAN URL, whatever the default is — so every
       // existing `/plans/[id]` link stays byte-identical, and the property
       // survives MOTIR-3262 making the default conditional.
-      if (next === planViewFromParam(null, review)) params.delete(PLAN_VIEW_PARAM);
+      if (next === pinnedDefaultView) params.delete(PLAN_VIEW_PARAM);
       else params.set(PLAN_VIEW_PARAM, next);
       const query = params.toString();
       // `scroll: false` — switching a body must never yank the reader to the top
       // of a pane they were already reading (`ChildPanel`'s own decision).
       router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, review, router, searchParams],
+    [pathname, pinnedDefaultView, router, searchParams],
   );
 
   const outcome: PlanItemOutcome | null =
