@@ -48,13 +48,43 @@ describe('the wave band is the approved artwork (MOTIR-1150 · MOTIR-1140)', () 
     expect(designAsset('wave-band-24.svg')).toContain(`viewBox="${WAVE_BAND_VIEW_BOX}"`);
   });
 
-  it('is ONE closed path of six segments — four quadratics and two straight caps', () => {
+  it('is ONE closed path of SIX quadratics and two straight caps', () => {
     // §2's construction claim, asserted rather than trusted: a "simplification"
     // that re-fits the curve would change these counts.
-    expect(WAVE_BAND_PATH.match(/Q/g)).toHaveLength(4);
+    //
+    // ⚠️ SIX, not four (MOTIR-3181). Each edge's final quadratic is SPLIT at 0.75
+    // so its tail can be re-aimed to meet the vertical cap tangent-vertically —
+    // the corner Yue reported at the box's vertical midpoint. The two extra
+    // segments are those eased tails; the shape is otherwise the same curve.
+    expect(WAVE_BAND_PATH.match(/Q/g)).toHaveLength(6);
     expect(WAVE_BAND_PATH.match(/L/g)).toHaveLength(1); // the second cap is the Z
     expect(WAVE_BAND_PATH.endsWith('Z')).toBe(true);
     expect(WAVE_BAND_PATH).not.toMatch(/[Cc]/); // no cubics — nothing was traced
+  });
+
+  it('MEETS BOTH CAPS TANGENT-VERTICALLY — the corner this card removed', () => {
+    // The property, asserted as itself rather than as a coordinate fixture: a
+    // quadratic's end tangent is `E - C`, so "arrives vertical" is `C.x === E.x`.
+    // A future edit that nudges either control off the cap's x re-introduces the
+    // kink, and no visual review would catch a two-decimal change.
+    const segs = [...WAVE_BAND_PATH.matchAll(/Q([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)/g)].map(
+      (m) => ({ cx: Number(m[1]), ex: Number(m[3]), ey: Number(m[4]) }),
+    );
+    const atCap = segs.filter((s) => s.ex === 0 || s.ex === 24);
+    expect(atCap, 'one eased tail per side').toHaveLength(2);
+    for (const s of atCap) {
+      expect(s.cx, 'the control must sit on the cap line for a vertical tangent').toBe(s.ex);
+      expect(s.ey, 'the junction is the box vertical midpoint').toBe(12);
+    }
+  });
+
+  it('spans the viewBox EDGE TO EDGE, so the straight caps are pixel-aligned', () => {
+    // An INSET vertical edge lands on a whole device pixel only at exact multiples
+    // of the grid; the viewport boundary is aligned at every scale. Measured cap
+    // alpha went 84/233/211/168/166/80 -> 255 at 16/26/28/32/56/64 px. Re-adding a
+    // margin here would undo that, so it is asserted rather than commented.
+    expect(WAVE_BAND_PATH.startsWith('M0 0')).toBe(true);
+    expect(WAVE_BAND_PATH).toContain('L24 24');
   });
 
   it('carries the design asset in the repo it names as the editable source', () => {

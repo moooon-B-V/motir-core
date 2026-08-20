@@ -193,6 +193,25 @@ rejected for reading plainly as the letter Z, the very thing this card ruled out
 
 ### ⚠️ Refined 2026-08-19 — the contour, not the shape (MOTIR-3181)
 
+**The reported defect, in Yue's words:** _"the points where the vertical line meet the curve — the
+middle point of the box, the angle looks sharp, I want the curve turn to the vertical line
+smoothly."_ It was sharp: the band ends in a straight VERTICAL cap at each side, and the curve
+arrived at it **14.7° (right) and 19.3° (left) off vertical** — a corner at exactly the box's
+vertical midpoint, `(0, 12)` and `(24, 12)`.
+
+**The fix is local.** A quadratic's end tangent is `E − C`, so "arrives vertical" means the control
+sits on the cap's own line (`C.x === E.x`). Forcing that on the full-length final segment drags the
+control far outside the frame and turns the mark into a 0.66-aspect ribbon. So each final quadratic
+is **split at 0.75** and only its TAIL re-aimed: the head is the de Casteljau restriction of the
+original curve (unchanged), the tail starts with the same tangent (so the new join is
+tangent-continuous) and ends vertical. Both junctions now measure **0.00000°**, every interior join
+is under 0.001°, and the aspect stays at 0.999. Overlaying the old outline on the new fill, the two
+diverge only in the last stretch before each cap.
+
+0.75 is chosen rather than arbitrary: below ~0.70 the ease starts early enough to visibly fatten the
+ends; at 0.85 the turn is too short and the corner is still legible. That is why the path now has
+**six quadratics rather than four** — the two extra segments are the eased tails, not a re-fit.
+
 Yue: _"the contour of the logo is not good, the left/right vertical line is maybe 1px out."_ It was.
 **The curve is unchanged** — same control points, same silhouette, same approval. Two artifacts of
 the hand-derivation were removed:

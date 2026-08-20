@@ -17,11 +17,20 @@
 export const WAVE_BAND_VIEW_BOX = '0 0 24 24';
 
 /**
- * One closed path — four quadratic curves + two straight caps, six segments.
+ * One closed path — SIX quadratic curves + two straight caps.
  * Filled, never stroked (design-notes.md §2 "paint").
  *
- * ⚠️ IT SPANS THE viewBox EDGE TO EDGE (0..24 on both axes), and that is the
- * fix rather than an oversight (MOTIR-3181). The viewport boundary is
+ * ⚠️ THE CURVE MEETS EACH CAP TANGENT-VERTICALLY (MOTIR-3181). The band ends in a
+ * straight vertical cap at each side, and the curve used to arrive at it 14.7°
+ * (right) and 19.3° (left) OFF vertical — a visible corner at the box's vertical
+ * midpoint, which is the defect Yue reported. Each final quadratic is now split at
+ * 0.75 and its tail re-aimed so the curve arrives EXACTLY vertical; both junctions
+ * measure 0.00000° and every interior join stays tangent-continuous. That is why
+ * there are six quadratics where there used to be four — the two extra segments are
+ * the eased tails, not a re-fitting of the shape.
+ *
+ * ⚠️ AND IT SPANS THE viewBox EDGE TO EDGE (0..24 on both axes), which is also the
+ * fix rather than an oversight. The viewport boundary is
  * pixel-aligned at EVERY scale, so a straight cap that coincides with it renders
  * crisp at every size; an INSET cap lands on a whole device pixel only at exact
  * multiples of the grid. The previous path carried a ~1-unit margin (caps at
@@ -33,7 +42,7 @@ export const WAVE_BAND_VIEW_BOX = '0 0 24 24';
  * CONSUMER — that is exactly what the icon generator's glyph-box scales are for.
  */
 export const WAVE_BAND_PATH =
-  'M0 0Q7 15.5 13 4.1875Q19 -7.125 24 12L24 24Q19 5.125 13 18.5625Q7 32 0 12Z';
+  'M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z';
 
 // ── The baked-colour literals ───────────────────────────────────────────────
 //
