@@ -217,14 +217,36 @@ interface SendGap {
  * PURE and exported so its two directions are asserted directly, with synthetic
  * gaps, rather than by stalling a real runner for three seconds per case.
  */
-export function stallDiagnosis(fn: string, worst: SendGap | null): string | null {
-  if (!worst || worst.ms < PERIOD_MS) return null;
+export function stallDiagnosis(fn: string, worst: SendGap | null, spanMs = 0): string | null {
+  // TWO ways the precondition fails, and only one of them is a stall (MOTIR-3276).
+  //
+  // ⚠️ THE WINDOW OPENS AT THE FIRST EVENT AND IS NOT RE-ARMED BY LATER ONES, so
+  // what the burst needs is *every event inside ONE window* — a property of its
+  // SPAN, not of adjacent gaps. Six sends of 600 ms have a worst gap of 600 ms
+  // and a span of 3 600 ms: the window closes mid-burst, the tail event's run
+  // lands after `SETTLE_MS` and is never observed, `toHaveLength(1)` passes, and
+  // only `seen[0].n` is wrong — the exact presentation the header above
+  // describes, with no gap anywhere near the threshold to report.
+  //
+  // That is a real occurrence, not a hypothetical: 2026-08-20, PR #2223's
+  // `Vitest (2/3)`, on a diff of one env var and an ADR. The gap check said
+  // nothing and the failure arrived as the bare `expected 5 to be 6` this
+  // function exists to prevent.
+  const stalled = worst !== null && worst.ms >= PERIOD_MS;
+  const overran = spanMs >= PERIOD_MS;
+  if (!stalled && !overran) return null;
+
+  const cause = stalled
+    ? `the runner stalled ${worst.ms} ms between events ${worst.from} and ${worst.to}`
+    : `the burst took ${spanMs} ms end to end (worst single gap ${worst?.ms ?? 0} ms)`;
+
   return (
-    `the runner stalled ${worst.ms} ms between events ${worst.from} and ${worst.to} of the ` +
-    `\`${fn}\` burst, which meets or exceeds the ${PERIOD_MS} ms debounce PERIOD — so the window ` +
-    'closed MID-BURST and this run measured a split burst rather than the scheduler coalescing ' +
-    'one. That is an ENVIRONMENTAL failure of the precondition, not a regression in the ' +
-    'scheduler: re-run it. Do not widen PERIOD to make it rarer (MOTIR-3125).'
+    `${cause} of the \`${fn}\` burst, which meets or exceeds the ${PERIOD_MS} ms debounce ` +
+    'PERIOD — so the window closed MID-BURST and this run measured a split burst rather than ' +
+    'the scheduler coalescing one. That is an ENVIRONMENTAL failure of the precondition, not ' +
+    'a regression in the scheduler: re-run it. Do not widen PERIOD to make it rarer ' +
+    '(MOTIR-3125), and do not weaken the assertion — carrying the LATEST event is the property ' +
+    'it exists to prove (MOTIR-3276).'
   );
 }
 
@@ -243,6 +265,11 @@ async function burst(
 ): Promise<{ key: string; n: number }[]> {
   const before = runs.length;
   let previousAt = 0;
+  // The window opens when the FIRST event lands, so the span is measured from
+  // there — not from the loop's start, which would charge the burst for work
+  // that happened before any window existed (MOTIR-3276).
+  let firstSentAt = 0;
+  let lastSentAt = 0;
   let worst: SendGap | null = null;
   for (const [index, data] of events.entries()) {
     if (injectStallMs > 0 && index === 1) {
@@ -250,13 +277,15 @@ async function burst(
     }
     await client.send({ name: `debounce-probe/${fn}`, data });
     const sentAt = Date.now();
+    if (index === 0) firstSentAt = sentAt;
+    lastSentAt = sentAt;
     if (index > 0) {
       const gap = sentAt - previousAt;
       if (!worst || gap > worst.ms) worst = { ms: gap, from: index, to: index + 1 };
     }
     previousAt = sentAt;
   }
-  const stalled = stallDiagnosis(fn, worst);
+  const stalled = stallDiagnosis(fn, worst, lastSentAt - firstSentAt);
   if (stalled) throw new Error(stalled);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
   return runs.slice(before).filter((r) => r.fn === fn);
@@ -397,5 +426,49 @@ describe('stallDiagnosis — the precondition every case above carries silently'
     expect(stallDiagnosis('per-key', { ms: PERIOD_MS + 1, from: 2, to: 3 })).toContain(
       'between events 2 and 3',
     );
+  });
+
+  // ── The SPAN, which the gap check cannot see (MOTIR-3276) ──────────────────
+
+  it('REFUSES a burst that overran the window with NO gap anywhere near it', () => {
+    // The occurrence this case is written from: 2026-08-20, PR #2223's
+    // `Vitest (2/3)`, on a diff of one env var and an ADR. Every gap was small,
+    // the diagnosis said nothing, and the failure arrived as the bare
+    // `expected 5 to be 6` this whole helper exists to prevent.
+    //
+    // The window opens at the FIRST event and is NOT re-armed by later ones, so
+    // a burst of six 600 ms sends spans 3 600 ms with a worst gap of 600 ms —
+    // the window closes mid-burst and the gap check is structurally blind to it.
+    const message = stallDiagnosis('coalesce', { ms: 600, from: 3, to: 4 }, 3_600);
+    expect(message).toContain('took 3600 ms end to end');
+    // It says the gap too, so a reader can see WHY the other check was silent
+    // rather than wondering whether it ran.
+    expect(message).toContain('worst single gap 600 ms');
+    expect(message).toContain('ENVIRONMENTAL');
+    expect(message).toContain('Do not widen PERIOD');
+  });
+
+  it('is SILENT when the span fits, and REFUSES at the boundary', () => {
+    expect(stallDiagnosis('coalesce', { ms: 100, from: 1, to: 2 }, PERIOD_MS - 1)).toBeNull();
+    // Same boundary reasoning as the gap: a burst that measured exactly the
+    // window is not one whose coalescing can be trusted.
+    expect(stallDiagnosis('coalesce', { ms: 100, from: 1, to: 2 }, PERIOD_MS)).toContain(
+      'end to end',
+    );
+  });
+
+  it('names the STALL when both trip — the sharper cause of the two', () => {
+    // A burst can overrun BECAUSE one send stalled. Reporting the span there
+    // would bury the pause that actually caused it, so the gap wins the message.
+    const message = stallDiagnosis('coalesce', { ms: PERIOD_MS + 500, from: 2, to: 3 }, 9_000);
+    expect(message).toContain('stalled 3500 ms between events 2 and 3');
+    expect(message).not.toContain('end to end');
+  });
+
+  it('defaults the span to zero, so an un-updated caller keeps the old behaviour', () => {
+    // The parameter is optional on purpose: every existing call site reads as it
+    // did, and a caller that has not been taught to measure the span cannot be
+    // made to refuse by accident.
+    expect(stallDiagnosis('coalesce', { ms: 10, from: 1, to: 2 })).toBeNull();
   });
 });
