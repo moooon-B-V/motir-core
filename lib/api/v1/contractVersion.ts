@@ -187,5 +187,16 @@
  *   up split across two pull requests. Additive: one new endpoint (§8's first
  *   allowed change) and one new resource (`ScopeClaim`); no declared shape
  *   changed.
+ * - `1.19.0` — MOTIR-3196 adds two query parameters to `getProjectReadySet`:
+ *   `ancestor` (repeatable) narrows the ready set to the leaves STRICTLY
+ *   BENEATH one or more containers, at any depth; `sprintId` (single-valued,
+ *   with the reserved literal `active`) narrows it to the items whose OWN
+ *   `sprintId` matches. Together they publish the SCOPE a run claims through
+ *   `claimScope` (1.18.0), so the read and the claim can name the same set.
+ *   Additive: two optional parameters on an existing operation (§8's second
+ *   allowed change); omit them and the response is byte-identical. An
+ *   unresolvable value is refused with the existing `INVALID_READY_FILTER` →
+ *   422 rather than silently matching everything, and an `ancestor` key from
+ *   another project is refused identically to one that never existed.
  */
-export const V1_CONTRACT_VERSION = '1.18.0';
+export const V1_CONTRACT_VERSION = '1.19.0';

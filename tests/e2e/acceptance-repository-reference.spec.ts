@@ -352,17 +352,30 @@ test('a repository is a link you can follow, and a rename does not break the car
     await expect(card.getByRole('link', { name: RENAMED })).toBeVisible();
     await expect(card.getByRole('link', { name: E2E_REPO_SECOND.name })).toBeVisible();
 
+    // ⚠️ 8xxx — THIS SPEC'S OWN BLOCK. Pull-request numbers are a SHARED
+    // namespace across the acceptance lane: `playwright.acceptance.config.ts`
+    // reuses one database for a whole shard, and nothing between specs resets
+    // it, so `(repo, number)` collides across FILES. Every other spec already
+    // takes a thousand-block of its own — `github.spec.ts` 4xxx,
+    // `repository-set.spec.ts` 5xxx, `acceptance-implemented-lifecycle` 6xxx,
+    // `acceptance-scoped-run` 7xxx — and this file was the one duplicating a
+    // neighbour's (6101/6102, the lifecycle spec's). It only ever passed
+    // because the two happened to land in different shards; the shard
+    // partition changes whenever a spec file is ADDED, and the collision then
+    // makes the second spec's `opened` delivery resolve to the first spec's
+    // change request, so its card never reaches Implemented. Take a new block
+    // rather than reusing one.
     await deliver(page, {
       action: 'opened',
       identifier: twoRepo.identifier,
-      number: 6101,
+      number: 8101,
       repo: E2E_REPO,
       expectOutcome: 'transitioned',
     });
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,
-      number: 6101,
+      number: 8101,
       repo: E2E_REPO,
       merged: true,
       // The hold — not `transitioned`.
@@ -380,14 +393,14 @@ test('a repository is a link you can follow, and a rename does not break the car
     await deliver(page, {
       action: 'opened',
       identifier: twoRepo.identifier,
-      number: 6102,
+      number: 8102,
       repo: E2E_REPO_SECOND,
       expectOutcome: 'noop',
     });
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,
-      number: 6102,
+      number: 8102,
       repo: E2E_REPO_SECOND,
       merged: true,
       expectOutcome: 'transitioned',

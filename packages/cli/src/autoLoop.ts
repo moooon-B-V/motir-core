@@ -116,7 +116,10 @@ export interface SkipRecord {
    * no agent ran, nothing was reverted — so `autoExitCode`, which reads only
    * `records`, is unaffected by it.
    */
-  reason: 'needs_planning' | 'needs_human' | 'claim_refused';
+  reason: 'needs_planning' | 'needs_human' | 'claim_refused' | 'blocked_in_scope';
+  /** For `blocked_in_scope`: the in-scope blockers that were still open when the
+   *  run reached this card. Absent for every other reason. */
+  blockedBy?: string[];
 }
 
 /** How ONE `--include-planning` expansion trigger ended (MOTIR-886).
@@ -266,6 +269,11 @@ const STOP_LABEL: Record<StopReason, string> = {
 const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
   needs_planning: 'needs planning',
   needs_human: 'needs a human',
+  // ⚠️ A SCOPED-RUN reason (MOTIR-3199), and it can only arise there. The run
+  // OWNS this card — the claim took every member in the to-do category,
+  // `blocked` included — which is not the same as being allowed to build it out
+  // of order. Skipped and NAMED, never forced.
+  blocked_in_scope: 'its blockers inside this scope did not land',
   claim_refused: 'claimed by somebody else, or no longer claimable',
 };
 
@@ -411,7 +419,12 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     blocks.push(formatTable(SUMMARY_HEADERS, rows));
   }
 
-  for (const reason of ['needs_planning', 'needs_human', 'claim_refused'] as const) {
+  for (const reason of [
+    'needs_planning',
+    'needs_human',
+    'claim_refused',
+    'blocked_in_scope',
+  ] as const) {
     const group = summary.skipped.filter((s) => s.reason === reason);
     if (group.length === 0) continue;
     blocks.push(

@@ -32,6 +32,7 @@ import type {
   WorkItemDetail,
   WorkItemLink,
   WorkItemSummary,
+  ScopeClaim,
   WorkItemClaim,
 } from '../client.js';
 
@@ -535,6 +536,57 @@ export function toWorkItemClaim(body: SuccessBody<'claimWorkItem'>): WorkItemCla
       ? { id: body.transitionedBy.id, name: body.transitionedBy.name }
       : null,
     transitionedAt: body.transitionedAt,
+  };
+}
+
+/**
+ * The SCOPE claim result (MOTIR-3049 · MOTIR-3198) — the scope-shaped sibling
+ * of {@link toWorkItemClaim}.
+ *
+ * Same shape of job: the wire and the view model agree field for field, and the
+ * adapter exists anyway because `client.ts` may not see a generated wire type
+ * (ADR Amendment 12 Q4). Every array is re-stated element by element rather than
+ * passed through, so a field the server adds later cannot arrive in the view
+ * model without somebody deciding it should.
+ */
+export function toScopeClaim(body: SuccessBody<'claimScope'>): ScopeClaim {
+  return {
+    scope: {
+      kind: body.scope.kind,
+      key: body.scope.key,
+      sprintId: body.scope.sprintId,
+      name: body.scope.name,
+    },
+    outcome: body.outcome,
+    claimed: body.claimed,
+    members: body.members.map((m) => ({
+      key: m.key,
+      title: m.title,
+      status: { key: m.status.key, category: m.status.category },
+    })),
+    offender: body.offender
+      ? {
+          key: body.offender.key,
+          title: body.offender.title,
+          status: { key: body.offender.status.key, category: body.offender.status.category },
+          assignee: body.offender.assignee
+            ? { id: body.offender.assignee.id, name: body.offender.assignee.name }
+            : null,
+          transitionedBy: body.offender.transitionedBy
+            ? { id: body.offender.transitionedBy.id, name: body.offender.transitionedBy.name }
+            : null,
+          transitionedAt: body.offender.transitionedAt,
+        }
+      : null,
+    shape: body.shape
+      ? { child: body.shape.child, childTitle: body.shape.childTitle, depth: body.shape.depth }
+      : null,
+    blockers: body.blockers.map((b) => ({
+      item: b.item,
+      blockedBy: b.blockedBy,
+      blockerStatus: b.blockerStatus,
+      blockerSprintId: b.blockerSprintId,
+    })),
   };
 }
 

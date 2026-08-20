@@ -253,9 +253,15 @@ export function buildProgram(): Command {
     )
     .action(nextCommand);
   register(program, 'run')
-    .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
+    .option(
+      '--print',
+      'Print the prompt to stdout instead of launching an agent (default). One work item only.',
+    )
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
-    .option('--force', 'Dispatch even though the item is not ready (dependencies unmet).')
+    .option(
+      '--force',
+      'Dispatch even though the item is not ready (dependencies unmet). One work item only.',
+    )
     // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
     // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
     // come back as different PROMPT TEXT, because the prompt is the entire
@@ -281,6 +287,20 @@ export function buildProgram(): Command {
     .option(
       '--auto-approve-replan',
       'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+    )
+    // ── The SCOPE flags (MOTIR-3198) ────────────────────────────────────────
+    // `motir run` takes a SCOPE now, so every work-loop flag had to be re-asked
+    // rather than inherited. `--kinds` is registered PRECISELY so it can be
+    // refused with its reason — the same MOTIR-1828 pattern the line above uses.
+    .option('--max <n>', 'Stop after dispatching n work items from the scope.')
+    .option('--keep-going', 'Continue past a failed agent instead of halting on the first one.')
+    .option(
+      '--include-planning',
+      'Trigger an AI expansion for an unexpanded story instead of refusing it. Never waits: the plan needs your approval.',
+    )
+    .option(
+      '--kinds <list>',
+      'Not supported — a scoped run drains the whole claimed set, not a filtered subset.',
     )
     .action(runCommand);
   register(program, 'auto')

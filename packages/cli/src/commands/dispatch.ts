@@ -10,7 +10,22 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
-import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
+import {
+  execCommand,
+  runIdFromDate,
+  sessionBranchName,
+  workReachedRemote,
+  type CommandRunner,
+} from '../git.js';
+import {
+  claimScopeForRun,
+  refuseLeafOnlyFlag,
+  resolveScopeTarget,
+  type ScopeRunOptions,
+} from './scope.js';
+import { drainScope } from './scopeDrain.js';
+import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
+import { closeOutRepos, parseMax, requireAgent } from './auto.js';
 import {
   agentSubmittedReplan,
   autoOnlyFlagError,
@@ -111,6 +126,13 @@ export interface DeliveryDeps {
   /** The git runner the push check (MOTIR-3004) asks, so a test can script "the
    *  agent pushed" / "the agent pushed nothing" without a real remote. */
   run?: CommandRunner;
+  /** The agent spawner, injected by the SCOPED drain's tests (MOTIR-3199) —
+   *  the same seam `motir auto`'s `AutoDeps` carries, for the same reason. */
+  runAgentFn?: typeof runAgent;
+  /** The run clock, so a driven drain reports deterministic durations. */
+  clock?: () => number;
+  /** The run id, so a driven drain gets a deterministic session branch. */
+  now?: () => Date;
 }
 
 /**
@@ -490,9 +512,13 @@ function keyList(entries: { key: string }[]): string {
 
 // ── motir run <key> ─────────────────────────────────────────────────────────
 
-export interface RunOptions extends DeliveryOptions {
+export interface RunOptions extends DeliveryOptions, ScopeRunOptions {
   /** `--force` — dispatch even though the item is not ready. */
   force?: boolean;
+  /** `--max <n>` — stop after n cards of a SCOPE. Leaf runs ignore it. */
+  max?: string;
+  /** `--keep-going` — continue a SCOPE past a failed agent. */
+  keepGoing?: boolean;
 }
 
 /**
@@ -526,7 +552,62 @@ export async function runCommand(
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
     const { client } = session;
-    const detail = await client.getWorkItem(trimmed);
+
+    // ── SCOPE or CARD? The SHAPE decides (MOTIR-3195 / MOTIR-3198) ──────────
+    //
+    // `motir run` takes a SCOPE now: a work-item key, or the reserved word
+    // `sprint`. Which run it performs is decided by what the target turns out to
+    // be — a leaf falls through to everything below, unchanged, byte for byte;
+    // a container with children runs its leaves; an epic and a childless
+    // container are refused, by `resolveScopeTarget`, with the copy the ADR
+    // spells out.
+    //
+    // ⚠️ THIS BRANCH COSTS NOTHING, AND THAT IS LOAD-BEARING.
+    // `resolveScopeTarget` makes the SAME `getWorkItem` read this function
+    // already made as its first act — one line earlier — and HANDS IT BACK on
+    // the leaf arm. Re-reading it here instead would put a second round-trip on
+    // the path every dispatched card takes, to save threading one value.
+    const decision = await resolveScopeTarget(client, trimmed, opts, session.serverUrl);
+    if (decision.action === 'stop') return;
+    if (decision.action === 'scope') {
+      refuseLeafOnlyFlag(opts);
+      // An agent is REQUIRED here, unlike on the leaf path where `--print` is the
+      // default: a set has no single prompt to paste, so there is nothing for a
+      // print-mode scoped run to do. The message is `motir auto`'s, verbatim,
+      // because it is the same requirement for the same reason.
+      const agent = requireAgent({ ...opts, print: false }, 'motir run <scope>');
+      const ownerId = await resolveOwnerId(client);
+      const claimed = await claimScopeForRun(session, decision.target, opts, ownerId);
+      if (!claimed) return;
+
+      const runId = runIdFromDate((deps.now ?? (() => new Date()))());
+      const branch = sessionBranchName(runId);
+      const run = deps.run ?? execCommand;
+      const summary = await drainScope({
+        session,
+        opts,
+        members: claimed.ready,
+        edges: claimed.edges,
+        max: parseMax(opts.max),
+        agent,
+        runId,
+        branch,
+        run,
+        clock: deps.clock ?? Date.now,
+        runAgentFn: deps.runAgentFn ?? runAgent,
+      });
+      // ONE pull request per TOUCHED repo, through the shipped close-out. On a
+      // multi-repo scope that is one PER REPO, and the summary names each — "one
+      // pull request, one CI run" is exactly true for a single-repo scope only.
+      closeOutRepos(summary, run);
+      info('');
+      info(renderAutoSummary(summary));
+      info(renderFindingsPolicy(opts));
+      process.exitCode = autoExitCode(summary);
+      return;
+    }
+
+    const detail = decision.detail;
     const { item, readiness } = detail;
 
     if (!readiness.ready && !opts.force) {

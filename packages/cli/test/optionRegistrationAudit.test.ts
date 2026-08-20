@@ -72,8 +72,20 @@ const HELP_SURFACE = new Set(['help', ...HELP_TOPICS.map((topic) => topic.name)]
 interface ParsedInterface {
   /** Field names, in declaration order. */
   fields: string[];
-  /** The single interface it extends, if any. */
-  parent: string | null;
+  /**
+   * EVERY interface it extends — TypeScript allows a comma-separated list, and
+   * `RunOptions extends DeliveryOptions, ScopeRunOptions` (MOTIR-3198) is the
+   * first one here to use it.
+   *
+   * ⚠️ This was `parent: string | null` and the block regex captured only the
+   * first name, so a multi-parent interface did not match the pattern AT ALL and
+   * `declaredOptions` threw *"not found under src/"*. The throw was the guard
+   * working — a miss must never be silent — but the diagnosis it offered was
+   * wrong: the interface was there, and ordinary TypeScript was not. Widening
+   * makes the audit cover strictly MORE than it did, which is the only direction
+   * a guard may be relaxed in.
+   */
+  parents: string[];
 }
 
 /** Every `export interface …` under `src/`, keyed by name. */
@@ -88,16 +100,20 @@ function parseInterfaces(dir: string, into = new Map<string, ParsedInterface>())
     const source = readFileSync(path, 'utf8');
     // Non-greedy to the first line that closes the block at column 0 — an
     // interface body never dedents that far until it ends.
-    const block = /export interface (\w+)(?: extends (\w+))?\s*\{([\s\S]*?)\n\}/g;
+    const block = /export interface (\w+)(?: extends ([\w\s,]+?))?\s*\{([\s\S]*?)\n\}/g;
     for (const match of source.matchAll(block)) {
-      const [, name, parent, body] = match;
+      const [, name, extendsList, body] = match;
       if (name === undefined || body === undefined) continue;
       // Fields sit at exactly one indent level; anything deeper belongs to a
       // nested object type, and doc comments start with `*` or `/`.
       const fields = [...body.matchAll(/^ {2}(\w+)\??:/gm)].flatMap(([, field]) =>
         field === undefined ? [] : [field],
       );
-      into.set(name, { fields, parent: parent ?? null });
+      const parents = (extendsList ?? '')
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+      into.set(name, { fields, parents });
     }
   }
   return into;
@@ -109,8 +125,12 @@ const INTERFACES = parseInterfaces(SRC_DIR);
 function declaredOptions(name: string): string[] {
   const fields: string[] = [];
   const seen = new Set<string>();
-  let current: string | null = name;
-  while (current && !seen.has(current)) {
+  // A QUEUE rather than a cursor: an interface may extend several, and every
+  // branch of the inheritance graph contributes fields the handler can read.
+  const queue: string[] = [name];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (seen.has(current)) continue;
     seen.add(current);
     const parsed: ParsedInterface | undefined = INTERFACES.get(current);
     // A miss means the interface was renamed or moved. Throw rather than skip:
@@ -118,7 +138,7 @@ function declaredOptions(name: string): string[] {
     // mode this test exists to prevent.
     if (!parsed) throw new Error(`option interface \`${current}\` not found under src/`);
     fields.push(...parsed.fields);
-    current = parsed.parent;
+    queue.push(...parsed.parents);
   }
   return [...new Set(fields)];
 }

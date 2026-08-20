@@ -125,7 +125,7 @@ export interface AutoDeps {
 
 /** A resolved agent — `motir auto` refuses to start without one, so every
  *  downstream signature takes the non-null form. */
-type ResolvedAgent = NonNullable<ReturnType<typeof resolveAgent>>;
+export type ResolvedAgent = NonNullable<ReturnType<typeof resolveAgent>>;
 
 /**
  * Parse `--max`. A cap that silently means "no cap" because it did not parse is
@@ -146,15 +146,15 @@ export function parseMax(raw: string | undefined): number | null {
  * mode, and there is no human in an unattended loop to copy anything — so it is
  * an error with guidance rather than a silently degraded run.
  */
-function requireAgent(opts: AutoOptions): ResolvedAgent {
+export function requireAgent(opts: AutoOptions, command = 'motir auto'): ResolvedAgent {
   if (opts.print) {
-    throw new CliError('`motir auto` cannot run in --print mode.', {
+    throw new CliError(`\`${command}\` cannot run in --print mode.`, {
       hint: 'An unattended loop has nobody to paste a prompt. Use `motir next --print` for one item, or pass --agent <cmd>.',
     });
   }
   const agent = resolveAgent(opts);
   if (!agent) {
-    throw new CliError('`motir auto` needs an agent to run.', {
+    throw new CliError(`\`${command}\` needs an agent to run.`, {
       hint: 'Pass --agent "<cmd>", set MOTIR_AGENT, or configure agentCommand. `motir doctor` checks it.',
     });
   }
@@ -176,7 +176,7 @@ function requireAgent(opts: AutoOptions): ResolvedAgent {
  * dispatched with no seed, which makes the server hand them the per-item-PR
  * prompt: the honest outcome, not a lineage the CLI could not actually create.
  */
-class RepoSessions {
+export class RepoSessions {
   private readonly byPath = new Map<string, RepoSession | null>();
 
   constructor(
@@ -634,7 +634,7 @@ async function triggerExpansion(
   }
 }
 
-interface DispatchOneInput {
+export interface DispatchOneInput {
   client: MotirClient;
   item: DispatchItem;
   /** Read by the CALLER, before the checkout was resolved — see the seed-first
@@ -678,12 +678,21 @@ const APPROVE_WAIT_MS = Number(process.env['MOTIR_APPROVE_WAIT_MS'] ?? '') || 5_
  * cannot forget which of the two it is holding (the same shape `motir batch`'s
  * drain uses).
  */
-type DispatchOneResult =
+export type DispatchOneResult =
   | { kind: 'record'; record: DispatchRecord }
   | { kind: 'skipped'; reason: SkipRecord['reason'] };
 
-/** Run ONE item through the single-dispatch pipeline and record how it ended. */
-async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
+/**
+ * Run ONE item through the single-dispatch pipeline and record how it ended.
+ *
+ * ⚠️ EXPORTED so the SCOPED drain (MOTIR-3199) composes it rather than growing a
+ * second copy. The two loops differ in how they choose the next card — `auto`
+ * asks the server every iteration, a scoped run orders a set it already owns —
+ * and in nothing else: the claim, the agent spawn, the replan check, the
+ * bootstrap check, the push check and the integration are one pipeline, and a
+ * fork of it would be two places for the MOTIR-3004 / MOTIR-3018 checks to drift.
+ */
+export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
   const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, run } = input;
 
   // THE CLAIM, and it can say no (MOTIR-3048). The pick already narrowed to rows

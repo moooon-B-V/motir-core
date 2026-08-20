@@ -14,7 +14,7 @@ import type {
   WorkItemPriorityDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
-import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
+import { SPRINT_ACTIVE, type ReadyListFilter } from '@/lib/workItems/readyFilter';
 
 // The v1 READY-SET row (Story 11.3 · Subtask 11.3.9 — MOTIR-2066) — the shape
 // an external agent loop reads to answer "what can I pick up right now, and what
@@ -238,7 +238,34 @@ const isReadyPriority = (value: string): value is WorkItemPriorityDto => PRIORIT
 export const UNASSIGNED = 'none';
 
 /**
- * Read `?kind=&priority=&assigneeId=` into the shipped `ReadyListFilter`.
+ * A `MOTIR-<n>` work-item key, as `?ancestor=` carries it: a project key, a
+ * hyphen, a positive integer.
+ *
+ * Checked HERE, where it costs nothing, because a malformed key is a request
+ * the caller can fix from the message alone — the same reasoning
+ * `resolveWorkItemKey` records for a malformed path segment ("a 422 before any
+ * read"). Whether a WELL-FORMED key names a container in this project is a
+ * database question, and belongs to the service (`InvalidReadyFilterError`).
+ */
+const ANCESTOR_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
+
+/** Normalize an `?ancestor=` key to the canonical upper-case form rows carry. */
+const normalizeAncestorKey = (raw: string): string => raw.trim().toUpperCase();
+
+/**
+ * Read `?kind=&priority=&assigneeId=&ancestor=&sprintId=` into the shipped
+ * `ReadyListFilter`.
+ *
+ * ⚠️ TWO KINDS OF FACET, and the difference decides how far this function can
+ * take each one (MOTIR-3196). `kind` / `priority` / `assigneeId` are
+ * VOCABULARIES — closed sets, or a tri-state — so a parser settles them
+ * completely and a bad value is a 422 from here. `ancestor` / `sprintId` are
+ * REFERENCES: this function checks their SHAPE and stops, because whether a
+ * key names an item in this project, or the project has an active sprint at
+ * all, cannot be answered without a read. The service answers those and raises
+ * `InvalidReadyFilterError`, which the route maps to the SAME
+ * `INVALID_READY_FILTER` → 422 — so the two tiers are one contract to a caller
+ * and two layers to a maintainer.
  *
  * `assigneeId` is TRI-STATE and the wire form has to preserve all three:
  * ABSENT means any assignee, the literal `none` means the unassigned bucket, and
@@ -275,11 +302,46 @@ export function parseReadyFilters(req: Request): ReadyListFilter {
 
   const rawAssignee = params.get('assigneeId');
 
+  // REPEATABLE, and an any-of set exactly like `kind` — a caller may legitimately
+  // scope one run to two stories, and the single-valued shape that forbids it
+  // would have to be widened later. De-duplicated here so the service resolves
+  // each key once; the result set is a union either way.
+  const ancestorKeys: string[] = [];
+  for (const raw of params.getAll('ancestor')) {
+    const key = normalizeAncestorKey(raw);
+    // An EMPTY value is a wire accident — a shell expanding an unset variable —
+    // not a request to scope to nothing, and `assigneeId` already treats one as
+    // omitted. Refusing it would fail the common scripted case on something the
+    // caller cannot see in their own command line.
+    if (key === '') continue;
+    if (!ANCESTOR_KEY_PATTERN.test(key)) {
+      throw new InvalidRequestError(
+        'INVALID_READY_FILTER',
+        `Malformed \`ancestor\` key: ${raw}. Expected a work-item key like \`MOTIR-7\`.`,
+      );
+    }
+    if (!ancestorKeys.includes(key)) ancestorKeys.push(key);
+  }
+
+  // SINGLE-VALUED: sprint membership is a scalar column, so there is no any-of
+  // question to ask. An empty value is treated as omitted, exactly as
+  // `assigneeId` treats one — the two are the same wire accident.
+  const rawSprint = params.get('sprintId');
+  const sprintRef = rawSprint === null || rawSprint.trim() === '' ? null : rawSprint.trim();
+
   return {
     ...(kinds.length > 0 ? { kinds } : {}),
     ...(priorities.length > 0 ? { priority: priorities } : {}),
     ...(rawAssignee !== null && rawAssignee !== ''
       ? { assigneeId: rawAssignee === UNASSIGNED ? null : rawAssignee }
       : {}),
+    ...(ancestorKeys.length > 0 ? { ancestorKeys } : {}),
+    ...(sprintRef !== null ? { sprintRef } : {}),
   };
 }
+
+/** Re-exported so a caller building a query string has one spelling to reach
+ *  for, beside `UNASSIGNED`. The value is declared with the filter shape it
+ *  belongs to; this is the same re-export `serverResolve.ts` does for
+ *  `DEFAULT_SERVER_URL`. */
+export { SPRINT_ACTIVE };

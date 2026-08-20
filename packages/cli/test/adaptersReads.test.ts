@@ -4,6 +4,7 @@ import {
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
+  toScopeClaim,
   toWhoami,
 } from '../src/adapters/reads.js';
 
@@ -184,5 +185,115 @@ describe('the activity reshape', () => {
     // the `all` page's footer arithmetic needs a number.
     const body = page([], { totalComments: null, totalChanges: null });
     expect(toActivityAllPage(body)).toMatchObject({ totalComments: 0, totalChanges: 0 });
+  });
+});
+
+describe('toScopeClaim — the SCOPE claim result (MOTIR-3049)', () => {
+  const base = {
+    scope: { kind: 'work_item' as const, key: 'PROD-1', sprintId: null, name: 'The story' },
+    outcome: 'claimed' as const,
+    claimed: true,
+    members: [] as never[],
+    offender: null,
+    shape: null,
+    blockers: [] as never[],
+  };
+
+  it('re-states every array element by element, never passing a row through', () => {
+    // The mapper exists so a field the server adds later cannot arrive in the
+    // view model without somebody deciding it should. That is only true if it
+    // BUILDS each element rather than spreading it — asserted by handing it a
+    // row with an extra field and reading the result back.
+    const claim = toScopeClaim({
+      ...base,
+      members: [
+        {
+          key: 'PROD-2',
+          title: 'Item two',
+          status: { key: 'in_progress', category: 'in_progress' },
+          surprise: 'should not survive',
+        },
+      ],
+      blockers: [
+        {
+          item: 'PROD-2',
+          blockedBy: 'PROD-99',
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+          surprise: 'nor this',
+        },
+      ],
+    } as never);
+
+    expect(claim.members).toEqual([
+      { key: 'PROD-2', title: 'Item two', status: { key: 'in_progress', category: 'in_progress' } },
+    ]);
+    expect(claim.blockers).toEqual([
+      { item: 'PROD-2', blockedBy: 'PROD-99', blockerStatus: 'todo', blockerSprintId: null },
+    ]);
+  });
+
+  it('maps the OFFENDER’s two nullable actors independently', () => {
+    // The MOTIR-2958 shape: a sibling flipped the status without assigning, so
+    // `assignee` is null while `transitionedBy` is the only witness. Collapsing
+    // the two nullable arms into one would lose the holder's name in exactly
+    // the case the field exists for.
+    const named = toScopeClaim({
+      ...base,
+      outcome: 'taken',
+      claimed: false,
+      offender: {
+        key: 'PROD-2',
+        title: 'Held',
+        status: { key: 'in_progress', category: 'in_progress' },
+        assignee: null,
+        transitionedBy: { id: 'u2', name: 'Rival' },
+        transitionedAt: '2026-08-20T10:00:00.000Z',
+      },
+    } as never);
+    expect(named.offender).toEqual({
+      key: 'PROD-2',
+      title: 'Held',
+      status: { key: 'in_progress', category: 'in_progress' },
+      assignee: null,
+      transitionedBy: { id: 'u2', name: 'Rival' },
+      transitionedAt: '2026-08-20T10:00:00.000Z',
+    });
+
+    const assigned = toScopeClaim({
+      ...base,
+      outcome: 'taken',
+      claimed: false,
+      offender: {
+        key: 'PROD-2',
+        title: 'Held',
+        status: { key: 'in_progress', category: null },
+        assignee: { id: 'u3', name: 'Owner' },
+        transitionedBy: null,
+        transitionedAt: null,
+      },
+    } as never);
+    expect(assigned.offender?.assignee).toEqual({ id: 'u3', name: 'Owner' });
+    expect(assigned.offender?.transitionedBy).toBeNull();
+  });
+
+  it('maps the `wrong_shape` detail, and leaves it null on every other outcome', () => {
+    const shaped = toScopeClaim({
+      ...base,
+      outcome: 'wrong_shape',
+      claimed: false,
+      shape: { child: 'PROD-5', childTitle: 'A container', depth: 2 },
+    } as never);
+    expect(shaped.shape).toEqual({ child: 'PROD-5', childTitle: 'A container', depth: 2 });
+    expect(toScopeClaim(base as never).shape).toBeNull();
+    expect(toScopeClaim(base as never).offender).toBeNull();
+  });
+
+  it('carries a SPRINT scope’s null key and its sprint id', () => {
+    const claim = toScopeClaim({
+      ...base,
+      scope: { kind: 'sprint', key: null, sprintId: 's1', name: 'Sprint 44' },
+    } as never);
+    expect(claim.scope).toEqual({ kind: 'sprint', key: null, sprintId: 's1', name: 'Sprint 44' });
   });
 });

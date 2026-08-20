@@ -12,6 +12,7 @@ import {
   toCompleteSessionResult,
   toDispatchPrompt,
   toExpandSubmitResult,
+  toScopeClaim,
   toWorkItemClaim,
   toActivityHistoryPage,
   toCommentsPage,
@@ -515,6 +516,72 @@ export interface WorkItemClaim {
   /** WHEN that transition happened, ISO-8601; null for a row whose status was
    *  never moved. */
   transitionedAt: string | null;
+}
+
+/** Which of the two claimable scopes a result is about. */
+export type ScopeClaimKind = 'work_item' | 'sprint';
+
+/**
+ * What a whole-scope claim resolved to (MOTIR-3049).
+ *
+ * The first four are {@link WorkItemClaimOutcome}'s vocabulary, unchanged and
+ * computed by the same classifier — a refusal means one MEMBER refused, and
+ * being inside a scope does not give a member a new reason. The last two are
+ * the ways a SCOPE can fail that a single card cannot:
+ *
+ * - `wrong_shape`    — a work-item scope whose child is itself a container. A
+ *                      RESULT, not an error: the answer is to re-plan, never to
+ *                      retry.
+ * - `not_finishable` — work OUTSIDE the scope gates work inside it, so a run
+ *                      that took it could not finish it.
+ */
+export type ScopeClaimOutcome =
+  | 'claimed'
+  | 'mine'
+  | 'taken'
+  | 'not_claimable'
+  | 'wrong_shape'
+  | 'not_finishable';
+
+/** One work item inside a claimed scope. */
+export interface ScopeMember {
+  key: string;
+  title: string;
+  status: { key: string; category: string | null };
+}
+
+/**
+ * The result of one scope claim — ALL OR NOTHING.
+ *
+ * ⚠️ `members` is populated only on a claim; every refusal carries `[]`,
+ * because a refusal claimed nothing. There is deliberately no shape here for
+ * "some of it": a partially-claimed scope is the one outcome with no good
+ * handling, since you are already holding cards somebody else is now blocked on.
+ */
+export interface ScopeClaim {
+  scope: { kind: ScopeClaimKind; key: string | null; sprintId: string | null; name: string };
+  outcome: ScopeClaimOutcome;
+  /** `outcome === 'claimed'` — the happy path, without knowing the vocabulary. */
+  claimed: boolean;
+  members: ScopeMember[];
+  /** The member that decided a `mine` / `taken` / `not_claimable` verdict. */
+  offender: {
+    key: string;
+    title: string;
+    status: { key: string; category: string | null };
+    assignee: ClaimActor | null;
+    transitionedBy: ClaimActor | null;
+    transitionedAt: string | null;
+  } | null;
+  /** The container child of a `wrong_shape` verdict, and how deep the work sits. */
+  shape: { child: string; childTitle: string; depth: number } | null;
+  /** Why a `not_finishable` scope cannot be finished, in the validators' shape. */
+  blockers: {
+    item: string;
+    blockedBy: string;
+    blockerStatus: string;
+    blockerSprintId: string | null;
+  }[];
 }
 
 // ── the plan-change CONVERSATION (MOTIR-1832) + the plan read (MOTIR-1837) ──
@@ -1030,6 +1097,11 @@ export class MotirClient {
     projectKey: string;
     kinds?: string[];
     ownerId?: string;
+    /** SCOPE to the ready leaves beneath these containers, at any depth
+     *  (MOTIR-3196). The container itself is never in the result. */
+    ancestor?: string[];
+    /** SCOPE to one sprint — an id, or the literal `active` (MOTIR-3196). */
+    sprintId?: string;
   }): Promise<DispatchItem[]> {
     const items: DispatchItem[] = [];
     for await (const item of this.walkReady(args)) {
@@ -1052,6 +1124,8 @@ export class MotirClient {
   private async *walkReady(args: {
     projectKey: string;
     kinds?: string[];
+    ancestor?: string[];
+    sprintId?: string;
   }): AsyncGenerator<DispatchItem> {
     let cursor: string | undefined;
     do {
@@ -1059,6 +1133,12 @@ export class MotirClient {
         path: { projectKey: args.projectKey },
         query: {
           ...(args.kinds ? { kind: args.kinds } : {}),
+          // The two SCOPE facets (MOTIR-3196). Sent through the SAME page walk
+          // as `kind`, so a scoped read follows the cursor to exhaustion exactly
+          // as an unscoped one does — a scoped run that silently took only the
+          // first page would claim a set it never enumerated.
+          ...(args.ancestor ? { ancestor: args.ancestor } : {}),
+          ...(args.sprintId !== undefined ? { sprintId: args.sprintId } : {}),
           ...(cursor ? { cursor } : {}),
         },
       });
@@ -1288,6 +1368,41 @@ export class MotirClient {
    */
   async claimWorkItem(args: { key: string }): Promise<WorkItemClaim> {
     return toWorkItemClaim(await this.v1.request('claimWorkItem', { path: { key: args.key } }));
+  }
+
+  /**
+   * CLAIM a whole SCOPE — a container and its children, or the project's active
+   * sprint — in ONE all-or-nothing transaction (MOTIR-3049).
+   *
+   * ⚠️ THE CLAIM IS UP FRONT, AND THAT IS THE WHOLE DESIGN. A scoped run
+   * promises to take a story and finish it, which is only keepable if it owns
+   * the story when it starts. Claiming as the loop reaches each card leaves a
+   * window in which a second run takes card five while this one is on card two,
+   * and the two integrate onto different branches — a half-delivered story split
+   * across two pull requests, worse than either run refusing.
+   *
+   * ⚠️ THE ACCEPTED COST: every card in the scope reads In Progress for the
+   * whole run while only one is being worked. "In Progress" stops meaning *an
+   * agent is on this right now* and starts meaning *this run owns it*. Decided,
+   * weighed, and stated in the operation's own documentation.
+   *
+   * Like {@link claimWorkItem} it can say NO, and every refusal is a 200 with an
+   * `outcome` — including two a single card has no analogue for (`wrong_shape`,
+   * `not_finishable`), which are FINDINGS whose answer is a re-plan rather than
+   * a retry. **The claim IS the dispatch status flip; do not transition after
+   * it.**
+   */
+  async claimScope(
+    args: { kind: 'work_item'; key: string } | { kind: 'sprint'; projectKey: string },
+  ): Promise<ScopeClaim> {
+    return toScopeClaim(
+      await this.v1.request('claimScope', {
+        body:
+          args.kind === 'work_item'
+            ? { kind: 'work_item', key: args.key }
+            : { kind: 'sprint', projectKey: args.projectKey },
+      }),
+    );
   }
 
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on

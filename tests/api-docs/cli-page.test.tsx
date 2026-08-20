@@ -68,9 +68,14 @@ describe('lib/apiDocs/cli — the facts are DERIVED, not typed', () => {
     }
   });
 
-  it('prints a command’s ARGUMENT SIGNATURE, so `motir run <key>` is not `motir run`', () => {
+  it('prints a command’s ARGUMENT SIGNATURE, so `motir run <scope>` is not `motir run`', () => {
+    // ⚠️ `<scope>`, not `<key>` (MOTIR-3195 / MOTIR-3198): `motir run` takes a
+    // work-item key OR the reserved word `sprint`, and the published table has
+    // to say so. The bare-`motir run` assertion is the one that matters and is
+    // unchanged — a row that dropped its signature would tell a reader the
+    // command takes no argument at all.
     const invocations = cliCommandInvocations();
-    expect(invocations).toContain('motir run <key>');
+    expect(invocations).toContain('motir run <scope>');
     expect(invocations).toContain('motir sprint [ref]');
     expect(invocations).toContain('motir link add <repo> <path>');
     expect(invocations).not.toContain('motir run');
