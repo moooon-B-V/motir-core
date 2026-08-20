@@ -240,7 +240,7 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
       { projectId: fx.project.id, kind: 'story', title: 'Spans two repositories' },
       fx.ctx,
     );
-    await workItemsService.createWorkItem(
+    const webHalf = await workItemsService.createWorkItem(
       {
         projectId: fx.project.id,
         kind: 'subtask',
@@ -250,7 +250,7 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
       },
       fx.ctx,
     );
-    await workItemsService.createWorkItem(
+    const apiHalf = await workItemsService.createWorkItem(
       {
         projectId: fx.project.id,
         kind: 'subtask',
@@ -268,6 +268,19 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
     expect(storyRow.targetRepos.slice().sort()).toEqual([AI.name, CORE.name]);
 
     await workItemsService.updateStatus(story.id, 'in_progress', fx.ctx);
+    // ⚠️ BUILD THE HALVES BEFORE DELIVERING THE STORY (Bug MOTIR-3229). A
+    // container's `implemented` is now a CLAIM about its children — the gate in
+    // `applyStatusTransition` refuses it while any live child sits below
+    // `implemented` — so a fixture that delivers a story over two untouched
+    // subtasks is refused, and correctly: that is precisely the shape MOTIR-1343
+    // shipped (a story `implemented`, then In Review, then Done, with `todo`
+    // children the merge then cascaded closed). Nothing about the SEAM under test
+    // changes: the story's repository set is derived from these two rows either
+    // way, and their statuses are not an input to it.
+    for (const half of [webHalf, apiHalf]) {
+      await workItemsService.updateStatus(half.id, 'in_progress', fx.ctx);
+      await workItemsService.updateStatus(half.id, 'implemented', fx.ctx);
+    }
     const event = (action: string, repo: typeof CORE, number: number, merged: boolean) =>
       githubWebhookService.handleEvent('pull_request', {
         action,

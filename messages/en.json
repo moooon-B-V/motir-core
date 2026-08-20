@@ -569,7 +569,8 @@
       "ILLEGAL_TRANSITION": "Illegal status transition: \"{from}\" → \"{to}\".",
       "STALE_WORK_ITEM": "This work item was edited by someone else. Refresh and try again.",
       "TYPE_NOT_ALLOWED_ON_KIND": "A type and executor can only be set on a task, subtask, or bug — not on an epic or story.",
-      "MISSING_ARTIFACT_EVIDENCE": "A \"deploy\" work item can't be closed until a comment on it records the artifact it published — a version (1.4.0), a registry digest (sha256:…) or an integrity hash (sha512-…). If this deliverable genuinely has no identifier, add a comment beginning \"NO ARTIFACT:\" with the reason."
+      "MISSING_ARTIFACT_EVIDENCE": "A \"deploy\" work item can't be closed until a comment on it records the artifact it published — a version (1.4.0), a registry digest (sha256:…) or an integrity hash (sha512-…). If this deliverable genuinely has no identifier, add a comment beginning \"NO ARTIFACT:\" with the reason.",
+      "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",

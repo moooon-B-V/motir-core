@@ -34,6 +34,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
+import { CONTAINER_CLAIM_STATUS_KEYS, childrenBelowClaimBar } from '@/lib/workItems/statusLadder';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -73,6 +74,7 @@ import {
   CrossProjectParentError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  ContainerHasOpenChildrenError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -2322,6 +2324,58 @@ export const workItemsService = {
       const bodies = await commentRepository.listBodiesByWorkItem(workItemId, tx);
       if (assessArtifactEvidence(bodies).outcome === 'missing') {
         throw new MissingArtifactEvidenceError(toStatusKey);
+      }
+    }
+
+    // THE CONTAINER-COMPLETENESS GATE (Bug MOTIR-3229). A container may not
+    // enter a status that CLAIMS its own work is built — `implemented` or
+    // `in_review` — while a live child of its own has not reached `implemented`.
+    //
+    // WHY IT IS A GATE AND NOT A DERIVATION OUTCOME, which is the part that took
+    // a production measurement to settle. MOTIR-1343 was set to `implemented`
+    // with two `todo` children, and the derivation run that fired 15 s later
+    // returned `rollup: { outcome: 'already_there' }` / `cascade: not_done` — both
+    // directions doing exactly what they are specified to do, and NEITHER looking
+    // down at the transitioning item's own children: the upward direction rolls up
+    // the item's PARENT, and the downward cascade fires only on entry into a
+    // done-category status. No trigger exists that would ever contradict such a
+    // claim. Derivation was not failing; it was never asked the question. So the
+    // question is asked HERE, at the one place every close-out passes through —
+    // the detail page, the board drag, the v1 route, the MCP `transition_status`
+    // and the CI-green promotion all land on this method.
+    //
+    // ⚠️ `done` IS DELIBERATELY NOT GUARDED. Completing a parent is a DECISION
+    // that completes its children, and §4's downward cascade is the shipped
+    // expression of it. A gate there would break the feature rather than the
+    // defect — which is why the cascade instead grew an exemption for the one
+    // child kind it must not sweep (`childStatusCascadeService`, same card).
+    //
+    // Scoped like the artifact-evidence gate above:
+    //   • `opts.system` is EXEMPT — the importer, the downward cascade and the
+    //     rollup's backward arm are background writes behind a change somebody
+    //     already made successfully, and a business rule must not fail them. The
+    //     forward rollup arm is NOT system, and needs no exemption: it only ever
+    //     targets a rung its children actually match.
+    //   • A LEAF never reaches the child read — the key test is a string compare,
+    //     so the overwhelmingly common transition pays nothing.
+    if (!opts.system && CONTAINER_CLAIM_STATUS_KEYS.has(toStatusKey)) {
+      const children = await workItemRepository.findChildren(workItemId, tx);
+      if (children.length > 0) {
+        const statuses = await workflowsService.listStatusesByProject(
+          current.projectId,
+          ctx.workspaceId,
+          tx,
+        );
+        const open = childrenBelowClaimBar(children, statuses, {
+          reviewKey: statuses.find((s) => s.key === 'in_review')?.key ?? null,
+          implementedKey: statuses.find((s) => s.key === 'implemented')?.key ?? null,
+        });
+        if (open.length > 0) {
+          throw new ContainerHasOpenChildrenError(
+            toStatusKey,
+            open.map((child) => child.identifier),
+          );
+        }
       }
     }
 

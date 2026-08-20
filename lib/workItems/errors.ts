@@ -33,7 +33,8 @@ export type WorkItemErrorTag =
   | 'CONTAINER_REPO_SET_NOT_WRITABLE'
   | 'ARCHIVED_TARGET_REPO'
   | 'CONFLICTING_TARGET_REPO_INPUT'
-  | 'MISSING_ARTIFACT_EVIDENCE';
+  | 'MISSING_ARTIFACT_EVIDENCE'
+  | 'CONTAINER_HAS_OPEN_CHILDREN';
 
 /**
  * Base class for every work-items typed error. Concrete subclasses set a
@@ -458,6 +459,49 @@ export class MissingArtifactEvidenceError extends WorkItemError {
     );
     this.name = 'MissingArtifactEvidenceError';
     this.statusKey = statusKey;
+  }
+}
+
+/**
+ * A CONTAINER was moved into a status that CLAIMS its work is built —
+ * `implemented` or `in_review` — while at least one of its own live children has
+ * not reached `implemented` (Bug MOTIR-3229;
+ * `lib/workItems/statusLadder.ts` carries the bar and its reasoning).
+ *
+ * A client error → 422. The message NAMES the open children, because the whole
+ * failure this closes is that nobody looked at the child set: MOTIR-1343 claimed
+ * `implemented`, then In Review, then Done over two `todo` children, opened and
+ * merged a pull request on that claim, and the merge's downward cascade closed
+ * both of them. An error that merely says "children are open" leaves the reader
+ * to go and find which; one that lists them is actionable in one hop.
+ *
+ * ⚠️ NOT an `IllegalTransitionError`, deliberately. The transition IS legal —
+ * the project's workflow allows it and would allow it again the moment the
+ * children land. What is refused is the CLAIM, and a caller told "no such
+ * workflow transition" would go and edit their workflow. Same argument
+ * `MISSING_ARTIFACT_EVIDENCE` makes for being its own third code on this
+ * sub-resource rather than a flavour of the other two.
+ */
+export class ContainerHasOpenChildrenError extends WorkItemError {
+  readonly tag = 'CONTAINER_HAS_OPEN_CHILDREN' as const;
+  readonly code = 'CONTAINER_HAS_OPEN_CHILDREN' as const;
+  readonly statusKey: string;
+  /** The identifiers of the children that have not reached the bar. */
+  readonly openChildren: readonly string[];
+  constructor(statusKey: string, openChildren: readonly string[]) {
+    const named = openChildren.slice(0, 5).join(', ');
+    const rest = openChildren.length > 5 ? ` (+${openChildren.length - 5} more)` : '';
+    super(
+      `This item cannot reach "${statusKey}" while ${openChildren.length} of its children ` +
+        `${openChildren.length === 1 ? 'has' : 'have'} not been implemented: ${named}${rest}. ` +
+        'A parent at that status claims everything under it is built, and its pull request is ' +
+        'opened on that claim. Land the children, re-parent them out if they are no longer in ' +
+        'scope, or move this item to Done — which completes them deliberately rather than as a ' +
+        'side effect.',
+    );
+    this.name = 'ContainerHasOpenChildrenError';
+    this.statusKey = statusKey;
+    this.openChildren = openChildren;
   }
 }
 

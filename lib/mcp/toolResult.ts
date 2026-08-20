@@ -6,6 +6,7 @@ import {
   IllegalParentTypeError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  ContainerHasOpenChildrenError,
   ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
@@ -230,6 +231,12 @@ export function toToolError(err: unknown): CallToolResult {
     // so the agent records the digest it already holds instead of seeing an
     // opaque internal error at the last step of a release.
     err instanceof MissingArtifactEvidenceError ||
+    // The container-completeness gate (MOTIR-3229). Same surface, same argument:
+    // `transition_status` is how an agent moves a container to `implemented` at
+    // the end of a run, and the message NAMES the children that are still open —
+    // so the agent lands them, re-parents them out, or reports, instead of seeing
+    // an opaque internal error at the step it believed was the last one.
+    err instanceof ContainerHasOpenChildrenError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's

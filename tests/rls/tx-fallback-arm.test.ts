@@ -684,7 +684,10 @@ describe('workItemRepository — all 68 fallback arms have a caller', () => {
       ['findArchivedByProject', r.findArchivedByProject(pid, ws, { limit: 5, offset: 0 })],
       ['countArchivedByProject', r.countArchivedByProject(pid, ws)],
       ['countByStatusCategory', r.countByStatusCategory(pid, ws)],
-      ['aggregateChildrenStatus', r.aggregateChildrenStatus(itemId, null)],
+      [
+        'aggregateChildrenStatus',
+        r.aggregateChildrenStatus(itemId, { reviewStatusKey: null, implementedStatusKey: null }),
+      ],
       ['countTriageItems', r.countTriageItems(pid, ws)],
       ['findColumnCards', r.findColumnCards(pid, ws, ['todo'], 'position', { limit: 5 })],
       ['findProjectTreeLevel', r.findProjectTreeLevel(pid, ws, null, sort, { take: 5, offset: 0 })],
