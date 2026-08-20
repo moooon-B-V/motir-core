@@ -106,6 +106,7 @@ export function PlanDetail({
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const planId = initialReview.id;
 
@@ -151,17 +152,32 @@ export function PlanDetail({
         // a wasted round-trip, and on the wrong surface it is a bug.
         if (refreshServerSurfaces) router.refresh();
       } catch (err) {
-        setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
-        // A 409 means a concurrent reviewer already decided — refetch to show it.
-        // The decision was still an approval, so the server surface it reveals is
-        // just as due as on our own success.
+        // A 409 is NOT an error on this surface (MOTIR-3240). It means the plan
+        // moved between render and click — a concurrent reviewer decided it, or
+        // the producer finished and it left `generating` — and the refetch below
+        // shows the reader exactly that. The decision was still made, so a server
+        // surface it reveals is just as due as on our own success.
+        //
+        // ⚠️ This used to set `errorCode` FIRST and then refetch, so the rail
+        // rendered "that didn't work" above a plan whose real state was right
+        // there beside it. That was wrong for the approve path too, and it is
+        // corrected for both rather than special-cased for the discard — the two
+        // are the same event and there is no reading on which one of them is a
+        // failure and the other is not.
         if (err instanceof PlanRequestError && err.status === 409) {
           await refetch().catch(() => {});
           if (refreshServerSurfaces) router.refresh();
+        } else {
+          setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
         }
       } finally {
         setBusy(false);
+        // Both confirms close on the way out, success or 409 alike: the action
+        // has resolved and the refetch has already shown the plan's real state,
+        // so leaving either dialog open would ask the reader to confirm a
+        // decision that has already been made.
         setConfirmOpen(false);
+        setDiscardOpen(false);
       }
     },
     [planId, refetch, router],
@@ -182,7 +198,20 @@ export function PlanDetail({
     void approve();
   }, [review.stale, approve]);
 
-  const onDecline = useCallback(() => void runAction(declinePlanRequest), [runAction]);
+  // DECLINE, and its one confirming arm (MOTIR-3240). Ending a plan that is still
+  // being written is irreversible from this surface and the plan is still moving,
+  // so it confirms — the same shape the stale-approve confirm already uses, and
+  // for the sharper reason. A `planned` plan has been read and declining it is
+  // the ordinary decision; that path is unchanged.
+  const onDecline = useCallback(() => {
+    if (review.status === 'generating') {
+      setDiscardOpen(true);
+      return;
+    }
+    void runAction(declinePlanRequest);
+  }, [review.status, runAction]);
+
+  const discard = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
@@ -267,6 +296,27 @@ export function PlanDetail({
           />
         }
       />
+
+      <Modal
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        title={t('discardConfirmTitle')}
+        // The confirm NAMES the proposals already appended: the count is the one
+        // fact that tells the reader what they are throwing away, and the second
+        // half is the reassurance the whole substrate rests on — nothing was ever
+        // created, so nothing is lost from the tree.
+        description={t('discardConfirmBody', { n: review.itemCount })}
+        size="sm"
+      >
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDiscardOpen(false)} disabled={busy}>
+            {t('discardConfirmCancel')}
+          </Button>
+          <Button variant="primary" onClick={() => void discard()} loading={busy} disabled={busy}>
+            {t('discardConfirmCta')}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={confirmOpen}

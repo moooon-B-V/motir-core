@@ -89,6 +89,20 @@ export function PlanReviewRail({
   const t = useTranslations('planReview');
   const decided = review.status === 'approved' || review.status === 'declined';
   const planned = review.status === 'planned';
+  // ⚠️ A `generating` PLAN CAN BE ENDED, and this rail was the only thing saying
+  // otherwise (MOTIR-3240, `design/ai-planning/design-notes.md` Part VIII §4).
+  // `plansService.declinePlan` has accepted `generating` since MOTIR-3189 and
+  // records `decisionReason: 'discarded'` for it; the route adds no guard of its
+  // own. The `disabled={!planned}` that stood on the decline button was written
+  // when the service DID refuse, and stayed correct-looking after it stopped —
+  // so the valve had no handle, and a plan nobody was producing any more sat at
+  // the top of the list with a spinner and no action.
+  //
+  // DISCARD, not Decline: declining is what you do to a finished proposal you
+  // have read; a plan that never finished is being ENDED. `decisionReason`
+  // already tells the two apart on the row, and this button is where a reader
+  // learns which one they are doing.
+  const generating = review.status === 'generating';
   const staleItems = review.items.filter((i) => i.stale);
 
   return (
@@ -200,20 +214,42 @@ export function PlanReviewRail({
             >
               {t('approveCta', { n: review.itemCount })}
             </Button>
-            <Button
-              variant="ghost"
-              onClick={onDecline}
-              disabled={!planned || busy}
-              leftIcon={<X className="size-4" aria-hidden="true" />}
-            >
-              {t('declineCta')}
-            </Button>
+            {/* One control per state. While `generating` the discard is the only
+                LIVE control on the rail, so it takes the `secondary` variant — a
+                real affordance rather than a ghost that reads as disabled beside
+                a genuinely disabled Approve. */}
+            {generating ? (
+              <Button
+                variant="secondary"
+                data-testid="plan-discard"
+                onClick={onDecline}
+                disabled={busy}
+                leftIcon={<X className="size-4" aria-hidden="true" />}
+              >
+                {t('discardCta')}
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={onDecline}
+                disabled={!planned || busy}
+                leftIcon={<X className="size-4" aria-hidden="true" />}
+              >
+                {t('declineCta')}
+              </Button>
+            )}
+            {/* The hint is REPLACED for `generating`, not removed. `reviewLocked`
+                — "Review unlocks when generation completes" — was true of both
+                buttons and is now true of one, and a hint under two buttons that
+                describes only one is how the live control reads as disabled too. */}
             <p className="text-center text-xs text-(--el-text-secondary)">
               {planned
                 ? review.stale
                   ? t('approveHintStale', { n: review.staleCount })
                   : t('approveHint')
-                : t('reviewLocked')}
+                : generating
+                  ? t('discardHint')
+                  : t('reviewLocked')}
             </p>
           </>
         )}
