@@ -13,6 +13,19 @@
 //   3. RESOLVE   — the target card from the branch ref, then the PR title.
 //   4. PUBLISH   — mint upload grants → PUT each file → register.
 //
+// ⚠️ STEP 3 HAS TWO ANSWERS, because a design asset reaches `main` by two
+// shapes (MOTIR-3177). On a SUBTASK run — one design card, one branch, one pull
+// request — the branch names the card and step 3 is the whole story. On a
+// PARENT RUN the branch is `parent/MOTIR-<container>-<slug>` and carries ONE
+// COMMIT PER CHILD, so the branch names the CONTAINER, which is not a card that
+// produced anything. The service refuses that (MOTIR-3146) and it is right to;
+// the assumption that failed was the sentence after the refusal — *"the design
+// child's own pull request is what publishes them"* — because in that shape no
+// such pull request exists. So the container answer is a SECOND resolve, per
+// asset rather than per branch: `attributeChangedPaths` reads the commit that
+// last touched each path and takes the card key out of its subject. Nothing is
+// ever published to the container.
+//
 // ⚠️ TWO WAYS IT EXITS 0 WITHOUT PUBLISHING, both deliberate:
 //   · NO CREDENTIAL — a fork PR gets neither OIDC nor the secret. Publishing is
 //     opt-in; a fork must not fail the build.
@@ -70,6 +83,129 @@ export function resolveTargetKey(env = process.env) {
   const fromTitle = parseWorkItemKey(env['DESIGN_PR_TITLE']);
   if (fromTitle) return { key: fromTitle, source: 'title' };
   return { key: null, source: 'none' };
+}
+
+/** The project part of a `MOTIR-3068`-style key — everything before the last dash. */
+export function projectPrefixOf(key) {
+  const dash = String(key).lastIndexOf('-');
+  return dash > 0 ? String(key).slice(0, dash) : String(key);
+}
+
+/**
+ * The card key a COMMIT SUBJECT names, restricted to one project prefix.
+ *
+ * ⚠️ Deliberately NOT {@link parseWorkItemKey}, whose regex is prefix-agnostic
+ * because a branch ref and a PR title are written for exactly this purpose. A
+ * commit subject is prose: `refactor(auth): drop the UTF-8 fallback` matches
+ * `<letters>-<digits>` and would attribute a mock to `UTF-8`. The prefix comes
+ * from the container key the branch already resolved, so it is derived rather
+ * than configured.
+ */
+export function parseCommitCardKey(subject, prefix) {
+  if (!subject || !prefix) return null;
+  const m = new RegExp(`\\b${prefix}-\\d+\\b`, 'i').exec(String(subject));
+  return m ? m[0].toUpperCase() : null;
+}
+
+/**
+ * Attribute every path a PARENT-RUN branch changed to the card that produced it
+ * (MOTIR-3177).
+ *
+ * The parent-run form lands **one commit per child** on the parent branch, each
+ * subject carrying that child's `MOTIR-<n>` (`run.md`'s parent-run step 3), so
+ * the repository already records who produced which file and no new metadata is
+ * needed. This walks `base..HEAD` newest-first and gives each path to the FIRST
+ * commit that touched it and named a card — i.e. the commit whose state HEAD's
+ * bytes actually reflect, which is what makes the published asset a true
+ * statement about the card it lands on.
+ *
+ * Merges are excluded: `git merge origin/main` on a resuming parent run brings
+ * in another card's design changes, and attributing those here would publish one
+ * card's work onto another — the failure this whole script refuses to risk.
+ *
+ * Anything an earlier commit also touched is reported as a CO-TOUCH rather than
+ * dropped or duplicated, and a path no keyed commit explains comes back in
+ * `unattributed` for the caller to name (never silently skipped).
+ *
+ * @param {{
+ *   base: string,
+ *   containerKey: string,
+ *   git?: (args: string[], cwd?: string) => string,
+ *   cwd?: string,
+ * }} args
+ * @returns {{ byPath: Map<string, string>, coTouched: Map<string, string[]> }}
+ */
+export function attributeChangedPaths({ base, containerKey, git = runGit, cwd = process.cwd() }) {
+  const prefix = projectPrefixOf(containerKey);
+  // `%x00` starts each record, so a subject containing a newline cannot be read
+  // as a file path — `--name-only` output is otherwise ambiguous with prose.
+  const out = git(
+    ['log', '--no-merges', '--name-only', '--format=%x00%H %s', `${base}..HEAD`, '--', 'design'],
+    cwd,
+  );
+
+  /** @type {Map<string, string>} */
+  const byPath = new Map();
+  /** @type {Map<string, string[]>} */
+  const coTouched = new Map();
+
+  for (const record of out.split('\0')) {
+    const lines = record.split('\n').filter((l) => l.trim() !== '');
+    if (lines.length === 0) continue;
+    const [header, ...paths] = lines;
+    const subject = header.slice(header.indexOf(' ') + 1);
+    const key = parseCommitCardKey(subject, prefix);
+    // A commit naming nothing, or naming the container itself, explains no
+    // path — it leaves the paths for an older commit, or unattributed.
+    if (!key || key === containerKey.toUpperCase()) continue;
+    for (const filePath of paths) {
+      const owner = byPath.get(filePath);
+      if (owner === undefined) byPath.set(filePath, key);
+      else if (owner !== key) coTouched.set(filePath, [...(coTouched.get(filePath) ?? []), key]);
+    }
+  }
+
+  return { byPath, coTouched };
+}
+
+/**
+ * Split a publish set into one set per producing card, using
+ * {@link attributeChangedPaths}'s answer.
+ *
+ * A `note_file` asset carries its OWN extracted text, so each card's inline
+ * `noteMd` is the concatenation of only ITS notes — the same relationship
+ * `buildPublishSet` establishes for the single-card case, held per card.
+ *
+ * @param {{
+ *   assets: Array<{ kind: string, sourcePath: string, text?: string }>,
+ *   byPath: Map<string, string>,
+ * }} args
+ * @returns {{
+ *   byCard: Array<{ key: string, assets: Array<object>, noteMd: string | null }>,
+ *   unattributed: string[],
+ * }}
+ */
+export function partitionAssetsByCard({ assets, byPath }) {
+  /** @type {Map<string, Array<object>>} */
+  const grouped = new Map();
+  const unattributed = [];
+  for (const asset of assets) {
+    const key = byPath.get(asset.sourcePath);
+    if (!key) {
+      unattributed.push(asset.sourcePath);
+      continue;
+    }
+    grouped.set(key, [...(grouped.get(key) ?? []), asset]);
+  }
+  const byCard = [...grouped.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, cardAssets]) => {
+      const notes = cardAssets
+        .filter((a) => a.kind === 'note_file' && typeof a.text === 'string')
+        .map((a) => a.text);
+      return { key, assets: cardAssets, noteMd: notes.length > 0 ? notes.join('\n\n') : null };
+    });
+  return { byCard, unattributed };
 }
 
 /**
@@ -331,6 +467,32 @@ export class NotALeafError extends Error {
 }
 
 /**
+ * The target is a real leaf, but NOT a child of the container whose branch is
+ * being published — the service refuses it with `DESIGN_EVIDENCE_NOT_A_CHILD`
+ * (MOTIR-3177).
+ *
+ * ⚠️ ALSO a no-op rather than a failure, for the same reason as
+ * {@link NotALeafError}: the paths are correct assets and the branch is a
+ * correct branch; what is wrong is the KEY a commit subject wrote, and no
+ * amount of red makes an already-merged commit message change. It is reachable
+ * whenever a parent-run commit mistypes its child's key — the container's real
+ * children are the only cards that can have produced its branch's assets, so a
+ * key outside that set is a typo, and publishing on a typo is exactly the
+ * "attached to the WRONG card" outcome this script refuses to risk. Reported by
+ * name so the operator can see which paths went nowhere and why.
+ */
+export class NotAChildError extends Error {
+  /** @param {string} targetKey @param {string} containerKey @param {string} body */
+  constructor(targetKey, containerKey, body) {
+    super(`${targetKey} is not a child of ${containerKey}`);
+    this.name = 'NotAChildError';
+    this.targetKey = targetKey;
+    this.containerKey = containerKey;
+    this.body = body;
+  }
+}
+
+/**
  * Mint grants, PUT every artifact, then register the result. Returns the
  * registered evidence.
  *
@@ -350,6 +512,7 @@ export async function publishDesignResult({
   commitSha = null,
   ciRunUrl = null,
   producedByKey = null,
+  withinParentKey = null,
   readFileBuffer = (p) => fs.readFileSync(p),
   fetchImpl = fetch,
   cwd = process.cwd(),
@@ -373,11 +536,16 @@ export async function publishDesignResult({
     {
       method: 'POST',
       headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ files }),
+      body: JSON.stringify({ files, withinParentKey }),
     },
   );
   if (!mintRes.ok) {
     const body = await mintRes.text();
+    // The commit subject named a card that is not one of this container's
+    // children — a mistyped key, not a publish to retry (MOTIR-3177).
+    if (mintRes.status === 422 && body.includes('DESIGN_EVIDENCE_NOT_A_CHILD')) {
+      throw new NotAChildError(targetKey, withinParentKey ?? '', body);
+    }
     // The service refuses a design result addressed to a CONTAINER — a result
     // attaches to the leaf that produced it, never to a story or an epic. That
     // is not a failed publish, it is a publish that must not happen; see the
@@ -417,6 +585,7 @@ export async function publishDesignResult({
       commitSha,
       ciRunUrl,
       producedByKey,
+      withinParentKey,
     }),
   });
   if (!registerRes.ok) {
@@ -457,6 +626,123 @@ export function buildPublishSet({ collected, noteResults = [] }) {
 }
 
 /**
+ * The PARENT-RUN answer to "which card produced this?" (MOTIR-3177): publish
+ * each asset to the child whose commit last touched it, and NEVER to the
+ * container.
+ *
+ * Called only after the container-addressed publish has already been refused,
+ * so the ordinary one-card path is untouched and MOTIR-3146's refusal still
+ * fires first. Its own refusals — a child that is itself a container, a commit
+ * naming a card outside the container — are reported by name and leave the run
+ * GREEN, because in every one of them the assets and the branch are correct and
+ * only the addressing is not.
+ *
+ * @param {{
+ *   containerKey: string,
+ *   assets: Array<{ kind: string, sourcePath: string, text?: string }>,
+ *   base: string,
+ *   publishOne: (args: object) => Promise<{ id: string }>,
+ *   log: { log: (message: string) => void },
+ *   attribute?: typeof attributeChangedPaths,
+ *   git?: (args: string[], cwd?: string) => string,
+ *   cwd?: string,
+ * }} args
+ * @returns {Promise<number>}
+ */
+export async function publishToProducingChildren({
+  containerKey,
+  assets,
+  base,
+  publishOne,
+  log,
+  attribute = attributeChangedPaths,
+  git = runGit,
+  cwd = process.cwd(),
+}) {
+  let byPath;
+  let coTouched;
+  try {
+    ({ byPath, coTouched } = attribute({ base, containerKey, git, cwd }));
+  } catch (err) {
+    // A shallow checkout has the two diff endpoints and none of the commits
+    // between them, so the walk is the one step that can fail on history the
+    // job never fetched. Say so — the alternative is a silent decline that
+    // reads exactly like "this container produced nothing".
+    log.log(
+      `Could not read ${base}..HEAD to attribute the assets (${err?.message ?? err}); ` +
+        `NOT publishing. ${assets.length} artifact(s) reach no card.`,
+    );
+    return 0;
+  }
+
+  const { byCard, unattributed } = partitionAssetsByCard({ assets, byPath });
+
+  if (byCard.length === 0) {
+    // The same exit as before MOTIR-3177, and the one AC3 pins: a container
+    // whose branch carries no child's design work publishes nothing, to nobody.
+    log.log(
+      `${containerKey} is a CONTAINER and no commit on this branch claims these assets — ` +
+        `NOT publishing. Would have published: ${assets
+          .map((a) => `${a.kind}:${a.sourcePath}`)
+          .join(', ')}`,
+    );
+    return 0;
+  }
+
+  log.log(
+    `${containerKey} is a CONTAINER: addressing ${assets.length} artifact(s) to the ` +
+      `${byCard.length} child card(s) whose commits produced them.`,
+  );
+  for (const [filePath, keys] of coTouched) {
+    log.log(
+      `${filePath} was also touched by ${keys.join(', ')}; published to ` +
+        `${byPath.get(filePath)}, the last commit to change it.`,
+    );
+  }
+  if (unattributed.length > 0) {
+    log.log(
+      `${unattributed.length} path(s) reach NO card — no commit on this branch names one: ` +
+        `${unattributed.join(', ')}`,
+    );
+  }
+
+  for (const card of byCard) {
+    try {
+      const evidence = await publishOne({
+        targetKey: card.key,
+        assets: card.assets,
+        noteMd: card.noteMd,
+        producedByKey: card.key,
+        withinParentKey: containerKey,
+      });
+      log.log(
+        `Published ${card.assets.length} design artifact(s) to ${card.key} ` +
+          `(target from parent-run commit attribution); evidence ${evidence.id}.`,
+      );
+    } catch (err) {
+      if (err instanceof NotALeafError) {
+        log.log(
+          `${card.key} is itself a CONTAINER — NOT publishing its ${card.assets.length} ` +
+            `artifact(s): ${card.assets.map((a) => a.sourcePath).join(', ')}`,
+        );
+        continue;
+      }
+      if (err instanceof NotAChildError) {
+        log.log(
+          `${card.key} is not a child of ${containerKey} — a mistyped commit key. NOT ` +
+            `publishing its ${card.assets.length} artifact(s): ` +
+            `${card.assets.map((a) => a.sourcePath).join(', ')}`,
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return 0;
+}
+
+/**
  * @param {Record<string, string | undefined>} [env]
  * @param {{ log: (message: string) => void }} [log]
  * @param {Record<string, any>} [deps]
@@ -469,6 +755,7 @@ export async function main(env = process.env, log = console, deps = {}) {
     resolveBase = resolveDiffBase,
     requestOidc = requestGithubOidcToken,
     publish = publishDesignResult,
+    attribute = attributeChangedPaths,
   } = deps;
   const baseSha = (env['DESIGN_BASE_SHA'] ?? '').trim();
   if (!baseSha) {
@@ -541,32 +828,35 @@ export async function main(env = process.env, log = console, deps = {}) {
   }
 
   const baseUrl = (env['MOTIR_BASE_URL'] ?? 'https://app.motir.co').replace(/\/$/, '');
+  const common = {
+    baseUrl,
+    headers: authHeadersFor(oidcToken, patToken),
+    commitSha: env['GITHUB_SHA'] ?? null,
+    ciRunUrl:
+      env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
+        ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
+        : null,
+  };
   let evidence;
   try {
-    evidence = await publish({
-      baseUrl,
-      targetKey,
-      assets,
-      noteMd,
-      headers: authHeadersFor(oidcToken, patToken),
-      commitSha: env['GITHUB_SHA'] ?? null,
-      ciRunUrl:
-        env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID']
-          ? `${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}`
-          : null,
-      producedByKey: targetKey,
-    });
+    evidence = await publish({ ...common, targetKey, assets, noteMd, producedByKey: targetKey });
   } catch (err) {
     if (!(err instanceof NotALeafError)) throw err;
     // See NotALeafError: a container-addressed result is a publish that must not
-    // happen, which is the same exit as an unresolvable target — reported, not red.
-    log.log(
-      `${targetKey} is a CONTAINER, not the card that produced these assets — NOT publishing. ` +
-        `The design child's own pull request is what publishes them. Would have published: ${assets
-          .map((a) => `${a.kind}:${a.sourcePath}`)
-          .join(', ')}`,
-    );
-    return 0;
+    // happen. Before MOTIR-3177 that was the end of it, on the assumption that
+    // "the design child's own pull request" would publish them — which is true of
+    // a subtask run and false of the PARENT run this branch actually is, where a
+    // design child ships as a COMMIT and has no pull request of its own. So the
+    // container is not the answer and never becomes one; the answer is per asset.
+    return await publishToProducingChildren({
+      containerKey: targetKey,
+      assets,
+      base: diffBase,
+      publishOne: (args) => publish({ ...common, noteMd: null, ...args }),
+      log,
+      attribute,
+      cwd: process.cwd(),
+    });
   }
 
   log.log(

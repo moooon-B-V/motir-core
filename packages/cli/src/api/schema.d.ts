@@ -738,7 +738,7 @@ export interface paths {
          * Approve the plan this work item produced
          * @description APPROVE the plan a work item’s own re-plan produced, without a browser session — the entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an `add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ IT IS ADDRESSED BY THE CARD, and that is the bound: the server resolves the plan from the planning conversation ANCHORED at this key, so there is no way to name a plan the card did not produce. Every other plan — a cadence plan, an onboarding generation, one submitted from the project-wide panel — is refused here and keeps the human decision it was written under. It calls the same service the in-app approve does, so the confirmation gate, the re-validation and the one-shot concurrency guard are identical; a plan that has already been approved or declined answers 409, exactly as it does in the app.
          *
-         *     Requires the `ai:view_plan` permission.
+         *     Requires the `ai:decide_plan` permission.
          */
         post: operations["approveWorkItemPlan"];
         delete?: never;

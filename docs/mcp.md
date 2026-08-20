@@ -1633,11 +1633,11 @@ asserts, even though no work item is created here.
 
 Append a batch of proposals, and optionally close the plan.
 
-| Input       | Type    | Required | Notes                                                                  |
-| ----------- | ------- | -------- | ---------------------------------------------------------------------- |
-| `planId`    | string  | yes      | The id `create_plan` returned.                                         |
-| `proposals` | array   | yes      | One or more proposals; see the shape below.                            |
-| `final`     | boolean | no       | `true` on the LAST batch — closes the plan (`generating` → `planned`). |
+| Input       | Type    | Required | Notes                                                                                     |
+| ----------- | ------- | -------- | ----------------------------------------------------------------------------------------- |
+| `planId`    | string  | yes      | The id `create_plan` returned.                                                            |
+| `proposals` | array   | yes      | The batch to append; see the shape below. **May be empty — but only with `final: true`.** |
+| `final`     | boolean | no       | `true` on the LAST batch — closes the plan (`generating` → `planned`).                    |
 
 Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blockedByRefs?, baseRevision? }`
 — the same shape `get_plan` returns, minus the fields the server owns:
@@ -1682,6 +1682,23 @@ queue. **Appending to a plan that has already been closed is refused** —
 plan row is locked for the append, so two concurrent callers serialize rather
 than interleaving into each other's `planItemIds`.
 
+**A pass with nothing left to append closes with an EMPTY batch:**
+
+```jsonc
+add_plan_items({ planId, proposals: [], final: true });
+```
+
+That is the normal ending for a **titles-first** author (`update_plan_item`
+below): the skeleton batches carried the structure and the deepen turns wrote the
+cards, so by the close there is no proposal left to ride the flag. An empty batch
+appends nothing, keeps every proposal the plan already holds, and moves it to
+`planned`.
+
+**An empty batch WITHOUT `final` is refused** — `INVALID_PROPOSAL`, naming what
+the call would have done. It would append nothing and leave the plan
+`generating`, which is a forgotten flag or a batch built from a list that turned
+out to be empty; answering it with a silent success would hide both.
+
 You do **not** set planning provenance on a proposal: `add_plan_items` stamps
 each `add` from the plan's own authorship, so the plan and the items it creates
 can never disagree about who wrote them.
@@ -1697,7 +1714,8 @@ author a plan end to end.
 
 Errors: an unknown / other-tenant `projectKey` or `planId` returns
 `PROJECT_NOT_FOUND` / `PLAN_NOT_FOUND` (404-not-403, no existence leak); a
-malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
+malformed proposal — or an EMPTY `proposals` array sent without `final: true` —
+returns `INVALID_PROPOSAL`; an append after `final` returns
 `PLAN_NOT_GENERATING`; a second `modify`/`remove` for a target the plan already
 proposes against returns `DUPLICATE_PLAN_TARGET` (below); and an ORM failure
 inside the append is contained as `PLAN_PERSISTENCE_FAILED`, never surfaced as
@@ -1762,8 +1780,8 @@ update_plan_item({ planId, planItemId: "ck_subtask",
   type: "code", executor: "coding_agent", priority: "high",
   storyPoints: 3, estimateMinutes: 45 })
 
-// 3 — CLOSE, and the deepened bodies go into the review queue with the tree
-add_plan_items({ planId, final: true, proposals: [ … ] })
+// 3 — CLOSE. Nothing is left to append, so the batch is empty.
+add_plan_items({ planId, proposals: [], final: true })
 ```
 
 **Set `executor` whenever you set `type`.** Approving a plan does **not** derive

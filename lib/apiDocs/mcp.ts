@@ -522,15 +522,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '7c51786d65d6',
   },
   add_plan_items: {
-    // Re-pinned for MOTIR-3194, summary UNCHANGED and deliberately so: the tool
-    // gained a paragraph about the ONE-PROPOSAL-PER-TARGET rule and how to work
-    // with it, which is a refusal a caller meets rather than a reason to pick
-    // this tool off the list. The reader choosing between tools still wants the
-    // line below; the agent that has already chosen reads the description.
+    // The SUMMARY is MOTIR-3193's and stays exactly as that story wrote it: the
+    // empty-final-batch close is a CAPABILITY, which is the kind of thing a
+    // reader picks a tool off this line for. MOTIR-3194 then re-pinned the
+    // fingerprint WITHOUT touching it, because what that card added to the
+    // description is the ONE-PROPOSAL-PER-TARGET rule — a refusal a caller meets
+    // after it has already chosen this tool, and read from the description.
     summary:
-      'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
+      'Append proposals to a plan — or close it with an empty final batch; ids come back in order, so the next batch can hang children off them.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '34deed9ed223',
+    descriptionFingerprint: 'ae3fc99f33f6',
   },
   update_plan_item: {
     summary:

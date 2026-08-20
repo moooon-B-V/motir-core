@@ -422,6 +422,21 @@ jobs:
           # is not, rather than paying `fetch-depth: 0` on every run.
           git cat-file -e "${DESIGN_BASE_SHA}^{commit}" 2>/dev/null ||
             git fetch --depth=1 origin "${DESIGN_BASE_SHA}"
+          # ⚠️ A PARENT-RUN pull request needs the COMMITS BETWEEN those two
+          # endpoints, not just the endpoints (MOTIR-3177). Its branch names the
+          # container, so the publisher addresses each asset to the child whose
+          # commit produced it — and a depth-1 checkout has the diff and none of
+          # the commits that explain it. Deepen only the branch prefixes that can
+          # carry a container key, so every ordinary subtask PR still pays
+          # nothing. `|| true`: a failed deepen leaves the publisher to report
+          # the assets as unattributable, which is the right outcome and not a
+          # reason to red-light a build over a fetch.
+          case "${DESIGN_PR_REF}" in
+            parent/*|story/*)
+              git fetch --depth=200 origin \
+                "+refs/heads/${DESIGN_PR_REF}:refs/remotes/origin/${DESIGN_PR_REF}" || true
+              ;;
+          esac
           node scripts/upload-design-assets.mjs
 
   build:

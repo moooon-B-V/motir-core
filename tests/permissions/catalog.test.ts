@@ -239,6 +239,17 @@ const MEMBER_FACING_ENFORCED: PermissionKey[] = [
   'ai:plan',
 ];
 
+/**
+ * The key MOTIR-3188 split out of `ai:view_plan`. A THIRD list rather than an
+ * append to either of the two above, and for the reason `MEMBER_FACING_ENFORCED`
+ * gives for not being folded into `ADMINISTRATIVE_ENFORCED`: membership of a list
+ * here is evidence about the STORY that wired the key, and `ai:decide_plan` was
+ * wired by neither MOTIR-2256 nor MOTIR-2291. It arrives `enforced` because the
+ * gate and the key land in the same change — there was never a moment where the
+ * catalog advertised it and `plansService` did not assert it.
+ */
+const PLAN_DECISION_ENFORCED: PermissionKey[] = ['ai:decide_plan'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -294,8 +305,15 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => MEMBER_FACING_ENFORCED.includes(k)).sort()).toEqual(
       [...MEMBER_FACING_ENFORCED].sort(),
     );
+    // …and MOTIR-3188's plan-DECISION key, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => PLAN_DECISION_ENFORCED.includes(k)).sort()).toEqual(
+      [...PLAN_DECISION_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
-      shipped.length + ADMINISTRATIVE_ENFORCED.length + MEMBER_FACING_ENFORCED.length,
+      shipped.length +
+        ADMINISTRATIVE_ENFORCED.length +
+        MEMBER_FACING_ENFORCED.length +
+        PLAN_DECISION_ENFORCED.length,
     );
   });
 

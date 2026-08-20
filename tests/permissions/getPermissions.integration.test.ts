@@ -176,6 +176,11 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       ...MEMBER_FACING_AT_MEMBER(),
+      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
+      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
+      // is MOTIR-2291's six, and folding a later key in would make membership
+      // of it stop meaning anything.
+      'ai:decide_plan',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -193,6 +198,11 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       ...MEMBER_FACING_AT_MEMBER(),
+      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
+      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
+      // is MOTIR-2291's six, and folding a later key in would make membership
+      // of it stop meaning anything.
+      'ai:decide_plan',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -208,6 +218,11 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       ...MEMBER_FACING_AT_MEMBER(),
+      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
+      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
+      // is MOTIR-2291's six, and folding a later key in would make membership
+      // of it stop meaning anything.
+      'ai:decide_plan',
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -229,6 +244,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       ...MEMBER_FACING_AT_MEMBER(),
+      // MOTIR-3188 — see the note on the `open` row above.
+      'ai:decide_plan',
       ...PUBLIC_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
@@ -338,7 +355,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 
     // The sets the grid will render, spelled out so a silent widening fails here.
     // MOTIR-2349 widened two of them ON PURPOSE — a viewer gains `report:view`,
-    // a member gains six — and those are the only additions this assertion admits.
+    // a member gains six — and MOTIR-3188 widened `member` by one more, also on
+    // purpose: `ai:decide_plan`, split out of `ai:view_plan`, lands exactly where
+    // the key it was cut from already sat. Those are the only additions this
+    // assertion admits.
     expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
       ['project:browse', 'report:view'].sort(),
     );
@@ -349,6 +369,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
         'comment:add',
         'attachment:create',
         ...MEMBER_FACING_AT_MEMBER(),
+        'ai:decide_plan',
       ].sort(),
     );
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed

@@ -39,7 +39,7 @@ import { truncateAuthTables } from '../../helpers/db';
 //     submitted from the project-wide panel — keeps the human decision it was
 //     written under, because none of them is reachable from a card's key.
 //   • NO SECOND IMPLEMENTATION. The one-shot guard, the confirmation gate and
-//     the `ai:view_plan` assertion are the shipped service's; a 409 on a second
+//     the `ai:decide_plan` assertion are the shipped service's; a 409 on a second
 //     approve is the SAME 409 the in-app route answers.
 //   • NO EXISTENCE LEAK. Another tenant's plan and an invented id are one answer.
 //   • A DISPATCHED AGENT CANNOT REACH IT. `CLI_TOKEN_GRANT` omits the key, and
@@ -48,8 +48,23 @@ import { truncateAuthTables } from '../../helpers/db';
 
 const BASE = 'http://localhost:3000/api/v1';
 
-/** The permission set an OPERATOR driving `motir auto` holds. */
-const OPERATOR = ['project:browse', 'work_item:edit', 'ai:plan', 'ai:view_plan'] as const;
+/**
+ * The permission set an OPERATOR driving `motir auto` holds.
+ *
+ * ⚠️ `ai:decide_plan` SINCE MOTIR-3188, and the change is the whole point of
+ * that card. This read `ai:view_plan`, which gated no view and held two
+ * authorities at once — authoring a plan and DECIDING one. Approval moved to the
+ * decide half, so the operator needs it here; `ai:view_plan` stays in the set
+ * because the same operator's agent AUTHORS the plan this route then approves,
+ * and dropping it would test a narrower actor than the real one.
+ */
+const OPERATOR = [
+  'project:browse',
+  'work_item:edit',
+  'ai:plan',
+  'ai:view_plan',
+  'ai:decide_plan',
+] as const;
 
 function approve(caller: V1ProjectCaller, key: string): Promise<Response> {
   return APPROVE(
@@ -281,19 +296,27 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     expect((await plansService.getPlan(planId, theirs.ctx)).status).toBe('planned');
   });
 
-  it('403s a token without `ai:view_plan`', async () => {
+  it('403s a token without `ai:decide_plan` — INCLUDING one that holds `ai:view_plan`', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key, planId } = await refusedCardWithPlan(caller);
     // A SECOND token in the SAME project — the narrower grant, not a second
     // tenant, so the refusal is about the permission and nothing else.
+    //
+    // ⚠️ IT HOLDS `ai:view_plan` DELIBERATELY (MOTIR-3188). Before the split this
+    // grant WAS the approving grant, so a test that merely omitted the AI keys
+    // would pass just as happily under the old conflated model and prove nothing
+    // about the split. The narrower token here can author a plan and cannot
+    // decide one — which is exactly the separation the card exists to create.
     const reader = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
       projectId: caller.fixture.projectId,
-      permissions: ['project:browse', 'work_item:edit', 'ai:plan'],
+      permissions: ['project:browse', 'work_item:edit', 'ai:plan', 'ai:view_plan'],
     });
 
     const res = await approve({ ...caller, ...reader }, key);
 
     expect(res.status).toBe(403);
+    // The body names the key, so a client can say WHICH grant is missing.
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining('ai:decide_plan') });
     expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
   });
 
@@ -302,6 +325,10 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     // whose card was refused. Enforced by `CLI_TOKEN_GRANT` omitting the key —
     // asserted HERE, beside the route, so widening that constant fails a test
     // that says why rather than quietly opening this door.
+    expect(CLI_TOKEN_GRANT).not.toContain('ai:decide_plan');
+    // …and since MOTIR-3188 the bound is structural rather than one omission: no
+    // MCP tool asserts the decide key either, so widening this grant to the whole
+    // AUTHOR key would still not open this door.
     expect(CLI_TOKEN_GRANT).not.toContain('ai:view_plan');
 
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
@@ -321,7 +348,7 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     expect(op).toBeDefined();
     expect(op?.method).toBe('POST');
     expect(op?.path).toBe('/api/v1/work-items/{key}/plan-approval');
-    expect(op?.permission).toBe('ai:view_plan');
+    expect(op?.permission).toBe('ai:decide_plan');
     // The statuses it can actually answer, all of them exercised above.
     expect(op?.errorStatuses).toEqual(expect.arrayContaining([404, 409, 422]));
     // It takes NO request body: the card in the path is the whole address, which

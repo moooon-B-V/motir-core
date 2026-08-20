@@ -5,6 +5,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
@@ -77,10 +78,13 @@ beforeEach(async () => {
   agent = writeFakeAgent(ws.path('agent'));
 });
 
-async function mintToken(fx: WorkItemFixture): Promise<string> {
+async function mintToken(
+  fx: WorkItemFixture,
+  extra: readonly PermissionKey[] = [],
+): Promise<string> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: `cli-${randomToken(6)}`,
-    fixedGrant: grantForLegacyScopes([...TOKEN_SCOPES]),
+    fixedGrant: [...new Set([...grantForLegacyScopes([...TOKEN_SCOPES]), ...extra])],
   });
   return token;
 }
@@ -88,16 +92,34 @@ async function mintToken(fx: WorkItemFixture): Promise<string> {
 /** A linked project, plus the env a dispatched agent needs to act as itself. */
 async function linkedProject(): Promise<{ fx: WorkItemFixture; agentEnv: Record<string, string> }> {
   const fx = await makeWorkItemFixture();
-  const token = await mintToken(fx);
-  expect((await ws.run(['auth', 'login', '--server', server.url, '--token', token])).exitCode).toBe(
-    0,
-  );
+
+  // ⚠️ TWO TOKENS SINCE MOTIR-3188, AND THE SPLIT IS THE DESIGN RATHER THAN A
+  // FIXTURE DETAIL. Both used to be one token minted from the six legacy scopes,
+  // which was fine while `ai:view_plan` gated approval — `work_items:write`
+  // expands to it, so the one credential could do everything. It no longer can,
+  // and it should not: `ai:decide_plan` gates approval now, no legacy scope
+  // confers it, and the OPERATOR approving while the AGENT never can is the
+  // sharpest bound in the whole findings protocol
+  // (`docs/decisions/run-findings-protocol.md` Q2).
+  //
+  // So the OPERATOR's credential — the one `motir auto --auto-approve-replan`
+  // drives — carries the decide key, exactly as a real operator's does
+  // (`DEFAULT_TOKEN_GRANT` is derived from the grantable set at mint, and that
+  // set now includes it). The AGENT's is unchanged: legacy scopes only, so it
+  // still files bugs and submits re-plans and is REFUSED on approve. Handing the
+  // agent the operator's token would have made this suite pass while asserting
+  // the opposite of what the design promises.
+  const operatorToken = await mintToken(fx, ['ai:decide_plan']);
+  const agentToken = await mintToken(fx);
+  expect(
+    (await ws.run(['auth', 'login', '--server', server.url, '--token', operatorToken])).exitCode,
+  ).toBe(0);
   expect((await ws.run(['link', '--project', fx.projectIdentifier])).exitCode).toBe(0);
   // The agent gets its OWN credential, exactly as a sandboxed one does — it is
   // not reading the CLI's config.
   return {
     fx,
-    agentEnv: { MOTIR_FAKE_AGENT_SERVER: server.url, MOTIR_FAKE_AGENT_TOKEN: token },
+    agentEnv: { MOTIR_FAKE_AGENT_SERVER: server.url, MOTIR_FAKE_AGENT_TOKEN: agentToken },
   };
 }
 

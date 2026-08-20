@@ -68,7 +68,7 @@ export const V1_OPERATIONS = {
   "approveWorkItemPlan": {
     method: "POST",
     path: "/api/v1/work-items/{key}/plan-approval",
-    permission: "ai:view_plan",
+    permission: "ai:decide_plan",
     successStatus: 200,
     responseComponent: "Plan",
   },

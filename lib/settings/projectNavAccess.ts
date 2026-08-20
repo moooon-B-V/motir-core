@@ -95,7 +95,12 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
   {
     href: '/plans',
     requires: 'ai:view_plan',
-    evidence: '`plansService` asserts `ai:view_plan` — the only key it asserts.',
+    evidence:
+      '`plansService` asserts `ai:view_plan` on its AUTHOR writes and `ai:decide_plan` on ' +
+      'approve / decline (MOTIR-3188 split the two); the plan READ itself is `canBrowse`. ' +
+      'The row keeps `ai:view_plan` deliberately: both keys resolve to exactly the same ' +
+      'actors under every built-in role, so the offer is unchanged, and it is the WIDER of ' +
+      'the two — a custom role that can author but not decide still has a plans page to use.',
   },
   {
     href: '/backlog',

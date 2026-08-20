@@ -1453,14 +1453,31 @@ async function editAddProposal(
     planRepository.findById(planId, ctx.workspaceId, tx),
   );
   if (!plan) throw new PlanNotFoundError(planId);
-  // `ai:view_plan` (Story MOTIR-2291 · Subtask MOTIR-2363). ⚠️ THE NAME IS THE
-  // MISLEADING PART: this key governs reading a generated plan AND acting on it,
-  // because they are the same surface and a reviewer who may not act has nothing
-  // to review for. Approving MATERIALIZES work items, so it is a write key
-  // wearing a read's name — which is why the decision record puts it at `member`
-  // rather than at browse, and why every method that writes to a PLAN row asks it,
-  // not just the two the routes call. The project comes from the PLAN row, never
-  // from the actor's active project.
+  // `ai:view_plan` (Story MOTIR-2291 · Subtask MOTIR-2363; SPLIT by MOTIR-3188).
+  //
+  // ⚠️ THE KEY GATES THE AUTHOR WRITES, AND IT GATES NO VIEW. Reading a plan is
+  // `canBrowse` and always was — `planReviewService.getPlanReview` says so in its
+  // own doc comment, and the v1 plan routes and the `get_plan` / `get_plan_status`
+  // MCP rows all declare `project:browse`. What this key governs is WRITING to a
+  // plan row without deciding it: `addProposals`, `markPlanned`, and this
+  // function's two callers. The two DECISIONS — `approvePlan`, which materializes
+  // the proposed subtree into work items, and `declinePlan` — assert
+  // `ai:decide_plan` instead.
+  //
+  // ⚠️ WHAT THIS COMMENT USED TO ARGUE, AND WHY IT NO LONGER DOES. It read: "this
+  // key governs reading a generated plan AND acting on it, because they are the
+  // same surface and a reviewer who may not act has nothing to review for" — a
+  // write key wearing a read's name. That was sound under three built-in roles
+  // (`member` held it, `viewer` did not, so nobody could see a plan without being
+  // able to approve one). MOTIR-2257's CUSTOM roles grant exactly what an admin
+  // ticks off a grid, which turned the misleading name into a privilege
+  // escalation; and MOTIR-2984/-2988 gave the surface a machine author, which is
+  // the reviewer-who-may-not-act the old sentence said could not exist. The name
+  // is still wrong — `ai:author_plan` is the honest one — and renaming it is a
+  // migration over a persisted `role_definition.permissions` value, deliberately
+  // left to its own card (`docs/decisions/agent-authored-plans.md` AMENDMENT 5).
+  //
+  // The project comes from the PLAN row, never from the actor's active project.
   await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
   const { row, items } = await withWorkspaceContext(
@@ -1647,7 +1664,15 @@ export const plansService = {
           // append holds — so a second call cannot observe a stale set. Grown
           // in-loop as well, because a duplicate inside ONE batch never reaches
           // the database to be caught by anything.
-          const claimed = claimedTargets(await planItemRepository.findByPlan(planId, tx));
+          //
+          // Skipped entirely when the batch targets nothing existing, which is
+          // the common shape: a skeleton layer is all `add`s, and MOTIR-3193's
+          // CLOSE sends no proposals at all. Neither can collide with anything,
+          // so neither pays for the read.
+          const targetsExisting = proposals.some((p) => p.op !== 'add' && p.workItemId);
+          const claimed = targetsExisting
+            ? claimedTargets(await planItemRepository.findByPlan(planId, tx))
+            : new Map<string, PlanTargetOp>();
 
           for (const p of proposals) {
             if (p.op !== 'add' && p.workItemId) {
@@ -1964,7 +1989,13 @@ export const plansService = {
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+    // `ai:decide_plan` (MOTIR-3188) — the DECIDE half, split out of
+    // `ai:view_plan`. This is the only path from a proposal to a row and it can
+    // create a whole subtree at once, so it is gated by the key whose name says
+    // so rather than by the one whose name says "can look at a plan". Behaviour
+    // is unchanged for every built-in role: both keys sit at `admin` and
+    // `member` and at neither `viewer` nor the implicit workspace-member grant.
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:decide_plan');
 
     // The project's TERMINAL statuses — every `category = 'done'` key, never a
     // hardcoded `'done'`, so `cancelled` is terminal too. Workflow statuses are
@@ -2241,7 +2272,11 @@ export const plansService = {
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+    // `ai:decide_plan` (MOTIR-3188) — declining ENDS a plan, which is a decision
+    // about somebody's tree even though it writes no work item. It travels with
+    // approve rather than with the author writes for that reason: the pair is
+    // "who decides", not "who writes to a plan row".
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:decide_plan');
 
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },

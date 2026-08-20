@@ -287,6 +287,138 @@ describe('add_plan_items — the append-order temp-ref contract', () => {
   });
 });
 
+describe('add_plan_items — CLOSING a titles-first plan (MOTIR-3193)', () => {
+  // The two-phase authoring path `update_plan_item` shipped (MOTIR-3088) ends
+  // with nothing left to append: the SKELETON batches carried the structure and
+  // the DEEPEN turns wrote the cards, so the CLOSE has no proposal to ride on.
+  // `proposals` used to be `.min(1)`, so the only legal closes were to hold one
+  // card back out of the deepen phase or to invent a proposal nobody meant —
+  // and a pass that did neither left its plan `generating`, where (MOTIR-3189)
+  // nothing can decide it. The internal producer seam has always allowed this
+  // shape (`aiGenerationService.appendProposals` skips the append when the batch
+  // is empty and still calls `markPlanned`); this is the MCP door catching up.
+
+  it('closes a plan with an EMPTY final batch, keeping every proposal the deepen phase wrote', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    // Phase 1 — SKELETON: structure only, no `final`.
+    const skeleton = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'add', proposedFields: { title: 'Invoices', kind: 'story' } },
+        { op: 'add', proposedFields: { title: 'Invoice PDF', kind: 'subtask' } },
+      ],
+    });
+    const [, pdfId] = ids(skeleton);
+
+    // Phase 2 — DEEPEN: one patch per card, still `generating`.
+    await call(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
+      planId,
+      planItemId: pdfId,
+      descriptionMd: 'Render the invoice as a PDF.',
+      storyPoints: 3,
+    });
+
+    // Phase 3 — CLOSE: nothing left to append.
+    const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [],
+      final: true,
+    });
+    expect(closed.isError, text(closed)).toBeFalsy();
+    expect(struct(closed).status).toBe('planned');
+    expect(struct(closed).itemCount).toBe(2);
+    expect(ids(closed)).toEqual([]);
+
+    // The close APPENDED nothing and DESTROYED nothing: the deepened body is
+    // still there, read back through the plan rather than off the write.
+    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
+    expect(read.items).toHaveLength(2);
+    const pdf = read.items.find((i) => i.id === pdfId);
+    expect(pdf!.proposedFields!.descriptionMd).toBe('Render the invoice as a PDF.');
+
+    // …and it is CLOSED, by the same rule a non-empty final batch closes it.
+    const late = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'add', proposedFields: { title: 'Too late' } }],
+    });
+    expect(late.isError).toBe(true);
+    await client.close();
+  });
+
+  it('REFUSES an empty batch that is not final, and changes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'add', proposedFields: { title: 'Only' } }],
+    });
+
+    const noop = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [] });
+
+    expect(noop.isError).toBe(true);
+    // The message says what the call WOULD have done — an empty non-final
+    // append is a caller mistake (a forgotten `final`, a batch built from an
+    // empty list), and answering it with a silent success would hide it.
+    expect(text(noop)).toContain('final: true');
+
+    // A refusal is a refusal: still `generating`, still holding its one proposal.
+    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
+    expect(read.status).toBe('generating');
+    expect(read.items).toHaveLength(1);
+    await client.close();
+  });
+
+  it('closes a plan holding NO proposals at all — the reviewer gets an empty plan to decline', async () => {
+    // MOTIR-3193 AC 3 leaves this behaviour AS IT IS rather than deciding it:
+    // `markPlanned` has never counted proposals, and a `planned` plan — empty or
+    // not — is one `declinePlan` accepts. MOTIR-3189, which settles the discard
+    // path out of `generating`, is where the question belongs; closing an empty
+    // plan is the outcome it does NOT strand.
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [],
+      final: true,
+    });
+    expect(closed.isError, text(closed)).toBeFalsy();
+    expect(struct(closed).status).toBe('planned');
+    expect(struct(closed).itemCount).toBe(0);
+    await client.close();
+  });
+
+  it('tells the caller it CLOSED the plan rather than reporting an append of nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'add', proposedFields: { title: 'A card' } }],
+    });
+
+    const closed = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [],
+      final: true,
+    });
+
+    // The human-readable half is the only thing a watching operator reads, and
+    // "Appended 0 proposal(s)" followed by an empty id list describes the call
+    // rather than what happened to the plan.
+    const summary = text(closed);
+    expect(summary).toContain('Closed plan');
+    expect(summary).not.toContain('Appended 0');
+    expect(summary).toContain('review queue');
+    await client.close();
+  });
+});
+
 describe('add_plan_items — the `modify` patch schema (MOTIR-3111)', () => {
   it('carries `explanationMd` through to the stored patch — the WHY the REPLAN ACTION rewrites', async () => {
     const fx = await makeWorkItemFixture();
