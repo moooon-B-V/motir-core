@@ -398,6 +398,10 @@
         --el-sidebar-item-bg-hover: #222222;
         --el-overlay-scrim: #000000a6;
       }
+      /* ── Recipe knobs — theme.css :root (MOTIR-3207) ── */
+      :root {
+        --orb-lit-mix: 26%;
+      }
 
       * {
         box-sizing: border-box;
@@ -716,7 +720,14 @@
         line-height: 1;
         background-image: radial-gradient(
           circle at 33% 27%,
-          color-mix(in srgb, var(--el-accent-text) 32%, var(--el-accent)),
+          /* The first stop's mix is `--orb-lit-mix`, read from the token layer
+             above — NOT a percentage typed here. It is the orb's contrast knob
+             (MOTIR-3207): the stop is the gradient's lightest point and the
+             white glyph sits over it, so a second copy of the number is a
+             second place for the mark to go illegible. Panel 9 records the
+             measurements; `tests/theme/orb-glyph-contrast.test.ts` fails if
+             either this rule or `PlanWithAIFab` inlines one. */
+          color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
           var(--el-accent) 56%,
           color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
         );
@@ -2426,11 +2437,21 @@
             <tr>
               <td>
                 <b>gradient&rsquo;s LIGHTEST point</b><br />(<code
-                  >color-mix(--el-accent-text 32%, --el-accent)</code
+                  >color-mix(--el-accent-text var(--orb-lit-mix), --el-accent)</code
                 >, at 33%/27%)
               </td>
-              <td><code>#8c81e2</code> &mdash; <b>3.32:1</b> passes</td>
-              <td><code>#9b90e8</code> &mdash; <b>2.78:1 FAILS</b></td>
+              <td><code>#8275df</code> &mdash; <b>3.77:1</b> passes</td>
+              <td><code>#9286e6</code> &mdash; <b>3.09:1</b> passes</td>
+            </tr>
+            <tr>
+              <td>
+                <i>the same stop as it SHIPPED before MOTIR-3207</i><br />(<code
+                  >--orb-lit-mix</code
+                >
+                was a literal <code>32%</code>)
+              </td>
+              <td><code>#8c81e2</code> &mdash; 3.32:1</td>
+              <td><code>#9b90e8</code> &mdash; <b>2.78:1 FAILED</b></td>
             </tr>
             <tr>
               <td>assistant avatar (flat <code>--el-accent</code>)</td>
@@ -2439,20 +2460,32 @@
             </tr>
           </table>
           <p class="note">
-            <b
-              >⚠️ The dark-theme orb misses WCAG 1.4.11 (3:1 for a non-text graphic) at the
-              gradient&rsquo;s brightest point.</b
-            >
-            This is <b>pre-existing</b> and not caused by the swap &mdash; the mock
-            <code>M</code> is white on the same gradient and measures the same 2.78:1 &mdash; but
-            this is the work item that measured it, so it is recorded rather than inherited. It is a
-            real, if narrow, exposure: the highlight sits at 33%/27% of the orb and the glyph
-            overlaps it, so part of the mark sits under 3:1 in dark.
-            <b>The remedy is one number</b>: dropping the highlight mix from <b>32% to 26%</b> gives
-            <code>#9286e6</code> at <b>3.09:1</b> and clears the bar with the gradient still visibly
-            lit. <b>This asset does not make that change</b> &mdash; the orb&rsquo;s fill is the
-            callout design&rsquo;s (MOTIR-1811, <code>done</code>) and changing it here would be
-            re-opening a shipped decision from a sibling card. Filed instead.
+            <b>✅ Fixed 2026-08-20 (MOTIR-3207) &mdash; the highlight mix is now 26%.</b> The
+            finding this asset recorded (the dark orb at <b>2.78:1</b>, under WCAG 1.4.11&rsquo;s
+            3:1 for a non-text graphic) was real: the highlight sits at 33%/27% and the centred
+            glyph overlaps it, so part of the mark sat under the bar. It was
+            <b>pre-existing</b> &mdash; the mock <code>M</code> was white on the same gradient and
+            measured the same &mdash; and it was filed rather than fixed here, because the
+            orb&rsquo;s fill belongs to MOTIR-1811.
+          </p>
+          <p class="note">
+            <b>The remedy was one number, but not the number this asset expected.</b> This sheet
+            recommended a <i>theme-aware</i> mix, reasoning that &ldquo;light has headroom at
+            32%&rdquo;. Measured across the whole shipped matrix &mdash; ten
+            <code>data-palette</code> values &times; both themes, resolved from the tokens rather
+            than from the default pair &mdash; that is a property of the <b>default palette</b>, not
+            of light: <b>four</b> of the twenty contexts failed at 32% &mdash; default dark
+            <b>2.78:1</b>, <code>cobalt</code> dark <b>2.86:1</b>, <code>spectrum</code> dark
+            <b>3.00:1</b> (2.999, under the bar) &mdash; and one of them (<code>evergreen</code> at
+            <b>2.94:1</b>) is a <b>LIGHT</b> one, which a <code>[data-theme='dark']</code> override
+            would have left broken. So the fix is <b>one global 26%</b>, held as
+            <code>--orb-lit-mix</code> in <code>packages/design-system/theme.css</code> and read
+            from there by both the shipped orb and this mock. Worst context after the change:
+            <b>3.09:1</b> (default dark); every one of the twenty clears 3:1. Mixing the
+            glyph&rsquo;s own colour into its backdrop is monotonic, so the knob is a CEILING
+            &mdash; raising it is the only direction that can break the bar, and
+            <code>tests/theme/orb-glyph-contrast.test.ts</code> re-measures every context on every
+            run.
           </p>
 
           <p class="sub">Themes</p>

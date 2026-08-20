@@ -485,13 +485,29 @@ both always-present, and both restyle with the active design style (sheet 5);
   > `BrandMark` `variant="mark"` rather than inlining an `<svg>`.
   >
   > **⚠️ And a finding, recorded not inherited.** Measured against the orb's own
-  > gradient, white-on-accent clears 3:1 in light (**#8c81e2, 3.32:1** at the
-  > gradient's lightest point) and **misses it in dark (#9b90e8, 2.78:1** — WCAG
-  > 1.4.11 for a non-text graphic). This is **pre-existing** — the mock `M` is white
-  > on the same gradient and measures the same — but this is the pass that measured
-  > it. The remedy is one number: the highlight mix from **32% → 26%** gives
-  > `#9286e6` at 3.09:1. Not changed here: the orb's fill belongs to MOTIR-1811
-  > (`done`).
+  > gradient, white-on-accent cleared 3:1 in light (**#8c81e2, 3.32:1** at the
+  > gradient's lightest point) and **missed it in dark (#9b90e8, 2.78:1** — WCAG
+  > 1.4.11 for a non-text graphic). This was **pre-existing** — the mock `M` was
+  > white on the same gradient and measured the same — but this was the pass that
+  > measured it. Not changed here: the orb's fill belongs to MOTIR-1811 (`done`).
+  >
+  > **✅ Fixed 2026-08-20 (MOTIR-3207), and the remedy is one number — though not
+  > the one this note proposed.** The shipped values are now **#8275df, 3.77:1**
+  > light and **#9286e6, 3.09:1** dark. The note above recommended a _theme-aware_
+  > mix on the reasoning that light had headroom at 32%; re-measured across the
+  > whole shipped matrix — ten `data-palette` values × both themes, resolved from
+  > the tokens rather than from the default pair — that is a property of the
+  > **default palette**, not of light. **Four** of the twenty contexts failed at
+  > 32% (default dark 2.78:1, `cobalt` dark 2.86:1, `spectrum` dark 3.00:1 —
+  > 2.999, under the bar — and `evergreen` **light** at **2.94:1**), so a
+  > `[data-theme='dark']` override of the stop would have left a light orb below
+  > the bar. The fix is therefore **one global 26%**, expressed once as
+  > `--orb-lit-mix` in `packages/design-system/theme.css` and read from there by
+  > both `PlanWithAIFab` and `ai-callout-menu.mock.html` panel 9. Worst context
+  > after the change: **3.09:1**; all twenty clear 3:1. Because mixing the glyph's
+  > own colour into its backdrop is monotonic, the knob is a **ceiling** — only
+  > raising it can break the bar — and `tests/theme/orb-glyph-contrast.test.ts`
+  > re-derives every context from the tokens on every run.
 
 **⚠️ The hero control is STYLE-AWARE — special in every design style (sheet 5).**
 It is not a fixed gradient: each `data-style` gives the "Plan with AI" control a

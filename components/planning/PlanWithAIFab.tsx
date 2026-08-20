@@ -62,9 +62,21 @@ export interface PlanWithAIFabProps {
 
 // The orb fill (a lit sphere — lighter top-left, accent body, a violet-leaning
 // edge) + the pink+violet aura. All palette-derived.
+//
+// The FIRST stop is the gradient's lightest point by construction, it sits at
+// 33%/27% — well inside the centred glyph box — and the glyph is white
+// (`--el-accent-text`), so that stop is where the mark is closest to
+// disappearing. How much of the glyph's own colour is mixed into the fill there
+// is therefore a CONTRAST knob, not a decoration: it lives once, as
+// `--orb-lit-mix` in the design system's recipe-knob block, where the number is
+// documented with the twenty palette x theme measurements that chose it
+// (MOTIR-3207). Do not inline a percentage back into this string — the mock in
+// `design/ai-chat/ai-callout-menu.mock.html` reproduces this recipe and reads
+// the same token, and `tests/theme/orb-glyph-contrast.test.ts` fails if either
+// side grows its own copy.
 const ORB_STYLE: CSSProperties = {
   backgroundImage:
-    'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) 32%, var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
+    'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
   boxShadow: [
     'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent)',
     '0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent)',
