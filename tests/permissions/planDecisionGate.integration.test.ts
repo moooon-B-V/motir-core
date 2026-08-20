@@ -181,6 +181,51 @@ describe('a role holding ai:view_plan and NOT ai:decide_plan', () => {
     expect((await plansService.getPlan(plan.id, s.ownerCtx)).status).toBe('planned');
   });
 
+  it('is REFUSED on DISCARD too — the `generating` entry is the same decision (MOTIR-3189)', async () => {
+    // `declinePlan` gained a second legal from-status, and a second from-status
+    // is exactly where a permission check gets forgotten: the assertion sits
+    // once, above the transaction, and nothing about the new entry re-runs it if
+    // a later refactor splits the method. So the gate is asserted from
+    // `generating` as well — the plan is deliberately left un-`markPlanned`ed,
+    // which is the shape a crashed generation leaves.
+    const s = await buildScenario('discard');
+    const plan = await plansService.createPlan(s.projectId, { title: 'A feature' }, s.authorCtx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A task', kind: 'task' } }],
+      s.authorCtx,
+    );
+
+    await expect(plansService.declinePlan(plan.id, s.authorCtx)).rejects.toSatisfy(
+      (err: unknown) => err instanceof PermissionDeniedError && err.permission === 'ai:decide_plan',
+    );
+    // Still `generating`, and still holding its proposal — the refusal is a
+    // gate, not a failed write.
+    const after = await plansService.getPlan(plan.id, s.ownerCtx);
+    expect(after.status).toBe('generating');
+    expect(after.itemCount).toBe(1);
+  });
+
+  it('the project OWNER discards it — the pairing for the new entry', async () => {
+    // The other half, for the same reason the approve pairing exists: a test
+    // that only proved the refusal could not tell "the decide key is narrower"
+    // from "nobody can end a half-generated plan", and the second is the defect
+    // MOTIR-3189 was filed about.
+    const s = await buildScenario('owner-discard');
+    const plan = await plansService.createPlan(s.projectId, { title: 'A feature' }, s.authorCtx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A task', kind: 'task' } }],
+      s.authorCtx,
+    );
+
+    const discarded = await plansService.declinePlan(plan.id, s.ownerCtx);
+    expect(discarded.status).toBe('declined');
+    expect(discarded.decisionReason).toBe('discarded');
+    // Nothing materialized — a discard is not an approve.
+    expect(await adminDb.workItem.findFirst({ where: { title: 'A task' } })).toBeNull();
+  });
+
   it('the project OWNER still approves it — the pairing, so a refusal is not a broken feature', async () => {
     const s = await buildScenario('owner');
     const plan = await plansService.createPlan(s.projectId, { title: 'A feature' }, s.authorCtx);

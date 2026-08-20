@@ -942,7 +942,7 @@ describe('the work-loop payloads', () => {
     expect(planOutcomePayload.probes[0]!.select(built as never)).toEqual([outcome]);
   });
 
-  it('the plan keeps `decidedById` and the authorship triple, which v1 does not publish', () => {
+  it('the plan keeps `decidedById`, the authorship triple and the decision reason, which v1 does not publish', () => {
     const plan = presentMcpPlan({
       id: 'plan-1',
       projectId: 'proj-1',
@@ -963,6 +963,11 @@ describe('the work-loop payloads', () => {
       authorSource: 'mcp' as const,
       authorHarness: 'Claude Code',
       authorModel: 'claude-opus-5',
+      // WHY a `declined` plan ended (MOTIR-3189) — the same extension point,
+      // for the same reason: an authoring agent reads back what became of its
+      // plan, and v1's `planSchema` stays as wide as it is today. `discarded`
+      // rather than a null here so the enum arm is actually exercised.
+      decisionReason: 'discarded' as const,
       items: [{ id: 'p-1' }],
     } as never);
     expect(plan.decidedById).toBe('user-1');
@@ -970,6 +975,7 @@ describe('the work-loop payloads', () => {
     expect(plan.authorSource).toBe('mcp');
     expect(plan.authorHarness).toBe('Claude Code');
     expect(plan.authorModel).toBe('claude-opus-5');
+    expect(plan.decisionReason).toBe('discarded');
     expect(plan.itemCount).toBe(1);
     expect(plan.items).toHaveLength(1);
     expect(derived(planPayload, plan).id).toBe('plan-1');

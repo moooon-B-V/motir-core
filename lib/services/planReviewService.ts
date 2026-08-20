@@ -439,7 +439,18 @@ export const planReviewService = {
     const history: PlanHistoryEventDto[] = [{ kind: 'created', at: plan.createdAt }];
     if (plan.plannedAt) history.push({ kind: 'planned', at: plan.plannedAt });
     if (plan.status === 'approved' || plan.status === 'declined') {
-      history.push({ kind: plan.status, at: plan.decidedAt, byName: decidedByName });
+      // The EVENT kind, which for a `declined` plan is not the status
+      // (MOTIR-3189). One status covers three histories — a person rejected a
+      // finished plan, a person discarded one mid-generation, the sweep
+      // terminated a dead producer — and the timeline is where the difference
+      // has to be visible. `reviewed` and a null reason both land on `declined`:
+      // an unrecorded reason is the pre-column default, and inventing a more
+      // specific event for it would be a guess.
+      const kind =
+        plan.status === 'declined' && plan.decisionReason && plan.decisionReason !== 'reviewed'
+          ? plan.decisionReason
+          : plan.status;
+      history.push({ kind, at: plan.decidedAt, byName: decidedByName });
     }
 
     const staleCount = items.filter((i) => i.stale).length;
@@ -455,6 +466,9 @@ export const planReviewService = {
       plannedAt: plan.plannedAt,
       decidedAt: plan.decidedAt,
       decidedByName,
+      // WHY it ended (MOTIR-3189) — read by the outcome block, which otherwise
+      // tells somebody their half-generated plan was reviewed and rejected.
+      decisionReason: plan.decisionReason,
       // The three-party attribution the header renders (`design-notes.md`
       // Part III §6). `origin` separates *nobody asked* from a plan somebody
       // requested; the authorship triple now answers *who wrote it* on its own,

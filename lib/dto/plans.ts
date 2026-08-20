@@ -12,6 +12,46 @@ import type { SprintBlockerDto } from '@/lib/dto/sprints';
 /** Wire form of the Prisma `PlanStatus` enum. */
 export type PlanStatusDto = 'generating' | 'planned' | 'approved' | 'declined';
 
+/**
+ * WHY a `declined` plan ended (MOTIR-3189) — the three histories that one status
+ * covers, recorded rather than left to be inferred from which of `plannedAt` /
+ * `decidedById` happen to be null.
+ *
+ * `reviewed` — a person read a `planned` plan and rejected it.
+ * `discarded` — a person ended a `generating` plan that never finished.
+ * `abandoned` — `abandonedPlanService` terminated one whose producer was gone.
+ *
+ * Deliberately NOT a fourth `PlanStatusDto` member: that vocabulary is public
+ * (v1's `planStatusSchema`, the MCP tool descriptions, four display switches and
+ * the zh-parity gate) and every consumer of a plan's status is asking *is it
+ * decided?*, which `declined` already answers. See
+ * `docs/decisions/agent-authored-plans.md` AMENDMENT 6.
+ *
+ * `null` is not a fourth reason — it is *not recorded*, which is what every row
+ * written before the column existed reads, and what an `approved` plan reads
+ * always. A consumer falls back to the status.
+ */
+export type PlanDecisionReasonDto = 'reviewed' | 'discarded' | 'abandoned';
+
+/**
+ * The same vocabulary as a runtime list, for the schemas that need to enumerate
+ * it (`mcpPlanSchema`). The `AssertTotal` beside it is what stops the two
+ * drifting: adding a member to the union above without adding it here is a
+ * compile error, not a value an agent quietly never sees.
+ */
+export const PLAN_DECISION_REASONS = [
+  'reviewed',
+  'discarded',
+  'abandoned',
+] as const satisfies readonly PlanDecisionReasonDto[];
+type AssertTotalDecisionReason = [
+  Exclude<PlanDecisionReasonDto, (typeof PLAN_DECISION_REASONS)[number]>,
+] extends [never]
+  ? true
+  : never;
+const _planDecisionReasonTotal: AssertTotalDecisionReason = true;
+void _planDecisionReasonTotal;
+
 /** Wire form of the Prisma `PlanItemOp` enum. */
 export type PlanItemOpDto = 'add' | 'modify' | 'remove';
 
@@ -290,6 +330,13 @@ export interface PlanDto {
   plannedAt: string | null;
   decidedAt: string | null;
   decidedById: string | null;
+  /**
+   * WHY a `declined` plan ended (MOTIR-3189) — `reviewed`, `discarded` or
+   * `abandoned`. Null on every other status, and on a `declined` row written
+   * before the column existed, where it means *not recorded* rather than a
+   * fourth kind of ending. See {@link PlanDecisionReasonDto}.
+   */
+  decisionReason: PlanDecisionReasonDto | null;
 }
 
 /** A plan plus its bundled proposal items (the detail view). */

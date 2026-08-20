@@ -54,12 +54,15 @@ import type { JobStatus } from '@/lib/ai/types';
 //     left; motir-ai unreachable ⇒ left, because unreachable is not death;
 //   * the MAX AGE — the arm for a worker that died without marking its own job,
 //     which is the one failure the ASK cannot see;
-//   * AC 5 — a PARTIAL plan is never touched, at any age, in two independent
-//     ways (it is not selected, and it would be refused at the write);
+//   * the PARTIAL arm (MOTIR-3189) — a plan HOLDING proposals whose producer is
+//     provably gone is declined too, and its proposals survive the decline;
+//     the write's guard is now a COUNT MISMATCH, so a late append is still
+//     `row_moved` and a plan that was already partial at discovery is not;
 //   * AC 2 — cadence FIRES again for a project whose only undecided plan was
 //     abandoned, which is the whole point;
 //   * AC 1 + the terminal state — `declined`, with a NULL decider, because
-//     nobody decided it.
+//     nobody decided it, and `decisionReason: 'abandoned'` so the review surface
+//     can tell this ending from a plan somebody read and rejected (MOTIR-3189).
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
@@ -256,6 +259,12 @@ describe('the sweep — AC 1: a dead job’s plan stops reading as undecided', (
     // lives in the actor. `Plan.createdById` already means *nobody asked* when
     // null (the cadence case); this is the same convention one column over.
     expect(row.decidedById).toBeNull();
+    // And since MOTIR-3189 it is RECORDED as well as derivable. `declined`
+    // covers three histories; without this column the rail rendered a swept
+    // plan exactly like one a person read and rejected.
+    expect(row.decisionReason).toBe('abandoned');
+    // `plannedAt` is untouched — this plan's generation frontier never closed.
+    expect(row.plannedAt).toBeNull();
     // The failure is not lost — the producer is still on the row.
     expect(row.sourceJobId).toBe('job_dead');
   });
@@ -347,40 +356,38 @@ describe('the sweep — what it must NEVER touch', () => {
     expect(submitJob).toHaveBeenCalledTimes(1);
   });
 
-  it('AC 5: a PARTIAL plan is never terminated, however dead its job', async () => {
-    // A job that died AFTER some appends left a real proposal a person can read
-    // and decline. The release valve works there, so the reconciler must not.
+  it('a partial plan behind a LIVE job is left alone — the same arm that protects an empty one', async () => {
+    // MOTIR-3189 widened the scan onto PARTIAL plans; it did not widen what
+    // counts as evidence. A plan holding proposals whose producer is still
+    // working is `job_in_flight` exactly as an empty one is, and nothing about
+    // holding proposals makes it terminable while the job says otherwise.
     const { fx } = await makeDrainedProject();
-    const planId = await seedGeneratingPlan(fx, { items: 2, ageMs: 10 * HOUR });
-    jobIn('failed');
+    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    jobIn('running');
 
     const summary = await abandonedPlanService.reconcileAbandoned();
 
-    expect(summary).toEqual({ scanned: 0, declined: 0, outcomes: [] });
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'job_in_flight' });
     expect((await planRow(planId)).status).toBe('generating');
-    // And it still gates, which is the correct outcome for a plan somebody owes
-    // an answer on.
+    // And it still gates, which is the correct outcome for a live generation.
     await expect(
       autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx),
     ).resolves.toMatchObject({ id: planId });
   });
 
-  it('AC 5, the RLS half: the partial plan is invisible to the SCAN, not merely refused', async () => {
-    // The emptiness test is a correlated NOT EXISTS inside the discovery
-    // statement, which runs under `withSystemContext`. Without the
-    // `plan_item_system_read` arm this card adds, every proposal row is hidden,
-    // NOT EXISTS is vacuously true, and the PARTIAL plan is SELECTED — a blind
-    // spot that WIDENS the scan onto exactly the rows AC 5 protects. `scanned:
-    // 0` above is what proves the arm is doing its job; a `left_as_is` verdict
-    // would mean the guard caught it at the write instead, which is a different
-    // (and worse) system.
+  it('a partial plan inside the GRACE is not asked about either', async () => {
+    // The grace is a correctness bound about the submit→first-append window and
+    // it is unchanged by the widening. A young plan that has already taken its
+    // first append is exactly a healthy streaming generation.
     const { fx } = await makeDrainedProject();
-    await seedGeneratingPlan(fx, { items: 1 });
+    const planId = await seedGeneratingPlan(fx, { items: 1, ageMs: 60 * 1000 });
     jobIn('failed');
 
-    await abandonedPlanService.reconcileAbandoned();
+    const summary = await abandonedPlanService.reconcileAbandoned();
 
+    expect(summary).toEqual({ scanned: 0, declined: 0, outcomes: [] });
     expect(getJob).not.toHaveBeenCalled();
+    expect((await planRow(planId)).status).toBe('generating');
   });
 
   it('does not touch a plan with NO producer — that is MOTIR-3051’s half, at the gate', async () => {
@@ -481,6 +488,152 @@ describe('the sweep — what it must NEVER touch', () => {
 
     expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'row_moved' });
     expect((await planRow(planId)).status).toBe('generating');
+  });
+});
+
+describe('the sweep — the PARTIAL arm (MOTIR-3189)', () => {
+  // AMENDMENT 2 excluded a partial plan on the ground that it is "a real
+  // proposal a person can read and decline". Read, yes — decline, no: every
+  // decider refused anything but `planned`, so a plan whose producer died
+  // part-way through was stranded exactly as permanently as an empty one, and
+  // went on pausing that project's cadence. The exclusion protected a decision
+  // nobody could make. These lock the widening AND its two edges: what the
+  // producer said still decides, and the proposals still survive.
+  it('declines a PARTIAL plan whose producer is provably gone, and KEEPS its proposals', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, { items: 3, ageMs: 10 * HOUR });
+    jobIn('failed');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary).toMatchObject({ scanned: 1, declined: 1 });
+    expect(summary.outcomes[0]).toMatchObject({
+      planId,
+      outcome: 'declined',
+      reason: 'job_terminal',
+    });
+    const row = await planRow(planId);
+    expect(row.status).toBe('declined');
+    expect(row.decidedById).toBeNull();
+    expect(row.decisionReason).toBe('abandoned');
+    // ⚠️ NOTHING IS DELETED. This is the MOTIR-3154 / MOTIR-3160 rule applied to
+    // the sweep, and it matters MORE here than on a reviewed decline: a
+    // half-generated plan's proposals are the only surviving record of how far
+    // the producer actually got before it died.
+    await expect(adminDb.planItem.count({ where: { planId } })).resolves.toBe(3);
+  });
+
+  it.each(['succeeded', 'canceled'] as const)(
+    'declines a PARTIAL plan behind a %s job too — every terminal state is final',
+    async (status) => {
+      const { fx } = await makeDrainedProject();
+      const planId = await seedGeneratingPlan(fx, { items: 2 });
+      jobIn(status);
+
+      await abandonedPlanService.reconcileAbandoned();
+
+      expect((await planRow(planId)).decisionReason).toBe('abandoned');
+      await expect(adminDb.planItem.count({ where: { planId } })).resolves.toBe(2);
+    },
+  );
+
+  it('declines a PARTIAL plan on the MAX-AGE arm — the crashed worker that never marked its job', async () => {
+    // The failure the ASK cannot see, now reachable for a partial plan: the
+    // worker vanished mid-stream, so its row reads `running` for ever and the
+    // proposals it managed to append sit behind it.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, {
+      items: 4,
+      ageMs: (ABANDONED_PLAN_MAX_AGE_HOURS + 1) * HOUR,
+    });
+    jobIn('running');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'max_age' });
+    expect((await planRow(planId)).decisionReason).toBe('abandoned');
+    await expect(adminDb.planItem.count({ where: { planId } })).resolves.toBe(4);
+  });
+
+  it('an OUTAGE still terminates nothing, partial plan or not', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    vi.mocked(getJob).mockRejectedValue(new MotirAiUnavailableError('connect ECONNREFUSED'));
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'ai_unreachable' });
+    expect((await planRow(planId)).status).toBe('generating');
+  });
+
+  it('the write refuses on a COUNT MISMATCH — a late append is still `row_moved`', async () => {
+    // The guard used to be `items > 0`, which was only ever correct because the
+    // predicate guaranteed zero. With partial plans selected, the question is
+    // no longer "does it hold anything" but "did it MOVE": a proposal arriving
+    // DURING the ask means the producer was alive after the job said otherwise,
+    // and that is still a leave. Seeded partial, so the mismatch — not a
+    // presence test — is what produces the verdict.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    vi.mocked(getJob).mockImplementation(async () => {
+      await adminDb.planItem.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          planId,
+          op: 'add',
+          proposedFields: { title: 'Arrived late', kind: 'subtask' },
+          blockedByRefs: [],
+        },
+      });
+      return { jobId: 'job_dead', status: 'failed', result: null, error: null } as Awaited<
+        ReturnType<typeof getJob>
+      >;
+    });
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'left_as_is', reason: 'row_moved' });
+    expect((await planRow(planId)).status).toBe('generating');
+  });
+
+  it('the discovery scan SEES the proposals — the RLS blind spot would now fail SAFE, not wide', async () => {
+    // The direction reversed with the predicate. Under `items: { none: {} }` an
+    // RLS-hidden proposal made a correlated NOT EXISTS vacuously true and pulled
+    // a PARTIAL plan into the scan — a blind spot that WIDENED it. Under
+    // `_count` a hidden proposal reads the count LOW at discovery, the write
+    // re-counts bound to the plan's own workspace, and the mismatch verdict is
+    // `row_moved`: a pass is lost, never a plan. What this asserts is the arm
+    // WORKING — the count the system-context scan read matched the truth, so the
+    // verdict is `declined` rather than the `row_moved` a hidden row would give.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedGeneratingPlan(fx, { items: 2 });
+    jobIn('failed');
+
+    const summary = await abandonedPlanService.reconcileAbandoned();
+
+    expect(summary.outcomes[0]).toMatchObject({ outcome: 'declined', reason: 'job_terminal' });
+    expect((await planRow(planId)).status).toBe('declined');
+  });
+
+  it('AC 8: the cadence FIRES again for a project whose only undecided plan was a stranded PARTIAL one', async () => {
+    // The harm this card exists to remove, asserted the way the card asked for
+    // it: `fired`, not `skipped: pending_proposal`. Before the widening this
+    // project's cadence was paused for good — the plan could not be swept
+    // (empty-only) and could not be decided (the status guard).
+    const { fx, stubKey } = await makeDrainedProject();
+    await seedGeneratingPlan(fx, { items: 2 });
+    jobIn('failed');
+
+    // BEFORE: the stranded partial plan reads as UNDECIDED, so the gate skips
+    // the project — and nothing could ever change that, which is the defect.
+    const before = await autoPlanCadenceService.runCadenceSweep();
+    expect(before.outcomes[0]).toMatchObject({ status: 'skipped', reason: 'pending_proposal' });
+
+    await abandonedPlanService.reconcileAbandoned();
+    const after = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(after).toMatchObject({ scanned: 1, fired: 1, skipped: 0 });
+    expect(after.outcomes[0]).toMatchObject({ status: 'fired', itemKey: stubKey });
   });
 });
 

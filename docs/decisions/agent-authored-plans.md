@@ -10,7 +10,8 @@
   MOTIR-2990 (materialize reads the proposal's provenance), MOTIR-2991 (the surface),
   MOTIR-2992 (the vitest gate), MOTIR-2993 (the E2E). AMENDMENT 3 is consumed by
   MOTIR-3095 (projected validity on the MCP), MOTIR-3096 (projected reads),
-  MOTIR-3097 (the story's vitest gate).
+  MOTIR-3097 (the story's vitest gate). AMENDMENT 6 amends AMENDMENT 2 — its
+  empty-only exclusion — and is written by MOTIR-3189.
 
 > Every reading below was taken off `origin/main` at `d82b5fa7` on 2026-08-18. Where a
 > reading and a card's prose disagreed, the code won and the difference is recorded — in
@@ -489,6 +490,10 @@ the fact would answer _not paused_ for a project whose real `planned` proposal s
 
 ## AMENDMENT 2 — a plan whose PRODUCER died is reconciled, not gated around (MOTIR-3064, 2026-08-19)
 
+> **⚠️ Its EMPTY-ONLY scope is superseded by AMENDMENT 6 (MOTIR-3189)**, which found that the
+> partial plan this amendment left to a human decision could not be decided by anyone. The
+> reasoning below is otherwise live — read both.
+
 AMENDMENT 1 closed the orphan with **no producer** and said, in its own _What this does NOT
 do_, that the other half was filed separately:
 
@@ -539,6 +544,11 @@ Three of those conjuncts are load-bearing and none is a performance tweak:
   entirely — so the reconciler can never be asking about a submit that happened a moment ago.
 - **Empty-only is the card's AC 5**, and it is the same line AMENDMENT 1 drew: a PARTIAL plan is
   a real proposal a person can read and decline, so nothing here may touch it.
+  **⚠️ SUPERSEDED by AMENDMENT 6 (MOTIR-3189): a partial plan could be read and NOT declined** —
+  every decider refused anything but `planned`, so this clause protected a decision the status
+  guard made impossible and stranded the plans permanently. The sweep now takes partial plans
+  too, once `declinePlan` gained the `generating` entry that makes the release valve real. The
+  other two conjuncts in this list are unchanged.
 - **Unreachable is not death.** `resolveJobState` reports a motir-ai outage as
   `reachable: false`; the sweep terminates nothing on that arm and asks again next tick. The one
   unreachable-shaped answer that IS evidence is `MOTIR_AI_JOB_NOT_FOUND` — a 404 is motir-ai
@@ -608,6 +618,10 @@ and the tenant-root write refusal stays exactly as strong as it was.
 
 - It still does not expire or auto-decline a plan **with proposals in it**, at any age or in any
   status. AMENDMENT 1's line holds: that is a decision somebody owes.
+  **⚠️ AMENDED by AMENDMENT 6 (MOTIR-3189).** It does now, on the same evidence it uses for an
+  empty one — because the decision this deferred to a person was not one a person could make.
+  What survives unchanged is the shape of the evidence: age alone still terminates nothing, and a
+  plan with no producer to ask about is reachable only by a person, through the discard path.
 - It does not release planning-target locks. `plansService` does that on approve/decline through
   a best-effort helper that needs an acting user this sweep does not have, and its own documented
   fallback is already the right one — _"the lease will expire and the sweep will clear it"_
@@ -1214,6 +1228,152 @@ old lie.
 
 ---
 
+## AMENDMENT 6 — a `generating` plan can be DISCARDED, and a `declined` one records WHY it ended (MOTIR-3189, 2026-08-20)
+
+AMENDMENT 2 reconciles an abandoned plan only when it is EMPTY, and said so on purpose:
+
+> **Empty-only is the card's AC 5**, and it is the same line AMENDMENT 1 drew: a PARTIAL plan is
+> a real proposal a person can read and decline, so nothing here may touch it.
+
+Read, yes. Decline, no.
+
+> Every reading below was taken off `origin/main` at `05d9cc71` on 2026-08-20.
+
+### The exclusion protected a decision nobody could make
+
+`plansService.declinePlan` re-reads the plan under its row lock and throws
+`PlanNotInExpectedStatusError` unless `fresh.status === 'planned'`. `approvePlan` does the same.
+So there was **no path out of `generating` for anyone** — not the sweep, not a person, not a
+token. The clause above is not a narrow exclusion; it is a permanent one, and the plans it
+strands are stranded in exactly the state MOTIR-3064 was written to end.
+
+The harm is that card's harm, unchanged. `planRepository.findUndecidedByProject` reads
+`generating` as UNDECIDED, and that is `autoPlanCadenceService`'s first gate — so a stranded
+partial plan pauses its project's auto-plan cadence indefinitely, with the AI-planning settings
+page reporting a proposal waiting on a decision nobody can make.
+
+And the class is not small. Generation STREAMS: `motir-ai/src/llm/treeGeneration.ts` instructs
+_"Emit ONE proposal per tool call — never a batched tree-delta"_, and each call is a
+`POST /api/internal/ai/plan-proposals` append. The only `generating → planned` transition is
+`markPlanned`, i.e. the `final: true` flag on that same seam. So a plan goes non-empty at the
+FIRST `propose_node` and stays that way until the last call — AMENDMENT 2's window is the gap
+between `createPlan` and the first append, and the generation itself is **everything after it**.
+A worker crash, a job failure, a cancel or a context blowup anywhere in that span leaves a
+partial plan, which is to say: almost every motir-ai death.
+
+A second class has no sweep at all. A plan opened by `create_plan` over the MCP carries no
+`sourceJobId` (Q3), so `listAbandonedCandidates` — whose whole method is to ASK motir-ai what
+became of the job — can never reach it, however old it gets. There is nothing to ask about.
+Observed 2026-08-19: plan `cmt0nxdb600qni3phtsm1jpdp`, three proposals, `authorSource: mcp`,
+`sourceJobId: null`, abandoned mid-authoring because its skeleton batch omitted a `blocked_by`
+edge, re-authored as a fresh plan — and still `generating`, with no way to end it.
+
+### D1 — the DISCARD is `declinePlan` with a second legal from-status, not a second method
+
+`declinePlan` now accepts `planned` OR `generating`, and refuses anything else with the same
+typed 409 (naming both legal origins; `actual` still rides the field per MOTIR-3025).
+
+The alternative was a `discardPlan` beside it. Rejected: the two are the same act — _stop this
+plan, keep what it proposed_ — and everything that makes the act safe is shared. A second method
+would be a second copy of the `ai:decide_plan` assertion, the `lockById` + re-read, the
+retain-every-PlanItem rule, the real item count and the planning-target lock release, kept in
+step by hand. The only thing that genuinely differs is which reason gets recorded, and the
+from-status already answers that.
+
+**Nothing is deleted, and that is settled law here rather than a fresh decision.** `declinePlan`
+used to drop every PlanItem in the same transaction; that is the defect MOTIR-3154 reported and
+MOTIR-3160 fixed, and the repository's delete method went with its only caller. There is no
+`plan.delete` / `planItem.delete*` call site in `lib/` or `app/` today and this card adds none.
+No `deletedAt` column either — **the row IS the tombstone**. The rule matters MORE on a discard
+than on a review: a half-generated plan's proposals are the only surviving record of how far its
+producer actually got.
+
+**`plannedAt` is not back-filled.** The generation frontier genuinely never closed. Stamping it
+would make a plan that died halfway indistinguishable from one that finished and was turned
+down, which is the precise conflation D3 exists to remove.
+
+### D2 — the sweep gains the PARTIAL arm, and the write's guard becomes a COMPARISON
+
+With the valve real, `listAbandonedCandidates` drops `items: { none: {} }`. A `generating` plan
+with a producer, past the grace, whose job is provably gone is declined whatever it holds.
+
+Nothing else about the decision table moved. `job_terminal` / `job_gone` / `max_age` still
+terminate; `job_in_flight`, `ai_unreachable` and `row_moved` still terminate nothing; the
+15-minute grace still keeps the sweep out of the submit→first-append window, and a partial plan
+behind a LIVE job is left alone by exactly the arm that leaves an empty one alone.
+
+One thing did have to change, and it is worth stating because it is easy to read the old code as
+a single guard. `items: { none: {} }` was doing **two** jobs: the discovery filter here, and the
+did-it-move check the write re-ran under the plan's own workspace context. With the filter gone
+the check cannot stay a presence test, or a plan that was already partial at discovery would be
+selected and then refused for the very property it was selected for. So the candidate carries
+`_count.items`, read in the same statement, and the write refuses on a **mismatch**. `row_moved`
+keeps meaning exactly what it always meant — the row changed between the ask and the act — and a
+proposal that lands DURING the network call is still a leave, because it means the producer was
+alive after the job said otherwise.
+
+**The RLS direction reverses, into the safe one.** AMENDMENT 2 flagged the surprising half: under
+a correlated `NOT EXISTS`, an RLS-hidden `plan_item` row makes the test vacuously true, so the
+blind spot **widened** the scan onto exactly the plans the exclusion protected. Under `_count` a
+hidden proposal reads the count LOW at discovery, the write re-counts bound to that plan's own
+workspace, the two disagree, and the verdict is `row_moved`. A blind spot now costs a pass, not a
+plan. The `plan_item_system_read` arm stays regardless — the scan reads that table either way,
+and a permanently-`row_moved` sweep is a broken sweep.
+
+### D3 — `decisionReason` is a private COLUMN, not a fourth `PlanStatus` member
+
+Once discard also writes `declined`, that one status covers three histories:
+
+| what happened                                 | `plannedAt` | `decidedById` | `decisionReason` |
+| --------------------------------------------- | ----------- | ------------- | ---------------- |
+| a person reviewed a finished plan and said no | set         | set           | `reviewed`       |
+| a person discarded a half-generated plan      | null        | set           | `discarded`      |
+| the sweep terminated a dead producer          | null        | null          | `abandoned`      |
+
+All three were **derivable** from the null pattern and none was **recorded**.
+`PlanHistoryEventDto.kind` was `'created' | 'planned' | 'approved' | 'declined'`, so
+`planReviewService` pushed one `declined` event and `PlanReviewRail` rendered all three
+identically — a reader could see that a plan ended, not why. Telling somebody whose generation
+crashed that a person read their plan and rejected it is not a cosmetic defect.
+
+**This does NOT reopen AMENDMENT 2's rejection of a new `PlanStatus` member, and the reasoning is
+unchanged in both directions.** That vocabulary is PUBLIC: v1's `planStatusSchema`, the
+`get_plan_status` MCP tool description, `PlanStatusDto`, four display switches, the i18n catalogue
+and its zh-parity gate — and every consumer of the status is asking _is it decided?_, which
+`declined` already answers. A private column reaches the review surface and the sweep's log line,
+and costs none of that. AMENDMENT 2's own fallback — _"the honesty lives in the ACTOR:
+`decidedById` is NULL"_ — was already doing a column's work with a null; this finishes it.
+
+- **The event KIND is what carries it to the reader, not the status.** `PlanHistoryEventDto.kind`
+  gains `'discarded'` and `'abandoned'`, mapped from the reason by `planReviewService`. Widening
+  `kind` IS one of the four display switches D3 just declined to pay for a status member — paid
+  deliberately, because making the difference visible is the entire point here and was not the
+  point there.
+- **NULL is not a fourth reason.** Every row written before the column reads null, which means
+  _not recorded_, and both the timeline and the outcome block fall back to the original `declined`
+  wording — the one that was true for those rows. `approved` carries null always: an approval has
+  one history.
+- **`declinedOutcomeKey` is total over the union** rather than a lookup with a default, so adding
+  a reason is a type error at the surface rather than a plan silently rendering as
+  reviewed-and-rejected.
+
+### What this does NOT do
+
+- **It does not expire or auto-decline a plan by AGE alone.** `max_age` still requires a producer
+  that was asked about and a job that never went terminal; a plan nobody can ask about
+  (`sourceJobId IS NULL`) is reachable only by a PERSON, through the discard path. AMENDMENT 1's
+  line holds for it: that is a decision somebody owes.
+- **It does not add a Discard BUTTON.** `design/ai-planning/design-notes.md` Panel B fixes the
+  decision bar as Approve + Decline and says _"NO 'Discard'"_, and that is about the bar a
+  `planned` plan shows — which this card does not touch. The `generating` surface has no decision
+  bar at all today; drawing one is a design question and its own card.
+- **It does not rename the `declined` status.** Three endings share it, and D3 is how they are
+  told apart.
+- **It does not give motir-ai a stale-job reaper.** A worker that dies still leaves `running` on
+  its own side; this card widens what core can recover from without it.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -1258,3 +1418,12 @@ old lie.
   plan without being able to enact one. Q2 and D2 are unchanged: both named the key their own service
   asserts, and both services still assert it. The key id `ai:view_plan` is knowingly wrong and its
   rename is a persisted-value migration left to its own card.
+- **A `generating` plan can be ENDED, and a `declined` one says how** (AMENDMENT 6, MOTIR-3189):
+  `declinePlan` takes a second legal from-status, so a plan whose producer died mid-generation is
+  discardable by a person holding `ai:decide_plan` instead of stranded for ever — including the
+  agent-authored orphan with no producer, which no sweep can ever ask about. The reconciling sweep
+  drops its empty-only conjunct and takes partial plans too, with its write guard becoming a
+  count COMPARISON so a late append is still `row_moved`; the RLS blind spot that used to WIDEN
+  that scan now fails safe. Every PlanItem survives every ending, unchanged since MOTIR-3160, and
+  a nullable `decisionReason` column (`reviewed` / `discarded` / `abandoned`) records which of the
+  three histories a `declined` row holds. No `PlanStatus` member, no backfill, no delete.

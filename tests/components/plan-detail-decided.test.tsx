@@ -68,6 +68,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     plannedAt: '2026-06-26T00:00:00.000Z',
     decidedAt: null,
     decidedByName: null,
+    decisionReason: null,
     // The three-party attribution (MOTIR-2991). The default is the UNATTRIBUTED
     // state, so every pre-existing case keeps asserting a header without one and
     // each attribution state opts in explicitly.
@@ -126,6 +127,73 @@ describe('PlanDetail — decided plans reach the review rail (MOTIR-1377)', () =
     const canvas = screen.getByTestId('plan-review-canvas');
     expect(canvas.getAttribute('data-item-count')).toBe('2');
     expect(canvas.getAttribute('data-outcome')).toBe('declined');
+  });
+
+  // MOTIR-3189 — the rendered half of "the timeline distinguishes the three".
+  // The three endings all leave `status: 'declined'`, so the OUTCOME block reads
+  // `decisionReason` to pick its sentence. Getting this wrong is not cosmetic:
+  // it tells somebody whose generation crashed that a person read their plan and
+  // rejected it.
+  describe('a DISCARDED / ABANDONED plan does not read as one somebody rejected', () => {
+    const REVIEWED = 'Plan declined — your tree was left untouched';
+
+    it('a DISCARDED plan says it was discarded before it finished', () => {
+      renderWithIntl(
+        <PlanDetail
+          projectKey="PRJ"
+          initialReview={review({
+            status: 'declined',
+            decisionReason: 'discarded',
+            decidedByName: 'Yue',
+            plannedAt: null,
+            itemCount: 1,
+            items: [planReviewItem({ planItemId: 'pi_1' })],
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByText('Plan discarded before it finished — your work items are unchanged'),
+      ).toBeTruthy();
+      expect(screen.queryByText(REVIEWED)).toBeNull();
+    });
+
+    it('an ABANDONED plan says the generation never finished', () => {
+      renderWithIntl(
+        <PlanDetail
+          projectKey="PRJ"
+          initialReview={review({
+            status: 'declined',
+            decisionReason: 'abandoned',
+            // Nobody decided it — the sweep leaves `decidedById` null.
+            decidedByName: null,
+            plannedAt: null,
+            itemCount: 2,
+            items: [planReviewItem({ planItemId: 'pi_1' }), planReviewItem({ planItemId: 'pi_2' })],
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByText('Generation never finished — this plan was ended automatically'),
+      ).toBeTruthy();
+      expect(screen.queryByText(REVIEWED)).toBeNull();
+    });
+
+    it('a `reviewed` reason and a NULL one both keep the original wording', () => {
+      // A null is *not recorded* — every row written before the column existed —
+      // and the original sentence is the one that was true for those plans.
+      for (const decisionReason of ['reviewed', null] as const) {
+        renderWithIntl(
+          <PlanDetail
+            projectKey="PRJ"
+            initialReview={review({ status: 'declined', decisionReason, decidedByName: 'Yue' })}
+          />,
+        );
+        expect(screen.getByText(REVIEWED)).toBeTruthy();
+        cleanup();
+      }
+    });
   });
 
   it('renders the APPROVED outcome for an approved plan', () => {

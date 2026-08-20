@@ -613,6 +613,9 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.items.map((i) => i.op).sort()).toEqual(['add', 'modify']);
     expect(review.decidedByName).not.toBeNull();
     expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'declined']);
+    // MOTIR-3189 — a plan a person read and rejected keeps the `declined` event
+    // and the original wording. It is the OTHER two endings that had to change.
+    expect(review.decisionReason).toBe('reviewed');
 
     // The refused `add` never became anything, so it keys by its own id and has
     // no identifier — inventing one would be the surface asserting a work item
@@ -828,6 +831,106 @@ describe('planReviewService.getPlanReview', () => {
     const modify = review.items.find((i) => i.op === 'modify')!;
     expect(modify.statusLabel).toBe('Awaiting legal');
     expect(modify.statusCategory).toBe('todo');
+  });
+
+  // MOTIR-3189 — `declined` covers three histories, and until this card the
+  // service pushed ONE `declined` event for all of them, so the rail rendered a
+  // plan that died halfway through generating exactly like one somebody read and
+  // rejected: you could see that it ended, not why. The reason is a private
+  // column rather than a fourth `PlanStatus` member (AMENDMENT 6), so the
+  // TIMELINE is where the difference has to become visible.
+  describe('the timeline distinguishes the three endings (MOTIR-3189)', () => {
+    /** A `generating` plan holding one proposal — the shape a crashed generation
+     *  or an abandoned authoring pass leaves. Deliberately not `markPlanned`ed,
+     *  which is what keeps `plannedAt` null. */
+    async function halfWritten(fx: WorkItemFixture): Promise<string> {
+      const plan = await plansService.createPlan(fx.projectId, { title: 'Half' }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Got this far', kind: 'task' } }],
+        fx.ctx,
+      );
+      return plan.id;
+    }
+
+    it('a DISCARDED plan reads `discarded`, and has no `planned` event at all', async () => {
+      const fx = await makeWorkItemFixture();
+      const planId = await halfWritten(fx);
+      await plansService.declinePlan(planId, fx.ctx);
+
+      const review = await planReviewService.getPlanReview(planId, fx.ctx);
+
+      // No `planned` event: the generation frontier never closed, and the
+      // timeline says so by ABSENCE rather than by a back-filled timestamp.
+      expect(review.history.map((h) => h.kind)).toEqual(['created', 'discarded']);
+      expect(review.plannedAt).toBeNull();
+      expect(review.decisionReason).toBe('discarded');
+      // A PERSON discarded it, so the decider is named — which is exactly what
+      // separates this ending from the sweep's.
+      expect(review.history.at(-1)!.byName).not.toBeNull();
+      // And the proposal it managed to produce survives to be read.
+      expect(review.itemCount).toBe(1);
+      expect(review.items).toHaveLength(1);
+    });
+
+    it('an ABANDONED plan reads `abandoned`, with NOBODY named', async () => {
+      // The sweep's ending. It writes `decisionReason: 'abandoned'` and leaves
+      // `decidedById` null, so the row is the one case where a decision event
+      // carries no actor — the surface must not render it as a person's call.
+      const fx = await makeWorkItemFixture();
+      const planId = await halfWritten(fx);
+      await adminDb.plan.update({
+        where: { id: planId },
+        data: { status: 'declined', decidedAt: new Date(), decisionReason: 'abandoned' },
+      });
+
+      const review = await planReviewService.getPlanReview(planId, fx.ctx);
+
+      expect(review.history.map((h) => h.kind)).toEqual(['created', 'abandoned']);
+      expect(review.decisionReason).toBe('abandoned');
+      expect(review.decidedByName).toBeNull();
+      expect(review.history.at(-1)!.byName).toBeNull();
+    });
+
+    it('a `declined` row with NO recorded reason keeps the ORIGINAL event — a null is not a fourth ending', async () => {
+      // Every row written before the column existed. `null` means *not
+      // recorded*, and the pre-column wording is the one that was true for
+      // those plans, so the timeline must fall back rather than guess.
+      const fx = await makeWorkItemFixture();
+      const plan = await plansService.createPlan(fx.projectId, { title: 'Legacy' }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Old', kind: 'task' } }],
+        fx.ctx,
+      );
+      await plansService.markPlanned(plan.id, fx.ctx);
+      await adminDb.plan.update({
+        where: { id: plan.id },
+        data: { status: 'declined', decidedAt: new Date(), decisionReason: null },
+      });
+
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+
+      expect(review.decisionReason).toBeNull();
+      expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'declined']);
+    });
+
+    it('an APPROVED plan carries no reason — an approval has one history', async () => {
+      const fx = await makeWorkItemFixture();
+      const plan = await plansService.createPlan(fx.projectId, { title: 'Yes' }, fx.ctx);
+      await plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Built', kind: 'task' } }],
+        fx.ctx,
+      );
+      await plansService.markPlanned(plan.id, fx.ctx);
+      await plansService.approvePlan(plan.id, fx.ctx);
+
+      const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+
+      expect(review.history.map((h) => h.kind)).toEqual(['created', 'planned', 'approved']);
+      expect(review.decisionReason).toBeNull();
+    });
   });
 
   it('throws PlanNotFoundError for a missing plan', async () => {

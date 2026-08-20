@@ -66,6 +66,10 @@ export function planReview(
     plannedAt: '2026-07-27T09:01:00.000Z',
     decidedAt: null,
     decidedByName: null,
+    // Not recorded — the default a `planned` plan has, and what every `declined`
+    // row written before MOTIR-3189's column reads. A case that wants a
+    // DISCARDED or ABANDONED outcome overrides it.
+    decisionReason: null,
     // The three-party attribution (MOTIR-2991). The default is the UNATTRIBUTED
     // state, so every pre-existing case keeps asserting a header without one and
     // each attribution state opts in explicitly.

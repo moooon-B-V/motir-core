@@ -14,6 +14,7 @@ import {
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
+import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { definePayload } from './define';
@@ -197,6 +198,24 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
   authorSource: z.enum(PLANNING_SOURCES).nullable(),
   authorHarness: z.string().nullable(),
   authorModel: z.string().nullable(),
+  /**
+   * WHY a `declined` plan ended (MOTIR-3189) — MCP's own field, on the same
+   * extension point and for the same reason as the four above: an agent that
+   * authored a plan reads back what became of it, and v1's `planSchema` stays
+   * exactly as wide as it is today.
+   *
+   * It earns its place on THIS surface specifically. `declined` covers three
+   * histories, and the one an authoring agent most needs to tell apart is *a
+   * person discarded my half-written plan* from *the sweep terminated it
+   * because my producer died* — the first is a decision to respect, the second
+   * a failure to retry. Null on every other status, and on a `declined` row
+   * written before the column existed, where it means *not recorded*.
+   *
+   * NOT a `PlanStatus` member: that vocabulary IS public and reaches v1, four
+   * display switches and the zh-parity gate, and every consumer of the status is
+   * asking *is it decided?* (AMENDMENT 6, D3).
+   */
+  decisionReason: z.enum(PLAN_DECISION_REASONS).nullable(),
   items: z.array(z.unknown()),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
@@ -220,6 +239,7 @@ export function presentMcpPlan(plan: PlanWithItemsDto): McpPlan {
     authorSource: plan.authorSource,
     authorHarness: plan.authorHarness,
     authorModel: plan.authorModel,
+    decisionReason: plan.decisionReason,
     items: plan.items,
   };
 }

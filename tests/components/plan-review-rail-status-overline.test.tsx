@@ -40,6 +40,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     plannedAt: '2026-08-19T00:00:00.000Z',
     decidedAt: null,
     decidedByName: null,
+    decisionReason: null,
     origin: 'user',
     createdByName: null,
     authorSource: null,

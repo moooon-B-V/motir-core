@@ -1556,7 +1556,7 @@ so a headless client can SHOW or judge the content instead of sending its user t
 a browser. Neither takes a decision on the plan.
 
 **Output** — `structuredContent`: the `PlanWithItemsDto` — the plan
-(`id, projectId, status, title, summary, sourceJobId, origin, itemCount, createdAt, plannedAt, decidedAt, decidedById`)
+(`id, projectId, status, title, summary, sourceJobId, origin, itemCount, createdAt, plannedAt, decidedAt, decidedById, decisionReason`)
 plus `items[]`, one entry per proposal:
 
 - **`op`** — `add` · `modify` · `remove`.
@@ -1566,6 +1566,12 @@ plus `items[]`, one entry per proposal:
 - **`patch`** (`modify`) — only the CHANGED fields.
 - **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
   un-materialized `add`**.
+- **`decisionReason`** — on a `declined` plan, WHY it ended: `reviewed` (a
+  person read a finished plan and said no), `discarded` (a person ended one that
+  never finished generating) or `abandoned` (Motir terminated one whose producer
+  was gone). `null` on every other status, and on a plan declined before the
+  field existed. **It is the difference between a decision to respect and a
+  failure to retry**, and the status alone cannot tell you which you have.
 - **`parentRef`** / **`blockedByRefs`** — each a real `work_item.id` **or** an
   intra-plan temp-ref `planItem:<planItemId>` pointing at another `add` in the
   same plan. Resolve the temp-refs against `items[].id` to rebuild the proposed

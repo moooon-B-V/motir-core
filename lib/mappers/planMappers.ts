@@ -54,6 +54,10 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
     decidedById: row.decidedById,
+    // WHY it ended (MOTIR-3189). Carried on every read that returns a plan, so
+    // the review surface can tell a DISCARDED plan from one somebody reviewed
+    // and rejected without re-deriving it from which timestamps are null.
+    decisionReason: row.decisionReason,
   };
 }
 
