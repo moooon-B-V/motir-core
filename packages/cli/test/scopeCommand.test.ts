@@ -444,6 +444,17 @@ describe('motir run <container> — a WRONG SHAPE submits a re-plan, once', () =
     expect(harness.stderr).toContain('is itself a container');
     expect(process.exitCode).toBeUndefined();
   });
+
+  it('a NON-Error throw is still reported, never as `[object Object]`', async () => {
+    // A transport can reject with anything. The reader needs a sentence either
+    // way, and the shape finding still stands.
+    setup({ claim: wrongShape(), planError: 'the socket closed' as unknown as Error });
+
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
+
+    expect(harness.stderr).toContain('the socket closed');
+    expect(harness.stderr).not.toContain('[object Object]');
+  });
 });
 
 describe('motir run <container> — the shapes that are not scopes', () => {
@@ -474,6 +485,19 @@ describe('motir run <container> — the shapes that are not scopes', () => {
     expect(callsTo('expand_item')[0]?.args).toBe('PROD-3');
     expect(harness.stderr).toContain('an expansion was triggered');
     expect(harness.stderr).toContain('the plan needs your approval');
+    expect(toolNames()).not.toContain('claim_scope');
+  });
+
+  it('an expansion that could not be submitted is reported, and the run still stops', async () => {
+    setup({
+      detail: detail({ kind: 'story', identifier: 'PROD-3' }, []),
+      expandError: 'the planner is unavailable' as unknown as Error,
+    });
+
+    await runCommand('PROD-3', { ...SCOPE_OPTS, includePlanning: true }, SCOPE_DEPS);
+
+    expect(harness.stderr).toContain('the expansion could not be submitted');
+    expect(harness.stderr).toContain('the planner is unavailable');
     expect(toolNames()).not.toContain('claim_scope');
   });
 

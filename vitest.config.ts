@@ -292,6 +292,16 @@ export default defineConfig({
         // the same 90 the file it came from carries. Measured on this branch
         // before pinning: 100 lines / 100 functions / 100 branches.
         'lib/workItems/blockerReadiness.ts',
+        // ⚠️ ADDED BY THE STORY GATE (MOTIR-3001 · MOTIR-3200). The ready
+        // FILTER shape has never been in the report at all — not gated at a low
+        // number, absent — which is the state this config's own header calls
+        // out: "the file then never enters the report, and a `thresholds` key
+        // naming it is a key nobody checks." MOTIR-3196 put two new axes, a
+        // reserved literal and a typed refusal in it, so it is entered and
+        // pinned here. Measured on this branch before pinning, over
+        // `tests/ready/` + the two ready route/vocabulary files:
+        // 95.83 lines / 100 functions / 93.33 branches.
+        'lib/workItems/readyFilter.ts',
         'lib/services/backlogService.ts',
         'lib/repositories/workItemRepository.ts',
         'lib/repositories/workItemLinkRepository.ts',
@@ -1785,6 +1795,7 @@ export default defineConfig({
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-3050 (see the `include` note above).
         'lib/workItems/blockerReadiness.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workItems/readyFilter.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2694 · Subtask MOTIR-2696 (see the `include` note above).
         'lib/workItems/embeddingDocument.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/workItemEmbeddingRepository.ts': {

@@ -231,6 +231,33 @@ describe('renderScopeRefusal', () => {
     expect(out).toContain('claims from the TO-DO category only');
   });
 
+  it('`mine` reads as a RESUME even through the refusal renderer', () => {
+    // Unreachable from the command — `mine` dispositions to `proceed` — and
+    // answered anyway, so the function is total over the vocabulary rather than
+    // over today's callers. A `default:` that swallowed it would turn a future
+    // caller's resume into the word "claimed".
+    expect(renderScopeRefusal(claim({ outcome: 'mine', claimed: false }))).toBe(
+      'PROD-1 "The story": already yours — resuming.',
+    );
+  });
+
+  it('`not_finishable` says so even when the validator named no PAIR', () => {
+    // The verdict is the server's; the blocker list is its evidence. An empty
+    // list must not render as a bare heading with nothing under it, which reads
+    // as a truncated message rather than as a scope nobody can finish.
+    const out = renderScopeRefusal(
+      claim({ outcome: 'not_finishable', claimed: false, blockers: [] }),
+    );
+    expect(out).toContain('cannot be finished from inside itself');
+    expect(out).toContain('(the validator named no specific pair)');
+  });
+
+  it('an unknown outcome falls through to `claimed` rather than throwing', () => {
+    // A CLI meets servers older and newer than itself; a vocabulary this build
+    // does not know must degrade, not crash.
+    expect(renderScopeRefusal(claim({ outcome: 'claimed' }))).toBe('PROD-1 "The story": claimed.');
+  });
+
   it('labels a SPRINT scope by its name, not by a null key', () => {
     const out = renderScopeRefusal(
       claim({
@@ -265,6 +292,17 @@ describe('renderClaimedScope', () => {
     expect(out).toContain('THIS RUN OWNS IT');
   });
 
+  it('says so plainly when the claim holds cards but NONE of them can start', () => {
+    // Reachable on a resume: the run already owns the scope (`mine`) and every
+    // leaf is mid-flight. An empty table would read as a rendering bug.
+    const out = renderClaimedScope(
+      claim({ members: [member('PROD-1', 'The story'), member('PROD-2')] }),
+      [],
+    );
+    expect(out).toContain('Nothing in it is ready to start.');
+    expect(out).toContain('Also claimed, not startable yet (1)');
+  });
+
   it('names the claimed-but-not-startable cards separately, so the footprint is visible', () => {
     // These are the cards whose blockers are inside the same scope. Printing
     // only the ready set would hide exactly the rows an operator will see go
@@ -276,6 +314,50 @@ describe('renderClaimedScope', () => {
 
     expect(out).toContain('Also claimed, not startable yet (1)');
     expect(out).toContain('PROD-4');
+  });
+});
+
+describe('the DEFENSIVE arms — a server that answers with an outcome and no detail', () => {
+  // A CLI meets servers older and newer than itself, and every `?.` in the
+  // renderers is a shape the generated types admit. What matters is that the
+  // refusal still READS — a message that degraded to "undefined — undefined" is
+  // worse than no message, because the reader cannot tell it is degraded.
+  it('`taken` with NO offender still names the scope and says nothing was locked', () => {
+    const out = renderScopeRefusal(claim({ outcome: 'taken', claimed: false, offender: null }));
+    expect(out).toContain('a member');
+    expect(out).toContain('an unknown status');
+    expect(out).not.toContain('undefined');
+  });
+
+  it('`wrong_shape` with NO shape detail still says the shape is not runnable', () => {
+    const out = renderScopeRefusal(claim({ outcome: 'wrong_shape', claimed: false, shape: null }));
+    expect(out).toContain('a child');
+    expect(out).toContain('2 levels from the story');
+    expect(out).not.toContain('undefined');
+  });
+
+  it('renders a SPRINT scope’s claimed table, whose container key is null', () => {
+    // The container of a sprint scope is the sprint, which has no work-item key
+    // — so the "exclude the container" filter has nothing to match, and every
+    // member is a card the run works.
+    const out = renderClaimedScope(
+      claim({
+        scope: { kind: 'sprint', key: null, sprintId: 's1', name: 'Sprint 44' },
+        members: [member('PROD-2'), member('PROD-3')],
+      }),
+      [readyRow('PROD-2'), readyRow('PROD-3')],
+    );
+    expect(out).toContain('Claimed The active sprint "Sprint 44" — 2 cards');
+    expect(out).not.toContain('null');
+  });
+
+  it('renders a row whose TITLE is null without printing the word', () => {
+    const out = renderClaimedScope(
+      claim({ members: [member('PROD-1', 'The story'), member('PROD-2')] }),
+      [{ ...readyRow('PROD-2'), title: null }],
+    );
+    expect(out).toContain('PROD-2');
+    expect(out).not.toContain('null');
   });
 });
 

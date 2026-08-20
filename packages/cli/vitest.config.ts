@@ -72,6 +72,19 @@ export default defineConfig({
         // held; that is how a floor stops being one.
         'src/adapters/filterParam.ts': { branches: 90, functions: 90, lines: 90 },
         'src/version.ts': { branches: 90, functions: 90, lines: 90 },
+        // ⚠️ ADDED BY THE STORY GATE (MOTIR-3001 · MOTIR-3200), for the reason
+        // stated directly above: a module the config does not NAME is not held,
+        // and an ungated file at 100% is indistinguishable from a gated one
+        // until the day it regresses. All three shipped mid-story.
+        'src/scopedRun.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/commands/scope.ts': { branches: 90, functions: 90, lines: 90 },
+        // Fully gated, including branches — the carve-out `client.ts` and
+        // `help.ts` take was drafted for this file and then not needed. The
+        // COOPERATIVE interrupt is driven in `test/scopeDrain.test.ts` (the
+        // flag, the card in flight finishing, the `interrupted` stop reason),
+        // which leaves only the second-Ctrl-C `process.exit(130)` uncovered —
+        // one line, and the file clears 90% branches without it.
+        'src/commands/scopeDrain.ts': { branches: 90, functions: 90, lines: 90 },
 
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped
