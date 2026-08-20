@@ -1469,9 +1469,14 @@ sequence is therefore decided rather than left to whoever runs the card:
 The plan already encodes step 4's dependency (MOTIR-2783 is `blocked_by`
 MOTIR-3222); this record is why.
 
-Cost: **+$11.83/mo** when applied. **Database:** the second machine's worker idles
-at `IDLE_POLL_INTERVAL_MS = 10 min`, which is past Neon's five-minute suspend
-threshold, so it does not by itself hold the compute awake.
+Cost: **+$11.83/mo** when applied. **Database: $0, and since 2026-08-20 that is
+structural rather than a margin.** The second machine's worker runs **no idle
+poll** — [MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228) deleted the re-arm, so an
+idle worker issues no query at all and cannot hold the compute awake. (This
+paragraph previously priced the same $0 against a 10-minute idle tick clearing a
+five-minute suspend threshold. Both halves of that sentence were wrong by
+2026-08-20: the tick is gone, and the threshold is ~9 minutes measured, not five
+— see §21.)
 
 #### `motir-gateway` — 1, and the floor and the transport are ONE decision
 
@@ -1573,13 +1578,13 @@ only, **$0.15/GB per 30 days**, no compute; a **suspended** machine is documente
 neither way. All three apps are on shared IPv4 (no $2/mo dedicated address) and
 Anycast IPv6 is free. Egress $0.02/GB.
 
-| change                                                     | machine delta           | database delta                     |
-| ---------------------------------------------------------- | ----------------------- | ---------------------------------- |
-| `motir-core` floor 1 → 2                                   | **+$11.83/mo**          | **$0** — no in-process poll (§21)  |
-| `motir-ai` floor 1 → 2 (after 3221/3222/3223)              | **+$11.83/mo**          | **$0** — idle tick is 10 min (§21) |
-| `motir-gateway` floor stays 1                              | $0                      | $0                                 |
-| `motir-gateway` pool 2 → 4, both extra members **stopped** | **≈ $0** — rootfs cents | $0                                 |
-| **Total, once all of it is applied**                       | **≈ +$23.66/mo**        | **$0**                             |
+| change                                                     | machine delta           | database delta                    |
+| ---------------------------------------------------------- | ----------------------- | --------------------------------- |
+| `motir-core` floor 1 → 2                                   | **+$11.83/mo**          | **$0** — no in-process poll (§21) |
+| `motir-ai` floor 1 → 2 (after 3221/3222/3223)              | **+$11.83/mo**          | **$0** — no in-process poll (§21) |
+| `motir-gateway` floor stays 1                              | $0                      | $0                                |
+| `motir-gateway` pool 2 → 4, both extra members **stopped** | **≈ $0** — rootfs cents | $0                                |
+| **Total, once all of it is applied**                       | **≈ +$23.66/mo**        | **$0**                            |
 
 For scale: the fleet runs at **≈ $27/mo** today (11.83 + 11.83 + 3.32), so this is
 roughly a **doubling of the machine bill and no change to the database bill** —
@@ -1806,31 +1811,127 @@ a record starts contradicting itself.
 
 ### §21 — Q19: the DATABASE coupling. The floor is priced with compute, not machine-hours
 
-Neon suspends a compute only after **five minutes** of total inactivity, and that
-threshold **cannot be lowered on the Launch plan** (probed 2026-08-13:
-`suspend_timeout_seconds: 60` → _"suspend interval is too short for your plan"_).
-So **any service whose warm machine queries Postgres more often than every five
-minutes holds its database awake permanently**, and the database is the larger
+> **⚠️ AMENDED IN PLACE 2026-08-20 by [MOTIR-3257](motir:cmt1u6a2q000ai5ph1wjb16wa),
+> after [MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228) merged
+> ([motir-ai#256](https://github.com/moooon-B-V/motir-ai/pull/256), 19:05Z).** Two
+> things this section said on the morning of 2026-08-20 are corrected below, and the
+> correction is recorded rather than quietly applied because the second one is an
+> input error that every floor priced here inherited:
+>
+> 1. The `motir-ai` row named a constant that no longer exists. The worker's idle
+>    poll is **deleted**, not lengthened.
+> 2. **Five minutes was the documented SETTING floor, not the measured DELAY.** The
+>    delay was never measured until 2026-08-20, and it is **~9 minutes**. The rule
+>    this section states survives intact; only its number needed correcting.
+>
+> Everything else in §21 — the mechanic, the property to protect, the duty-cycle
+> readings — stands, and is left as it was written.
+
+**Two different numbers, and conflating them is what cost the last card that read
+this section.**
+
+- **The SETTING floor: five minutes.** `suspend_timeout_seconds` cannot be set
+  below 300 s on the Launch plan (probed 2026-08-13:
+  `suspend_timeout_seconds: 60` → _"suspend interval is too short for your
+  plan"_). That probe established what Neon will **accept**; it never observed a
+  compute going quiet.
+- **The observed DELAY: ~9 minutes**, measured 2026-08-20 by sampling the Neon
+  control plane every 30 s — **no database connection**, so the probe cannot wake
+  what it measures.
+
+| endpoint           | last activity | went `idle` | delay     |
+| ------------------ | ------------- | ----------- | --------- |
+| `motir-ai`         | 10:23:43      | 10:33:26    | **9m43s** |
+| `motir-ai`         | 10:35:14      | 10:43:34    | **8m20s** |
+| a sibling endpoint | 10:01:30      | 10:11:01    | **9m31s** |
+
+So **any service whose warm machine queries Postgres more often than roughly every
+nine minutes holds its database awake permanently**, and the database is the larger
 bill: a `shared-cpu-1x` machine is $3.32/mo, its Neon compute at the 0.25 CU floor
 for 730 h is **$19.50/mo**.
 
-| service         | in-process poll on a warm machine                         | does a second warm machine add compute-hours?                                                     |
-| --------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `motir-core`    | **none** — every `setInterval` in the repo is client-side | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.              |
-| `motir-ai`      | the worker's idle tick, **10 min** — past the threshold   | **No.** `IDLE_POLL_INTERVAL_MS` was raised precisely so an idle motir-ai lets its database sleep. |
-| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 600` s**     | **No**, since PR #15. At the old 60 s it would have, permanently.                                 |
+**And the gap between the two numbers is not pedantry — it is the whole cost of
+[MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)'s interval.** A 10-minute poll was
+chosen to clear the documented five minutes with 2× margin. Against the real delay
+it cleared it by about a minute, so the compute suspended and was re-woken almost
+immediately: a measured **77% duty cycle over a 30-minute window**, not the ~50%
+the five-minute arithmetic predicts. **An interval that sits "past the threshold"
+is only ever as good as the threshold, and the threshold here is an observation
+Neon does not contract to.** No poll at all is the only form of this that cannot
+rot.
+
+| service         | in-process poll on a warm machine                                                            | does a second warm machine add compute-hours?                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `motir-core`    | **none** — every `setInterval` in the repo is client-side                                    | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.                           |
+| `motir-ai`      | **none** — no timer re-arms on an idle queue ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)) | **No, and not by a margin.** There is no timer to price: an idle worker schedules nothing and issues no query. |
+| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 600` s** — ⚠️ see below                         | **No** — but no longer because the database sleeps. At 600 s against a ~9 min delay it may not; see below.     |
+
+**All three rows re-checked against shipped code on 2026-08-20** by
+[MOTIR-3257](motir:cmt1u6a2q000ai5ph1wjb16wa), rather than carried forward:
+
+- **`motir-core` — confirmed unchanged.** `grep -rn 'setInterval(' lib app` on
+  `origin/main` still returns **exactly five** hits, and every one of them sits in a
+  file whose first line is `'use client'` (`lib/hooks/usePlanGeneration.ts`,
+  `ExpansionNudgeBanner.tsx`, `RepositoriesRoom.tsx`, `NotificationBell.tsx`,
+  `MigrateWizard.tsx`). The count is the same five this amendment's own Sources
+  row recorded on 2026-08-20.
+- **`motir-ai` — corrected.** The idle-poll constant, its export and the idle
+  re-arm are gone from `src/jobs/worker.ts` — deliberately not named here, because
+  a record that cites a deleted symbol sends its next reader grepping for
+  something that is not there. A tick that finds nothing sets its delay to `null`,
+  which schedules nothing; the next tick comes from `wakeWorker()` on submit. Two
+  timers survive and **neither is a poll**: an error backoff that escalates
+  5 s → 300 s over seven attempts and then **stops**
+  (`errorBackoffMs` returns `null`, deliberately, so an outage cannot re-create the
+  poll at 5-minute spacing), and a per-job lease renewal that exists only while a
+  handler is running.
+- **`motir-gateway` — confirmed unchanged.** `fly.toml` still sets
+  `SYNC_FREQUENCY = "600"` and `common/config/config.go:110` still defaults it to
+  `10*60` s. **Read from the repo, not from the platform** — the deployed value is
+  a `fly.toml` `[env]` entry rather than a secret, so this is a code reading and
+  carries a code reading's warrant.
+
+**⚠️ AND THE GATEWAY'S ROW SURVIVES ONLY AS AN ANSWER — ITS REASON DOES NOT.** The
+code is unchanged, but 600 s was chosen against the five-minute figure and clears
+the measured ~9 minutes by about a minute — the **same margin** that gave motir-ai
+a 77% duty cycle rather than the ~50% its arithmetic promised. So the `No` in that
+row is still correct and is now correct for the opposite reason: a second warm
+gateway adds no compute-hours because **the first one may already be holding the
+compute awake around the clock**, not because the database is asleep for both. The
+2026-08-13 duty-cycle reading below (`motir-gateway` **~100%**) is consistent with
+exactly that, and nothing has re-measured it since PR #15 landed.
+
+**This is a standing bill, not a scaling one**, which is why it does not change any
+floor decided in this amendment and is not silently folded into §16's table: the
+cost is already being paid at a floor of 1. It is named here because the corrected
+number is what makes it visible, and because it is the same defect
+[MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228) removed from motir-ai — an interval
+tuned against a threshold nobody measured. **It has no owner yet.**
+[MOTIR-2852](motir:cmss0vww500l9i5phpl0lngzi) and
+[MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo) are `motir-core` cards and do not
+reach it.
 
 **All three floors above can therefore be raised without a database bill**, which
-is not a coincidence — it is the result of three separate cards having already
-moved every polling loop past the five-minute threshold. **That is the property to
-protect.** A future in-process poll shorter than five minutes on any of these
-services re-prices every floor in this amendment, and is a decision to bring back
-here rather than a constant to tune.
+is not a coincidence — it is the result of separate cards having already taken
+every polling loop out of the path. **That is the property to protect.** A future
+in-process poll on any of these services re-prices every floor in this amendment,
+and is a decision to bring back here rather than a constant to tune. **Note what
+that sentence no longer says:** it used to license any interval longer than five
+minutes. It licenses none — an interval is priced against a delay nobody
+guarantees, and the two services that have no timer at all cost nothing to reason
+about.
 
 Duty cycles measured 18:15→20:46Z on 2026-08-13, from Neon's own API: `motir-core`
 **99%**, `motir-ai` **~100%**, `motir-gateway` **~100%** — all three databases were
 awake essentially continuously, driven by timers rather than by users.
-MOTIR-2852/2853 and MOTIR-3224 are the cards that close the remaining gap.
+**`motir-ai`'s driver is gone as of 2026-08-20**
+([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)); that reading is now historical for
+that service and has not been re-taken.
+[MOTIR-2852](motir:cmss0vww500l9i5phpl0lngzi) and
+[MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo) own the remaining gap, both on
+`motir-core`. Read their status in Motir rather than here — a record that asserts
+what is still open is a record with a short half-life, which is the failure this
+amendment is correcting one paragraph up.
 
 ### §22 — What this amendment does NOT decide
 
@@ -1881,14 +1982,16 @@ is a re-plan of this card, not a judgement call there.
 
 ### Sources — additions
 
-| Claim                                               | Source                                                                                               |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| The proxy never creates or destroys machines        | <https://fly.io/docs/launch/autostop-autostart/>                                                     |
-| Machine states, and that `stop` is compute-free     | <https://fly.io/docs/machines/machine-states/> · <https://fly.io/docs/about/pricing/>                |
-| No spend cap, no billing alert                      | Fly cost-management docs, quoted in `ci-runner-fleet.md` §9 (re-read on `origin/main`, 2026-08-20)   |
-| Machine states, VM sizes, event histories           | `GET https://api.machines.dev/v1/apps/<app>/machines`, 2026-08-20                                    |
-| Resident memory per service                         | `fly ssh console -a <app> --machine <id>` → `/proc/*/status` `VmRSS`, 2026-08-20                     |
-| One machine runs one job at a time                  | `motir-ai` `src/jobs/worker.ts` (`ticking` guard) and `src/jobs/planJobRepository.ts`, `origin/main` |
-| motir-core has no server-side poll                  | `grep -rn 'setInterval(' lib app` on `origin/main`, 2026-08-20 — five hits, all `'use client'`       |
-| `REDIS_CONN_STRING` unset on the gateway            | `fly secrets list -a motir-gateway`, 2026-08-20                                                      |
-| Neon's five-minute floor is not lowerable on Launch | Neon API probe, 2026-08-13, recorded on MOTIR-2780                                                   |
+| Claim                                                       | Source                                                                                                                                                                                       |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The proxy never creates or destroys machines                | <https://fly.io/docs/launch/autostop-autostart/>                                                                                                                                             |
+| Machine states, and that `stop` is compute-free             | <https://fly.io/docs/machines/machine-states/> · <https://fly.io/docs/about/pricing/>                                                                                                        |
+| No spend cap, no billing alert                              | Fly cost-management docs, quoted in `ci-runner-fleet.md` §9 (re-read on `origin/main`, 2026-08-20)                                                                                           |
+| Machine states, VM sizes, event histories                   | `GET https://api.machines.dev/v1/apps/<app>/machines`, 2026-08-20                                                                                                                            |
+| Resident memory per service                                 | `fly ssh console -a <app> --machine <id>` → `/proc/*/status` `VmRSS`, 2026-08-20                                                                                                             |
+| One machine runs one job at a time                          | `motir-ai` `src/jobs/worker.ts` (`ticking` guard) and `src/jobs/planJobRepository.ts`, `origin/main`                                                                                         |
+| motir-core has no server-side poll                          | `grep -rn 'setInterval(' lib app` on `origin/main`, 2026-08-20 — five hits, all `'use client'`                                                                                               |
+| `REDIS_CONN_STRING` unset on the gateway                    | `fly secrets list -a motir-gateway`, 2026-08-20                                                                                                                                              |
+| Neon's five-minute SETTING floor is not lowerable on Launch | Neon API probe, 2026-08-13, recorded on MOTIR-2780 — this is the minimum `suspend_timeout_seconds`, NOT the observed delay                                                                   |
+| Neon's observed suspend DELAY is ~9 min, not five           | Neon control-plane sampling every 30 s with no database connection, 2026-08-20 — three samples (9m43s / 8m20s / 9m31s), recorded on MOTIR-3224 (motir-ai#256) and carried here by MOTIR-3257 |
+| motir-ai runs no in-process poll                            | `src/jobs/worker.ts` on `origin/main` after MOTIR-3224 — an idle tick sets its delay to `null` and schedules nothing                                                                         |
