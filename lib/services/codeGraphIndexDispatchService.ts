@@ -850,6 +850,13 @@ export const codeGraphIndexDispatchService = {
       aiBaseUrl,
       tarballUrl,
       runCredential: credential.credential,
+      // MOTIR-3252 — present only when motir-ai decided this run may sync
+      // (a snapshot exists AND its engine version matches the container's).
+      // Forwarded, never inspected: this side cannot tell a good grant from a
+      // bad one and has no business trying.
+      ...(credential.previousSnapshotUrl
+        ? { previousSnapshotUrl: credential.previousSnapshotUrl }
+        : {}),
       timeoutSeconds: Math.ceil(indexTimeoutMs / 1000),
     });
 
@@ -1145,6 +1152,11 @@ export const codeGraphIndexDispatchService = {
    * it is what keeps the four variables the image's boot contract names
    * (`motir-ai/infra/indexer/README.md`) the only four that can be in it.
    *
+   * ⚠️ FOUR VARIABLES, OR FIVE (MOTIR-3252). The fifth —
+   * `MOTIR_INDEX_SNAPSHOT_URL` — appears only when motir-ai offered this run its
+   * previous snapshot, and it is a third pre-signed URL rather than a widening:
+   * one object, one method, minutes. Everything in the list below is still absent.
+   *
    * ⚠️ WHAT IS DELIBERATELY ABSENT, since the absence is the decision (§4, §10):
    * no GitHub App key and no installation token — the pre-signed URL is
    * self-authorizing and strictly less privilege; no `DATABASE_URL`; no
@@ -1168,6 +1180,13 @@ export const codeGraphIndexDispatchService = {
     tarballUrl: string;
     /** This run's motir-ai credential — opaque, and the only one in the spec. */
     runCredential: string;
+    /**
+     * OPTIONAL (MOTIR-3252) — the pre-signed, single-key GET for the repo's
+     * PREVIOUS snapshot, when motir-ai offered one. Its presence is what turns
+     * this run into a SYNC rather than a whole-tree rebuild; its absence is the
+     * behaviour this container had unconditionally before it existed.
+     */
+    previousSnapshotUrl?: string;
     timeoutSeconds: number;
   }): ContainerSpec {
     const { target, fleet, aiBaseUrl, tarballUrl, runCredential, timeoutSeconds } = args;
@@ -1187,6 +1206,14 @@ export const codeGraphIndexDispatchService = {
         MOTIR_INDEX_REPO_REF: target.repoRef,
         MOTIR_AI_BASE_URL: aiBaseUrl,
         MOTIR_INDEX_RUN_CREDENTIAL: runCredential,
+        // A FIFTH variable, and only sometimes — the one exception to the key set
+        // above, added deliberately (MOTIR-3252). It is another PRE-SIGNED URL,
+        // which is the same class of thing as the tarball: self-authorizing,
+        // scoped to one object, minutes long, and useless for anything else. It
+        // is NOT a new credential class, and the paragraph above stands unchanged:
+        // still no GitHub key, no `DATABASE_URL`, no object-storage credential, no
+        // service token, no Fly token.
+        ...(args.previousSnapshotUrl ? { MOTIR_INDEX_SNAPSHOT_URL: args.previousSnapshotUrl } : {}),
       },
     };
   },

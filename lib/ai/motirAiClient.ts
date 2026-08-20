@@ -692,6 +692,25 @@ export interface CodeGraphRunCredential {
   credential: string;
   /** ISO-8601 — when it stops working. Minutes away, by design. */
   expiresAt: string;
+  /**
+   * OPTIONAL (MOTIR-3252) — a single-key, GET-only pre-signed URL for the repo's
+   * PREVIOUS code-graph snapshot, which the container syncs against instead of
+   * re-parsing the whole tree.
+   *
+   * **Opaque here, exactly like `credential`.** motir-core does not know the
+   * snapshot key, cannot compute it, and holds no object-storage credential — all
+   * three by decision (`docs/decisions/code-graph-index-fleet.md` §4/§5). motir-ai
+   * mints it because it has the coordination row and the bucket; this side carries
+   * it to the container's environment and never opens it.
+   *
+   * **Absent is the normal answer, not a failure.** A first index has no previous
+   * snapshot, and a `codegraphVersion` bump deliberately withholds it so the run
+   * rebuilds — the re-index the schema promises. Either way the container does a
+   * full build, which is what it did unconditionally before this existed. That is
+   * also what makes the two repos' halves free to merge in any order: an older
+   * motir-ai simply never returns the field.
+   */
+  previousSnapshotUrl?: string;
 }
 
 /**
@@ -764,7 +783,20 @@ export async function mintCodeGraphRunCredential(input: {
       'motir-ai returned a run credential with no expiry from POST /v1/code-graph/run-credential',
     );
   }
-  return { credential: body.credential, expiresAt: body.expiresAt };
+  // The snapshot grant is OPTIONAL and is validated only for shape — a malformed
+  // one is DROPPED rather than fatal, because the run it would have accelerated
+  // still succeeds without it. This is the one field here whose absence is
+  // routine, so it must not learn the fatal treatment of the two above.
+  const previousSnapshotUrl =
+    typeof body.previousSnapshotUrl === 'string' && body.previousSnapshotUrl.length > 0
+      ? body.previousSnapshotUrl
+      : undefined;
+
+  return {
+    credential: body.credential,
+    expiresAt: body.expiresAt,
+    ...(previousSnapshotUrl ? { previousSnapshotUrl } : {}),
+  };
 }
 
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
