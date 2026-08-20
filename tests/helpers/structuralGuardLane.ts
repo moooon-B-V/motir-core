@@ -51,6 +51,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // repository's answer (the vacuous-pass trap MOTIR-2815 hit).
   'tests/theme/inkContrastLint.test.ts',
   'tests/theme/inkContrastScan.test.ts',
+  // ── tests/theme/ — the shell viewport-unit guard (MOTIR-3208) ─────────────
+  // Same shape again: a text walk of `app/` + `components/` + the design
+  // system's `src/`, plus two stylesheets, asserting that every viewport-sized
+  // length on the shell path is written in `dvh`. It opens no database, renders
+  // nothing, and imports nothing from `lib/` or `app/`, so it carries no
+  // coverage out of the merged report.
+  'tests/theme/shellViewportUnits.test.ts',
 ] as const;
 
 /**

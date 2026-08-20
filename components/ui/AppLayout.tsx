@@ -77,7 +77,24 @@ export function AppLayout({ topNav, sidebar, children, className }: AppLayoutPro
         {/* Persistent rail — hidden below md, where the drawer takes over. */}
         <div className="hidden min-h-0 md:block">{sidebar}</div>
 
-        <main id="main" tabIndex={-1} className="min-h-0 overflow-y-auto focus:outline-none">
+        {/*
+          `<main>` is the ONLY scroller on any signed-in surface — the root above
+          is `h-dvh overflow-hidden`, so the document itself never scrolls
+          (MOTIR-3208).
+
+          Both axes are stated. Left implicit, `overflow-x` does not stay
+          `visible`: CSS Overflow 3 computes it to `auto` whenever the other axis
+          is non-visible, so the shell's one scroller would acquire a horizontal
+          bar nobody chose. `auto` is what it is set to deliberately — content
+          wider than the column (a wide table, a code block, a board) must stay
+          REACHABLE, and clipping it would make it permanently unreachable in a
+          shell whose document cannot scroll to reveal it.
+        */}
+        <main
+          id="main"
+          tabIndex={-1}
+          className="min-h-0 overflow-y-auto overflow-x-auto focus:outline-none"
+        >
           {children}
         </main>
       </div>

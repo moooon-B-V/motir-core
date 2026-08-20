@@ -17,7 +17,7 @@ export default async function ExploreLayout({ children }: { children: ReactNode 
   const topics = categories.slice(0, 6).map((c) => ({ slug: c.slug, label: c.label }));
 
   return (
-    <div className="flex min-h-screen flex-col bg-(--el-page-bg)">
+    <div className="flex min-h-dvh flex-col bg-(--el-page-bg)">
       <ExploreTopBar />
       <main className="mx-auto w-full max-w-[72rem] flex-1 px-4 py-8 sm:px-6">{children}</main>
       <ExploreFooter topics={topics} />
