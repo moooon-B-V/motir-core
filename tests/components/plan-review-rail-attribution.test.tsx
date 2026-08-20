@@ -35,6 +35,7 @@ function review(over: Partial<PlanReviewDto> = {}): PlanReviewDto {
     plannedAt: '2026-08-19T00:00:00.000Z',
     decidedAt: null,
     decidedByName: null,
+    decisionReason: null,
     // The default is the UNATTRIBUTED state — no requester, no author — so each
     // state below opts in explicitly.
     origin: 'user',

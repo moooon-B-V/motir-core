@@ -2,8 +2,17 @@ import { Prisma, type Plan } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 /** A plan the abandoned-plan sweep may act on — a `Plan` whose `sourceJobId` the
- *  selecting predicate has already proved non-null. */
-export type AbandonedPlanCandidate = Plan & { sourceJobId: string };
+ *  selecting predicate has already proved non-null, carrying the proposal COUNT
+ *  read in the same statement.
+ *
+ *  The count is what the sweep's write re-reads against (MOTIR-3189). It used to
+ *  be able to assert `0` from the predicate alone; now that a PARTIAL plan is a
+ *  candidate, "did the row move under us?" is a comparison rather than a
+ *  presence test, and the number has to travel with the candidate to make it. */
+export type AbandonedPlanCandidate = Plan & {
+  sourceJobId: string;
+  _count: { items: number };
+};
 
 // Plan repository — single Prisma operations on the `plan` table (Story 7.21 ·
 // MOTIR-1336). Writes require `tx` (a compile-time guarantee they run in a
@@ -87,14 +96,15 @@ export const planRepository = {
    * for a project whose real `planned` proposal sits one row down — trading a
    * permanent pause for the stacked proposal the gate exists to prevent.
    *
-   * ⚠️ THE OTHER HALF — an empty plan whose PRODUCER died — is not reachable from
-   * here and never was: that row carries a `sourceJobId`, so it is identical to a
+   * ⚠️ THE OTHER HALF — a plan whose PRODUCER died — is not reachable from here
+   * and never was: that row carries a `sourceJobId`, so it is identical to a
    * healthy in-flight generation until somebody asks the job. It is reconciled
    * OUT of `generating` by `abandonedPlanService.reconcileAbandoned`
-   * (MOTIR-3064), which asks and then writes a terminal status — so by the time
-   * this read sees it, it is `declined` and decided. The predicate below is
-   * unchanged by that fix, deliberately: a gate that guessed at liveness is the
-   * thing AMENDMENT 2 rejected.
+   * (MOTIR-3064, which took the empty ones; MOTIR-3189, which took the partial
+   * ones too), so by the time this read sees it, it is `declined` and decided.
+   * The predicate below is unchanged by BOTH fixes, deliberately: a gate that
+   * guessed at liveness is the thing AMENDMENT 2 rejected, and widening the
+   * sweep does not make guessing here any better an idea.
    *
    * Newest first, so the ONE row returned is the plan a caller would show. Takes
    * an optional `tx` because both consumers read it inside a workspace context
@@ -120,10 +130,10 @@ export const planRepository = {
 
   /**
    * The ABANDONED-PLAN candidates, across workspaces — the discovery read behind
-   * the reconciling sweep (MOTIR-3064). Returns `generating` plans that have a
-   * PRODUCER, hold NO proposals, and are older than `olderThan`; the sweep then
-   * asks motir-ai what became of each one's job and terminates only the ones
-   * whose producer is provably gone.
+   * the reconciling sweep (MOTIR-3064; widened to PARTIAL plans by MOTIR-3189).
+   * Returns `generating` plans that have a PRODUCER and are older than
+   * `olderThan`, whatever they hold; the sweep then asks motir-ai what became of
+   * each one's job and terminates only the ones whose producer is provably gone.
    *
    * THIS IS THE OTHER HALF OF {@link findUndecidedByProject}'s exclusion, and the
    * two are deliberately disjoint. MOTIR-3051 excluded the orphan with NO
@@ -141,20 +151,42 @@ export const planRepository = {
    * race a submit it would otherwise be asking about milliseconds after it
    * happened.
    *
-   * ⚠️ AND IT IS EMPTY-ONLY, BY THE CARD'S OWN SCOPE (MOTIR-3064 AC 5). A job
-   * that died AFTER some appends left a PARTIAL plan, and that is a real proposal
-   * a person can read and decline — the release valve works there, so nothing
-   * here may touch it.
+   * ⚠️ IT IS NO LONGER EMPTY-ONLY (MOTIR-3189), AND THE EXCLUSION DID NOT FALL
+   * FOR BEING TOO CAUTIOUS. MOTIR-3064 AC 5 read: *"a PARTIAL plan is a real
+   * proposal a person can read and decline — the release valve works there, so
+   * nothing here may touch it."* Read, yes. Decline, no: `declinePlan` and
+   * `approvePlan` both re-read under their row lock and refused anything but
+   * `planned`, so there was no path out of `generating` for anyone — not the
+   * sweep, not a person, not a token. The exclusion protected a human decision
+   * the status guard made impossible, and stranded every partial plan
+   * permanently, which is the same harm MOTIR-3064 existed to remove:
+   * `findUndecidedByProject` reads `generating` as UNDECIDED whatever the plan
+   * holds. The valve is real now — `declinePlan` accepts `generating` and
+   * records `discarded` — and this arm covers the plans nobody is coming back
+   * to look at.
+   *
+   * ⚠️ SO THE COUNT IS SELECTED RATHER THAN ASSERTED, AND THE WRITE COMPARES IT.
+   * `items: { none: {} }` was doing two jobs — the filter here, and the write's
+   * did-it-move guard. With the filter gone the guard cannot stay a presence
+   * test, so the candidate carries `_count.items` and the write refuses on a
+   * MISMATCH. `row_moved` then keeps meaning exactly what it always meant (the
+   * row changed between the ask and the act) while a plan that was ALREADY
+   * partial at discovery goes through.
    *
    * Cross-workspace, so it runs under `withSystemContext` against the plan
    * policy's `FOR SELECT` system arm; every write the sweep then makes re-binds
-   * to that row's own workspace. **`plan_item` needs that arm too, and the
-   * direction is the surprising one**: `items: { none: {} }` is a correlated
-   * subquery in the SAME statement, so an RLS-hidden proposal row makes `NOT
-   * EXISTS` vacuously true and a PARTIAL plan read as empty — the blind spot
-   * WIDENS this scan rather than narrowing it. Both arms ship in this card's
-   * migration. Bounded by `take` and ordered oldest-first, so a
-   * backlog drains over successive passes rather than in one long transaction.
+   * to that row's own workspace. **`plan_item` still needs its arm, and the
+   * direction has REVERSED into the safe one.** Under `items: { none: {} }` an
+   * RLS-hidden proposal made a correlated `NOT EXISTS` vacuously true and
+   * WIDENED the scan onto exactly the rows the exclusion protected. Under
+   * `_count` a hidden proposal reads the count LOW, the write re-counts under
+   * the plan's own workspace context, the two disagree, and the verdict is
+   * `row_moved` — nothing is terminated. A blind spot here now costs a pass
+   * rather than a plan. The arm (MOTIR-3064's migration) stays: the scan reads
+   * `plan_item` either way, and a permanently-`row_moved` sweep is a broken one.
+   *
+   * Bounded by `take` and ordered oldest-first, so a backlog drains over
+   * successive passes rather than in one long transaction.
    */
   async listAbandonedCandidates(
     olderThan: Date,
@@ -164,14 +196,17 @@ export const planRepository = {
     // The cast is the WHERE clause's `sourceJobId: { not: null }` stated in the
     // type system: the caller needs a `string` to ask motir-ai with, and a
     // runtime re-check would be a branch no query result can take. Narrowing it
-    // HERE keeps the proof next to the predicate that establishes it.
+    // HERE keeps the proof next to the predicate that establishes it. The
+    // `_count` half comes from the `include` and needs no narrowing; one cast
+    // covers both, because Prisma widens `sourceJobId` back to nullable on the
+    // way out whatever the predicate said.
     return tx.plan.findMany({
       where: {
         status: 'generating',
         sourceJobId: { not: null },
         createdAt: { lte: olderThan },
-        items: { none: {} },
       },
+      include: { _count: { select: { items: true } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
     }) as Promise<AbandonedPlanCandidate[]>;

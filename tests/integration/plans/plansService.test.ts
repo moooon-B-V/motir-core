@@ -2,9 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import {
   InvalidProposalError,
   PlanItemNotFoundError,
+  PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
 } from '@/lib/plans/errors';
@@ -854,16 +856,224 @@ describe('plansService.declinePlan', () => {
     expect(row?.itemCount).toBe(3);
   });
 
-  it('rejects approve/decline from a non-planned status', async () => {
+  it('records `reviewed` — the ending this method was written for', async () => {
+    // The from-status IS the reason (MOTIR-3189). `declined` covers three
+    // histories now, and a plan a person read and rejected is the one that keeps
+    // the original wording on the review surface.
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Reviewed and refused', kind: 'task' } },
+    ]);
+
+    const declined = await plansService.declinePlan(planId, fx.ctx);
+
+    expect(declined.decisionReason).toBe('reviewed');
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).decisionReason).toBe(
+      'reviewed',
+    );
+  });
+
+  // AMENDED by MOTIR-3189. This used to read "rejects approve/decline from a
+  // non-planned status" and assert BOTH deciders refuse a `generating` plan —
+  // which was true, and was the defect: with the sweep excluding partial plans
+  // to leave the decision to a person, no person had a door. Approve is
+  // unchanged (materializing an unfinished plan is a different act); decline
+  // now accepts `generating` as a DISCARD.
+  it('rejects APPROVE from a non-planned status — materializing an unfinished plan is not a decision to allow', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
     // still generating
     await expect(plansService.approvePlan(plan.id, fx.ctx)).rejects.toBeInstanceOf(
       PlanNotInExpectedStatusError,
     );
-    await expect(plansService.declinePlan(plan.id, fx.ctx)).rejects.toBeInstanceOf(
-      PlanNotInExpectedStatusError,
+  });
+
+  it('rejects decline from an ALREADY-DECIDED status, naming both legal origins', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Once only', kind: 'task' } },
+    ]);
+    await plansService.declinePlan(planId, fx.ctx);
+
+    // The idempotency / lost-race landing, unchanged: the second caller re-reads
+    // under the lock, observes `declined`, and gets the typed 409 carrying the
+    // ACTUAL status as data (MOTIR-3025) so it need not parse the sentence.
+    await expect(plansService.declinePlan(planId, fx.ctx)).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof PlanNotInExpectedStatusError &&
+        err.actual === 'declined' &&
+        err.message.includes('planned or generating'),
     );
+  });
+});
+
+describe('plansService.declinePlan — DISCARD from `generating` (MOTIR-3189)', () => {
+  // A plan whose producer died mid-generation could not be approved, declined or
+  // discarded by anyone: both deciders re-read under the row lock and threw
+  // unless the status was `planned`. Meanwhile `findUndecidedByProject` read it
+  // as UNDECIDED and paused that project's auto-plan cadence for good, and
+  // AMENDMENT 2 excluded partial plans from the reconciling sweep precisely to
+  // leave the call to a person. Nobody checked the person had a door.
+
+  /** Open a `generating` plan and append proposals WITHOUT closing the frontier
+   *  — the shape a crashed generation or an abandoned authoring pass leaves. */
+  async function generatingPlan(
+    fx: WorkItemFixture,
+    proposals: Parameters<typeof plansService.addProposals>[1],
+    opts: { sourceJobId?: string | null } = {},
+  ): Promise<string> {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Half-written', ...(opts.sourceJobId ? { sourceJobId: opts.sourceJobId } : {}) },
+      fx.ctx,
+    );
+    if (proposals.length > 0) await plansService.addProposals(plan.id, proposals, fx.ctx);
+    return plan.id;
+  }
+
+  it('AC 1: moves a PARTIAL `generating` plan to `declined`, and every PlanItem survives', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Untouched');
+    const planId = await generatingPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Never created', kind: 'task' } },
+      { op: 'modify', workItemId: targetId, patch: { title: 'Should not apply' } },
+    ]);
+
+    const discarded = await plansService.declinePlan(planId, fx.ctx);
+
+    expect(discarded.status).toBe('declined');
+    expect(discarded.decidedById).toBe(fx.ownerId);
+    expect(discarded.decidedAt).not.toBeNull();
+    // ⚠️ NOTHING IS DELETED — the MOTIR-3154 / MOTIR-3160 rule, unchanged. It
+    // matters more here: these proposals are the only record of how far the
+    // producer got before it stopped. Asserted by READING THE PLAN BACK, which
+    // is what the card asked for rather than a count on the write's own return.
+    const readBack = await plansService.getPlan(planId, fx.ctx);
+    expect(readBack.items).toHaveLength(2);
+    expect(readBack.itemCount).toBe(2);
+    expect(readBack.items.map((i) => i.op).sort()).toEqual(['add', 'modify']);
+    // …and the tree is untouched, exactly as on a reviewed decline.
+    expect(await adminDb.workItem.findFirst({ where: { title: 'Never created' } })).toBeNull();
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } })).title).toBe(
+      'Untouched',
+    );
+  });
+
+  it('AC 3 + AC 4: `plannedAt` stays NULL and the reason is `discarded`', async () => {
+    // The frontier genuinely never closed. Back-filling `plannedAt` would make a
+    // plan that died halfway indistinguishable from one that finished and was
+    // turned down — the exact conflation `decisionReason` exists to remove, so
+    // the two assertions belong in one test.
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Half a tree', kind: 'task' } },
+    ]);
+
+    const discarded = await plansService.declinePlan(planId, fx.ctx);
+
+    expect(discarded.plannedAt).toBeNull();
+    expect(discarded.decisionReason).toBe('discarded');
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(row.plannedAt).toBeNull();
+    expect(row.decisionReason).toBe('discarded');
+  });
+
+  it('AC 7: a plan with NO PRODUCER is discardable — the sweep can never ask about it', async () => {
+    // The agent-authored orphan. `create_plan` over MCP records no
+    // `sourceJobId`, so `listAbandonedCandidates` (which asks motir-ai what
+    // became of the job) can never reach this row however old it gets — there
+    // is nothing to ask about. The discard path is its ONLY exit, which is why
+    // this row gets a test of its own rather than riding the one above.
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Authored by hand', kind: 'task' } },
+    ]);
+    expect(
+      (await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).sourceJobId,
+    ).toBeNull();
+
+    const discarded = await plansService.declinePlan(planId, fx.ctx);
+
+    expect(discarded.status).toBe('declined');
+    expect(discarded.decisionReason).toBe('discarded');
+    expect(discarded.sourceJobId).toBeNull();
+  });
+
+  it('discards an EMPTY `generating` plan too — the shape the sweep already had', async () => {
+    // Not a new class, but the one MOTIR-3051 and MOTIR-3064 were written about,
+    // and a person should not have to wait an hour for a sweep to clear a plan
+    // they know is dead. Zero proposals is not a reason to refuse.
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx, []);
+
+    const discarded = await plansService.declinePlan(planId, fx.ctx);
+
+    expect(discarded.status).toBe('declined');
+    expect(discarded.itemCount).toBe(0);
+    expect(discarded.decisionReason).toBe('discarded');
+  });
+
+  it('AC 8: the project’s cadence stops being paused by it', async () => {
+    // The harm, closed at the service rather than through the sweep: the plan is
+    // no longer UNDECIDED, so the pending-proposal gate stops reading it.
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Stranded', kind: 'task' } },
+    ]);
+    await expect(
+      autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ id: planId });
+
+    await plansService.declinePlan(planId, fx.ctx);
+
+    await expect(autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx)).resolves.toBeNull();
+  });
+
+  it('AC 2: a plan in ANOTHER WORKSPACE is refused exactly as an unknown one is — no existence leak', async () => {
+    // The lookup is workspace-scoped (`findById(planId, ctx.workspaceId)`), so a
+    // cross-tenant id resolves to null and takes the SAME branch a nonexistent
+    // id takes. What the assertion has to prove is that the two are
+    // indistinguishable: a 404 for one and a 403 for the other would answer
+    // "that plan exists, elsewhere", which is the leak.
+    const owner = await makeWorkItemFixture({ name: 'Acme', identifier: 'ACME' });
+    const stranger = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLBX' });
+    const planId = await generatingPlan(owner, [
+      { op: 'add', proposedFields: { title: 'Theirs', kind: 'task' } },
+    ]);
+
+    await expect(plansService.declinePlan(planId, stranger.ctx)).rejects.toBeInstanceOf(
+      PlanNotFoundError,
+    );
+    await expect(
+      plansService.declinePlan('plan_does_not_exist', stranger.ctx),
+    ).rejects.toBeInstanceOf(PlanNotFoundError);
+
+    // And the plan is untouched — the refusal happened before the transaction.
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+      'generating',
+    );
+  });
+
+  it('two concurrent discards resolve to exactly one write; the loser gets the typed error', async () => {
+    // The row lock and the re-read are shared with the reviewed path, so this is
+    // the same guarantee — asserted from `generating` because that is the entry
+    // the lock had never been exercised from.
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Contended', kind: 'task' } },
+    ]);
+
+    const results = await Promise.allSettled([
+      plansService.declinePlan(planId, fx.ctx),
+      plansService.declinePlan(planId, fx.ctx),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(PlanNotInExpectedStatusError);
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(row.status).toBe('declined');
+    expect(row.decisionReason).toBe('discarded');
   });
 });
 

@@ -4092,6 +4092,23 @@ enum PlanStatus {
   @@map("plan_status")
 }
 
+/// WHY a `declined` plan ended (MOTIR-3189) — the record behind a status that
+/// covers three different histories. See `Plan.decisionReason`, which is where
+/// the reasoning for a private column rather than a `PlanStatus` member lives.
+enum PlanDecisionReason {
+  /// A person reviewed a `planned` plan and rejected it — `declinePlan` from
+  /// `planned`, the only ending that existed before this enum.
+  reviewed
+  /// A person ended a `generating` plan that never finished — `declinePlan`
+  /// from `generating`. `plannedAt` stays NULL: the frontier never closed.
+  discarded
+  /// `abandonedPlanService.reconcileAbandoned` terminated a plan whose producer
+  /// was provably gone. `decidedById` is NULL — nobody decided it.
+  abandoned
+
+  @@map("plan_decision_reason")
+}
+
 /// The operation a `PlanItem` proposes against the work-item tree (Story 7.21).
 /// `add` — create a new node (its fields live in `proposedFields`; no WorkItem
 /// exists until approve). `modify` — patch an existing node (the sparse changed
@@ -4184,6 +4201,28 @@ model Plan {
   /// Set on approve/decline, with the deciding actor.
   decidedAt     DateTime?               @map("decided_at")
   decidedById   String?                 @map("decided_by_id")
+  /// WHY this plan ended, for the three histories `declined` now covers
+  /// (MOTIR-3189). `reviewed` — a person read a finished plan and said no.
+  /// `discarded` — a person ended a plan that never finished generating.
+  /// `abandoned` — the sweep terminated one whose producer was provably gone.
+  ///
+  /// All three are DERIVABLE from the null pattern across `plannedAt` /
+  /// `decidedById`, and none was RECORDED: `planReviewService` pushed one
+  /// `declined` event and the rail rendered all three identically, so a reader
+  /// could see that a plan ended and not why.
+  ///
+  /// A PRIVATE column rather than a fourth `PlanStatus` member, which is the
+  /// trade AMENDMENT 2 weighed and this one completes. `PlanStatus` is a public
+  /// vocabulary reaching v1's `planStatusSchema`, the MCP tool descriptions,
+  /// `PlanStatusDto`, four display switches and the zh-parity gate; this column
+  /// reaches the review surface and the sweep's log line. AMENDMENT 2's own
+  /// fallback — "the honesty lives in the ACTOR: `decidedById` is NULL" — is the
+  /// half-measure it replaces, and that null still means what it meant.
+  ///
+  /// NULL is not a fourth reason: every row written before this column existed
+  /// reads null, so a consumer treats it as "not recorded" and falls back to the
+  /// status. Never set on `approved` — an approval has one history.
+  decisionReason PlanDecisionReason?    @map("decision_reason")
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)

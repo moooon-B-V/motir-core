@@ -5,6 +5,7 @@ import { AlertTriangle, Bot, Check, RotateCw, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import type { PlanHistoryEventDto, PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanDecisionReasonDto } from '@/lib/dto/plans';
 import type { PlanStatusDto, StaleReason } from '@/lib/dto/plans';
 
 // The REVIEW RAIL of the plan detail (Subtask 7.4.5 / MOTIR-847) — the chat-side
@@ -322,6 +323,32 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
   );
 }
 
+/**
+ * WHICH sentence a non-approved outcome gets (MOTIR-3189).
+ *
+ * `declined` covers three histories and used to render one line for all of them,
+ * so a plan that died halfway through generating was reported to its owner as a
+ * plan somebody had read and rejected. The reason is what separates them; a
+ * `reviewed` reason and a NULL one both take the original wording, because a
+ * null means *not recorded* (every row written before the column existed) and
+ * the original wording is the one that was true for those rows.
+ *
+ * Total over the union rather than a lookup with a fallback, so adding a reason
+ * to `PlanDecisionReasonDto` is a type error here rather than a plan silently
+ * rendering as reviewed-and-rejected.
+ */
+function declinedOutcomeKey(reason: PlanDecisionReasonDto | null): string {
+  switch (reason) {
+    case 'discarded':
+      return 'discardedOutcome';
+    case 'abandoned':
+      return 'abandonedOutcome';
+    case 'reviewed':
+    case null:
+      return 'declinedOutcome';
+  }
+}
+
 function DecidedOutcome({
   review,
   t,
@@ -341,7 +368,9 @@ function DecidedOutcome({
         ) : (
           <X className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden="true" />
         )}
-        {approved ? t('approvedOutcome', { n: review.itemCount }) : t('declinedOutcome')}
+        {approved
+          ? t('approvedOutcome', { n: review.itemCount })
+          : t(declinedOutcomeKey(review.decisionReason))}
       </p>
       {approved && codeOutcome ? (
         <p

@@ -24,6 +24,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
   PlanStatusDto,
+  PlanDecisionReasonDto,
   StaleReason,
   PlanAuthorSourceDto,
   PlanOriginDto,
@@ -203,11 +204,24 @@ export interface PlanReviewItemDto {
 
 /** A history event on the plan's lifecycle (the timeline). */
 export interface PlanHistoryEventDto {
-  /** `created` / `planned` / `approved` / `declined`. */
-  kind: 'created' | 'planned' | 'approved' | 'declined';
+  /**
+   * `created` / `planned` / `approved`, and the THREE endings a `declined` plan
+   * can have — `declined` (a person reviewed it and said no), `discarded` (a
+   * person ended it mid-generation) and `abandoned` (the sweep terminated a dead
+   * producer).
+   *
+   * ⚠️ The kind is the EVENT, not the status (MOTIR-3189). All three endings
+   * leave `Plan.status = 'declined'`; what separates them is
+   * `Plan.decisionReason`, and the timeline is the surface whose whole job is to
+   * say what happened. Before this the service pushed one `declined` event for
+   * all three and the rail rendered them identically — you could see that a plan
+   * ended and not why.
+   */
+  kind: 'created' | 'planned' | 'approved' | 'declined' | 'discarded' | 'abandoned';
   /** ISO timestamp, or null for a not-yet-reached event (the pending decision). */
   at: string | null;
-  /** The actor's display name (the decider) — only on `approved` / `declined`. */
+  /** The actor's display name (the decider) — only on the decision events, and
+   *  null on `abandoned`, where nobody decided. */
   byName?: string | null;
 }
 
@@ -224,6 +238,15 @@ export interface PlanReviewDto {
   decidedAt: string | null;
   /** The decider's display name, resolved from `decidedById`. */
   decidedByName: string | null;
+  /**
+   * WHY a `declined` plan ended (MOTIR-3189) — what the outcome block reads to
+   * avoid telling a reader their half-generated plan was reviewed and rejected.
+   *
+   * Null on every plan that is not `declined`, and on a `declined` row written
+   * before the column existed. A null is *not recorded*, so the surface falls
+   * back to the plain declined wording rather than inventing a reason.
+   */
+  decisionReason: PlanDecisionReasonDto | null;
   /**
    * The plan's THREE-party attribution (Story MOTIR-2982 · MOTIR-2991) — see
    * `design/ai-planning/design-notes.md` Part III.

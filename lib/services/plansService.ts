@@ -2153,9 +2153,33 @@ export const plansService = {
   },
 
   /**
-   * Decline a `planned` plan: set `declined` + decidedAt/decidedById, and KEEP
-   * every PlanItem. The tree was NEVER touched (adds never materialized;
-   * modify/remove targets untouched) → a clean no-op on the work-item tree.
+   * End a plan without materializing it: set `declined` + decidedAt/decidedById,
+   * record WHY it ended, and KEEP every PlanItem. The tree was NEVER touched
+   * (adds never materialized; modify/remove targets untouched) → a clean no-op
+   * on the work-item tree.
+   *
+   * ⚠️ TWO FROM-STATUSES, ONE IMPLEMENTATION (MOTIR-3189). `planned` is the
+   * REVIEW decision this method was written for; `generating` is a DISCARD of a
+   * plan that never finished being written. They are the same act — stop this
+   * plan, keep what it proposed — and the only thing that differs is the
+   * `decisionReason` the from-status names, so a second method would be a second
+   * copy of the permission check, the row lock, the retention rule and the lock
+   * release, kept in step by hand.
+   *
+   * ⚠️ AND `generating` HAD NO EXIT AT ALL BEFORE THIS, which is the defect.
+   * Both deciders re-read under the row lock and threw unless the status was
+   * `planned`, so a plan whose producer died mid-generation could not be
+   * approved, declined or discarded by anyone — while
+   * `findUndecidedByProject` went on reading it as UNDECIDED and pausing that
+   * project's auto-plan cadence for good, with the settings page reporting a
+   * proposal waiting on a decision nobody could make. AMENDMENT 2 excluded
+   * partial plans from the reconciling sweep precisely to leave that decision to
+   * a person; nobody checked that the person had a door.
+   *
+   * ⚠️ `plannedAt` IS NOT BACK-FILLED on a discard. The generation frontier
+   * genuinely never closed, and stamping it would make a plan that died halfway
+   * indistinguishable from one that finished and was turned down — the exact
+   * conflation `decisionReason` exists to remove.
    *
    * ⚠️ This used to drop every item inside the same transaction, and that is
    * the defect MOTIR-3154 reports (fixed here, MOTIR-3160). Not writing
@@ -2164,11 +2188,9 @@ export const plansService = {
    * offered and a person turned down. A declined plan read `0 items` for ever —
    * indistinguishable from a plan that proposed nothing — so the review model
    * had nothing to draw and MOTIR-1377 had to short-circuit the empty state to
-   * stop it shadowing the declined outcome.
-   *
-   * The rows are now the RECORD of a decision instead of a hole, and the delete
-   * had exactly one caller, so the repository method went with it — an abandoned
-   * path left behind is the next reader's live option.
+   * stop it shadowing the declined outcome. That holds for a DISCARD unchanged,
+   * and matters more there: a half-generated plan's proposals are the only
+   * record of how far the producer got.
    */
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -2188,12 +2210,25 @@ export const plansService = {
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
         if (!fresh) throw new PlanNotFoundError(planId);
-        if (fresh.status !== 'planned') {
-          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+        if (fresh.status !== 'planned' && fresh.status !== 'generating') {
+          // `approved` / `declined` — already decided. The message names both
+          // legal origins so the 409 says what would have worked, and `actual`
+          // still rides the field for a caller that has to branch on it
+          // (MOTIR-3025).
+          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned or generating');
         }
         const updated = await planRepository.update(
           planId,
-          { status: 'declined', decidedAt: new Date(), decidedById: ctx.userId },
+          {
+            status: 'declined',
+            decidedAt: new Date(),
+            decidedById: ctx.userId,
+            // The FROM-status is the reason, and it is read under the lock
+            // rather than from the pre-lock `plan` — a plan that reached
+            // `planned` while this call was in flight was reviewed, not
+            // discarded, and the record should say so.
+            decisionReason: fresh.status === 'planned' ? 'reviewed' : 'discarded',
+          },
           tx,
         );
         // The real count, read inside the same transaction — `markPlanned` above
