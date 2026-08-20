@@ -65,6 +65,14 @@ literals).
 
 **Approved by Yue on 2026-08-06** (MOTIR-1140, 8.3.2). This is the final mark: build against it.
 
+**Its DRAWING re-approved by Yue on 2026-08-19** (MOTIR-3182, after MOTIR-3181), at
+`design/brand/wave-band.svg` / `wave-band-24.svg` @ `5e67fd38`. **The concept was approved once and
+the drawing twice**, and the second approval settled only the contour: the curve now meets each
+vertical cap tangent-vertically (0.00000°, was 14.7° / 19.3° off), and the caps sit on the viewBox
+edge so they land on whole pixels at every size (alpha 255, was 84–233 at the non-grid sizes). The
+mark itself — its two crests, its rhythm, its proportions — is untouched, and MOTIR-1140's approval
+is not re-opened.
+
 **It is not a trace.** Yue supplied the mark as an editable **draw.io vector file**
 (`design/brand/motir-logo.drawio.svg`), which draws it as four _open_ strokes: an upper curve, a
 lower curve and two straight end caps. The artwork is that same geometry **closed and filled** —
