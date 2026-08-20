@@ -45,8 +45,23 @@ vi.mock('@/lib/blob/uploader', () => ({
   mintPrivateUploadToken: vi.fn(async (pathname: string) => `token-for:${pathname}`),
 }));
 
+// The DELETE half is SESSION-authed rather than CI-authed (MOTIR-3215), so it
+// reads one ambient value the POST half does not: the workspace context, which
+// in production comes from the session cookie + `next/headers`. Neither exists
+// in this environment, so it is the one thing faked — everything below it (the
+// identifier resolution, the `work_item:edit` gate, the lock, the write) runs
+// through the real path against the real database, exactly as the POST tests do.
+const workspaceCtx = vi.hoisted(() => ({
+  current: null as null | { userId: string; workspaceId: string },
+}));
+vi.mock('@/lib/workspaces', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/workspaces')>();
+  return { ...actual, getWorkspaceContext: async () => workspaceCtx.current };
+});
+
 const { POST: MINT } = await import('@/app/api/work-items/[id]/design-evidence/upload-token/route');
-const { POST: REGISTER } = await import('@/app/api/work-items/[id]/design-evidence/route');
+const { POST: REGISTER, DELETE: WITHDRAW } =
+  await import('@/app/api/work-items/[id]/design-evidence/route');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { designPrefix } = await import('@/lib/services/designEvidenceService');
 
@@ -94,6 +109,7 @@ function seed(
 beforeEach(async () => {
   store.clear();
   oidc.current = null;
+  workspaceCtx.current = null;
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "design_asset", "design_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
@@ -105,6 +121,7 @@ beforeEach(async () => {
     title: 'Design — the panel',
     parentId: story.id,
   });
+  workspaceCtx.current = { userId: fx.ctx.userId, workspaceId: fx.ctx.workspaceId };
 });
 
 afterAll(async () => {
@@ -699,5 +716,105 @@ describe('POST /design-evidence — register', () => {
 
     const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(after.status).toBe(before.status);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /design-evidence — the WITHDRAW entry point (MOTIR-3215)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('DELETE /design-evidence', () => {
+  const del = (identifier: string, body?: unknown) =>
+    new Request(`http://localhost/api/work-items/${identifier}/design-evidence`, {
+      method: 'DELETE',
+      ...(body === undefined
+        ? {}
+        : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+    });
+
+  /** Publish a result on `card` through the real register route. */
+  async function publish(name = 'p.mock.html') {
+    const token = await integrationToken(fx);
+    const res = await REGISTER(
+      req(
+        '',
+        token,
+        { assets: [seed('mock', name, 'text/html')], commitSha: `sha-${name}` },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(201);
+    return (await res.json()).evidence as { id: string };
+  }
+
+  it('withdraws the current result and returns the withdrawn row with its audit stamp', async () => {
+    const published = await publish();
+
+    const res = await WITHDRAW(
+      del(card.identifier, { reason: 'Published by a PR that changed no design file.' }),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(200);
+    const { evidence } = await res.json();
+    expect(evidence.id).toBe(published.id);
+    expect(evidence.withdrawnAt).not.toBeNull();
+    expect(evidence.withdrawnById).toBe(fx.ctx.userId);
+    expect(evidence.withdrawnReason).toBe('Published by a PR that changed no design file.');
+
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(0);
+    // Not destroyed — the row and its asset survive the withdrawal.
+    expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
+    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(1);
+  });
+
+  it('accepts a request with NO body — the reason is optional, not a 400', async () => {
+    await publish();
+    const res = await WITHDRAW(del(card.identifier), params(card.identifier));
+    expect(res.status).toBe(200);
+    expect((await res.json()).evidence.withdrawnReason).toBeNull();
+  });
+
+  it('401s an unauthenticated caller — a CI token is NOT a substitute here', async () => {
+    await publish();
+    workspaceCtx.current = null;
+
+    // Even carrying the publish token, which the POST beside it accepts: the
+    // withdrawal has to be able to name a PERSON, and the keyless-OIDC /
+    // PAT identity resolves to a workspace.
+    const token = await integrationToken(fx);
+    const res = await WITHDRAW(
+      new Request(`http://localhost/api/work-items/${card.identifier}/design-evidence`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      params(card.identifier),
+    );
+    expect(res.status).toBe(401);
+    expect((await res.json()).code).toBe('UNAUTHENTICATED');
+    // Nothing was written.
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(1);
+  });
+
+  it('404s when there is no current result — and 404s the SECOND withdrawal the same way', async () => {
+    const first = await WITHDRAW(del(card.identifier), params(card.identifier));
+    expect(first.status).toBe(404);
+    expect((await first.json()).code).toBe('DESIGN_EVIDENCE_NO_CURRENT_RESULT');
+
+    await publish();
+    expect((await WITHDRAW(del(card.identifier), params(card.identifier))).status).toBe(200);
+
+    const second = await WITHDRAW(del(card.identifier), params(card.identifier));
+    expect(second.status).toBe(404);
+    expect((await second.json()).code).toBe('DESIGN_EVIDENCE_NO_CURRENT_RESULT');
+  });
+
+  it('404s an unknown work item, with no existence leak', async () => {
+    const res = await WITHDRAW(del('PROD-99999'), params('PROD-99999'));
+    expect(res.status).toBe(404);
   });
 });

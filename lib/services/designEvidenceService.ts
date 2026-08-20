@@ -15,6 +15,7 @@ import {
   DesignEvidenceEmptyError,
   DesignEvidenceNotAChildError,
   DesignEvidenceNotALeafError,
+  DesignEvidenceNoCurrentResultError,
   DesignEvidenceNotFoundError,
   DesignEvidencePathnameError,
   DesignEvidenceSupersedeConflictError,
@@ -169,6 +170,32 @@ async function resolveTarget(
   // resolved from the ITEM, never from the actor's active project (the gate
   // MOTIR-2365 added to the acceptance resolver after a token-minting endpoint
   // turned out to be reachable with a session and an id).
+  await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:edit');
+  return item;
+}
+
+/**
+ * Resolve + authorize a WITHDRAWAL target (MOTIR-3215).
+ *
+ * ⚠️ Deliberately WITHOUT {@link isLeafPosition}, which {@link resolveTarget}
+ * applies. The leaf rule belongs to PUBLISH — it decides which card a design
+ * result may be attached to (§3). Applying it here would mean a card that has
+ * since GAINED a child can no longer have its wrong result taken back, which
+ * re-creates the permanence this whole path exists to remove: a `task` or `bug`
+ * is leaf-CAPABLE, not leaf-BY-KIND (MOTIR-3146), so an ordinary re-plan is
+ * enough to strand a row forever. A row that exists is withdrawable.
+ *
+ * The item-scoped `work_item:edit` gate is unchanged and is the real authority
+ * check: withdrawing a design result is editing that item, and the project is
+ * resolved from the ITEM rather than the actor's active project (the same gate
+ * MOTIR-2365 put on the acceptance resolver).
+ */
+async function resolveWithdrawTarget(workItemId: string, ctx: ServiceContext): Promise<WorkItem> {
+  const item = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => workItemRepository.findById(workItemId, tx),
+  );
+  if (!item) throw new DesignEvidenceNotFoundError(workItemId);
   await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:edit');
   return item;
 }
@@ -516,6 +543,56 @@ export const designEvidenceService = {
     } catch (err) {
       throw translateSupersedeConflict(err, item.id);
     }
+  },
+
+  /**
+   * WITHDRAW a work item's CURRENT design result — clear it with NOTHING taking
+   * its place (MOTIR-3215).
+   *
+   * Until this existed the table had exactly two mutations, create and
+   * supersede-by-publish, and BOTH need a replacement. A result published onto a
+   * card that will never have a design of its own therefore could not be
+   * corrected by any means: there is nothing correct to publish over it. That is
+   * not a gap somebody failed to fill — it is the reason MOTIR-3213's stray rows
+   * were still standing in production days after the publisher was fixed.
+   *
+   * **Nothing is deleted, and that is settled law in this domain.** The evidence
+   * row survives, its `design_asset` rows survive, and their `Attachment` rows
+   * are NOT unlinked — unlike a supersede, which hands the old blobs to the
+   * orphan-GC because a correct replacement has taken over the record. Here the
+   * record IS the point: destroying it would leave no way to see what was
+   * wrongly claimed, or that anything was claimed at all. Same position
+   * `declinePlan` reached in MOTIR-3154 / MOTIR-3160.
+   *
+   * **Never advances the item's status**, for the same reason the publish path
+   * does not: this is evidence, not a workflow decision.
+   */
+  async withdrawCurrentForWorkItem(
+    input: { workItemId: string; reason?: string | null },
+    ctx: ServiceContext,
+  ): Promise<DesignEvidenceDTO> {
+    const item = await resolveWithdrawTarget(input.workItemId, ctx);
+
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        // Lock BEFORE reading which row to withdraw — the decision is
+        // read-derived exactly as the supersede's is, so an unlocked read lets a
+        // concurrent publish insert a new current row that this withdrawal then
+        // silently misses (the lock-before-read-derived-update rule in
+        // CLAUDE.md). The lock is what makes "the row I read is the row I write"
+        // true here.
+        await designEvidenceRepository.lockCurrentByWorkItem(item.id, tx);
+        const current = await designEvidenceRepository.findCurrentByWorkItem(item.id, tx);
+        if (!current) throw new DesignEvidenceNoCurrentResultError(item.identifier);
+        return designEvidenceRepository.withdrawById(
+          current.id,
+          { withdrawnById: ctx.userId, withdrawnReason: input.reason?.trim() || null },
+          tx,
+        );
+      },
+    );
+    return toDesignEvidenceDto(row);
   },
 
   /**

@@ -40,6 +40,7 @@ const {
   DesignEvidenceBlobMissingError,
   DesignEvidenceSupersedeConflictError,
   DesignEvidenceNotFoundError,
+  DesignEvidenceNoCurrentResultError,
 } = await import('@/lib/designEvidence/errors');
 const { UnsupportedFileTypeError, FileTooLargeError } = await import('@/lib/blob/errors');
 const { isAllowedUploadType, isAllowedDesignAssetType } = await import('@/lib/blob/allowlist');
@@ -885,5 +886,190 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
     expect(dto).not.toBeNull();
     expect(dto!.assets.map((a) => a.kind)).toEqual(['mock', 'image']);
     expect(dto!.noteMd).toContain('## R');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WITHDRAW (MOTIR-3215)
+// ─────────────────────────────────────────────────────────────────────────────
+// The table shipped with two mutations — create, and supersede-by-publish — and
+// both need a REPLACEMENT. A result published onto a card that will never have a
+// design of its own was therefore permanent, which is why MOTIR-3213's stray
+// rows were still standing in production after the publisher was fixed. These
+// pin the third mutation and, just as much, what it deliberately does NOT do.
+
+describe('designEvidenceService.withdrawCurrentForWorkItem', () => {
+  /**
+   * Publish a one-asset result and return its DTO. The commit sha is derived
+   * from the asset name so two publishes are two publishes: an identical
+   * `commitSha` + `producedByKey` pair is a CI redelivery, which
+   * `findIdempotentExisting` correctly answers with the existing row rather
+   * than superseding it.
+   */
+  async function publish(fx: WorkItemFixture, workItemId: string, name = 'a.mock.html') {
+    return designEvidenceService.recordFromPathnames(
+      {
+        workItemId,
+        assets: [seedAsset(fx, workItemId, { kind: 'mock', name, contentType: 'text/html' })],
+        commitSha: `sha-${name}`,
+        producedByKey: 'MOTIR-2669',
+      },
+      fx.ctx,
+    );
+  }
+
+  it('clears the current result with no replacement — the panel read then returns null', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    const published = await publish(fx, card.id);
+
+    const withdrawn = await designEvidenceService.withdrawCurrentForWorkItem(
+      { workItemId: card.id, reason: 'Published by a PR that changed no design file.' },
+      fx.ctx,
+    );
+
+    expect(withdrawn.id).toBe(published.id);
+    expect(withdrawn.withdrawnAt).not.toBeNull();
+    expect(withdrawn.withdrawnById).toBe(fx.ctx.userId);
+    expect(withdrawn.withdrawnReason).toBe('Published by a PR that changed no design file.');
+
+    // The panel's own read — AC 1's "reads as having none". Nothing is current,
+    // so `DesignResultPanel` takes its existing empty branch; no new UI state.
+    expect(await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx)).toBeNull();
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(0);
+  });
+
+  it('is AUDITABLE, not destructive — the row, its assets and their attachments all survive', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    const published = await publish(fx, card.id);
+
+    await designEvidenceService.withdrawCurrentForWorkItem({ workItemId: card.id }, fx.ctx);
+
+    const row = await adminDb.designEvidence.findUnique({ where: { id: published.id } });
+    expect(row).not.toBeNull();
+    expect(row!.isCurrent).toBe(false);
+    expect(row!.withdrawnAt).toBeInstanceOf(Date);
+    expect(await adminDb.designAsset.count({ where: { designEvidenceId: published.id } })).toBe(1);
+
+    // ⚠️ The attachments stay LINKED, unlike a supersede — which unlinks them so
+    // the orphan-GC reclaims the blobs, because a correct replacement has taken
+    // over the record. Here the record IS the point: unlinking would destroy the
+    // only evidence of what was wrongly published.
+    const atts = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
+    expect(atts).toHaveLength(1);
+    expect(atts[0]!.workItemId).toBe(card.id);
+  });
+
+  it('distinguishes the three histories — never designed vs superseded vs withdrawn', async () => {
+    const fx = await makeWorkItemFixture();
+
+    // (a) never designed — no row at all.
+    const untouched = await makeSubtask(fx);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: untouched.id } })).toBe(0);
+
+    // (b) superseded by a later publish — is_current false, withdrawnAt NULL.
+    const republished = await makeSubtask(fx);
+    const first = await publish(fx, republished.id, 'one.mock.html');
+    await publish(fx, republished.id, 'two.mock.html');
+    const superseded = await adminDb.designEvidence.findUnique({ where: { id: first.id } });
+    expect(superseded!.isCurrent).toBe(false);
+    expect(superseded!.withdrawnAt).toBeNull();
+
+    // (c) withdrawn — is_current false AND withdrawnAt set.
+    const takenBack = await makeSubtask(fx);
+    const only = await publish(fx, takenBack.id);
+    await designEvidenceService.withdrawCurrentForWorkItem({ workItemId: takenBack.id }, fx.ctx);
+    const row = await adminDb.designEvidence.findUnique({ where: { id: only.id } });
+    expect(row!.isCurrent).toBe(false);
+    expect(row!.withdrawnAt).not.toBeNull();
+
+    // Which is the whole point: `is_current = false` alone cannot tell (b) from
+    // (c), and the design gate reads the same absence for both.
+    expect(superseded!.isCurrent).toBe(row!.isCurrent);
+    expect(superseded!.withdrawnAt).not.toEqual(row!.withdrawnAt);
+  });
+
+  it('refuses a work item with no current result — and refuses a SECOND withdrawal the same way', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+
+    await expect(
+      designEvidenceService.withdrawCurrentForWorkItem({ workItemId: card.id }, fx.ctx),
+    ).rejects.toBeInstanceOf(DesignEvidenceNoCurrentResultError);
+
+    await publish(fx, card.id);
+    await designEvidenceService.withdrawCurrentForWorkItem({ workItemId: card.id }, fx.ctx);
+    await expect(
+      designEvidenceService.withdrawCurrentForWorkItem({ workItemId: card.id }, fx.ctx),
+    ).rejects.toBeInstanceOf(DesignEvidenceNoCurrentResultError);
+  });
+
+  it('refuses an unknown / cross-workspace work item as NOT FOUND', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      designEvidenceService.withdrawCurrentForWorkItem({ workItemId: 'nope' }, fx.ctx),
+    ).rejects.toBeInstanceOf(DesignEvidenceNotFoundError);
+  });
+
+  it('⚠️ withdraws from a card that has since GAINED a child — the leaf gate is PUBLISH-only', async () => {
+    // The trap this test exists for: `resolveTarget` refuses a non-leaf, and a
+    // `task` / `bug` is leaf-CAPABLE, not leaf-BY-KIND (MOTIR-3146). If the
+    // withdraw path reused that gate, an ordinary re-plan that parents a subtask
+    // under the card would strand its wrong result forever — re-creating the
+    // exact permanence this whole path removes. MOTIR-2902, one of the four
+    // production victims, is a `task`.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent story' });
+    const task = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'A leaf, for now',
+      parentId: story.id,
+    });
+    await publish(fx, task.id);
+
+    await createTestWorkItem(fx, { kind: 'subtask', title: 'A child arrives', parentId: task.id });
+
+    // Publishing to it is now refused — the container rule, working correctly.
+    await expect(publish(fx, task.id, 'later.mock.html')).rejects.toBeInstanceOf(
+      DesignEvidenceNotALeafError,
+    );
+
+    // Withdrawing is not.
+    const withdrawn = await designEvidenceService.withdrawCurrentForWorkItem(
+      { workItemId: task.id },
+      fx.ctx,
+    );
+    expect(withdrawn.withdrawnAt).not.toBeNull();
+    expect(await designEvidenceService.getCurrentForWorkItem(task.id, fx.ctx)).toBeNull();
+  });
+
+  it('a blank reason is stored as NULL, not as an empty string', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await publish(fx, card.id);
+
+    const withdrawn = await designEvidenceService.withdrawCurrentForWorkItem(
+      { workItemId: card.id, reason: '   ' },
+      fx.ctx,
+    );
+    expect(withdrawn.withdrawnReason).toBeNull();
+  });
+
+  it('a later publish can still take the current slot after a withdrawal', async () => {
+    // Withdrawal must CLEAR the partial-unique slot, not occupy it: a card whose
+    // stray result was taken back may later produce a real design.
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    await publish(fx, card.id, 'stray.mock.html');
+    await designEvidenceService.withdrawCurrentForWorkItem({ workItemId: card.id }, fx.ctx);
+
+    const real = await publish(fx, card.id, 'real.mock.html');
+    expect(real.withdrawnAt).toBeNull();
+    const current = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
+    expect(current!.id).toBe(real.id);
+    expect(await adminDb.designEvidence.count({ where: { workItemId: card.id } })).toBe(2);
   });
 });

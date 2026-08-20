@@ -104,4 +104,37 @@ export const designEvidenceRepository = {
     });
     return result.count;
   },
+
+  /**
+   * WITHDRAW one row by id — `is_current → false` with NOTHING taking the slot,
+   * plus the audit stamp that says so (MOTIR-3215).
+   *
+   * ⚠️ Deliberately NOT a variant of `markSupersededByWorkItem`, even though the
+   * two write the same flag. That one clears the partial-unique slot so an
+   * insert can take it and is meaningless without the insert that follows;
+   * this one is the whole operation. Folding them together would make the
+   * `withdrawn_at` stamp an optional argument of a supersede, and the first
+   * caller to forget it would record a withdrawal as a supersede — which is the
+   * exact ambiguity the column was added to remove.
+   *
+   * Keyed by ID rather than by work item, because the service has already
+   * LOCKED and READ the row it decided on: re-selecting by `WHERE is_current`
+   * here would re-open the read-derived window that lock exists to close.
+   */
+  async withdrawById(
+    id: string,
+    data: { withdrawnById: string | null; withdrawnReason: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<DesignEvidenceWithAssets> {
+    return tx.designEvidence.update({
+      where: { id },
+      data: {
+        isCurrent: false,
+        withdrawnAt: new Date(),
+        withdrawnById: data.withdrawnById,
+        withdrawnReason: data.withdrawnReason,
+      },
+      include: WITH_ASSETS,
+    });
+  },
 };

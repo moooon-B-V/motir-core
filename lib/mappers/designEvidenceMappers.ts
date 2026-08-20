@@ -47,5 +47,8 @@ export function toDesignEvidenceDto(row: DesignEvidenceWithAssets): DesignEviden
     ciRunUrl: row.ciRunUrl,
     producedByKey: row.producedByKey,
     createdAt: row.createdAt.toISOString(),
+    withdrawnAt: row.withdrawnAt ? row.withdrawnAt.toISOString() : null,
+    withdrawnById: row.withdrawnById,
+    withdrawnReason: row.withdrawnReason,
   };
 }

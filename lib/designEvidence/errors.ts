@@ -143,3 +143,22 @@ export class DesignEvidenceSupersedeConflictError extends DesignEvidenceError {
     this.name = 'DesignEvidenceSupersedeConflictError';
   }
 }
+
+/**
+ * A withdrawal was asked for on a work item that has no CURRENT design result —
+ * it never had one, or its result has already been withdrawn (MOTIR-3215). → 404.
+ *
+ * Distinct from {@link DesignEvidenceNotFoundError}, which answers "no such work
+ * item / not visible to you". Here the item resolved fine and the caller may see
+ * it; there is simply nothing to take back. Collapsing the two would make a
+ * double-withdraw indistinguishable from a permissions failure, and the second
+ * press of a button is exactly when a caller hits this.
+ */
+export class DesignEvidenceNoCurrentResultError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_NO_CURRENT_RESULT' as const;
+  readonly status = 404;
+  constructor(identifier: string) {
+    super(`${identifier} has no current design result to withdraw.`);
+    this.name = 'DesignEvidenceNoCurrentResultError';
+  }
+}
