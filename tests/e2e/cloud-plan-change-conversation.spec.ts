@@ -304,11 +304,18 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     await expect(rail(page).getByText(/Added 2 work items, changed 1/)).toBeVisible();
     await expect(composer(page)).toBeEnabled();
 
-    // The proposal is gone from the canvas and the committed items are drawn in
-    // its place — the client island refetched (it seeds its level once, so
-    // `router.refresh()` alone could not have reached it).
+    // The GATE is gone; the overlay is not. It KEEPS the decided cards
+    // (`design/ai-planning/design-notes.md` Part VI §3 / MOTIR-3162, via bug
+    // MOTIR-3206) — three diff nodes, the two adds and the change, each now
+    // carrying the accepted treatment instead of a pending one. The committed
+    // titles are still asserted below, which is what proves the client island
+    // refetched (it seeds its level once, so `router.refresh()` alone could not
+    // have reached it) — that half of this block is unchanged and is the half
+    // this spec was really pinning.
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(3);
+    // The outcome is read as the WORD, so a colour-only treatment cannot pass.
+    await expect(page.getByTestId('plan-change-outcome').first()).toHaveText('accepted');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
 
     // The real substrate: the tree reflects the change.

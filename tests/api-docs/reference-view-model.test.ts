@@ -59,6 +59,9 @@ describe('the reference covers the registry', () => {
       // because it closes them out; `plans` reads last because a plan is what
       // the planning conversation PRODUCES.
       'sessions',
+      // MOTIR-3049 — the scope claim, beside the session close-out for the same
+      // reason: it acts on a SET of work items and is addressed by none of them.
+      'scope-claims',
       'sprints',
       'planning',
       'plans',

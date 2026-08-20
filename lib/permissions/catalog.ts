@@ -54,6 +54,33 @@
 // (`lib/tokens/grant.ts`). The COMPOSITION rule is unchanged and is the part of
 // the old statement that survives: a grant NARROWS its owner's role and the two
 // are intersected at dispatch. Nothing here is a scope, because scopes are gone.
+//
+// ⚠️ `ai:view_plan` AND `ai:decide_plan` ARE AUTHOR AND DECIDE, AND NEITHER IS A
+// VIEW (MOTIR-3188, 2026-08-20). Every plan READ runs on `project:browse` —
+// `planReviewService.getPlanReview` is `canBrowse`-enforced, and so are the v1
+// plan routes and the `get_plan` / `get_plan_status` MCP rows. So:
+//
+//   * `ai:view_plan` gates the AUTHOR writes on a plan — `addProposals`,
+//     `markPlanned`, and `editAddProposal` (both its callers). Its NAME is a
+//     survivor of the conflation below and is knowingly wrong; renaming it is a
+//     migration over a persisted `role_definition.permissions` value and is its
+//     own card (`docs/decisions/agent-authored-plans.md` AMENDMENT 5).
+//   * `ai:decide_plan` gates the two DECISIONS — `approvePlan`, which
+//     MATERIALIZES a proposed subtree into real work items, and `declinePlan`.
+//
+// They were ONE key until MOTIR-3188, on the shipped argument that reading a
+// plan and acting on it are the same surface. That held while every reviewer was
+// a person under a BUILT-IN role (`member` holds both, `viewer` neither), and
+// two changes broke it: MOTIR-2257's custom roles grant EXACTLY what an admin
+// ticks off a grid — so ticking a switch labelled "view" conferred bulk
+// work-item creation — and MOTIR-2984/-2988 put plan AUTHORING on a machine
+// token, which is precisely the actor that should be able to draft without
+// being able to enact.
+//
+// The split is behaviour-neutral on the built-in roles BY CONSTRUCTION: both
+// keys sit in `ROLE_GATED_PERMISSIONS` and in `member`, and in neither `viewer`
+// nor `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. What changes is that a custom
+// role can now withhold one without the other.
 
 /**
  * The domain groups, in the order a UI renders them. Every permission carries
@@ -134,6 +161,7 @@ export const PERMISSIONS = [
   'ai:configure',
   'ai:plan',
   'ai:view_plan',
+  'ai:decide_plan',
 ] as const;
 
 /** One permission key — the union derived from {@link PERMISSIONS}. */
@@ -205,6 +233,7 @@ const PERMISSION_META: Record<
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2355 / -2357 / -2358 / -2359
   'ai:view_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2363
+  'ai:decide_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-3188
 };
 
 /**

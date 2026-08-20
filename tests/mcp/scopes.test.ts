@@ -9,7 +9,7 @@ import {
   toolScope,
 } from '@/lib/mcp/scopes';
 import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
-import { isPermissionKey } from '@/lib/permissions/catalog';
+import { isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
 
 // The tool→PERMISSION model guard (Story MOTIR-2572 · Subtask MOTIR-2574) —
 // the 7.7.16 scope-map guard RE-POINTED onto the new vocabulary, not duplicated
@@ -124,12 +124,36 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
     }
   });
 
-  it('the union of the six is the WHOLE grantable set — the compatibility promise', () => {
-    // A token holding all six scopes could reach every token-reachable
-    // operation. It still can. This is the property that makes "no already-minted
-    // token loses authority" checkable rather than asserted.
+  it('the union of the six is the grantable set MINUS the keys that postdate them', () => {
+    // A token holding all six scopes could reach every token-reachable operation
+    // that EXISTED when those scopes were written. It still can. That is the
+    // property making "no already-minted token loses authority" checkable rather
+    // than asserted — and it is a claim about the SIX, not about the catalog's
+    // future.
+    //
+    // ⚠️ THE EXCLUSION IS THE RULE WORKING (MOTIR-3188). `ai:decide_plan` gates
+    // plan APPROVAL, whose only token entrance
+    // (`POST /api/v1/work-items/{key}/plan-approval`) MOTIR-3021 created in 2026,
+    // long after these six strings stopped being written. No legacy scope expands
+    // to it, because a legacy row is stale data and stale data may never WIDEN
+    // access — the same posture `expandStoredValue`'s third arm takes toward a
+    // value it cannot interpret at all.
+    //
+    // ⚠️ AND WITHOUT THE SPLIT IT WOULD HAVE WIDENED. `work_items:write` expands
+    // to `ai:view_plan`, and for the hours between MOTIR-3021 merging and
+    // MOTIR-3188 landing that key gated plan approval — so a token carrying a
+    // legacy string could have approved a proposed subtree into somebody's tree.
+    // Splitting DECIDE off closed that without anybody having to notice it.
+    //
+    // Named as an exact set rather than a filter over the constant under test: a
+    // SECOND exclusion must appear here as a failure, not join an allowance —
+    // the same discipline the ONE-named-loss assertion below applies.
     const union = new Set(LEGACY_TOKEN_SCOPES.flatMap((s) => [...LEGACY_SCOPE_PERMISSIONS[s]]));
-    expect([...union].sort()).toEqual([...GRANTABLE_PERMISSIONS].sort());
+    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan'];
+    expect([...union].sort()).toEqual(
+      GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
+    );
+    for (const key of POSTDATE_THE_SCOPES) expect([...union]).not.toContain(key);
   });
 
   it('maps every operation the six scopes gated, tool by tool, with ONE named loss', () => {

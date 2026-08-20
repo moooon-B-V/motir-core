@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { WorkItemNode } from '@/components/planning/WorkItemNode';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import { arrivalLevel } from '@/components/planning/PlanReviewCanvas';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
@@ -42,6 +44,8 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     executor: null,
     planningProvenance: null,
     status: null,
+    statusLabel: null,
+    statusCategory: null,
     hasChildren: false,
     changes: [],
     stale: false,
@@ -69,6 +73,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-14',
           title: 'Seller onboarding',
           status: 'in_progress',
+          statusLabel: null,
+          statusCategory: null,
           changes: [
             { field: 'priority', from: 'medium', to: 'high' },
             { field: 'title', from: 'old', to: 'new' },
@@ -77,6 +83,13 @@ describe('PlanItemNode', () => {
       />,
     );
     expect(screen.getByText('change')).toBeTruthy();
+    // ⚠️ The KEY, where an `add` shows "New" (bug MOTIR-3191). Between the two,
+    // that is what lets a reviewer read "this amends PROD-14" off the node
+    // without opening it — and it is the half that a `modify` drawn at the
+    // project root made unreadable, because a card at the root reads as a
+    // proposed EPIC whatever its badge says.
+    expect(screen.getByText('PROD-14')).toBeTruthy();
+    expect(screen.queryByText('New')).toBeNull();
     expect(screen.getByTestId('diff-line')).toBeTruthy();
     expect(screen.getByText('medium')).toBeTruthy();
     expect(screen.getByText('high')).toBeTruthy();
@@ -93,12 +106,99 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-19',
           title: 'Manual payout export',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
         })}
       />,
     );
     expect(screen.getByText('remove')).toBeTruthy();
     const title = screen.getByText('Manual payout export');
     expect(title.className).toContain('line-through');
+  });
+
+  // ── The STATUS chip is the SHARED one (bug MOTIR-3170) ──────────────────
+  //
+  // This node used to keep its OWN six-member status literal and coerce
+  // anything else to `todo`, so a `modify` whose live target had an open pull
+  // request drew as "To Do" on the plan-detail canvas. There is now ONE
+  // resolver — `WorkItemStatusPill` → `lib/workflows/canvasStatusMeta.ts` —
+  // and these assert on the rendered TEXT, which is what a reviewer reads.
+  it('renders a modify whose live target is at `implemented` as "Implemented"', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_impl',
+          identifier: 'PROD-31',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    expect(screen.getByText('Implemented')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it("renders a target at a CUSTOM workflow status with that status's own label", () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_custom',
+          identifier: 'PROD-32',
+          title: 'Seller onboarding',
+          status: 'awaiting_legal',
+          statusLabel: 'Awaiting legal',
+          statusCategory: 'todo',
+        })}
+      />,
+    );
+    expect(screen.getByText('Awaiting legal')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it('draws the chip from the SAME resolver as the roadmap node — same key, same fill', () => {
+    // The AC is "no second copy of the mapping in `components/planning/`". A
+    // rendered comparison is what proves it: if this file ever grows its own map
+    // again, the two fills diverge here rather than in production.
+    const proposal = renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    const onProposal = proposal.container.querySelector(
+      '[data-status="implemented"]',
+    ) as HTMLElement;
+    const chipClass = onProposal.className;
+    const chipText = onProposal.textContent;
+    cleanup();
+
+    const node = renderWithIntl(
+      <WorkItemNode
+        item={{
+          id: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          kind: 'subtask',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        }}
+      />,
+    );
+    const onNode = node.container.querySelector('[data-status="implemented"]') as HTMLElement;
+    expect(onNode.className).toBe(chipClass);
+    expect(onNode.textContent).toBe(chipText);
   });
 
   it('shows a stale badge with the reasons in the tooltip', () => {
@@ -134,6 +234,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-21',
           title: 'Seller onboarding',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
           changes: [{ field, from, to }],
         })}
       />,
@@ -384,5 +486,72 @@ describe('mergePlanLevel', () => {
 
     expect(level.nodes.map((n) => n.id)).toEqual(['p1']);
     expect(level.nodes[0]!.drillable).toBe(true);
+  });
+});
+
+// ── bug MOTIR-3191 — where the canvas OPENS on a plan of amendments ───────────
+//
+// `mergePlanLevel` above has always re-skinned a `modify` in place once the
+// canvas is on the right level. What decides which level that is, is
+// `arrivalLevel` — and a `modify` reached it with a null parent, because it
+// carries no `parentRef` and could not. So the canvas opened at the project
+// ROOT, where the target is not a child, and the amendment fell through to the
+// pushed branch as a node of its own beside the epics.
+//
+// ⚠️ These pass on `main` too, and that is the finding rather than a gap in
+// them: `arrivalLevel` was never the broken half. It reads `parentNodeId` /
+// `parentTrail` and does the right thing with whatever it is given — it was
+// given null. So this locks the CONSUMER side of the contract the review model
+// now satisfies, and the failing-without-the-fix half lives one layer down, in
+// `planReviewService`'s own suite, where the null was produced.
+describe('arrivalLevel', () => {
+  it('opens a MODIFY-only plan at its target’s level, not at the root', () => {
+    const arrival = arrivalLevel([
+      item({
+        planItemId: 'pi_1',
+        nodeId: 'wi_target',
+        op: 'modify',
+        identifier: 'MOTIR-3181',
+        title: 'An existing card',
+        parentNodeId: 'wi_story',
+        parentIdentifier: 'MOTIR-3070',
+        parentTitle: 'Plan review',
+        parentTrail: [
+          { id: 'wi_epic', identifier: 'MOTIR-2200', title: 'The agent loop' },
+          { id: 'wi_story', identifier: 'MOTIR-3070', title: 'Plan review' },
+        ],
+      }),
+    ]);
+
+    expect(arrival?.id).toBe('wi_story');
+    // The whole committed chain, so the breadcrumb names the branch the card
+    // lives on rather than starting at the level the plan does not touch.
+    expect(arrival?.trail.map((c) => c.id)).toEqual(['wi_epic', 'wi_story']);
+  });
+
+  it('still opens at the ROOT when the plan genuinely proposes roots', () => {
+    // A null parent is now a STATEMENT ("this card is a root"), not the absence
+    // of an answer — so the root arrival has to keep working.
+    expect(arrivalLevel([item({ op: 'add', parentNodeId: null })])).toBeNull();
+  });
+
+  it('takes the level carrying the MOST proposals when a mixed plan spans two', () => {
+    const at = (nodeId: string, parent: string, key: string) =>
+      item({
+        planItemId: `pi_${nodeId}`,
+        nodeId,
+        parentNodeId: parent,
+        parentIdentifier: key,
+        parentTitle: 'A parent',
+        parentTrail: [{ id: parent, identifier: key, title: 'A parent' }],
+      });
+
+    const arrival = arrivalLevel([
+      at('a', 'wi_p1', 'MOTIR-1'),
+      at('b', 'wi_p2', 'MOTIR-2'),
+      at('c', 'wi_p2', 'MOTIR-2'),
+    ]);
+
+    expect(arrival?.id).toBe('wi_p2');
   });
 });

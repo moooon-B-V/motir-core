@@ -921,6 +921,17 @@ export default defineConfig({
         // launcher it derives its href from is already gated above.
         'lib/planning/aiCallout.ts',
         'components/planning/AiCalloutMenu.tsx',
+        // MOTIR-3208 — the orb's drag + throw. `orbPhysics.ts` is pure and is
+        // GATED below (100 statements / branches / functions / lines, measured on
+        // this branch). `useDraggableOrb.ts` is REPORT-ONLY, and the reason is the
+        // one this block prescribes rather than a shortfall being hidden: it is at
+        // 100% LINES and 84% branches, and what remains are DOM-capability guards
+        // (`el.setPointerCapture?.()`, `pos.current ?? …`) that a single test
+        // environment cannot drive both ways — happy-dom either has the method or
+        // does not. Pinning 90 would invite mocking the DOM into having and not
+        // having a capability, which tests the mock.
+        'lib/planning/orbPhysics.ts',
+        'lib/hooks/useDraggableOrb.ts',
         'components/planning/PlanWithAIFab.tsx',
         // MOTIR-1970 — the schedule-health detection seam. Gated because this is
         // the code that has to work on the day everything else has already
@@ -1002,6 +1013,15 @@ export default defineConfig({
         // method that owns a LOCK, and a gate or a decision re-implemented in
         // the route would appear here as an uncovered branch.
         'app/api/v1/work-items/[key]/claim/route.ts',
+        // Story MOTIR-3017: the bounded public entrance to plan approval. Gated
+        // for the same reason — it is a thin adapter over one service path, so a
+        // bound re-implemented in the route rather than enforced in the service
+        // would show up here as an uncovered branch.
+        'app/api/v1/work-items/[key]/plan-approval/route.ts',
+        // MOTIR-3049 — the SCOPE CLAIM, for exactly the same reason one line up.
+        // Its two arms differ only in which identifier they resolve; the claim
+        // itself is one service method.
+        'app/api/v1/scope-claims/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
         'app/api/v1/work-items/[key]/activity/route.ts',
@@ -1470,6 +1490,16 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/work-items/[key]/claim/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/plan-approval/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/scope-claims/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -2290,6 +2320,8 @@ export default defineConfig({
         // the NEXT action entry cannot quietly ship an unexercised row.
         'lib/planning/aiCallout.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/AiCalloutMenu.tsx': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3208 — measured at 100/100/100/100 on this branch before pinning.
+        'lib/planning/orbPhysics.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanWithAIFab.tsx': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-1970 — the schedule-health detection seam (see the `include` note).
         'lib/jobs/cron.ts': { branches: 90, functions: 90, lines: 90 },

@@ -334,7 +334,7 @@ watch it.
 
 | hop                                   | who does it                                                                                  |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `todo → in_progress`                  | **the run**, when it claims the card                                                         |
+| `todo → in_progress`                  | **the run's CLAIM** — assignment and status in one locked server call                        |
 | `in_progress → implemented`           | **the agent, or the CLI** — once the work is committed, PUSHED, and its pull request is open |
 | `implemented → in_review`             | **the webhook, when CI goes green.** Nobody at a terminal                                    |
 | `in_review → done`                    | **a human**, by merging                                                                      |
@@ -362,6 +362,102 @@ session branch and opens one pull request; merging it closes **every** card that
 branch carries, not just one. `motir done --session <branch>` still exists and
 still works — it is now the manual fallback for a run whose pull request was
 never opened, rather than the step you have to remember.
+
+---
+
+## What a run does when it finds trouble
+
+An agent working a card meets two different kinds of trouble, and they are not
+the same problem: **this card is wrong**, and **something else is broken**. The
+prompt gives it a branch for each, and this is what the run does with them.
+
+### Three outcomes, and what each leaves behind
+
+| the agent reports      | the card ends at                 | who acts next                                        |
+| ---------------------- | -------------------------------- | ---------------------------------------------------- |
+| **finished**           | **Implemented**                  | CI, then you — the ordinary lifecycle above          |
+| **this card is wrong** | **Planning**                     | **you**, on the plan it submitted                    |
+| **found a defect**     | unchanged — it finishes its card | you, on the **bug** it filed, whenever you get to it |
+
+**A re-plan is a correct outcome, not a failure.** The agent reverts its
+worktree, comments the evidence on the card, moves it to **Planning** and submits
+a plan for you to read. `motir run` and `motir next` report it and exit **0**;
+`motir batch` records it as a skip and carries on with the rest of its snapshot;
+`motir auto` **stops**, because the cards it would take next are the ones that
+plan may be about to change.
+
+Planning sits in the in-progress category, so the card is out of the pickable set
+until you act — nothing re-dispatches it behind your back.
+
+**Filing a bug does not end anything.** The agent reproduces the defect first,
+files a `bug` parented under the in-flight card's own parent, links it back to
+the card it was found on, and then carries on with the work it was given. The bug
+blocks nothing and claims no scope; it is a record, not a claim on your sprint.
+
+### The three flags
+
+Every one is opt-in. With none of them, an agent may file bugs and submit
+re-plans, and nothing is approved automatically.
+
+| flag                    | commands                          | what it does                                                                          |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------- |
+| `--disable-log-bug`     | `run` · `next` · `batch` · `auto` | The agent is not offered bug filing at all; it comments the finding instead.          |
+| `--disable-replan`      | `run` · `next` · `batch` · `auto` | The agent is not offered re-planning; a wrong card is commented and left In Progress. |
+| `--auto-approve-replan` | **`auto` only**                   | Approve the submitted re-plan and keep looping, instead of stopping for you.          |
+
+The two `--disable-*` flags are not local behaviour — they change **what the
+agent is told**, by narrowing the prompt the server assembles. That is the only
+way to change what a sandboxed agent does, and it is why every run prints the
+policy it used: a run whose agent filed nothing should be distinguishable from
+one that was not allowed to.
+
+```sh
+motir auto --agent "…" --disable-replan          # findings welcome, plan untouched
+motir batch --agent "…" --disable-log-bug        # a demo: touch nothing but the cards
+motir auto --agent "…" --auto-approve-replan     # ⚠️ read the next section first
+```
+
+`--no-log-bug` and `--no-replan` are accepted and behave identically to their
+`--disable-*` forms — a compatibility affordance, since `--no-*` is this CLI's
+usual spelling for a negated boolean. They are deliberately absent from
+`motir help`; the `--disable-*` spellings are the documented ones, because
+`--no-log-bug` reads ambiguously between _"don't log a bug this time"_ and _"the
+capability is off"_, and only the second is meant.
+
+### ⚠️ `--auto-approve-replan` lets a run change your plan while you are not watching
+
+That is the whole feature, and it is worth reading as a sentence rather than
+inferring from a flag name. With it set, `motir auto` takes a plan its own agent
+submitted, **approves it without anybody looking**, and continues — so proposals
+become real work items, re-scoped cards change, and removed cards are archived,
+in a tree you own, at three in the morning.
+
+It is bounded, and the bounds are worth knowing:
+
+- **Only the plan the refused card itself produced.** The run approves through a
+  card-addressed endpoint; the server derives the plan from the planning
+  conversation anchored at that card. It cannot reach a plan submitted from the
+  web panel, an onboarding generation, or the auto-plan cadence — each of those
+  keeps the human decision it was written under.
+- **A card is never dispatched twice by one run**, so a card that refuses itself
+  repeatedly cannot loop. Each submission spends AI credits; one per card is the
+  cap.
+- **`--max` still binds**, even when an approved plan enlarges the ready set.
+- **A refusal stops the run**, with the server's own message, rather than
+  continuing against a tree nobody approved.
+- **The summary names every plan it approved and the card each was approved
+  for**, so the first thing you read afterwards is what the run decided.
+
+Without the flag, `auto` stops at the first re-plan and waits for you. That is
+the default, and it stays the default.
+
+**It is `auto`-only, on purpose.** `motir run` and `motir next` dispatch one item
+and exit — there is no continuation for an approval to feed. `motir batch`
+freezes its ready set before the first agent starts and never re-reads it, so
+cards a newly-approved plan created would be approved and then never dispatched;
+approving a change to your plan and declining to act on it is worse than not
+offering the flag. All three **register** it so they can refuse it with that
+reason, rather than failing with `unknown option`.
 
 ---
 
@@ -644,14 +740,14 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 
 ### Work loop
 
-| Command                | Flags                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `motir next`           | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset`                                           |
-| `motir run <key>`      | `--print` · `--agent <cmd>` · `--force`                                                              |
-| `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` |
-| `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset`                        |
-| `motir plan [args...]` | `--detach`                                                                                           |
-| `motir done [key]`     | `--session <branch>` · `--via <status>`                                                              |
+| Command                | Flags                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motir next`           | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
+| `motir run <key>`      | `--print` · `--agent <cmd>` · `--force` · `--disable-log-bug` · `--disable-replan`                                                                                        |
+| `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
+| `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                  |
+| `motir plan [args...]` | `--detach`                                                                                                                                                                |
+| `motir done [key]`     | `--session <branch>` · `--via <status>`                                                                                                                                   |
 
 ```sh
 motir next --kinds subtask --print
@@ -670,7 +766,9 @@ motir done --session motir/auto-20260729-011830
 
 `--print` is **registered but refused** on `auto` and `batch`: an unattended run
 has nobody to paste a prompt, so the flag fails with guidance rather than
-commander's bare "unknown option".
+commander's bare "unknown option". `--auto-approve-replan` is refused the same
+way on `run`, `next` and `batch` — see **What a run does when it finds trouble**
+below, which is where the three findings flags are explained.
 
 ### Help and topics
 
@@ -695,7 +793,7 @@ piping.
 Selection differs; the pipeline does not. Every dispatch runs:
 
 ```
-select → transition_status(in_progress) → dispatch_prompt → deliver
+select → claim (assign + in_progress, one locked call) → dispatch_prompt → deliver
 ```
 
 **The prompt is generated SERVER-SIDE** (`dispatch_prompt`) and printed
@@ -790,21 +888,50 @@ ready **only** because a dependency is integrated-awaiting-review is excluded
 and named — that dependency's code is not on `main`, so a pull request of its
 own could not even build. That lineage is `auto`'s territory.
 
-**A run CLAIMS what it takes, and takes only what is free.** Before an agent is
-launched — before the status even moves — the card is assigned to the token
-owner. That is the signal a teammate reads on the board: someone has this. And a
-run picks up only the **to-do category**, never a status key, so a project that
-defines its own statuses gets the rule for free and a card at `Planning` leaves
-circulation without anything special-casing it. A card claimed by someone else
-is not picked up at all; a card claimed by **you** and left in progress by an
-interrupted run is — that is how a killed run resumes.
+**A run CLAIMS what it takes, and the claim is a LOCK.** Every dispatch path —
+`run`, `next`, `batch`, `auto` — takes its card with ONE call
+(`POST /api/v1/work-items/{key}/claim`), which inside a single transaction locks
+the row, re-checks that it is still in the **to-do category**, assigns it to the
+token owner and moves it to In Progress. That is the signal a teammate reads on
+the board: someone has this. It is expressed on the CATEGORY and never on a
+status key, so a project that defines its own statuses gets the rule for free
+and a card at `Planning` leaves circulation without anything special-casing it.
 
-⚠️ The claim is an **advisory, not a lock**. Two runs started at the same instant
-can both see a card unassigned and both take it. Closing that needs a conditional
-write Motir does not offer today; the window is one read-to-write gap and the
-failure is loud — two branches for one card is noticed immediately. `motir run
-<key>` is the exception to the pickable rule rather than the claim: you named the
-card, so it warns and proceeds.
+**Two runs at one card: exactly one starts.** This used to be an advisory — an
+unconditional assignment with a read-to-write gap two simultaneous runs fell
+straight into, which the CLI documented as an accepted race. It is not one any
+more. The loser is told which of three things happened, because the three call
+for different next moves:
+
+| the run is told | what it means                                         | what it does                                      |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| `claimed`       | it is yours                                           | dispatches                                        |
+| `mine`          | already yours, In Progress — your own interrupted run | dispatches, saying so                             |
+| `taken`         | somebody else holds it, **and they are named**        | does not dispatch                                 |
+| `not_claimable` | outside the to-do category                            | does not dispatch, and says which status it is at |
+
+**Which statuses a run REFUSES.** Anything outside the to-do category:
+`implemented`, `in_review`, `planning`, `done`, `cancelled`, and any status your
+project's workflow adds that is not in that category. **`todo` and `blocked` are
+both inside it**, which is why `motir run --force` on a card whose dependencies
+are unmet still works — `--force` bypasses the _readiness_ gate, and readiness is
+a different question from claimability.
+
+⚠️ **`motir run <key>` refuses these too, and that is a deliberate change.** It
+used to warn about `in_review` and `planning` and dispatch anyway, on the
+reasoning that a person who names a key has a reason — and it said _nothing at
+all_ about a `done` card, which it silently reopened, because `done → in_progress`
+is a legal workflow edge. That is a good argument about who owns a card and a bad
+one about whether finished work should be restarted. So the split is: the server
+owns which STATES a run may claim from, and the CLI keeps the one warning the
+server deliberately does not enforce — **a to-do card assigned to somebody else
+is still claimable, and `motir run <key>` warns you that you are taking it.**
+
+**A refusal is not a failure.** In `run` and `next` it ends the command cleanly,
+exit 0. In `batch` and `auto` it is recorded as a SKIP with its own reason —
+_claimed by somebody else, or no longer claimable_ — beside _needs planning_ and
+_needs a human_; no agent ran, nothing was reverted, and the run's exit code is
+unaffected by it.
 
 **What both loops skip.** An unexpanded epic/story is a _planning_ item, not a
 dispatchable one — there is no agent prompt for "do the planning" — so it is

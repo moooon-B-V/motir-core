@@ -136,6 +136,104 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     expect(await stateOf(caller, item.id)).toEqual(before);
   });
 
+  // ── the per-run findings policy (MOTIR-3020) ──────────────────────────────
+  //
+  // The parameter that carries an operator's per-run policy to the ONE surface
+  // the agent actually reads. `docs/decisions/run-findings-protocol.md` Q1.
+
+  it('renders the COMPLETE protocol when `findingsPolicy` is absent', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'no policy');
+
+    const body = await prompt(caller, item.identifier);
+
+    expect(body.prompt).toContain('FOUND A DEFECT');
+    expect(body.prompt).toContain('motir plan --detach');
+  });
+
+  it('removes the branch the policy names, from the prompt itself', async () => {
+    // Asserted on the PROMPT TEXT, because that is the whole contract: a
+    // parameter that changed a field and not the text would change nothing about
+    // what the agent does.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'no bugs please');
+
+    const body = await prompt(caller, item.identifier, '?findingsPolicy=log-bug');
+
+    expect(body.prompt).not.toContain('create_work_item');
+    expect(body.prompt).toContain('Comment the finding on');
+    expect(body.prompt).toContain('motir plan --detach');
+  });
+
+  it('removes both when both are named', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'quiet run');
+
+    const body = await prompt(caller, item.identifier, '?findingsPolicy=log-bug,replan');
+
+    expect(body.prompt).not.toContain('create_work_item');
+    expect(body.prompt).not.toContain('motir plan --detach');
+    expect(body.prompt).toContain('leave the card In Progress');
+  });
+
+  it('REFUSES an unknown capability with 422 rather than rendering the full protocol', async () => {
+    // The refusal is the point. Ignoring `no-log-bug` would hand the caller a
+    // 200 and a prompt they believe is narrowed — the exact lie this parameter
+    // exists to remove.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'typo');
+
+    const res = await req(caller, item.identifier, '?findingsPolicy=no-log-bug');
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('INVALID_FINDINGS_POLICY');
+    // It TEACHES: the vocabulary is in the message, so a caller can fix it.
+    expect(body.error).toContain('log-bug');
+    expect(body.error).toContain('replan');
+  });
+
+  it('stays a READ under a policy — the row is untouched', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'still a read');
+    const before = await stateOf(caller, item.id);
+
+    await prompt(caller, item.identifier, '?findingsPolicy=log-bug,replan');
+
+    expect(await stateOf(caller, item.id)).toEqual(before);
+  });
+
+  it('the MCP tool takes the SAME parameter and renders the same text', async () => {
+    // Two transports, one vocabulary, one parser. A policy that narrowed the v1
+    // prompt and not the MCP one would be a contract that depends on how it was
+    // fetched.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'both doors');
+
+    const viaHttp = await prompt(caller, item.identifier, '?findingsPolicy=log-bug');
+    const viaMcp = await runDispatchPrompt(
+      { key: item.identifier, findingsPolicy: 'log-bug' },
+      caller.ctx,
+    );
+
+    expect(viaMcp.isError).toBeFalsy();
+    const payload = viaMcp.structuredContent as { prompt: string };
+    expect(payload.prompt).toBe(viaHttp.prompt);
+  });
+
+  it('the MCP tool REFUSES an unknown capability too', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'mcp typo');
+
+    const result = await runDispatchPrompt(
+      { key: item.identifier, findingsPolicy: 'nonsense' },
+      caller.ctx,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('nonsense');
+  });
+
   it('treats an EMPTY `sessionBranch` as no seed rather than as a bad request', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     const item = await makeItem(caller, 'no seed');
@@ -491,6 +589,100 @@ describe('the dispatch-prompt schema', () => {
 
     expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
     expect(dispatchPromptSchema.parse(envelope([ordering])).advisories[0]).toEqual(ordering);
+  });
+
+  it('carries a SELF-BLOCKING-DESIGN advisory field-for-field, with BOTH indices (MOTIR-3178)', () => {
+    // The third `kind: 'shape'` variant, and a variant for the same §8 reason the
+    // sizing one is: it carries no `criterionIndex` at all — a PAIR of named
+    // indices instead, because its remedy LIFTS the design criterion onto its own
+    // card rather than cutting the list at a line.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'shape',
+          item: 'PROD-1',
+          severity: 'likely-self-blocking-design',
+          designCriterionIndex: 1,
+          surfaceCriterionIndex: 4,
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toEqual({
+      kind: 'shape',
+      item: 'PROD-1',
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 4,
+    });
+    // No `criterionIndex` is invented on the way out, and no other member's
+    // fields ride along — the point of the field-by-field mapper.
+    expect(mapped.advisories[0]).not.toHaveProperty('criterionIndex');
+    expect(mapped.advisories[0]).not.toHaveProperty('threshold');
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
+
+  it('all THREE `kind: "shape"` variants stay disjoint — none parses as another', () => {
+    // The union is plain, not discriminated, so this guarantee rests entirely on
+    // the three variants' REQUIRED fields being disjoint: `criterionIndex` /
+    // `threshold` / the index PAIR. Asserted directly, because the day it stops
+    // holding the failure is a silently stripped payload rather than an error.
+    const selfBlocking = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 4,
+    };
+    const sizing = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-over-gate-sizing',
+      threshold: 'both',
+      storyPoints: 13,
+      estimateMinutes: 600,
+    };
+    const straddle = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-repo-straddle',
+      criterionIndex: 2,
+      path: 'motir-ai/src/x.ts',
+      repo: 'motir-ai',
+      reason: 'contradiction',
+    };
+    const envelope = (advisories: unknown[]) => ({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: null,
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr' as const,
+      sessionBranch: null,
+      advisories,
+    });
+
+    expect(dispatchPromptSchema.parse(envelope([selfBlocking])).advisories[0]).toEqual(
+      selfBlocking,
+    );
+    expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
+    expect(dispatchPromptSchema.parse(envelope([straddle])).advisories[0]).toEqual(straddle);
+    // …and all three together, in one array, since that is how a card carrying
+    // several defects actually arrives.
+    expect(
+      dispatchPromptSchema.parse(envelope([selfBlocking, sizing, straddle])).advisories,
+    ).toEqual([selfBlocking, sizing, straddle]);
   });
 });
 

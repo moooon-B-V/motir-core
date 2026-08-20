@@ -3,7 +3,7 @@
 import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { WorkItemStatusPill, type WorkItemStatus } from '@/components/planning/WorkItemNode';
+import { WorkItemStatusPill } from '@/components/planning/WorkItemNode';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -39,23 +39,18 @@ import type { StaleReason } from '@/lib/dto/plans';
 // approached: each of those is a border STYLE (dashed pending / dotted skippable
 // / dashed not-in-sprint) or a red CHIP (blocked elsewhere), and this is neither.
 
-const KNOWN_STATUSES = new Set<WorkItemStatus>([
-  'todo',
-  'in_progress',
-  'in_review',
-  'blocked',
-  'done',
-  'cancelled',
-]);
+// ⚠️ THE THIRD COPY OF THE STATUS SET USED TO LIVE HERE, AND IT IS GONE (bug
+// MOTIR-3170). It was a six-member literal that coerced anything outside itself
+// to `todo`, so a `modify` proposal whose live target sat at `implemented` drew
+// on the plan canvas as **To Do** — a confident false statement about a card
+// whose pull request was open. The status KEY now travels verbatim to the ONE
+// shared chip (`WorkItemStatusPill` → `lib/workflows/canvasStatusMeta.ts`), and
+// there is deliberately no mapping left in `components/planning/` to forget to
+// update the next time a status is added.
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
 
 function toKind(raw: string): IssueType {
   return KNOWN_KINDS.has(raw as IssueType) ? (raw as IssueType) : 'task';
-}
-function toStatus(raw: string | null): WorkItemStatus | null {
-  if (!raw) return null;
-  const s = raw.toLowerCase().replace(/[\s-]+/g, '_');
-  return KNOWN_STATUSES.has(s as WorkItemStatus) ? (s as WorkItemStatus) : 'todo';
 }
 
 const KIND_TINT: Record<IssueType, string> = {
@@ -96,7 +91,6 @@ export function PlanItemNode({
 }) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
-  const status = toStatus(item.status);
 
   // Op-specific frame. None reuses the cross-story red dashed/hatch language.
   const frame =
@@ -149,7 +143,13 @@ export function PlanItemNode({
               {t('staleBadge')}
             </span>
           ) : null}
-          {status ? <WorkItemStatusPill status={status} /> : null}
+          {item.status ? (
+            <WorkItemStatusPill
+              status={item.status}
+              label={item.statusLabel}
+              category={item.statusCategory}
+            />
+          ) : null}
           {item.hasChildren ? (
             <ChevronRight
               className="size-4 shrink-0 text-(--el-text-muted)"

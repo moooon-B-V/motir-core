@@ -19,7 +19,11 @@ import {
   streamContextualPlanJob,
   PlanEditsClientError,
 } from '@/lib/planning/planEditsClient';
-import { approvePlanRequest, declinePlanRequest } from '@/lib/planning/planReviewClient';
+import {
+  approvePlanRequest,
+  declinePlanRequest,
+  fetchPlanReview,
+} from '@/lib/planning/planReviewClient';
 import {
   planDecisionErrorCode,
   readPendingProposal,
@@ -561,12 +565,32 @@ export function usePlanChangeConversation({
 
     try {
       const approved = summarizePlanApproval(await approvePlanRequest(planId));
+      // ⚠️ RE-READ THE DECIDED PLAN (bug MOTIR-3206). The review in hand was read
+      // while the plan was `planned`, so every `add` in it is keyed by its
+      // PlanItem id and carries no identifier. Keeping the overlay past the
+      // decision (MOTIR-3162) therefore drew each accepted card TWICE: once as
+      // the committed node the level read now returns, once as the keyless ghost
+      // the stale review still describes. `getPlanReview` re-keys a materialized
+      // add by the work item it became and fills in its identifier (MOTIR-3160) —
+      // only the server knows those ids, so this read is the only way the canvas
+      // can land the treatment ON the card.
+      //
+      // Best-effort by design: a failed re-read leaves the previous review in
+      // place, which is the picture that shipped before — worse, never broken.
+      // The approve itself has already succeeded and is not re-tried or undone.
+      let decidedReview: PlanReviewDto | null = null;
+      try {
+        decidedReview = await fetchPlanReview(planId);
+      } catch {
+        /* keep the pre-decision review rather than losing the overlay entirely */
+      }
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
         phase: 'idle',
         // The review STAYS (MOTIR-3162) — it is the record of what was accepted,
         // and `decided` is what turns it into the accepted treatment.
+        review: decidedReview ?? s.review,
         decided: 'accepted',
         jobId: null,
         // Decided: the plan is no longer pending, so its handle goes with the

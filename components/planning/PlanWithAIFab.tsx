@@ -7,9 +7,11 @@ import { cn } from '@/lib/utils/cn';
 import { AI_CALLOUT_NAME_KEY } from '@/lib/planning/aiCallout';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import { AiCalloutMenu } from './AiCalloutMenu';
+import { BrandMark } from '@/components/brand/BrandMark';
+import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
 
 /**
- * PlanWithAIFab — the floating "M" orb, the universal AI callout's TRIGGER
+ * PlanWithAIFab — the floating Motir orb, the universal AI callout's TRIGGER
  * (MOTIR-1299 / Story 7.20; MOTIR-1812 / Story 7.24. Design @
  * `design/ai-chat/ai-callout-menu.mock.html`). A glowing orb afloat
  * bottom-right on every screen — the second of the two entrances the design
@@ -26,7 +28,8 @@ import { AiCalloutMenu } from './AiCalloutMenu';
  * straight to `/planning` from every screen, and the rows are real links, so
  * ⌘/middle-click survives one level in.
  *
- * Built with a MOCK "M" logo (the real brand mark lands later, per the design).
+ * Wears the Motir mark (MOTIR-3185) at the 26px glyph box the design
+ * specifies for the 56px circle — composed from `BrandMark`, never inlined.
  * Palette-derived throughout (the orb fill + glow are `color-mix()` over
  * `--el-*`, never raw hex); the orb is genuinely circular (`rounded-full`).
  * Sits at `z-40` — below toasts / modals / the command palette (`z-50`), which
@@ -34,6 +37,22 @@ import { AiCalloutMenu } from './AiCalloutMenu';
  *
  * Gating is the MOUNT's job (rendered only where AI planning is configured +
  * there's a project to plan into), like the header pill.
+ *
+ * ── DRAGGABLE, AND THROWABLE (MOTIR-3208) ───────────────────────────────────
+ * The orb can be dragged anywhere on screen, and a hard flick throws it: it
+ * carries its release velocity, bounces off the viewport edges and settles. The
+ * physics is `lib/planning/orbPhysics.ts` (pure) and the wiring is
+ * `lib/hooks/useDraggableOrb.ts`; this component only supplies the element.
+ *
+ * Three behaviours worth knowing before editing:
+ *   * A press that does not MOVE still opens the callout — the drag threshold is
+ *     4 px, and past it the click that the browser fires on release is swallowed
+ *     in the capture phase so a throw does not also open the panel.
+ *   * The position is NOT persisted. A new tab puts the orb back in its default
+ *     corner; it survives client-side navigation only because this component is
+ *     mounted by the layout and never unmounts.
+ *   * `prefers-reduced-motion` skips the THROW, not the drag: the orb still goes
+ *     wherever it is put, it just does not fly there.
  */
 export interface PlanWithAIFabProps {
   /** The originating context — defaults to the global project entrance. */
@@ -43,9 +62,21 @@ export interface PlanWithAIFabProps {
 
 // The orb fill (a lit sphere — lighter top-left, accent body, a violet-leaning
 // edge) + the pink+violet aura. All palette-derived.
+//
+// The FIRST stop is the gradient's lightest point by construction, it sits at
+// 33%/27% — well inside the centred glyph box — and the glyph is white
+// (`--el-accent-text`), so that stop is where the mark is closest to
+// disappearing. How much of the glyph's own colour is mixed into the fill there
+// is therefore a CONTRAST knob, not a decoration: it lives once, as
+// `--orb-lit-mix` in the design system's recipe-knob block, where the number is
+// documented with the twenty palette x theme measurements that chose it
+// (MOTIR-3207). Do not inline a percentage back into this string — the mock in
+// `design/ai-chat/ai-callout-menu.mock.html` reproduces this recipe and reads
+// the same token, and `tests/theme/orb-glyph-contrast.test.ts` fails if either
+// side grows its own copy.
 const ORB_STYLE: CSSProperties = {
   backgroundImage:
-    'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) 32%, var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
+    'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
   boxShadow: [
     'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent)',
     '0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent)',
@@ -57,6 +88,9 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
   const t = useTranslations('shell');
   const [open, setOpen] = useState(false);
   const label = t(AI_CALLOUT_NAME_KEY);
+  // Drag + throw (MOTIR-3208). The hook owns pointer capture and the frame loop;
+  // `lib/planning/orbPhysics.ts` owns every decision about where the orb goes.
+  const { attach, onPointerDown, onClickCapture, dragging } = useDraggableOrb();
 
   return (
     // Non-modal, like the user menu: the page behind stays scrollable and
@@ -64,14 +98,26 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
     <Popover open={open} onOpenChange={setOpen} modal={false}>
       <Popover.Trigger asChild>
         <button
+          ref={attach}
           type="button"
           aria-label={label}
           title={label}
           style={ORB_STYLE}
+          onPointerDown={onPointerDown}
+          onClickCapture={onClickCapture}
           className={cn(
             'fixed right-5 bottom-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full',
             'text-(--el-accent-text) select-none',
-            'transition-transform hover:scale-105 active:scale-95',
+            // `touch-none` so a drag on a touch screen moves the orb instead of
+            // scrolling the page under it — without it the gesture is stolen by
+            // the scroller before `pointermove` ever fires.
+            'touch-none',
+            // The hover/active scale is a TRANSITION on the same property the drag
+            // writes, so it is dropped mid-gesture: easing toward the finger reads
+            // as lag. `cursor-grabbing` is the other half of that feedback.
+            dragging
+              ? 'cursor-grabbing'
+              : 'cursor-grab transition-transform hover:scale-105 active:scale-95',
             'focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
             className,
           )}
@@ -88,9 +134,14 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
               boxShadow: '0 0 0 0 color-mix(in srgb, var(--el-highlight) 60%, transparent)',
             }}
           />
-          {/* Mock "M" brand mark — replaced by the real logo later (design note). */}
-          <span aria-hidden className="relative font-sans text-xl leading-none font-bold">
-            M
+          {/* The Motir mark, at the 26px glyph box `design/ai-chat/design-notes.md`
+              § B specifies for the 56px circle (a 0.464 ratio, the same one the
+              28px assistant avatar uses). `tone="inverted"` is what puts
+              `--el-accent-text` on it — the glyph carries its own ink otherwise
+              and would render accent-on-accent. Composed, never inlined: the path
+              lives in `components/brand/waveBand.ts` alone. */}
+          <span aria-hidden className="relative flex">
+            <BrandMark variant="mark" tone="inverted" size={26} />
           </span>
         </button>
       </Popover.Trigger>

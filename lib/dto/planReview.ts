@@ -20,6 +20,7 @@
 // no longer on the canvas once that item materialized; a real work-item ref
 // stays as-is.
 
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
   PlanStatusDto,
@@ -94,12 +95,21 @@ export interface PlanReviewItemDto {
    *  (a `modify` / `remove`, or an `add` that has been materialized — same id,
    *  not a ghost copy); the PlanItem id for an `add` that has not. */
   nodeId: string;
-  /** The resolved parent node id (drill placement), or null for a root. */
+  /**
+   * The resolved parent node id (drill placement), or null for a root.
+   *
+   * ONE rule for all three ops (bug MOTIR-3191): an `add` names its parent in
+   * `parentRef`; a `modify` / `remove` names none — it cannot, since its parent
+   * is the live card's and a proposal may not move anything — so its placement is
+   * read off the TARGET's own `parentId`. Before that, a proposal ABOUT an
+   * existing card arrived with a null parent and every consumer drew it as a
+   * ROOT, which is where the plan rules put epics and nothing else.
+   */
   parentNodeId: string | null;
   /**
-   * The COMMITTED parent this proposal will be created under — resolved from the
-   * same batched target read, and non-null only when `parentRef` names a real
-   * work item rather than another proposal in this plan (MOTIR-3083).
+   * The COMMITTED parent this proposal sits under — resolved from the same
+   * batched read, for a `parentRef` naming a real work item AND for the parent a
+   * `modify` / `remove` inherits from its target (MOTIR-3083, MOTIR-3191).
    *
    * It is what the canvas opens a LEVEL at and what the breadcrumb names. Before
    * this the review model carried no field that could name the parent at all, so
@@ -172,6 +182,14 @@ export interface PlanReviewItemDto {
   /** The target's current status key — null for an un-materialized `add` (it is
    *  not a work item yet); the live status for every proposal that has one. */
   status: string | null;
+  /** The target status's own display LABEL, from the project's workflow (bug
+   *  MOTIR-3170). Null for an `add`, and for a target whose status the workflow
+   *  no longer holds. The canvas chip cannot name a CUSTOM status out of the
+   *  `labels.defaultStatus` catalog, so the identity travels beside the key. */
+  statusLabel: string | null;
+  /** The target status's lifecycle CATEGORY — the chip's fallback tone when the
+   *  canvas has no per-key treatment (see `statusLabel`). */
+  statusCategory: StatusCategoryDto | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */
   hasChildren: boolean;
   /** The `modify` diff (old→new) — empty for `add` / `remove`. */

@@ -305,11 +305,18 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   //
   // ⚠️ The grid's SIZE is derived, not written down (MOTIR-2988). It was `6`,
   // and it became 7 the moment `ai:view_plan` gained its first token-reachable
-  // operation — `GRANTABLE_PERMISSIONS` is COMPUTED from `TOOL_PERMISSIONS`, so
-  // any story that gives an existing catalog key a tool grows this modal without
-  // touching it. A literal here turns that into a red build on an unrelated
-  // branch; reading the same derived set the picker reads keeps this a test of
-  // the modal's HEIGHT, which is what it is for.
+  // operation — `GRANTABLE_PERMISSIONS` is COMPUTED, so any story that gives an
+  // existing catalog key an operation grows this modal without touching it. A
+  // literal here turns that into a red build on an unrelated branch; reading the
+  // same derived set the picker reads keeps this a test of the modal's HEIGHT,
+  // which is what it is for.
+  //
+  // ⚠️ It is EIGHT since MOTIR-3188, by a mechanism this note did not describe.
+  // The sentence above said the set is computed from `TOOL_PERMISSIONS`; it is
+  // computed from three sources, and the third — `V1_ONLY_PERMISSIONS`, keys
+  // reachable through `/api/v1` and no MCP tool — held nothing until
+  // `ai:decide_plan` arrived. So a key can now grow this grid without any tool
+  // existing for it at all.
   await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();
   await expect(dialog.getByRole('combobox', { name: 'Project' })).toBeVisible();
   await expect(dialog.getByRole('group', { name: 'Permissions' }).getByRole('switch')).toHaveCount(

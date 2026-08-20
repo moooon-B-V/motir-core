@@ -217,6 +217,28 @@ describe('the per-agent layer seam', () => {
     }
   });
 
+  it('installs claude from the `stable` dist-tag, not `latest` (MOTIR-3192)', () => {
+    // claude-code's native binary ships as a per-platform OPTIONAL dependency,
+    // and on 2026-08-19 `latest` moved to a version whose two x64 platform
+    // packages were never published. An absent optional dependency is not an
+    // error, so the install succeeded, installed one package, and the launcher
+    // then reported "claude native binary not installed" — red-lighting every
+    // amd64 build in the repository 56 minutes after the publish.
+    //
+    // `stable` is upstream's own curated channel, which a partial publish to
+    // `latest` cannot reach. Asserted because the failure it prevents is
+    // invisible here: a floating install looks identical in the diff and breaks
+    // on somebody else's release schedule.
+    expect(armOf('claude')).toContain("npm_agent '@anthropic-ai/claude-code' 'stable'");
+  });
+
+  it('logs the RESOLVED version of every npm-installed agent (MOTIR-3192)', () => {
+    // `added N packages` names nothing, so placing that outage meant diffing
+    // two job logs twelve minutes apart to find which version each had. One
+    // `npm ls` line in the shared helper makes the next one a grep.
+    expect(installAgent).toMatch(/npm ls -g --depth=0 "\$name"/);
+  });
+
   it('smoke-tests the binary it installed, so a broken profile fails the BUILD', () => {
     // Same rule the base applies to `motir --version`: a profile that cannot
     // execute its agent must fail here, not inside an unattended run.

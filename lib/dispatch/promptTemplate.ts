@@ -4,6 +4,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
@@ -21,9 +22,28 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 //
 // PURE: a function of its input record only. No DB, no I/O, no LLM call, no
 // clock, no randomness — which is exactly the property the consumer (MOTIR-881,
-// `motir next --print`) tests for ("two calls for an unchanged item return
-// byte-identical output"). The SERVICE reads state and calls this; this module
-// never reads anything.
+// `motir next --print`) tests for. The SERVICE reads state and calls this; this
+// module never reads anything.
+//
+// ⚠️ THE INPUT RECORD NOW INCLUDES THE RUN'S POLICY (MOTIR-3020), and the
+// determinism property is RESTATED rather than weakened. It used to be phrased as
+// "two calls for an unchanged ITEM return byte-identical output"; the honest form
+// is two-sided:
+//
+//   • the same item WITH THE SAME POLICY returns byte-identical output; and
+//   • the same item with a DIFFERENT policy returns DIFFERENT output — which has
+//     to be asserted explicitly, or an inert switch passes every disabled-branch
+//     test vacuously.
+//
+// This trades a property MOTIR-2406 stated deliberately — *"every instruction
+// here is unconditional"* — and the trade is recorded in
+// `docs/decisions/run-findings-protocol.md` Q1, not slipped in. What it costs:
+// a prompt is no longer reproducible from the CARD alone, and two agents on one
+// card can be told different things. What it buys: an operator can say what their
+// agent may write, and a flag the prompt never carried could never have done
+// that, because the prompt is the entire contract with a sandboxed agent.
+// {@link FULL_FINDINGS_POLICY} is what an omitted policy means, and it is the
+// complete protocol.
 //
 // The four sections (CONTEXT / WHAT TO DO / ACCEPTANCE CRITERIA / GIT WORKFLOW)
 // productize the grammar `motir-meta/prompts/run.md` § *Prompt structure* has
@@ -72,6 +92,80 @@ export const NO_INJECTIONS: DispatchPromptInjections = { conventions: [], lesson
 
 /** Everything the prompt is assembled from. Resolved by the service; the
  *  assembly reads nothing else. */
+/**
+ * The two capabilities a run may switch OFF for its agent (MOTIR-3020,
+ * `docs/decisions/run-findings-protocol.md` Q1).
+ *
+ * Named after the CAPABILITY rather than the CLI flag that disables it: the
+ * grammar must not inherit one client's `--disable-` prefix, and the same names
+ * are what the `findingsPolicy` query parameter carries on the wire.
+ */
+export interface FindingsPolicy {
+  /** May the agent FILE A BUG for a defect that is not about its own card? */
+  logBug: boolean;
+  /** May the agent SUBMIT A RE-PLAN when its own card's premise is false? */
+  replan: boolean;
+}
+
+/**
+ * The default, and the reason the default is this way round.
+ *
+ * An omitted policy renders the COMPLETE protocol, so every existing caller —
+ * and a human reading `motir run --print` to learn what an agent is told — sees
+ * the whole contract. A prompt that quietly dropped a branch because a parameter
+ * was absent would make the contract depend on how it was REQUESTED, which is the
+ * failure the unconditional-prompt rule (MOTIR-2406) existed to prevent. What
+ * this trades is narrower: an operator may now spend that property deliberately,
+ * per run, and nothing spends it for them.
+ */
+export const FULL_FINDINGS_POLICY: FindingsPolicy = { logBug: true, replan: true };
+
+/**
+ * The wire vocabulary of {@link FindingsPolicy}: the tokens a caller may name to
+ * DISABLE a capability. A closed set, and a list of what is OFF rather than a
+ * mode, so a third capability adds one token instead of doubling an enum.
+ */
+export const FINDINGS_POLICY_TOKENS = ['log-bug', 'replan'] as const;
+
+export type FindingsPolicyToken = (typeof FINDINGS_POLICY_TOKENS)[number];
+
+/**
+ * Parse the `findingsPolicy` parameter — a comma-separated list of DISABLED
+ * capabilities — into the policy the template consumes.
+ *
+ * Shared by both transports on purpose: the `/api/v1` route and the MCP tool must
+ * not be able to disagree about what a token means, and re-expressing the
+ * vocabulary per transport is how they would.
+ *
+ * ⚠️ AN UNRECOGNISED TOKEN IS A REFUSAL, NOT AN IGNORED ONE — returned as
+ * `{ unknown }` for the caller to raise in its own error shape. A typo that
+ * silently rendered the FULL protocol is exactly the lie this whole story removes:
+ * the operator would believe they had switched something off while the agent went
+ * on being told to do it. Absent and empty both mean the full protocol, because a
+ * client assembling a query string from an optional value should not have to know
+ * the difference between omitting a key and sending it blank.
+ */
+export function parseFindingsPolicy(
+  raw: string | null | undefined,
+): { policy: FindingsPolicy; unknown: null } | { policy: null; unknown: string } {
+  const value = (raw ?? '').trim();
+  if (value === '') return { policy: FULL_FINDINGS_POLICY, unknown: null };
+
+  const disabled = new Set<string>();
+  for (const part of value.split(',')) {
+    const token = part.trim();
+    if (token === '') continue;
+    if (!(FINDINGS_POLICY_TOKENS as readonly string[]).includes(token)) {
+      return { policy: null, unknown: token };
+    }
+    disabled.add(token);
+  }
+  return {
+    policy: { logBug: !disabled.has('log-bug'), replan: !disabled.has('replan') },
+    unknown: null,
+  };
+}
+
 export interface DispatchPromptSource {
   /** The `PROD-<n>` identifier. */
   key: string;
@@ -123,6 +217,14 @@ export interface DispatchPromptSource {
   advisories?: WorkItemProseAdvisoryDto[];
   /** The Epic-9 enrichment slots; defaults to {@link NO_INJECTIONS}. */
   injections?: DispatchPromptInjections;
+  /**
+   * What this run permits the agent to WRITE (MOTIR-3020) — the per-run findings
+   * policy, defaulting to {@link FULL_FINDINGS_POLICY} when omitted.
+   *
+   * ⚠️ IT IS PART OF THE INPUT RECORD, which is what keeps the module's purity
+   * claim true rather than merely restated. See the header.
+   */
+  findingsPolicy?: FindingsPolicy;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -153,8 +255,9 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
     '   every new branch, and the error / edge cases. Code without tests is incomplete.',
     '4. Run the repository checks (lint, typecheck, formatting, build) plus the test',
     '   files you added or changed. Do not run the full suite locally — CI runs it.',
-    '5. Stop when every acceptance criterion below holds. Do not widen the scope; log',
-    '   anything else you find as a separate work item.',
+    '5. Stop when every acceptance criterion below holds. Do not widen the scope —',
+    '   anything else you find is a FOUND A DEFECT, handled in the outcome protocol',
+    '   below, which says what to do with it and whether this run may file it.',
   ],
   design: [
     '1. Read the card description above, then INVENTORY the shipped reality the',
@@ -357,6 +460,7 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
   const straddles = advisories.filter(isRepoStraddleAdvisory);
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
+  const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   const lines: string[] = [];
 
   if (references.length > 0) {
@@ -449,6 +553,30 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       '  split and STOP; do not start a run whose own sizing says it will not finish. If the',
       '  card is genuinely one unit and the numbers are wrong, say so and correct them on the',
       '  record — but do not simply proceed past this line.',
+    );
+  }
+
+  // THE DESIGN GATE (MOTIR-3178). Addressed to the agent because the agent is the
+  // one holding both halves: the card in its hand asks it to draw a design and
+  // then build the files that match it, in one pull request, with nobody looking
+  // in between. That is Principle #13 exactly inverted, and the agent is the last
+  // point at which it is still cheap to say so.
+  if (selfBlocking.length > 0) {
+    lines.push(
+      '',
+      'THIS CARD IS ITS OWN DESIGN BLOCKER — it draws the design AND builds it:',
+      ...selfBlocking.map(
+        (a) =>
+          `    - criterion ${a.designCriterionIndex} produces a design asset; criterion ` +
+          `${a.surfaceCriterionIndex} builds a rendered surface against it.`,
+      ),
+      '  Design before code, WITHIN every story (Principle #13) means somebody sees the drawing',
+      '  before the files written to match it. Read literally the design gate is satisfied here —',
+      '  the type: design subtask this card must be linked to IS this card — which is exactly the',
+      '  reading this check exists to catch. The remedy is a LIFT, not a cut: propose the design',
+      '  criterion as its OWN type: design card, leave the rest blocked_by it, and STOP. Do not',
+      '  draw and build in one pass. If the composition is genuinely right — the asset is a small',
+      '  amendment nobody needs to approve separately — say so on the record and proceed.',
     );
   }
 
@@ -808,7 +936,22 @@ function modelSelfReport(): string[] {
  * a card nobody re-read. Telling it to stop and describe what it found turns the
  * most expensive failure mode into the cheapest one.
  */
+/**
+ * WHAT ENDS THIS WORK, and what does not.
+ *
+ * Three branches (MOTIR-3020, `docs/decisions/run-findings-protocol.md`), and the
+ * third one is the one an agent gets wrong without being told: FINISHED and THE
+ * CARD IS WRONG are both about the card in hand, while FOUND A DEFECT is about
+ * something else entirely and must NOT end the run.
+ *
+ * Two of the three are switchable by the run's {@link FindingsPolicy}, and a
+ * disabled branch renders NOTHING — no heading, no blank line, no trace — the
+ * same empty-in-nothing-out shape {@link advisorySection} uses. What replaces it
+ * is not silence: the agent is told what to do INSTEAD, because an agent with a
+ * finding and no instruction improvises.
+ */
 function outcomeProtocol(src: DispatchPromptSource): string[] {
+  const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
   return [
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
@@ -848,12 +991,53 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     '  1. REVERT FIRST. Put the tree back the way you found it and commit',
     '     NOTHING. Do this before anything else — every later step is a step in',
     '     which you might otherwise have committed a half-change.',
-    '  2. Do not improvise. No adjacent fix, no widening the card so it becomes',
-    '     satisfiable, and do not create or edit work items yourself. A plan is',
-    "     PROPOSALS awaiting a human's approval; writing the cards would be doing",
-    '     the approving.',
+    ...cardIsWrongSteps(src, policy),
+    ...foundADefect(src, policy),
+  ];
+}
+
+/**
+ * The steps after the revert, which is where the re-plan switch lives.
+ *
+ * ⚠️ THE PROHIBITION IS REPLACED, NOT DELETED, and what survives is the half that
+ * was load-bearing: DO NOT RESTRUCTURE THE PLAN. An agent that can re-shape the
+ * tree can card its way out of a card it cannot finish, which is the exact
+ * improvisation this whole protocol exists to prevent.
+ *
+ * What GOES is the blanket ban on creation and the reason given for it — *"A plan
+ * is PROPOSALS awaiting a human's approval; writing the cards would be doing the
+ * approving"*. That sentence misdescribes the mechanism: `create_work_item` is a
+ * DIRECT write that enters no proposal pipeline and that nobody approves. It is
+ * how `motir log-bug` files bugs and how every card of this story was authored.
+ */
+function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
+  const permitted = policy.replan
+    ? 'Creating a bug and submitting a re-plan (both below) are permitted.'
+    : 'Creating a bug is permitted where this prompt says so.';
+  const restructuring = [
+    '  2. Do not improvise. No adjacent fix, and no widening the card so it',
+    '     becomes satisfiable. Do NOT RESTRUCTURE THE PLAN: no archiving, no',
+    '     re-parenting, no re-scoping, and no editing any other card.',
+    `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
+  ];
+
+  // The switch. With re-planning disabled there is nothing to submit and nowhere
+  // to park the card: it stays In Progress, which is the honest record of a run
+  // that started work and stopped, and the operator reads the comment.
+  if (!policy.replan) {
+    return [
+      ...restructuring,
+      '  4. Stop, and leave the card In Progress. Do not move its status: this run',
+      '     was launched without re-planning, so there is no plan to submit and no',
+      '     decision for anyone to make yet. Your comment is the whole report.',
+      '  5. Do not pick up other work.',
+    ];
+  }
+
+  return [
+    ...restructuring,
     `  4. Move ${src.key} to Planning with the transition_status tool (key`,
     `     ${src.key}, status planning). That status is in the in-progress`,
     '     category, which is what actually takes the card out of the pickable set',
@@ -870,6 +1054,81 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     "     spends the token owner's AI credits, and a blind retry in an unattended",
     '     run costs them twice for one finding.',
     '  7. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * The THIRD branch: your card is fine, and something ELSE is broken.
+ *
+ * ⚠️ ITS FIRST JOB IS TO SAY IT IS NOT AN ENDING. An agent that has just found
+ * something broken treats it as a reason to stop unless told otherwise, and a run
+ * that abandoned a perfectly good card over a side-finding would be worse than
+ * one that never looked.
+ *
+ * ⚠️ AND THE PARENT IS A KEY, NOT A RULE TO APPLY. The ADR's Q3 settles it — the
+ * bug is parented under the in-flight card's PARENT — and the parent key is
+ * already on the dispatch payload, so the text names it outright. An agent asked
+ * to file something "in a sensible place" invents a place.
+ */
+function foundADefect(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
+  const heading = [
+    '',
+    'FOUND A DEFECT — your card is fine, and something ELSE is broken. This is NOT',
+    'an ending: it does not finish your card, it does not fail it, and it does not',
+    'change which of the two outcomes above you report. You record what you found',
+    'and CARRY ON with the card in hand.',
+    '',
+  ];
+
+  // The switch. Nothing renders in place of the branch's instructions except the
+  // alternative: a comment. The finding must still reach a human — a policy that
+  // turned filing off was never asking the agent to forget what it saw.
+  if (!policy.logBug) {
+    return [
+      ...heading,
+      `  This run was launched without bug filing, so do NOT create a work item.`,
+      `  Comment the finding on ${src.key} instead: what is broken, how to make it`,
+      '  happen, and the evidence — the command you ran and what it printed. Then',
+      '  continue with your card.',
+    ];
+  }
+
+  // The parent is the card's own parent; a top-level card is its own parent for
+  // this purpose, because a bug with no parent lands at the project root where
+  // nobody triaging this area will meet it.
+  const parentKey = src.parent?.key ?? src.key;
+  const parentNote = src.parent
+    ? `${parentKey} — the parent of ${src.key}, the card you are working`
+    : `${parentKey} — the card you are working, which has no parent of its own`;
+
+  return [
+    ...heading,
+    '  1. REPRODUCE IT FIRST. Make the defect happen before you write a word about',
+    '     it. A bug filed from reading the code is a claim, not an observation, and',
+    '     it costs whoever picks it up the same investigation a second time.',
+    '  2. File it with the create_work_item tool:',
+    '',
+    "         kind:      'bug'",
+    `         parentKey: ${parentKey}`,
+    '',
+    `     That parent is not a choice: it is ${parentNote}.`,
+    '     Do not look for a better home and do not invent one.',
+    '  3. Its description carries three things, in this order:',
+    '        - THE REPRODUCTION — what to do to make it happen.',
+    '        - THE EVIDENCE — the command you ran and its output verbatim, or the',
+    '          file and line you read.',
+    `        - WHERE IT WAS SEEN — ${src.key}, and the branch or commit you were`,
+    '          on. A number measured on an unmerged branch is not a number about',
+    '          main, and saying which is the difference between a report and a',
+    '          rumour.',
+    `  4. Link it back: link_work_items, relationship relates_to, to ${src.key}.`,
+    '     The parent says where the bug LIVES; this says where it was FOUND. It',
+    '     is idempotent, and it usually IS a no-op: naming the card in step 3',
+    '     already creates that edge. A "already linked" answer is success.',
+    '  5. It BLOCKS NOTHING. No blocked_by edge, no sprint, no estimate. Filing is',
+    '     purely additive — it claims no scope and holds nothing up — and that is',
+    '     what makes it safe for an unattended run to do at all.',
+    '  6. Carry on with your card and report its own outcome as above.',
   ];
 }
 

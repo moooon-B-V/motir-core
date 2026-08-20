@@ -1145,6 +1145,143 @@ export const workItemRepository = {
   },
 
   /**
+   * The multi-row CLAIM LOCK (MOTIR-3049) — take a `FOR UPDATE` on EVERY row of
+   * a scope, in ONE statement, in a DETERMINISTIC order.
+   *
+   * ⚠️ **THE ORDER MATTERS, AND `ORDER BY "id"` PINS IT RATHER THAN CREATING
+   * IT.** A sprint claim and a story claim inside that sprint contend over an
+   * overlapping row set the moment both scopes are claimable, and two
+   * transactions taking the same rows in DIFFERENT orders deadlock instead of
+   * queueing: Postgres detects the cycle and kills one of them with `40P01`.
+   * `ORDER BY "id"` sorts BELOW the LockRows plan node, so rows are locked in
+   * sorted order whatever access path the planner picks.
+   *
+   * Measured, so the comment does not overstate itself: on today's plan
+   * (`= ANY(array)` over the primary key) Postgres ALREADY returns and locks in
+   * ascending `id` order with no `ORDER BY` at all, and it does so even when the
+   * caller's array is reversed. **So no test can tell this clause apart from its
+   * absence, and none pretends to.** What it buys is that the order stops being
+   * a property of the chosen plan — a wide member set that tips into a
+   * sequential scan, or a future rewrite of this statement, cannot silently
+   * reorder it. Callers may still sort their ids; that is belt to this braces.
+   *
+   * ⚠️ **AND IT FILTERS ON `id` ALONE**, for the reason
+   * {@link findClaimStatesByIds} states in full: a `FOR UPDATE` that waits
+   * re-evaluates its own predicate against the row version the winner just
+   * wrote, so a WHERE or JOIN reading `status` returns ZERO rows at exactly the
+   * moment somebody is holding the row. The mutable state is read AFTERWARDS.
+   *
+   * Returns the ids it actually locked — fewer than asked for means a row was
+   * deleted between the caller's read and this statement, which the caller has
+   * to notice rather than assume away. `tx` REQUIRED: a lock outside a
+   * transaction is released before the next statement runs.
+   */
+  async lockByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Array<{ id: string }>> {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "work_item"
+       WHERE "id" = ANY(${ids}::text[])
+       ORDER BY "id"
+       FOR UPDATE`;
+  },
+
+  /**
+   * The post-lock CLAIM STATE read for MANY rows (MOTIR-3049) — the batched
+   * twin of {@link findClaimStateById}, and it carries the same two warnings
+   * because it is the same statement widened.
+   *
+   * ⚠️ **THE LOCK AND THIS READ ARE TWO STATEMENTS ON PURPOSE.** Folding the
+   * `workflow_status` join into the `FOR UPDATE` reads the very column a racing
+   * claimant writes, and EvalPlanQual then drops the row from the result at the
+   * moment the lock is granted. {@link lockByIds} filters on the immutable `id`;
+   * this reads the mutable state under that lock, where the answer is stable.
+   *
+   * ⚠️ The workflow join is a **LEFT** join, so `statusCategory` is `null` for a
+   * row at a status its project's workflow does not define. An INNER join would
+   * silently DROP such a row, and a dropped row in a scope claim is worse than
+   * one in a keyed claim: the scope would be claimed as if that member were not
+   * in it. `null` is never the to-do category, so the row refuses the claim —
+   * which is the safe answer as well as the honest one.
+   *
+   * Carries `identifier` and `title` so a refusal can NAME the offending member
+   * without a second read, and `archivedAt` so an archived row refuses.
+   * Ordered by `id`, the same order the lock took. `tx` REQUIRED.
+   */
+  async findClaimStatesByIds(
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      title: string;
+      status: string;
+      statusCategory: string | null;
+      assigneeId: string | null;
+      archivedAt: Date | null;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    return tx.$queryRaw<
+      Array<{
+        id: string;
+        identifier: string;
+        title: string;
+        status: string;
+        statusCategory: string | null;
+        assigneeId: string | null;
+        archivedAt: Date | null;
+      }>
+    >`
+      SELECT w."id",
+             w."identifier",
+             w."title",
+             w."status",
+             ws."category" AS "statusCategory",
+             w."assigneeId",
+             w."archivedAt"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."id" = ANY(${ids}::text[])
+       ORDER BY w."id"`;
+  },
+
+  /**
+   * Assign MANY already-locked rows to one user (MOTIR-3049) — the batched write
+   * half of a scope claim.
+   *
+   * The WHERE keeps a re-claim from writing a value that is already correct,
+   * exactly as the keyed claim skips its single assignment for the same reason:
+   * an update that changes nothing still bumps `updatedAt`, and `updatedAt` is
+   * what the all-or-nothing rollback test reads. Returns the number of rows
+   * actually written, so a caller can say what it did rather than assume it.
+   *
+   * ⚠️ **`{ not: userId }` ALONE SILENTLY SKIPS EVERY UNASSIGNED ROW**, which is
+   * to say almost every row a claim is interested in. `assigneeId` is nullable,
+   * and SQL's `"assigneeId" <> $1` is NULL — not TRUE — for a NULL column, so an
+   * un-assigned card does not match the filter and is never written. The claim
+   * then reports itself successful with the whole scope still unassigned, and the
+   * NEXT claimant reads `assignee: null` and calls a card it in fact holds
+   * `taken`. The explicit `OR` with `assigneeId: null` is the fix, and it is
+   * written out rather than folded away because the collapsed form looks correct.
+   *
+   * The caller holds `FOR UPDATE` on every id (that is what "already-locked"
+   * means); this method does not re-take it and must not be called without it.
+   */
+  async assignManyTo(ids: string[], userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await tx.workItem.updateMany({
+      where: {
+        id: { in: ids },
+        OR: [{ assigneeId: null }, { assigneeId: { not: userId } }],
+      },
+      data: { assigneeId: userId },
+    });
+    return result.count;
+  },
+
+  /**
    * The triage QUEUE read (Subtask 6.11.3, per docs/decisions/triage-model.md
    * §2) — the ONE read that INVERTS the `notInTriageSql` exclusion: it returns
    * ONLY triage-marked items for a project, never the planned tree. The ACTIVE

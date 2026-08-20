@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { plansService } from '@/lib/services/plansService';
+import { planReviewService } from '@/lib/services/planReviewService';
 import type { PlanItemDto, PlanItemOpDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { isTempRef, tempRefId } from '@/lib/plans/refs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -31,9 +32,18 @@ import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 //
 // The same PROPOSAL GATE its siblings carry applies, and for a sharper reason:
 // this tool hands back titles, kinds and sizing that read exactly like work
-// items. They are not. `plansService.approvePlan` — a human decision made in
-// Motir — is the only path from a proposal to a `work_item` row, and an `add`'s
-// `workItemId` stays `null` until then.
+// items. They are not. `plansService.approvePlan` is the only path from a
+// proposal to a `work_item` row, and an `add`'s `workItemId` stays `null` until
+// then.
+//
+// ⚠️ AMENDED 2026-08-19 (MOTIR-3021). This used to read "a human decision made
+// in Motir", and the ONLY-PATH half is still exactly true — approve remains the
+// single proposal→row write. What is no longer true is that it happens only in
+// the app: `POST /api/v1/plans/{planId}/approval` is a bounded public entrance
+// an operator's `motir auto --auto-approve-replan` drives
+// (`docs/decisions/run-findings-protocol.md` Q2). It is deliberately NOT an MCP
+// tool — MCP is the AGENT's surface, and an agent must never approve its own
+// re-plan — so nothing about THIS tool's reach changed.
 
 export const GET_PLAN_TOOL_NAME = 'get_plan';
 
@@ -75,8 +85,26 @@ function blockers(refs: string[]): string {
   return refs.length > 0 ? ` · blocked_by: ${refs.join(', ')}` : '';
 }
 
+/**
+ * Where a proposal sits in the COMMITTED tree, and what its target is CALLED —
+ * the half of the rendering that cannot be read off a `PlanItemDto` (bug
+ * MOTIR-3191). Supplied by the caller from `planReviewService.getPlanReview`,
+ * keyed by `planItemId`; absent for a client that has no tree to resolve against,
+ * and the rendering then degrades to the flat list it was.
+ */
+export interface ProposalPlacement {
+  /** The target's own key (`MOTIR-3181`), when the proposal has a live target. */
+  identifier: string | null;
+  /** The committed parent's id — the grouping key. */
+  parentNodeId: string | null;
+  /** The committed ancestor path down to that parent, ROOT FIRST. */
+  parentTrail: { identifier: string; title: string }[];
+}
+
+export type PlacementByPlanItemId = ReadonlyMap<string, ProposalPlacement>;
+
 /** One proposal as a single line — the op, what it targets, and its sizing. */
-function describeItem(item: PlanItemDto): string {
+function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string {
   const marker = OP_MARKER[item.op];
   if (item.op === 'add') {
     const fields = item.proposedFields;
@@ -90,7 +118,10 @@ function describeItem(item: PlanItemDto): string {
       blockers(item.blockedByRefs)
     );
   }
-  const target = item.workItemId ?? '(no target)';
+  // The target by its KEY when the tree could be read (MOTIR-3191). `MOTIR-3181`
+  // is what the reviewer knows the card as; the cuid this used to print is an
+  // identifier for the database and for nobody reading a plan.
+  const target = placement?.identifier ?? item.workItemId ?? '(no target)';
   if (item.op === 'remove') return `${marker} remove ${target}`;
   const patch = item.patch ?? {};
   const changed = Object.keys(patch).filter(
@@ -103,18 +134,35 @@ function describeItem(item: PlanItemDto): string {
   );
 }
 
+/** `under MOTIR-2200 ▸ MOTIR-3154 — A DECIDED plan's cards vanish:` — the live
+ *  branch a group of proposals hangs off, named the way the canvas breadcrumb
+ *  names it. */
+function groupHeading(trail: { identifier: string; title: string }[]): string {
+  const chain = trail.map((c) => c.identifier).join(' ▸ ');
+  const parent = trail.at(-1)!;
+  return `under ${chain} — ${parent.title}:`;
+}
+
 /**
  * The proposals as an indented tree, so a terminal client that ignores
  * `structuredContent` can still SEE the shape that was proposed.
  *
- * Nesting follows `parentRef`, but ONLY the intra-plan temp-ref form
- * (`planItem:<id>`): a `parentRef` naming a REAL work item places the proposal
- * under something that already exists — outside this plan — so it renders at the
- * top level, where the reader's eye expects a new branch hanging off the live
- * tree. `modify` / `remove` carry no `parentRef` at all and sit at the top level
- * for the same reason.
+ * Nesting inside the PLAN follows `parentRef`'s intra-plan temp-ref form
+ * (`planItem:<id>`) — an `add` under another `add` in this same plan.
+ *
+ * Everything else hangs off a branch of the LIVE tree, and is grouped under a
+ * heading that names it (bug MOTIR-3191). That covers a `parentRef` pointing at a
+ * real work item, and — the case this fixes — a `modify` / `remove`, which
+ * carries no `parentRef` at all and inherits its target's position. Un-indented,
+ * the two were indistinguishable from an `add` at the PROJECT ROOT, which the
+ * plan rules reserve for epics: a plan of two amendments read as two new
+ * root-level cards, and was correctly declined on that reading.
+ *
+ * With no `placements` (a caller that could not resolve the tree) this degrades
+ * to exactly the flat rendering it had — the same contract every other
+ * tree-resolution failure on this surface takes.
  */
-function renderProposals(items: PlanItemDto[]): string[] {
+function renderProposals(items: PlanItemDto[], placements?: PlacementByPlanItemId): string[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const childrenOf = new Map<string, PlanItemDto[]>();
   const roots: PlanItemDto[] = [];
@@ -138,18 +186,41 @@ function renderProposals(items: PlanItemDto[]): string[] {
     // path.
     if (rendered.has(item.id)) return;
     rendered.add(item.id);
-    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item)}`);
+    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id))}`);
     for (const child of childrenOf.get(item.id) ?? []) walk(child, depth + 1);
   };
-  for (const root of roots) walk(root, 0);
+
+  // The live-tree branches, in the order they first appear, so a plan's own
+  // ordering survives the grouping.
+  const groups = new Map<string, { heading: string; items: PlanItemDto[] }>();
+  const ungrouped: PlanItemDto[] = [];
+  for (const root of roots) {
+    const placement = placements?.get(root.id);
+    const trail = placement?.parentTrail ?? [];
+    if (!placement?.parentNodeId || trail.length === 0) {
+      ungrouped.push(root);
+      continue;
+    }
+    const group = groups.get(placement.parentNodeId);
+    if (group) group.items.push(root);
+    else groups.set(placement.parentNodeId, { heading: groupHeading(trail), items: [root] });
+  }
+
+  for (const root of ungrouped) walk(root, 0);
+  for (const { heading, items: grouped } of groups.values()) {
+    lines.push(`  ${heading}`);
+    for (const item of grouped) walk(item, 1);
+  }
   // Anything a cycle kept out of the root set is still the caller's data — print
   // it rather than silently dropping proposals from a list the client trusts.
   for (const item of items) walk(item, 0);
   return lines;
 }
 
-/** The human-readable block: the plan's own line, then its proposal tree. */
-export function summarizePlan(plan: PlanWithItemsDto): string {
+/** The human-readable block: the plan's own line, then its proposal tree.
+ *  `placements` (MOTIR-3191) is what lets a proposal about an EXISTING card be
+ *  drawn where that card lives; without it the tree renders flat, as it did. */
+export function summarizePlan(plan: PlanWithItemsDto, placements?: PlacementByPlanItemId): string {
   const lines = [
     `Plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s).`,
     `Project ${plan.projectId} · origin ${plan.origin}` +
@@ -166,7 +237,10 @@ export function summarizePlan(plan: PlanWithItemsDto): string {
         : 'This plan bundles no proposals.',
     );
   } else {
-    lines.push('Proposals (indented under their proposed parent):', ...renderProposals(plan.items));
+    lines.push(
+      'Proposals (indented under their proposed parent):',
+      ...renderProposals(plan.items, placements),
+    );
   }
 
   lines.push(
@@ -179,13 +253,48 @@ export function summarizePlan(plan: PlanWithItemsDto): string {
   return lines.join('\n');
 }
 
+/**
+ * Where each proposal sits in the live tree — the SAME resolution the plan-review
+ * canvas draws from, so the two surfaces cannot disagree about what a plan
+ * proposes (bug MOTIR-3191). Read separately because `PlanWithItemsDto` carries
+ * refs and ids, and placement is a question about the WORK ITEMS those ids name.
+ *
+ * BEST-EFFORT on purpose: this enriches a rendering that already worked without
+ * it, and the tool's job — hand back what was proposed — must not start failing
+ * because a tree read did. A failure degrades to the flat list.
+ */
+async function resolvePlacements(
+  planId: string,
+  ctx: ServiceContext,
+): Promise<PlacementByPlanItemId | undefined> {
+  try {
+    const review = await planReviewService.getPlanReview(planId, ctx);
+    return new Map(
+      review.items.map((item) => [
+        item.planItemId,
+        {
+          identifier: item.identifier,
+          parentNodeId: item.parentNodeId,
+          parentTrail: item.parentTrail.map((c) => ({
+            identifier: c.identifier,
+            title: c.title,
+          })),
+        },
+      ]),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 /** The adapter: read the plan through the service, summarize, return. */
 export async function runGetPlan(
   args: { planId: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const plan = await plansService.getPlan(args.planId, ctx);
-  return toolOk(summarizePlan(plan), derived(planPayload, presentMcpPlan(plan)));
+  const placements = await resolvePlacements(args.planId, ctx);
+  return toolOk(summarizePlan(plan, placements), derived(planPayload, presentMcpPlan(plan)));
 }
 
 export function registerGetPlan(server: McpServer, resolveContext: McpContextResolver): void {

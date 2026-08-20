@@ -19,7 +19,7 @@ export async function ConnectAiGate() {
   const t = await getTranslations('onboarding');
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-(--el-page-bg) px-6 text-(--el-text)">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-(--el-page-bg) px-6 text-(--el-text)">
       <Link href="/" className="mb-8 flex items-center gap-2 font-sans text-base font-semibold">
         <span className="flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
           <Sparkles className="h-4 w-4" aria-hidden />

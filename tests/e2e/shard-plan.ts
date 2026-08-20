@@ -62,6 +62,28 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * `onboarding-migrate.spec.ts` (43.5 s) is by far the heaviest of the twelve and
  * is the one to watch when the bin-packer redistributes.
  *
+ * ⚠️ `plan-decision-permission.spec.ts` (MOTIR-3188) carries the LOCAL provenance
+ * too, for the same reason the twelve above do: it is a brand-new spec, and a
+ * spec with no entry here is assigned to no leg and never runs — which is what
+ * the guard caught on its first CI run. Measured on 2026-08-20 against a
+ * production build, twice: **2.8 s** alone on a cold server and **1.8 s** in a
+ * warm run beside two siblings. The HIGHER reading is recorded, because
+ * under-estimating is the direction that unbalances a bin-packer.
+ *
+ * That same run is the CALIBRATION for every local number in this file, which
+ * nothing had until now: `custom-roles.spec.ts` measured **8.3 s** locally
+ * against **8.2 s** here, and `roles-permissions.spec.ts` **6.5 s** against
+ * **9.3 s**. So a local reading is in the same units and runs at or below the CI
+ * cost — never above it. Re-measure from the first green run that includes it.
+ *
+ * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208) carries a FOURTH provenance: it
+ * had never run in this lane, so it was measured LOCALLY against a production
+ * build on 2026-08-20. Playwright's JSON reporter put its three test BODIES at
+ * 2.6 / 1.2 / 1.1 s (4.9 s total, sign-up and seeding included, since this spec
+ * seeds inside the test rather than in a hook); 8.0 rounds that up to cover the
+ * three `resetDatabase()` hooks the reporter attributes separately. Re-measure
+ * it from the first green CI run that includes it.
+ *
  * ⚠️ `app-role-surfaces.spec.ts` (MOTIR-2816) carries a THIRD provenance and a
  * cost of ~0 that is honest for THIS lane and misleading anywhere else. Every
  * test in it calls `test.skip()` unless `E2E_APP_ROLE=1`, and the bulk legs never
@@ -146,6 +168,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'per-domain-admin-permissions.spec.ts': 11.4,
   'permission-gated-ui.spec.ts': 10.8,
   'plan-change-planner-turn.spec.ts': 6.7,
+  'plan-decision-permission.spec.ts': 2.8,
   'planning-anchor-level.spec.ts': 9.4,
   'plans-review.spec.ts': 6.3,
   'profile.spec.ts': 10.8,
@@ -187,6 +210,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'shell-empty-projects.spec.ts': 2.5,
   'shell-flows.spec.ts': 38.2,
   'shell-keyboard.spec.ts': 0,
+  'shell-viewport-floor.spec.ts': 8.0,
   'shell.spec.ts': 2.7,
   'sprint-delete.spec.ts': 6.7,
   'sprint-edit-dates.spec.ts': 5.8,

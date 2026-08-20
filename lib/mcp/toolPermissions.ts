@@ -75,8 +75,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `add_plan_items`. It is not. `planValidityService.validateProjectedPlan`
   // reads the plan through `plansService.getPlan`, which runs
   // `projectAccessService.assertCanBrowse` — the same key its two sibling
-  // validators name. `ai:view_plan` gates the plan DECISIONS (`approvePlan` /
-  // `declinePlan` / `addProposals`); a projection decides nothing, writes
+  // validators name. `ai:view_plan` gates the plan AUTHOR writes (`addProposals`
+  // / `markPlanned` / `editAddProposal`) and `ai:decide_plan` the two DECISIONS
+  // (`approvePlan` / `declinePlan`, split out by MOTIR-3188); a projection
+  // decides nothing, writes
   // nothing and persists nothing, so filing it there would narrow a read below
   // the gate that actually runs — §3's no-fiction rule in the other direction
   // (`docs/decisions/agent-authored-plans.md` AMENDMENT 3, Q8). The same
@@ -86,8 +88,9 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   validate_plan: 'project:browse',
   // The two plan READS resolve through `plansService.getPlan` /
   // `findPlanIdForJob`, both `assertCanBrowse`. They are NOT `ai:view_plan`:
-  // that key gates the plan DECISIONS (`approvePlan` / `declinePlan` /
-  // `addProposals`).
+  // that key gates the plan AUTHOR writes (`addProposals` / `markPlanned` /
+  // `editAddProposal`). Nor are they `ai:decide_plan`, which MOTIR-3188 split
+  // off for `approvePlan` / `declinePlan` — neither of which is an MCP tool.
   //
   // ⚠️ AMENDED 2026-08-18 (MOTIR-2988). This comment used to end "…, none of
   // which is an MCP tool." That was true until `add_plan_items` shipped, and it
@@ -95,6 +98,27 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `ai:view_plan` entry below is a mistake — so it is corrected here rather
   // than left to age. The reads are still `project:browse`; what changed is that
   // one of the DECISIONS now has a door.
+  //
+  // ⚠️ AMENDED AGAIN 2026-08-19 (MOTIR-3021), for the same reason: a SECOND
+  // decision now has a door. `approvePlan` is reachable by a bearer token
+  // through `POST /api/v1/work-items/{key}/plan-approval`, BOUNDED to the plan a
+  // run's own refused card produced (`docs/decisions/run-findings-protocol.md`
+  // Q2). It is deliberately NOT an MCP tool — MCP is the agent's surface and an
+  // agent must never approve its own re-plan — so this MAP is unchanged; only
+  // the claim that the decisions are unreachable would now be wrong.
+  // `declinePlan` still has no door of any kind.
+  //
+  // ⚠️ AND AMENDED ONCE MORE 2026-08-20 (MOTIR-3188), where the two met at a
+  // merge. The paragraph above said that route was gated by "this same
+  // `ai:view_plan` key", and it no longer is: the DECISIONS were split onto
+  // `ai:decide_plan`, so the route declares that. The bound the paragraph ends on
+  // is unchanged and now rests on something stronger than an omission —
+  // `CLI_TOKEN_GRANT` omits the decide key too, AND no tool in this map asserts
+  // it, so a token minted FOR a dispatched agent is out of the route by
+  // construction (MOTIR-3051). Do not widen that grant. The key IS grantable to
+  // an operator's token, through that one v1 operation and no other:
+  // `lib/tokens/grant.ts`'s `V1_ONLY_PERMISSIONS` carries it, which is the first
+  // entry that array has ever held.
   get_plan_status: 'project:browse',
   get_plan: 'project:browse',
 
@@ -166,12 +190,23 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   append_plan_turn: 'ai:plan',
   submit_plan_session: 'ai:plan',
 
-  // ── ai:view_plan — the plan DECISION that now has a door ─────────────────
+  // ── ai:view_plan — the plan AUTHOR write that has a door ─────────────────
   // `plansService.addProposals` (and `markPlanned`, which `final: true` also
   // reaches) assert `ai:view_plan` by name. The key's name reads as a view and
-  // gates a write — the service says so itself ("a write key wearing a read's
-  // name"), which is why the decision record puts it at `member` rather than at
-  // browse. NOT `ai:plan`: this tool starts no job and spends no AI credits, so
+  // gates a write, which is why the decision record puts it at `member` rather
+  // than at browse.
+  //
+  // ⚠️ AMENDED BY MOTIR-3188. This heading used to say "the plan DECISION that
+  // now has a door", and the paragraph cited the service's own "a write key
+  // wearing a read's name". The DECISIONS have since moved to `ai:decide_plan`
+  // (`approvePlan` / `declinePlan`), and neither of them is an MCP tool — so
+  // what has a door here is the AUTHOR half, and only that. Left corrected
+  // rather than deleted: the sentence about the misleading name is exactly what
+  // a later reader would use to conclude these two rows belong on the decide
+  // key. They do not — the rule is still that a row names the key its own
+  // service asserts, and `editAddProposal` asserts `ai:view_plan`.
+  //
+  // NOT `ai:plan`: this tool starts no job and spends no AI credits, so
   // the key that gates the billable submits would be the wrong one in both
   // directions (`docs/decisions/agent-authored-plans.md` Q2).
   add_plan_items: 'ai:view_plan',

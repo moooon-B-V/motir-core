@@ -6,6 +6,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 
 import type {
   PlanItemDto,
@@ -40,6 +41,30 @@ const TEMP_REF_PREFIX = 'planItem:';
  *  (`planItem:<id>`) → the referenced add's node id; a real work-item id → itself. */
 function resolveRef(ref: string): string {
   return ref.startsWith(TEMP_REF_PREFIX) ? ref.slice(TEMP_REF_PREFIX.length) : ref;
+}
+
+/**
+ * How much of a long prose body the diff cell carries per side (bug MOTIR-3191).
+ *
+ * A PREVIEW rather than the whole body, and the bound is deliberate: the review
+ * model is read on every poll of a `generating` plan, and a plan of thirty
+ * `modify` proposals would otherwise put sixty full descriptions on the wire to
+ * fill two truncated cells. 140 characters is roughly the first sentence, which
+ * is where a rewritten description tells you it was rewritten.
+ */
+const PROSE_PREVIEW_CHARS = 140;
+
+/**
+ * One long Markdown body as a single readable line: whitespace squeezed (a body
+ * is multi-paragraph and the cell is one line) and cut at
+ * {@link PROSE_PREVIEW_CHARS}. `null` for an absent or blank body, which is what
+ * the diff cell renders as "nothing there before".
+ */
+function prosePreview(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const flat = value.replace(/\s+/g, ' ').trim();
+  if (flat.length === 0) return null;
+  return flat.length > PROSE_PREVIEW_CHARS ? `${flat.slice(0, PROSE_PREVIEW_CHARS - 1)}…` : flat;
 }
 
 /** The OLD → NEW field changes a `modify` proposes (its diff overlay). */
@@ -88,11 +113,22 @@ function buildChanges(
     patch.descriptionMd !== undefined &&
     patch.descriptionMd !== (target?.descriptionMd ?? null)
   ) {
-    // Descriptions are long prose — surface only THAT it changed, not the text.
-    changes.push({ field: 'description', from: null, to: 'updated' });
+    // ⚠️ A REAL old→new pair, not the word "updated" (bug MOTIR-3191). This cell
+    // used to read `— → updated`, which is a notification rather than a diff: it
+    // told a reviewer that the half of the card they most need to judge had moved
+    // and refused to say where to. Panel B of `design/ai-planning/design-notes.md`
+    // has always specified *"an inline old→new diff (old read live from the
+    // target, new from `patch`)"* for a `modify`, and prose is the one field that
+    // never honoured it. It is a PREVIEW of each side (see `prosePreview`) — the
+    // cell is one line — but it is a preview of the ACTUAL values.
+    changes.push({
+      field: 'description',
+      from: prosePreview(target?.descriptionMd),
+      to: prosePreview(patch.descriptionMd),
+    });
   }
   // …and the SECOND body (MOTIR-3111). Same treatment as the description above —
-  // long prose, so the cell says only that it moved. It is listed because the
+  // long prose, so each side is previewed. It is listed because the
   // explanation is the half a reviewer reads to decide whether a proposed
   // re-shape is right: a `modify` that silently rewrote the WHY while the review
   // surface showed nothing would defeat the point of putting the plan in front of
@@ -101,7 +137,11 @@ function buildChanges(
     patch.explanationMd !== undefined &&
     patch.explanationMd !== (target?.explanationMd ?? null)
   ) {
-    changes.push({ field: 'explanation', from: null, to: 'updated' });
+    changes.push({
+      field: 'explanation',
+      from: prosePreview(target?.explanationMd),
+      to: prosePreview(patch.explanationMd),
+    });
   }
   const added = patch.blockedByAdd?.length ?? 0;
   const removed = patch.blockedByRemove?.length ?? 0;
@@ -155,6 +195,22 @@ export const planReviewService = {
     );
     const targetById = new Map(targets.map((t) => [t.id, t]));
 
+    // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
+    // parent (bug MOTIR-3191).
+    //
+    // A `modify` / `remove` carries NO `parentRef` and cannot: its parent is
+    // whatever the live card already has, and the contract deliberately forbids a
+    // proposal from re-parenting anything (`docs/decisions/agent-authored-plans.md`).
+    // Reading placement off `parentRef` ALONE therefore gave it a null parent —
+    // which every consumer reads as *a root*. So an amendment to a subtask five
+    // levels down drew at the PROJECT ROOT, beside the `add`s the plan rules
+    // reserve that level for, and a reviewer applying the root-is-for-epics rule
+    // to what the surface showed was correct to decline it. The parent is not
+    // absent; it is on the TARGET, one field away.
+    const targetParentIds = plan.items
+      .map((i) => (i.workItemId ? (targetById.get(i.workItemId)?.parentId ?? null) : null))
+      .filter((id): id is string => id !== null);
+
     // …AND the committed parents' OWN ancestors (bug MOTIR-3152), because the
     // breadcrumb the canvas opens with is the whole CHAIN down to the level, not
     // its last link. The read above resolves the parent; walking UP from it is a
@@ -169,13 +225,18 @@ export const planReviewService = {
     // A `findAncestors` per parent would be the obvious alternative and is the
     // one this deliberately avoids: it is one query PER PARENT, and a plan may
     // legitimately propose under many.
+    //
+    // The frontier is seeded with every id that must END UP in `ancestorById`:
+    // the committed parents' own parents (their rows came back in round 1), and
+    // — MOTIR-3191 — the inherited parents themselves, which did not.
     const ancestorById = new Map(targets.map((t) => [t.id, t]));
     let frontier = Array.from(
-      new Set(
-        committedParentIds
+      new Set([
+        ...committedParentIds
           .map((id) => targetById.get(id)?.parentId)
           .filter((id): id is string => !!id),
-      ),
+        ...targetParentIds,
+      ]),
     );
     // A hard bound as well as the natural one: a cycle in `parentId` is not
     // representable through the API, but this loop must terminate on a corrupt
@@ -216,6 +277,18 @@ export const planReviewService = {
 
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
+    // The project's WORKFLOW, so a target's status can carry its own identity —
+    // label + lifecycle category — to the canvas chip (bug MOTIR-3170). The chip
+    // used to receive a bare key and narrow it against a six-member literal,
+    // which drew a `modify` whose target sits at `implemented` as "To Do". One
+    // read per plan page; the statuses are per-project and there is one project.
+    const statusByKey = new Map(
+      (await workflowsService.listStatusesByProject(plan.projectId, ctx.workspaceId)).map((s) => [
+        s.key,
+        s,
+      ]),
+    );
+
     // Resolve node ids first, so `hasChildren` can be computed across the forest.
     //
     // ONE rule for all three ops (MOTIR-3160): the work item this proposal is
@@ -243,8 +316,22 @@ export const planReviewService = {
         ? (nodeIdByPlanItemId.get(resolved) ?? resolved)
         : resolved;
     };
-    const parentNodeIdOf = (item: PlanItemDto): string | null =>
-      item.parentRef ? resolveNodeRef(item.parentRef) : null;
+    /**
+     * Where this proposal SITS — one rule for all three ops (bug MOTIR-3191).
+     *
+     * An `add` says so itself, in `parentRef`. A `modify` / `remove` cannot: it
+     * names a `workItemId` and no parent, because its parent is the live card's
+     * and a proposal may not move anything. So the placement of a proposal ABOUT
+     * an existing card is read off that card — which is the same answer approve
+     * would produce, since a `modify` leaves `parentId` exactly where it found it.
+     *
+     * A materialized `add` has both; `parentRef` wins, and the two agree.
+     */
+    const parentNodeIdOf = (item: PlanItemDto): string | null => {
+      if (item.parentRef) return resolveNodeRef(item.parentRef);
+      const target = item.workItemId ? targetById.get(item.workItemId) : undefined;
+      return target?.parentId ?? null;
+    };
     const childParentIds = new Set(
       withNodeIds.map(({ item }) => parentNodeIdOf(item)).filter((p): p is string => p !== null),
     );
@@ -257,20 +344,32 @@ export const planReviewService = {
 
       const targetMissing = item.op !== 'add' && !target;
 
-      // The COMMITTED parent, when there is one. A `planItem:` parent already has
-      // a node in the proposed set, so it needs no resolution; an archived or
-      // hard-deleted parent simply does not come back from the read, and the item
-      // then reads as a root — degrade, never throw (MOTIR-3083 AC 5).
-      const committedParent =
-        item.parentRef && !item.parentRef.startsWith(TEMP_REF_PREFIX)
-          ? targetById.get(item.parentRef)
-          : undefined;
+      // The COMMITTED parent, when there is one. Two sources now (MOTIR-3191):
+      // a `parentRef` naming a real work item — an `add`, saying where it wants
+      // to land — and the parent a `modify` / `remove` INHERITS from its target,
+      // which is the only way a proposal about an existing card can name one. An
+      // intra-plan (`planItem:`) parent is neither: it already has a node in the
+      // proposed set, so the canvas draws it and the breadcrumb does not.
+      //
+      // The row comes from either batched map: a `parentRef` target was read in
+      // round 1, an inherited parent by the ancestor walk. An archived or
+      // hard-deleted parent is in neither, and the item then reads as a root —
+      // degrade, never throw (MOTIR-3083 AC 5).
+      const parentNodeId = parentNodeIdOf(item);
+      const committedParentId = item.parentRef
+        ? item.parentRef.startsWith(TEMP_REF_PREFIX)
+          ? null
+          : item.parentRef
+        : parentNodeId;
+      const committedParent = committedParentId
+        ? (targetById.get(committedParentId) ?? ancestorById.get(committedParentId))
+        : undefined;
 
       return {
         planItemId: item.id,
         op: item.op,
         nodeId,
-        parentNodeId: parentNodeIdOf(item),
+        parentNodeId,
         parentIdentifier: committedParent?.identifier ?? null,
         parentTitle: committedParent?.title ?? null,
         parentKind: committedParent?.kind ?? null,
@@ -310,6 +409,14 @@ export const planReviewService = {
         // identifier off `target` and leaving the status null would split one
         // batched read across two cards for no reason.
         status: target?.status ?? null,
+        // The status's own IDENTITY (bug MOTIR-3170) — its label and lifecycle
+        // category, so the canvas chip can name a status it has no per-key
+        // treatment for instead of coercing it to `todo`. Resolved off the SAME
+        // `target`, and therefore under MOTIR-3160's rule directly above rather
+        // than the `op === 'add'` guard that rule removed: a status that is
+        // non-null must be nameable, or the chip is back to guessing.
+        statusLabel: statusByKey.get(target?.status ?? '')?.label ?? null,
+        statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
         stale: reasons.length > 0,

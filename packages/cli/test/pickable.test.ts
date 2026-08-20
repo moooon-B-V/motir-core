@@ -125,9 +125,27 @@ describe('pickWarning — `motir run <key>` WARNS, it does not refuse', () => {
     expect(pickWarning({ status: 'todo', assigneeId: THEM }, ME)).toMatch(/two agents on one card/);
   });
 
-  it('names WHERE it is', () => {
-    expect(pickWarning({ status: 'in_review', assigneeId: null }, ME)).toMatch(/already In Review/);
-    expect(pickWarning({ status: 'planning', assigneeId: null }, ME)).toMatch(/being re-planned/);
+  // MOTIR-3048 — the STATUS axis left this function. The claim endpoint refuses
+  // anything outside the to-do category, so a warning about `in_review` or
+  // `planning` would describe an outcome that can no longer happen, and a
+  // warning for something impossible is noise before it is a lie. What replaced
+  // it is a server refusal, asserted in `dispatchCommand.test.ts`.
+  it('says NOTHING about where the card is — the server owns that now', () => {
+    expect(pickWarning({ status: 'in_review', assigneeId: null }, ME)).toBeNull();
+    expect(pickWarning({ status: 'planning', assigneeId: null }, ME)).toBeNull();
+    expect(pickWarning({ status: 'done', assigneeId: null }, ME)).toBeNull();
+  });
+
+  // …and the assignee axis is kept for exactly the opposite reason: the server
+  // deliberately does NOT refuse a to-do card that belongs to somebody else, so
+  // this is the only place a person is told they are taking one.
+  it('still names WHOSE it is, whatever status it sits at', () => {
+    expect(pickWarning({ status: 'todo', assigneeId: THEM }, ME)).toMatch(
+      /assigned to someone else/,
+    );
+    expect(pickWarning({ status: 'blocked', assigneeId: THEM }, ME)).toMatch(
+      /assigned to someone else/,
+    );
   });
 
   it('says nothing about a card that would have been picked anyway', () => {

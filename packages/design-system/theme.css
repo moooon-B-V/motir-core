@@ -2723,6 +2723,46 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   RECIPE KNOBS — the SCALARS a component's own colour recipe reads
+   (MOTIR-3207)
+
+   Not part of the Tier-3 layer above and deliberately not named `--el-*`:
+   that layer is a COLOUR contract (every member aliases a Tier-0 --color-*
+   and is asserted palette-dependent by tests/theme/paletteTokenCoverage).
+   A knob here is a NUMBER inside a color-mix() — one value for every
+   palette and both themes — so it fails both halves of that contract while
+   being exactly the thing that has to be expressed once.
+
+   Declared on a plain `:root` rule rather than in @theme so the property is
+   emitted unconditionally: its only consumer is a `var()` inside a JS style
+   object, which Tailwind's source scan has no reason to keep a theme
+   variable alive for.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* THE ORB's lit-sphere highlight — how much --el-accent-text is mixed into
+     --el-accent at the first stop of `PlanWithAIFab`'s radial gradient, which
+     is the gradient's LIGHTEST point and therefore where the white glyph over
+     it is closest to disappearing (design/ai-chat/design-notes.md § B).
+
+     26%, not the 32% that shipped, and ONE number rather than a per-theme
+     pair. At 32% the glyph misses WCAG 1.4.11's 3:1 for a non-text graphic in
+     FOUR of the twenty palette x theme contexts — default dark 2.78:1, cobalt
+     dark 2.86:1, spectrum dark 3.00:1 (2.999, i.e. under the bar) and,
+     contrary to the finding that filed this, evergreen LIGHT at 2.94:1. So
+     "light has headroom" is a property of the DEFAULT PALETTE, not of light:
+     a `[data-theme='dark']` override of this stop would have left evergreen's
+     light orb failing. At 26% the worst context is 3.09:1 and all twenty
+     clear the bar.
+
+     Mixing the glyph's own colour INTO its backdrop is monotonic — a larger
+     number is always less contrast — so this is a CEILING, and lowering it
+     further is always safe for legibility and only ever costs the lit look.
+     tests/theme/orb-glyph-contrast.test.ts measures every context from these
+     tokens and fails if a future palette or a raised knob crosses 3:1. */
+  --orb-lit-mix: 26%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    AXIS 1 (COLOUR) — data-palette overrides (Subtask 7.3.48)
    Registry: lib/theme/palettes.ts. A named palette re-skins the app by
    OVERRIDING the Tier-3 --el-* layer above — and ONLY colour (--el-* /

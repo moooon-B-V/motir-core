@@ -10,7 +10,8 @@
 //
 //   • one READ OF THE READY SET per iteration — never a batch read-ahead,
 //   • each item's prompt fetched with the run's session branch as the SEED,
-//   • each item flipped to in_progress before its agent is launched,
+//   • each item CLAIMED — assigned and flipped to in_progress in one locked
+//     call — before its agent is launched,
 //   • each item recorded as integrated on that same branch,
 //   • a final ready read that comes back to an empty set — the loop stops
 //     because the server drained, not because it ran out of patience,
@@ -95,12 +96,46 @@ const shapeOf = (entry) =>
     .replace(`/${PROJECT}/`, '/{project}/')}`;
 
 const READY = `GET /api/v1/projects/{project}/ready`;
-const TRANSITION = 'POST /api/v1/work-items/{key}/transitions';
 const PROMPT = 'GET /api/v1/work-items/{key}/dispatch-prompt';
 const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
-/** The CLAIM (MOTIR-2427) — a plain assignment, written before the status moves
- *  and long before the agent launches. */
-const CLAIM = 'PATCH /api/v1/work-items/{key}';
+/**
+ * The CLAIM (MOTIR-2427, made atomic by MOTIR-2961/MOTIR-3048) — ONE locked call
+ * that assigns the item AND moves it to in_progress, written long before the
+ * agent launches.
+ *
+ * ⚠️ THE SEPARATE TRANSITION IS GONE, and its absence is an assertion. This file
+ * used to expect `PATCH /work-items/{key}` followed by
+ * `POST /work-items/{key}/transitions` — two unlocked writes with a read-to-write
+ * gap between them that two simultaneous runs fell into. A loop that made both
+ * again would be a regression to the race, so the shape below takes the card in
+ * ONE write, and the pair coming back — a `PATCH` plus a `POST …/transitions`
+ * where this single call now stands — would fail the comparison.
+ *
+ * ⚠️ The per-item shape DID later grow a fifth request (the read-back below), so
+ * do not read this bound as a count. It is about the PAIR: what must never
+ * return is an unlocked assign-then-transition, whatever else the sequence
+ * carries.
+ */
+const CLAIM = 'POST /api/v1/work-items/{key}/claim';
+/**
+ * The READ-BACK (MOTIR-3018), and it is a real addition to the sequence — one
+ * `GET` per item that exits 0, between the agent finishing and the run recording
+ * anything.
+ *
+ * ⚠️ IT IS HERE BECAUSE EXIT 0 IS NOT AN OUTCOME. A card the agent finished and a
+ * card the agent REFUSED — read it, found the plan wrong, submitted a re-plan and
+ * reverted its worktree — both leave the process with status 0. The loop cannot
+ * tell them apart from the exit code, so it asks the CARD: a card sitting in
+ * `planning` is one whose agent handed work back. Nothing cheaper distinguishes
+ * them, and getting it wrong is expensive in the direction that matters — a
+ * refused card recorded as integrated puts a branch nobody wrote into a pull
+ * request.
+ *
+ * The cost is stated rather than hidden: one extra request per item, on the exit-0
+ * path only. A run that STOPPED making it would be the MOTIR-3018 regression, so
+ * its presence is asserted here in position, not merely tolerated.
+ */
+const READBACK = 'GET /api/v1/work-items/{key}';
 
 // The suite runs `motir ready` against this same stub before the loop starts —
 // it is the cheapest proof that the credential resolved, whichever tier supplied
@@ -136,10 +171,12 @@ check(whoamiCount === 1, `expected exactly ONE whoami for the run, got ${whoamiC
 
 // The expected shape, built rather than hard-coded so the item count is a knob.
 const expected = [];
-// ⚠️ THE CLAIM COMES BEFORE THE TRANSITION, and the ORDER is the assertion. A
-// claim written after the work is history; the only version that tells a
-// teammate anything is the one that lands while the work is happening.
-for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, TRANSITION, INTEGRATION);
+// ⚠️ THE CLAIM COMES BEFORE THE AGENT, and the ORDER is the assertion. A claim
+// written after the work is history; the only version that tells a teammate
+// anything is the one that lands while the work is happening. It comes AFTER the
+// prompt read on purpose — the prompt is a pure read that carries `targetRepo`,
+// and `auto.ts` resolves the checkout from it before touching anything.
+for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, READBACK, INTEGRATION);
 expected.push(READY); // the drain probe
 
 check(
@@ -164,17 +201,14 @@ for (let i = 1; i <= ITEMS; i += 1) {
 
   const dispatch = loop[base + 1];
   const claim = loop[base + 2];
-  const transition = loop[base + 3];
+  // ⚠️ NO BODY, and that is the assertion. The owner comes from the TOKEN on
+  // this endpoint, so a claim carrying an `assigneeId` would mean the CLI had
+  // gone back to naming the assignee itself — which is the half of the old pair
+  // that could be wrong.
   check(
-    keyOf(claim) === key && typeof claim?.body?.assigneeId === 'string',
-    `${key}: expected a CLAIM assigning the item, got ${keyOf(claim)} ${JSON.stringify(
+    keyOf(claim) === key && (claim?.body === undefined || claim?.body === null),
+    `${key}: expected a keyed CLAIM with no body, got ${keyOf(claim)} ${JSON.stringify(
       claim?.body,
-    )}`,
-  );
-  check(
-    keyOf(transition) === key && transition?.body?.status === 'in_progress',
-    `${key}: expected a transition to in_progress, got ${keyOf(transition)} ${JSON.stringify(
-      transition?.body,
     )}`,
   );
 
@@ -188,6 +222,14 @@ for (let i = 1; i <= ITEMS; i += 1) {
   check(
     typeof seed === 'string' && seed.startsWith('motir/auto-'),
     `${key}: the dispatch prompt carried no session-branch seed (got ${JSON.stringify(seed)})`,
+  );
+
+  // The read-back is about THIS card. A loop that asked about the wrong one would
+  // read the wrong card's status and could refuse a card its agent finished.
+  const readback = loop[base + 3];
+  check(
+    keyOf(readback) === key,
+    `${key}: the post-agent read-back asked about ${keyOf(readback) ?? '(nothing)'}`,
   );
 
   const integrated = loop[base + 4];
@@ -229,6 +271,14 @@ check(
 // The loop must stop because the SERVER drained. Under MCP that was "N+1
 // `next_ready` calls, the last one empty"; here it is the same claim made
 // directly — one ready read per iteration plus the drain probe, and no more.
+// A NEGATIVE, worth stating: nothing on this path transitions a status any more.
+// The dispatch flip is inside the claim and the close-out is the integration, so
+// a `POST /transitions` appearing here is the old pair coming back.
+check(
+  !loopShapes.includes('POST /api/v1/work-items/{key}/transitions'),
+  'the loop wrote a separate status transition — the claim is the flip (MOTIR-3048)',
+);
+
 const readyReads = loopShapes.filter((shape) => shape === READY).length;
 check(
   readyReads === ITEMS + 1,

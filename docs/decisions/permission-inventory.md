@@ -126,7 +126,7 @@ carries a decided policy, and no row says `new`.
 
 | Domain               | Permissions                                                                       |
 | -------------------- | --------------------------------------------------------------------------------- |
-| `ai` (3)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                   |
+| `ai` (4)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ · `ai:decide_plan`                |
 | `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
 | `board` (1)          | `board:configure`                                                                 |
 | `comment` (2)        | `comment:add` · `comment:moderate`                                                |
@@ -228,7 +228,18 @@ worse failure than a gap.
 
 **R10.** The workflow statuses a board column projects. Statuses live here, not under /projects.
 
-**R11.** Reads a generated plan and its proposals — AND acts on it. MOTIR-2363 wired `ai:view_plan` on every method that WRITES to a plan row (approve, decline, edit a proposal, add proposals, mark planned); the READ keeps `assertCanBrowse` through `plansService.getPlan`, because a plan you may not act on is still a plan you may read. ⚠️ The key's NAME is the misleading part: approving materializes work items, so it is a write key, which is why the decision record puts it at `member` rather than at browse.
+**R11.** Reads a generated plan and its proposals — AND acts on it. MOTIR-2363 wired `ai:view_plan` on every method that WRITES to a plan row (approve, decline, edit a proposal, add proposals, mark planned); the READ keeps `assertCanBrowse` through `plansService.getPlan`, because a plan you may not act on is still a plan you may read.
+
+> ⚠️ **AMENDED by MOTIR-3188 (2026-08-20) — the one key is now TWO, and the row above is what it corrects.** R11 used to end: _"The key's NAME is the misleading part: approving materializes work items, so it is a write key, which is why the decision record puts it at `member` rather than at browse."_ That was an accurate description of a conflation, and it stopped being a safe one. Two AUTHORITIES were inside one key:
+>
+> - **AUTHOR** — `addProposals`, `markPlanned`, `editAddProposal` (and its `updateProposal` / `deepenProposal` callers). These keep **`ai:view_plan`**.
+> - **DECIDE** — `approvePlan`, the only path from a proposal to real rows, and `declinePlan`. These now assert **`ai:decide_plan`**.
+>
+> The conflation was invisible under the three built-in roles (`member` holds it, `viewer` does not), which is why it shipped. **MOTIR-2257's custom roles** ended that: a role grants exactly what an admin ticks off a grid, so ticking a switch whose label said _view_ conferred bulk work-item creation on a role that was deliberately not given `work_item:edit`. **MOTIR-2984 / -2988** ended it a second way, by giving the surface a machine author — a token allowed to draft a plan was a token allowed to enact one.
+>
+> Behaviour-neutral on the built-ins by construction: `ai:decide_plan` enters `ROLE_GATED_PERMISSIONS` and `member` and neither `viewer` nor `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`, so every actor who could approve before can approve after. Full argument in `docs/decisions/agent-authored-plans.md` AMENDMENT 5.
+>
+> ⚠️ **And the `ai:view_plan` cell on the `/api/plans/[id]` GET row below is a DESCRIPTION OF THE ROW'S SUBJECT, not of its gate.** That read is `canBrowse` — its own Gate column says so — and it is the evidence that this key never gated a view at all.
 
 **R12.** Better-Auth endpoint — authenticates, does not authorise.
 
@@ -372,8 +383,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/idea-draft`                             | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                                                                                        | —                | no-gate     | R48 |
 | `/api/idea-draft/[id]/claim`                  | POST      | — none — consumes a single-use draft id at sign-in                                                                                                 | —                | user-scoped | R49 |
 | `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` → `plansService.getPlan` → `assertCanBrowse`                                                                     | `ai:view_plan`   | existing    | R11 |
-| `/api/plans/[id]/approve`                     | POST      | `plansService.approvePlan` → `assertPermission`                                                                                                    | `ai:view_plan`   | existing    | R11 |
-| `/api/plans/[id]/decline`                     | POST      | `plansService.declinePlan` → `assertPermission`                                                                                                    | `ai:view_plan`   | existing    | R11 |
+| `/api/plans/[id]/approve`                     | POST      | `plansService.approvePlan` → `assertPermission`                                                                                                    | `ai:decide_plan` | existing    | R11 |
+| `/api/plans/[id]/decline`                     | POST      | `plansService.declinePlan` → `assertPermission`                                                                                                    | `ai:decide_plan` | existing    | R11 |
 | `/api/plans/[id]/items/[itemId]`              | PATCH     | `plansService.updateProposal` → `assertPermission`                                                                                                 | `ai:view_plan`   | existing    | R11 |
 | `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                                                                                                                  | `project:browse` | existing    | R17 |
 | `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                                                                                                                   | `ai:configure`   | existing    | R17 |
@@ -398,6 +409,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/projects/[projectKey]/sprints`                  | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/work-items`               | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/work-items/count`         | —     | `assertCanBrowse` (via `projectsService.getByKey`) | —          | token-scoped | R1  |
+| `/api/v1/scope-claims`                                   | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/sessions/complete`                              | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/sprints/[sprintId]`                             | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/sprints/[sprintId]/complete`                    | —     | — none —                                           | —          | token-scoped | R1  |
@@ -414,6 +426,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/work-items/[key]/implementation`                | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/integration`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/links`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/plan-approval`                 | —     | `assertCanBrowse`, `ai:decide_plan`                | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/restore`                       | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/transitions`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/workspaces`                                     | —     | — none —                                           | —          | token-scoped | R1  |

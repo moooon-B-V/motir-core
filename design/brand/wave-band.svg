@@ -1,14 +1,23 @@
 <!--
   Motir brand mark — the wave band. Production artwork, native size.
 
-  SOURCE: design/brand/motir-logo.drawio.svg (draw.io / diagrams.net, editable).
-  That file draws the mark as four open strokes — an upper curve, a lower curve
-  and two straight end caps. This file is the same geometry CLOSED and FILLED:
-  upper curve, right cap, lower curve reversed, left cap. It uses the source's
-  own control points, so it is exact by construction — no tracing, no fitting
-  error. Four quadratic curves and two straight caps — six segments, ~110 bytes of path data.
-  To change the mark, edit the .drawio.svg and re-derive this file; do not hand-edit
-  the path.
+  GENERATED — do not hand-edit. Run `pnpm tsx scripts/brand/generate-wave-band.mts`;
+  `tests/brand/waveBandGenerator.test.ts` asserts this file equals the generator's
+  current output, so a hand-edit fails the suite. The CONCEPT lives in
+  design/brand/motir-logo.drawio.svg (Yue's editable sketch); it is no longer the
+  derivation source, because the tangent conditions below cannot be drawn by hand.
+
+  REFINED, NOT RE-DRAWN (MOTIR-3181). Same approved mark, same two crests, same
+  rhythm. Three things the file used to get wrong:
+    1. The curve met each straight vertical cap 14.7° / 19.3° OFF vertical — a
+       visible corner at the box's vertical midpoint. The final quadratic is now
+       split at 0.75 and its tail re-aimed so the curve arrives EXACTLY vertical:
+       the junction is tangent-continuous.
+    2. The 24-grid cut inset ~1 unit where the native artwork had none, so the caps
+       antialiased into a soft seam at every size that is not a multiple of the
+       grid. They now sit ON the viewBox edge, which is pixel-aligned at every
+       scale. Padding belongs to the consumer, never to the artwork.
+    3. A stray +0.54 on every y. The frame is exact.
 
   fill="currentColor" is deliberate: the mark carries NO colour of its own, so it
   follows the theme and the palette from whatever renders it. Set the colour on the
@@ -19,6 +28,6 @@
 
   See design/brand/design-notes.md sections 1 and 2.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768.00 768.54" width="768.00" height="768.54" role="img" aria-label="Motir">
-  <path d="M0 0.54Q224 496.54 416 134.54Q608 -227.46 768 384.54L768 768.54Q608 164.54 416 594.54Q224 1024.54 0 384.54Z" fill="currentColor" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 768 768" width="768" height="768" role="img" aria-label="Motir">
+  <path d="M0 0Q224 496 416 134Q560 -137.5 686 138.88Q768 318.74 768 384L768 768Q608 164 416 594Q272 916.5 110 637.13Q0 447.43 0 384Z" fill="currentColor" />
 </svg>

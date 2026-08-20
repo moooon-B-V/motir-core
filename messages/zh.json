@@ -428,8 +428,12 @@
       "description": "提交规划任务，消耗工作区的AI额度并生成计划变更建议。"
     },
     "ai_view_plan": {
-      "label": "查看AI计划",
-      "description": "打开已生成的计划并查看其建议内容。"
+      "label": "编写AI计划",
+      "description": "向已生成的计划追加建议并结束编写；仅查看计划只需项目访问权限。"
+    },
+    "ai_decide_plan": {
+      "label": "批准或拒绝AI计划",
+      "description": "将计划中的建议转化为真实工作项，或结束计划而不创建任何工作项。"
     }
   },
   "localeToggle": {
@@ -4881,7 +4885,6 @@
     "chat": {
       "railLabel": "对话",
       "assistantName": "Motir",
-      "assistantInitial": "M",
       "composerPlaceholder": "回复，或提个问题……",
       "send": "发送",
       "working": "Motir 正在思考……",

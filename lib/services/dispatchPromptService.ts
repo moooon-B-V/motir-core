@@ -2,7 +2,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
-import { assembleDispatchPrompt } from '@/lib/dispatch/promptTemplate';
+import { assembleDispatchPrompt, type FindingsPolicy } from '@/lib/dispatch/promptTemplate';
 import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
@@ -123,6 +123,21 @@ export interface DispatchPromptOptions {
    * the one-PR-per-run contract before the run had produced anything.
    */
   sessionBranch?: string | null;
+  /**
+   * What this run permits its agent to WRITE (MOTIR-3020) — bug filing and
+   * re-plan submission, independently.
+   *
+   * ⚠️ IT HAS TO ARRIVE HERE, not stay in the client. The prompt is the entire
+   * contract with a sandboxed agent: a flag the agent never reads changes
+   * nothing about what it does. That is why this is a request parameter rather
+   * than CLI-side behaviour (`docs/decisions/run-findings-protocol.md` Q1).
+   *
+   * OMITTED means the COMPLETE protocol — see
+   * {@link import('@/lib/dispatch/promptTemplate').FULL_FINDINGS_POLICY}. This
+   * service does not default it; the template does, so every caller of the
+   * template gets the same answer for an absent policy.
+   */
+  findingsPolicy?: FindingsPolicy;
 }
 
 export const dispatchPromptService = {
@@ -219,6 +234,10 @@ export const dispatchPromptService = {
       // lineage always wins, so a seed can never redirect one.
       sessionBranch:
         readiness.inheritedSessionBranch ?? item.sessionBranch ?? opts.sessionBranch ?? null,
+      // Passed through UNDEFAULTED. `undefined` is the template's own signal for
+      // "the full protocol", so defaulting it here would put a second copy of
+      // that decision in a second place.
+      ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
     });
 
     return {

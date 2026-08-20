@@ -13,12 +13,15 @@
 # the prompt, believe its exit code". Validating it against a real coding agent
 # would test the agent's mood, cost money, and need a key the image deliberately
 # does not carry. Substituting a scripted agent tests the thing that is actually
-# Motir's: the SEQUENCE — read the ready set → fetch the item's prompt →
-# transition it to in_progress → (agent) → record the integration, re-queried
-# once per iteration until the ready set drains, then ONE pull request per repo.
+# Motir's: the SEQUENCE — read the ready set → fetch the item's prompt → CLAIM it
+# (assigned and moved to in_progress in one locked call) → (agent) → record the
+# integration, re-queried once per iteration until the ready set drains, then ONE
+# pull request per repo.
 #
-# (The prompt is fetched BEFORE the transition since MOTIR-2398 — it carries
-# `targetRepo`, which the run routes on. `assert-run.mjs` records why.)
+# (The prompt is fetched BEFORE the claim since MOTIR-2398 — it carries
+# `targetRepo`, which the run routes on. And the claim is ONE request since
+# MOTIR-3048, not an assignment followed by a transition. `assert-run.mjs`
+# records why, and refuses the old pair coming back.)
 #
 # It asserts the sequence, not just the exit code: every request is recorded and
 # checked by assert-run.mjs. A run that exits 0 having silently skipped the

@@ -483,9 +483,18 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // this tool from a one-line catalogue is choosing the verdict; the advisory
     // channel and every severity in it is documented where somebody would look,
     // in `docs/mcp.md`'s `validate_work_item` section and its severity table.
+    //
+    // Re-pinned once more for MOTIR-3178's FOURTH shape severity
+    // (`likely-self-blocking-design`). Same re-read, same answer — and the
+    // repetition is now itself the finding worth recording: every severity this
+    // family gains drifts this pin and leaves the summary correct, because the
+    // summary is scoped to the verdict and the severities live on the channel
+    // that never touches it. A future member should expect to bump the hash and
+    // change nothing else; a member that DID make this line wrong would be one
+    // that started gating, which the family's contract forbids.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: 'edf9b0c94837',
+    descriptionFingerprint: '2989ea0e1745',
   },
   validate_plan: {
     summary:
@@ -514,8 +523,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   add_plan_items: {
     summary:
-      'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
-    descriptionFingerprint: '3b22fa8a946b',
+      'Append proposals to a plan — or close it with an empty final batch; ids come back in order, so the next batch can hang children off them.',
+    descriptionFingerprint: '0c4685fc9814',
   },
   update_plan_item: {
     summary:

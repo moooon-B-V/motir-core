@@ -466,6 +466,61 @@ describe('usePlanChangeConversation — approve / discard', () => {
     expect(onApproved).toHaveBeenCalledTimes(1);
   });
 
+  // ── The overlay must key by what the adds BECAME (bug MOTIR-3206) ─────────
+  //
+  // The review in hand was read while the plan was `planned`, so its `add` is
+  // keyed by the PlanItem id and carries no identifier. Keeping it past the
+  // decision (MOTIR-3162) then drew every accepted card twice: the committed
+  // node the level read returns, plus the keyless ghost the stale review still
+  // describes. Only the server knows the materialized ids, so the decision has
+  // to re-read the plan.
+  it('RE-READS the decided plan so the overlay carries the materialized keys', async () => {
+    const DECIDED = planReview([
+      planReviewItem({
+        planItemId: 'pi_1',
+        // Keyed by the work item it became, with its real identifier — what
+        // `getPlanReview` returns once `materialize` has stamped it.
+        nodeId: 'wi_new',
+        identifier: 'PAY-90',
+        kind: 'story',
+        title: 'Recurring',
+        status: 'todo',
+      }),
+    ]);
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    fetchReview.mockResolvedValueOnce(DECIDED);
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(fetchReview).toHaveBeenLastCalledWith('plan-1');
+    expect(result.current.state.review).toEqual(DECIDED);
+    expect(result.current.state.decided).toBe('accepted');
+  });
+
+  it('keeps the PREVIOUS review when the re-read fails — the approve still stands', async () => {
+    // Best-effort by design: the write has already succeeded, so a failed read
+    // must not lose the overlay or report the decision as failed. The picture
+    // degrades to the one that shipped before, and nothing is retried or undone.
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    fetchReview.mockRejectedValueOnce(new Error('network'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(result.current.state.decided).toBe('accepted');
+    expect(result.current.state.errorCode).toBeNull();
+  });
+
   it('a NEW turn supersedes a decided overlay — it never bleeds into the next run', async () => {
     // The review is kept THROUGH the decision so the canvas can draw it; a new
     // run is the moment it stops describing anything.

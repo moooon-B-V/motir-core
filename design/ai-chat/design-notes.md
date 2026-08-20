@@ -347,7 +347,7 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 | **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
 | **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                             |
 | **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                  |
-| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts   |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating Motir callout; context → mode adapts              |
 | **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)       |
 | **6** | Opening & exiting — a full-screen overlay ON TOP of the app; Close (✕ / Esc / "Back to …") + the confirm-to-persist guard on close-with-pending |
 
@@ -459,16 +459,55 @@ both always-present, and both restyle with the active design style (sheet 5);
 - **A — the header "Plan with AI" pill.** A gradient hero pill in `TopNav`'s
   right cluster, present on every screen, never covering content — the direct
   **planning** entrance; opens the workspace in the current context's mode.
-- **B — the floating "M" button = the universal AI callout.** A glowing orb (the
-  **M** logo) afloat bottom-right on every screen; tapping it opens the AI
-  callout — **the home of ALL AI**, where **Plan with AI is ONE action**
+- **B — the floating Motir orb = the universal AI callout.** A glowing orb
+  wearing the **Motir mark** afloat bottom-right on every screen; tapping it opens
+  the AI callout — **the home of ALL AI**, where **Plan with AI is ONE action**
   alongside **"Ask about this project"** (Q&A over the plan / docs / work items)
   and **"Help with a task"** (draft / summarise / assist). Planning is the
   capability this design+story deliver now; project Q&A and task assistance are
-  **future capabilities reached through the same button**. **Built now with a
-  mock `M` logo** — the real brand logo replaces it later (the orb is the logo's
-  home). The callout menu composes `Card` + list rows + an "Ask Motir anything…"
-  input.
+  **future capabilities reached through the same button**. The callout menu
+  composes `Card` + list rows + an "Ask Motir anything…" input.
+
+  > **✅ Deferral discharged 2026-08-19 (MOTIR-3183).** This bullet used to read
+  > _"Built now with a mock `M` logo — the real brand logo replaces it later (the
+  > orb is the logo's home)."_ It does now. The orb renders the **wave band**,
+  > read from `design/brand/wave-band-24.svg`, at a **26 px glyph box in the 56 px
+  > circle** (the box the letter occupied, so the swap changes _what_ is in the
+  > circle and not how much of it is filled). **Centred geometrically**: the ink
+  > centroid sits at (11.705, 11.820) on the 24 grid against a bbox centre of
+  > (11.975, 11.975), an offset of 0.27 / 0.16 units = **0.29 / 0.17 px at 26 px**,
+  > below half a device pixel — so no optical nudge is applied, and the number is
+  > recorded because _"it looks centred"_ is the claim it replaces. The same mark
+  > rides the **28 px assistant avatar** in both rails at a 13 px box — the same
+  > 0.464 glyph-to-circle ratio, so the two read as one object at two sizes. The
+  > mark is `fill="currentColor"` and therefore **needs no dark variant**. Drawn in
+  > `ai-callout-menu.mock.html` panel 9; the code swap is MOTIR-3185, which composes
+  > `BrandMark` `variant="mark"` rather than inlining an `<svg>`.
+  >
+  > **⚠️ And a finding, recorded not inherited.** Measured against the orb's own
+  > gradient, white-on-accent cleared 3:1 in light (**#8c81e2, 3.32:1** at the
+  > gradient's lightest point) and **missed it in dark (#9b90e8, 2.78:1** — WCAG
+  > 1.4.11 for a non-text graphic). This was **pre-existing** — the mock `M` was
+  > white on the same gradient and measured the same — but this was the pass that
+  > measured it. Not changed here: the orb's fill belongs to MOTIR-1811 (`done`).
+  >
+  > **✅ Fixed 2026-08-20 (MOTIR-3207), and the remedy is one number — though not
+  > the one this note proposed.** The shipped values are now **#8275df, 3.77:1**
+  > light and **#9286e6, 3.09:1** dark. The note above recommended a _theme-aware_
+  > mix on the reasoning that light had headroom at 32%; re-measured across the
+  > whole shipped matrix — ten `data-palette` values × both themes, resolved from
+  > the tokens rather than from the default pair — that is a property of the
+  > **default palette**, not of light. **Four** of the twenty contexts failed at
+  > 32% (default dark 2.78:1, `cobalt` dark 2.86:1, `spectrum` dark 3.00:1 —
+  > 2.999, under the bar — and `evergreen` **light** at **2.94:1**), so a
+  > `[data-theme='dark']` override of the stop would have left a light orb below
+  > the bar. The fix is therefore **one global 26%**, expressed once as
+  > `--orb-lit-mix` in `packages/design-system/theme.css` and read from there by
+  > both `PlanWithAIFab` and `ai-callout-menu.mock.html` panel 9. Worst context
+  > after the change: **3.09:1**; all twenty clear 3:1. Because mixing the glyph's
+  > own colour into its backdrop is monotonic, the knob is a **ceiling** — only
+  > raising it can break the bar — and `tests/theme/orb-glyph-contrast.test.ts`
+  > re-derives every context from the tokens on every run.
 
 **⚠️ The hero control is STYLE-AWARE — special in every design style (sheet 5).**
 It is not a fixed gradient: each `data-style` gives the "Plan with AI" control a
@@ -929,7 +968,7 @@ grounded in MOTIR-1728 / 1729 / 1730 / 1731; gates those four code subtasks.
 
 ---
 
-## ⭐ The "M" universal AI callout — the orb becomes a TRIGGER (MOTIR-1811, 2026-08-01)
+## ⭐ The Motir callout — the orb becomes a TRIGGER (MOTIR-1811, 2026-08-01)
 
 **What changes.** The shipped floating **"M"** orb (`PlanWithAIFab`, MOTIR-1299)
 navigates **straight** to the planning workspace today. It becomes the **trigger
@@ -940,6 +979,13 @@ ONLY entrance this touches** — the TopNav hero pill, ⌘K, the work-item door
 (MOTIR-910) and the roadmap door (MOTIR-1011) are all unchanged.
 
 ### ⭐ EVERY ROW OPENS THE SAME SURFACE — the menu only says what the callout CAN DO (Yue, 2026-08-01)
+
+> **UNCHANGED by the 2026-08-19 glyph amendment (MOTIR-3183).** That pass renamed the surface in
+> prose — _the Motir callout_, whose trigger is _the Motir orb_ — and swapped the letter inside the
+> circle for the mark. **It touched no mechanism**: one href shared by every row, a row is a LABEL
+> and not a route, a row appears when its capability lands, and a row may seed the composer's
+> starter phrasing without constraining the thread. The name changed because it had stopped
+> describing the thing; the contract below did not.
 
 Motir has exactly one AI conversation surface — the `PlanningWorkspace` hosted at
 `/planning` (MOTIR-1729) — and **all three rows navigate to that one surface with
@@ -1307,3 +1353,262 @@ exports, `deviceScaleFactor: 2`, 1240 px wide; `prettier --check` clean.
 Composes `plan-change-conversation.mock.html` (MOTIR-1727) +
 `planning-workspace.mock.html` (MOTIR-1193); grounded in the producer
 **MOTIR-2222**; gates the code subtask **MOTIR-2226**.
+
+---
+
+## ⭐ Ask about this project — the cited ANSWER turn, and the chrome that follows the turn (MOTIR-1815, 2026-08-20)
+
+**What changes.** A turn in the one conversation can now be a **question** rather
+than a plan change. Nothing about the surface changes with it: the same
+workspace, the same rail, the same composer, the same single door. What changes
+is that a turn has an **intent**, that intent is resolved by the server and comes
+back on the turn, and the canvas chrome follows the **latest turn**.
+
+**Asset:** `ask-answers.mock.html` (source) + `ask-answers.png` (full-page
+export). A nine-panel review board.
+
+| Panel | What it shows                                                                                                  |
+| ----- | -------------------------------------------------------------------------------------------------------------- |
+| **1** | **The door** — the "Ask about this project" row, what it opens, and the one thing it seeds                     |
+| **2** | **The cited ANSWER turn** — the new turn form, and why citations are inline                                    |
+| **3** | **⭐ The chrome transition** — one footer slot, two contents, drawn at all three moments                       |
+| **4** | **A mixed thread in both orders** — ask→change and change→ask, and how the two turn kinds read apart           |
+| **5** | **The correction marker** — both labels, and what re-running a turn does to the transcript                     |
+| **6** | **The redirect's second stream** — the hand-off state, so the rail never shows two spinners with a gap between |
+| **7** | **Six states** — empty · thinking · answered · **no confident answer** · error · out-of-credits                |
+| **8** | **Dark, and the ink every new element carries** — the real token flip and the per-element AA table             |
+| **9** | **What it composes** — every element mapped to its shipped owner, and the four things this asset actually owns |
+
+### ⚠️ SCOPE — four elements, and everything else is composed
+
+The two-pane frame is `planning-workspace.mock.html` (MOTIR-1193); the rail
+shell, its bubbles, its markers, its composer and the confirm bar are
+`plan-change-conversation.mock.html` (MOTIR-1727) and
+`plan-change-planner-speaks.mock.html` (MOTIR-2225); the canvas is
+`design/roadmap/` (MOTIR-1009). **None of them is re-specified here.** This asset
+owns exactly four things: the **answer turn's form** (panel 2), the **canvas
+footer slot** (panel 3), the **correction marker + the redirect hand-off**
+(panels 5–6), and the **ask row's copy, the fourth starter and the widened
+opener** (panel 1).
+
+**And it does NOT own the avatar's glyph.** The Motir mark inside the 28 px
+assistant circle is the sibling glyph design's element (MOTIR-3183, § "The
+identity glyph wherever Motir speaks"); its path lives in
+`components/brand/waveBand.ts` and reaches every surface through
+`BrandMark variant="mark"`. This asset draws that specimen at the 13 px it
+specifies and re-decides nothing about it. **No stand-in letter appears anywhere
+in the asset.**
+
+### ⚠️ Two rungs above fix what this may draw — cited, never re-opened
+
+- § **"EVERY ROW OPENS THE SAME SURFACE"** (above): every row shares ONE href, a
+  row is a **label** and not a route, and a row may seed the composer's starter
+  phrasing without constraining the thread.
+- **`docs/decisions/conversation-turn-intent.md`** (MOTIR-1816): §1 intent is
+  **server-resolved** and the client sends none; §2 `ask` is the one door and the
+  resolver is the `ask_project` job's first step; §3 a mis-read is corrected by
+  **re-running the same turn**; §4 the not-confident default is `ask`; §5 intent
+  is per-**TURN** and a row seeds TEXT only.
+
+So there is **no ask/act switch** in the composer, **no `?mode=ask`**, no second
+href, no per-feature chat panel, and no session-scoped state a thread can be
+stuck in. Every state drawn is reachable from every other by typing the next
+sentence.
+
+### ⭐ The load-bearing finding — the confirm bar MOUNTS today, and three canvas controls ride on it
+
+Measured in the shipped component rather than assumed.
+`PlanningWorkspaceHost` renders the confirm bar as a `shrink-0` flex **sibling
+below** a `min-h-0 flex-1` canvas box, conditionally
+(`state.review && !state.decided && !index.isEmpty`). So the bar mounts and
+unmounts, and the canvas box grows and shrinks by its full height.
+
+That would be nearly harmless if the canvas were a static page. It is not:
+`ProjectRoadmapCanvas` anchors **three control clusters to the bottom of that
+box** — the engine's zoom + fit cluster (`bottom-4 left-4`), the LOCATE control
+(`bottom-4 left-[8.25rem]`) and the full-screen control (`right-3 bottom-4`).
+Alternating between a question and a change — the exact rhythm this story invites
+— would make the canvas's own furniture hop on every turn. The nodes do **not**
+move (there is no `ResizeObserver` and no fit-on-resize, so pan and zoom survive);
+the jump is entirely in the bottom-anchored chrome, which is why the fix belongs
+to the **box** and costs nothing else.
+
+**The answer: ONE footer slot, always mounted, two contents.**
+
+|             | Resting (post-answer, and every state with no pending proposal)                                                                                                    | Proposal pending                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| **box**     | identical — `border-t --el-border`, `bg --el-surface`, `px-4 py-2.5`, and a two-line text column whose lines BOTH `truncate`. **57 px, measured, in both states.** |
+| **line 1**  | "Roadmap — as saved" · `--el-text-secondary`, 600                                                                                                                  | "1 added · 1 changed" · `--el-text`, 650 |
+| **line 2**  | "Nothing proposed. The conversation has changed nothing."                                                                                                          | "Nothing is saved yet."                  |
+| **actions** | none                                                                                                                                                               | Discard (ghost) · Approve (primary)      |
+
+**The truncation is load-bearing.** The heights match STRUCTURALLY — same box,
+same two type sizes — rather than by a pinned `min-h`, which would drift the
+moment the bar's own content changed. Both lines truncate (the shipped bar's own
+recipe), so neither state can grow a third line: let the title wrap and the gate
+measures 64 px against the resting slot's 57, and the jump is back.
+
+The bar does **not** animate out, because it never leaves: a 120 ms opacity
+cross-fade of the contents, no transform and no height animation. What this costs
+the shipped code is one level of nesting — the conditional **mount** becomes a
+conditional **content**, on the same predicate — which is why "chrome follows the
+turn" is a composition here and not a redesign. `PlanChangeConfirmBar` itself is
+untouched.
+
+The resting slot is deliberately **not** a status bar that accumulates things to
+say: it has exactly those two lines in every non-proposal state. Its second line
+is the ask's own promise made visible — **an ask writes nothing** — at the one
+moment a person might wonder whether their question moved something.
+
+### The cited answer turn — citations are INLINE, and the count line is not a second list
+
+An answer is an **ordinary assistant bubble**: same fill, ink, avatar and width
+as the opener and the planner's findings report. It needs no new treatment to
+read as Motir speaking — the finding MOTIR-2225 already made.
+
+**Citations sit inline, in the prose that rests on them**, rendered by the
+shipped path (`MarkdownView` → `WorkItemRefChip`). Three grounds, the first
+decisive:
+
+1. **The rail already cites inline.** An assistant findings report renders its
+   `[KEY](motir:<id>)` tokens through exactly that path, and the shipped
+   component says so in the imperative — _"never a second inline treatment
+   invented for this surface."_ A trailing source list would be a second citation
+   treatment on the same bubble in the same rail.
+2. **The mirror links inline.** Rovo and Linear both render references in the
+   sentence; the numbered-footnote model belongs to a full-page answer surface,
+   and in a 332 px rail a bibliography routinely out-lengths the answer.
+3. **Checkability.** A citation beside the **claim** says which sentence rests on
+   what. A trailing list says only what was read.
+
+The envelope's `citations` array is the grounding **contract**, and an answer may
+rest on items the prose never names — so one quiet line inside the bubble,
+_"Answered from 6 work items"_, states the size of the evidence base without
+re-rendering it. It is a **number**; the two treatments cannot be confused.
+
+**A user turn is plain text.** The shipped rail renders `{turn.body}` for a user
+bubble and `<MarkdownView>` only for an assistant one, so a key the person typed
+stays a key and a chip appears only where Motir cited something. That asymmetry
+is shipped and is kept.
+
+### The two turn kinds are deliberately NOT differentiated by their bubble
+
+Tinting answers would say "these are two conversations", which is the one thing
+this story exists to deny. What separates them is **what each turn carries** —
+citations and a count line, or a "Sent to Motir AI" submission marker and a
+canvas state — every one of which is meaningful on its own. No distinction rests
+on colour alone. A question asked mid-review does **not** discard the pending
+proposal: `state.review` is what the footer reads, and an ask writes nothing to
+it. Asking mid-review is a lookup, not an abandonment.
+
+### The correction marker, and the redirect's second stream
+
+The marker sits under the **assistant** turn — the moment the user discovers the
+mis-read — as a single centred line in the shipped marker vocabulary. Two labels:
+**"Propose changes instead"** under an answer, **"Answer this instead"** under a
+proposal. It re-runs the **original user turn** under the other intent (no second
+user turn), appends a **new** assistant turn, and leaves the superseded one on the
+thread undimmed and unstruck — a correction is a second answer, not an erasure.
+Only the latest assistant turn carries a marker, so a thread never offers two ways
+to re-run the same turn. It is an interactive marker (`--el-link`, underlined, a
+real `<button>` in the tab order), distinguished from the passive ones by ink AND
+underline; while the re-run streams it becomes a disabled _"Re-reading…"_ rather
+than disappearing, and once it fires a passive line — _"Re-read as a plan
+change"_ / _"Re-read as a question"_ — says why a second assistant turn exists.
+
+Because `ask` is the one door, a plan-change turn **streams twice** (ADR
+Consequence 3). The rail draws **one continuous waiting state** across both jobs:
+the waiting bubble never unmounts, its text is swapped in place, and the hand-off
+is named in a marker — _"Reading it as a plan change — working on the
+proposal"_ — because it is provenance, not conversation. The footer slot stays
+**resting** until the proposal exists. A failure in either stream lands in the
+shipped error state; Motir never falls through to the other intent.
+
+### The door — one row, one starter, one widened sentence
+
+The row is a **single entry** in `aiCalloutActions()` — icon
+`message-circle-question` (the name the shipped registry already reserves in its
+own comment), title **"Ask about this project"**, description **"Answer questions
+about the plan, docs and work items"** — drawn to the row anatomy MOTIR-1811
+specifies, carrying the same `planningWorkspaceHref(context)` every other row
+carries. Nothing in `AiCalloutMenu` or on the orb changes.
+
+**The row seeds NOTHING into the composer; the STARTER SET grows by one.** The
+rail already has the mechanism the shipped spec's "seed the composer's starter
+phrasing" describes — `STARTERS`, chips that **prefill** the composer on click and
+never send. So the seed is one more chip, _"What's blocked, and why?"_, and it
+belongs to the **surface** rather than to the row: it shows however the user
+arrived. A pre-filled **value** was rejected on two grounds — it is in the way of
+anyone who wanted to ask something else, and a stub sent unedited becomes a real
+turn that costs a real job. A starter chip cannot be sent by accident, and being
+surface-scoped it provably carries no intent through the door (§5).
+
+**The opener widens.** Shipped copy is _"What should change?"_, which is now half
+the truth and quietly discourages the other half. It becomes **"What should
+change — or what would you like to know?"** — one sentence, both capabilities,
+still one thread.
+
+### The states
+
+Six, and the fourth is the one that matters. **No confident answer** is an honest
+_"I can't answer that from this project"_ — an ordinary bubble, not an error,
+because nothing went wrong — and it is still a **cited** answer: it says what it
+searched (_"Searched 214 work items and 3 decision records"_), so "I don't know"
+is checkable rather than a shrug. **Error** and **out-of-credits** are the shipped
+rail error slot and the shipped gateway gate (MOTIR-803), composed unchanged; what
+this asset records is that an **ask** reaches them too. The footer slot is
+**resting** in all six unless a proposal is pending from an earlier turn.
+
+### Primitives composed (no hand-rolling)
+
+| Element                                     | Shipped owner                                                  |
+| ------------------------------------------- | -------------------------------------------------------------- |
+| two-pane workspace frame                    | `planning-workspace.mock.html` · `PlanningWorkspaceHost`       |
+| rail shell · head · turn list · composer    | `plan-change-conversation.mock.html` · `PlanChangeRail`        |
+| bubble · marker vocabulary · asking variant | `plan-change-planner-speaks.mock.html` (MOTIR-2225)            |
+| roadmap canvas · diff rings · its controls  | `design/roadmap/` · `ProjectRoadmapCanvas`                     |
+| confirm bar                                 | `PlanChangeConfirmBar` — **unchanged**; it moves INTO the slot |
+| callout panel · row anatomy · keyboard      | `ai-callout-menu.mock.html` (MOTIR-1811)                       |
+| the assistant avatar's MARK                 | the glyph design (MOTIR-3183) · `BrandMark` · `waveBand.ts`    |
+| citation chip                               | `WorkItemRefChip` · `markdown-editor.css`                      |
+| error · out-of-credits                      | the shipped rail error slot · the gateway gate (MOTIR-803)     |
+
+### Token / a11y discipline
+
+| New element                 | Ink on fill                                        | Light / dark     |
+| --------------------------- | -------------------------------------------------- | ---------------- |
+| count line                  | `--el-text-secondary` on `--el-surface-soft`       | 6.51 / ≥6 ✓      |
+| correction marker           | `--el-link` on `--el-surface` — **and underlined** | AA ✓             |
+| hand-off marker             | `--el-text-secondary` on `--el-surface`            | 6.24 / ≥6 ✓      |
+| footer slot · resting lines | `--el-text-secondary` on `--el-surface`            | 6.24 / ≥6 ✓      |
+| ask starter chip            | `--el-text-strong` on `--el-tint-lavender`         | tint-bg recipe ✓ |
+| callout row description     | `--el-text-secondary` — shipped                    | as shipped       |
+
+**Neither `--el-text-muted` nor `--el-text-faint` carries text anywhere in the
+asset.** Muted clears AA only on the white page (4.54, 0.04 of headroom) and every
+surface here is `--el-surface` or `--el-surface-soft`, where it measures
+4.17–4.34 and fails. Faint clears AA on nothing; its one appearance is the shipped
+chip's 6 px status **dot** — a `background`, not an ink, carrying no text and
+pairing its hue with a position.
+
+Shape flows through element-semantic tokens only — `--radius-card`,
+`--radius-control`, `--radius-btn`, `--radius-badge`, `--radius-input`,
+`--spacing-control-*`, `--spacing-chip-*`, `--spacing-kbd-*`, `--height-btn-sm`,
+`--height-input`. No raw hue anywhere: the two `color-mix()` gradients are the
+shipped callout's own, over `--el-*` inputs only. The correction marker is a real
+`<button>` in the tab order with `--focus-ring-color` on focus-visible; the
+citation chip keeps its shipped hover / focus treatment and its **peek** click, so
+"click a citation, then keep talking" is true without this asset designing
+anything; decorative glyphs are `aria-hidden`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
+(this section) · `ask-answers.mock.html` (source) · `ask-answers.png` (full-page
+Playwright chromium export, light, `deviceScaleFactor: 2`, 1200 px wide);
+`prettier --check` clean. Composes `planning-workspace.mock.html` (MOTIR-1193) +
+`plan-change-conversation.mock.html` (MOTIR-1727) +
+`plan-change-planner-speaks.mock.html` (MOTIR-2225) +
+`ai-callout-menu.mock.html` (MOTIR-1811); bound by
+`docs/decisions/conversation-turn-intent.md` (MOTIR-1816); gates the code subtask
+**MOTIR-1820**.

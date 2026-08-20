@@ -2,26 +2,23 @@
 
 import {
   ArrowUpRight,
-  Ban,
   Check,
   CheckCircle2,
   ChevronRight,
   CircleDashed,
-  CircleDot,
   CirclePlay,
-  Eye,
   Flag,
   MapPin,
-  XCircle,
-  type LucideIcon,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
+import { canvasStatusLabel, canvasStatusMeta } from '@/lib/workflows/canvasStatusMeta';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -56,20 +53,26 @@ export interface WorkItemProgress {
   verified?: number;
 }
 
-export type WorkItemStatus =
-  | 'todo'
-  | 'in_progress'
-  | 'in_review'
-  | 'blocked'
-  | 'done'
-  | 'cancelled';
-
 export interface WorkItemNodeData {
   id: string;
   identifier: string;
   title: string;
   kind: IssueType;
-  status: WorkItemStatus;
+  /** The workflow status KEY, verbatim (bug MOTIR-3170). This used to be a CLOSED
+   *  six-member union — `todo · in_progress · in_review · blocked · done ·
+   *  cancelled` — which every producer had to satisfy, so each of them coerced
+   *  anything else to `todo` and the canvas confidently drew a card whose pull
+   *  request was open as **To Do**. Statuses are DATABASE-defined (a project
+   *  configures its own workflow), so no union here can ever be total; the chip
+   *  resolves a treatment at render time instead. */
+  status: string;
+  /** The status's own display LABEL, as the level read carried it from the
+   *  project's workflow. Optional: a node built without it (onboarding / a plan
+   *  preview) falls back to the translated catalog label for a default key. */
+  statusLabel?: string | null;
+  /** The status's lifecycle CATEGORY — the chip's fallback tone for a key the
+   *  canvas has no per-key treatment for (see `statusLabel`). */
+  statusCategory?: StatusCategoryDto | null;
   /** The work TYPE (Story 2.7) — drives the MANUAL / human chip (MOTIR-1642 /
    *  8.8.36), paired with `executor` via the shipped `isManualReadyItem`
    *  predicate. Optional: a node built without it (onboarding / plan preview)
@@ -81,20 +84,13 @@ export interface WorkItemNodeData {
   assigneeName?: string | null;
 }
 
-interface StatusMeta {
-  icon: LucideIcon;
-  tint: string;
-  text: string;
-}
-
-const STATUS_META: Record<WorkItemStatus, StatusMeta> = {
-  done: { icon: Check, tint: 'bg-(--el-tint-mint)', text: 'text-(--el-text-strong)' },
-  in_progress: { icon: CircleDot, tint: 'bg-(--el-tint-sky)', text: 'text-(--el-text-strong)' },
-  in_review: { icon: Eye, tint: 'bg-(--el-tint-lavender)', text: 'text-(--el-text-strong)' },
-  blocked: { icon: Ban, tint: 'bg-(--el-tint-peach)', text: 'text-(--el-text-strong)' },
-  todo: { icon: CircleDashed, tint: 'bg-(--el-muted)', text: 'text-(--el-text-secondary)' },
-  cancelled: { icon: XCircle, tint: 'bg-(--el-muted)', text: 'text-(--el-text-secondary)' },
-};
+// The per-status treatment map that used to live here now lives in
+// `lib/workflows/canvasStatusMeta.ts` (bug MOTIR-3170), for the reason the note
+// on `WorkItemNodeData.status` gives: it was a `Record<ClosedUnion, …>`, which
+// the compiler certifies as TOTAL against a union that is itself the
+// hand-authored subset — so the one check that could have caught a missing
+// status was structurally unable to. The resolver is shared with `PlanItemNode`
+// so the canvas has ONE status vocabulary rather than three.
 
 const KIND_TINT: Record<IssueType, string> = {
   epic: 'bg-(--el-tint-rose)',
@@ -104,16 +100,32 @@ const KIND_TINT: Record<IssueType, string> = {
   subtask: 'bg-(--el-tint-lavender)',
 };
 
-export function WorkItemStatusPill({ status }: { status: WorkItemStatus }) {
-  const meta = STATUS_META[status];
+/**
+ * ONE workflow status as a canvas chip. The KEY is whatever the project's
+ * workflow defines; `label` / `category` are the status's own identity as the
+ * level read carried them (bug MOTIR-3170). A key with no per-key treatment
+ * takes its category's tone, and one with neither takes the neutral chip — it
+ * never impersonates To Do.
+ */
+export function WorkItemStatusPill({
+  status,
+  label = null,
+  category = null,
+}: {
+  status: string;
+  label?: string | null;
+  category?: StatusCategoryDto | null;
+}) {
+  const meta = canvasStatusMeta(status, category);
   const Icon = meta.icon;
   const tStatus = useTranslations('labels.defaultStatus');
   return (
     <span
+      data-status={status}
       className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-1.5 py-0.5 text-[11px] font-medium ${meta.tint} ${meta.text}`}
     >
       <Icon className="size-3" aria-hidden="true" />
-      {tStatus(status)}
+      {canvasStatusLabel(status, label, tStatus)}
     </span>
   );
 }
@@ -265,7 +277,11 @@ export function WorkItemNode({
         ) : showDone ? (
           <DonePill />
         ) : (
-          <WorkItemStatusPill status={item.status} />
+          <WorkItemStatusPill
+            status={item.status}
+            label={item.statusLabel ?? null}
+            category={item.statusCategory ?? null}
+          />
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,

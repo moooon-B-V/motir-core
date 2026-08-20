@@ -49,7 +49,7 @@ export default async function OnboardingDirectionDocPage({
   }
 
   return (
-    <main className="min-h-screen overflow-y-auto bg-(--el-surface) px-4 py-6 sm:px-8">
+    <main className="min-h-dvh overflow-y-auto bg-(--el-surface) px-4 py-6 sm:px-8">
       <div className="mx-auto max-w-[60rem]">
         <DirectionDocFullPage
           tier={tier}

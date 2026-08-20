@@ -57,6 +57,35 @@ export class DesignEvidenceNotALeafError extends DesignEvidenceError {
 }
 
 /**
+ * The target is a leaf, but not a CHILD of the container the publisher named
+ * (MOTIR-3177). → 422.
+ *
+ * A PARENT-RUN pull request's branch names the container, so the publisher
+ * re-addresses each asset to the child whose commit produced it, reading the
+ * key out of that commit's subject. A commit subject is prose written by hand,
+ * and a mistyped key resolves to a real, unrelated card that is perfectly
+ * publishable in every other respect — at which point the design of six swept
+ * areas lands on somebody's billing task. So the publisher declares the
+ * container it is publishing FOR and the tenant, which is the only party that
+ * can see the tree, checks the relationship.
+ *
+ * A wrong key is the ONLY thing this can catch, which is why it refuses rather
+ * than falling back: the container's own children are exactly the cards that
+ * can have produced its branch's assets.
+ */
+export class DesignEvidenceNotAChildError extends DesignEvidenceError {
+  readonly code = 'DESIGN_EVIDENCE_NOT_A_CHILD' as const;
+  readonly status = 422;
+  constructor(identifier: string, containerIdentifier: string) {
+    super(
+      `${identifier} is not a child of ${containerIdentifier}, so it cannot have produced ` +
+        `that container's design assets.`,
+    );
+    this.name = 'DesignEvidenceNotAChildError';
+  }
+}
+
+/**
  * A publish reported a blob pathname OUTSIDE this item's
  * `design/<workspaceId>/<workItemId>/` prefix — a caller trying to register an
  * arbitrary / cross-tenant blob. Rejected before any DB write. → 400.

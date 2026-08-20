@@ -59,7 +59,7 @@ import { BrandMark } from '@/components/brand/BrandMark';
 export default async function AuthLayout({ children }: { children: ReactNode }) {
   const t = await getTranslations('auth');
   return (
-    <div className="flex min-h-screen w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 has-[[data-auth-wide]]:py-8 sm:px-10">
+    <div className="flex min-h-dvh w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 has-[[data-auth-wide]]:py-8 sm:px-10">
       <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem]">
         {/* The card is the brand row's column: `gap-8` matches the rhythm
             `AuthShell` already sets inside itself, so the lockup reads as the
