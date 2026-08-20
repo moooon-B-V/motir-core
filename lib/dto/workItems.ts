@@ -1455,10 +1455,16 @@ export type WorkItemProseSizingThresholdDto = 'story_points' | 'estimate_minutes
 
 /**
  * THE ESTIMATION GATE, mechanized (MOTIR-3110) — a childless `coding_agent` card
- * sized at or above 13 story points, or estimated at more than 60 minutes of
- * agent run time. Both are the gate's own numbers
- * (`plan-rules/kind-leaf-deepen.md`): `13+` is its literal SPLIT signal, and a
- * `coding_agent` leaf's run must fit inside an hour.
+ * sized at or above 13 story points, or estimated at more than 70 TOTAL minutes.
+ *
+ * ⚠️ **Only ONE of those two is the gate's own number** (corrected by
+ * MOTIR-3271). `13+` is the gate's literal SPLIT signal, read off the card's own
+ * points column. The gate's minutes ceiling is on the AGENT RUN ALONE, excluding
+ * CI, while `estimateMinutes` is defined as agent run **plus** CI — so the
+ * minutes arm is a PROXY, and `70` is the top of the largest band the gate's
+ * calibration table endorses (5 points, ~50–70 total) rather than the hour the
+ * rule names. `ESTIMATION_GATE_ESTIMATE_MINUTES` carries the derivation and the
+ * residual error classes.
  *
  * ⚠️ A `shape` member and not its own family, unlike
  * {@link WorkItemProseSubsumptionAdvisoryDto}, and the discriminator is what the
@@ -1478,19 +1484,40 @@ export type WorkItemProseSizingThresholdDto = 'story_points' | 'estimate_minutes
  * session opens the description and reads a sentence asking it not to proceed.
  *
  * ⚠️ **No opt-out, deliberately** — no `isOverGateSizingCheckExempt` to match
- * {@link isSubsumptionCheckExempt}. The other two checks have false-positive
- * classes a card can legitimately be in (a boundary contract, a release cut);
- * this one has none. Its input is two integers and an enum, so a card that fires
- * is over the gate, full stop, and a mute would only re-create the field the
- * plan does not read.
+ * {@link isSubsumptionCheckExempt}. A mute would only re-create the field the
+ * plan does not read, and a large card is often the honest intermediate state of
+ * a re-plan in progress.
+ *
+ * ⚠️ **CORRECTED IN PLACE (MOTIR-3271), because the reason given for that
+ * absence was wrong.** This paragraph used to read: *"The other two checks have
+ * false-positive classes a card can legitimately be in (a boundary contract, a
+ * release cut); this one has none. Its input is two integers and an enum, so a
+ * card that fires is over the gate, full stop."* **What it was wrong about: one
+ * of those two integers is not the integer the rule is about.**
+ * `estimateMinutes` sums agent time and CI time; the gate ceilings agent time
+ * alone. So the MINUTES arm does have a false-positive class — a short run
+ * behind a heavy CI leg — and MOTIR-3239 (5 SP / 65 min, inside the calibration
+ * table's own 50–70 band) was a measured member of it under the old `60`
+ * threshold. The POINTS arm's half of the claim stands unaltered: `13+` is the
+ * gate's literal signal and fires on exactly what the rule names. The remedy
+ * chosen was to move the threshold and to SAY the minutes arm is a proxy
+ * wherever a finding is rendered — not to add a mute, which would put the
+ * answer back into a field nothing reads.
  */
 export interface WorkItemProseSizingAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
   severity: 'likely-over-gate-sizing';
-  /** Which ceiling(s) the card crossed. */
+  /**
+   * Which ceiling(s) the card crossed — and with what authority: `story_points`
+   * IS the gate's rule, `estimate_minutes` is a proxy for it (MOTIR-3271).
+   */
   threshold: WorkItemProseSizingThresholdDto;
   /** The card's own `storyPoints`, as observed — `null` when unestimated. */
   storyPoints: number | null;
-  /** The card's own `estimateMinutes`, as observed — `null` when unestimated. */
+  /**
+   * The card's own `estimateMinutes`, as observed — `null` when unestimated.
+   * The SUM of agent run time and CI time, which is what makes the minutes arm
+   * a proxy rather than the rule.
+   */
   estimateMinutes: number | null;
 }
 

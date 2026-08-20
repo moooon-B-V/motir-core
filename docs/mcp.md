@@ -391,8 +391,20 @@ severities, each with its own remedy:
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                             |
 | `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                 |
-| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                                                | SPLIT the card by size                                     |
+| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)  | SPLIT the card by size                                     |
 | `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card |
+
+**`likely-over-gate-sizing`'s two arms do not carry the same authority.**
+`storyPoints >= 13` IS the gate's rule — its literal split signal, read off the
+card's own column. `estimateMinutes > 70` is a **PROXY** for the gate's other
+ceiling and not that ceiling: the gate ceilings a `coding_agent` **run** at one
+hour **excluding CI**, while `estimateMinutes` is defined as agent run time
+**plus** CI time, so no threshold on the sum can decide the addend. `70` is the
+top of the largest total the gate's own calibration table endorses (5 points,
+~50–70), which is the smallest threshold that stays silent on every size the
+rules ask for. Two residual classes are accepted rather than denied: a short run
+behind a heavy CI leg can fire, and a long run with a trivial CI leg can stay
+quiet (MOTIR-3271).
 
 **`likely-over-gate-sizing` is the one member that carries no `criterionIndex`**,
 because its finding is about two COLUMNS rather than a criterion and its remedy
@@ -1339,7 +1351,7 @@ ITSELF, with no second work item involved: `likely-ordering-violation` (a
 criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
 (a criterion naming a path outside the card's `targetRepo` — split per repo), or
 `likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
-or `estimateMinutes > 60` — split by size), or `likely-self-blocking-design` (a
+or `estimateMinutes > 70` — split by size), or `likely-self-blocking-design` (a
 childless card one of whose criteria produces a design asset while another builds
 the rendered surface it draws — LIFT the design criterion onto its own
 `type: design` card). The first two carry the `criterionIndex` they cut at; the
@@ -1359,8 +1371,12 @@ reference, a self-reference, an ancestor, and anything already in the
 document it produces, not in its card body — are outside its reach; and
 `likely-repo-straddle` sees only repo-QUALIFIED paths, never a bare symbol whose
 repo a reader happens to know. `likely-over-gate-sizing` has no blind spot of
-that kind — its input is two integer columns and an enum — but for the same
-reason it has no opt-out either: a card that fires is over the gate.
+that kind — its input is two integer columns and an enum — and it has no opt-out,
+because a mute would put the answer back into a field nothing reads. But cheap
+inputs are not an exact reading: its POINTS arm is the gate's rule and its
+MINUTES arm is a proxy with a real false-positive class, since `estimateMinutes`
+sums agent time and CI time while the gate ceilings the agent run alone
+(MOTIR-3271, correcting the claim that this member had no false-positive class).
 `likely-self-blocking-design` reads criterion PROSE, so it has the opposite
 profile: a real false-positive class (a card amending an asset and adjusting the
 one surface that reads it), accepted deliberately because the channel never

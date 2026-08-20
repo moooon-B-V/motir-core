@@ -544,10 +544,14 @@ function advisorySection(advisories: WorkItemProseAdvisoryDto[]): string[] {
       ...oversized.map(
         (a) =>
           `    - ${a.storyPoints ?? '—'} story points / ${a.estimateMinutes ?? '—'} estimated` +
-          ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 13-point split signal' : 'the 60-minute run ceiling'}.`,
+          ` minutes, over ${a.threshold === 'both' ? 'BOTH ceilings' : a.threshold === 'story_points' ? 'the 13-point split signal' : 'the 70-minute estimate threshold'}.`,
       ),
       '  13+ points is the split signal read literally, and a coding_agent run must fit inside',
-      '  an hour. READ THE CARD FIRST: every prior instance of this had already done the',
+      '  an hour. The MINUTES half is a PROXY for that hour, not the rule itself: the gate',
+      '  ceilings the AGENT RUN excluding CI, while the estimate column sums agent time AND CI',
+      '  time — so past 70 total minutes the run is PROBABLY over the hour, and a card with a',
+      '  short run behind a heavy CI leg can be inside it. Check the split before the number.',
+      '  READ THE CARD FIRST: every prior instance of this had already done the',
       '  analysis and written the axis to split on into its own description — that is why the',
       '  check exists, because the answer kept going into a field nothing reads. Propose the',
       '  split and STOP; do not start a run whose own sizing says it will not finish. If the',

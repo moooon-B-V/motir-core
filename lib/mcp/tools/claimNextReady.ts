@@ -100,7 +100,7 @@ function summarize(
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card is sized ${s.storyPoints ?? '—'} ` +
         `story points / ${s.estimateMinutes ?? '—'} estimated minutes, over the estimation ` +
-        `gate (${s.threshold === 'both' ? 'both ceilings' : s.threshold === 'story_points' ? '13+ points is its literal SPLIT signal' : 'a coding_agent run must fit in 60 minutes'}). ` +
+        `gate (${s.threshold === 'both' ? 'both ceilings' : s.threshold === 'story_points' ? '13+ points is its literal SPLIT signal' : 'a coding_agent run must fit in 60 minutes, and this minutes figure is a PROXY for that — the column sums agent time and CI time'}). ` +
         'Read the card for a split it has already worked out — four cards over this gate each ' +
         'carried the correct remedy in their own description — and SPLIT it rather than ' +
         'starting a run the size says will not finish.',
