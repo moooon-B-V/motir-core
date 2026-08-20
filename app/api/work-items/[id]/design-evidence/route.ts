@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getWorkspaceContext } from '@/lib/workspaces';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { authorizeDesignPublish } from '@/lib/designEvidence/publishAuth';
+import { resolveWorkItemByIdentifier } from '@/lib/publishAuth/ciPublishAuth';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
@@ -92,6 +94,65 @@ export async function POST(
     const gateError = workItemGateErrorResponse(err);
     if (gateError) return gateError;
     if (err instanceof DesignEvidenceError || err instanceof AttachmentError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
+    }
+    throw err;
+  }
+}
+
+// DELETE /api/work-items/[id]/design-evidence (MOTIR-3215) — WITHDRAW the item's
+// current design result: clear it with nothing taking its place. Same thin HTTP
+// shape as the POST above; the difference that matters is WHO may call it.
+//
+// ⚠️ SESSION-AUTHED, not CI-authed, and that is the point rather than an
+// oversight. Publishing is something a build DOES; withdrawing is a judgement
+// somebody MAKES — the record has to be able to name a person, and
+// `authorizeDesignPublish`'s keyless-OIDC arm resolves to a workspace, not to
+// one. The `work_item:edit` gate the service applies is the authority check;
+// this layer only establishes the actor.
+//
+// The one caller that is NOT a person is the data-repair migration beside this
+// route (`20260820140100_withdraw_stray_design_results`), which writes
+// `withdrawn_by_id = NULL` — deliberately distinguishable from every withdrawal
+// that comes through here.
+//
+// Optional JSON body: `reason` (free text, recorded verbatim). A body is not
+// required — DELETE requests routinely carry none — so a missing or unparseable
+// one is simply "no reason given", never a 400.
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const ctx = await getWorkspaceContext();
+  if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+
+  const { id } = await params;
+  const identifier = id.trim().toUpperCase();
+
+  // Same identifier → item resolution the publish gate uses, so the two halves
+  // of this route address a card the same way (and a hidden / cross-workspace /
+  // missing item reads 404, never 403 — finding #44).
+  const item = await resolveWorkItemByIdentifier(identifier, ctx);
+  if (item instanceof Response) return item;
+
+  let reason: string | null = null;
+  try {
+    const body = (await req.json()) as Record<string, unknown>;
+    reason = typeof body?.reason === 'string' && body.reason.trim() !== '' ? body.reason : null;
+  } catch {
+    // No body, or not JSON. Not an error: the reason is optional.
+  }
+
+  try {
+    const evidence = await designEvidenceService.withdrawCurrentForWorkItem(
+      { workItemId: item.id, reason },
+      ctx,
+    );
+    return NextResponse.json({ evidence }, { status: 200 });
+  } catch (err) {
+    const gateError = workItemGateErrorResponse(err);
+    if (gateError) return gateError;
+    if (err instanceof DesignEvidenceError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
     }
     throw err;

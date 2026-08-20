@@ -78,4 +78,18 @@ export interface DesignEvidenceDTO {
   /** The card key whose PR produced this result (e.g. "MOTIR-2669"). */
   producedByKey: string | null;
   createdAt: string;
+  /**
+   * When this result was WITHDRAWN, or null (MOTIR-3215). The panel's read never
+   * carries a non-null value — a withdrawn row is not current, so
+   * `getCurrentForWorkItem` returns null and the panel shows its empty state.
+   * It is carried on the DTO because the WITHDRAWAL's own response is the
+   * caller's receipt, and because the three histories only stay legible if the
+   * stamp travels with the row: no row = never designed, `withdrawnAt` null =
+   * superseded by a later publish, `withdrawnAt` set = taken back.
+   */
+  withdrawnAt: string | null;
+  /** WHO took it back; null with `withdrawnAt` set means the SYSTEM did. */
+  withdrawnById: string | null;
+  /** WHY, in the withdrawer's own words. */
+  withdrawnReason: string | null;
 }

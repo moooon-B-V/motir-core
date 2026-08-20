@@ -35,6 +35,12 @@ function evidence(p: Partial<DesignEvidenceDTO> = {}): DesignEvidenceDTO {
     ciRunUrl: 'https://ci.example/run/9',
     producedByKey: 'MOTIR-2669',
     createdAt: '2026-08-11T00:00:00.000Z',
+    // A row the panel can render is by definition not withdrawn (MOTIR-3215):
+    // a withdrawal clears `is_current`, so `getCurrentForWorkItem` returns null
+    // and the panel takes its empty branch instead of this one.
+    withdrawnAt: null,
+    withdrawnById: null,
+    withdrawnReason: null,
     ...p,
   };
 }

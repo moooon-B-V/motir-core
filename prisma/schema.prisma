@@ -240,6 +240,11 @@ model User {
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
   decidedPlans                Plan[]                    @relation("PlanDecidedBy")
+  // Design results this user has WITHDRAWN (MOTIR-3215). SetNull on the FK so a
+  // deleted withdrawer leaves the withdrawal on record, unattributed — the same
+  // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
+  // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
+  withdrawnDesignEvidences    DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
   requestedPlans              Plan[]                    @relation("PlanCreatedBy")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
@@ -2930,30 +2935,57 @@ enum DesignAssetKind {
 /// sections. Capped at 64 KiB (§1) and rendered through the single Markdown
 /// path; the full text always ships as a `note_file` asset.
 model DesignEvidence {
-  id            String   @id @default(cuid())
-  workspaceId   String   @map("workspace_id")
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
   /// The work item whose design this is — the design subtask itself.
-  workItemId    String   @map("work_item_id")
+  workItemId      String    @map("work_item_id")
   /// The extracted `design-notes.md` section(s), capped at 64 KiB. Null when
   /// the PR changed no section (the above-the-first-heading case, §1).
-  noteMd        String?  @map("note_md") @db.Text
+  noteMd          String?   @map("note_md") @db.Text
   /// True when the inline copy was truncated at a section boundary; the
   /// `note_file` asset always carries the complete text.
-  noteTruncated Boolean  @default(false) @map("note_truncated")
+  noteTruncated   Boolean   @default(false) @map("note_truncated")
   /// Provenance from the CI run that published it (the BYOK publish path).
-  commitSha     String?  @map("commit_sha")
-  ciRunUrl      String?  @map("ci_run_url")
+  commitSha       String?   @map("commit_sha")
+  ciRunUrl        String?   @map("ci_run_url")
   /// The card key whose PR produced this result (e.g. "MOTIR-2669").
-  producedByKey String?  @map("produced_by_key")
+  producedByKey   String?   @map("produced_by_key")
   /// True for exactly one row per work item (the partial unique index enforces
   /// it); a superseded row is false.
-  isCurrent     Boolean  @default(true) @map("is_current")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  isCurrent       Boolean   @default(true) @map("is_current")
+  /// When this result was WITHDRAWN — cleared without a replacement being
+  /// published (MOTIR-3215). NULL on every row that was never withdrawn.
+  ///
+  /// ⚠️ This is the column that makes `isCurrent = false` legible. Before it,
+  /// one flag covered two histories a reader cannot tell apart and needs to:
+  ///
+  /// | what happened                          | `isCurrent` | `withdrawnAt` |
+  /// | -------------------------------------- | ----------- | ------------- |
+  /// | a later publish superseded it          | false       | NULL          |
+  /// | somebody took it back, nothing replaced| false       | set           |
+  ///
+  /// and the ABSENCE of any row at all is the third: the card never had a
+  /// design. The design gate reads that same absence, so a withdrawal that
+  /// left no trace would swap one silent wrong answer for another.
+  withdrawnAt     DateTime? @map("withdrawn_at")
+  /// WHO withdrew it. NULL with `withdrawnAt` set means the SYSTEM did — today
+  /// that is the data-repair migration that drained the strays MOTIR-3213's
+  /// publisher defect left behind, and it is deliberately distinguishable from
+  /// a person's withdrawal. SetNull, like every other audit stamp here: a
+  /// deleted actor loses attribution, never the record.
+  withdrawnById   String?   @map("withdrawn_by_id")
+  /// WHY, in the withdrawer's own words. Free text rather than an enum: unlike
+  /// `Plan.decisionReason`'s three closed histories, the reasons a design
+  /// result is wrong are open-ended, and a vocabulary invented up front would
+  /// be a guess written into the record this column exists to make honest.
+  withdrawnReason String?   @map("withdrawn_reason") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workItem  WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  assets    DesignAsset[]
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem    WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  withdrawnBy User?         @relation("DesignEvidenceWithdrawnBy", fields: [withdrawnById], references: [id], onDelete: SetNull)
+  assets      DesignAsset[]
 
   /// The panel read: an item's results, newest first (the current is the head).
   @@index([workItemId, createdAt(sort: Desc)])
@@ -4144,24 +4176,24 @@ enum PlanOrigin {
 /// untouched. The lifecycle timestamps + decider ARE the history surface (when
 /// planned / when decided / by whom). Workspace-scoped tenant data (RLS).
 model Plan {
-  id            String                  @id @default(cuid())
-  workspaceId   String                  @map("workspace_id")
-  projectId     String                  @map("project_id")
-  status        PlanStatus              @default(generating)
+  id             String                  @id @default(cuid())
+  workspaceId    String                  @map("workspace_id")
+  projectId      String                  @map("project_id")
+  status         PlanStatus              @default(generating)
   /// A short label for the plan — typically the idea/prompt the generation came from.
-  title         String?
+  title          String?
   /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
-  summary       String?                 @db.Text
+  summary        String?                 @db.Text
   /// AI-suggested product/project name (MOTIR-1554/1551) — set on the FINAL
   /// plan-proposals append, and ONLY by the onboarding generation. Consumed at
   /// approve to rename a still-provisional draft project. Null otherwise.
-  productName   String?                 @map("product_name")
+  productName    String?                 @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
-  sourceJobId   String?                 @map("source_job_id")
+  sourceJobId    String?                 @map("source_job_id")
   /// WHY this plan was started (MOTIR-916) — `user` (someone clicked) or
   /// `cadence` (the auto-plan watcher fired it when the ready set drained).
   /// Set at submit; never changes afterwards.
-  origin        PlanOrigin              @default(user)
+  origin         PlanOrigin              @default(user)
   /// WHO ASKED for this plan (MOTIR-2986) — the person whose request produced
   /// it, as opposed to `decidedById`'s who APPROVED it and `authorSource`'s
   /// which AGENT wrote it. A plan has up to three parties and they are commonly
@@ -4173,7 +4205,7 @@ model Plan {
   /// person a request they never made. The requester is written ⟺ a person
   /// actually asked (`origin = 'user'`); a cadence plan is identified by its
   /// `origin`, not by a fabricated requester.
-  createdById   String?                 @map("created_by_id")
+  createdById    String?                 @map("created_by_id")
   /// WHO authored this plan (MOTIR-2986), as opposed to `origin`'s WHY,
   /// `createdById`'s WHO ASKED and `sourceJobId`'s WHICH JOB — the
   /// `source · harness · model` triple
@@ -4186,21 +4218,21 @@ model Plan {
   /// SERVER-SET at the write seam — `mcp` from the `create_plan` MCP tool, the
   /// same discipline `create_work_item` applies so an agent cannot claim
   /// `native`/`manual`. NEVER a caller field.
-  authorSource  WorkItemPlanningSource? @map("author_source")
+  authorSource   WorkItemPlanningSource? @map("author_source")
   /// The authoring agent's harness, SELF-REPORTED at `create_plan`
   /// (`plannedWithHarness`) — free text by Decision 2, stored as-supplied
   /// (trimmed, empty → null). Null on every plan Motir's own generator produced:
   /// the generator path is deliberately not retrofitted here (MOTIR-2996).
-  authorHarness String?                 @map("author_harness")
+  authorHarness  String?                 @map("author_harness")
   /// The authoring agent's model, SELF-REPORTED at `create_plan`
   /// (`plannedWithModel`) — free text, same rules as `authorHarness`.
-  authorModel   String?                 @map("author_model")
-  createdAt     DateTime                @default(now()) @map("created_at")
+  authorModel    String?                 @map("author_model")
+  createdAt      DateTime                @default(now()) @map("created_at")
   /// Set when generation completes (→ `planned`).
-  plannedAt     DateTime?               @map("planned_at")
+  plannedAt      DateTime?               @map("planned_at")
   /// Set on approve/decline, with the deciding actor.
-  decidedAt     DateTime?               @map("decided_at")
-  decidedById   String?                 @map("decided_by_id")
+  decidedAt      DateTime?               @map("decided_at")
+  decidedById    String?                 @map("decided_by_id")
   /// WHY this plan ended, for the three histories `declined` now covers
   /// (MOTIR-3189). `reviewed` — a person read a finished plan and said no.
   /// `discarded` — a person ended a plan that never finished generating.
@@ -4222,7 +4254,7 @@ model Plan {
   /// NULL is not a fourth reason: every row written before this column existed
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
-  decisionReason PlanDecisionReason?    @map("decision_reason")
+  decisionReason PlanDecisionReason?     @map("decision_reason")
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
