@@ -108,8 +108,18 @@ function testFiles(dir: string, out: string[] = []): string[] {
  * all: `type: 'design'` (a work-item type, in dozens of specs) is a plain
  * value, and `packages/design-system/theme.css` (the token suites) is a quoted
  * string that starts with `packages/`, not `design`.
+ *
+ * ⚠️ `Promise.resolve(…)` IS EXCLUDED, and it is the one collision the "path
+ * builder" idea does not survive on its own (MOTIR-3227). A spec that stubs a
+ * GitHub file list — `Promise.resolve([{ filename: 'design/a.png' }])` — builds
+ * no path and reads no asset, but it spells `resolve(` followed by a quoted
+ * `design/…` and matched. That is a false positive, not a spec to file under
+ * DELIBERATELY_OUT: excluding it there would record a decision nobody made, and
+ * the next such stub would need its own row. Measured over all 1 406 files in
+ * `tests/**` when this was added, the negative lookbehind removes exactly that
+ * one file and keeps all seven genuine readers.
  */
-const READS_DESIGN_TREE = /(?:join|resolve)\(\s*[^)]*?['"]design(?:\/[^'"]*)?['"]/;
+const READS_DESIGN_TREE = /(?<!Promise\.)(?:join|resolve)\(\s*[^)]*?['"]design(?:\/[^'"]*)?['"]/;
 
 /**
  * Specs that match the predicate above but deliberately do NOT belong in the
