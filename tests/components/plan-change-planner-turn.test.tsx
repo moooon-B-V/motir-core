@@ -7,6 +7,7 @@ import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
 
 // The PLANNER SPEAKING in the rail (MOTIR-2226; design `design/ai-chat/`
 // § "The planner SPEAKS in the plan-change thread", states A–E).
@@ -117,9 +118,11 @@ describe('state A — the findings report', () => {
     const report = screen.getByTestId('plan-change-report');
     expect(within(report).getByText('I searched the plan.')).toBeTruthy();
     // The planner's avatar, not the user's — the whole point. Before this card
-    // the same turn rendered inside a `turn 2` user bubble.
-    expect(within(report).getByText('M')).toBeTruthy();
+    // the same turn rendered inside a `turn 2` user bubble. Since MOTIR-3185 the
+    // assistant wears the Motir mark, so the tell is the wave band, not an `M`.
+    expect(report.querySelector('svg path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
     expect(within(report).queryByText('·')).toBeNull();
+    expect(within(report).queryByText('M')).toBeNull();
     expect(screen.queryByText('turn 2')).toBeNull();
     // A report changes only the transcript: the composer is untouched.
     expect(screen.queryByTestId('plan-change-awaiting')).toBeNull();

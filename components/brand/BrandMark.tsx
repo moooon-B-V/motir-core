@@ -79,8 +79,17 @@ export function BrandMark({
 
   // Mark-only carries no container and no `--brand-size`: there is nothing to
   // derive. The wrapping link owns the accessible name (§8).
+  //
+  // ⚠️ IT DOES HONOUR `tone`, and did not before MOTIR-3185. The glyph sets its
+  // own ink (`.brand-glyph { color: --el-accent-on-surface }`), which WINS over
+  // whatever the host inherited — so a mark dropped on an accent fill rendered
+  // accent-on-accent and effectively vanished. `brand-inv` is the shipped
+  // mechanism for that (`.brand-inv .brand-glyph`), and it needs a container to
+  // hang on. A `tone` prop that silently did nothing on this variant was a trap
+  // rather than a simplification.
   if (variant === 'mark') {
-    return className ? <span className={className}>{glyph}</span> : glyph;
+    const wrapper = [TONE_CLASS[tone], className ?? ''].filter(Boolean).join(' ');
+    return wrapper ? <span className={wrapper}>{glyph}</span> : glyph;
   }
 
   const classes = [
