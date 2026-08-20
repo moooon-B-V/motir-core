@@ -904,9 +904,33 @@ appeared until the widget also bumped a tick the inbox refetches on.)
     so its option-click timed out at 120s — a real bug the first pass missed.)
   - **A pre-existing bug in already-shipped code** (the failure reproduces on
     `main` without your change) → do NOT absorb it into the current PR and do
-    NOT just rerun past it: log it as a **bug work item** in the plan seed (the
-    bug-logging `seed/*` PR with the `[reseed]` marker) so it's tracked, and
-    surface it in the PR body — the same protocol as an out-of-scope finding.
+    NOT just rerun past it: **file it as a `bug` work item against the live
+    tenant**, and surface it in the PR body — the same protocol as an
+    out-of-scope finding.
+    - **Reproduce it FIRST.** A bug filed from reading the code is a claim, not
+      an observation, and it costs whoever picks it up the same investigation a
+      second time.
+    - **Parent it under the in-flight card's own parent**, and link it
+      `relates_to` the card it was found on. The parent says where the bug
+      LIVES; the link says where it was FOUND. It blocks nothing, joins no
+      sprint and claims no scope — filing is purely additive, which is what
+      makes it safe to do mid-run at all.
+    - Its description carries the **reproduction**, the **evidence** (the
+      command you ran and its output verbatim, or the file and line you read),
+      and the **card and branch it was seen on** — a number measured on an
+      unmerged branch is not a number about `main`.
+    - ⚠️ **This clause used to say "log it in the plan seed (the bug-logging
+      `seed/*` PR with the `[reseed]` marker)". That channel is RETIRED** —
+      every mutation goes through the live tenant now — so for a long stretch
+      the one instruction that told an agent to file a bug pointed at a
+      mechanism that no longer existed, while the dispatch prompt forbade the
+      one that did. An agent following both faithfully did nothing. Fixed by
+      MOTIR-3026; the protocol above is the same one the dispatch prompt's
+      FOUND A DEFECT branch states, so the two cannot disagree
+      (`docs/decisions/run-findings-protocol.md` Q3).
+    - A run launched with `--disable-log-bug` is told to COMMENT the finding
+      instead. Honour whichever the prompt you were handed actually says: the
+      prompt is the contract, and this file is the standing default.
   - **Genuinely flaky** (non-deterministic, root cause understood and unrelated
     to your change) → only THEN is a re-run appropriate; say so explicitly with
     the evidence, don't let "probably flaky" be the default.
