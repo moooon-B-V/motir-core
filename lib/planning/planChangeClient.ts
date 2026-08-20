@@ -149,6 +149,22 @@ export type AskSettleResponse =
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
+/**
+ * A turn that opened NO ask job — it went straight to the shipped plan-change
+ * submit, and `jobId` / `planId` name the plan-edit job now running.
+ *
+ * It arrives from either entrance, and the caller must handle it from both:
+ * a NEW turn that answers the planner's pending question (the affordance already
+ * settled the disposition, so there is nothing to classify), and a RE-RUN the
+ * handler hands back.
+ */
+export interface AskRedirectResponse {
+  outcome: 'redirected';
+  jobId: string;
+  planId: string;
+  session: PlanChangeSessionDto;
+}
+
 /** Send a NEW user turn through the one door. The body carries the text alone. */
 export async function submitAskTurn(
   body: string,
@@ -156,10 +172,12 @@ export async function submitAskTurn(
   /** Whether the composer's ANSWER affordance sent this turn — ADR §1's wire
    *  field. It is not an intent: it records which affordance sent the turn, so
    *  the thread can say later whether the planner's question was answered or
-   *  merely superseded. */
+   *  merely superseded, AND — when the thread really is waiting on a question —
+   *  it is what sends the turn straight to the plan-change submit instead of
+   *  through a classifier that has nothing useful to decide. */
   isAnswer = false,
-): Promise<AskSubmitResponse> {
-  return post<AskSubmitResponse>('/api/ai/ask', { body, isAnswer }, signal);
+): Promise<AskSubmitResponse | AskRedirectResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse>('/api/ai/ask', { body, isAnswer }, signal);
 }
 
 /**
@@ -175,8 +193,8 @@ export async function rerunAskTurn(
   turnId: string,
   options: { flip?: boolean } = {},
   signal?: AbortSignal,
-): Promise<AskSubmitResponse> {
-  return post<AskSubmitResponse>(
+): Promise<AskSubmitResponse | AskRedirectResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
     options.flip ? { turnId, flip: true } : { turnId },
     signal,

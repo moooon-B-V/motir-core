@@ -7,6 +7,7 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 import { readAskOutcome } from '@/lib/planning/askResult';
 import { EmptyPlanChangeTurnError, PlanChangeTurnNotFoundError } from '@/lib/planChange/errors';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
+import { pendingQuestion } from '@/lib/planning/planChangeThread';
 
 // The ASK seam (Story MOTIR-1343 · MOTIR-1819) — the motir-core side of "Ask
 // about this project".
@@ -68,6 +69,18 @@ export interface AskSubmitResult {
  *    the handler DOES return, and lands as an ordinary answer with no citations —
  *    that is `answered`, not this.)
  */
+/** A turn that did NOT open an ask job: it went straight to the shipped
+ *  plan-change submit, and `jobId` / `planId` name the plan-edit job now
+ *  running. Both entrances can produce it — {@link aiAskService.submitTurn} when
+ *  the turn answers a pending question, and {@link aiAskService.resubmit} when
+ *  the handler hands a turn back. */
+export interface AskRedirectResult {
+  outcome: 'redirected';
+  jobId: string;
+  planId: string;
+  session: PlanChangeSessionDto;
+}
+
 export type AskSettleResult =
   | { outcome: 'answered'; session: PlanChangeSessionDto }
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
@@ -125,7 +138,7 @@ export const aiAskService = {
     body: string,
     ctx: ProjectContext,
     opts: { isAnswer?: boolean } = {},
-  ): Promise<AskSubmitResult> {
+  ): Promise<AskSubmitResult | AskRedirectResult> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
 
@@ -142,17 +155,53 @@ export const aiAskService = {
     // call has run is a door with an undocumented precondition, and the
     // get-or-create is idempotent (the `(project_id, scope_key)` unique makes a
     // lost create-race read the winner's row).
-    await planChangeSessionsService.getOrCreateForProject(ctx);
-    // `isAnswer` rides through, because ADR §1's wire table says it does: the
-    // client→server body is `body, targets?, isAnswer?`, unchanged from the
-    // shipped shape. It is NOT an intent and cannot become one — it records
-    // WHICH AFFORDANCE sent the turn (the shipped `isAnswer` precedent), so the
-    // thread can say later whether the planner's question was answered or merely
-    // superseded. Dropping it here would silently cost the rail its
-    // "Answered — planning resumed" marker on every reply that came through this
-    // door, which is now every reply.
+    const current = await planChangeSessionsService.getOrCreateForProject(ctx);
+
+    // ── ⭐ AN ANSWER TO A PENDING QUESTION SKIPS THE CLASSIFIER ──────────────
+    //
+    // `isAnswer` rides through because ADR §1's wire table says it does, and it
+    // is NOT an intent: it records WHICH AFFORDANCE sent the turn. That is
+    // exactly what makes it decisive here — the disposition is already known,
+    // and it was recorded in the first place BECAUSE it cannot be re-derived
+    // from the words.
+    //
+    // Classifying anyway is the expensive half of §4's asymmetry. A reply to a
+    // blocking question is usually a fragment ("money in") that is neither a
+    // question nor a request, so the default lands on `ask`, Motir answers it as
+    // a project question, the planner's question stays pending forever and the
+    // run never resumes — a thread the user has to un-stick by hand, which it
+    // never needed before this door became the only one.
+    //
+    // ⚠️ THE FLAG ALONE IS NOT TRUSTED, which is what keeps the intent
+    // server-resolved (§1). A client claiming `isAnswer` is honoured only when
+    // the thread ACTUALLY has a pending question — the same derivation the rail
+    // uses to decide whether to show the answer bar at all. Without that check
+    // this would be a client-supplied intent wearing another name, which is the
+    // back door §5 exists to close.
+    const answersAQuestion = opts.isAnswer === true && pendingQuestion(current.turns) !== null;
+    if (answersAQuestion) {
+      await planChangeSessionsService.appendTurn(trimmed, ctx, undefined, {
+        // What actually RAN. The field records the effective disposition, and
+        // what runs on this branch is the plan-change submit, not an ask.
+        intent: 'plan_change',
+        isAnswer: true,
+      });
+      // The SHIPPED submit, untouched: it accumulates every user turn in order,
+      // which is how answering RESUMES the run rather than restarting it.
+      const submitted = await planChangeSessionsService.submit(ctx);
+      return {
+        outcome: 'redirected',
+        jobId: submitted.jobId,
+        planId: submitted.planId,
+        session: submitted.session,
+      };
+    }
+
     const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, undefined, {
       intent: 'ask',
+      // Recorded even here: a turn sent from the answer bar when nothing was
+      // pending is still a fact about the affordance, and the transcript keeps
+      // facts rather than tidying them away.
       isAnswer: opts.isAnswer === true,
     });
     const turn = appended.turns.at(-1);
@@ -182,10 +231,7 @@ export const aiAskService = {
     turnId: string,
     ctx: ProjectContext,
     opts: { flip?: boolean } = {},
-  ): Promise<
-    | AskSubmitResult
-    | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
-  > {
+  ): Promise<AskSubmitResult | AskRedirectResult> {
     await projectAccessService.assertPermission(
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },

@@ -14,6 +14,7 @@ import {
   submitAskTurn,
   submitContextualPlan,
   submitPlanChange,
+  type AskRedirectResponse,
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
@@ -517,7 +518,9 @@ export function usePlanChangeConversation({
    * returns reads as "that failed, it is trying again" — and nothing failed.
    */
   const runAsk = useCallback(
-    async (submitter: (signal: AbortSignal) => Promise<AskSubmitResponse>) => {
+    async (
+      submitter: (signal: AbortSignal) => Promise<AskSubmitResponse | AskRedirectResponse>,
+    ) => {
       const controller = new AbortController();
       abortRef.current = controller;
       // An ask is project-wide by construction, so a retry after one must not
@@ -527,6 +530,33 @@ export function usePlanChangeConversation({
       try {
         const submitted = await submitter(controller.signal);
         if (!mountedRef.current) return;
+
+        // REDIRECTED AT THE DOOR — no ask job was opened at all. Two turns reach
+        // this: a reply to the planner's pending question (the affordance
+        // already settled the disposition, so there was nothing to classify) and
+        // a re-run the handler hands back before streaming.
+        //
+        // There is no hand-off to name here, because nothing was read and
+        // re-read: the run IS a plan-change run from its first frame, and the
+        // waiting row says what it has always said for one.
+        if ('outcome' in submitted) {
+          lastAskTurnRef.current = null;
+          setState((s) => ({
+            ...s,
+            phase: 'streaming',
+            session: submitted.session,
+            jobId: submitted.jobId,
+            planId: submitted.planId,
+            review: s.decided ? null : s.review,
+            decided: null,
+            progress: { kind: 'submitted' },
+            errorCode: null,
+            outOfCredits: false,
+          }));
+          await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
+          return;
+        }
+
         lastAskTurnRef.current = submitted.turnId;
         setState((s) => ({
           ...s,
