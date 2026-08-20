@@ -4,11 +4,13 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import {
+  DuplicatePlanTargetError,
   InvalidProposalError,
   PlanItemNotFoundError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  PlanPersistenceError,
 } from '@/lib/plans/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
@@ -1934,5 +1936,199 @@ describe('plansService.approvePlan — a materialized add is born `blocked` when
     );
     expect(afterDetail.readiness.ready).toBe(true);
     expect(afterDetail.item.status).toBe('blocked');
+  });
+});
+
+// ── ONE PROPOSAL PER EXISTING TARGET, AND A CONTAINED ORM BOUNDARY (MOTIR-3194) ─
+//
+// `PlanItem @@unique([planId, workItemId])` has always refused a second
+// `modify`/`remove` for one target. What it refused WITH was Prisma's own
+// ``Invalid `prisma.planItem.create()` invocation: Unique constraint failed on
+// the (not available)`` — an ORM method name, no subject, and a constraint field
+// rendering as nothing, delivered to a plan-authoring agent through
+// `toToolError`'s re-throw.
+//
+// Two things are locked here, and the SECOND is the one a "fix the duplicate
+// message" change would have left open:
+//
+//   1. The duplicate is refused in WORDS — a typed error naming the work item,
+//      the op already held, and both alternatives — across batches, INSIDE one
+//      batch (which never reaches the database at all), and across the two ops
+//      the constraint spans. And the refusal is a refusal: nothing from the
+//      rejected batch lands.
+//   2. ANY OTHER Prisma failure on the same path is contained too. Asserted with
+//      a REAL foreign-key violation against the real database — a `modify`
+//      naming a work item that does not exist — because a boundary proven only
+//      by the one error it was written for is not a boundary.
+
+describe('plansService.addProposals — one proposal per existing target (MOTIR-3194)', () => {
+  it('refuses a SECOND modify for a target the plan already patches, naming the item and both ways out', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'The survivor');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } }],
+      fx.ctx,
+    );
+
+    const refusal = await plansService
+      .addProposals(
+        plan.id,
+        [{ op: 'modify', workItemId: target, patch: { blockedByAdd: ['whatever'] } }],
+        fx.ctx,
+      )
+      .catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(DuplicatePlanTargetError);
+    const err = refusal as DuplicatePlanTargetError;
+    expect(err.code).toBe('DUPLICATE_PLAN_TARGET');
+    expect(err.workItemId).toBe(target);
+    expect(err.existingOp).toBe('modify');
+    expect(err.op).toBe('modify');
+
+    // The MESSAGE is the deliverable — it names the subject and BOTH escapes,
+    // which is exactly what the ORM string it replaces named neither of.
+    expect(err.message).toContain(target);
+    expect(err.message).toContain('already holds');
+    expect(err.message).toContain('link_work_items');
+    // …and it is not the ORM's prose wearing a new class name.
+    expect(err.message).not.toMatch(/prisma/i);
+    expect(err.message).not.toContain('not available');
+
+    // The plan still holds exactly the first proposal.
+    const after = await plansService.getPlan(plan.id, fx.ctx);
+    expect(after.items).toHaveLength(1);
+    expect((after.items[0]!.patch as { title?: string } | null)?.title).toBe('Re-scoped');
+  });
+
+  it('refuses a duplicate INSIDE one batch, and appends NOTHING from it', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'The survivor');
+    const other = await seedItem(fx, 'A bystander');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+
+    // The first two proposals are perfectly legal; the third collides with the
+    // second. A database constraint alone cannot see this until the insert, so
+    // the in-batch arm is a check the pre-read has to grow itself.
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [
+          { op: 'add', proposedFields: { title: 'A new leaf' } },
+          { op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } },
+          { op: 'modify', workItemId: target, patch: { priority: 'high' } },
+        ],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DuplicatePlanTargetError);
+
+    // ONE transaction: the legal proposals ahead of the collision are rolled
+    // back with it, so a retry of the corrected batch cannot double-append.
+    const after = await plansService.getPlan(plan.id, fx.ctx);
+    expect(after.items).toHaveLength(0);
+
+    // …and the same batch with the two patches FOLDED INTO ONE — the first
+    // alternative the message names — is accepted whole.
+    const fixed = await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'A new leaf' } },
+        { op: 'modify', workItemId: target, patch: { title: 'Re-scoped', priority: 'high' } },
+        { op: 'modify', workItemId: other, patch: { title: 'Also touched' } },
+      ],
+      fx.ctx,
+    );
+    expect(fixed.items).toHaveLength(3);
+  });
+
+  it('spans the two ops — a `remove` for a target already carrying a `modify` is refused', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'The survivor');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target, patch: { title: 'Re-scoped' } }],
+      fx.ctx,
+    );
+
+    const refusal = await plansService
+      .addProposals(plan.id, [{ op: 'remove', workItemId: target }], fx.ctx)
+      .catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(DuplicatePlanTargetError);
+    expect((refusal as DuplicatePlanTargetError).existingOp).toBe('modify');
+    expect((refusal as DuplicatePlanTargetError).op).toBe('remove');
+  });
+
+  it('leaves `add` proposals alone — a plan may hold as many as it likes', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A tree' }, fx.ctx);
+
+    // Every `add` carries `workItemId: null` until materialize, and Postgres
+    // treats NULLs as distinct — which is the whole reason the unique index can
+    // constrain real targets without constraining a tree.
+    const appended = await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'One' } },
+        { op: 'add', proposedFields: { title: 'Two' } },
+        { op: 'add', proposedFields: { title: 'Three' } },
+      ],
+      fx.ctx,
+    );
+    expect(appended.items).toHaveLength(3);
+    expect(appended.items.every((i) => i.workItemId === null)).toBe(true);
+  });
+
+  it('contains ANY other ORM failure on the same path — a real FK violation, typed', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+
+    // A `modify` naming a work item that does not exist. `plan_item.work_item_id`
+    // is a real foreign key, so this is a genuine Prisma failure (P2003) raised by
+    // the real database on the real insert — no mock, and a DIFFERENT error from
+    // the duplicate the card was filed about. Before the boundary was contained,
+    // this escaped to an agent as Prisma's own invocation trace exactly as the
+    // duplicate did.
+    const refusal = await plansService
+      .addProposals(
+        plan.id,
+        [{ op: 'modify', workItemId: 'cm_no_such_work_item', patch: { title: 'x' } }],
+        fx.ctx,
+      )
+      .catch((err: unknown) => err);
+
+    expect(refusal).toBeInstanceOf(PlanPersistenceError);
+    const err = refusal as PlanPersistenceError;
+    expect(err.code).toBe('PLAN_PERSISTENCE_FAILED');
+    expect(err.operation).toBe('plan proposal append');
+    // The ORM's code rides as DATA — readable by a caller, absent from the prose.
+    expect(err.ormCode).toBe('P2003');
+    expect(err.message).not.toMatch(/prisma/i);
+    expect(err.message).not.toMatch(/invocation/i);
+
+    // The append is atomic, so the failed batch left the plan empty.
+    const after = await plansService.getPlan(plan.id, fx.ctx);
+    expect(after.items).toHaveLength(0);
+  });
+
+  it('passes the service’s OWN typed refusals through the containment untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A re-plan' }, fx.ctx);
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // The containment wraps the whole transaction, so the errors thrown INSIDE it
+    // travel through the same catch. A wrapper that swallowed them would trade one
+    // opaque failure for another.
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Late' } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(PlanNotGeneratingError);
   });
 });

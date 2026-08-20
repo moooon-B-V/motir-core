@@ -522,9 +522,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '7c51786d65d6',
   },
   add_plan_items: {
+    // The SUMMARY is MOTIR-3193's and stays exactly as that story wrote it: the
+    // empty-final-batch close is a CAPABILITY, which is the kind of thing a
+    // reader picks a tool off this line for. MOTIR-3194 then re-pinned the
+    // fingerprint WITHOUT touching it, because what that card added to the
+    // description is the ONE-PROPOSAL-PER-TARGET rule — a refusal a caller meets
+    // after it has already chosen this tool, and read from the description.
     summary:
       'Append proposals to a plan — or close it with an empty final batch; ids come back in order, so the next batch can hang children off them.',
-    descriptionFingerprint: '0c4685fc9814',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'ae3fc99f33f6',
   },
   update_plan_item: {
     summary:

@@ -3,12 +3,14 @@ import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
+  DuplicatePlanTargetError,
   InvalidProposalError,
   NoPlanForJobError,
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  PlanPersistenceError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { ProposalInput } from '@/lib/dto/plans';
@@ -33,7 +35,12 @@ import type { ProposalInput } from '@/lib/dto/plans';
 //                                          token's tenant — cross-tenant 404-not-403)
 //   PlanNotGeneratingError /
 //     PlanNotInExpectedStatusError → 409 (the plan already left `generating`)
+//   DuplicatePlanTargetError      → 409 (this plan already proposes against that
+//                                          work item — MOTIR-3194)
 //   InvalidProposalError          → 422 (a proposal inconsistent with its op)
+//   PlanPersistenceError          → 500 (an ORM failure inside the append,
+//                                          CONTAINED — a typed code and a sentence
+//                                          instead of Prisma's own prose)
 //   PlanItemUnknownTargetRepoRoleError → 422 (a `targetRepoRole` outside the
 //                                          shared role vocabulary — MOTIR-1912)
 //   ProjectAccessDeniedError      → 404 browse / 403 edit
@@ -93,6 +100,16 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof PlanNotGeneratingError || err instanceof PlanNotInExpectedStatusError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
+    // A second `modify`/`remove` for a work item this plan already targets
+    // (MOTIR-3194). 409 rather than 422: the batch is well-formed, and what it
+    // conflicts with is the plan's existing CONTENT. `workItem` rides as data so
+    // the generator can act on it without parsing the sentence.
+    if (err instanceof DuplicatePlanTargetError) {
+      return NextResponse.json(
+        { code: err.code, workItem: err.workItemId, error: err.message },
+        { status: 409 },
+      );
+    }
     if (err instanceof InvalidProposalError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
@@ -109,6 +126,16 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json(
         { code: err.code, error: err.message },
         { status: err.kind === 'browse' ? 404 : 403 },
+      );
+    }
+    // An ORM failure inside the append, contained by the service (MOTIR-3194).
+    // It IS a 500 — nothing about the request could have avoided it — but it is a
+    // 500 with a stable code, so the generator's retry logic reads a contract
+    // rather than a Prisma invocation trace. `ormCode` rides as data.
+    if (err instanceof PlanPersistenceError) {
+      return NextResponse.json(
+        { code: err.code, ormCode: err.ormCode, error: err.message },
+        { status: 500 },
       );
     }
     throw err;

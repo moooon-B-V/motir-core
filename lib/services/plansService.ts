@@ -42,6 +42,7 @@ import {
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
+  DuplicatePlanTargetError,
   InvalidProposalError,
   PlanItemNotFoundError,
   PlanItemTargetMissingError,
@@ -51,6 +52,8 @@ import {
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
   PlanNotInExpectedStatusError,
+  PlanPersistenceError,
+  type PlanTargetOp,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
@@ -217,6 +220,63 @@ function validateProposal(p: ProposalInput): void {
     // remove
     if (!p.workItemId) throw new InvalidProposalError('A `remove` proposal requires workItemId.');
   }
+}
+
+/**
+ * Convert a PRISMA failure escaping a plan boundary into a typed
+ * {@link PlanPersistenceError} (MOTIR-3194); pass everything else through
+ * untouched.
+ *
+ * ⚠️ THE POINT IS THE `else` BRANCH, not the mapping. `toToolError` RE-THROWS
+ * what it does not recognise, and the MCP SDK renders a re-thrown error's
+ * `message` into a JSON-RPC internal error — so any Prisma error reaching an MCP
+ * boundary IS the caller's error text. Before this, the duplicate-target
+ * constraint arrived as ``Invalid `prisma.planItem.create()` invocation: Unique
+ * constraint failed on the (not available)``: the ORM's method name, no subject,
+ * and a constraint field rendering as nothing.
+ *
+ * Catching only the one known constraint would have left every other ORM failure
+ * on the same path escaping the same way, so this catches the WHOLE Prisma error
+ * family by class. It must therefore be conservative in the other direction: the
+ * service's own typed errors (`PlanNotFoundError`, `PlanNotGeneratingError`,
+ * `DuplicatePlanTargetError`, …) are thrown from INSIDE the same transaction and
+ * are returned unchanged — a wrapper that swallowed them would trade one opaque
+ * failure for another.
+ *
+ * The five classes are the complete set the client can throw
+ * (`generated/prisma/internal/prismaNamespace.ts`), enumerated rather than matched
+ * on a name prefix so a hand-thrown `Error` named like one cannot be mistaken for
+ * an ORM failure.
+ */
+function containPrismaFailure(err: unknown, operation: string): unknown {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError ||
+    err instanceof Prisma.PrismaClientUnknownRequestError ||
+    err instanceof Prisma.PrismaClientValidationError ||
+    err instanceof Prisma.PrismaClientInitializationError ||
+    err instanceof Prisma.PrismaClientRustPanicError
+  ) {
+    const ormCode = err instanceof Prisma.PrismaClientKnownRequestError ? err.code : null;
+    return new PlanPersistenceError(operation, ormCode);
+  }
+  return err;
+}
+
+/**
+ * The targets a plan's proposals already claim — `workItemId → op` (MOTIR-3194).
+ *
+ * Only a `modify`/`remove` has a target while a plan is `generating`: an `add`
+ * carries `workItemId: null` until materialize writes the created id back
+ * (`planItemRepository.setWorkItemId`), which is the same reason Postgres's
+ * NULL-distinct semantics let a plan hold many `add`s under
+ * `@@unique([planId, workItemId])`.
+ */
+function claimedTargets(items: readonly PlanItem[]): Map<string, PlanTargetOp> {
+  const claimed = new Map<string, PlanTargetOp>();
+  for (const item of items) {
+    if (item.op !== 'add' && item.workItemId) claimed.set(item.workItemId, item.op);
+  }
+  return claimed;
 }
 
 /**
@@ -1568,6 +1628,13 @@ export const plansService = {
    * (the producer calls this per node / per batch). NO WorkItem is created here.
    * The plan row is locked + its status re-read so an append racing a
    * `markPlanned` is rejected once the plan leaves `generating`.
+   *
+   * ⚠️ ONE PROPOSAL PER EXISTING TARGET, AND IT IS REFUSED IN WORDS (MOTIR-3194).
+   * `PlanItem @@unique([planId, workItemId])` admits at most one `modify`/`remove`
+   * per target, and the rule is KEPT — {@link DuplicatePlanTargetError} argues why
+   * on the record. What changed is how it announces itself: a check under the plan
+   * lock, BEFORE the insert, naming the work item and the alternatives, instead of
+   * an ORM string naming `prisma.planItem.create()`.
    */
   async addProposals(
     planId: string,
@@ -1582,38 +1649,68 @@ export const plansService = {
     if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
     proposals.forEach(validateProposal);
 
-    const { row, items } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const locked = await planRepository.lockById(planId, tx);
-        if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        if (fresh.status !== 'generating') throw new PlanNotGeneratingError(planId, fresh.status);
+    let result: { row: Plan; items: PlanItem[] };
+    try {
+      result = await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+        async (tx) => {
+          const locked = await planRepository.lockById(planId, tx);
+          if (!locked) throw new PlanNotFoundError(planId);
+          const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+          if (!fresh) throw new PlanNotFoundError(planId);
+          if (fresh.status !== 'generating') throw new PlanNotGeneratingError(planId, fresh.status);
 
-        for (const p of proposals) {
-          const data: Prisma.PlanItemUncheckedCreateInput = {
-            workspaceId: ctx.workspaceId,
-            planId,
-            op: p.op,
-            workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
-            parentRef: p.parentRef ?? null,
-            blockedByRefs: p.blockedByRefs ?? [],
-            baseRevision: p.baseRevision ?? null,
-            ...(p.op === 'add' && p.proposedFields
-              ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
-              : {}),
-            ...(p.op === 'modify' && p.patch
-              ? { patch: p.patch as unknown as Prisma.InputJsonValue }
-              : {}),
-          };
-          await planItemRepository.create(data, tx);
-        }
-        const allItems = await planItemRepository.findByPlan(planId, tx);
-        return { row: fresh, items: allItems };
-      },
-    );
-    return toPlanWithItemsDto(row, items);
+          // The targets this plan ALREADY claims, read under the row lock the
+          // append holds — so a second call cannot observe a stale set. Grown
+          // in-loop as well, because a duplicate inside ONE batch never reaches
+          // the database to be caught by anything.
+          //
+          // Skipped entirely when the batch targets nothing existing, which is
+          // the common shape: a skeleton layer is all `add`s, and MOTIR-3193's
+          // CLOSE sends no proposals at all. Neither can collide with anything,
+          // so neither pays for the read.
+          const targetsExisting = proposals.some((p) => p.op !== 'add' && p.workItemId);
+          const claimed = targetsExisting
+            ? claimedTargets(await planItemRepository.findByPlan(planId, tx))
+            : new Map<string, PlanTargetOp>();
+
+          for (const p of proposals) {
+            if (p.op !== 'add' && p.workItemId) {
+              const existing = claimed.get(p.workItemId);
+              if (existing) throw new DuplicatePlanTargetError(p.workItemId, existing, p.op);
+              claimed.set(p.workItemId, p.op);
+            }
+            const data: Prisma.PlanItemUncheckedCreateInput = {
+              workspaceId: ctx.workspaceId,
+              planId,
+              op: p.op,
+              workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
+              parentRef: p.parentRef ?? null,
+              blockedByRefs: p.blockedByRefs ?? [],
+              baseRevision: p.baseRevision ?? null,
+              ...(p.op === 'add' && p.proposedFields
+                ? { proposedFields: p.proposedFields as unknown as Prisma.InputJsonValue }
+                : {}),
+              ...(p.op === 'modify' && p.patch
+                ? { patch: p.patch as unknown as Prisma.InputJsonValue }
+                : {}),
+            };
+            await planItemRepository.create(data, tx);
+          }
+          const allItems = await planItemRepository.findByPlan(planId, tx);
+          return { row: fresh, items: allItems };
+        },
+      );
+    } catch (err) {
+      // THE BOUNDARY, not the one path (MOTIR-3194). The check above is what
+      // actually refuses a duplicate target, in words; this is what stops ANY
+      // other ORM failure inside the transaction — a foreign key, a lost
+      // connection, a malformed write — from reaching an agent as Prisma's own
+      // prose. Everything that is not a Prisma error passes through unchanged,
+      // including the typed refusals thrown a few lines up.
+      throw containPrismaFailure(err, 'plan proposal append');
+    }
+    return toPlanWithItemsDto(result.row, result.items);
   },
 
   /** Mark the generation frontier complete: `generating` → `planned`. */
