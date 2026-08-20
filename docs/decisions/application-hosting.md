@@ -54,16 +54,21 @@ per-pull-request preview environments, and to the order of the pipeline.
 
 ## §1 — The decisions, in one table
 
-| #      | Question                                 | Decision                                                                                                 |
-| ------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Q1** | Where does motir-core run?               | **Fly.io**, as ONE long-running process (`output: 'standalone'`), org `moooon`, region `iad`             |
-| **Q2** | What replaces Vercel Blob?               | **Tigris**, S3-compatible, **two buckets** (public assets / private content); S3 presigned URLs          |
-| **Q3** | What replaces the three `VERCEL_*` URLs? | **`MOTIR_BASE_URL`**, one variable, one accessor (`lib/baseUrl.ts`), two-rung precedence                 |
-| **Q4** | Do per-PR preview environments survive?  | **No. They are DROPPED** — a decision, with what is lost and what reverses it recorded                   |
-| **Q5** | What is the pipeline order?              | Existing gates FIRST, deploy after, Inngest sync as a failing step, verification read from the PLATFORM  |
-| **Q6** | How many machines, and who creates them? | **2**, created by `fly scale count 2` — an operator action, owned by MOTIR-2386, never by `fly.toml`     |
-| **Q7** | Is static-asset egress fronted by a CDN? | **No**, for now — the app serves its own static output at $0.02/GB, accepted explicitly with a trigger   |
-| **Q8** | What does the move NOT change?           | The database engine, migrations, Inngest, the E2E suite, the 4-layer convention, motir-ai, motir-gateway |
+| #      | Question                                 | Decision                                                                                                                   |
+| ------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Q1** | Where does motir-core run?               | **Fly.io**, as ONE long-running process (`output: 'standalone'`), org `moooon`, region `iad`                               |
+| **Q2** | What replaces Vercel Blob?               | **Tigris**, S3-compatible, **two buckets** (public assets / private content); S3 presigned URLs                            |
+| **Q3** | What replaces the three `VERCEL_*` URLs? | **`MOTIR_BASE_URL`**, one variable, one accessor (`lib/baseUrl.ts`), two-rung precedence                                   |
+| **Q4** | Do per-PR preview environments survive?  | **No. They are DROPPED** — a decision, with what is lost and what reverses it recorded                                     |
+| **Q5** | What is the pipeline order?              | Existing gates FIRST, deploy after, Inngest sync as a failing step, verification read from the PLATFORM                    |
+| **Q6** | How many machines, and who creates them? | **2**, created by `fly scale count 2` — an operator action, owned by MOTIR-2386, never by `fly.toml`                       |
+| **Q7** | Is static-asset egress fronted by a CDN? | **No**, for now — the app serves its own static output at $0.02/GB, accepted explicitly with a trigger                     |
+| **Q8** | What does the move NOT change?           | The database engine, migrations, Inngest, the E2E suite, the 4-layer convention, ~~motir-ai, motir-gateway~~ (Amendment 7) |
+
+> **The amendments add Q9–Q19 and this table does not repeat them**, by the
+> convention Amendments 1 and 6 already set. Q9 (the core→ai transport) is
+> Amendment 1, corrected by 5; Q10 (region, as residency) is Amendment 6;
+> **Q11–Q19 (the scaling posture for all three services) are Amendment 7.**
 
 ---
 
@@ -331,6 +336,14 @@ should not need a local checkout to see the change.
 
 ## §7 — Q6: the machine pool, and who creates it
 
+> **⚠️ SCOPE WIDENED by Amendment 7 (2026-08-20).** Everything below is about
+> **`motir-core`** and stands unchanged. What it does not decide — and what Q8
+> explicitly excluded — is `motir-ai` and `motir-gateway`. **Amendment 7 §13–§16
+> decides all three**, and it separates two numbers this section runs together:
+> the **pool** (which machines exist) and the **availability floor**
+> (`min_machines_running`, how many the proxy will not stop). A pool of two with a
+> floor of one is a single point of failure, which is what this app has been.
+
 ### The decision
 
 **Production runs TWO machines** — org `moooon`, region `iad`,
@@ -408,15 +421,15 @@ measured traffic problem.
 
 Enumerated so nothing is assumed into scope:
 
-| Element                                     | Disposition                                                                                                                                                                                                                                                      |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The database engine**                     | Neon stays Neon. The app connects with a plain `DATABASE_URL` through `PrismaPg` either way — **moving compute does not move data.** Only the _account_ moves, from a Vercel-managed Marketplace resource to the direct Neon account motir-ai uses (MOTIR-2391). |
-| **Migrations**                              | `pnpm prisma migrate deploy`, as Fly's `release_command` — the shape motir-ai has used for months.                                                                                                                                                               |
-| **Inngest**                                 | A plain HTTP endpoint. Two secrets and a re-sync step; the Vercel Inngest integration is not installed.                                                                                                                                                          |
-| **The E2E suite**                           | Unchanged by decision (Yue, 2026-08-07). 119 specs, own ephemeral Postgres per leg, nine legs.                                                                                                                                                                   |
-| **Route shapes and the 4-layer convention** | Untouched. Q1 rejects the catch-all refactor precisely because it would change them.                                                                                                                                                                             |
-| **`motir-ai`, `motir-gateway`**             | Out of scope. motir-ai already runs on Fly.                                                                                                                                                                                                                      |
-| **`motir.co` nameservers**                  | Already third-party, already outside Vercel. The cutover is a DNS **record** change, not a Vercel domain operation.                                                                                                                                              |
+| Element                                     | Disposition                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The database engine**                     | Neon stays Neon. The app connects with a plain `DATABASE_URL` through `PrismaPg` either way — **moving compute does not move data.** Only the _account_ moves, from a Vercel-managed Marketplace resource to the direct Neon account motir-ai uses (MOTIR-2391).                                                                                                                                                  |
+| **Migrations**                              | `pnpm prisma migrate deploy`, as Fly's `release_command` — the shape motir-ai has used for months.                                                                                                                                                                                                                                                                                                                |
+| **Inngest**                                 | A plain HTTP endpoint. Two secrets and a re-sync step; the Vercel Inngest integration is not installed.                                                                                                                                                                                                                                                                                                           |
+| **The E2E suite**                           | Unchanged by decision (Yue, 2026-08-07). 119 specs, own ephemeral Postgres per leg, nine legs.                                                                                                                                                                                                                                                                                                                    |
+| **Route shapes and the 4-layer convention** | Untouched. Q1 rejects the catch-all refactor precisely because it would change them.                                                                                                                                                                                                                                                                                                                              |
+| **`motir-ai`, `motir-gateway`**             | ~~Out of scope. motir-ai already runs on Fly.~~ **⚠️ RETIRED by Amendment 7 (2026-08-20).** This row scoped the two sibling services out of this record, and for the _migration_ question it was right. It is no longer true of **scaling**: Amendment 7 decides the pool, the availability floor, the VM size, the concurrency signal and the instance ceiling for all three. Read §13–§16 there, not this cell. |
+| **`motir.co` nameservers**                  | Already third-party, already outside Vercel. The cutover is a DNS **record** change, not a Vercel domain operation.                                                                                                                                                                                                                                                                                               |
 
 ---
 
@@ -430,6 +443,12 @@ boundary rather than a hole:
   from Fly's metrics after the cutover — MOTIR-2392 takes the first platform
   reading. Re-sizing is a one-line change plus a deploy; guessing now would be a
   measurement with no data behind it.
+  > **First reading taken, 2026-08-20 (Amendment 7 §12).** `next-server` resident
+  > **390 MB** of 1.92 GiB usable — **~4.9× headroom, at idle**. That is a
+  > baseline, not a load reading, so **the trigger has not fired**: it asks for a
+  > _sustained_ reading and this is a single idle sample. Recorded so the trigger
+  > has something to fire against rather than nothing, which is the state it was
+  > in for eleven days.
 - **Per-PR preview environments.** Dropped by Q4 with a named reversal path;
   building them is a future Story.
 - **A CDN.** Q7, with its trigger.
@@ -1234,3 +1253,570 @@ decision:**
 | Dutch implementation and supervisory authority                        | `Uitvoeringswet AVG`; Autoriteit Persoonsgegevens                                            |
 | Cookie/tracking consent is ePrivacy, not GDPR                         | Telecommunicatiewet art. 11.7a                                                               |
 | The database is in `us-east-1`, moved 2026-08-07                      | MOTIR-2391, `done` — its own acceptance criteria record the project identity and the restore |
+
+## Amendment 7 (2026-08-20) — the scaling posture for ALL THREE services: the pool is a ceiling, the FLOOR is the availability decision, and on `motir-ai` the floor is also the job-concurrency ceiling
+
+> **Written by Story MOTIR-2781 · Subtask MOTIR-2780.** Q6 decided a machine pool
+> for `motir-core` and Q8 explicitly scoped `motir-ai` and `motir-gateway` OUT of
+> this record. **This amendment retires that exclusion** and decides the pool, the
+> availability floor, the VM size, the concurrency signal and the instance ceiling
+> for all three.
+>
+> **Numbered 7.** Amendment 6 was the highest heading on `origin/main`, re-read at
+> edit time; every remote branch was scanned for a seventh
+> (`git show origin/<branch>:docs/decisions/application-hosting.md | grep '^## Amendment 7'`
+> over all heads, 2026-08-20) and none carries one. The one open pull request
+> against this repository (#2209) does not touch this file. All clock times are the
+> platform's own, in UTC.
+
+**Amends:** §7/Q6's scope (motir-core only → all three) and §9/Q8's row
+_"`motir-ai`, `motir-gateway` — out of scope"_, which is **withdrawn**. It
+withdraws no decision: Q6's pool of two stands, Q10's `iad` stands, Amendment 5's
+`.internal` constraint stands and is load-bearing below.
+
+### Why this record and not a new one
+
+Three services, one platform, one mechanic, and the mechanic is the whole
+difference between a scaling story that works and one that reads as though it
+does. Splitting it across three records would put the same paragraph in three
+places and let two of them drift. The exclusion in Q8 was written when this record
+was about **moving motir-core**; it was never a judgement that the other two
+should be decided elsewhere.
+
+---
+
+### §11 — The mechanic, restated once, because every number below depends on it
+
+**Fly Proxy's autostart/autostop never CREATES or DESTROYS a machine.** It starts
+and stops machines that already exist. So:
+
+- **The pool is the ceiling.** `fly scale count <n>` — an operator action — is the
+  only thing that raises it. `fly.toml` cannot, and `flyctl deploy` updates the
+  machines that exist without adding one.
+- **`min_machines_running` is a floor on how many of that pool the proxy will not
+  stop.** It is **not** a failover guarantee. If the last running machine dies,
+  `flyd` restarts _that machine_ — a boot, with boot latency, on the same host
+  class. Nothing takes over. **Two machines RUNNING is the only configuration that
+  survives losing one without a gap**, and that is a different setting from a pool
+  of two.
+- **A stopped pool member is nearly free** — rootfs only, $0.15/GB per 30 days, no
+  compute (Fly pricing, read 2026-08-13). **So the pool should be sized for the
+  peak you must be able to SERVE, not for the load you have**: capacity you have
+  not pre-created is capacity the proxy cannot give you, and capacity you
+  pre-create and never run costs cents. The bill follows what actually runs.
+- **There is no spend cap and no billing alert.** `ci-runner-fleet.md` §9, re-read
+  on `origin/main` 2026-08-20 and unchanged by #2174: _"We don't support billing
+  alerts (yet)"_ and _"there's no soft ceiling."_ The pool is the only backstop
+  that exists.
+
+### §12 — Measured first, 2026-08-20, from the PLATFORM
+
+Every number below was read from Fly's Machines API or from inside the running
+machine on 2026-08-20, not from a `fly.toml`.
+
+| app             | pool | states at 13:05Z         | VM                     | MemTotal     | main process, RSS at idle                                       |
+| --------------- | ---- | ------------------------ | ---------------------- | ------------ | --------------------------------------------------------------- |
+| `motir-core`    | 2    | 1 `started`, 1 `stopped` | 2× shared CPU / 2 GB   | 2 015 600 kB | `next-server` **399 732 kB (390 MB)**                           |
+| `motir-ai`      | 2    | 1 `started`, 1 `stopped` | 2× shared CPU / 2 GB   | 2 015 600 kB | `node` **234 164 kB** + a second `node` 114 860 kB = **341 MB** |
+| `motir-gateway` | 2    | 1 `started`, 1 `stopped` | 1× shared CPU / 512 MB | 469 852 kB   | `one-api` **81 364 kB (79 MB)**                                 |
+
+All three `iad`-only. Command:
+`fly ssh console -a <app> --machine <id> -C "/bin/sh -c 'for p in /proc/[0-9]*; do … VmRSS … done | sort -rn | head'"`.
+**Every reading is AT IDLE** — it sizes the baseline and says nothing about load.
+
+**⚠️ Two rows have moved since this Story was written, and both matter:**
+
+- **`motir-gateway`'s pool is 2, not 1.** `fly scale count 2` was run out of band
+  on 2026-08-13, creating machine `2862102a006e98`. This amendment **ratifies**
+  it (§13).
+- **`motir-gateway` PR #15 MERGED on 2026-08-14, and it did NOT set
+  `min_machines_running = 0`.** MOTIR-2782 records it as open and proposing 0.
+  What actually merged keeps the floor at **1**, raises `SYNC_FREQUENCY` 60 → 600,
+  and writes out the reason at length — ending _"MOTIR-2780 owns that pairing."_
+  §14 is that answer.
+
+#### Has `motir-core`'s spare ever started? — MOTIR-2785 AC2, answered
+
+**Yes, and it starts on every deploy — then the proxy stops it about five and a
+half minutes later.** Read from the Machines API `events[]` for
+`7817663f103648`, 2026-08-20:
+
+```
+12:29:18.569Z  start     started   flyd     ← a deploy started it
+12:34:48.720Z  cordon    started   proxy
+12:34:58.772Z  stop      stopping  proxy    ← the proxy stopped it, 5m40s later
+12:34:59.395Z  exit      stopped   flyd
+12:35:01.807Z  uncordon  stopped   flyd
+```
+
+So the pool is not decoration and the autostart path works. **What it does not do
+is stay up.** From 12:35Z onward `motir-core` served its entire load from one
+machine, which is the state this amendment is about. (The API retains five events
+per machine, so this is the recent window, not the lifetime history.)
+
+---
+
+### §13 — Q11: the POOL, per service
+
+| service         | pool                                         | decision                                                               |
+| --------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| `motir-core`    | **2**                                        | Unchanged. Q6 stands and its reasoning is untouched.                   |
+| `motir-ai`      | **2**                                        | Unchanged. Its `fly.toml` already reasons the mechanic out correctly.  |
+| `motir-gateway` | **2 now, 4 once the rate limiter is shared** | **Ratifies** the out-of-band scale of 2026-08-13, and gates the raise. |
+
+**Why the gateway's pool is ratified rather than reversed.** Reversing is one
+command and the pool is not the hazard — the _second running process_ is (§16).
+At a floor of 1 the spare only starts above `soft_limit`, and current traffic is
+nowhere near it, so the pool of two is inert in exactly the way the pool of one
+used to be. Reversing would buy nothing and would have to be undone.
+
+**Why the gateway's ceiling is the one raised ahead of demand.** It is the only
+service whose load we do not control — customers' own applications and Epic 9's
+hosted agents ([MOTIR-673](motir:cmqfb4me600k82d0ieesj6uul)) — and a ceiling
+converts a spike into an **outage** rather than a cost. Four stopped
+`shared-cpu-1x` machines cost rootfs only. **The gate is MOTIR-2782's rate-limiter
+work, not a traffic number**: see §16.
+
+### §14 — Q12: the AVAILABILITY FLOOR. This is the decision, and it is not the pool
+
+The current answer on all three is `min_machines_running = 1`, which means **one
+machine is a single point of failure on every service we run**, whatever the pool
+says. The spare is stopped; it wakes on load crossing `soft_limit`, never on its
+sibling dying.
+
+| service         | floor                                  | when                                                                          | why                                                                                                                                                          |
+| --------------- | -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `motir-core`    | **1 → 2**                              | now — MOTIR-2785                                                              | user-facing; a crash or host drain today is a visible outage until `flyd` reboots                                                                            |
+| `motir-ai`      | **1 → 2**                              | **only after MOTIR-3221 + 3222 + 3223 have merged AND deployed** — MOTIR-2783 | the floor is the JOB-CONCURRENCY ceiling here, and raising it makes the mid-job kill hazard live                                                             |
+| `motir-gateway` | **1, and explicitly NOT 0; NOT 2 yet** | now — MOTIR-2782                                                              | `.internal` cannot wake a suspended machine (floor 0 = outage); a second _running_ process doubles every rate limit (floor 2 = a silently weakened throttle) |
+
+#### `motir-core` — 2, and the marginal database cost is zero
+
+Cost: **+$11.83/mo** (`shared-cpu-2x` 2 GB, Fly pricing 2026-08-13), taking the
+pair to $23.66/mo running continuously.
+
+**And no database cost, which is the half Q8 asks for.** motir-core runs **no
+in-process background loop**: `grep -rn 'setInterval(' lib app` over `origin/main`
+returns five hits and every one of them is in a `'use client'` hook or component.
+Its scheduled work runs through Inngest, which reaches the app **over HTTP** and
+would reach one machine whether or not a second is warm. So a second warm
+motir-core machine adds machine-hours and **not** compute-hours.
+
+> **⚠️ Revisit trigger, stated now because it will not be obvious later.**
+> MOTIR-2852 and MOTIR-2853 exist to stop motir-core's timers holding its Neon
+> compute awake (measured duty cycle 99%, 2026-08-13). **When they land, the
+> database will begin to sleep, and at that point a second warm machine still
+> costs nothing extra** — it runs no query of its own. The trigger that WOULD
+> re-price this floor is any future in-process poll on motir-core, which this
+> paragraph is the standing argument against.
+
+#### `motir-ai` — 2, and the reason is not availability
+
+**The floor on `motir-ai` is the job-concurrency ceiling, and this is the finding
+that reframes MOTIR-2783's question.** Read on `origin/main` 2026-08-20:
+
+- `startWorker` (`src/jobs/worker.ts`) guards its loop with a `ticking` flag, so
+  **one machine runs at most ONE job at a time.** `claimNextQueued`'s own comment
+  says so outright: _"one machine runs one job at a time."_
+- A **stopped** machine runs no worker at all.
+
+So **peak concurrent planning jobs = the number of RUNNING machines**, and today
+that number is **one**. The queue can be arbitrarily deep and nothing will wake
+the spare, because the only thing that wakes it is HTTP concurrency and the job
+backlog does not move HTTP concurrency (Q2). **`min_machines_running = 2` is not a
+nicety on this service; it is the only mechanism by which a second worker exists.**
+
+**But it must not be applied yet.** Raising the floor to 2 puts two machines
+permanently in the state where both are doing work, and that is exactly the state
+in which a machine can be killed mid-job — with, today, no drain and no reaper, so
+the job stays `running` forever and wedges its whole planning session (§16). The
+sequence is therefore decided rather than left to whoever runs the card:
+
+1. **MOTIR-3221** — the claim takes ownership (`claimedBy` + `leaseExpiresAt`).
+2. **MOTIR-3222** — the reaper expires a stale lease and frees the wedged key.
+3. **MOTIR-3223** — the worker drains on `SIGTERM` instead of being killed at five
+   seconds.
+4. **Then** MOTIR-2783 raises the floor to 2.
+
+The plan already encodes step 4's dependency (MOTIR-2783 is `blocked_by`
+MOTIR-3222); this record is why.
+
+Cost: **+$11.83/mo** when applied. **Database:** the second machine's worker idles
+at `IDLE_POLL_INTERVAL_MS = 10 min`, which is past Neon's five-minute suspend
+threshold, so it does not by itself hold the compute awake.
+
+#### `motir-gateway` — 1, and the floor and the transport are ONE decision
+
+**Not 0.** This ratifies, rather than re-derives, the reasoning that merged in
+PR #15: `motir-ai` addresses this app as `http://motir-gateway.internal:3000/v1`;
+6PN is machine-to-machine, **no proxy is involved**, and suspended machines are
+deregistered from `.internal` DNS (measured 2026-08-13 at a pool of 2). At a floor
+of 0, four minutes of quiet suspends every machine, the name resolves to nothing,
+and **every planner LLM call and every search call fails with nothing in the
+system able to start a machine again.** The saving — about $9.75/mo of Neon
+compute — is real and is not worth a planning layer that a quiet afternoon takes
+down.
+
+**`min_machines_running = 0` becomes available the moment `motir-ai` reaches this
+app through something the proxy serves** — Flycast (private, proxy-routed, _can_
+autostart) or the public origin. That is the pairing PR #15 named this card to
+decide, and the answer is: **not until the transport changes.** It is not on this
+Story; it is a candidate for whoever next revisits the seam, and it is the only
+route to scale-to-zero here.
+
+**And not 2 either, yet** — for a completely different reason: see §16.
+
+**`auto_stop = "suspend"` stands**, with the caveat unchanged and now more
+pointed: Fly documents `stop` as compute-free and documents **nothing** about
+billing in the `suspended` state. **The saving attributed to suspend is an
+expectation, not a contract — check it against a real invoice.** (Observed
+2026-08-20: the gateway's spare sits `stopped`, not `suspended`, because a deploy
+on 2026-08-19T22:43Z left it stopped and nothing has started it since. The
+`suspend` path applies to a machine the proxy stops, not to one a deploy leaves
+down.)
+
+### §15 — Q13: WHICH signal each service scales on
+
+`soft_limit` counts HTTP concurrency at the proxy. That is the right dimension for
+exactly one of the three.
+
+| service         | `type`            | soft / hard   | is it the scaling signal?                                                   |
+| --------------- | ----------------- | ------------- | --------------------------------------------------------------------------- |
+| `motir-core`    | `requests`        | 200 / 250     | **Yes.** Short interactive requests; HTTP concurrency _is_ the load.        |
+| `motir-ai`      | `requests`        | 20 / 25       | **No — retired as a scaling signal.** Kept as a protective per-machine cap. |
+| `motir-gateway` | **`connections`** | **100 / 150** | **Yes, once the dimension is right.** A stream is not a request.            |
+
+**`motir-core` — the dimension is right and the NUMBER is an unmeasured
+inheritance.** 200/250 has never been measured against a 2× shared-CPU box
+running Next.js. It is recorded here as an **ESTIMATE**, not a reading.
+**Trigger to revise:** the first sustained request-concurrency or p95-latency
+reading from Fly metrics. Changing it on no data would be a measurement with
+nothing behind it, which is the failure §10 already names.
+
+**`motir-ai` — statically sized, and the number is now written down.** Q2 asked
+for what replaces `soft_limit` or an explicit acceptance of static sizing. **It is
+static sizing, and the capacity is `running machines × 1 job`.** The assumed peak
+concurrent-job count is **1**, and its basis is that the only consumer is the
+`moooon` tenant's own planning, driven by one human. **Trigger to resize:** a
+second concurrent planning consumer — Epic 9, or self-hosted callers (§18, scoped
+out). The 20/25 block stays as a cap that protects a box from a control-plane
+burst; its comments must say it is not the scaling signal.
+
+**`motir-gateway` — `connections`, because it holds each one open for the life of
+a completion.** 200 concurrent _short requests_ and 200 concurrent _long-lived
+streams_ are not the same load, and `requests` was transcribed from motir-core
+where it means something else. **100 / 150 is an ESTIMATE**, chosen conservatively
+for one shared vCPU: the memory reading says memory is not the binding constraint
+(79 MB resident of 459 MB usable, ~5.7× headroom, so even at 100 KB of buffers per
+stream the box holds thousands), so the constraint is CPU and upstream provider
+limits, for neither of which we have a reading. **Trigger:** the first measured
+concurrent-stream count under real traffic.
+
+> **⚠️ ORDERING, inside MOTIR-2782's single PR.** Lowering the gateway's soft
+> limit makes the proxy start the second machine SOONER — which is precisely the
+> event that doubles every rate limit (§16). **So the concurrency block must not
+> be lowered before the limiter is fixed.** In that card: resolve the limiter
+> first, then the concurrency block, in one PR.
+
+### §16 — Q14: the instance CEILING, per service, with the behaviour AT it
+
+Fly offers neither a spend cap nor a billing alert, so **the pool is the cap** and
+we have no way to be told we reached it. That fact shapes every row.
+
+| service         | ceiling   | behaviour AT the ceiling                                                                   | how we learn                                        | 24/7 cost if all run |
+| --------------- | --------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------- |
+| `motir-core`    | **2**     | proxy queues behind `hard_limit` (250/machine), then refuses                               | a user report, or Fly metrics. **No alert exists.** | **$23.66/mo**        |
+| `motir-ai`      | **2**     | jobs stay `queued` in `PlanJob` — the correct behaviour for a job runner; nothing 5xxs     | queue depth: `queued` rows with an old `createdAt`  | **$23.66/mo**        |
+| `motir-gateway` | **2 → 4** | proxy queues, then refuses — **for a customer's production application that is an outage** | a customer report. **No alert exists.**             | **$13.28/mo** at 4   |
+
+**Why the gateway alone gets headroom bought ahead of demand.** For motir-core and
+motir-ai the caller is us, and a ceiling that turns a spike into queueing is a
+cost control working as intended. For the gateway the caller is a customer's
+production application, and the same ceiling is a refusal on their traffic. Since
+a stopped member costs rootfs only, buying the ceiling ahead of the demand costs
+approximately nothing, and **not buying it cannot be fixed at the moment it is
+needed** — the proxy cannot create a machine.
+
+#### The cost delta of everything decided above — AC6, in one place
+
+Fly pricing read 2026-08-13: `shared-cpu-2x` 2 GB = **$11.83/mo** running;
+`shared-cpu-1x` 512 MB = **$3.32/mo** running; a **stopped** machine is rootfs
+only, **$0.15/GB per 30 days**, no compute; a **suspended** machine is documented
+neither way. All three apps are on shared IPv4 (no $2/mo dedicated address) and
+Anycast IPv6 is free. Egress $0.02/GB.
+
+| change                                                     | machine delta           | database delta                     |
+| ---------------------------------------------------------- | ----------------------- | ---------------------------------- |
+| `motir-core` floor 1 → 2                                   | **+$11.83/mo**          | **$0** — no in-process poll (§21)  |
+| `motir-ai` floor 1 → 2 (after 3221/3222/3223)              | **+$11.83/mo**          | **$0** — idle tick is 10 min (§21) |
+| `motir-gateway` floor stays 1                              | $0                      | $0                                 |
+| `motir-gateway` pool 2 → 4, both extra members **stopped** | **≈ $0** — rootfs cents | $0                                 |
+| **Total, once all of it is applied**                       | **≈ +$23.66/mo**        | **$0**                             |
+
+For scale: the fleet runs at **≈ $27/mo** today (11.83 + 11.83 + 3.32), so this is
+roughly a **doubling of the machine bill and no change to the database bill** —
+and the database is the larger line item on any service that polls (§21). **The
+availability floor is the expensive half of this amendment and the pool is the
+cheap half**, which is the opposite of the intuition the word "scaling" produces.
+
+⚠️ **Every figure here is a LIST PRICE, not an invoice.** The suspend gap (§22) is
+the one that could move it, and it moves the gateway only.
+
+#### ⚠️ THE GATE ON THE GATEWAY'S CEILING IS A RATE LIMITER, NOT A TRAFFIC NUMBER
+
+`motir-gateway`'s rate limiting is **per process**, and `REDIS_CONN_STRING` is
+**not set** — verified again 2026-08-20 (`fly secrets list -a motir-gateway`: ten
+secrets, none of them Redis). `GlobalAPIRateLimit()` guards the whole `/api`
+router and `CriticalRateLimit()` guards password reset, verification and
+registration. **Every one of those limits becomes N× looser at N running
+machines**, silently, with nothing in the config or the logs saying so.
+
+**So the decision is:**
+
+1. **The gateway's floor stays 1 and its ceiling stays 2 until the limiter is
+   shared or the configured numbers are divided by the pool size.** Dividing is
+   the fail-closed direction — it makes the limits _tighter_ when only one machine
+   runs — and it is an acceptable interim; a shared limiter is the target.
+2. **Redis is not a free companion to scaling and must not be added as a
+   performance tweak.** `main.go` sets `config.MemoryCacheEnabled = true` whenever
+   `RedisEnabled`, which switches ON the cache paths (`CacheGetTokenByKey`,
+   `CacheGetUserQuota`, `CacheGetRandomSatisfiedChannel`). The gateway is
+   machine-agnostic **today because those caches are off** and every lookup reads
+   through to the shared Postgres. Turning Redis on moves that correctness from
+   "there is no cache" onto "the cache is genuinely shared and correctly expired".
+   **Land Redis together with the pool raise, or raise nothing.**
+
+### §17 — Q15: stickiness. NO affinity anywhere, and the reasons, so nobody adds it
+
+**`motir-ai` is genuinely stateless across machines.** Two independent reasons,
+both read from the code rather than assumed:
+
+- `claimNextQueued` claims with `SELECT … FOR UPDATE OF j SKIP LOCKED` inside a
+  transaction — a **Postgres row lock**, exclusive across machines, not merely
+  within a process.
+- Progress is **DB-relayed**: `ctx.emit` persists each frame and
+  `GET /v1/jobs/:id/stream` polls it back, so a client that submits to machine A
+  and streams from machine B sees the same frames.
+
+So motir-core reaching a freshly-woken motir-ai instance is **correct**, not a
+bug. What it costs is cold start, not consistency — and the floor of 1 (§14)
+already means no caller pays an unmeasured boot.
+
+**`motir-gateway` is machine-agnostic too, but conditionally.** Sessions are
+cookie-backed and signed with the same `SessionSecret` on every machine; token,
+quota and channel reads go straight to the shared Postgres. **That second half
+holds only while Redis is off** (§16). Recording both here so that the absence of
+affinity is protected as a property and the condition under which it holds is not
+forgotten.
+
+### §18 — Q16: the mid-job autostop hazard, MEASURED
+
+**MEASURED on the real deployment, 2026-08-20. The hazard is REAL: Fly's proxy
+stopped a machine that was pinned at 100% CPU with no HTTP arriving.**
+
+Q5 suspected this and said _"VERIFY IT — do not reason about it."_ Here is the
+verification. `motir-ai` runs `auto_stop_machines = "stop"` with
+`min_machines_running = 1`, so machine `895905f6d67d68` was the one **above** the
+floor.
+
+**The experiment.** Start the spare; give it work that consumes CPU and is
+invisible to the proxy — exactly the shape of a planning job, which is background
+work on a machine that may be receiving no HTTP at all; send it no requests; poll
+the machine state once a minute.
+
+```
+13:09:16Z  fly machine start 895905f6d67d68 -a motir-ai
+13:09:19Z  start / started / flyd
+13:09:2xZ  fly ssh console … -C "nohup sh -c 'while …; do :; done' &"   ← 100% CPU, no HTTP
+           /proc/loadavg confirms the burn running
+13:14:52.917Z  cordon  / started  / source=PROXY
+13:15:03.042Z  stop    / stopping / source=PROXY     ← stopped WHILE BUSY
+13:15:06.036Z  uncordon/ stopping / flyd
+13:15:09.136Z  exit    / stopped  / flyd
+```
+
+**Elapsed from start to the proxy's stop: 5 min 44 s.** The busy process died with
+the machine.
+
+**The same window, measured independently the same day on a different app.**
+`motir-core`'s spare `7817663f103648` (§12): `start` 12:29:18.569Z → proxy `stop`
+12:34:58.772Z = **5 min 40 s**, with the identical `cordon → stop → uncordon →
+exit` sequence. Two apps, two configurations, one window of roughly five and three
+quarter minutes. **The idle timer is the proxy's, it is about REQUESTS, and it does
+not look at the machine at all.**
+
+#### What this proves, and what it does not
+
+**Proves:** `auto_stop` on both `stop` (motir-ai, motir-core) is driven entirely
+by proxy-visible traffic. A machine above the floor doing CPU-bound work with no
+inbound requests **is stopped**, in under six minutes. Fly's own guidance agrees
+in advance — for apps with background work it says _"have your app shut itself
+down when idle"_ rather than rely on the proxy — but a vendor doc describing a
+mechanism is not a reading of our machine, and this is the reading.
+
+**Does not prove:** that a real `PlanJob` handler would be killed _today_.
+It would not, and the reason is arithmetic rather than safety:
+`min_machines_running = 1` shields one machine, the worker is single-flight, and
+**with one machine running there is exactly one job and it is on the shielded
+machine.** The hazard is unreachable at a floor of 1 and becomes reachable the
+instant the floor is 2 — which is precisely what §14 decides to do.
+
+#### ⚠️ AND THERE IS A SECOND WAY IN THAT IS LIVE TODAY, WHICH THE FLOOR DOES NOT SHIELD
+
+The autostop path is the one Q5 asked about. **It is not the one that has been
+firing.** Verified on `origin/main` 2026-08-20:
+
+- `src/index.ts` is `serve(...)` plus `startWorker()`, and **the `stop()` that
+  `startWorker` returns is discarded.** There is no `SIGTERM` or `SIGINT` handler
+  anywhere in `src/`.
+- `fly.toml` sets no `kill_timeout`, so Fly's default of **5 seconds** applies.
+
+**So every deploy signals the machine, waits five seconds and force-kills whatever
+job was mid-flight** — and the floor shields nothing, because a deploy replaces the
+machine the floor is protecting. There were **six deploys in the thirteen hours
+before 2026-08-20 10:00Z**.
+
+#### The remedy, decided
+
+A killed job is not merely lost. `claimNextQueued` selects `WHERE status =
+'queued'` and its sibling clause skips any job whose `concurrencyKey` has a
+`running` row — and `concurrencyKeyFor` derives `session:<aiProjectId>:<scopeKey>`.
+**So one abandoned `running` row wedges every future job of that planning session,
+permanently.** No poll interval reaches it; the predicate excludes it at every
+tick, forever. Its `PlanningRun` strands too (`jobId` is `@unique`; only
+`closeRunSafe` closes it), so metering keeps a run that never ended.
+
+The remedy is three cards, and it is **prevention plus recovery, because neither
+alone is sufficient**:
+
+| card                                          | does                                                                                                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-3221](motir:cmt1gmu6c00i6i2phjiybnd5j) | the claim takes OWNERSHIP — `claimedBy` + `leaseExpiresAt`, renewed while the handler runs, every terminal write claim-scoped                        |
+| [MOTIR-3222](motir:cmt1gnqvv00ixi2phf1mnz8he) | the REAPER — one atomic UPDATE at the top of each tick expires a stale lease, fails the job `ai_job_abandoned` and closes its orphaned `PlanningRun` |
+| [MOTIR-3223](motir:cmt1gon3s00jpi2phtgfoofp4) | DRAIN on `SIGTERM` — stop claiming, leave the proxy, finish the in-flight job, with a `kill_timeout` sized against Fly's **300 s maximum**           |
+
+**Fly caps `kill_timeout` at 300 seconds and a planning job can exceed five
+minutes, so draining cannot be a guarantee** — which is exactly why the reaper is
+not optional. Draining prevents most abandonments; reaping makes the remainder
+recoverable instead of permanent.
+
+**And it is a genuinely FAILING recovery, not a retry**: every claim opens a
+metering run and debits credits, so silently re-running a killed job double-charges
+a tenant for tokens already burned. `ai_job_abandoned` is a distinct code so
+motir-core can tell _"the machine died under your job"_ from _"the handler rejected
+your input"_.
+
+**This is the sequencing §14 encodes.** The floor on `motir-ai` does not move to 2
+until all three have merged and deployed.
+
+### §19 — Q17: self-hosted `motir-core` callers — SCOPED OUT, with the trigger
+
+**Every number in this amendment is sized for ONE internal caller.** If self-hosted
+`motir-core` instances call hosted `motir-ai`, four things change at once and the
+sizing is the least of them:
+
+- **Origin** — traffic arrives from the public internet rather than 6PN. motir-ai
+  already has a public listener, so this is not new capability; it becomes a
+  load-bearing one.
+- **Load shape** — many small tenants with uncorrelated peaks instead of one
+  bursty internal caller. A _better_ shape for autoscaling and a worse one for a
+  static size chosen against one caller, which is what §15 decides.
+- **Auth** — the core→ai boundary is one shared `MOTIR_AI_SERVICE_TOKEN`. **A
+  shared secret across many independent installations is the same class of problem
+  [MOTIR-2778](motir:cmspvd9480054i3phmyvwhcbj) records at the gateway**: an
+  identity that cannot distinguish callers. **Named here as OUT OF SCOPE so it is
+  not discovered twice**; it is a security decision, not a sizing one.
+- **Region** — self-hosters are not all in `iad`, which turns Q10 from a residency
+  decision into a latency budget as well.
+
+**The trigger that reopens this section: the first self-hosted instance pointed at
+hosted `motir-ai`.** Not the first request for the capability — the first one
+configured.
+
+### §20 — Q18: region. Already decided; NOT re-decided here
+
+**`iad`, all three, unchanged.** Amendment 6 (Q10) decided this as a **residency**
+decision with a named reversal trigger — _the first prospect with a contractual
+EU-residency requirement who will not self-host_ — and with two standing
+obligations (adopt nothing region-locked; MOTIR-2391's runbook is the migration
+script). Nothing in this amendment's traffic model touches that reasoning.
+
+**Q4 of MOTIR-2780 asked for the region to be decided or deferred with a trigger.
+It was decided, ten days earlier, in this same file.** Recording the pointer
+rather than a second answer is the point: two live answers to one question is how
+a record starts contradicting itself.
+
+### §21 — Q19: the DATABASE coupling. The floor is priced with compute, not machine-hours
+
+Neon suspends a compute only after **five minutes** of total inactivity, and that
+threshold **cannot be lowered on the Launch plan** (probed 2026-08-13:
+`suspend_timeout_seconds: 60` → _"suspend interval is too short for your plan"_).
+So **any service whose warm machine queries Postgres more often than every five
+minutes holds its database awake permanently**, and the database is the larger
+bill: a `shared-cpu-1x` machine is $3.32/mo, its Neon compute at the 0.25 CU floor
+for 730 h is **$19.50/mo**.
+
+| service         | in-process poll on a warm machine                         | does a second warm machine add compute-hours?                                                     |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `motir-core`    | **none** — every `setInterval` in the repo is client-side | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.              |
+| `motir-ai`      | the worker's idle tick, **10 min** — past the threshold   | **No.** `IDLE_POLL_INTERVAL_MS` was raised precisely so an idle motir-ai lets its database sleep. |
+| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 600` s**     | **No**, since PR #15. At the old 60 s it would have, permanently.                                 |
+
+**All three floors above can therefore be raised without a database bill**, which
+is not a coincidence — it is the result of three separate cards having already
+moved every polling loop past the five-minute threshold. **That is the property to
+protect.** A future in-process poll shorter than five minutes on any of these
+services re-prices every floor in this amendment, and is a decision to bring back
+here rather than a constant to tune.
+
+Duty cycles measured 18:15→20:46Z on 2026-08-13, from Neon's own API: `motir-core`
+**99%**, `motir-ai` **~100%**, `motir-gateway` **~100%** — all three databases were
+awake essentially continuously, driven by timers rather than by users.
+MOTIR-2852/2853 and MOTIR-3224 are the cards that close the remaining gap.
+
+### §22 — What this amendment does NOT decide
+
+- **Whether `suspend` bills.** Fly documents `stop` as compute-free and documents
+  the `suspended` state neither way. **Trigger:** the next real invoice. If
+  suspend bills near a running machine, `motir-gateway` switches to `stop` and
+  takes the slower resume.
+- **The gateway's VM size.** It stays `shared-cpu-1x` / 512 MB. The only reading
+  we have (79 MB resident, ~5.7× headroom) says **memory is not the constraint**,
+  and we have no CPU reading at all for a TLS-terminating streaming relay.
+  **Trigger:** the first sustained CPU reading under real streaming traffic — Epic
+  9's agents or a customer application, whichever arrives first. Sizing up now
+  would be guessing in the expensive direction.
+- **A shared rate limiter's shape.** §16 requires one before the gateway's ceiling
+  rises; whether that is Redis, a Fly-native store, or limits divided by the pool
+  size is MOTIR-2782's to decide and record.
+- **Scale-to-zero on the gateway.** Available only behind a transport change
+  (§14), which is not on this Story.
+- **A second region.** Q10's, with Q10's trigger.
+- **Alerting.** There is none, and this amendment does not invent one. Every "how
+  we learn" cell in §16 is honest about that; a spend tripwire is
+  `ci-runner-fleet.md` §9.2's shape and belongs with the meter, not here.
+
+### §23 — What each card below must do, and must not re-decide
+
+| card                                                          | executes                                                                                                                                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-2785](motir:cmspw6flk00ati1phgihgdtvl) `motir-core`    | floor 1 → **2**; pool unchanged; `requests` 200/250 retained and LABELLED an estimate; §12's memory reading recorded against §10's trigger                             |
+| [MOTIR-2782](motir:cmspw58b6008gi1phpdzuy8p2) `motir-gateway` | the rate limiter FIRST, then `connections` **100/150**; floor stays **1**; pool stays **2**; `suspend` retained with the invoice caveat                                |
+| [MOTIR-2783](motir:cmspw5w0k009ki1phkgmw22v1) `motir-ai`      | floor 1 → **2**, but only after 3221/3222/3223 have merged and deployed; 20/25 retained as a CAP, documented as not the signal; peak concurrent jobs recorded as **1** |
+
+**None of them re-decides a number.** A number that looks wrong at execution time
+is a re-plan of this card, not a judgement call there.
+
+### Sources — additions
+
+| Claim                                               | Source                                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| The proxy never creates or destroys machines        | <https://fly.io/docs/launch/autostop-autostart/>                                                     |
+| Machine states, and that `stop` is compute-free     | <https://fly.io/docs/machines/machine-states/> · <https://fly.io/docs/about/pricing/>                |
+| No spend cap, no billing alert                      | Fly cost-management docs, quoted in `ci-runner-fleet.md` §9 (re-read on `origin/main`, 2026-08-20)   |
+| Machine states, VM sizes, event histories           | `GET https://api.machines.dev/v1/apps/<app>/machines`, 2026-08-20                                    |
+| Resident memory per service                         | `fly ssh console -a <app> --machine <id>` → `/proc/*/status` `VmRSS`, 2026-08-20                     |
+| One machine runs one job at a time                  | `motir-ai` `src/jobs/worker.ts` (`ticking` guard) and `src/jobs/planJobRepository.ts`, `origin/main` |
+| motir-core has no server-side poll                  | `grep -rn 'setInterval(' lib app` on `origin/main`, 2026-08-20 — five hits, all `'use client'`       |
+| `REDIS_CONN_STRING` unset on the gateway            | `fly secrets list -a motir-gateway`, 2026-08-20                                                      |
+| Neon's five-minute floor is not lowerable on Launch | Neon API probe, 2026-08-13, recorded on MOTIR-2780                                                   |
