@@ -26,6 +26,9 @@ const {
   fetchReview,
   approve,
   decline,
+  resumeAnchored,
+  submitAnchored,
+  resubmitAnchored,
   submitAsk,
   rerunAsk,
   settleAsk,
@@ -38,6 +41,9 @@ const {
   fetchReview: vi.fn(),
   approve: vi.fn(),
   decline: vi.fn(),
+  resumeAnchored: vi.fn(),
+  submitAnchored: vi.fn(),
+  resubmitAnchored: vi.fn(),
   submitAsk: vi.fn(),
   rerunAsk: vi.fn(),
   settleAsk: vi.fn(),
@@ -48,11 +54,12 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   openPlanChangeSession: open,
   appendPlanChangeTurn: append,
   submitPlanChange: submit,
-  // The anchored half (MOTIR-910) is unused by these project-thread edge cases,
-  // but the module mock must still carry every export the hook imports.
-  resumeContextualSession: vi.fn(),
-  submitContextualPlan: vi.fn(),
-  resubmitContextualPlan: vi.fn(),
+  // The anchored half (MOTIR-910) is exercised by exactly one case here — the
+  // retry that falls back to the ENTRANCE's anchor — and otherwise just has to
+  // exist, because the module mock must carry every export the hook imports.
+  resumeContextualSession: resumeAnchored,
+  submitContextualPlan: submitAnchored,
+  resubmitContextualPlan: resubmitAnchored,
   submitAskTurn: submitAsk,
   rerunAskTurn: rerunAsk,
   settleAskJob: settleAsk,
@@ -191,6 +198,19 @@ beforeEach(() => {
   // ── the ASK door (MOTIR-1343) — the project thread's only entrance. The
   // default settle REDIRECTS, so these suites keep exercising the same
   // plan-change tail they were written against.
+  resumeAnchored.mockResolvedValue({ session: null, planId: null });
+  submitAnchored.mockResolvedValue({
+    jobId: 'job-anchored-0',
+    planId: 'plan-anchored-0',
+    sessionId: 's1',
+    session: session(['Split this story.']),
+  });
+  resubmitAnchored.mockResolvedValue({
+    jobId: 'job-anchored-1',
+    planId: 'plan-anchored-1',
+    sessionId: 's1',
+    session: session(['Split this story.']),
+  });
   submitAsk.mockImplementation(async (body: string) => ({
     jobId: 'ask-1',
     turnId: 't0',
@@ -765,5 +785,242 @@ describe('narrateFrame — the frames the augment job really emits', () => {
   it('narrates both validation frames as validating', () => {
     expect(narrateFrame('validated', {})).toEqual({ kind: 'validating' });
     expect(narrateFrame('validation_skipped', {})).toEqual({ kind: 'validating' });
+  });
+});
+
+// ── The arms MOTIR-1343 added weight to (MOTIR-1822) ─────────────────────────
+//
+// None of these are new behaviour. They are paths the file always had, which the
+// ask door made MATTER: it roughly doubled the hook's branch count, so the same
+// handful of unexercised arms went from rounding error to a broken coverage
+// floor. Each one below is a real thing the hook does and nothing asserted.
+
+describe('usePlanChangeConversation — the quiet arms', () => {
+  it('ignores a job frame it has no narration for', async () => {
+    // `narrateFrame` returns null for anything outside the known set, and the
+    // run must leave `progress` alone rather than clearing the line mid-flight.
+    stream.mockImplementationOnce(
+      async (
+        _jobId: string,
+        _signal: AbortSignal,
+        _onError: (code: string | null) => void,
+        _onDone: () => void,
+        onFrame?: (event: string, data: unknown) => void,
+      ) => {
+        onFrame?.('some_future_frame', { x: 1 });
+      },
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('DISCARD with nothing to decline still clears the thread’s decision state', async () => {
+    // The defensive read again: a stubbed or older response carried no `planId`,
+    // so there is no plan to decline — the gate must record the decision without
+    // POSTing to `undefined`.
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.discard();
+    });
+
+    expect(decline).not.toHaveBeenCalled();
+    expect(result.current.state.decided).toBe('declined');
+  });
+
+  it('an ANCHORED retry before any run falls back to the entrance’s anchor', async () => {
+    // `lastAnchorRef` is empty until a run lands, so a retry pressed first has to
+    // reach for the anchor the workspace was opened at — otherwise it would
+    // silently re-aim an item thread at the project.
+    const hook = renderHook(() => usePlanChangeConversation({ anchorId: 'wi_123' }));
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    await act(async () => {
+      await hook.result.current.retry();
+    });
+
+    expect(resubmitAnchored).toHaveBeenCalledWith('wi_123', [], expect.anything());
+  });
+
+  it('a plan-run stream failure while a proposal is pending returns to REVIEW', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    expect(result.current.state.phase).toBe('review');
+
+    // The SECOND run fails at the plan-edit stream — the leg the redirect hands
+    // off to — and the proposal already on the canvas has to survive it.
+    stream.mockImplementationOnce(
+      async (_jobId: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('FAILED');
+      },
+    );
+    await act(async () => {
+      await result.current.send('and drop the other one');
+    });
+
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(result.current.state.errorCode).toBe('FAILED');
+  });
+
+  it('an out-of-credits refusal mid-plan-run is GATED, and keeps the proposal', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    stream.mockImplementationOnce(
+      async (_jobId: string, _signal: AbortSignal, onError: (code: string | null) => void) => {
+        onError('MOTIR_AI_OUT_OF_CREDITS');
+      },
+    );
+    await act(async () => {
+      await result.current.send('and drop the other one');
+    });
+
+    expect(result.current.state.outOfCredits).toBe(true);
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.review).toEqual(REVIEW);
+  });
+
+  it('drops a DISCARD that lands after unmount', async () => {
+    const pending = deferred<never>();
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+
+    decline.mockReturnValueOnce(pending.promise as never);
+    let discarding!: Promise<void>;
+    await act(async () => {
+      discarding = hook.result.current.discard();
+    });
+    hook.unmount();
+
+    await act(async () => {
+      (pending.resolve as unknown as (v: unknown) => void)({});
+      await discarding;
+    });
+
+    expect(hook.result.current.state.decided).toBeNull();
+  });
+
+  it('drops a discard FAILURE that lands after unmount', async () => {
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+
+    let reject!: (e: unknown) => void;
+    decline.mockReturnValueOnce(
+      new Promise((_r, rj) => {
+        reject = rj;
+      }) as never,
+    );
+    let discarding!: Promise<void>;
+    await act(async () => {
+      discarding = hook.result.current.discard();
+    });
+    hook.unmount();
+
+    await act(async () => {
+      reject(new Error('nope'));
+      await discarding;
+    });
+
+    // Nothing was written — not even the error the surface would have shown.
+    expect(hook.result.current.state.errorCode).toBeNull();
+  });
+
+  it('drops the post-approve review READ that lands after unmount', async () => {
+    // The approve itself already succeeded; what is dropped is the overlay
+    // refresh that follows it, which has nowhere to land.
+    const pending = deferred<unknown>();
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+
+    fetchReview.mockReturnValueOnce(pending.promise as never);
+    let approving!: Promise<void>;
+    await act(async () => {
+      approving = hook.result.current.approve();
+    });
+    hook.unmount();
+
+    await act(async () => {
+      pending.resolve(REVIEW);
+      await approving;
+    });
+
+    expect(hook.result.current.state.decided).toBeNull();
+  });
+
+  it('an ANCHORED submit that fails is recoverable in place', async () => {
+    // `run`'s own catch — the plan-change path's, which the project thread no
+    // longer reaches now that it goes through the ask door. The anchored
+    // entrance still does, so this is where that arm lives.
+    submitAnchored.mockRejectedValue(new PlanEditsClientError(500, null));
+    const hook = renderHook(() => usePlanChangeConversation({ anchorId: 'wi_123' }));
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    await act(async () => {
+      await hook.result.current.send('Split this story.');
+    });
+
+    expect(hook.result.current.state.errorCode).toBe('FAILED');
+    expect(hook.result.current.state.phase).toBe('idle');
+  });
+
+  it('an ANCHORED submit refused for credits is GATED, not an error', async () => {
+    submitAnchored.mockRejectedValue(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
+    const hook = renderHook(() => usePlanChangeConversation({ anchorId: 'wi_123' }));
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    await act(async () => {
+      await hook.result.current.send('Split this story.');
+    });
+
+    expect(hook.result.current.state.outOfCredits).toBe(true);
+    expect(hook.result.current.state.errorCode).toBeNull();
+  });
+
+  it('an ANCHORED submit that ABORTS writes nothing at all', async () => {
+    submitAnchored.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const hook = renderHook(() => usePlanChangeConversation({ anchorId: 'wi_123' }));
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    await act(async () => {
+      await hook.result.current.send('Split this story.');
+    });
+
+    expect(hook.result.current.state.errorCode).toBeNull();
+    expect(hook.result.current.state.outOfCredits).toBe(false);
+  });
+
+  it('a new turn after a DECISION clears the decided overlay', async () => {
+    // The overlay describes what was just decided; a new run is the moment it
+    // stops describing anything (MOTIR-3162's rule, from the other side).
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBe('accepted');
+
+    await act(async () => {
+      await result.current.send('now split it');
+    });
+
+    expect(result.current.state.decided).toBeNull();
   });
 });

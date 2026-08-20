@@ -33,8 +33,8 @@ describe('one surface, no mode', () => {
     for (const context of [
       { kind: 'project' },
       { kind: 'roadmap' },
-      { kind: 'generation' },
       { kind: 'work-item', itemKey: 'PAY-7' },
+      { kind: 'convention-refine', repoKey: 'motir-core' },
     ] as const) {
       const hrefs = aiCalloutActions(context).map((a) => a.href);
       expect(hrefs.length).toBeGreaterThan(1);

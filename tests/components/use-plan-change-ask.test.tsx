@@ -427,6 +427,22 @@ describe('asking WHILE a proposal is pending — a question is a lookup, not an 
     expect(hook.result.current.state.phase).toBe('review');
   });
 
+  it('a SETTLE that fails keeps the gate up and reports it', async () => {
+    // The last hop can fail on its own: the job succeeded, the answer exists,
+    // and filing it did not. The proposal already on the canvas is untouched.
+    const hook = await withPendingProposal();
+    settleAsk.mockRejectedValue(new Error('filing failed'));
+
+    await act(async () => {
+      await hook.result.current.send('what does that cover?');
+    });
+
+    expect(hook.result.current.state.phase).toBe('review');
+    expect(hook.result.current.state.review).toEqual(REVIEW);
+    expect(hook.result.current.state.errorCode).toBe('FAILED');
+    expect(hook.result.current.state.outOfCredits).toBe(false);
+  });
+
   it('a refusal at the DOOR keeps it as well', async () => {
     const hook = await withPendingProposal();
     submitAsk.mockRejectedValue(new PlanEditsClientError(500, null));
