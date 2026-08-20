@@ -78,14 +78,24 @@ export default async function PlansPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { project: ctx.project.name })}
-          </p>
-        </div>
-        {!isEmpty && aiConfigured ? <PlanWithAILauncher context={{ kind: 'project' }} /> : null}
+      {/* ONE Plan-with-AI entrance, and it is not this one (MOTIR-3237,
+          `design/ai-planning/design-notes.md` Part VII §5). This header used to
+          render its own `PlanWithAILauncher` about 200px below the identical one
+          `TopNav` puts on every authed screen — a per-surface door MOTIR-1300
+          already ruled against, and which the launcher's own header comment says
+          it exists to remove. The `flex-wrap justify-between` layout went with
+          it: it existed only to position that pill, so the heading block IS the
+          header now, exactly as `/roadmap`'s is.
+
+          The EMPTY STATE's CTA below STAYS. It is a first-run call to action,
+          not a repeat of the top bar, and `/roadmap`'s empty state carries the
+          same one — removing it would leave this surface with a dead-end empty
+          state while its sibling kept a live one. */}
+      <header className="flex min-w-0 flex-col gap-1">
+        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+        <p className="text-sm text-(--el-text-muted)">
+          {t('subtitle', { project: ctx.project.name })}
+        </p>
       </header>
 
       {isEmpty ? (
