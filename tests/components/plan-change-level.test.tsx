@@ -253,3 +253,93 @@ describe('decoratePlanChangeLevel — the decided outcome', () => {
     expect(screen.getByTestId('plan-change-outcome').textContent).toBe('accepted');
   });
 });
+
+// ── A MATERIALIZED add lands ON its card (bug MOTIR-3206) ───────────────────
+//
+// MOTIR-3162 made the overlay outlive the decision, and this module kept keying
+// every `add` as a synthetic `proposed:` node — an id that can never match a
+// work item. So the level read returned the newly created card AND the overlay
+// appended a keyless copy of it: every accepted card drawn twice, which is the
+// duplicate `design/ai-planning/design-notes.md` Part VI §3 rules out in the
+// same sentence that gives an accepted add its real key.
+describe('decoratePlanChangeLevel — a DECIDED add', () => {
+  // The level AFTER the approve: `materialize` created the card, so the
+  // per-level read now returns it beside the ones that were already there.
+  const LEVEL_AFTER: RoadmapLevelData = {
+    ...LEVEL,
+    items: [
+      ...LEVEL.items,
+      {
+        id: 'wi-90',
+        parentId: null,
+        identifier: 'PAY-90',
+        title: 'Recurring invoices',
+        kind: 'story',
+        status: 'todo',
+        hasChildren: false,
+      },
+    ],
+  };
+
+  /** The re-read review: `getPlanReview` keys the materialized add by the work
+   *  item it became and fills in its identifier (MOTIR-3160). */
+  const ACCEPTED: PlanReviewDto = planReview([
+    planReviewItem({
+      planItemId: 'pi_1',
+      nodeId: 'wi-90',
+      identifier: 'PAY-90',
+      kind: 'story',
+      title: 'Recurring invoices',
+      status: 'todo',
+    }),
+  ]);
+
+  it('merges onto the committed node instead of drawing a second copy', () => {
+    const level = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL_AFTER),
+      LEVEL_AFTER,
+      indexPlanReview(ACCEPTED),
+      null,
+      'accepted',
+    );
+
+    // FOUR nodes, not five: the card is on the canvas exactly once.
+    expect(level.nodes).toHaveLength(4);
+    expect(level.nodes.filter((n) => n.id.startsWith('proposed:'))).toHaveLength(0);
+    expect(level.nodes.filter((n) => n.searchText.includes('Recurring invoices'))).toHaveLength(1);
+  });
+
+  it('wears the add frame and the accepted word, over the REAL card', () => {
+    const level = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL_AFTER),
+      LEVEL_AFTER,
+      indexPlanReview(ACCEPTED),
+      null,
+      'accepted',
+    );
+    const merged = level.nodes.find((n) => n.id === 'wi-90')!;
+    // It keeps the committed node's own affordances — it IS a work item now.
+    expect(merged.viewable).toBe(true);
+
+    renderWithIntl(<>{merged.content}</>);
+    expect(screen.getByTestId('plan-change-diff-node').getAttribute('data-diff-state')).toBe('add');
+    expect(screen.getByTestId('plan-change-outcome').textContent).toBe('accepted');
+    // The real key is what Part VI §3 calls the strongest accepted signal, and
+    // it is on screen because the node underneath is the shipped work-item one.
+    expect(screen.getByText('PAY-90')).toBeTruthy();
+  });
+
+  it('leaves a DECLINED add as a ghost — it never became anything', () => {
+    // A decline materializes nothing, so the review keeps a null identifier and
+    // the add must stay a synthetic node: inventing a key for it would assert a
+    // work item that does not exist (Part VI §3).
+    const level = decoratePlanChangeLevel(
+      buildWorkItemLevel(LEVEL),
+      LEVEL,
+      indexPlanReview(REVIEW),
+      null,
+      'declined',
+    );
+    expect(level.nodes.filter((n) => n.id.startsWith('proposed:'))).toHaveLength(1);
+  });
+});

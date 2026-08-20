@@ -199,8 +199,15 @@ export function PlanChangeRail({
         ))}
 
         {/* The proposal, said in words — the rail mirrors the canvas bar's counts
-            so the numbers are readable without hunting the board. */}
-        {state.review && !index.isEmpty ? (
+            so the numbers are readable without hunting the board.
+            ⚠️ PENDING ONLY, and `!state.decided` is what says so (MOTIR-3206) —
+            the SAME predicate `PlanningWorkspaceHost` gives the canvas bar it
+            mirrors, so the two gates cannot disagree about whether one is owed.
+            Before MOTIR-3162 a null `review` carried that meaning; once the
+            review survived its decision, this block kept a LIVE Approve /
+            Discard pair (and "nothing is saved yet") on a plan that was already
+            approved or declined. */}
+        {state.review && !state.decided && !index.isEmpty ? (
           <>
             <Bubble role="assistant">
               {tc('summary', {
@@ -238,8 +245,17 @@ export function PlanChangeRail({
         ) : null}
 
         {/* After an approve the thread CONTINUES — a plan change is rarely one
-            change (design panel 6, "after approve"). */}
-        {state.approved && !state.review ? (
+            change (design panel 6, "after approve").
+            ⚠️ KEYED ON THE DECISION, not on the ABSENCE of a review (MOTIR-3206).
+            This read `state.approved && !state.review`, which was the same fact
+            while approve NULLED the review; MOTIR-3162 made the review survive
+            its decision, so the second conjunct became permanently false and
+            this line stopped rendering at all — the user approved and the rail
+            said nothing about what landed. `decided` is what the surviving
+            review no longer says, and it is also what a NEW run resets
+            (`usePlanChangeConversation`'s start reducer clears `decided`, not
+            `approved`), so this still clears when the next proposal opens. */}
+        {state.decided === 'accepted' && state.approved ? (
           <Bubble role="assistant">
             {tc('approved', {
               created: state.approved.created.length,
