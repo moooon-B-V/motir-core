@@ -3,8 +3,8 @@ import path from 'node:path';
 import ts from 'typescript';
 import { policyGatedModels } from './singletonReadScan';
 
-// The SYSTEM-CONTEXT scanner (MOTIR-2880) — the FOURTH axis, and the first one
-// that is not about plumbing at all.
+// The CONTEXT-ARM scanner — the FOURTH axis, and the first one that is not about
+// plumbing at all.
 //
 // ── The three axes that came before, and the question none of them asks ─────
 // `singletonReadScan` asks whether a read CAN be bound (does it take a `tx`?).
@@ -13,25 +13,41 @@ import { policyGatedModels } from './singletonReadScan';
 // binds nothing). All three are answered YES at every site below, and every one
 // of those sites was still dead:
 //
-//     the transaction bound `app.system_admin` — but does any POLICY read it?
+//     the transaction bound a GUC — but does any POLICY on the tables the
+//     statements TOUCH actually read it?
 //
-// `withSystemContext` binds ONE GUC, and that GUC is read by a policy ARM added
-// PER TABLE for the jobs runtime and operator tooling. Measured on the migrated
-// schema at the commit this landed: of the 69 tables with RLS enabled, 26 carry
-// such an arm on a permissive SELECT/ALL policy and 43 do not — `work_item`,
-// `workspace_membership`, `project_repository`, `sprint`, `comment` among them.
-// A read of an unarmed table inside a system context returns ZERO ROWS AND
-// RAISES NOTHING.
+// ── ⚠️ THE GUC IS A PARAMETER NOW (MOTIR-2959), and that is the whole point ──
+// MOTIR-2880 built this instrument for ONE context: `withSystemContext`, binding
+// `app.system_admin`. The QUESTION it asks was never specific to that GUC, and
+// the same class has now been found three times over three different bindings —
+// `public_request_vote` with no workspace-member arm (MOTIR-2864),
+// `github_identity` visible only to its owner (MOTIR-2910), and `attachment` ⨝
+// `workspace` with no org arm, which silently stopped the free-tier storage cap
+// from ever firing (MOTIR-2956). Each was found by a test going red rather than
+// by anyone reading a policy, and MOTIR-2956 swept its helper family BY HAND:
+// twelve call sites, one broken, eleven written down in
+// `docs/rls-runtime-role-inventory.md`. A hand sweep is a SNAPSHOT — the
+// thirteenth call site, or a JOIN added to an existing repository method,
+// restores the class in silence.
+//
+// So a {@link ContextDescriptor} says which helper opens the context and which
+// GUC(s) it binds, and everything below is an instance of it. {@link
+// SYSTEM_CONTEXT} reproduces MOTIR-2880's verdicts unchanged; {@link
+// ORG_SERVICE_CONTEXT} is the second, and adding a third is a literal, not a
+// rewrite.
 //
 // ── Why the arm inventory is not enough, and this module resolves JOINS ─────
 // `notes.html` #269: *a read is admitted only if EVERY table it touches is
 // admitted; a policy-arm inventory describes the FROM clause, not the query.*
-// Both of the sites this card could not fix by binding were found through that
+// Both of the sites MOTIR-2880 could not fix by binding were found through that
 // clause and not through the FROM one — `projectRepository#findLivePairs` reads
 // the armed `project` and dies on a `workspace: { is: {} }` relation filter, and
 // `ciContainerPeriodCostRepository#sumForPeriodByMetaSplit` reads the armed
 // `ci_container_period_cost` and dies on `JOIN "organization"`. A scanner that
-// only collected `tx.<model>` accesses would have reported both sites green.
+// only collected `tx.<model>` accesses would have reported both sites green. So
+// would an arm inventory have cleared MOTIR-2956: `attachment` is the FROM
+// clause and `workspace` is the JOIN, and arming only the first would have left
+// the sum at zero — the fix reading as applied while changing nothing.
 //
 // So {@link repositoryQueryModels} resolves, per repository method: the models
 // addressed off the transaction client, PLUS the models reachable through the
@@ -39,17 +55,25 @@ import { policyGatedModels } from './singletonReadScan';
 // PLUS the tables named in the FROM / JOIN clauses of its raw SQL.
 //
 // ── The BINDING has a position, exactly as in bareTransactionScan ──────────
-// The fix for most of this class is not a policy — it is `bindWorkspaceContext`
-// / `bindOrganizationContext` called the moment the tenant becomes known, which
-// is additive (the system flag stays set for the connection-tier reads in the
-// same transaction). That makes the verdict positional in the same way a bare
-// transaction's is: a statement BEFORE the bind is still system-only, and one
-// after it is tenant-bound. A whole-site boolean would report
-// `changeRequestStatusSync` bound and put its blind work-item resolve straight
-// back under, because that resolve runs in the same block as the bind.
+// The fix for most of the SYSTEM class is not a policy — it is
+// `bindWorkspaceContext` / `bindOrganizationContext` called the moment the tenant
+// becomes known, which is additive (the system flag stays set for the
+// connection-tier reads in the same transaction). That makes the verdict
+// positional in the same way a bare transaction's is: a statement BEFORE the
+// bind is still system-only, and one after it is tenant-bound. A whole-site
+// boolean would report `changeRequestStatusSync` bound and put its blind
+// work-item resolve straight back under, because that resolve runs in the same
+// block as the bind.
+//
+// Generalised, that is a WINDOW: the span of a body over which the descriptor's
+// GUC is the binding in force. A `wrapper` entry opens the window at the
+// callback body and closes it at the first NARROWING bind; a `bind` entry — a
+// helper that binds on an ALREADY-OPEN transaction, which is what
+// `bindOrganizationContext` is — opens it at the call and runs to the end of the
+// enclosing function. Only statements inside the window are adjudicated.
 //
 // ── What it deliberately does NOT decide ───────────────────────────────────
-// Whether a system-only read of an UNARMED table is a bug. It usually is, but
+// Whether a context-only read of an UNARMED table is a bug. It usually is, but
 // three legitimate shapes exist and cannot be told apart from the syntax: a
 // table that is in `policyGatedModels`'s deliberate OVER-approximation and
 // carries no policy at all; raw SQL whose target the parser cannot name; and a
@@ -57,26 +81,24 @@ import { policyGatedModels } from './singletonReadScan';
 // armed. So the scanner enumerates and the guard test carries the verdicts —
 // one entry per site, with the reason in the value, the division of labour
 // MOTIR-2784 established.
+//
+// ── ⚠️ AND ONE LIMIT THIS GENERALISATION ADDS, STATED RATHER THAN INHERITED ──
+// `notes.html` #268 / #273: an instrument that does not say what it cannot see
+// hands its blind spot to every partition cut from its output. A `bind` entry's
+// window sits INSIDE some enclosing context — `bindOrganizationContext` is
+// called from within a `withWorkspaceContext` transaction — whose own GUC is
+// still bound. This scan does not model the enclosing context, so it reports a
+// statement whose table is admitted by the ENCLOSING binding as reaching the
+// descriptor's GUC unarmed. That over-reports, which is the safe direction and
+// is what the guards' verdict tables are for; it never under-reports. Modelling
+// the enclosing context would mean resolving which wrapper each call site sits
+// in, across files — a real feature, and deliberately not this one.
 
-// ⚠️ `tests` JOINED THE ROOTS IN MOTIR-2887, and the reason is that the class this
-// module finds has a TEST-SIDE twin that is strictly worse. A `withSystemContext`
-// block in `lib/` that reads an unarmed table makes the PRODUCT visibly wrong; the
-// same block in a FIXTURE makes the TEST quietly wrong IN THE DIRECTION OF
-// PASSING — `dropStatusCategory` in `githubWebhookCustomWorkflow.test.ts` deleted
-// nothing, so the test measured the DEFAULT workflow while claiming to measure a
-// custom one. MOTIR-2880 scoped the scan to `lib/` + `app/` to stay off the test
-// tree while MOTIR-2881 / MOTIR-2882 were rewriting it; both have merged, and that
-// reason has expired.
+/** Which root directories a scan walks. `tests` joined in MOTIR-2887. */
 const SCAN_ROOTS = ['lib', 'app', 'tests'] as const;
 const REPO_DIR = 'lib/repositories';
 const SCHEMA = 'prisma/schema.prisma';
-const HELPER = 'withSystemContext';
 
-/** The helpers that bind a TENANT GUC on an already-open transaction. */
-const BIND_CALLS = new Set(['bindWorkspaceContext', 'bindOrganizationContext']);
-
-/** The GUCs that narrow a system transaction to one tenant. `app.system_admin`
- *  is deliberately NOT one of them — it is what the site already has. */
 /**
  * How deep the helper walk follows a `tx`. THREE, because the shallowest real
  * miss this scanner has been shown is at two (`sweepRepo` -> `applyOne` ->
@@ -86,17 +108,218 @@ const BIND_CALLS = new Set(['bindWorkspaceContext', 'bindOrganizationContext']);
  */
 const MAX_HELPER_HOPS = 3;
 
-const TENANT_GUCS = ['app.workspace_id', 'app.organization_id', 'app.user_id'] as const;
+/**
+ * How a context is ENTERED, which decides where its window starts.
+ *
+ * - `wrapper` — `withSystemContext(cb)` / `withOrgServiceWriteContext(id, cb)`.
+ *   The transaction is opened by the helper and handed to a callback, so the
+ *   window is that callback's body. The callback is found as the first
+ *   function-valued argument, which is why the two shapes need no per-helper
+ *   argument index.
+ * - `bind` — `bindOrganizationContext(tx, id)`. The transaction is ALREADY open
+ *   and the GUC is bound partway through it, so the window starts AT the call
+ *   and runs to the end of the enclosing function. A statement above the call is
+ *   not under this binding and is not this descriptor's business.
+ */
+export type ContextEntry =
+  | { readonly kind: 'wrapper'; readonly name: string }
+  | { readonly kind: 'bind'; readonly name: string };
 
-export type SystemContextVerdict =
-  /** At least one gated statement runs before any tenant binding. */
-  | 'system-only'
-  /** Every gated statement sits after a tenant binding. */
-  | 'binds-tenant'
+export interface ContextDescriptor {
+  /** Stable id — part of the scan cache key and of every report line. */
+  readonly id: string;
+  /** Human label for a guard's failure message. */
+  readonly label: string;
+  /**
+   * The GUC(s) this context binds. A statement inside the window is admitted
+   * only where a policy on every table it touches READS one of these.
+   */
+  readonly gucs: readonly string[];
+  /** The calls that open the context. */
+  readonly entries: readonly ContextEntry[];
+  /**
+   * Helper calls that NARROW the context — they bind something more specific, so
+   * every statement after one is no longer this descriptor's concern. Empty for
+   * a descriptor with nothing narrower to fall back to, which makes the whole
+   * body the window.
+   */
+  readonly narrowingBinds: readonly string[];
+  /** The GUCs those binds set, matched in raw `set_config` SQL. */
+  readonly narrowingGucs: readonly string[];
+  /**
+   * Repo-relative files to skip: the helper's own definition binds the GUC it is
+   * named for, so scanning it reports the file that DEFINES the context.
+   */
+  readonly skipFiles: readonly string[];
+}
+
+/**
+ * `withSystemContext` — MOTIR-2880's descriptor, unchanged in substance.
+ *
+ * `app.system_admin` is read by a policy ARM added PER TABLE for the jobs runtime
+ * and operator tooling; a read of an unarmed table inside a system context
+ * returns ZERO ROWS AND RAISES NOTHING. The tenant binds NARROW it: they are
+ * additive, so a statement after one is scoped to a tenant and adjudicated by
+ * that tenant's arm rather than by the system flag.
+ */
+export const SYSTEM_CONTEXT: ContextDescriptor = {
+  id: 'system',
+  label: 'withSystemContext',
+  gucs: ['app.system_admin'],
+  entries: [{ kind: 'wrapper', name: 'withSystemContext' }],
+  narrowingBinds: ['bindWorkspaceContext', 'bindOrganizationContext'],
+  narrowingGucs: ['app.workspace_id', 'app.organization_id', 'app.user_id'],
+  skipFiles: [path.join('lib', 'workspaces', 'context.ts')],
+};
+
+/**
+ * The ORG-SERVICE context (MOTIR-2959) — the second instance, and the one whose
+ * absence let MOTIR-2956 ship.
+ *
+ * Two entries, because the family has two shapes and only one of them is a
+ * wrapper (`lib/organizations/context.ts`):
+ *
+ * - `withOrgServiceWriteContext(orgId, cb)` opens a transaction binding ONLY
+ *   `app.organization_id` — the userless service-to-service path.
+ * - `bindOrganizationContext(tx, orgId)` binds the same GUC on a transaction
+ *   that is already open, because the org id is not known until partway through.
+ *
+ * `withOrgContext` is deliberately NOT here: it binds `app.user_id` as well, and
+ * the org arms this descriptor is about are guarded on that setting being EMPTY
+ * (`coalesce(current_setting('app.user_id'), '') = ''`), so its readers are
+ * admitted through the member-scoped policies instead. That is the boundary
+ * MOTIR-2956 drew and its reasoning is in
+ * `docs/rls-runtime-role-inventory.md` § *A BOUND read is only bound if the
+ * policy has THAT arm*.
+ *
+ * NOTHING NARROWS IT. There is no binding a caller can add that makes an
+ * org-unarmed table readable under this context, so the window is the whole
+ * body and every gated statement in it is adjudicated.
+ */
+export const ORG_SERVICE_CONTEXT: ContextDescriptor = {
+  id: 'org-service',
+  label: 'withOrgServiceWriteContext / bindOrganizationContext',
+  gucs: ['app.organization_id'],
+  entries: [
+    { kind: 'wrapper', name: 'withOrgServiceWriteContext' },
+    { kind: 'bind', name: 'bindOrganizationContext' },
+  ],
+  narrowingBinds: [],
+  narrowingGucs: [],
+  skipFiles: [path.join('lib', 'organizations', 'context.ts')],
+};
+
+/**
+ * The helper families this scanner can see but that no guard ADJUDICATES per
+ * site — declared here rather than described in prose, so the enumeration is
+ * code a reader can run (`other-context-arm-guard.test.ts` does).
+ *
+ * ⚠️ MOTIR-2959's step 4 asked for these to sit behind a CEILING *if their
+ * verdict count is large*. Measured on `origin/main` @ `7de5856f` — and the
+ * measurement is the point, because the alternative was to assume:
+ *
+ * | descriptor          | sites | `context-only` | UNARMED (site, table) pairs |
+ * | ------------------- | ----: | -------------: | --------------------------: |
+ * | `SYSTEM_CONTEXT`    |   166 |             27 |                           0 |
+ * | `ORG_SERVICE_CONTEXT` |  31 |             30 |                           0 |
+ * | `WORKSPACE_CONTEXT` + `WORKSPACE_USER_CONTEXT` | 1277 | 1201 |         0 |
+ * | `ORG_USER_CONTEXT`  |    19 |             15 |                           0 |
+ * | `USER_CONTEXT`      |    39 |             27 |                           1 |
+ *
+ * A count of ONE is not a population to bound; it is a verdict to write down,
+ * and `other-context-arm-guard.test.ts` writes it. The `notes.html` #317 shape
+ * is exactly this — a COUNT and a COMPOSITION are two measurements, and the
+ * card's "if large" was the second one, unmeasured.
+ */
+
+/**
+ * `withWorkspaceServiceContext(id, cb)` and `bindWorkspaceContext(tx, id)` — the
+ * workspace-tier analogues of the org pair, binding `app.workspace_id` and no
+ * acting user.
+ */
+export const WORKSPACE_CONTEXT: ContextDescriptor = {
+  id: 'workspace-service',
+  label: 'withWorkspaceServiceContext / bindWorkspaceContext',
+  gucs: ['app.workspace_id'],
+  entries: [
+    { kind: 'wrapper', name: 'withWorkspaceServiceContext' },
+    { kind: 'bind', name: 'bindWorkspaceContext' },
+  ],
+  narrowingBinds: [],
+  narrowingGucs: [],
+  skipFiles: [path.join('lib', 'workspaces', 'context.ts')],
+};
+
+/**
+ * `withWorkspaceContext({ userId, workspaceId, projectId }, cb)` — the ordinary
+ * request-path context. It binds an acting USER as well, so a table admitted by
+ * a `app.user_id` arm alone is admitted here; both GUCs are declared, which is
+ * why this is a separate descriptor from {@link WORKSPACE_CONTEXT} rather than a
+ * third entry on it. (`app.project_id` is read only by a RESTRICTIVE narrowing
+ * policy, which can never ADMIT a row, so it is not an arm and is not listed.)
+ */
+export const WORKSPACE_USER_CONTEXT: ContextDescriptor = {
+  id: 'workspace-user',
+  label: 'withWorkspaceContext',
+  gucs: ['app.workspace_id', 'app.user_id'],
+  entries: [{ kind: 'wrapper', name: 'withWorkspaceContext' }],
+  narrowingBinds: [],
+  narrowingGucs: [],
+  skipFiles: [path.join('lib', 'workspaces', 'context.ts')],
+};
+
+/**
+ * `withOrgContext({ userId, organizationId }, cb)` — the THIRD org family, and
+ * the one MOTIR-2956 deliberately left out of its sweep. It binds the acting
+ * user too, which is exactly why the org arms that card added do NOT fire for it
+ * (they are guarded on `app.user_id` being empty); its reads are admitted
+ * member-scoped instead, so both GUCs are declared.
+ */
+export const ORG_USER_CONTEXT: ContextDescriptor = {
+  id: 'org-user',
+  label: 'withOrgContext',
+  gucs: ['app.organization_id', 'app.user_id'],
+  entries: [{ kind: 'wrapper', name: 'withOrgContext' }],
+  narrowingBinds: [],
+  narrowingGucs: [],
+  skipFiles: [path.join('lib', 'organizations', 'context.ts')],
+};
+
+/** `withUserContext(userId, cb)` — binds the acting user and nothing else. */
+export const USER_CONTEXT: ContextDescriptor = {
+  id: 'user',
+  label: 'withUserContext',
+  gucs: ['app.user_id'],
+  entries: [{ kind: 'wrapper', name: 'withUserContext' }],
+  narrowingBinds: [],
+  narrowingGucs: [],
+  skipFiles: [path.join('lib', 'workspaces', 'context.ts')],
+};
+
+/** The families enumerated but not adjudicated per site — see the note below. */
+export const OTHER_CONTEXTS: readonly ContextDescriptor[] = [
+  WORKSPACE_CONTEXT,
+  WORKSPACE_USER_CONTEXT,
+  ORG_USER_CONTEXT,
+  USER_CONTEXT,
+];
+
+export type ContextVerdict =
+  /** At least one gated statement runs inside the window. */
+  | 'context-only'
+  /**
+   * Gated statements exist, but every one sits OUTSIDE the window — narrowed by
+   * a later binding (a `wrapper` entry whose block goes on to bind a tenant), or
+   * issued BEFORE this binding took effect (a `bind` entry, whose window opens
+   * at the call). Either way this descriptor's GUC is not what admits them.
+   */
+  | 'narrowed'
   /** The block reaches no policy-gated statement at all. */
   | 'no-gated-statement';
 
-export interface SystemContextSite {
+export interface ContextSite {
+  /** The descriptor this site was found for — `ContextDescriptor.id`. */
+  context: string;
   /** repo-relative path, e.g. `lib/services/changeRequestStatusSync.ts` */
   file: string;
   line: number;
@@ -104,15 +327,15 @@ export interface SystemContextSite {
   enclosing: string;
   /** `file#enclosing` — the allowlist key, LINE-INDEPENDENT on purpose */
   key: string;
-  verdict: SystemContextVerdict;
+  verdict: ContextVerdict;
   /**
-   * Prisma models reached BEFORE any tenant binding, sorted. These are the ones
-   * whose TABLE must carry a `system_admin` read arm.
+   * Prisma models reached INSIDE the window, sorted. These are the ones whose
+   * TABLE must carry an arm reading one of the descriptor's GUCs.
    */
-  systemOnlyModels: string[];
-  /** Every gated model the block reaches, bound or not. */
+  contextOnlyModels: string[];
+  /** Every gated model the block reaches, in the window or not. */
   models: string[];
-  /** True when a statement before the binding is raw SQL the parser cannot name. */
+  /** True when a statement inside the window is raw SQL the parser cannot name. */
   raw: boolean;
   /** How each model was reached — `repo.method`, `helper:name`, `tx.model`. */
   via: string[];
@@ -127,8 +350,8 @@ export interface SystemContextSite {
    * PARAMETER, supplied by whichever provider is driving the delivery — and the
    * walk resolves callees by NAME through `reachableHelpers`, which knows local
    * declarations and imports and cannot know a parameter's runtime value. So the
-   * call was dropped, and the site was classified `binds-tenant` off the
-   * statements the walk COULD see (all of which do sit after the bind) while
+   * call was dropped, and the site was classified `narrowed` off the statements
+   * the walk COULD see (all of which do sit after the bind) while
    * `resolveGithubChangeRequestContext` — which runs BEFORE it and read
    * `workspace_membership` unbound — was invisible.
    *
@@ -227,7 +450,8 @@ const repoCache = new Map<string, Map<string, { models: string[]; raw: boolean }
  * "what is the FROM clause". This one also walks the argument object literal for
  * relation keys and the raw SQL for FROM / JOIN targets, which answers "what is
  * the QUERY" — the distinction `notes.html` #269 exists to make, and the one
- * that found both of this card's un-bindable sites.
+ * that found MOTIR-2880's two un-bindable sites and MOTIR-2956's `workspace`
+ * join.
  */
 export function repositoryQueryModels(
   root = process.cwd(),
@@ -356,8 +580,9 @@ function queryModels(
 
 // ─── the scan ──────────────────────────────────────────────────────────────
 
-/** Does this subtree bind a TENANT GUC — a helper call, or real `set_config` SQL? */
-function bindsTenantInline(node: ts.Node): boolean {
+/** Does this subtree bind a NARROWING GUC — a helper call, or real `set_config` SQL? */
+function bindsNarrowingInline(node: ts.Node, gucs: readonly string[]): boolean {
+  if (gucs.length === 0) return false;
   let found = false;
   const visit = (n: ts.Node): void => {
     if (found) return;
@@ -371,7 +596,7 @@ function bindsTenantInline(node: ts.Node): boolean {
       ts.isTemplateMiddle(n) ||
       ts.isTemplateTail(n)
     ) {
-      if (TENANT_GUCS.some((g) => n.text.includes(`set_config('${g}'`))) found = true;
+      if (gucs.some((g) => n.text.includes(`set_config('${g}'`))) found = true;
     }
     if (!found) ts.forEachChild(n, visit);
   };
@@ -383,7 +608,7 @@ function bindsTenantInline(node: ts.Node): boolean {
  * The functions a file can reach by NAME with a `tx` — its own module-local ones,
  * PLUS the exported functions it imports from another `lib/` module.
  *
- * ⚠️ THE IMPORTED HALF IS NOT OPTIONAL, and leaving it out cost this card a real
+ * ⚠️ THE IMPORTED HALF IS NOT OPTIONAL, and leaving it out cost MOTIR-2880 a real
  * miss. `historicalPullRequestBackfillService#sweepRepo` calls
  * `resolveChangeRequestWorkItem(repo.workspaceId, cr, tx)` — imported from
  * `changeRequestStatusSync` — which reads `work_item` and `project`, neither
@@ -490,8 +715,25 @@ function localHelpers(sf: ts.SourceFile): HelperMap {
   return out;
 }
 
-/** The nearest named function/method enclosing a node, for the site key. */
+/**
+ * The nearest named function/method enclosing a node, for the site key.
+ *
+ * ⚠️ A CALLBACK NAME IS THE FALLBACK, NOT THE FIRST ANSWER (MOTIR-2959). The
+ * callback branch below was added for `tests/`, where the commonest enclosing
+ * scope is an anonymous arrow handed to `it(…)` and there is no named function
+ * anywhere above it. Returning it EAGERLY was harmless while every site was a
+ * `withSystemContext` call — those sit directly in a named method — and stops
+ * being harmless with a `bind` entry, which sits INSIDE the wrapper's callback:
+ * three separate binds in `withWorkspaceContext` blocks of one file all key as
+ * `<file>#withWorkspaceContext` and collapse onto each other, so a verdict table
+ * cannot address them apart. So the walk now COMPLETES and prefers a named
+ * function or method, falling back to the outermost callback name it saw.
+ * Verified to leave all 166 `SYSTEM_CONTEXT` sites and all 14 fixture sites
+ * byte-identical — in `tests/` the `it(…)` arrow genuinely has no named ancestor,
+ * which is why the fallback still fires exactly where it was built to.
+ */
 function enclosingName(node: ts.Node): string {
+  let callback: string | undefined;
   for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
     if (
       (ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n)) &&
@@ -515,6 +757,10 @@ function enclosingName(node: ts.Node): string {
     // `beforeEach(…)`, which none of them names — every such site would key as
     // `<module>` and collapse onto one another. The test's own TITLE is the
     // line-independent name the sibling guards' keys are built for.
+    //
+    // The OUTERMOST such callback wins, so a nested `it(…)` inside `describe(…)`
+    // still keys on the test rather than on the suite only when no named
+    // function encloses either — see the header note.
     if (
       (ts.isArrowFunction(n) || ts.isFunctionExpression(n)) &&
       n.parent &&
@@ -523,10 +769,31 @@ function enclosingName(node: ts.Node): string {
     ) {
       const fn = n.parent.expression.text;
       const [first] = n.parent.arguments;
-      return first && ts.isStringLiteralLike(first) ? `${fn}:${first.text}` : fn;
+      callback ??= first && ts.isStringLiteralLike(first) ? `${fn}:${first.text}` : fn;
     }
   }
-  return '<module>';
+  return callback ?? '<module>';
+}
+
+/**
+ * The body a `bind` entry's window runs to the end of — the nearest enclosing
+ * function-like body. Falls back to the source file, which keeps a bind at
+ * module scope (a shape no shipped file has, and a parse fixture might) from
+ * being silently dropped.
+ */
+function enclosingBody(node: ts.Node, sf: ts.SourceFile): ts.Node {
+  for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+    if (
+      (ts.isFunctionDeclaration(n) ||
+        ts.isMethodDeclaration(n) ||
+        ts.isArrowFunction(n) ||
+        ts.isFunctionExpression(n)) &&
+      n.body
+    ) {
+      return n.body;
+    }
+  }
+  return sf;
 }
 
 function* walk(dir: string): Generator<string> {
@@ -534,9 +801,9 @@ function* walk(dir: string): Generator<string> {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (entry === 'node_modules' || entry === '.next') continue;
-      // The scanner's OWN negative fixture is a separate root with its own cache
-      // key (see `scanSystemContexts`), so walking it from the repo root would
-      // report its deliberately-broken sites as real findings.
+      // The scanner's OWN negative fixtures are separate roots with their own
+      // cache keys (see `scanContexts`), so walking them from the repo root would
+      // report their deliberately-broken sites as real findings.
       if (entry === '__fixtures__') continue;
       yield* walk(full);
     } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
@@ -546,23 +813,30 @@ function* walk(dir: string): Generator<string> {
 }
 
 /**
- * Memoised per root, for the reason `callSiteScan` documents: the guard calls
- * these exports from several tests, and under `vitest run --coverage` the v8
- * provider instruments the compiler-API walk heavily enough that an unmemoised
- * re-scan blows the repo's 15 s `testTimeout`.
+ * Memoised per (descriptor, root), for the reason `callSiteScan` documents: the
+ * guard calls these exports from several tests, and under `vitest run --coverage`
+ * the v8 provider instruments the compiler-API walk heavily enough that an
+ * unmemoised re-scan blows the repo's 15 s `testTimeout`.
+ *
+ * The DESCRIPTOR is part of the key, not only the root: two descriptors over one
+ * tree are two different questions, and a root-only key would hand the second
+ * the first's answer — the same vacuous-pass shape the fixture roots are keyed
+ * apart to avoid.
  */
-const cache = new Map<string, SystemContextSite[]>();
+const cache = new Map<string, ContextSite[]>();
 
-/** Every `withSystemContext` block in `lib/` + `app/` + `tests/`, classified by what it reaches. */
-export function scanSystemContexts(root = process.cwd()): SystemContextSite[] {
-  const cached = cache.get(root);
+/** Every site of `descriptor` in `lib/` + `app/` + `tests/`, classified by what it reaches. */
+export function scanContexts(descriptor: ContextDescriptor, root = process.cwd()): ContextSite[] {
+  const cacheKey = `${descriptor.id}::${root}`;
+  const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const gated = policyGatedModels(root);
   const repoModels = repositoryQueryModels(root);
   const map = schemaMap(root);
   const tables = tableNames(map);
-  const out: SystemContextSite[] = [];
+  const out: ContextSite[] = [];
+  const entryOf = new Map(descriptor.entries.map((e) => [e.name, e] as const));
 
   for (const scanRoot of SCAN_ROOTS) {
     const abs = path.join(root, scanRoot);
@@ -573,25 +847,35 @@ export function scanSystemContexts(root = process.cwd()): SystemContextSite[] {
     }
     for (const full of walk(abs)) {
       const rel = path.relative(root, full);
-      // The helper's own definition binds the GUC it is named for; scanning it
-      // would report the file that DEFINES the context as a site.
-      if (rel === path.join('lib', 'workspaces', 'context.ts')) continue;
+      if (descriptor.skipFiles.includes(rel)) continue;
       const sf = ts.createSourceFile(
         full,
         readFileSync(full, 'utf8'),
         ts.ScriptTarget.Latest,
         true,
       );
-      if (!sf.text.includes(`${HELPER}(`)) continue;
+      if (!descriptor.entries.some((e) => sf.text.includes(`${e.name}(`))) continue;
       const helpers = reachableHelpers(sf, root);
 
       const visit = (node: ts.Node): void => {
-        if (
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === HELPER
-        ) {
-          out.push(classify(node, sf, rel, gated, repoModels, helpers, root, map, tables));
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+          const entry = entryOf.get(node.expression.text);
+          if (entry) {
+            const site = classify(
+              node,
+              entry,
+              descriptor,
+              sf,
+              rel,
+              gated,
+              repoModels,
+              helpers,
+              root,
+              map,
+              tables,
+            );
+            if (site) out.push(site);
+          }
         }
         ts.forEachChild(node, visit);
       };
@@ -600,12 +884,14 @@ export function scanSystemContexts(root = process.cwd()): SystemContextSite[] {
   }
 
   out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
-  cache.set(root, out);
+  cache.set(cacheKey, out);
   return out;
 }
 
 function classify(
   node: ts.CallExpression,
+  entry: ContextEntry,
+  descriptor: ContextDescriptor,
   sf: ts.SourceFile,
   file: string,
   gated: ReadonlySet<string>,
@@ -614,28 +900,59 @@ function classify(
   root: string,
   map: SchemaMap,
   tables: ReadonlySet<string>,
-): SystemContextSite {
+): ContextSite | undefined {
   const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
   const enclosing = enclosingName(node);
   const models = new Set<string>();
-  const systemOnly = new Set<string>();
+  const inWindow = new Set<string>();
   const via = new Set<string>();
   const unresolved = new Set<string>();
   let raw = false;
 
-  const [arg] = node.arguments;
-  const cb = arg && (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) ? arg : undefined;
-  const txName =
-    cb?.parameters[0] && ts.isIdentifier(cb.parameters[0].name)
-      ? cb.parameters[0].name.text
-      : undefined;
-  const body: ts.Node = cb ? cb.body : node;
-  const aliases = txName ? [txName] : ['tx'];
+  // ── The BODY the window lives in, and where the window OPENS ──────────────
+  //
+  // A `wrapper` hands the transaction to a callback, so its body is the window's
+  // home and the window opens at its start. The callback is located as the first
+  // function-valued ARGUMENT rather than at a fixed index, which is the whole
+  // reason `withSystemContext(cb)` and `withOrgServiceWriteContext(id, cb)` need
+  // no per-helper arity.
+  //
+  // A `bind` binds on an already-open transaction, so its home is the ENCLOSING
+  // function and the window opens AT THE CALL: a statement above it ran before
+  // the GUC was set and belongs to whatever context encloses this one.
+  let body: ts.Node;
+  let aliases: string[];
+  let windowStart: number;
 
-  // ── Where the transaction starts being TENANT-bound ───────────────────────
+  if (entry.kind === 'wrapper') {
+    const cb = node.arguments.find((a) => ts.isArrowFunction(a) || ts.isFunctionExpression(a)) as
+      | ts.ArrowFunction
+      | ts.FunctionExpression
+      | undefined;
+    const txName =
+      cb?.parameters[0] && ts.isIdentifier(cb.parameters[0].name)
+        ? cb.parameters[0].name.text
+        : undefined;
+    body = cb ? cb.body : node;
+    aliases = txName ? [txName] : ['tx'];
+    windowStart = body.getStart(sf);
+  } else {
+    const [txArg] = node.arguments;
+    // A bind whose first argument is not a plain identifier hands us no alias to
+    // follow. Reporting it with the default `tx` would attribute somebody else's
+    // statements to this site, so it is skipped — and that is not a silent drop:
+    // no shipped call site has this shape, and one appearing would show up as a
+    // site the guard's expected-set assertion cannot find.
+    if (!txArg || !ts.isIdentifier(txArg)) return undefined;
+    body = enclosingBody(node, sf);
+    aliases = [txArg.text];
+    windowStart = node.getEnd();
+  }
+
+  // ── Where the window CLOSES ───────────────────────────────────────────────
   //
   // ⚠️ A BOOLEAN HERE IS WRONG, for the reason `bareTransactionScan` spells out
-  // one axis over: the fix for this whole class is a bind placed MID-BLOCK, so
+  // one axis over: the fix for the system class is a bind placed MID-BLOCK, so
   // every fixed site would report "bound" while its pre-bind reads stayed dead.
   // `changeRequestStatusSync` is the fixture — it binds `repo.workspaceId` after
   // the connection-tier resolve and before the work-item resolve, and the two
@@ -644,23 +961,26 @@ function classify(
   // ⚠️ LEXICAL, not control-flow — the same documented limit as the sibling
   // scanner. A bind inside one arm of an `if` reads as binding everything below
   // it; tightening that needs a CFG.
-  let bindPos: number | undefined;
+  let windowEnd: number | undefined;
   const noteBind = (pos: number): void => {
-    if (bindPos === undefined || pos < bindPos) bindPos = pos;
+    if (pos <= windowStart) return; // a narrowing bind above the window is not ours
+    if (windowEnd === undefined || pos < windowEnd) windowEnd = pos;
   };
-  const visitBinds = (n: ts.Node): void => {
-    if (
-      ts.isCallExpression(n) &&
-      ts.isIdentifier(n.expression) &&
-      BIND_CALLS.has(n.expression.text) &&
-      n.arguments.some((a) => ts.isIdentifier(a) && aliases.includes(a.text))
-    ) {
-      noteBind(n.getStart(sf));
-    }
-    ts.forEachChild(n, visitBinds);
-  };
-  visitBinds(body);
-  if (bindsTenantInline(body)) {
+  if (descriptor.narrowingBinds.length > 0) {
+    const visitBinds = (n: ts.Node): void => {
+      if (
+        ts.isCallExpression(n) &&
+        ts.isIdentifier(n.expression) &&
+        descriptor.narrowingBinds.includes(n.expression.text) &&
+        n.arguments.some((a) => ts.isIdentifier(a) && aliases.includes(a.text))
+      ) {
+        noteBind(n.getStart(sf));
+      }
+      ts.forEachChild(n, visitBinds);
+    };
+    visitBinds(body);
+  }
+  if (bindsNarrowingInline(body, descriptor.narrowingGucs)) {
     const visitRaw = (n: ts.Node): void => {
       if (
         (ts.isStringLiteral(n) ||
@@ -668,7 +988,7 @@ function classify(
           ts.isTemplateHead(n) ||
           ts.isTemplateMiddle(n) ||
           ts.isTemplateTail(n)) &&
-        TENANT_GUCS.some((g) => n.text.includes(`set_config('${g}'`))
+        descriptor.narrowingGucs.some((g) => n.text.includes(`set_config('${g}'`))
       ) {
         noteBind(n.getStart(sf));
       }
@@ -680,9 +1000,8 @@ function classify(
   const record = (pos: number, model: string, label: string, isRaw: boolean): void => {
     if (model) models.add(model);
     via.add(label);
-    const beforeBind = bindPos === undefined || pos < bindPos;
-    if (beforeBind) {
-      if (model) systemOnly.add(model);
+    if (pos >= windowStart && (windowEnd === undefined || pos < windowEnd)) {
+      if (model) inWindow.add(model);
       if (isRaw) raw = true;
     }
   };
@@ -698,10 +1017,11 @@ function classify(
       const name = n.name.text;
       const pos = n.getStart(sf);
       if (name.startsWith('$')) {
-        // A `set_config` binding is the binding, not a statement to adjudicate.
+        // A `set_config` binding is the binding, not a statement to adjudicate —
+        // whether it is this descriptor's own GUC or a narrowing one.
         if (
           (name.startsWith('$queryRaw') || name.startsWith('$executeRaw')) &&
-          !bindsTenantInline(n.parent)
+          !bindsNarrowingInline(n.parent, [...descriptor.narrowingGucs, ...descriptor.gucs])
         ) {
           const found = queryModels(n.parent, aliases, map, tables);
           for (const m of found.models)
@@ -732,8 +1052,8 @@ function classify(
   // under `motir_app` for precisely this. A depth cap plus a visited set keeps it
   // terminating on the mutual recursion these services do write.
   //
-  // A helper's position is its CALL SITE's, not its declaration's: the binding it
-  // sits before or after is the caller's.
+  // A helper's position is its CALL SITE's, not its declaration's: the window it
+  // sits inside or outside of is the caller's.
   const seen = new Set<string>();
   const walkCalls = (
     node: ts.Node,
@@ -771,11 +1091,15 @@ function classify(
             // other value-level indirection. Everything below it is unread, so
             // record it instead of stepping over it silently.
             //
-            // A BIND_CALLS member is never a wall: the scan models it explicitly
-            // (that is what moves `bindPos`), so an unresolved DECLARATION for it
-            // costs nothing. Reporting it would be noise that trains a reader to
-            // skim the one list that must stay worth reading.
-            if (!helper && !BIND_CALLS.has(name)) {
+            // A narrowing bind, or the descriptor's own entry, is never a wall:
+            // the scan models both explicitly (that is what moves the window), so
+            // an unresolved DECLARATION for one costs nothing. Reporting it would
+            // be noise that trains a reader to skim the one list that must stay
+            // worth reading.
+            const modelled =
+              descriptor.narrowingBinds.includes(name) ||
+              descriptor.entries.some((e) => e.name === name);
+            if (!helper && !modelled) {
               unresolved.add(trail ? `${trail} -> ${name}` : name);
             }
             const mark = `${helper?.sf.fileName ?? file.fileName}#${name}`;
@@ -805,22 +1129,17 @@ function classify(
   };
   walkCalls(body, aliases, undefined, sf, helpers, 0, '');
 
-  const verdict: SystemContextVerdict =
-    systemOnly.size > 0 || raw
-      ? 'system-only'
-      : bindPos !== undefined
-        ? 'binds-tenant'
-        : models.size > 0
-          ? 'binds-tenant'
-          : 'no-gated-statement';
+  const verdict: ContextVerdict =
+    inWindow.size > 0 || raw ? 'context-only' : models.size > 0 ? 'narrowed' : 'no-gated-statement';
 
   return {
+    context: descriptor.id,
     file,
     line,
     enclosing,
     key: `${file}#${enclosing}`,
-    verdict: models.size === 0 && !raw ? 'no-gated-statement' : verdict,
-    systemOnlyModels: [...systemOnly].sort(),
+    verdict,
+    contextOnlyModels: [...inWindow].sort(),
     models: [...models].sort(),
     raw,
     via: [...via].sort(),
@@ -854,7 +1173,10 @@ function aliasedRepoKey(sf: ts.SourceFile, key: string): string {
   return real && method ? `${real}.${method}` : key;
 }
 
-/** The findings — a system context reaching a gated table before any tenant binding. */
-export function systemOnlyReads(root = process.cwd()): SystemContextSite[] {
-  return scanSystemContexts(root).filter((s) => s.verdict === 'system-only');
+/** The findings — a context reaching a gated table inside its own binding window. */
+export function contextOnlyReads(
+  descriptor: ContextDescriptor,
+  root = process.cwd(),
+): ContextSite[] {
+  return scanContexts(descriptor, root).filter((s) => s.verdict === 'context-only');
 }

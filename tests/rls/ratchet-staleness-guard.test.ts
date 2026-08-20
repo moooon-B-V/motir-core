@@ -71,7 +71,7 @@ describe('the ratchet scanner rules on every shape', () => {
     // `FIXTURE_MAX_HOPS` is numeric, module-scoped, and compared with
     // `toBeLessThanOrEqual` — every surface property of a ceiling except the
     // one that enrols it. The real tree's `MAX_HELPER_HOPS`
-    // (`systemContextScan.ts`) is the same shape, and a scanner that swept it in
+    // (`contextArmScan.ts`) is the same shape, and a scanner that swept it in
     // would demand a re-measure preamble on a parser's recursion limit.
     expect(found).not.toContain('FIXTURE_MAX_HOPS');
     expect(found.every((n) => RATCHET_NAME.test(n))).toBe(true);

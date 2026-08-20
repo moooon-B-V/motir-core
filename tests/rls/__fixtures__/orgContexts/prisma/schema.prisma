@@ -1,0 +1,29 @@
+// Fixture schema for the ORG-CONTEXT descriptor (MOTIR-2959).
+//
+// The same three models the systemContexts fixture uses, and the RELATION between
+// two of them is the point for the same reason one axis over: MOTIR-2956's defect
+// was found through a JOIN and not through the FROM clause. `attachment` was
+// armed by that card's fix and the `workspace` it JOINs had to be armed too, or
+// the storage sum would still have read zero (`notes.html` #269). `Widget.owner`
+// is what lets this fixture prove a read of an admitted table is still reported
+// on the table it joins.
+
+model Widget {
+  id          String @id
+  workspaceId String
+  ownerId     String
+  owner       Gadget @relation(fields: [ownerId], references: [id])
+}
+
+model Gadget {
+  id          String   @id
+  workspaceId String
+  widgets     Widget[]
+
+  @@map("gadget_row")
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}
