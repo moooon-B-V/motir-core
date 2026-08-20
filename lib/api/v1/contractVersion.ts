@@ -138,5 +138,26 @@
  *   criterion-carrying one, because it carries a PAIR of indices
  *   (`designCriterionIndex` / `surfaceCriterionIndex`) and no `criterionIndex`
  *   at all. Every existing member is byte-identical.
+ * - `1.17.0` — MOTIR-3017 adds two things a run needs in order to report what it
+ *   found, both additive. (1) An optional `findingsPolicy` query parameter on
+ *   `GET …/dispatch-prompt`: a comma-separated list of the capabilities this run
+ *   switches OFF for its agent. Omitted renders the protocol byte-identically to
+ *   today, so no existing caller moves; an unrecognised capability is refused
+ *   (`INVALID_FINDINGS_POLICY`, 422) rather than ignored, which is a new
+ *   CONDITION getting a status on an existing operation — §8's allowed shape.
+ *   (2) `approveWorkItemPlan` — `POST /api/v1/work-items/{key}/plan-approval`,
+ *   the bounded public entrance to `plansService.approvePlan` that
+ *   `motir auto --auto-approve-replan` drives: a new operation, gated by the
+ *   `ai:view_plan` key the service already asserts, with no declared shape
+ *   changed. Its 409 additionally carries
+ *   `planStatus`, an enrichment on a NEW condition rather than a change to an
+ *   existing one. See `docs/decisions/run-findings-protocol.md`.
+ *
+ *   ⚠️ RENUMBERED 1.14.0 → 1.17.0 ON MERGE, which is the process working rather
+ *   than a correction. This number is a SERIALIZED RESOURCE: every in-flight
+ *   additive pull request claims the next MINOR, and three landed while this one
+ *   was open (MOTIR-3157, MOTIR-2961, MOTIR-3178). The entry above names the
+ *   OPERATIONS rather than a position precisely so renumbering stays one line,
+ *   and it did.
  */
-export const V1_CONTRACT_VERSION = '1.16.0';
+export const V1_CONTRACT_VERSION = '1.17.0';

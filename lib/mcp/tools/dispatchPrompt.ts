@@ -14,10 +14,11 @@ import {
 } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
-import { toToolError, toolOk } from '../toolResult';
+import { toToolError, toolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import { dispatchPromptPayload, presentMcpDispatchPrompt } from '../payloads/workLoop';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
+import { FINDINGS_POLICY_TOKENS, parseFindingsPolicy } from '@/lib/dispatch/promptTemplate';
 
 // `dispatch_prompt` (Story 7.9 · MOTIR-1802) — the CANONICAL, server-generated
 // coding-agent prompt for ONE work item. This is the seam the CLI's single
@@ -59,6 +60,19 @@ const inputSchema = {
         'its own — the unattended-run seed (`motir auto`). It never overrides: an item ' +
         'whose dependencies are already integrated, or that is itself integrated, keeps ' +
         'that branch, so a caller cannot redirect a live lineage.',
+    ),
+  // MOTIR-3020 — the SAME parameter the `/api/v1` route takes, parsed by the
+  // SAME function (`parseFindingsPolicy`), so the two transports cannot disagree
+  // about what a token means. Omitted renders the complete protocol.
+  findingsPolicy: z
+    .string()
+    .trim()
+    .optional()
+    .describe(
+      'Optional comma-separated list of the capabilities this run switches OFF for the ' +
+        `agent — one or more of: ${FINDINGS_POLICY_TOKENS.join(', ')}. Omitted renders the ` +
+        'COMPLETE outcome protocol, which is what every caller wanting to read the real ' +
+        'contract should do. An unrecognised capability is refused, never ignored.',
     ),
 };
 
@@ -172,13 +186,24 @@ function summarize(dto: DispatchPromptDto): string {
 
 /** The adapter: resolve the project from the key prefix, assemble the prompt. */
 export async function runDispatchPrompt(
-  args: { key: string; sessionBranch?: string },
+  args: { key: string; sessionBranch?: string; findingsPolicy?: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const identifier = normalizeIdentifier(args.key);
+  // Refused BEFORE the read, and refused rather than ignored: a caller who
+  // mistyped a capability must not receive the full protocol believing it is
+  // narrowed (`docs/decisions/run-findings-protocol.md` Q1).
+  const parsed = parseFindingsPolicy(args.findingsPolicy);
+  if (parsed.policy === null) {
+    return toolError(
+      'INVALID_FINDINGS_POLICY',
+      `\`${parsed.unknown}\` is not a findings-policy capability. Known: ${FINDINGS_POLICY_TOKENS.join(', ')}.`,
+    );
+  }
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
   const dto = await dispatchPromptService.getDispatchPrompt(project.id, identifier, ctx, {
     sessionBranch: args.sessionBranch ?? null,
+    findingsPolicy: parsed.policy,
   });
   return toolOk(summarize(dto), derived(dispatchPromptPayload, presentMcpDispatchPrompt(dto)));
 }

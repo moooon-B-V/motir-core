@@ -72,9 +72,22 @@ export class PlanNotGeneratingError extends Error {
  */
 export class PlanNotInExpectedStatusError extends Error {
   readonly code = 'PLAN_NOT_IN_EXPECTED_STATUS' as const;
+  /**
+   * The status the plan is ACTUALLY in, carried as DATA (MOTIR-3025).
+   *
+   * ⚠️ A CALLER HAS TO TELL TWO OF THESE APART and cannot do it from the
+   * sentence. `generating` means *not yet — the planner is still writing*, and
+   * `approved` / `declined` mean *someone already decided*. An unattended loop
+   * should wait for the first and stop on the second, and parsing a message to
+   * learn which is exactly what `public-api-conventions.md` §8 forbids. So it
+   * rides the field, the same way `POST …/transitions` carries its allowed
+   * targets rather than folding them into prose.
+   */
+  readonly actual: string;
   constructor(planId: string, actual: string, expected: string) {
     super(`Plan ${planId} is ${actual}; this action requires it to be ${expected}.`);
     this.name = 'PlanNotInExpectedStatusError';
+    this.actual = actual;
   }
 }
 
@@ -258,5 +271,31 @@ export class PlanTargetImmutableError extends Error {
       `Work item ${workItemId} is in the terminal status "${status}" — completed work cannot be modified or removed by approving a plan.`,
     );
     this.name = 'PlanTargetImmutableError';
+  }
+}
+
+/**
+ * There is no plan for this work item to approve (MOTIR-3021 / MOTIR-3023,
+ * `docs/decisions/run-findings-protocol.md` Q2 bound B1). → 422
+ *
+ * ⚠️ THIS IS THE BOUND, and it is what keeps the public approval entrance from
+ * being "approve any pending plan in the workspace". An unattended loop may
+ * approve the plan its own refused card CAUSED, and nothing else — every other
+ * plan (a cadence plan, an onboarding generation, one submitted from the
+ * project-wide panel) keeps the human gate it was written under.
+ *
+ * A plan belongs to a card when the plan-change conversation ANCHORED at that
+ * card submitted the job the plan was produced by. No such conversation, or one
+ * that has never submitted, means there is nothing here for an automated
+ * approval to act on — refused, deliberately, rather than read as
+ * unanchored-so-allowed.
+ */
+export class NoPlanForWorkItemError extends Error {
+  readonly code = 'NO_PLAN_FOR_WORK_ITEM' as const;
+  constructor(readonly workItemKey: string) {
+    super(
+      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused card produced; approve any other plan in Motir.`,
+    );
+    this.name = 'NoPlanForWorkItemError';
   }
 }

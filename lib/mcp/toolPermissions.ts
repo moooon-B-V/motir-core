@@ -95,6 +95,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `ai:view_plan` entry below is a mistake — so it is corrected here rather
   // than left to age. The reads are still `project:browse`; what changed is that
   // one of the DECISIONS now has a door.
+  //
+  // ⚠️ AMENDED AGAIN 2026-08-19 (MOTIR-3021), for the same reason: a SECOND
+  // decision now has a door. `approvePlan` is reachable by a bearer token
+  // through `POST /api/v1/plans/{planId}/approval`, gated by this same
+  // `ai:view_plan` key and BOUNDED to the plan a run's own refused card produced
+  // (`docs/decisions/run-findings-protocol.md` Q2). It is deliberately NOT an
+  // MCP tool — MCP is the agent's surface and an agent must never approve its
+  // own re-plan — so this MAP is unchanged; only the claim that the decisions
+  // are unreachable would now be wrong. `declinePlan` still has no door of any
+  // kind. And `CLI_TOKEN_GRANT` below still omits `ai:view_plan`, which is what
+  // keeps a token minted FOR a dispatched agent out of the new route (MOTIR-3051);
+  // do not widen it.
   get_plan_status: 'project:browse',
   get_plan: 'project:browse',
 

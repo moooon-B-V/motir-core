@@ -139,3 +139,26 @@ export class NotLinkedError extends CliError {
     this.name = 'NotLinkedError';
   }
 }
+
+/**
+ * A plan-approval refused because the plan is not in the status the action
+ * needs — carrying WHICH status it is in (MOTIR-3025).
+ *
+ * ⚠️ IT EXISTS SO A LOOP CAN TELL "NOT YET" FROM "ALREADY DECIDED". An agent
+ * submits its re-plan with `--detach` and exits within milliseconds, so an
+ * unattended run reaches the approval while the planner is often still writing:
+ * `generating` means wait, and `approved` / `declined` mean somebody has already
+ * decided and the run must stop. The two are one word apart in the sentence and
+ * a caller must not be parsing sentences (`public-api-conventions.md` §8), so
+ * the server carries the status as DATA and this is where it lands.
+ *
+ * A `CliError` in every other respect: printed the same way, exits the same way.
+ */
+export class PlanNotDecidableError extends CliError {
+  readonly planStatus: string;
+  constructor(message: string, planStatus: string, opts: { hint?: string } = {}) {
+    super(message, opts);
+    this.name = 'PlanNotDecidableError';
+    this.planStatus = planStatus;
+  }
+}

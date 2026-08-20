@@ -12,11 +12,16 @@ import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
 import {
+  agentSubmittedReplan,
+  autoOnlyFlagError,
   checkBootstrapCheckout,
+  findingsPolicyOf,
   renderAgentFailure,
   renderAgentSuccess,
   renderClaimRefusal,
   renderNothingPushed,
+  renderFindingsPolicy,
+  renderReplanSubmitted,
   renderDispatchAdvisories,
   renderDispatchSummary,
   renderResumeNotice,
@@ -25,6 +30,7 @@ import {
   resolveDispatchTargets,
   type AgentSource,
   type DispatchTarget,
+  type FindingsPolicyOptions,
 } from '../dispatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient, WorkItemClaim } from '../client.js';
 
@@ -80,11 +86,19 @@ const CLOSE_OUT_SOURCE = 'byok' as const;
 
 // ── agent resolution ────────────────────────────────────────────────────────
 
-export interface DeliveryOptions {
+export interface DeliveryOptions extends FindingsPolicyOptions {
   /** `--agent <cmd>` — launch THIS agent on the prompt. */
   agent?: string;
   /** `--print` — print the prompt and stop (the default when no agent). */
   print?: boolean;
+  /**
+   * `--auto-approve-replan` — REGISTERED here in order to be REFUSED
+   * (MOTIR-3022). `run` and `next` dispatch one item and exit, so there is no
+   * continuation for an approval to feed; the flag belongs to `motir auto`.
+   * Declaring it is what lets the guard's message reach the user instead of
+   * commander's `unknown option` (MOTIR-1828 / MOTIR-1830).
+   */
+  autoApproveReplan?: boolean;
 }
 
 /**
@@ -217,14 +231,24 @@ async function deliver(input: DeliverInput): Promise<void> {
   // request in a repository that has already merged.
   const resume = renderResumeNotice(dispatch);
 
+  // The policy this run used, said out loud (MOTIR-3022). Without it a run whose
+  // agent FILED nothing is indistinguishable from one that was not allowed to,
+  // and `--print` would show a prompt whose missing branch had no explanation.
+  const policyLine = renderFindingsPolicy(opts);
+
   if (!agent) {
     // PRINT mode: the prompt is the PAYLOAD (stdout, byte-identical), the
     // summary is DIAGNOSTICS (stderr). That split is what lets
     // `motir next --print | pbcopy` copy the prompt and nothing else, while the
     // user still sees the repo + resolved path on screen.
+    //
+    // ⚠️ The policy line is DIAGNOSTICS too — it goes to stderr with the rest,
+    // never into the payload, and the prompt above it is the one the agent
+    // would actually receive. There is no preview-only assembly.
     info(summary);
     if (resume) info(resume);
     if (advisory) info(advisory);
+    info(policyLine);
     info('');
     outVerbatim(dispatch.prompt);
     return;
@@ -233,6 +257,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   info(summary);
   if (resume) info(resume);
   if (advisory) info(advisory);
+  info(policyLine);
   info('');
   const result = await runAgent({
     command: agent.parsed,
@@ -249,6 +274,21 @@ async function deliver(input: DeliverInput): Promise<void> {
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
     // must be able to tell a failed run from a successful one.
     process.exitCode = result.exitCode;
+    return;
+  }
+
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so the run asks the card which it was before deciding anything
+  // else. This read comes FIRST — before the push check — because a refusing
+  // agent reverts its worktree and pushes nothing by design, so the push check
+  // would otherwise report a correctly-refused card as work that went missing.
+  if (await agentSubmittedReplan(client, key)) {
+    // Nothing to exclude: `planning` is in the in-progress CATEGORY, so the card
+    // is already out of the pickable set — which is the entire reason that
+    // status exists (MOTIR-2425). Adding it to the session exclude list would
+    // record a local opinion about a card the server already holds back.
+    info('');
+    info(renderReplanSubmitted(key));
     return;
   }
 
@@ -307,6 +347,20 @@ function suspectCheckouts(targets: DispatchTarget[], primary: DispatchTarget) {
   return over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
 }
 
+/**
+ * Refuse `--auto-approve-replan` on a command with no loop to continue into —
+ * BEFORE anything else, so nothing is claimed for a run that cannot proceed.
+ *
+ * The flag is registered on these commands precisely so this message is
+ * reachable; without the registration commander answers `unknown option` and
+ * this function is dead code from the command line (MOTIR-1828 / MOTIR-1830).
+ */
+function refuseAutoOnlyFlag(opts: DeliveryOptions, command: 'run' | 'next'): void {
+  if (!opts.autoApproveReplan) return;
+  const { message, hint } = autoOnlyFlagError(command);
+  throw new CliError(message, { hint });
+}
+
 // ── motir next ──────────────────────────────────────────────────────────────
 
 export interface NextOptions extends DeliveryOptions {
@@ -316,6 +370,7 @@ export interface NextOptions extends DeliveryOptions {
 }
 
 export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): Promise<void> {
+  refuseAutoOnlyFlag(opts, 'next');
   const kinds = parseKinds(opts.kinds);
   await withProjectSession(async (session) => {
     const { client, serverUrl, projectKey } = session;
@@ -347,7 +402,9 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
       info(renderClaimRefusal(claim));
       return;
     }
-    const dispatch = await client.dispatchPrompt(item.key);
+    const dispatch = await client.dispatchPrompt(item.key, {
+      findingsPolicy: findingsPolicyOf(opts),
+    });
     await deliver({
       session,
       key: item.key,
@@ -464,6 +521,7 @@ export async function runCommand(
   opts: RunOptions,
   deps: DeliveryDeps = {},
 ): Promise<void> {
+  refuseAutoOnlyFlag(opts, 'run');
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
@@ -507,7 +565,9 @@ export async function runCommand(
       info(renderClaimRefusal(claim));
       return;
     }
-    const dispatch = await client.dispatchPrompt(item.identifier);
+    const dispatch = await client.dispatchPrompt(item.identifier, {
+      findingsPolicy: findingsPolicyOf(opts),
+    });
     await deliver({
       session,
       key: item.identifier,

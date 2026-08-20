@@ -13,11 +13,13 @@ import {
   autoExitCode,
   classifyReadyItem,
   formatDuration,
+  landedWork,
   planReviewUrl,
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
   type AutoSummary,
+  type DispatchRecord,
 } from '../src/autoLoop.js';
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
@@ -705,6 +707,7 @@ describe('motir auto --include-planning', () => {
       ],
       repos: [],
       prs: [],
+      approvals: [],
       stopReason: 'drained',
     });
 
@@ -1031,6 +1034,9 @@ describe('the summary reports every pull-request outcome distinctly', () => {
       // the `motir auto` default (`--include-planning` is what fills it).
       planning: [],
       prs,
+      // MOTIR-3023's approvals lane, empty for the same reason
+      // (`--auto-approve-replan` is what fills it).
+      approvals: [],
       stopReason: 'drained',
     });
 
@@ -1171,6 +1177,7 @@ describe('records with missing pieces still render honestly', () => {
         { repoName: 'motir-ai', branch: BRANCH, url: null, outcome: 'existing' },
         { repoName: 'motir-gateway', branch: BRANCH, url: null, outcome: 'failed' },
       ],
+      approvals: [],
       stopReason: 'drained',
     };
 
@@ -1438,5 +1445,134 @@ describe('renderSessionPrBody — the commits, not the card titles', () => {
     const out = renderSessionPrBody('20260729-010203', BRANCH, [record('PROD-1', 'A')], []);
     expect(out).not.toContain('## What the commits say');
     expect(out).toContain('- PROD-1 — A');
+  });
+});
+
+describe('landedWork — the partition that used to be `!== failed` (MOTIR-3018)', () => {
+  const rec = (
+    over: Partial<DispatchRecord> & Pick<DispatchRecord, 'key' | 'outcome'>,
+  ): DispatchRecord => ({
+    title: `Item ${over.key}`,
+    durationMs: 1000,
+    sessionBranch: 'motir/run-1',
+    repo: 'motir-core',
+    parentKey: null,
+    ...over,
+  });
+
+  it.each([
+    ['integrated', true],
+    ['implemented', true],
+    ['failed', false],
+    // The member the old spelling got wrong: a refused card put no code
+    // anywhere, so it is not carried by a branch and not named in a pull
+    // request.
+    ['replanned', false],
+  ] as const)('%s → %s', (outcome, expected) => {
+    expect(landedWork({ outcome })).toBe(expected);
+  });
+
+  it('keeps a re-planned card out of the pull-request body and title', () => {
+    const records: DispatchRecord[] = [
+      rec({ key: 'PROD-1', title: 'Built it', outcome: 'integrated' }),
+      rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+    ];
+    const body = renderSessionPrBody('20260819-010203', 'motir/run-1', records);
+    expect(body).toContain('Work items carried (1)');
+    expect(body).toContain('PROD-1');
+    expect(body).not.toContain('PROD-2');
+    // One carried card, so the title names it — not "2 work items".
+    expect(sessionPrTitle('20260819-010203', records.filter(landedWork))).toContain('PROD-1');
+  });
+
+  it('names the re-planned card in the summary, as an outcome rather than a failure', () => {
+    const summary: AutoSummary = {
+      runId: '20260819-010203',
+      records: [
+        rec({ key: 'PROD-2', title: 'Refused it', outcome: 'replanned', sessionBranch: null }),
+      ],
+      skipped: [],
+      planning: [],
+      repos: [],
+      prs: [],
+      approvals: [],
+      stopReason: 'replanned',
+    };
+    const text = renderAutoSummary(summary);
+    expect(text).toContain('an agent refused its card and submitted a re-plan');
+    expect(text).toContain('Re-planned');
+    expect(text).toContain('PROD-2');
+    // Not listed as delivered work, and not as a failure.
+    expect(text).not.toContain('Implemented — CI decides');
+    expect(text).not.toContain('Failed — still In Progress');
+    // A correct outcome exits 0.
+    expect(autoExitCode(summary)).toBe(0);
+  });
+});
+
+describe('the summary says what the run APPROVED (MOTIR-3023)', () => {
+  const rec = (
+    over: Partial<DispatchRecord> & Pick<DispatchRecord, 'key' | 'outcome'>,
+  ): DispatchRecord => ({
+    title: `Item ${over.key}`,
+    durationMs: 1000,
+    sessionBranch: null,
+    repo: 'motir-core',
+    parentKey: null,
+    ...over,
+  });
+
+  const summary = (approvals: AutoSummary['approvals']): AutoSummary => ({
+    runId: '20260819-010203',
+    records: [rec({ key: 'PROD-7', outcome: 'replanned' })],
+    skipped: [],
+    planning: [],
+    repos: [],
+    prs: [],
+    approvals,
+    stopReason: 'drained',
+  });
+
+  it('names every plan and the card it was approved FOR', () => {
+    // ⚠️ This is the one feature where a machine changes a person's plan while
+    // they are not looking. A COUNT would tell them their tree moved without
+    // telling them where.
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 3 }]),
+    );
+    expect(text).toContain('Plans APPROVED by this run');
+    expect(text).toContain('your tree changed while you were away');
+    expect(text).toContain('plan_abc');
+    expect(text).toContain('approved for PROD-7');
+    expect(text).toContain('3 proposals materialized');
+    // And it says the card is held out, which is why re-running is what picks
+    // the new work up.
+    expect(text).toContain('held out of THIS run');
+  });
+
+  it('says nothing at all when nothing was approved', () => {
+    expect(renderAutoSummary(summary([]))).not.toContain('Plans APPROVED');
+  });
+
+  it('does not tell the operator to review a plan this run already approved', () => {
+    // The two blocks would otherwise contradict each other: one saying the plan
+    // was approved, the next saying to go and review it.
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 1 }]),
+    );
+    expect(text).toContain('its plan was approved by this run');
+    expect(text).not.toContain('review the submitted plan in Motir');
+  });
+
+  it('DOES tell them to review one it did not approve', () => {
+    const text = renderAutoSummary(summary([]));
+    expect(text).toContain('review the submitted plan in Motir');
+  });
+
+  it('singularises one proposal', () => {
+    const text = renderAutoSummary(
+      summary([{ key: 'PROD-7', planId: 'plan_abc', proposalCount: 1 }]),
+    );
+    expect(text).toContain('1 proposal materialized');
   });
 });
