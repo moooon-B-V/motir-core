@@ -16,7 +16,31 @@
 // over a live set breaks the moment a row is inserted/removed, but the
 // seek-after position is reproducible.
 
-import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
+// ⚠️ `import type`, NEVER a value import — and this line is load-bearing rather
+// than stylistic (MOTIR-2458, re-learned here by MOTIR-3196).
+//
+// A generated enum is a runtime VALUE, so `import { WorkItemKind } from
+// '@/generated/prisma/client'` pulls the whole `@prisma/client` runtime into
+// every module graph that reaches this file. This file used to do exactly that,
+// and it did not matter for as long as its only consumers were services that
+// carry the client anyway. Then `lib/api/v1/ready/schema.ts` — reached by the
+// OpenAPI operation registry, which three PUBLISHED documentation pages render
+// — began importing a VALUE from here (`SPRINT_ACTIVE`), and those three pages
+// shipped a database client to draw a schema table. That is the same failure
+// MOTIR-2458 fixed one module over, arriving through one extra hop.
+//
+// `tests/public-docs-db-imports.test.ts` is the guard, and it fails on the
+// PAGES rather than on this line — so if it ever goes red again, the reach is
+// what to look for, not the page.
+//
+// The two vocabularies below are therefore literal tuples with a compile-time
+// totality assertion, exactly as `ready/schema.ts` derives its own. The Prisma
+// enums remain the upstream authority for what they must contain; the assertion
+// is what makes that a compile error rather than a comment.
+import type { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
+
+/** `true` only when `Union` is fully covered by `Covered`; otherwise `never`. */
+type AssertTotal<Union, Covered> = [Exclude<Union, Covered>] extends [never] ? true : never;
 
 /**
  * The faceted filter every ready read accepts. Each axis is optional and
@@ -164,15 +188,16 @@ export class InvalidReadyFilterError extends Error {
 // The enum's declaration order IS the priority ranking (lowest → highest); the
 // sort reverses it (highest first). Kept as a frozen tuple for the rare JS-side
 // comparison; the SQL seek-after compares the enum column directly.
-export const READY_PRIORITY_ASC: readonly WorkItemPriority[] = [
-  WorkItemPriority.lowest,
-  WorkItemPriority.low,
-  WorkItemPriority.medium,
-  WorkItemPriority.high,
-  WorkItemPriority.highest,
-];
+export const READY_PRIORITY_ASC = [
+  'lowest',
+  'low',
+  'medium',
+  'high',
+  'highest',
+] as const satisfies readonly WorkItemPriority[];
+const _prioritiesTotal: AssertTotal<WorkItemPriority, (typeof READY_PRIORITY_ASC)[number]> = true;
 
-const PRIORITY_VALUES = new Set<string>(Object.values(WorkItemPriority));
+const PRIORITY_VALUES = new Set<string>(READY_PRIORITY_ASC);
 
 /**
  * The issue-type dispatch ranking — the PRIMARY sort key (Subtask 7.0.12;
@@ -185,14 +210,19 @@ const PRIORITY_VALUES = new Set<string>(Object.values(WorkItemPriority));
  * this orders what remains.)
  */
 export const READY_KIND_RANK: Record<WorkItemKind, number> = {
-  [WorkItemKind.subtask]: 0,
-  [WorkItemKind.bug]: 1,
-  [WorkItemKind.task]: 2,
-  [WorkItemKind.story]: 3,
-  [WorkItemKind.epic]: 4,
+  subtask: 0,
+  bug: 1,
+  task: 2,
+  story: 3,
+  epic: 4,
 };
+// `Record<WorkItemKind, number>` already makes a MISSING kind a compile error;
+// this makes an EXTRA one a compile error too, which the Record does not.
+const _kindsTotal: AssertTotal<WorkItemKind, keyof typeof READY_KIND_RANK> = true;
 
-const KIND_VALUES = new Set<string>(Object.values(WorkItemKind));
+const KIND_VALUES = new Set<string>(Object.keys(READY_KIND_RANK));
+
+void [_kindsTotal, _prioritiesTotal];
 
 /** Encode a (kind, priority, key) position into the opaque page cursor. */
 export function encodeReadyCursor(cursor: ReadyCursor): string {
