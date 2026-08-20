@@ -2,19 +2,21 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                      | Files                                                    | Card                 | Section   |
-| -------------------------------------------- | -------------------------------------------------------- | -------------------- | --------- |
-| The Plans surface                            | `plans-surface.mock.html` + `.png`                       | MOTIR-843 (7.4.1)    | Part I    |
-| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                     | MOTIR-1749 (7.13.11) | Part II   |
-| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`            | MOTIR-2985           | Part III  |
-| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png`  | MOTIR-3074           | Part IV   |
-| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`             | MOTIR-3082           | Part V    |
-| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`             | MOTIR-3082           | Part V    |
-| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`             | MOTIR-3159           | Part VI   |
-| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`             | MOTIR-3159           | Part VI   |
-| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`               | MOTIR-3233           | Part VII  |
-| The plan detail's **List ↔ Canvas** switcher | **`plan-detail-list-view.mock.html`** + `.png`           | MOTIR-3234           | Part VIII |
-| What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png` | MOTIR-3234           | Part VIII |
+| Surface                                      | Files                                                     | Card                 | Section   |
+| -------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
+| The Plans surface                            | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
+| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
+| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
+| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
+| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
+| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
+| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
+| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
+| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
+| The plan detail's **List ↔ Canvas** switcher | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
+| What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
+| The plan canvas **at arrival**               | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
+| **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -56,6 +58,11 @@ them now would re-export the very asset this rule exists to leave alone.
 **Part V amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
 parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
 differing), and a read view for one proposal composing the shipped quick view.
+
+**Part IX gets its own asset too** — `plan-canvas-arrival.mock.html` decides the canvas's
+BEHAVIOUR where Part VIII decided the pane's bodies: which level it arrives at, the breadcrumb crumb
+for a parent that does not exist yet, and a **Show changes** control. It also carries the conditional
+DEFAULT-VIEW rule Part VIII defers to it, and RELEASES the pane-header slot Part VIII reserved.
 
 **Part VIII gets its own asset too** — `plan-detail-list-view.mock.html` gives the canvas pane a
 header, a **List ↔ Canvas** switcher and a second body (a list of what the plan proposes) beside the
@@ -1732,3 +1739,266 @@ The canvas and its node treatments; **which level the canvas arrives at**; **the
 for a PROPOSED parent**; **the Show-changes control's own behaviour and treatment** — all three are
 Part IX's. Also: the drill-down, the review rail's layout, the establish step's own content, the
 approve/decline flow for a `planned` plan, and the `/plans` list surface (Part VII).
+
+---
+
+# Part IX — The plan-detail CANVAS at arrival, and SHOW CHANGES (MOTIR-3259 / Story MOTIR-3232)
+
+**Its OWN asset**: `design/ai-planning/plan-canvas-arrival.mock.html` + `plan-canvas-arrival.png`,
+four panels, plus this section.
+
+Part VIII gave the plan-detail pane a second BODY. **Part IX is the first body's BEHAVIOUR** — what
+the canvas does when it opens, and one control it does not have.
+
+**It draws NO new surface.** `/plans/[id]` is reached exactly as Part I §5 draws it — the left-nav
+_Plans_ entry, then a row — and this Part adds no entrance. It does not amend
+`plans-surface.mock.html`; the canvas, its node cards and the three `op` languages are composed as
+that asset draws them.
+
+## 0. The CONTRACT this Part must design to
+
+`ProjectRoadmapCanvas` (MOTIR-1194) is the reusable foundation five surfaces mount, driven by
+`PlanningCanvas`. Its shape constrains what may be drawn here:
+
+- **PRESENTATIONAL and PER-LEVEL.** It owns no fetching; the consumer supplies `loadLevel(parentId)`
+  and it renders exactly one level. **A panel that drew the whole proposed tree at once would be
+  un-buildable against it** — so whatever Show changes does, it does to the level in view (§L5 is
+  that consequence, faced rather than worked around).
+- **It ARRIVES where the consumer tells it**, via `initialTrail` — read ONCE at mount, a seed and not
+  a controlled level. Panel 1 is a decision about that seed and never about hijacking navigation.
+- **The breadcrumb** is the trail plus a root crumb the consumer labels (`roadmap.canvas.breadcrumbRoot`,
+  bug MOTIR-3152).
+- **The top-right cluster** holds the search box and the full-screen toggle, gated on `searchable` /
+  `fullScreenable`. §L1 is what this Part does about a third control wanting chrome.
+
+## 1. Panel 1 — WHERE THE CANVAS ARRIVES
+
+### The defect, read on `origin/main` @ `b820c979`
+
+Two shipped facts meet, and each is right on its own:
+
+1. `arrivalLevel(items)` counts proposals per parent and takes the largest — but its loop opens
+   `if (!item.parentNodeId || !item.parentIdentifier) continue;`.
+2. `planReviewService.getPlanReview` sets `parentIdentifier` (with `parentTitle`, `parentKind` and
+   `parentTrail: []`) to **null for an intra-plan `planItem:` parent** — deliberately, because
+   _"an intra-plan parent already has a node in the proposed set, so the canvas draws it and the
+   breadcrumb does not."_ **`parentNodeId` IS populated** for those items.
+
+**So (1) discards exactly the items (2) describes.** A plan proposing one story under a committed
+epic plus five subtasks under that story counts ONE edge and opens on the **epic**, drawing the
+proposed story as one card among its committed siblings. Panel 1 draws that BEFORE beside the AFTER,
+because the change is invisible in a single frame.
+
+### The five decisions
+
+1. **The arrival rule.** The canvas opens on the level the plan most FILLS, counting proposals under
+   PROPOSED containers as well as committed ones — i.e. count `parentNodeId` for every proposal.
+   **What this changes:** the plan that proposes a container AND its contents, which is the shape an
+   agent-authored skeleton produces almost every time. **What it does not:** a plan of pure roots
+   still opens at the top level; a plan whose proposals all sit under one committed parent still
+   opens there.
+2. **The TIE-BREAK is the DEEPER level.** One story under an epic plus one subtask under that story
+   is 1–1, and the shipped code keeps whichever level the `Map` yielded first — an accident, not a
+   decision. Prefer the deeper: **a reviewer wants to land where the work is, and the shallower level
+   is one Back away while the deeper one is a drill they must first discover.** Depth is the length
+   of the arrival trail, which the same pass already builds.
+3. **The CRUMB for a proposed parent — `New · <title>`.** A committed crumb is `KEY · Title`
+   (`workItemCrumbLabel`); an un-materialized `add` has `identifier: null` **by construction**, and a
+   placeholder key (`MOTIR-?`, `#new-3`) would assert a work item that does not exist — on the one
+   surface whose whole promise is that nothing is real until approve. So the crumb keeps the grammar
+   and puts the WORD `New` in the slot the key would occupy. **The distinction is TEXT first**, with
+   the accent ink, the dashed border and the `+` glyph as second and third channels — never colour
+   alone.
+4. **A level that is ENTIRELY proposed.** Drilling into a proposed container asks the roadmap for the
+   children of an id no work item has; `fetchRoadmapLevel` is best-effort and resolves an empty
+   committed level, so the proposals render alone. That is correct and looks like nothing else on
+   this surface, so **the level caption says why** — in the shipped `lvlcap` slot — and an
+   empty-looking canvas is not read as a failed load.
+5. **The DEGRADE.** An archived or hard-deleted ancestor gives `parentTrail: []` beside a non-null
+   `parentNodeId`, and the shipped code already degrades to one synthesised crumb. When the parent is
+   ITSELF proposed there is no committed chain to synthesise from at all, so the trail is the
+   canvas's own ROOT crumb plus the proposed crumb. **The canvas never arrives with no breadcrumb**,
+   and Back always leads somewhere real.
+
+## 2. Panels 3–4 — SHOW CHANGES
+
+### §L1 · Placement — the CANVAS's own cluster, and Part VIII's reserved slot is RELEASED
+
+**Part VIII reserved the right end of its new pane header for this control, and Part IX does not take
+it.** The toggle goes in `ProjectRoadmapCanvas`'s **top-right cluster**, beside the search box and
+the full-screen button. Three reasons, in order:
+
+- **It acts on the canvas's nodes and belongs adjacent to what it changes.** The pane header sits
+  above a body that may be the LIST, where this control means nothing.
+- **It must not exist in the list view**, and the canvas's own cluster gets that for free — no
+  conditional chrome in a header that belongs to both bodies.
+- **The emphasis state lives in the foundation.** The prop carrying the emphasised ids is
+  `ProjectRoadmapCanvas`'s (opt-in, defaulting to absent, exactly as `searchable` / `fullScreenable`
+  / `locatable` are); a control in a different component would have to lift that state out of the
+  component that owns it.
+
+**Part VIII's panel 1 draws a dashed placeholder in the pane header labelled for this Part. That
+placeholder is not built.** It is recorded here rather than by re-exporting Part VIII's asset — that
+asset records the moment it was drawn, and this note is the correction a reader needs (see _A design
+result is a MOMENT_). The pane header therefore holds the switcher alone.
+
+**Per element:** the shipped full-screen button's shell — `--el-surface` fill, `--el-border`,
+`--radius-btn`, `--height-control`, `--shadow-card` — widened for a label, because this control has
+no icon a reader could guess. Resting ink `--el-text-secondary`; ACTIVE takes `--el-accent-soft` fill,
+`--el-accent` border and `--el-accent` ink; DISABLED is the same shell at reduced opacity. A real
+`<button>` carrying `aria-pressed`. **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` /
+`h-*`.**
+
+### §L2 · The SET, and why it is orthogonal to the op languages
+
+**Every proposal on the level in view, whatever its `op`** — `add`, `modify` and `remove` alike,
+which is what the request's _added / updated / archived_ names. A `modify` or `remove` shares its node
+id with the committed card it targets, so the ring lands ON that card rather than beside it.
+
+**The op languages from Part I §3 panel B stay exactly as they are: they say WHICH change this is,
+and the emphasis says THAT there is one.** They are orthogonal, and neither is an alternative to the
+other — a build card must not read this as a choice.
+
+### §L3 · The treatment — the SHIPPED ring and the SHIPPED dim
+
+`ProjectRoadmapCanvas`'s node wrapper already rings a selected or search-matched node
+(`ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)`) and already dims
+everything outside the connected set (`opacity-35`). **Show changes applies that same pair to a SET.**
+One ring value, one dim value, one vocabulary; no second highlight language.
+
+**The dim stays at the shipped 35%, not lower.** A committed sibling is on this canvas for a reason —
+_"seeing the company a proposed card will keep is most of what 'is this the right place for it?'
+means"_ (`planLevel.tsx`) — so dimming it to invisibility would defeat the level the emphasis exists
+to read.
+
+### §L4 · A live SELECTION WINS, and the toggle stays pressed
+
+Selecting a card already dims everything unconnected to it, and both mechanisms write the same
+`connectedIds`-shaped state. Layering them gives three opacity tiers and no legible meaning. So the
+**selection wins for as long as it lasts** — a proposed card outside the selection's connected set is
+dimmed like any other. The toggle stays `aria-pressed`, so clearing the selection restores the
+emphasis rather than making the reader re-arm it. **A selection is a momentary act; the toggle is a
+mode, and a mode should survive one.**
+
+### §L5 · The plan's cards that are NOT on this level — a COUNT, and no navigation
+
+The canvas is per-level; a plan spread over three parents has most of itself off-screen. **The control
+reads `3 of 11` whenever the level holds fewer than the plan's total, and stops there.** It offers no
+way to reach the rest, deliberately: **the way to the other eight is Part VIII's LIST**, which is the
+whole reason that body exists. A second navigation affordance here would be a worse answer to the
+same question, in the pane that already has the better one.
+
+### §L6 · The degenerate levels
+
+- **A level with NO proposals** (the reviewer drilled elsewhere): the toggle is **disabled**, with
+  `title` and accessible description _"No proposed changes on this level"_. An ON state would dim
+  every card and ring none — a screen that says nothing, which is worse than a control that says why
+  it cannot help.
+- **A level that is ENTIRELY the plan's**: enabled, and ON simply rings everything with nothing to
+  dim. Correct and harmless, not special-cased, and the count reading `4 of 4` is the honest thing to
+  say about it.
+
+### §L7 · A DECIDED plan — the control SURVIVES, in the past tense
+
+Part VI made this pane a RECORD after the decision. **"What did this plan change?" is a better
+question after approve than before** — the cards are real now and sit among neighbours that were
+always there — so the control stays and its label moves to the past tense (_Show what changed_). On a
+DECLINED plan it stays too, reading the same: the record is of what the plan _would_ have changed, and
+the reader is asking the same thing.
+
+### §L8 · a11y and motion
+
+The toggle is a real button carrying `aria-pressed`, so its state is announced rather than inferred
+from its fill; disabled, it carries the reason as its accessible description. **The emphasis is never
+colour alone** — a ringed node also carries its own `op` badge, which is TEXT (`add` / `change` /
+`archive`), and the dim is a second non-hue channel. And because turning this on changes the opacity
+of most of the screen at once, **the transition is dropped entirely under
+`prefers-reduced-motion: reduce`**: the state changes instantly rather than fading.
+
+## 3. The conditional DEFAULT VIEW — the rule Part VIII defers to this Part
+
+**The canvas by default; the LIST when the plan's proposals sit under MORE THAN ONE distinct
+parent.**
+
+- **What counts as a container:** a distinct `parentNodeId`, whether that parent is committed or
+  itself proposed. **`null` — a root proposal — counts as ONE container, the top level**, so a plan of
+  pure roots has exactly one and opens on the canvas.
+- **Why:** a straddling plan has no single level that can show it, and the canvas shows one level at a
+  time. Opening on it is the surface insisting on a view that structurally cannot answer the question.
+  The list already exists by then, and making it the default in that one case is the cheapest of the
+  three fixes here and the one that admits the most.
+- **The switcher itself is Part VIII's.** This Part decides only which option is preselected — and
+  Part VIII cites this section rather than restating it, so the two cannot drift into two answers.
+- **The URL contract is unchanged:** the default writes a CLEAN url with no parameter, whatever the
+  default is, so every existing `/plans/[id]` link stays byte-identical.
+- **The default is a SEED, read once.** A `generating` plan can cross the one-container threshold
+  while a reviewer is looking at it; a later poll must never move them between views.
+
+## 4. The workflow spec this Part draws to — the three build cards
+
+The card required these to be read, not inferred, and this is which behaviour came from which:
+
+| behaviour                                                                                                    | card                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the arrival level, the tie-break, the proposed crumb, the trail synthesis and the degrades                   | **MOTIR-3260** — _the plan canvas OPENS on the level the plan actually fills_, which also ships a pure container-spread module (`planShape`) beside `lib/planning/planReview.ts` |
+| the emphasis, its opt-in prop on the foundation, the set, the reset on level change, and the off-level count | **MOTIR-3261** — _SHOW CHANGES on the plan canvas_                                                                                                                               |
+| the derived default view                                                                                     | **MOTIR-3262** — _a plan whose proposals STRADDLE containers opens in the LIST view_, which reads the container count from that same module and re-derives nothing               |
+
+Two constraints those cards state that this Part has honoured rather than contradicted: the emphasis
+prop is **opt-in and the foundation's four other consumers are byte-unchanged**, and the container
+count has **exactly one implementation**, in that module, which both the arrival level and the
+default view read.
+
+## 5. Copy — every string these panels introduce
+
+Both catalogues are owed (the zh-parity gate). **The namespace splits on WHO owns the string**, which
+is the same line the opt-in prop draws:
+
+| key                | namespace        | en                                                                   | why this namespace                                                                      |
+| ------------------ | ---------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `showChanges`      | `roadmap.canvas` | Show changes                                                         | the control lives on the FOUNDATION, which has five consumers                           |
+| `showChangesPast`  | `planReview`     | Show what changed                                                    | the past tense is a fact about a decided PLAN, which the foundation knows nothing about |
+| `showChangesNone`  | `roadmap.canvas` | No proposed changes on this level                                    | the disabled reason, said by the control                                                |
+| `showChangesCount` | `roadmap.canvas` | {n} of {total}                                                       | the count, said by the control                                                          |
+| `proposedCrumb`    | `planReview`     | New                                                                  | the key-slot word on a proposed crumb — plan-specific                                   |
+| `allProposedLevel` | `planReview`     | Nothing committed here yet — every card on this level is this plan's | the level caption                                                                       |
+
+**The foundation cannot name what "the plan's changes" ARE** — it has no idea it is showing a plan —
+so the strings it renders are generic and the plan-specific ones are passed in. That is the same
+reason the emphasised ids are a prop rather than something the canvas derives.
+
+## 6. GIVES / TAKES — swept over the story SUBTREE
+
+**TAKES** (premises as well as elements):
+
+- **Part VIII's _which view is DEFAULT_ deferral — a PREMISE.** Part VIII states the default is a
+  conditional rule and cites this Part; §3 is that rule.
+- **Part VIII's reserved pane-header slot — a STRUCTURE, RELEASED not consumed** (§L1). Part VIII's
+  asset draws a placeholder there that is not built; recorded here, with that asset left frozen.
+- **Part VI's _the decided pane holds a RECORD_ — a PREMISE, EXTENDED** (§L7): the control survives
+  the decision and changes tense.
+- **Part V panel E's _a proposal is a normal card on its parent's level_ — a PREMISE this Part
+  completes.** Part V made the level right; Part IX makes the ARRIVAL right, which is the same
+  argument one step earlier.
+- **Part I §3 panel B's three `op` languages — an ELEMENT set, untouched and explicitly orthogonal**
+  to the emphasis (§L2).
+- **Part I §5's access path — a STRUCTURE, cited.** This Part adds no entrance.
+- **`ProjectRoadmapCanvas`'s selected / search-matched ring and `opacity-35` dim — ELEMENTS, reused
+  verbatim** (§L3), and its `initialTrail` read-once contract — a PREMISE (§0).
+- **MOTIR-3152's breadcrumb-root fix — an ELEMENT** the degrade in §1.5 leans on.
+
+**GIVES:**
+
+- **MOTIR-3260** takes §1 whole: the rule, the tie-break, the crumb, the all-proposed level and both
+  degrades.
+- **MOTIR-3261** takes §L1–§L8: placement, the prop's shape, the set, the treatment, the selection
+  interaction, the count, the two degenerate levels, the decided-plan label and the a11y/motion line.
+- **MOTIR-3262** takes §3: the rule, what counts as a container, the pure-roots case, and the
+  seed-not-controlled property.
+- **Part VIII** gets its reserved slot back, and its switcher stands alone in the pane header.
+
+## 7. What Part IX does NOT draw
+
+The node treatments and the three `op` languages; the drill / Back / search / zoom / full-screen
+mechanics; the List ↔ Canvas switcher and the list body (Part VIII's); the review rail; the establish
+band; the `/plans` list surface (Part VII's); and any new entrance to this surface.
