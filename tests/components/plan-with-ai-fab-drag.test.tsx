@@ -15,7 +15,11 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 //     in your face;
 //   * the orb must not be draggable off-screen, and a resize must not strand it;
 //   * `prefers-reduced-motion` must keep the drag and drop the flight;
-//   * position must NOT be persisted — a new tab starts in the default corner.
+//   * position must NOT be persisted — a new tab starts in the default corner;
+//   * an OPEN callout must be gone the moment the orb moves, and stay gone
+//     through the throw and after it (MOTIR-3226) — the orb is the popover's own
+//     trigger, so a panel nobody closed rode the drag across the page and then
+//     stranded ~818px behind a flying orb.
 //
 // ⚠️ AND ONE PROPERTY-LEVEL CONTRACT, WHICH IS WHY THE ASSERTIONS READ
 // `style.translate` AND NOT `style.transform` (MOTIR-3214). The orb's own classes
@@ -85,34 +89,75 @@ function translateOf(el: HTMLElement): { x: number; y: number } | null {
   return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
 }
 
+/** The three halves of a gesture, separately — a test that asserts what the
+ *  page looks like WHILE the orb is moving cannot use the whole-gesture helper
+ *  below, because by the time it returns the finger is already up. */
+function press(el: HTMLElement, [x, y]: [number, number], pointerId = 1): void {
+  fireEvent.pointerDown(el, { button: 0, pointerId, clientX: x, clientY: y });
+}
+
+function movePointer([x, y]: [number, number], timeStamp: number, pointerId = 1): void {
+  act(() => {
+    window.dispatchEvent(
+      pointerEvent('pointermove', { clientX: x, clientY: y, pointerId, timeStamp }),
+    );
+  });
+}
+
+function releasePointer([x, y]: [number, number], timeStamp: number, pointerId = 1): void {
+  act(() => {
+    window.dispatchEvent(
+      pointerEvent('pointerup', { clientX: x, clientY: y, pointerId, timeStamp }),
+    );
+  });
+}
+
 /** One drag gesture. `steps` are absolute client coordinates. */
 function drag(el: HTMLElement, from: [number, number], steps: Array<[number, number]>): void {
-  fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: from[0], clientY: from[1] });
+  press(el, from);
   let t = 0;
   for (const [x, y] of steps) {
     t += 16;
-    act(() => {
-      window.dispatchEvent(
-        pointerEvent('pointermove', {
-          clientX: x,
-          clientY: y,
-          pointerId: 1,
-          timeStamp: t,
-        }),
-      );
-    });
+    movePointer([x, y], t);
   }
   const last = steps.at(-1) ?? from;
-  act(() => {
-    window.dispatchEvent(
-      pointerEvent('pointerup', {
-        clientX: last[0],
-        clientY: last[1],
-        pointerId: 1,
-        timeStamp: t + 16,
-      }),
-    );
+  releasePointer(last, t + 16);
+}
+
+/** Open the callout the way a user does — a press that does not move, and the
+ *  click the browser fires on release. */
+async function openCallout(el: HTMLElement): Promise<void> {
+  press(el, [1150, 750], 9);
+  releasePointer([1150, 750], 4, 9);
+  fireEvent.click(el);
+  expect(await screen.findByRole('dialog')).toBeTruthy();
+}
+
+/** Collect animation frames instead of running them, so a test drives the
+ *  flight one frame at a time. Returns the queue and a pump. */
+function captureFrames(): {
+  frames: FrameRequestCallback[];
+  pumpToRest: () => number;
+} {
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    frames.push(cb);
+    return frames.length;
   });
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  let clock = 1000;
+  vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  const pumpToRest = (): number => {
+    let pumped = 0;
+    while (frames.length > 0 && pumped < 2000) {
+      const cb = frames.shift()!;
+      clock += 16;
+      act(() => cb(clock));
+      pumped++;
+    }
+    return pumped;
+  };
+  return { frames, pumpToRest };
 }
 
 let reducedMotion = false;
@@ -503,5 +548,120 @@ describe('a gesture cannot poison the next one', () => {
     fireEvent.click(el);
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
+  });
+});
+
+// ── A MOVING ORB CANNOT CARRY ITS OWN POPOVER (MOTIR-3226) ──────────────────
+// The orb is the callout's `Popover.Trigger`, and nothing in the gesture path
+// touched the popover's `open` state — so an open panel was DRAGGED across the
+// page (288px of menu over the user's content), and on a throw it detached and
+// stranded ~818px from the orb before snapping back at rest. Both are one bug:
+// the gesture and the popover were built as if the other did not exist.
+//
+// Why the panel is CLOSED rather than re-anchored: the report asked for it to be
+// hidden, and a menu glued to a flying orb is the worse of the two. Why it does
+// not come back at rest: the click a drag produces is deliberately swallowed
+// (`onClickCapture`), so the user has asked for nothing.
+describe('a moving orb closes the callout', () => {
+  it('the panel is GONE from the first painted frame of the drag', async () => {
+    renderWithIntl(<PlanWithAIFab />);
+    const el = orbEl();
+    stubRect(el, 1124, 724);
+    await openCallout(el);
+
+    press(el, [1150, 750]);
+    // The first move past the 4px threshold is the first frame the orb is
+    // painted anywhere new — the panel must already be gone by then, not one
+    // commit later.
+    movePointer([1000, 600], 16);
+    expect(translateOf(el)).not.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // …and it stays gone for the rest of the drag, over every one of the four
+    // positions the report measured it sledding through.
+    for (const [i, step] of (
+      [
+        [800, 450],
+        [600, 320],
+        [420, 240],
+      ] as Array<[number, number]>
+    ).entries()) {
+      movePointer(step, 32 + i * 16);
+      expect(screen.queryByRole('dialog')).toBeNull();
+    }
+    releasePointer([420, 240], 80);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('stays closed through the THROW and at rest — it does not re-open when the orb settles', async () => {
+    const { frames, pumpToRest } = captureFrames();
+    renderWithIntl(<PlanWithAIFab />);
+    const el = orbEl();
+    stubRect(el, 1124, 724);
+    await openCallout(el);
+
+    // A hard flick: enough travel to be a drag, enough velocity to fly.
+    press(el, [1150, 750]);
+    movePointer([900, 750], 16);
+    movePointer([600, 750], 32);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    releasePointer([600, 750], 48);
+    // The release is the moment `dragging` goes false — the flight is still to
+    // come, and the panel must not reappear for it.
+    expect(frames.length).toBeGreaterThan(0);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // Mid-flight: this is where the panel used to sit 818px behind the orb.
+    act(() => frames.shift()!(1016));
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // …and all the way to rest, which is where it used to snap back under the
+    // orb rather than being gone.
+    pumpToRest();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('REDUCED MOTION — no flight to wait for, and the panel is still closed at rest', async () => {
+    reducedMotion = true;
+    const { frames } = captureFrames();
+    renderWithIntl(<PlanWithAIFab />);
+    const el = orbEl();
+    stubRect(el, 1124, 724);
+    await openCallout(el);
+
+    press(el, [1150, 750]);
+    movePointer([900, 750], 16);
+    movePointer([600, 750], 32);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    releasePointer([600, 750], 48);
+    // `fling` refuses under reduced motion, so the orb is already at rest here —
+    // and the panel must not come back for the arrival.
+    expect(frames).toHaveLength(0);
+    expect(translateOf(el)).not.toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('a SHAKY TAP under the threshold does not close it — the orb keeps its button', async () => {
+    renderWithIntl(<PlanWithAIFab />);
+    const el = orbEl();
+    stubRect(el, 1124, 724);
+    await openCallout(el);
+
+    // 3px of travel: below `DRAG_THRESHOLD_PX`, so nothing was painted and
+    // nothing moved. Hiding on MOVEMENT must not fire on a hand that wobbles.
+    press(el, [1150, 750]);
+    movePointer([1152, 751], 16);
+    releasePointer([1152, 751], 32);
+
+    expect(translateOf(el)).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeNull();
   });
 });
