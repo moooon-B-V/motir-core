@@ -70,6 +70,13 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
   'tests/rls/system-context-arm-guard.test.ts':
     'imports ../helpers/adminDb — it pairs the static scan with live assertions ' +
     'about the system context, so it needs a migrated database.',
+  'tests/rls/org-context-arm-guard.test.ts':
+    'imports ../helpers/adminDb — same shape as its system-context sibling one ' +
+    'axis over (MOTIR-2959). The arm inventory it adjudicates against is a ' +
+    'pg_policies read, not a source scan, so the lane cannot host it.',
+  'tests/rls/other-context-arm-guard.test.ts':
+    'imports ../helpers/adminDb — the workspace / user / org-user descriptors, ' +
+    'adjudicated against the same live pg_policies inventory (MOTIR-2959).',
   'tests/permissions/roleAssignment.test.ts':
     'imports @/lib/db and ../helpers/adminDb — it checks the role-assignment ' +
     'matrix against real rows, not only against source.',

@@ -1516,7 +1516,8 @@ caller DELETES on that), and the fleet cost meter reporting zero.
 
 ### The guard — per (table, context), against `pg_policies`
 
-`tests/rls/systemContextScan.ts` + `tests/rls/system-context-arm-guard.test.ts`. **This is the
+`tests/rls/contextArmScan.ts` (named `systemContextScan.ts` until MOTIR-2959 made the GUC a
+parameter) + `tests/rls/system-context-arm-guard.test.ts`. **This is the
 instrument MOTIR-2864's entry asked for and MOTIR-2881's closing section names again** — _"an
 assertion per (table, context) pair"_ — built here because this class is the one that cannot be
 found any other way. It is the FOURTH scanner, and the first that asks a question about the
@@ -1796,7 +1797,7 @@ discriminator is the block's ROLE in the test, not its syntax:
 The convention was already established in the tree and simply not applied uniformly: `tests/jobs/dlq.test.ts`
 keeps `replayDLQ` on `withSystemContext` and asserts through `adminDb.jobRunDlq.findUnique` in the same test.
 
-### The instrument — `systemContextScan` now walks `tests/`, and the guard adjudicates it
+### The instrument — `systemContextScan` (now `contextArmScan`) walks `tests/`, and the guard adjudicates it
 
 `SCAN_ROOTS` gains `tests`, `walk()` skips `__fixtures__` (the scanner's own negative fixture is a
 separate root with its own cache key), and `enclosingName` gains a case for a test callback. That last
@@ -2034,6 +2035,22 @@ one.
 | `billingService.syncScaledTrackerSeatQuantity` :347 (bind) | `organization`, `organization_membership`                     | ✓ / ✓                                                                             |
 | `workspacesService.addMember` :607 (bind)                  | `organization_membership` (INSERT)                            | ✓ `org_membership_insert_active_or_bootstrap`                                     |
 
+> **⚠️ THIS TABLE IS NO LONGER WHERE THE SWEEP LIVES — `tests/rls/org-context-arm-guard.test.ts` IS
+> (MOTIR-2959, 2026-08-20).** Every row above is now `ORG_SWEEP` in that guard, keyed
+> line-independently as `file#enclosing`, and re-derived on every run by
+> `contextArmScan`'s `ORG_SERVICE_CONTEXT` descriptor: a call site with no row fails the build, a row
+> whose call site is gone fails the build, and every table named in a row is re-measured against
+> `pg_policies` rather than believed. **The table below stays as the RECORD of what was read on
+> 2026-08-17 and why; it is not the thing to update when a caller is added.** The paragraph directly
+> under it — "a hand sweep is a snapshot; the thirteenth call site restores the class in silence" — is
+> the whole reason, and it applied to this table from the day it was written.
+>
+> One row is carried by HAND inside the guard and says so: `workspacesService.addMember` reaches
+> `organization_membership` through `organizationsService.ensureOrgMembership(…, tx)`, a SERVICE call
+> the scan's walk does not follow (it follows repositories and name-resolvable helpers). That is the
+> instrument's blind spot, named at the row rather than absorbed (`notes.html` #268 / #273); widening
+> the walk to service objects would move the `withSystemContext` axis too and is a card of its own.
+
 Every repository method behind those rows was read for JOINs rather than assumed from its name —
 that is the half `notes.html` #269 says an arm inventory cannot answer. `organizationRepository`
 (`findByIdInTx` / `findCapContext*` / `lockByIdForUpdate`), `organizationMembershipRepository.countByOrg`
@@ -2045,6 +2062,30 @@ binds `app.user_id` as well) whose readers are `organizationsService`, `billingS
 `aiUsageService`, `acceptanceVideoEligibilityService` and `lib/ai/tenantOrg.ts`. Their reads are
 member-scoped by design and admitted through `organization_membership_visible` /
 `workspace_membership_visible`, which is why this card's guard deliberately leaves them alone.
+
+> **AND THE "OUT OF SCOPE" IS NOW MEASURED RATHER THAN ASSERTED (MOTIR-2959).** `withOrgContext` is
+> `ORG_USER_CONTEXT`, a declared descriptor with BOTH its GUCs, adjudicated in
+> `tests/rls/other-context-arm-guard.test.ts` alongside the workspace and user families. On
+> `origin/main` @ `7de5856f`:
+>
+> | descriptor                                             | sites | `context-only` | UNARMED (site, table) pairs |
+> | ------------------------------------------------------ | ----: | -------------: | --------------------------: |
+> | `SYSTEM_CONTEXT` (`withSystemContext`)                 |   166 |             27 |                           0 |
+> | `ORG_SERVICE_CONTEXT` (the pair swept above)           |    31 |             30 |                           0 |
+> | `WORKSPACE_CONTEXT` (service + `bindWorkspaceContext`) |   893 |            866 |                           0 |
+> | `WORKSPACE_USER_CONTEXT` (`withWorkspaceContext`)      |   384 |            335 |                           0 |
+> | `ORG_USER_CONTEXT` (`withOrgContext`)                  |    19 |             15 |                           0 |
+> | `USER_CONTEXT` (`withUserContext`)                     |    39 |             27 |                           1 |
+>
+> The one pair is `publicRequestsService.toggleUpvote` reading `work_item` — a FALSE POSITIVE of an
+> arm inventory keyed on a setting name, because `work_item_public_project_read` admits the row while
+> reading no GUC at all. Adjudicated `guc-less-arm` in that guard, with the four test files that
+> settle it.
+>
+> MOTIR-2959 asked for these families to sit behind a CEILING **if their verdict count is large**.
+> The "if" was answered before the mechanism was chosen, and one pair is not a population to bound —
+> it is a verdict to write down (`notes.html` #317: a count and a composition are two measurements,
+> and only one of them had been taken).
 
 ### Blast radius, and why the timing was lucky
 

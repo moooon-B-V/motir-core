@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminDb } from '../helpers/adminDb';
-import { scanSystemContexts, schemaMap, systemOnlyReads } from './systemContextScan';
+import { SYSTEM_CONTEXT, contextOnlyReads, scanContexts, schemaMap } from './contextArmScan';
+import { armedTables, rlsEnabledTables } from './policyArms';
 
 // The SYSTEM-CONTEXT ARM guard (MOTIR-2880) — the FOURTH axis, and the first one
 // that asks a question about the DATABASE rather than about the code.
@@ -34,12 +35,29 @@ import { scanSystemContexts, schemaMap, systemOnlyReads } from './systemContextS
 // reads the armed `project` and dies on its `workspace: { is: {} }` relation
 // filter; `ciContainerPeriodCostRepository#sumForPeriodByMetaSplit` reads the
 // armed `ci_container_period_cost` and dies on `JOIN "organization"`. So
-// `systemContextScan` resolves relation keys and raw-SQL join targets, and the
+// `contextArmScan` resolves relation keys and raw-SQL join targets, and the
 // assertion below runs over every table the query touches.
 //
 // The division of labour is the one MOTIR-2784 established and the three sibling
 // guards keep: the machine enumerates, a human adjudicates, and a site nobody has
 // ruled on fails the build.
+//
+// ── ⚠️ THE SCANNER IS NO LONGER THIS GUARD'S ALONE (MOTIR-2959) ─────────────
+// `systemContextScan.ts` is now `contextArmScan.ts`, and the GUC it asks about
+// is a {@link ContextDescriptor} parameter rather than a constant — because the
+// question was never specific to `app.system_admin`, and the same class has
+// since been found on the org binding (MOTIR-2956, the free-tier storage cap).
+// `org-context-arm-guard.test.ts` is the second consumer and
+// `other-context-arm-guard.test.ts` the third.
+//
+// **Nothing in THIS file's verdicts moved, and that was checked rather than
+// hoped.** Running the pre-rename scanner and `scanContexts(SYSTEM_CONTEXT)`
+// side by side over `origin/main` @ `7de5856f` returns the same 166 sites and
+// the same 14 fixture sites, field for field — file, line, enclosing, key,
+// verdict, models, raw, via and unresolvedCalls. Two names changed and no
+// judgement did: the verdict `system-only` reads `context-only` and
+// `binds-tenant` reads `narrowed`, because on a descriptor that binds an org id
+// neither of the old words means anything.
 
 /** Why a system-only read of an UNARMED table is nonetheless acceptable. */
 type Verdict =
@@ -106,7 +124,7 @@ const WALLED_SITES: Record<string, string> = {
 };
 
 let rlsTables: Set<string>;
-let armedTables: Set<string>;
+let systemArmed: Set<string>;
 
 // WARM THE SCAN ONCE, in a hook with its own budget — the reason
 // `call-site-guard.test.ts` and `bare-transaction-guard.test.ts` both give: the
@@ -120,29 +138,15 @@ let armedTables: Set<string>;
 // ⚠️ Do NOT "fix" a recurrence by raising `testTimeout`: that is a global knob
 // and this is one expensive fixture.
 beforeAll(async () => {
-  scanSystemContexts();
-  scanSystemContexts('tests/rls/__fixtures__/systemContexts');
-  const enabled = await adminDb.$queryRaw<{ relname: string }[]>`
-    SELECT c.relname
-      FROM pg_class c
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND c.relrowsecurity
-  `;
-  rlsTables = new Set(enabled.map((r) => r.relname));
-
-  // A table is READ-armed when a PERMISSIVE policy covering SELECT (`FOR SELECT`
-  // or `FOR ALL`) has `app.system_admin` in its USING clause. Permissive matters:
-  // Postgres combines them with OR, so a permissive arm ADMITS. A restrictive one
-  // could only ever narrow, and reading it as an arm would be backwards.
-  const arms = await adminDb.$queryRaw<{ tablename: string }[]>`
-    SELECT DISTINCT tablename
-      FROM pg_policies
-     WHERE schemaname = 'public'
-       AND permissive = 'PERMISSIVE'
-       AND cmd IN ('SELECT', 'ALL')
-       AND coalesce(qual, '') LIKE '%system_admin%'
-  `;
-  armedTables = new Set(arms.map((r) => r.tablename));
+  scanContexts(SYSTEM_CONTEXT);
+  scanContexts(SYSTEM_CONTEXT, 'tests/rls/__fixtures__/systemContexts');
+  rlsTables = await rlsEnabledTables();
+  // The arm inventory moved to `policyArms.ts` when MOTIR-2959 made the GUC a
+  // parameter; the question it asks is the one this guard has always asked, and
+  // tightening the match from `%system_admin%` to the
+  // `current_setting('app.system_admin'` reference returns the SAME 29 tables on
+  // `origin/main` @ `7de5856f`. No verdict below is re-derived.
+  systemArmed = await armedTables(SYSTEM_CONTEXT.gucs[0]!);
 }, 120_000);
 
 afterAll(async () => {
@@ -154,15 +158,15 @@ describe('every system-context read touches a table whose policy set reads app.s
     const { tableOf } = schemaMap();
     const findings: string[] = [];
 
-    for (const site of scanSystemContexts()) {
-      for (const model of site.systemOnlyModels) {
+    for (const site of scanContexts(SYSTEM_CONTEXT)) {
+      for (const model of site.contextOnlyModels) {
         const table = tableOf.get(model);
         if (!table) {
           findings.push(`${site.key} :: ${model} — no table in prisma/schema.prisma`);
           continue;
         }
         if (!rlsTables.has(table)) continue; // over-approximation; nothing to be blind to
-        if (armedTables.has(table)) continue;
+        if (systemArmed.has(table)) continue;
         if (DELIBERATELY_SYSTEM_ONLY[`${site.key} :: ${model}`]) continue;
         findings.push(
           `${site.key} :: ${model} -> "${table}" has RLS and NO system_admin read arm ` +
@@ -195,7 +199,9 @@ describe('every system-context read touches a table whose policy set reads app.s
     // record for a shape nobody can find any more.
     const { tableOf } = schemaMap();
     const live = new Set(
-      scanSystemContexts().flatMap((s) => s.systemOnlyModels.map((m) => `${s.key} :: ${m}`)),
+      scanContexts(SYSTEM_CONTEXT).flatMap((s) =>
+        s.contextOnlyModels.map((m) => `${s.key} :: ${m}`),
+      ),
     );
     const stale = Object.keys(DELIBERATELY_SYSTEM_ONLY).filter((k) => !live.has(k));
     expect(stale, 'a verdict for a pair the scan no longer reports — delete it').toEqual([]);
@@ -210,9 +216,9 @@ describe('every system-context read touches a table whose policy set reads app.s
     // The pair this card could not fix by binding, pinned BY NAME. They are the
     // reason two policies were added, so the day someone reverts an arm the
     // failure names the read rather than appearing as an anonymous count.
-    expect(armedTables.has('workspace'), 'workspace — projectRepository#findLivePairs').toBe(true);
+    expect(systemArmed.has('workspace'), 'workspace — projectRepository#findLivePairs').toBe(true);
     expect(
-      armedTables.has('organization'),
+      systemArmed.has('organization'),
       'organization — ciContainerPeriodCostRepository#sumForPeriodByMetaSplit',
     ).toBe(true);
   });
@@ -222,7 +228,7 @@ describe('every system-context read touches a table whose policy set reads app.s
     // the same reason: the day someone reverts this the failure should name the
     // read that goes blind rather than surface as an anonymous count.
     //
-    // ⚠️ It is NOT in `armedTables` and must not be — that set is the
+    // ⚠️ It is NOT in `systemArmed` and must not be — that set is the
     // `system_admin` arm, and this is a WORKSPACE-MEMBER arm. The team grid's
     // caller is already correctly bound to its own tenant; what it cannot reach
     // is other users' rows INSIDE that tenant, which no binding fixes and
@@ -266,7 +272,7 @@ describe('every system-context read touches a table whose policy set reads app.s
     // workspace's membership rows. Asserting the absence is what makes the bind
     // the only answer that keeps this suite green.
     expect(
-      armedTables.has('workspace_membership'),
+      systemArmed.has('workspace_membership'),
       'workspace_membership must NOT get a system_admin arm — githubWebhookService#' +
         'resolveGithubChangeRequestContext binds repo.workspaceId instead (MOTIR-2910)',
     ).toBe(false);
@@ -302,39 +308,39 @@ describe('the scanner itself', () => {
     // against a fixture ROOT so proving the detector works can never leave a stray
     // unbound system context in a real service.
     const root = 'tests/rls/__fixtures__/systemContexts';
-    const byEnclosing = new Map(scanSystemContexts(root).map((s) => [s.enclosing, s]));
+    const byEnclosing = new Map(scanContexts(SYSTEM_CONTEXT, root).map((s) => [s.enclosing, s]));
     const site = (fn: string) => byEnclosing.get(fn);
 
     // Pinned INDIVIDUALLY. One `toEqual` over the set would pass for the wrong
     // reason the day the scan returns nothing at all.
     expect(site('systemOnlyRead')?.verdict, 'a plain gated read under the flag').toBe(
-      'system-only',
+      'context-only',
     );
 
     // ⚠️ THE JOIN CASES — the three shapes an arm inventory clears and the query
     // does not. Each must report the JOINED model too, not only the FROM clause.
-    expect(site('systemOnlyJoinedRead')?.systemOnlyModels, 'an `include` is a join').toEqual([
+    expect(site('systemOnlyJoinedRead')?.contextOnlyModels, 'an `include` is a join').toEqual([
       'gadget',
       'widget',
     ]);
     expect(
-      site('systemOnlyRelationFilterRead')?.systemOnlyModels,
+      site('systemOnlyRelationFilterRead')?.contextOnlyModels,
       'a relation FILTER is a join — this is `findLivePairs`',
     ).toEqual(['gadget', 'widget']);
     expect(
-      site('systemOnlyRawJoin')?.systemOnlyModels,
+      site('systemOnlyRawJoin')?.contextOnlyModels,
       'a raw-SQL JOIN is a join — this is `sumForPeriodByMetaSplit`',
     ).toEqual(['gadget', 'widget']);
 
     // The binding, and its POSITION.
-    expect(site('bindsBeforeRead')?.verdict, 'bound before the read').toBe('binds-tenant');
+    expect(site('bindsBeforeRead')?.verdict, 'bound before the read').toBe('narrowed');
     expect(
       site('bindsAfterRead')?.verdict,
       'a binding AFTER the read cannot retroactively bind it — a whole-site boolean ' +
         'gets this wrong, and every site this card fixed binds MID-BLOCK',
-    ).toBe('system-only');
+    ).toBe('context-only');
     expect(
-      site('discoversThenBinds')?.systemOnlyModels,
+      site('discoversThenBinds')?.contextOnlyModels,
       'the connection-tier read before the bind is system-only BY DESIGN; only the ' +
         'tenant read after it is bound',
     ).toEqual([]);
@@ -344,7 +350,7 @@ describe('the scanner itself', () => {
 
     // One hop into a same-file helper.
     expect(site('systemOnlyViaHelper')?.verdict, 'one hop into a forwarding helper').toBe(
-      'system-only',
+      'context-only',
     );
 
     // A tenant-bound context is not a system context, so it is not reported.
@@ -357,10 +363,10 @@ describe('the scanner itself', () => {
     // finding it is why the walk is recursive at all. Four is OUT, so the bound is
     // a decision rather than an accident of how deep the tree happened to go.
     expect(site('systemTwoHops')?.verdict, 'two hops — the real miss lived here').toBe(
-      'system-only',
+      'context-only',
     );
     expect(site('systemThreeHops')?.verdict, 'three hops — the last one in reach').toBe(
-      'system-only',
+      'context-only',
     );
     expect(
       site('systemFourHops')?.verdict,
@@ -370,12 +376,12 @@ describe('the scanner itself', () => {
     // Mutual recursion terminates and still reports what it reaches. Without the
     // visited set the bounded walk would be finite but would re-enter `ping` on
     // every level, which is the shape that turns a scan into a hang.
-    expect(site('systemMutualRecursion')?.verdict, 'ping/pong terminates').toBe('system-only');
+    expect(site('systemMutualRecursion')?.verdict, 'ping/pong terminates').toBe('context-only');
 
     // THE WALL (MOTIR-2910). A `tx` handed to a function-typed PARAMETER is a
     // callee the walk cannot resolve by name, so everything below it is unread.
     // Both halves are pinned: the site NAMES the unresolved call, and its verdict
-    // is still `binds-tenant` — because the point is that a green verdict here is
+    // is still `narrowed` — because the point is that a green verdict here is
     // computed over a partial walk, which is exactly what made the real instance
     // invisible. A future change that starts resolving these will fail this and
     // should: the adjudication below would then be describing a solved problem.
@@ -386,7 +392,7 @@ describe('the scanner itself', () => {
     expect(
       site('systemUnresolvedCallback')?.verdict,
       'and the partial walk still reads green — the reason the field exists',
-    ).toBe('binds-tenant');
+    ).toBe('narrowed');
   });
 
   it('every site whose walk hit a WALL is adjudicated', () => {
@@ -396,7 +402,7 @@ describe('the scanner itself', () => {
     // evidence — someone has to have read the callee. Two exist, both the shared
     // change-request consumers, both taking the provider's resolver as a
     // parameter; every entry names what was read by hand and what it found.
-    const findings = scanSystemContexts()
+    const findings = scanContexts(SYSTEM_CONTEXT)
       .filter((s) => s.unresolvedCalls.length > 0)
       .filter((s) => !WALLED_SITES[s.key])
       .map((s) => `${s.key} — unresolved: ${s.unresolvedCalls.join(', ')}`);
@@ -408,7 +414,7 @@ describe('the scanner itself', () => {
         'the walk could read.\n\n' +
         'This is NOT a finding to silence — it is the shape that hid MOTIR-2910 ' +
         "(`resolveGithubChangeRequestContext`'s unbound `workspace_membership` read " +
-        'sat behind exactly this indirection while the site reported `binds-tenant`).\n\n' +
+        'sat behind exactly this indirection while the site reported `narrowed`).\n\n' +
         'To clear it: READ every implementation that can be passed for that ' +
         'parameter, adjudicate each against the arm rules above, and record the ' +
         'result in WALLED_SITES.',
@@ -420,7 +426,7 @@ describe('the scanner itself', () => {
     // indirection was refactored away keeps a permanent "someone read this" on
     // record for a shape nobody can find.
     const live = new Set(
-      scanSystemContexts()
+      scanContexts(SYSTEM_CONTEXT)
         .filter((s) => s.unresolvedCalls.length > 0)
         .map((s) => s.key),
     );
@@ -433,10 +439,10 @@ describe('the scanner itself', () => {
   it('actually finds the sites it is pointed at (a live negative)', () => {
     // A scanner that silently returns nothing passes forever. Pin that it walks the
     // real tree, resolves the schema, and classifies in more than one direction.
-    const all = scanSystemContexts();
+    const all = scanContexts(SYSTEM_CONTEXT);
     expect(all.length).toBeGreaterThan(50);
-    expect(all.some((s) => s.verdict === 'binds-tenant')).toBe(true);
-    expect(systemOnlyReads().length).toBeGreaterThan(0);
+    expect(all.some((s) => s.verdict === 'narrowed')).toBe(true);
+    expect(contextOnlyReads(SYSTEM_CONTEXT).length).toBeGreaterThan(0);
     // Every reported site names a real file and a real enclosing function.
     expect(all.filter((s) => s.enclosing === '<module>')).toEqual([]);
   });
