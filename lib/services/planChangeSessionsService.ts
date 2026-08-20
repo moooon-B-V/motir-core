@@ -444,7 +444,7 @@ export const planChangeSessionsService = {
     body: string,
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    opts: { isAnswer?: boolean; intent?: PlanChangeTurnIntent } = {},
+    opts: { isAnswer?: boolean; intent?: PlanChangeTurnIntent; jobId?: string } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -460,6 +460,7 @@ export const planChangeSessionsService = {
       // turns keep a null intent, exactly as every turn written before the
       // model existed does; that is why there is no back-fill.
       intent: opts.intent ?? null,
+      ...(opts.jobId ? { jobId: opts.jobId } : {}),
     });
   },
 
@@ -525,7 +526,7 @@ export const planChangeSessionsService = {
     turnId: string,
     intent: PlanChangeTurnIntent,
     pctx: ProjectContext,
-    opts: { corrected?: boolean } = {},
+    opts: { corrected?: boolean; jobId?: string } = {},
     scopeKey: string = PROJECT_SCOPE_KEY,
   ): Promise<PlanChangeSessionDto> {
     const session = await requireSession(pctx, scopeKey);
@@ -545,6 +546,7 @@ export const planChangeSessionsService = {
           turn.id,
           {
             intent,
+            ...(opts.jobId ? { jobId: opts.jobId } : {}),
             // `corrected` LATCHES: a turn re-read a second time stays corrected,
             // because what the flag records is that Motir once got it wrong, and
             // that does not stop being true.

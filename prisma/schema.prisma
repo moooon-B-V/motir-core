@@ -4931,8 +4931,12 @@ model PlanChangeTurn {
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
-  /// that keeps a re-read job from appending the same turn twice). Null on
-  /// `user` turns.
+  /// that keeps a re-read job from appending the same turn twice). Also set on a
+  /// `user` turn submitted through the ASK door (MOTIR-1819) — that turn IS its
+  /// own submission, so the turn is the natural key for the job it produced, and
+  /// the settle is then a single keyed, replayable lookup rather than "the most
+  /// recent user turn". Null on a `user` turn of the shipped plan-change path,
+  /// whose submission is a separate gesture writing a `system` marker.
   jobId       String?            @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.

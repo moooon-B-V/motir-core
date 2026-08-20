@@ -48,6 +48,19 @@ export const JOB_KINDS = [
   // enum (the open-core boundary) — adding it here closes the drift motir-ai's
   // envelope.ts documented while its consumer was unbuilt.
   'plan_sprint',
+  // `ask_project` (Story MOTIR-1343 — MOTIR-1817 handler / MOTIR-1819 consumer)
+  // — the ANSWERING job behind "Ask about this project": a question answered from
+  // the plan tree + code graph with CITATIONS, writing no plan delta and changing
+  // no work item. Adding it HERE closes the drift motir-ai's envelope documented
+  // while this consumer was unbuilt.
+  //
+  // ⚠️ It is also the CONVERSATION'S DOOR (`docs/decisions/conversation-turn-intent.md`
+  // §2): the person types into one composer with no mode to pick, so EVERY user
+  // turn is submitted as this kind, and the handler's first turn decides whether
+  // to answer it or hand it back as `intent: 'plan_change'` — at which point core
+  // dispatches the SHIPPED plan-change submit for the same turn. Mirror of the
+  // closed motir-ai enum (the open-core boundary).
+  'ask_project',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 

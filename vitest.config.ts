@@ -568,6 +568,29 @@ export default defineConfig({
         // (MOTIR-1730) join together, once the story's code has merged and the
         // numbers are real. The client TRANSPORT is gated too: it is the only
         // path the rail reaches the server by, and it shipped untested.
+        // Story MOTIR-1343 · MOTIR-1819 — the ASK seam. Every file here is new
+        // code this card wrote, MEASURED on this branch before being pinned (the
+        // sequence this block prescribes throughout):
+        //   `aiAskService.ts`  96.2 stmts / 93.9 branches / 100 funcs / 100 lines
+        //   `askResult.ts`     100 / 100 / 100 / 100
+        // Both are GATED in `thresholds` below.
+        //
+        // ⚠️ The three ROUTE files are REPORT-ONLY, deliberately, and the reason is
+        // the one the `_guard.tsx` note above gives rather than a shortfall worth
+        // hiding: what is uncovered in them is the `throw err` rethrow of an error
+        // the shared mapper did not recognise — a branch reachable only by an
+        // exception type no service on the path raises. Pinning 90 would either
+        // gate on a number the suite cannot honestly reach, or invite a test that
+        // fabricates an unmapped throw to walk one line. Publish the number; the
+        // pin belongs to whoever makes that arm reachable.
+        //
+        // ⚠️ WRITTEN WITH `**`, NOT A LITERAL `[jobId]`, for the reason this file
+        // records twice already: in a glob `[jobId]` is a CHARACTER CLASS, so the
+        // literal path names a directory that does not exist and the entry would
+        // quietly cover — and gate — nothing.
+        'lib/services/aiAskService.ts',
+        'lib/planning/askResult.ts',
+        'app/api/ai/ask/**/route.ts',
         'lib/services/planChangeSessionsService.ts',
         'lib/repositories/planChangeSessionRepository.ts',
         'lib/repositories/planChangeTurnRepository.ts',
@@ -2098,6 +2121,11 @@ export default defineConfig({
         'lib/ai/codeContext.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 7.30 · Subtask MOTIR-1732 — the plan-change conversation, the
         // planning-workspace host contract, and the rail's client state machine.
+        // Story MOTIR-1343 · MOTIR-1819 — measured on this branch before pinning
+        // (see the `include` note above for the numbers and for why the three
+        // route files are report-only).
+        'lib/services/aiAskService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/askResult.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/planChangeSessionsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/planChangeSessionRepository.ts': {
           branches: 90,

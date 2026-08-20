@@ -49,16 +49,24 @@ export const planChangeTurnRepository = {
     return tx.planChangeTurn.findFirst({ where: { id, sessionId, workspaceId } });
   },
 
-  /** Patch ONE turn in place. The only field a turn is ever updated on is its
-   *  INTENT (plus the flag that records the correction) — a turn's `body`, `seq`
-   *  and `role` are immutable by design, because the thread is a record of who
-   *  said what. Typed to `intent` / `intentCorrected` rather than to the full
-   *  update input so that immutability is a compile-time fact, not a convention.
+  /** Patch ONE turn in place. Exactly three fields are ever updated — its INTENT,
+   *  the flag recording a correction, and the JOB that ran for it — and a turn's
+   *  `body`, `seq` and `role` are immutable by design, because the thread is a
+   *  record of who said what. Typed to those three rather than to the full update
+   *  input so that immutability is a compile-time fact, not a convention.
    *  Requires `tx` (the write rule) — and it is called under the session's row
-   *  lock, so a concurrent correction cannot interleave with an append. */
+   *  lock, so a concurrent correction cannot interleave with an append.
+   *
+   *  ⚠️ `jobId` on a USER turn is MOTIR-1819's addition, and it widens what the
+   *  column's own comment said ("Null on `user` turns"). Before the ask path a
+   *  user turn produced no job of its own: submitting was a separate gesture that
+   *  wrote a `system` marker. An ask submit IS the turn, so the turn is the
+   *  natural key for its job — which is what makes the settle a single keyed,
+   *  replayable lookup instead of "the most recent user turn", a guess that is
+   *  wrong under exactly the concurrency the row lock exists for. */
   async updateIntent(
     id: string,
-    data: { intent: PlanChangeTurnIntent; intentCorrected?: boolean },
+    data: { intent?: PlanChangeTurnIntent; intentCorrected?: boolean; jobId?: string },
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn> {
     return tx.planChangeTurn.update({ where: { id }, data });

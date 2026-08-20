@@ -1,0 +1,143 @@
+import { NextResponse } from 'next/server';
+import { getSession } from '@/lib/auth';
+import { getActiveProject } from '@/lib/projects';
+import { aiAskService } from '@/lib/services/aiAskService';
+import { failureReasonFrame } from '@/lib/ai/jobStream';
+import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
+import type { JobStreamEvent } from '@/lib/ai/types';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+
+// GET /api/ai/ask/:jobId/stream (Story MOTIR-1343 · MOTIR-1819) — the live
+// channel the conversation rail subscribes to while an ask turn runs. Proxies the
+// motir-ai `ask_project` job stream (the shipped 7.1.5 `streamJob`) to the browser
+// as Server-Sent Events, relaying its progress frames and the terminal status, and
+// closing on a terminal state.
+//
+// It is the SHIPPED streaming path, not a second one: the same `streamJob`
+// relay, the same `formatFrame` / SSE headers, the same `failureReasonFrame`
+// enrichment, and the same status mapping the discovery stream uses — session and
+// project gates run BEFORE the stream opens so they return real HTTP codes, the
+// first frame is PRIMED so a pre-stream transport failure maps to 404 / 502, and
+// once frames are flowing a failure can only surface as a terminal `error` frame.
+//
+// ⚠️ THE STREAM IS NOT THE ANSWER. What lands on the thread is filed by
+// `POST /api/ai/ask/settle`, which the client calls when this stream settles —
+// core has no other signal that a motir-ai job finished. A reader who takes the
+// streamed text as the deliverable would lose it on reload.
+
+/** Serialise one relayed job event as an SSE frame (`event:` + `data:` JSON). */
+function formatFrame(ev: JobStreamEvent): string {
+  return `event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`;
+}
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream; charset=utf-8',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+} as const;
+
+// NOT rate-limited, deliberately (MOTIR-2597): this route READS a job whose cost was already
+// paid at submit time, where the `ai:generate` ceiling was spent. A limiter here would refuse a
+// caller mid-generation — cutting off the answer they have already been charged for — without
+// ever preventing a single provider call.
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ jobId: string }> },
+): Promise<Response> {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
+
+  const ctx = await getActiveProject();
+  if (!ctx) {
+    return NextResponse.json(
+      { code: 'NO_ACTIVE_PROJECT', error: 'No active project.' },
+      { status: 404 },
+    );
+  }
+
+  const { jobId } = await params;
+
+  // `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2359) — asserted BEFORE the
+  // stream opens, so the refusal is a real HTTP status and no SSE frame is ever
+  // written to an actor who may not plan.
+  //
+  // ⚠️ WHAT THIS GATE DOES AND DOES NOT ESTABLISH. It establishes that the caller
+  // may plan in THEIR OWN project. It does NOT establish that the job belongs to
+  // that project: a jobId is still readable across projects by an actor who has
+  // one, because motir-ai answers `GET /v1/jobs/:id` with no tenant filter. The
+  // id is now SENT (see `getJob` / `streamJob`); MOTIR-2360 is the card that makes
+  // motir-ai enforce it.
+  try {
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+  } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
+    throw err;
+  }
+  const iterator = aiAskService.streamAsk(jobId, ctx.projectId)[Symbol.asyncIterator]();
+
+  // Prime the first frame so a pre-stream transport failure (motir-ai
+  // unreachable / unknown job) maps to a real HTTP status rather than a stream
+  // that opens and immediately errors.
+  let first: IteratorResult<JobStreamEvent>;
+  try {
+    first = await iterator.next();
+  } catch (err) {
+    await iterator.return?.(undefined);
+    if (err instanceof MotirAiJobNotFoundError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof MotirAiError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
+    }
+    throw err;
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        let result = first;
+        let reasonEmitted = false;
+        while (!result.done) {
+          controller.enqueue(encoder.encode(formatFrame(result.value)));
+          // On a terminal `failed` status, append the failure REASON as an
+          // `error` frame (Subtask 8.1.8) so the client learns WHY — e.g.
+          // out-of-credits → the paywall — not just THAT it failed. Once only.
+          if (!reasonEmitted) {
+            const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);
+            if (reason) {
+              reasonEmitted = true;
+              controller.enqueue(encoder.encode(formatFrame(reason)));
+            }
+          }
+          result = await iterator.next();
+        }
+      } catch (err) {
+        // Headers are already sent — surface the failure as a terminal SSE
+        // `error` frame carrying the typed code (mapped through the 7.1.1
+        // taxonomy), then close.
+        const code = err instanceof MotirAiError ? err.code : 'INTERNAL_ERROR';
+        const message = err instanceof Error ? err.message : 'stream failed';
+        controller.enqueue(
+          encoder.encode(formatFrame({ event: 'error', data: { code, message } })),
+        );
+      } finally {
+        await iterator.return?.(undefined);
+        controller.close();
+      }
+    },
+    // Client disconnect (the browser closes EventSource) → release the upstream
+    // reader so we don't leak the motir-ai connection.
+    async cancel() {
+      await iterator.return?.(undefined);
+    },
+  });
+
+  return new Response(stream, { headers: SSE_HEADERS });
+}
