@@ -134,6 +134,17 @@ errors. Everything that decides whether a proposal becomes a row stays inside
 as gating the plan DECISIONS (`approvePlan` / `declinePlan` / `addProposals`). No
 new scope is minted.
 
+> ⚠️ **AMENDED 2026-08-20 (MOTIR-3188): the route now declares `ai:decide_plan`.**
+> The rule this answer applied is unchanged and still the right one — _a route
+> names the key its own service asserts, and no new scope is minted for a decision
+> that already has one._ What changed is the service. `ai:view_plan` gated no view
+> and held two authorities at once (AUTHOR: `addProposals` / `markPlanned` /
+> `editAddProposal`; DECIDE: `approvePlan` / `declinePlan`), which made a custom
+> role ticking a switch labelled _"View AI plans"_ a bulk work-item creator.
+> `approvePlan` moved to the DECIDE half and this route followed it. The operation's
+> shape, statuses and error codes are untouched. See
+> `docs/decisions/agent-authored-plans.md` AMENDMENT 5.
+
 **Not an MCP tool, and that is the sharpest bound available.** MCP is the AGENT's
 surface. A tool would put approval in reach of the credential the sandboxed agent
 holds, which is the one party that must never approve its own re-plan — the
@@ -146,6 +157,16 @@ It is also already enforced from the other side and by accident of good design:
 'ai:plan']` — **no `ai:view_plan`** — so a token minted for a dispatched agent
 cannot reach this endpoint even if someone hands it the URL. That is MOTIR-3051's
 refusal working as intended, and it must not be "fixed" by widening the grant.
+
+> ⚠️ **AND SINCE MOTIR-3188 THE BOUND IS STRUCTURAL, NOT AN OMISSION.** The
+> argument above rests on one entry being absent from one grant — true, but a
+> single edit away from false. The route now declares `ai:decide_plan`, which
+> `CLI_TOKEN_GRANT` also omits AND which **no MCP tool asserts at all**, so a
+> dispatched agent's credential cannot reach approval by any route — and could not
+> even if somebody widened that grant to the full author key. The key is reachable
+> by an OPERATOR's token, through this one v1 operation and no other:
+> `lib/tokens/grant.ts`'s `V1_ONLY_PERMISSIONS` carries it, the first entry that
+> array has ever held.
 
 ### The bounds — each implementable and testable from this text alone
 

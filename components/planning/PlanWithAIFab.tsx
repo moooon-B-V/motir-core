@@ -7,10 +7,11 @@ import { cn } from '@/lib/utils/cn';
 import { AI_CALLOUT_NAME_KEY } from '@/lib/planning/aiCallout';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import { AiCalloutMenu } from './AiCalloutMenu';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
 
 /**
- * PlanWithAIFab — the floating "M" orb, the universal AI callout's TRIGGER
+ * PlanWithAIFab — the floating Motir orb, the universal AI callout's TRIGGER
  * (MOTIR-1299 / Story 7.20; MOTIR-1812 / Story 7.24. Design @
  * `design/ai-chat/ai-callout-menu.mock.html`). A glowing orb afloat
  * bottom-right on every screen — the second of the two entrances the design
@@ -27,7 +28,8 @@ import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
  * straight to `/planning` from every screen, and the rows are real links, so
  * ⌘/middle-click survives one level in.
  *
- * Built with a MOCK "M" logo (the real brand mark lands later, per the design).
+ * Wears the Motir mark (MOTIR-3185) at the 26px glyph box the design
+ * specifies for the 56px circle — composed from `BrandMark`, never inlined.
  * Palette-derived throughout (the orb fill + glow are `color-mix()` over
  * `--el-*`, never raw hex); the orb is genuinely circular (`rounded-full`).
  * Sits at `z-40` — below toasts / modals / the command palette (`z-50`), which
@@ -131,9 +133,14 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
               boxShadow: '0 0 0 0 color-mix(in srgb, var(--el-highlight) 60%, transparent)',
             }}
           />
-          {/* Mock "M" brand mark — replaced by the real logo later (design note). */}
-          <span aria-hidden className="relative font-sans text-xl leading-none font-bold">
-            M
+          {/* The Motir mark, at the 26px glyph box `design/ai-chat/design-notes.md`
+              § B specifies for the 56px circle (a 0.464 ratio, the same one the
+              28px assistant avatar uses). `tone="inverted"` is what puts
+              `--el-accent-text` on it — the glyph carries its own ink otherwise
+              and would render accent-on-accent. Composed, never inlined: the path
+              lives in `components/brand/waveBand.ts` alone. */}
+          <span aria-hidden className="relative flex">
+            <BrandMark variant="mark" tone="inverted" size={26} />
           </span>
         </button>
       </Popover.Trigger>

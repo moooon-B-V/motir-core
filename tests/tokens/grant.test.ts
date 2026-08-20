@@ -221,7 +221,28 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       'integration',
     ]);
     for (const key of grant) expect(isGrantable(key)).toBe(true);
-    // All six together still reach everything — the compatibility promise.
-    expect([...grant].sort()).toEqual([...GRANTABLE_PERMISSIONS].sort());
+    // The compatibility promise, stated exactly (ADR §5): the six together reach
+    // everything the six's OPERATIONS could reach. That was ALL of
+    // `GRANTABLE_PERMISSIONS` until MOTIR-3188, and the ADR's shorthand for it
+    // was "i.e. everything".
+    //
+    // ⚠️ IT NOW HAS ONE EXCLUSION, AND THE EXCLUSION IS THE POINT — not a gap to
+    // close. `ai:decide_plan` gates plan APPROVAL, whose only token entrance
+    // (`POST /api/v1/work-items/{key}/plan-approval`) was created by MOTIR-3021
+    // in 2026, long after these six strings stopped being written. A legacy row
+    // is stale data, and stale data may never WIDEN access — the same rule
+    // `customRoleBase` applies to a retired role key.
+    //
+    // ⚠️ AND WITHOUT THE SPLIT IT WOULD HAVE WIDENED. `work_items:write` expands
+    // to `ai:view_plan`, and for the few hours between MOTIR-3021 merging and
+    // MOTIR-3188 that was the key gating plan approval — so a token holding a
+    // legacy string could have approved a plan into somebody's tree. Splitting
+    // DECIDE off closed that without anybody having to notice it.
+    expect([...grant].sort()).toEqual(
+      GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:decide_plan').sort(),
+    );
+    // Said as its own assertion so the exclusion cannot be read as an oversight
+    // in the line above: no legacy scope confers the decide key, by construction.
+    expect(grant).not.toContain('ai:decide_plan');
   });
 });

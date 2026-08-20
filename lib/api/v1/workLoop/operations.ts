@@ -394,7 +394,12 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'was written under. It calls the same service the in-app approve does, so the ' +
       'confirmation gate, the re-validation and the one-shot concurrency guard are identical; a ' +
       'plan that has already been approved or declined answers 409, exactly as it does in the app.',
-    permission: 'ai:view_plan',
+    // `ai:decide_plan` since MOTIR-3188 — the key `approvePlan` asserts. It was
+    // `ai:view_plan` when this operation shipped; that key gated no view and held
+    // AUTHOR and DECIDE together, and the decisions moved to the new one. The
+    // operation's shape, statuses and error codes are untouched, and both keys
+    // resolve to exactly the same actors under every built-in role.
+    permission: 'ai:decide_plan',
     parameters: [
       {
         name: 'key',

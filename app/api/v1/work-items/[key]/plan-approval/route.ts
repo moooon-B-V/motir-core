@@ -33,9 +33,16 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // never approve its own re-plan — the approving party is the OPERATOR's loop.
 // Expressing that structurally beats expressing it as a check, and it costs
 // nothing: the CLI speaks `/api/v1` exclusively. It is enforced from the other
-// side too, by accident of good design: `CLI_TOKEN_GRANT` omits `ai:view_plan`,
-// so a token minted FOR a dispatched agent cannot reach this route at all
-// (MOTIR-3051). Do not widen that grant to "fix" it.
+// side too, by accident of good design: `CLI_TOKEN_GRANT` omits the key this
+// route declares, so a token minted FOR a dispatched agent cannot reach it at
+// all (MOTIR-3051). Do not widen that grant to "fix" it.
+//
+// ⚠️ THAT BOUND GOT STRONGER, NOT WEAKER, WHEN THE KEY CHANGED (MOTIR-3188).
+// The sentence above named `ai:view_plan`, and the omission it relied on was one
+// entry missing from one grant. This route now declares `ai:decide_plan`, which
+// `CLI_TOKEN_GRANT` also omits AND which no MCP tool asserts at all — so a
+// sandboxed agent's credential cannot reach approval by any route, and could not
+// even if somebody widened that grant to the full author key.
 //
 // ── ONE service call, and the bound is inside it ───────────────────────────
 // `plansService.approvePlanForWorkItem` resolves the plan and delegates to the
@@ -43,10 +50,19 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // the confirmation gate untouched. HTTP only up here (CLAUDE.md 4-layer).
 
 // The key the SERVICE itself asserts (`approvePlan` →
-// `projectAccessService.assertPermission(…, 'ai:view_plan')`) and the key
-// `lib/mcp/toolPermissions.ts` already records as gating the plan DECISIONS.
-// Declared rather than minted: a new scope for a decision that already has one
-// would give a caller two ways to be allowed, and one of them would drift.
+// `projectAccessService.assertPermission(…, 'ai:decide_plan')`) — the key that
+// gates the plan DECISIONS. Declared rather than minted: a new scope for a
+// decision that already has one would give a caller two ways to be allowed, and
+// one of them would drift.
+//
+// ⚠️ IT WAS `ai:view_plan` WHEN THIS ROUTE SHIPPED, and the rule that picked it
+// is unchanged — a route names the key its own service asserts. MOTIR-3188 split
+// that key in two, because it gated no view and held both AUTHOR and DECIDE: an
+// admin ticking a switch labelled "view" on the Roles & permissions grid was
+// granting bulk work-item creation. `approvePlan` moved to the DECIDE half, so
+// this declaration followed it. Nothing about the route's shape, statuses or
+// error codes changed, and every built-in role resolves the two keys
+// identically.
 //
 // ⚠️ The reasoning lives HERE, above the export, because the registry guards
 // read this file as SOURCE — `declaredPermissionByMethod` matches
@@ -54,7 +70,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // the brace, so a comment in that gap makes the route read as declaring NO
 // permission (`tests/api/v1/openapi-registry.test.ts`). Every other v1 route is
 // written this way for the same reason.
-export const POST = withV1Route<{ key: string }>({ permission: 'ai:view_plan' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
 
   let plan;

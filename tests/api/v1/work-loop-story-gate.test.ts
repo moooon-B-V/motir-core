@@ -39,8 +39,8 @@ import {
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { V1_ONLY_PERMISSIONS } from '@/lib/tokens/grant';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
-import type { PermissionKey } from '@/lib/permissions/catalog';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { activityService } from '@/lib/services/activityService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -139,10 +139,36 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'an MCP tool, and that absence is the sharpest bound in the design rather than an ' +
     'oversight. MCP is the AGENT’s surface, and the agent whose card was refused is the one ' +
     'party that must never approve its own re-plan; the approving party is the OPERATOR’s ' +
-    'loop, which speaks /api/v1. It takes `ai:view_plan` — the key `plansService.approvePlan` ' +
-    'itself asserts and the one this map already records as gating the plan DECISIONS — so ' +
-    'no permission is invented here either.',
+    'loop, which speaks /api/v1. It takes `ai:decide_plan` — the key ' +
+    '`plansService.approvePlan` itself asserts — so no permission is invented here either. ' +
+    'It said `ai:view_plan` until MOTIR-3188, which split that key because it gated no view ' +
+    'and held AUTHOR and DECIDE at once; the route followed its service, as the rule requires. ' +
+    'This is the ONE work-loop operation whose key no MCP tool asserts, and deliberately so — ' +
+    'a tool would hand approval to the very credential the bound above exists to keep out.',
 };
+
+/**
+ * The permissions a work-loop operation is ALLOWED to declare — i.e. every key
+ * some token-reachable operation already asserts, so a route cannot invent one.
+ *
+ * ⚠️ IT WAS `Object.values(TOOL_PERMISSIONS)` ALONE, and MOTIR-3188 is why it is
+ * not any more. Membership of the MCP tool map was a good PROXY for "a real
+ * permission" for as long as every v1 operation mirrored a tool — and this
+ * story's own `WORK_LOOP_UNMIRRORED` is the register of operations that
+ * deliberately do not. `approveWorkItemPlan` is the first whose key no tool
+ * asserts either: the plan DECISIONS have no MCP tool ON PURPOSE, because a tool
+ * would put approval in reach of the sandboxed agent's credential.
+ *
+ * So the second arm is `V1_ONLY_PERMISSIONS` — the hand-kept list of keys
+ * reachable through `/api/v1` and nowhere else, which exists for exactly this
+ * and is guarded in BOTH directions by `tests/tokens/grant.test.ts` (no
+ * grantable key without an operation, no v1 declaration outside the grantable
+ * set). Widening the proxy here does not weaken the check: a key in neither arm
+ * is still an invented one, and that is what this assertion is for.
+ */
+function realPermissions(): readonly string[] {
+  return [...Object.values(TOOL_PERMISSIONS), ...V1_ONLY_PERMISSIONS];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. The scope map is MIRRORED, not copied
@@ -172,7 +198,7 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
       expect(reason.trim().length, `${operationId} states why it has no tool`).toBeGreaterThan(40);
       const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === operationId);
       expect(op, `${operationId} is declared`).toBeDefined();
-      expect(Object.values(TOOL_PERMISSIONS) as readonly string[]).toContain(op?.permission);
+      expect(realPermissions(), `${operationId} invents a permission`).toContain(op?.permission);
     }
   });
 
@@ -646,9 +672,8 @@ describe('the merged operation registry', () => {
   });
 
   it('gates every work-loop operation on a REAL scope', () => {
-    const scopes: readonly PermissionKey[] = Object.values(TOOL_PERMISSIONS);
     for (const op of WORK_LOOP_OPERATIONS) {
-      expect(scopes, `${op.operationId}`).toContain(op.permission);
+      expect(realPermissions(), `${op.operationId}`).toContain(op.permission);
     }
   });
 });

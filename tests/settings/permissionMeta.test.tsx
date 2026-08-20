@@ -115,12 +115,21 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // it is pinned here rather than absorbed: the PROPERTY (balanced within one
     // row, no group broken across the columns) is what the layout rule is, and
     // the NUMBERS are what someone has to look at again if the set grows further.
+    //
+    // ⚠️ 2026-08-20 (MOTIR-3188): SEVEN to EIGHT, and this is the "someone has to
+    // look again" the note above asked for. `ai:decide_plan` — plan approval,
+    // split off `ai:view_plan` — is grantable through MOTIR-3021's one v1
+    // entrance, so the split is now 4/4: BALANCED, and one row taller on the
+    // shorter column than the asset measured. The `ai` domain group is what grew,
+    // and it is not broken across the columns (the assertion below proves that).
+    // The modal is one row taller than 938px at its tallest; re-measure the asset
+    // when the set next grows, rather than letting the numbers drift untouched.
     const [left, right] = permissionColumnsForTokens();
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
     expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(1);
     expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
     expect(rows(left)).toBe(4);
-    expect(rows(right)).toBe(3);
+    expect(rows(right)).toBe(4);
   });
 
   it('loses no permission to the column split, and never breaks a group across one', () => {

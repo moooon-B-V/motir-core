@@ -22,7 +22,9 @@ import type { DesignAssetKindDTO } from '@/lib/dto/designEvidence';
 // the runtime design-approval gate's call to make later (§7).
 //
 // JSON body: `assets` (required — `[{ kind, sourcePath, pathname }]`), `noteMd`,
-// `commitSha`, `ciRunUrl`, `producedByKey`.
+// `commitSha`, `ciRunUrl`, `producedByKey`, and — on a PARENT-RUN publish only —
+// `withinParentKey`, the container the target must be a child of (MOTIR-3177).
+// It gates the write and is not persisted.
 
 const strOrNull = (v: unknown): string | null =>
   typeof v === 'string' && v.trim() !== '' ? v : null;
@@ -81,6 +83,7 @@ export async function POST(
         commitSha: strOrNull(body.commitSha),
         ciRunUrl: strOrNull(body.ciRunUrl),
         producedByKey: strOrNull(body.producedByKey),
+        withinParentKey: strOrNull(body.withinParentKey),
       },
       ctx,
     );

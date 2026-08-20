@@ -6,7 +6,7 @@
 // recording to Story MOTIR-1342 regardless of the PR that triggered the run.
 // This is the story's `verification_recipe`, automated:
 //
-//   With AI configured and a project active: click the floating "M" orb
+//   With AI configured and a project active: click the floating Motir orb
 //   bottom-right → the callout menu opens anchored to it → click "Plan with AI"
 //   → the planning workspace opens at /planning. Re-open the menu and dismiss it
 //   with Esc and with an outside click; focus returns to the orb.
@@ -145,7 +145,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('the "M" orb opens the AI callout, and Plan with AI reaches the workspace', async ({
+test('the Motir orb opens the AI callout, and Plan with AI reaches the workspace', async ({
   page,
   chapter,
   beat,
@@ -161,7 +161,7 @@ test('the "M" orb opens the AI callout, and Plan with AI reaches the workspace',
 
   await signIn(page, seed.email, seed.password);
 
-  await chapter('The floating "M" orb is on the authed shell', async () => {
+  await chapter('The floating Motir orb is on the authed shell', async () => {
     await expect(landingHeading(page)).toBeVisible();
 
     // The orb is present and CLOSED — a trigger, not a menu left hanging open.

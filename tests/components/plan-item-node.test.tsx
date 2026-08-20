@@ -5,6 +5,7 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { WorkItemNode } from '@/components/planning/WorkItemNode';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import { arrivalLevel } from '@/components/planning/PlanReviewCanvas';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
@@ -82,6 +83,13 @@ describe('PlanItemNode', () => {
       />,
     );
     expect(screen.getByText('change')).toBeTruthy();
+    // ⚠️ The KEY, where an `add` shows "New" (bug MOTIR-3191). Between the two,
+    // that is what lets a reviewer read "this amends PROD-14" off the node
+    // without opening it — and it is the half that a `modify` drawn at the
+    // project root made unreadable, because a card at the root reads as a
+    // proposed EPIC whatever its badge says.
+    expect(screen.getByText('PROD-14')).toBeTruthy();
+    expect(screen.queryByText('New')).toBeNull();
     expect(screen.getByTestId('diff-line')).toBeTruthy();
     expect(screen.getByText('medium')).toBeTruthy();
     expect(screen.getByText('high')).toBeTruthy();
@@ -478,5 +486,72 @@ describe('mergePlanLevel', () => {
 
     expect(level.nodes.map((n) => n.id)).toEqual(['p1']);
     expect(level.nodes[0]!.drillable).toBe(true);
+  });
+});
+
+// ── bug MOTIR-3191 — where the canvas OPENS on a plan of amendments ───────────
+//
+// `mergePlanLevel` above has always re-skinned a `modify` in place once the
+// canvas is on the right level. What decides which level that is, is
+// `arrivalLevel` — and a `modify` reached it with a null parent, because it
+// carries no `parentRef` and could not. So the canvas opened at the project
+// ROOT, where the target is not a child, and the amendment fell through to the
+// pushed branch as a node of its own beside the epics.
+//
+// ⚠️ These pass on `main` too, and that is the finding rather than a gap in
+// them: `arrivalLevel` was never the broken half. It reads `parentNodeId` /
+// `parentTrail` and does the right thing with whatever it is given — it was
+// given null. So this locks the CONSUMER side of the contract the review model
+// now satisfies, and the failing-without-the-fix half lives one layer down, in
+// `planReviewService`'s own suite, where the null was produced.
+describe('arrivalLevel', () => {
+  it('opens a MODIFY-only plan at its target’s level, not at the root', () => {
+    const arrival = arrivalLevel([
+      item({
+        planItemId: 'pi_1',
+        nodeId: 'wi_target',
+        op: 'modify',
+        identifier: 'MOTIR-3181',
+        title: 'An existing card',
+        parentNodeId: 'wi_story',
+        parentIdentifier: 'MOTIR-3070',
+        parentTitle: 'Plan review',
+        parentTrail: [
+          { id: 'wi_epic', identifier: 'MOTIR-2200', title: 'The agent loop' },
+          { id: 'wi_story', identifier: 'MOTIR-3070', title: 'Plan review' },
+        ],
+      }),
+    ]);
+
+    expect(arrival?.id).toBe('wi_story');
+    // The whole committed chain, so the breadcrumb names the branch the card
+    // lives on rather than starting at the level the plan does not touch.
+    expect(arrival?.trail.map((c) => c.id)).toEqual(['wi_epic', 'wi_story']);
+  });
+
+  it('still opens at the ROOT when the plan genuinely proposes roots', () => {
+    // A null parent is now a STATEMENT ("this card is a root"), not the absence
+    // of an answer — so the root arrival has to keep working.
+    expect(arrivalLevel([item({ op: 'add', parentNodeId: null })])).toBeNull();
+  });
+
+  it('takes the level carrying the MOST proposals when a mixed plan spans two', () => {
+    const at = (nodeId: string, parent: string, key: string) =>
+      item({
+        planItemId: `pi_${nodeId}`,
+        nodeId,
+        parentNodeId: parent,
+        parentIdentifier: key,
+        parentTitle: 'A parent',
+        parentTrail: [{ id: parent, identifier: key, title: 'A parent' }],
+      });
+
+    const arrival = arrivalLevel([
+      at('a', 'wi_p1', 'MOTIR-1'),
+      at('b', 'wi_p2', 'MOTIR-2'),
+      at('c', 'wi_p2', 'MOTIR-2'),
+    ]);
+
+    expect(arrival?.id).toBe('wi_p2');
   });
 });

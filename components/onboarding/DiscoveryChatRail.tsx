@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { AiPaywall, AI_OUT_OF_CREDITS_CODE, resolveAiPaywall } from '@/components/ai/AiPaywall';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import type { ChatTurn, ValidateEarlyAsk, WorkingState } from '@/lib/onboarding/discoveryLoop';
+import { BrandMark } from '@/components/brand/BrandMark';
 
 // The discovery CHAT RAIL (Subtask 7.3.5 / MOTIR-833, design screen C/G2 right
 // rail) — the SOLE input to the onboarding loop. Free-form talk drives the
@@ -89,12 +90,12 @@ export function DiscoveryChatRail({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" role="log">
         {turns.map((turn) => (
-          <Bubble key={turn.id} turn={turn} assistantInitial={t('assistantInitial')} />
+          <Bubble key={turn.id} turn={turn} />
         ))}
 
         {working && (
           <div className="flex items-start gap-2">
-            <Avatar role="assistant" initial={t('assistantInitial')} />
+            <Avatar role="assistant" />
             <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
               <Spinner size="sm" aria-hidden="true" />
               {working.phase === 'drafting' ? t('drafting') : t('working')}
@@ -191,11 +192,11 @@ export function DiscoveryChatRail({
   );
 }
 
-function Bubble({ turn, assistantInitial }: { turn: ChatTurn; assistantInitial: string }) {
+function Bubble({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === 'user';
   return (
     <div className={`flex items-start gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
-      <Avatar role={turn.role} initial={assistantInitial} />
+      <Avatar role={turn.role} />
       <div
         className={
           isUser
@@ -209,7 +210,7 @@ function Bubble({ turn, assistantInitial }: { turn: ChatTurn; assistantInitial: 
   );
 }
 
-function Avatar({ role, initial }: { role: ChatTurn['role']; initial: string }) {
+function Avatar({ role }: { role: ChatTurn['role'] }) {
   const isUser = role === 'user';
   return (
     <span
@@ -220,7 +221,7 @@ function Avatar({ role, initial }: { role: ChatTurn['role']; initial: string }) 
           : 'bg-(--el-accent) text-(--el-accent-text)'
       }`}
     >
-      {isUser ? '·' : initial}
+      {isUser ? '·' : <BrandMark variant="mark" tone="inverted" size={13} />}
     </span>
   );
 }
