@@ -150,7 +150,9 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): these cards are sized OVER the estimation gate — a ` +
-        'coding_agent leaf splits at 13+ story points and its run must fit in 60 minutes:',
+        'coding_agent leaf splits at 13+ story points and its run must fit in 60 minutes (the ' +
+        'MINUTES reading is a PROXY: the estimate column sums agent time and CI time, while the ' +
+        'ceiling is on the agent run alone, so the threshold is 70 total minutes):',
       ...oversized.map(
         (a) =>
           `  ${a.item} is ${a.storyPoints ?? '—'} points / ${a.estimateMinutes ?? '—'} minutes ` +
@@ -308,9 +310,12 @@ export function registerValidateWorkItem(
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
         'name two or more) — both with the 1-based criterion index to cut at — ' +
         '`likely-over-gate-sizing` when a CHILDLESS coding_agent card is sized over the estimation ' +
-        'gate, at 13+ story points or more than 60 estimated minutes (with `threshold`, the ' +
-        'observed `storyPoints` and `estimateMinutes`, and no criterion index, because the remedy ' +
-        'is to SPLIT the card rather than cut it at a line), or `likely-self-blocking-design` when ' +
+        'gate, at 13+ story points or more than 70 estimated minutes — the points arm is the ' +
+        "gate's own literal SPLIT signal, the minutes arm is a PROXY for its run ceiling, because " +
+        '`estimateMinutes` sums agent time and CI time while the gate ceilings the agent run ' +
+        'alone (with `threshold`, the observed `storyPoints` and `estimateMinutes`, and no ' +
+        'criterion index, because the remedy is to SPLIT the card rather than cut it at a line), ' +
+        'or `likely-self-blocking-design` when ' +
         'a CHILDLESS card is its OWN design blocker — one criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +

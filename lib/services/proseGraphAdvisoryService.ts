@@ -349,10 +349,17 @@ function repoStraddleAdvisory(
  * output of that analysis went into a field the plan does not read
  * (`notes.html` #323).
  *
- * NO exemption predicate, and unlike {@link repoStraddleAdvisory} that is not a
- * knowingly-accepted false positive either: the two exemptions this check has —
- * a non-`coding_agent` executor and a card that HOLDS children — are the gate's
+ * NO exemption predicate: the two exemptions this check has — a
+ * non-`coding_agent` executor and a card that HOLDS children — are the gate's
  * own scope, applied inside {@link overGateSizing} where the numbers are.
+ *
+ * ⚠️ CORRECTED BY MOTIR-3271. This used to continue "…and unlike
+ * {@link repoStraddleAdvisory} that is not a knowingly-accepted false positive
+ * either". On the MINUTES arm it is one: `estimateMinutes` sums agent time and
+ * CI time while the gate ceilings the agent run alone, so that arm is a proxy
+ * with a real false-positive class (a short run behind a heavy CI leg). The
+ * absent predicate is still the right call — see the DTO's corrected paragraph
+ * for why a mute is the wrong remedy — but the reason given for it was not.
  */
 function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto | null {
   const found = overGateSizing({

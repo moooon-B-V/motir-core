@@ -120,6 +120,16 @@ const criterionShapeAdvisorySchema = z.object({
  * A SIZING SHAPE advisory — the card's own `storyPoints` / `estimateMinutes` are
  * over the estimation gate's two ceilings (MOTIR-3110).
  *
+ * ⚠️ **The two arms do not carry the same authority, and a client rendering this
+ * must not present them as if they did (MOTIR-3271).** `story_points` IS the
+ * gate's rule — `13+` is its literal split signal. `estimate_minutes` is a
+ * PROXY: the column sums agent run time and CI time while the gate's ceiling is
+ * on the agent run alone, so the finding means *probably over the hour*, at a
+ * threshold (70 total minutes) derived from the top of the calibration band the
+ * gate endorses. Nothing on the WIRE changes with that threshold — it is a
+ * server-side heuristic, not a declared shape — which is why this correction
+ * moves no contract version.
+ *
  * ⚠️ `kind: 'shape'` and NO `criterionIndex`, which is why it is a second
  * variant beside {@link criterionShapeAdvisorySchema} rather than a third
  * severity inside it. The two are disjoint on their REQUIRED fields — this one
@@ -137,11 +147,17 @@ const sizingShapeAdvisorySchema = z.object({
   kind: z.literal('shape'),
   item: workItemKeySchema,
   severity: advisorySeveritySchema,
-  /** Which ceiling(s) the card crossed: points, minutes, or both. */
+  /**
+   * Which ceiling(s) the card crossed: points, minutes, or both — `story_points`
+   * is the gate's rule, `estimate_minutes` a proxy for it (see above).
+   */
   threshold: z.string(),
   /** The card's observed `storyPoints` — `null` when unestimated. */
   storyPoints: z.number().nullable(),
-  /** The card's observed `estimateMinutes` — `null` when unestimated. */
+  /**
+   * The card's observed `estimateMinutes` — `null` when unestimated. The SUM of
+   * agent run time and CI time, which is what makes the minutes arm a proxy.
+   */
   estimateMinutes: z.number().nullable(),
 });
 
