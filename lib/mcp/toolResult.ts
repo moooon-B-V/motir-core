@@ -56,12 +56,14 @@ import {
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
 import {
+  DuplicatePlanTargetError,
   InvalidProposalError,
   NoPlanForJobError,
   PlanItemNotFoundError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
+  PlanPersistenceError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -371,11 +373,26 @@ export function toToolError(err: unknown): CallToolResult {
   //   · INVALID_PROPOSAL — a grammar or sizing refusal (an `add`-only rule broken,
   //     points outside the Fibonacci range, a negative estimate). Fixable by the
   //     caller in one hop, which is exactly what an opaque 500 prevented.
+  //   · DUPLICATE_PLAN_TARGET (MOTIR-3194) — a second `modify`/`remove` for a work
+  //     item the plan already proposes against. The message names the item AND the
+  //     two ways out (fold the patches into one proposal; or, for an edge between
+  //     items that already exist, `link_work_items`), because what it replaces is
+  //     the one refusal on this surface that named neither: Prisma's own
+  //     ``Unique constraint failed on the (not available)``, reaching an agent
+  //     verbatim through the `throw` at the bottom of this function.
+  //   · PLAN_PERSISTENCE_FAILED (MOTIR-3194) — ANY other ORM failure inside the
+  //     append, contained at the service boundary. It is still a server-side
+  //     failure and still not the caller's fault; the difference is that it now
+  //     arrives as a stable code and a sentence rather than as an ORM invocation
+  //     trace. Mapped here rather than re-thrown DELIBERATELY: re-throwing is what
+  //     put the ORM's prose in front of an agent in the first place.
   if (
     err instanceof PlanItemNotFoundError ||
     err instanceof PlanNotInExpectedStatusError ||
     err instanceof PlanNotGeneratingError ||
-    err instanceof InvalidProposalError
+    err instanceof InvalidProposalError ||
+    err instanceof DuplicatePlanTargetError ||
+    err instanceof PlanPersistenceError
   ) {
     return toolError(err.code, err.message);
   }

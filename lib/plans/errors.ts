@@ -189,6 +189,121 @@ export class PlanItemUnknownTargetRepoRoleError extends Error {
   }
 }
 
+/**
+ * The op a plan may hold at most one of per existing target. `add` is absent
+ * deliberately: an `add` has no target until materialize (its `workItemId` is
+ * null), which is exactly why the unique index constrains real targets only.
+ */
+export type PlanTargetOp = 'modify' | 'remove';
+
+/**
+ * A second proposal in ONE plan targets a work item the plan already proposes
+ * against (MOTIR-3194) — a second `modify`, or a `modify` alongside a `remove`.
+ *
+ * ## The rule, and why it is KEPT rather than relaxed
+ *
+ * `PlanItem @@unique([planId, workItemId])` is a decided rule, not an incidental
+ * one — its schema comment says *"one op per target per plan"*, and NULLs being
+ * distinct in Postgres is what still admits many `add`s in the same plan. This
+ * card (MOTIR-3194) re-opened the question, because `materialize` walks
+ * `for (const item of items)` and applies each `modify` in sequence, so nothing
+ * DOWNSTREAM requires uniqueness. Three things upstream do:
+ *
+ *  1. **The review surface would show a wrong diff.** A PlanItem stores only the
+ *     NEW values; the OLD side of every diff is read LIVE from the target. Two
+ *     `modify` rows for one card therefore render as two independent diffs whose
+ *     "from" is the same committed value — the second one silently omitting the
+ *     first's changes. A person approves what they read, so a diff that cannot be
+ *     rendered honestly is not a presentation problem.
+ *  2. **`baseRevision` is per target, not per row.** It is the optimistic-concurrency
+ *     anchor a `modify`/`remove` is computed against; two rows for one target carry
+ *     two anchors with no defined precedence between them.
+ *  3. **The constraint spans `modify` AND `remove`,** so relaxing it wholesale would
+ *     admit a plan that patches a card and archives it in the same approval. A
+ *     partial relaxation for `modify`+`modify` alone buys a caller nothing that
+ *     merging the two patches does not already buy.
+ *
+ * And the caller loses nothing: two patches that would merge cleanly can simply BE
+ * one patch, and a dependency edge between two work items that ALREADY exist never
+ * needed a proposal at all (`link_work_items` writes it directly). The message says
+ * both, because the mistake this replaces was an ORM string that said neither.
+ *
+ * → 409 (the plan already holds a proposal for that target), and the MCP surface's
+ * `DUPLICATE_PLAN_TARGET`.
+ */
+export class DuplicatePlanTargetError extends Error {
+  readonly code = 'DUPLICATE_PLAN_TARGET' as const;
+  constructor(
+    /** The target both proposals name. */
+    readonly workItemId: string,
+    /** The op the plan ALREADY holds for it. */
+    readonly existingOp: PlanTargetOp,
+    /** The op that was refused. */
+    readonly op: PlanTargetOp,
+  ) {
+    super(
+      `This plan already holds a \`${existingOp}\` proposal for work item ${workItemId}, and a ` +
+        `plan holds at most ONE proposal per existing target — so this \`${op}\` is refused. ` +
+        `Fold everything you want to change about ${workItemId} into that one proposal instead; ` +
+        `or, if what you are recording is a dependency edge between two work items that ALREADY ` +
+        `exist, call \`link_work_items\` — an edge between committed items needs no proposal at all.`,
+    );
+    this.name = 'DuplicatePlanTargetError';
+  }
+}
+
+/**
+ * An ORM failure escaping the plan-append boundary, CONTAINED (MOTIR-3194).
+ *
+ * ⚠️ THIS CLASS EXISTS SO THAT A PRISMA STRING CANNOT BE A PRODUCT SURFACE. The
+ * defect it closes was not the duplicate-target rule above; it was that the rule
+ * announced itself as
+ * `Invalid \`prisma.planItem.create()\` invocation: Unique constraint failed on the
+ * (not available)` — an ORM method name, no subject, and a constraint field that
+ * renders as literally nothing. `toToolError` re-throws what it does not
+ * recognise, so an unmapped ORM error reaches an agent as a JSON-RPC internal
+ * error carrying that text verbatim.
+ *
+ * Naming the ONE duplicate case would have left every other Prisma failure on the
+ * same path (a foreign key, a broken connection, a validation error) escaping the
+ * same way. So the append wraps its whole transaction and converts ANY Prisma
+ * error to this — a stable `code`, a message written for the caller, and the ORM's
+ * own code carried as DATA rather than folded into prose.
+ *
+ * It is deliberately NOT actionable-sounding: reaching it means the write failed
+ * for a reason the boundary does not model, and the honest thing to tell an agent
+ * is that its proposals are not at fault and nothing was appended. The one code
+ * worth a hint is `P2002`, which is the duplicate-target rule arriving through a
+ * race the pre-check cannot see.
+ *
+ * → 500 (it IS a server-side failure — what changes is that it is typed).
+ */
+export class PlanPersistenceError extends Error {
+  readonly code = 'PLAN_PERSISTENCE_FAILED' as const;
+  constructor(
+    /**
+     * The boundary that failed, phrased so BOTH doors onto it can carry the same
+     * string: the `add_plan_items` MCP tool and the internal generator seam
+     * (`POST /api/internal/ai/plan-proposals`) both reach `addProposals`, and
+     * naming either one would misdescribe the other's caller.
+     */
+    readonly operation: string,
+    /** The ORM's own error code (`P2002`, …) when it had one, else null. */
+    readonly ormCode: string | null,
+  ) {
+    super(
+      `The database refused the ${operation}` +
+        (ormCode ? ` (${ormCode})` : '') +
+        `. Nothing was appended and the plan is unchanged.` +
+        (ormCode === 'P2002'
+          ? ' A uniqueness constraint fired: a plan holds at most one `modify`/`remove` proposal' +
+            ' per target work item, so append one proposal per target.'
+          : ''),
+    );
+    this.name = 'PlanPersistenceError';
+  }
+}
+
 // ── The persist-time confirmation gate (Subtask 7.12.5 · MOTIR-911) ───────────
 // The three rejections `validatePlanProposals` raises BEFORE approve writes
 // anything. They are deliberately distinct from the errors above: those surface

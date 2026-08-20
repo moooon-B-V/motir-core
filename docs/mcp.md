@@ -1698,7 +1698,39 @@ author a plan end to end.
 Errors: an unknown / other-tenant `projectKey` or `planId` returns
 `PROJECT_NOT_FOUND` / `PLAN_NOT_FOUND` (404-not-403, no existence leak); a
 malformed proposal returns `INVALID_PROPOSAL`; an append after `final` returns
-`PLAN_NOT_GENERATING`.
+`PLAN_NOT_GENERATING`; a second `modify`/`remove` for a target the plan already
+proposes against returns `DUPLICATE_PLAN_TARGET` (below); and an ORM failure
+inside the append is contained as `PLAN_PERSISTENCE_FAILED`, never surfaced as
+the database driver's own text.
+
+###### One proposal per existing target — `DUPLICATE_PLAN_TARGET`
+
+**A plan holds at most ONE `modify` or `remove` for any given `workItemId`.** A
+second one — another `modify`, or a `remove` beside a `modify` — is refused,
+naming the work item. Many `add`s are unaffected: an `add` has no target until
+approve.
+
+**Why the rule is kept** (asked and answered on MOTIR-3194, after the refusal was
+found escaping as a raw ORM string). Nothing DOWNSTREAM needs it — `materialize`
+applies each `modify` in sequence. Three things upstream do:
+
+1. **The review surface could not render it honestly.** A proposal stores only the
+   NEW values; every diff's OLD side is read live from the target. Two patches on
+   one card therefore render as two diffs from the same committed state, the second
+   silently omitting the first's changes — and a person approves what they read.
+2. **`baseRevision` is per target.** It is the optimistic-concurrency anchor a
+   `modify`/`remove` is computed against; two rows for one target carry two
+   anchors with no defined precedence.
+3. **The rule spans `modify` AND `remove`,** so relaxing it wholesale would admit
+   a plan that patches a card and archives it in one approval.
+
+**What to do instead**, and neither costs you anything:
+
+- **Fold the second change into the one `modify`** — two patches that would merge
+  cleanly can simply BE one patch.
+- **For a dependency edge between two work items that ALREADY exist, call
+  `link_work_items`.** An edge between committed items never needed a proposal:
+  it is a direct write, legal at any time, and it does not wait for an approval.
 
 ##### `update_plan_item` — the DEEPEN turn
 

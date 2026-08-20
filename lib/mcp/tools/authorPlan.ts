@@ -77,6 +77,22 @@ import { GET_PLAN_TOOL_NAME } from './getPlan';
 // It also means a plan's attribution and its items' attribution cannot disagree,
 // because there is exactly one place either is written.
 //
+// ── ONE PROPOSAL PER EXISTING TARGET (MOTIR-3194) ──────────────────────
+// `PlanItem @@unique([planId, workItemId])` admits at most one `modify`/`remove`
+// per target work item, and MOTIR-3194 KEPT that rule after re-opening it —
+// `DuplicatePlanTargetError` (`lib/plans/errors.ts`) argues the three upstream
+// reasons on the record, the load-bearing one being that a plan stores only the
+// NEW values and the review surface reads each diff's OLD side LIVE from the
+// target, so two patches on one card cannot be rendered honestly.
+//
+// What that card actually FIXED is this file's contract: the rule used to
+// announce itself as Prisma's own ``Invalid `prisma.planItem.create()`
+// invocation: Unique constraint failed on the (not available)``, because
+// `toToolError` re-throws what it does not recognise and the SDK renders a
+// re-thrown message verbatim. The refusal is now typed, names the work item, and
+// names both alternatives — and the whole append transaction is contained, so no
+// OTHER ORM failure can take the route this one took.
+//
 // ── NEITHER TOOL IS BILLABLE ───────────────────────────────────────────────
 // `MCP_BILLABLE_TOOLS` (`lib/mcp/rateLimitGate.ts`) holds exactly the tools that
 // make motir-ai run a model job. These spend no provider tokens and start no
@@ -751,7 +767,18 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'and puts it in the review queue. Appending to an already-closed plan is refused. ' +
         'IMPORTANT: this creates NO work item. Approving the plan in Motir is the only path ' +
         'from a proposal to a work item, and approval does not happen on this surface — do ' +
-        'not report proposed work as created. Costs nothing and starts no job.',
+        'not report proposed work as created. Costs nothing and starts no job. ' +
+        'ONE PROPOSAL PER EXISTING TARGET: a plan holds at most one `modify` or ' +
+        '`remove` for any given `workItemId`, so a second one is refused with ' +
+        '`DUPLICATE_PLAN_TARGET` naming the item. The rule is deliberate — a ' +
+        'proposal stores only the NEW values and the review surface reads each ' +
+        'diff’s OLD side live from the target, so two patches on one card would ' +
+        'render as two diffs from the same committed state and the reviewer would ' +
+        'approve something neither of them says. When you need a second change to ' +
+        'a card you have already patched, fold it into that one `modify`; and when ' +
+        'what you are recording is a dependency edge between two work items that ' +
+        'ALREADY exist, use `link_work_items` instead — an edge between ' +
+        'committed items needs no proposal at all.',
       inputSchema: addPlanItemsInputSchema,
     },
     async (args, extra) => {

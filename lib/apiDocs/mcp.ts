@@ -522,9 +522,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: '7c51786d65d6',
   },
   add_plan_items: {
+    // Re-pinned for MOTIR-3194, summary UNCHANGED and deliberately so: the tool
+    // gained a paragraph about the ONE-PROPOSAL-PER-TARGET rule and how to work
+    // with it, which is a refusal a caller meets rather than a reason to pick
+    // this tool off the list. The reader choosing between tools still wants the
+    // line below; the agent that has already chosen reads the description.
     summary:
       'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
-    descriptionFingerprint: '3b22fa8a946b',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '34deed9ed223',
   },
   update_plan_item: {
     summary:

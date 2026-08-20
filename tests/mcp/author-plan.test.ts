@@ -840,3 +840,115 @@ describe('the four registries and the gates', () => {
     expect(isBillableTool(UPDATE_PLAN_ITEM_TOOL_NAME)).toBe(false);
   });
 });
+
+// ── THE REFUSAL AN AGENT ACTUALLY MEETS (Bug MOTIR-3194) ────────────────────
+//
+// A plan that also amends an existing card is the ordinary shape of a re-plan,
+// so `DUPLICATE_PLAN_TARGET` is among the first refusals a plan-authoring agent
+// will hit — and until this bug it was the one refusal on this surface that told
+// the agent nothing. `toToolError` re-throws what it does not recognise and the
+// SDK renders a re-thrown message verbatim, so the ORM's own
+// ``Invalid `prisma.planItem.create()` invocation: Unique constraint failed on
+// the (not available)`` WAS the product surface: no subject, no rule, and a
+// constraint field rendering as literally nothing.
+//
+// This block stands at the MCP boundary rather than at the service, because the
+// boundary is where the defect lived. A typed error the tool layer forgets to map
+// reaches an agent exactly as the untyped one did.
+describe('add_plan_items — one proposal per existing target (MOTIR-3194)', () => {
+  it('refuses a second `modify` in the AGENT’s words — the item, the rule, and both ways out', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The survivor' });
+
+    const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { title: 'Re-scoped' } }],
+    });
+    expect(first.isError, text(first)).toBeFalsy();
+
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { blockedByAdd: [target.id] } }],
+    });
+
+    expect(refused.isError).toBe(true);
+    const message = text(refused);
+    // A stable code an agent can branch on, not a sentence it has to parse.
+    expect(message).toContain('DUPLICATE_PLAN_TARGET');
+    // The SUBJECT the ORM string had none of.
+    expect(message).toContain(target.id);
+    // The RULE, and the two things to do instead — this is the whole deliverable.
+    expect(message).toContain('at most ONE proposal per existing target');
+    expect(message).toContain('link_work_items');
+    // And none of the ORM's prose reached the agent, by any of its tells.
+    expect(message).not.toMatch(/prisma/i);
+    expect(message).not.toMatch(/invocation/i);
+    expect(message).not.toContain('not available');
+
+    // The refusal is a refusal: the plan holds exactly what it held.
+    const rows = await adminDb.planItem.findMany({ where: { planId } });
+    expect(rows).toHaveLength(1);
+    expect((rows[0]!.patch as { title?: string } | null)?.title).toBe('Re-scoped');
+    await client.close();
+  });
+
+  it('takes the FOLDED batch its message recommends — the advice is executable', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'The survivor' });
+
+    // Two patches on one card, in ONE proposal — the first alternative the
+    // refusal names. A message that recommends something the tool then rejects
+    // would be a worse failure than the ORM string, so the advice is asserted
+    // rather than described.
+    const folded = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { title: 'Re-scoped', explanationMd: 'Why it changed', priority: 'high' },
+        },
+      ],
+    });
+
+    expect(folded.isError, text(folded)).toBeFalsy();
+    const rows = await adminDb.planItem.findMany({ where: { planId } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.patch).toMatchObject({
+      title: 'Re-scoped',
+      explanationMd: 'Why it changed',
+      priority: 'high',
+    });
+    await client.close();
+  });
+
+  it('contains ANY other ORM failure the same way — a dangling target, typed', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    // `plan_item.work_item_id` is a real foreign key, so a `modify` naming an
+    // item that does not exist is a genuine, DIFFERENT Prisma failure on the same
+    // insert — and it used to escape to an agent exactly as the duplicate did.
+    // Mapping only the duplicate would have left this one untouched, which is why
+    // the containment is at the boundary and not on the one path.
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: 'cm_no_such_work_item', patch: { title: 'x' } }],
+    });
+
+    expect(refused.isError).toBe(true);
+    const message = text(refused);
+    expect(message).toContain('PLAN_PERSISTENCE_FAILED');
+    expect(message).not.toMatch(/prisma/i);
+    expect(message).not.toMatch(/invocation/i);
+    expect(message).not.toContain('not available');
+
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+    await client.close();
+  });
+});
