@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  THE "M" UNIVERSAL AI CALLOUT MENU — the orb becomes a TRIGGER (MOTIR-1811,
+  THE MOTIR CALLOUT MENU — the orb becomes a TRIGGER (MOTIR-1811,
   Story MOTIR-1342).
 
   This is NOT a new AI surface, and NOT a mode picker. Motir has exactly ONE AI
@@ -52,7 +52,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The "M" universal AI callout menu — orb → Plan · Ask · Help</title>
+    <title>The Motir callout menu — orb → Plan · Ask · Help</title>
     <style>
       /* ── Tier 0 (light) — generated verbatim from packages/design-system/theme.css @theme ── */
       :root {
@@ -678,6 +678,30 @@
         background: var(--el-surface-soft);
       }
 
+      /* The shipped assistant avatar (MOTIR-3183) — `size-7` on `--el-accent`,
+         copied from PlanChangeRail / DiscoveryChatRail class-for-class. */
+      .chat-av {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .chat-av .mark {
+        width: 13px;
+        height: 13px;
+        display: block;
+      }
+      .chat-av.user {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+
       /* ── the shipped orb, reproduced with its own recipe ──────────── */
       .orb {
         position: relative;
@@ -700,6 +724,22 @@
           inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
           0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
           0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+      }
+      /* THE MARK inside the orb (MOTIR-3183). 26px in the 56px circle — the box
+         the mock "M" occupied, kept so the swap changes WHAT is in the circle and
+         not how much of it is filled. `currentColor` is inherited from `.orb`, so
+         the glyph needs no colour of its own and no dark variant.
+         Optical centring: MEASURED, not assumed. The band's ink centroid sits at
+         (11.705, 11.820) on its 24 grid against a bbox centre of (11.975, 11.975)
+         — an offset of 0.27 / 0.16 units, which is 0.29 / 0.17 px at 26 px. That is
+         below half a device pixel, so NO nudge is applied and the glyph is centred
+         geometrically. The number is recorded because "it looks centred" is the
+         claim this replaces. */
+      .orb .mark {
+        position: relative;
+        width: 26px;
+        height: 26px;
+        display: block;
       }
       .orb.floating {
         position: absolute;
@@ -770,6 +810,14 @@
         );
         font-size: 11px;
         font-weight: 700;
+      }
+      /* The menu header's mini orb wears the mark too (MOTIR-3183) — 11px in the
+         22px circle, the same 0.464 glyph-to-circle ratio the orb uses, so the two
+         read as the same object at two sizes. */
+      .menu .m-head .miniorb .mark {
+        width: 11px;
+        height: 11px;
+        display: block;
       }
       .menu .m-head b {
         font-size: 12.5px;
@@ -1082,9 +1130,9 @@
 
     <div class="board">
       <div class="boardhead">
-        <h1>The “M” universal AI callout — the orb becomes a trigger</h1>
+        <h1>The Motir callout — the orb becomes a trigger</h1>
         <p>
-          The shipped floating <b>“M”</b> orb (<code>PlanWithAIFab</code>, MOTIR-1299) navigates
+          The shipped floating <b>Motir orb</b> (<code>PlanWithAIFab</code>, MOTIR-1299) navigates
           <b>straight</b> to the planning workspace today. This design turns it into the
           <b>trigger for a small anchored menu</b> — “the home of all AI” — whose first action is
           <i>Plan with AI</i>, with <i>Ask about this project</i> (MOTIR-1343) and
@@ -1179,7 +1227,14 @@
                     <div class="line"></div>
                   </div>
                 </div>
-                <span class="orb floating"><span class="pulse"></span>M</span>
+                <span class="orb floating"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
                 <span class="anno" style="right: 92px; bottom: 26px"
                   >click →
                   <code style="background: none; color: inherit; padding: 0"
@@ -1244,7 +1299,15 @@
                 </div>
                 <div style="position: absolute; right: 20px; bottom: 88px">
                   <div class="menu" style="transform: scale(0.9); transform-origin: bottom right">
-                    <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                    <div class="m-head">
+                      <span class="miniorb"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          /></svg></span
+                      ><b>Motir AI</b>
+                    </div>
                     <div class="m-rows">
                       <span class="m-row primary hover">
                         <span class="ic"
@@ -1260,7 +1323,14 @@
                     </div>
                   </div>
                 </div>
-                <span class="orb floating open"><span class="pulse"></span>M</span>
+                <span class="orb floating open"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
                 <span class="anno" style="right: 92px; bottom: 26px">trigger stays put</span>
                 <span class="anno" style="right: 296px; bottom: 108px"
                   >side <b>top</b> · align <b>end</b> · offset 12 ⟶</span
@@ -1360,19 +1430,47 @@
                   "
                 >
                   <div>
-                    <span class="orb"><span class="pulse"></span>M</span>
+                    <span class="orb"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                     <div class="sub" style="margin: 9px 0 0">rest</div>
                   </div>
                   <div>
-                    <span class="orb hover"><span class="pulse"></span>M</span>
+                    <span class="orb hover"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                     <div class="sub" style="margin: 9px 0 0">hover<br />scale 1.05</div>
                   </div>
                   <div>
-                    <span class="orb focus"><span class="pulse"></span>M</span>
+                    <span class="orb focus"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                     <div class="sub" style="margin: 9px 0 0">focus-visible<br />ring + offset</div>
                   </div>
                   <div>
-                    <span class="orb open"><span class="pulse"></span>M</span>
+                    <span class="orb open"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                     <div class="sub" style="margin: 9px 0 0">open<br />pulse stopped</div>
                   </div>
                 </div>
@@ -1431,7 +1529,15 @@
               <p class="sub">Interim — ships now <span class="tag now">MOTIR-1812</span></p>
               <div class="stage" style="display: grid; place-items: center">
                 <div class="menu">
-                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-head">
+                    <span class="miniorb"
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg></span
+                    ><b>Motir AI</b>
+                  </div>
                   <div class="m-rows">
                     <span class="m-row primary">
                       <span class="ic"
@@ -1466,7 +1572,15 @@
               </p>
               <div class="stage" style="display: grid; place-items: center">
                 <div class="menu">
-                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-head">
+                    <span class="miniorb"
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg></span
+                    ><b>Motir AI</b>
+                  </div>
                   <div class="m-rows">
                     <span class="m-row primary">
                       <span class="ic"
@@ -1540,7 +1654,15 @@
               <p class="sub">Not this <span class="tag gone">forbidden</span></p>
               <div class="stage" style="display: grid; place-items: center">
                 <div class="menu strike">
-                  <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                  <div class="m-head">
+                    <span class="miniorb"
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg></span
+                    ><b>Motir AI</b>
+                  </div>
                   <div class="m-rows">
                     <span class="m-row primary">
                       <span class="ic"
@@ -1893,7 +2015,15 @@
                     </div>
                     <div style="position: absolute; right: 20px; bottom: 88px">
                       <div class="menu">
-                        <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                        <div class="m-head">
+                          <span class="miniorb"
+                            ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                              <path
+                                d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                                fill="currentColor"
+                              /></svg></span
+                          ><b>Motir AI</b>
+                        </div>
                         <div class="m-rows">
                           <span class="m-row primary">
                             <span class="ic"
@@ -1909,7 +2039,14 @@
                         </div>
                       </div>
                     </div>
-                    <span class="orb floating open"><span class="pulse"></span>M</span>
+                    <span class="orb floating open"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                   </div>
                 </div>
               </div>
@@ -1930,7 +2067,15 @@
                     </div>
                     <div style="position: absolute; right: 16px; bottom: 88px">
                       <div class="menu" style="width: 288px">
-                        <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                        <div class="m-head">
+                          <span class="miniorb"
+                            ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                              <path
+                                d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                                fill="currentColor"
+                              /></svg></span
+                          ><b>Motir AI</b>
+                        </div>
                         <div class="m-rows">
                           <span class="m-row primary">
                             <span class="ic"
@@ -1946,7 +2091,14 @@
                         </div>
                       </div>
                     </div>
-                    <span class="orb floating open"><span class="pulse"></span>M</span>
+                    <span class="orb floating open"
+                      ><span class="pulse"></span
+                      ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
                     <span class="anno" style="left: 8px; bottom: 214px"
                       >shifted 4 px → 16 px margins</span
                     >
@@ -2004,7 +2156,15 @@
               <div class="darkwrap" data-theme="dark" data-appearance-scope>
                 <div style="display: grid; place-items: center; gap: 16px">
                   <div class="menu">
-                    <div class="m-head"><span class="miniorb">M</span><b>Motir AI</b></div>
+                    <div class="m-head">
+                      <span class="miniorb"
+                        ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          /></svg></span
+                      ><b>Motir AI</b>
+                    </div>
                     <div class="m-rows">
                       <span class="m-row primary">
                         <span class="ic"
@@ -2047,7 +2207,14 @@
                       ></span>
                     </div>
                   </div>
-                  <span class="orb"><span class="pulse"></span>M</span>
+                  <span class="orb"
+                    ><span class="pulse"></span
+                    ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
                 </div>
               </div>
             </div>
@@ -2111,6 +2278,191 @@
               </ul>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- ══════════════ 9 — THE IDENTITY GLYPH (MOTIR-3183) ══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">9</span>
+          <h2>The identity glyph — wherever Motir speaks, it wears the mark</h2>
+          <span class="cap">amends panels 1–8; changes only what is inside the circle</span>
+        </div>
+        <div class="panel-body">
+          <p class="note">
+            <b>The deferral this discharges.</b> The orb shipped on 2026-08-01 with a mock
+            <code>M</code>, and both this asset and <code>design/ai-chat/design-notes.md</code> said
+            the real logo would replace it later. It does now. <b>Nothing else moves</b> — the
+            callout&rsquo;s rows, its registry, its one href, the orb&rsquo;s fill, aura, pulse,
+            position, size and z-index are all as shipped, and
+            <b>&ldquo;EVERY ROW OPENS THE SAME SURFACE&rdquo; is unchanged by this amendment</b>.
+          </p>
+          <p class="note">
+            <b>The glyph is READ, never retyped.</b> Every orb on this sheet carries the
+            <code>&lt;path&gt;</code> from <code>design/brand/wave-band-24.svg</code> verbatim. The
+            code work item composes <code>components/brand/BrandMark.tsx</code>
+            <code>variant="mark"</code> rather than inlining an <code>&lt;svg&gt;</code>, so the
+            one-module rule keeps holding.
+          </p>
+
+          <div class="cols c2">
+            <div>
+              <p class="sub">The orb — four states, 26px glyph in the 56px circle</p>
+              <div style="display: flex; gap: 22px; align-items: center; flex-wrap: wrap">
+                <span class="orb"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
+                <span class="orb hover"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
+                <span class="orb pressed"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
+                <span class="orb focus"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
+                <span class="orb open"
+                  ><span class="pulse"></span
+                  ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    /></svg
+                ></span>
+              </div>
+              <p class="note">
+                rest &middot; hover (<code>scale-105</code>) &middot; active (<code>scale-95</code>)
+                &middot; focus-visible (the shipped ring + offset) &middot; open
+                (<code>data-state=open</code>, pulse stopped).
+                <b>The glyph holds its optical size across all five</b>: the transform scales the
+                whole button, so the mark scales with the circle and its ratio to the circle never
+                changes. It adds no animation of its own, so the reduced-motion gate in
+                <code>globals.css</code> is untouched.
+              </p>
+            </div>
+            <div>
+              <p class="sub">The assistant avatar — 28px, both rails</p>
+              <div style="display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap">
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <span class="chat-av"
+                    ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <span class="ds">PlanChangeRail &mdash; the planner turn</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <span class="chat-av"
+                    ><svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <span class="ds">DiscoveryChatRail &mdash; the assistant turn</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center">
+                  <span class="chat-av user">&middot;</span>
+                  <span class="ds">the user side &mdash; NOT touched</span>
+                </div>
+              </div>
+              <p class="note">
+                Both are the shipped <code>size-7</code> <code>--el-accent</code> circle. The glyph
+                box is <b>13px in the 28px circle</b> &mdash; a <b>0.464</b> ratio, the same one the
+                orb uses (26/56), so the two read as one object at two sizes rather than as two
+                weights. The user&rsquo;s <code>&middot;</code> on <code>--el-muted</code> is
+                untouched by this asset.
+              </p>
+            </div>
+          </div>
+
+          <p class="sub">Optical centring — measured, not asserted</p>
+          <p class="note">
+            The band&rsquo;s visual mass is not its bounding box, so a geometrically centred glyph
+            can read low or left. Measured on the approved artwork: the ink centroid sits at
+            <b>(11.705, 11.820)</b> on its 24 grid against a bbox centre of
+            <b>(11.975, 11.975)</b> &mdash; an offset of <b>0.27 / 0.16 units</b>, which is
+            <b>0.29 / 0.17 px at 26 px</b> and <b>0.15 / 0.09 px at 13 px</b>. That is below half a
+            device pixel at every size the mark ships in, so <b>no optical nudge is applied</b> and
+            the glyph is centred geometrically. The number is recorded because &ldquo;it looks
+            centred&rdquo; is exactly the claim this replaces &mdash; and because a future re-cut of
+            the path could move it.
+          </p>
+
+          <p class="sub">Contrast against the gradient &mdash; and a finding</p>
+          <table class="t">
+            <tr>
+              <th>Sample</th>
+              <th>Light</th>
+              <th>Dark</th>
+            </tr>
+            <tr>
+              <td>orb body (<code>--el-accent</code>)</td>
+              <td><code>#5645d4</code> &mdash; 6.57:1</td>
+              <td><code>#6c5cdd</code> &mdash; 4.99:1</td>
+            </tr>
+            <tr>
+              <td>
+                <b>gradient&rsquo;s LIGHTEST point</b><br />(<code
+                  >color-mix(--el-accent-text 32%, --el-accent)</code
+                >, at 33%/27%)
+              </td>
+              <td><code>#8c81e2</code> &mdash; <b>3.32:1</b> passes</td>
+              <td><code>#9b90e8</code> &mdash; <b>2.78:1 FAILS</b></td>
+            </tr>
+            <tr>
+              <td>assistant avatar (flat <code>--el-accent</code>)</td>
+              <td>6.57:1</td>
+              <td>4.99:1</td>
+            </tr>
+          </table>
+          <p class="note">
+            <b
+              >⚠️ The dark-theme orb misses WCAG 1.4.11 (3:1 for a non-text graphic) at the
+              gradient&rsquo;s brightest point.</b
+            >
+            This is <b>pre-existing</b> and not caused by the swap &mdash; the mock
+            <code>M</code> is white on the same gradient and measures the same 2.78:1 &mdash; but
+            this is the work item that measured it, so it is recorded rather than inherited. It is a
+            real, if narrow, exposure: the highlight sits at 33%/27% of the orb and the glyph
+            overlaps it, so part of the mark sits under 3:1 in dark.
+            <b>The remedy is one number</b>: dropping the highlight mix from <b>32% to 26%</b> gives
+            <code>#9286e6</code> at <b>3.09:1</b> and clears the bar with the gradient still visibly
+            lit. <b>This asset does not make that change</b> &mdash; the orb&rsquo;s fill is the
+            callout design&rsquo;s (MOTIR-1811, <code>done</code>) and changing it here would be
+            re-opening a shipped decision from a sibling card. Filed instead.
+          </p>
+
+          <p class="sub">Themes</p>
+          <p class="note">
+            The mark carries <b>no colour of its own</b> &mdash; <code>fill="currentColor"</code>,
+            inherited from the orb&rsquo;s <code>--el-accent-text</code> and the avatar&rsquo;s. It
+            therefore <b>needs no dark variant</b> and follows a <code>data-palette</code> swap for
+            free. This sheet renders in both themes from the same markup; nothing below hard-codes a
+            hue.
+          </p>
         </div>
       </section>
 
@@ -2223,7 +2575,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td>the floating “M” orb</td>
+                  <td>the floating Motir orb</td>
                   <td><span class="tag now">the ONLY change</span> link → menu trigger</td>
                 </tr>
               </table>
