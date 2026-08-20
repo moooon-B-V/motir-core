@@ -34,12 +34,21 @@ import { armedTables, rlsEnabledTables } from './policyArms';
 // workspace-tier product should look like, and the guard says so by finding
 // nothing.
 //
-// ⚠️ THE COST IS REAL AND IS WHY THIS IS ITS OWN FILE. The four scans are ~8.5 s
-// bare (the workspace family alone is 5.4 s over 1277 sites, split 893 / 384
-// across its two descriptors), on an instrument
-// every sibling guard documents as blowing the repo's 15 s `testTimeout` under
-// `vitest run --coverage`. Warmed once in `beforeAll` with its own budget, and
-// kept out of the two guards that must stay cheap.
+// ⚠️ THE COST IS REAL, AND THE FIRST VERSION OF THIS FILE FAILED CI ON IT.
+// `beforeAll` took 196 s against a 180 s budget on the Vitest 3/3 shard and took
+// the run red. The cause was not the budget: `scanContexts` parsed all 3085 files
+// in `lib/` + `app/` + `tests/` and only THEN asked whether the text mentioned
+// the descriptor's helper, so four descriptors meant four full parses of a tree
+// in which 318 files mention any helper at all. The parse cache and the
+// text-test-before-parse in `contextArmScan.ts` are the fix, and they are load-
+// bearing rather than tidy: the four scans went 8.5 s -> 1.26 s locally, and the
+// single-descriptor system guard 2.5 s -> 0.86 s with them.
+//
+// The budget below stays at 180 s, which is now ~7x headroom at CI's measured
+// ~20x factor over this box, and this file stays SEPARATE from the two guards
+// that must stay cheap. Raising a budget is the wrong knob for work that is
+// being done four times — every sibling guard says so about `testTimeout`, and
+// it is exactly as true one level up.
 
 /** Why a context-only read of an UNARMED table is nonetheless acceptable. */
 type Verdict =

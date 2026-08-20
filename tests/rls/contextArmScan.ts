@@ -99,6 +99,57 @@ const SCAN_ROOTS = ['lib', 'app', 'tests'] as const;
 const REPO_DIR = 'lib/repositories';
 const SCHEMA = 'prisma/schema.prisma';
 
+// ─── the parse cache, and why it is not an optimisation ────────────────────
+//
+// ⚠️ PARSING IS THE WHOLE COST, AND IT IS DESCRIPTOR-INDEPENDENT — so it is done
+// ONCE PER FILE for the process, not once per file per descriptor. This became
+// load-bearing the moment the GUC turned into a parameter: MOTIR-2880's scanner
+// parsed every file in `lib/` + `app/` + `tests/` and only then asked whether the
+// text mentioned its helper, which is affordable exactly once and is what
+// `other-context-arm-guard.test.ts` multiplied by four.
+//
+// Measured on `origin/main` @ `7de5856f`: the walk sees **3085** files, and only
+// **318** of them contain ANY `with*Context` / `bind*Context` call at all. So the
+// cheap text test moves BEFORE the parse, and the parse is memoised by path:
+//
+//   before — 3085 parses per descriptor (12 340 for the four)
+//   after  — 318 parses for the process, whatever the descriptor count
+//
+// It is not a micro-optimisation and the numbers are here because the first
+// version shipped without them: on CI, which runs this suite about 20× slower
+// than the box it was measured on, the four-descriptor guard's `beforeAll` took
+// **196 s** against a 180 s budget and failed the shard. A budget is the wrong
+// knob for work that was being done four times.
+const textCache = new Map<string, string>();
+const sourceCache = new Map<string, ts.SourceFile>();
+const walkCache = new Map<string, string[]>();
+
+/** A file's contents, read at most once per process. */
+function fileText(abs: string): string {
+  let text = textCache.get(abs);
+  if (text === undefined) {
+    text = readFileSync(abs, 'utf8');
+    textCache.set(abs, text);
+  }
+  return text;
+}
+
+/**
+ * A file's AST, parsed at most once per process.
+ *
+ * Keyed by ABSOLUTE path, so a fixture root and the real tree never collide —
+ * the same reason the scan cache is keyed by root, and the trap MOTIR-2815 hit
+ * (a single unkeyed cache handing the fixture the real repository's answer).
+ */
+function sourceFileFor(abs: string): ts.SourceFile {
+  let sf = sourceCache.get(abs);
+  if (!sf) {
+    sf = ts.createSourceFile(abs, fileText(abs), ts.ScriptTarget.Latest, true);
+    sourceCache.set(abs, sf);
+  }
+  return sf;
+}
+
 /**
  * How deep the helper walk follows a `tx`. THREE, because the shallowest real
  * miss this scanner has been shown is at two (`sweepRepo` -> `applyOne` ->
@@ -474,7 +525,7 @@ export function repositoryQueryModels(
   for (const file of files.sort()) {
     const repository = file.replace(/\.ts$/, '');
     const full = path.join(dir, file);
-    const sf = ts.createSourceFile(full, readFileSync(full, 'utf8'), ts.ScriptTarget.Latest, true);
+    const sf = sourceFileFor(full);
 
     const visit = (node: ts.Node): void => {
       if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name) && node.body) {
@@ -648,9 +699,7 @@ function reachableHelpers(sf: ts.SourceFile, root: string): HelperMap {
     if (!resolved) continue;
     let imported: HelperMap;
     try {
-      imported = localHelpers(
-        ts.createSourceFile(resolved, readFileSync(resolved, 'utf8'), ts.ScriptTarget.Latest, true),
-      );
+      imported = localHelpers(sourceFileFor(resolved));
     } catch {
       continue;
     }
@@ -796,6 +845,24 @@ function enclosingBody(node: ts.Node, sf: ts.SourceFile): ts.Node {
   return sf;
 }
 
+/** Every scannable file under `root`'s SCAN_ROOTS, listed at most once per root. */
+function scannableFiles(root: string): string[] {
+  const cached = walkCache.get(root);
+  if (cached) return cached;
+  const out: string[] = [];
+  for (const scanRoot of SCAN_ROOTS) {
+    const abs = path.join(root, scanRoot);
+    try {
+      statSync(abs);
+    } catch {
+      continue;
+    }
+    out.push(...walk(abs));
+  }
+  walkCache.set(root, out);
+  return out;
+}
+
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir).sort()) {
     const full = path.join(dir, entry);
@@ -838,49 +905,40 @@ export function scanContexts(descriptor: ContextDescriptor, root = process.cwd()
   const out: ContextSite[] = [];
   const entryOf = new Map(descriptor.entries.map((e) => [e.name, e] as const));
 
-  for (const scanRoot of SCAN_ROOTS) {
-    const abs = path.join(root, scanRoot);
-    try {
-      statSync(abs);
-    } catch {
-      continue;
-    }
-    for (const full of walk(abs)) {
-      const rel = path.relative(root, full);
-      if (descriptor.skipFiles.includes(rel)) continue;
-      const sf = ts.createSourceFile(
-        full,
-        readFileSync(full, 'utf8'),
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      if (!descriptor.entries.some((e) => sf.text.includes(`${e.name}(`))) continue;
-      const helpers = reachableHelpers(sf, root);
+  for (const full of scannableFiles(root)) {
+    const rel = path.relative(root, full);
+    if (descriptor.skipFiles.includes(rel)) continue;
+    // ⚠️ THE TEXT TEST COMES BEFORE THE PARSE. Doing it the other way round is
+    // what made the four-descriptor guard time out on CI — 3085 files parsed per
+    // descriptor to find the 318 that mention any helper at all. The predicate is
+    // the same either way (`sf.text` IS the file text); only the cost moves.
+    if (!descriptor.entries.some((e) => fileText(full).includes(`${e.name}(`))) continue;
+    const sf = sourceFileFor(full);
+    const helpers = reachableHelpers(sf, root);
 
-      const visit = (node: ts.Node): void => {
-        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-          const entry = entryOf.get(node.expression.text);
-          if (entry) {
-            const site = classify(
-              node,
-              entry,
-              descriptor,
-              sf,
-              rel,
-              gated,
-              repoModels,
-              helpers,
-              root,
-              map,
-              tables,
-            );
-            if (site) out.push(site);
-          }
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const entry = entryOf.get(node.expression.text);
+        if (entry) {
+          const site = classify(
+            node,
+            entry,
+            descriptor,
+            sf,
+            rel,
+            gated,
+            repoModels,
+            helpers,
+            root,
+            map,
+            tables,
+          );
+          if (site) out.push(site);
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(sf);
-    }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
   }
 
   out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
