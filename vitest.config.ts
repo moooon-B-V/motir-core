@@ -898,6 +898,17 @@ export default defineConfig({
         // launcher it derives its href from is already gated above.
         'lib/planning/aiCallout.ts',
         'components/planning/AiCalloutMenu.tsx',
+        // MOTIR-3208 — the orb's drag + throw. `orbPhysics.ts` is pure and is
+        // GATED below (100 statements / branches / functions / lines, measured on
+        // this branch). `useDraggableOrb.ts` is REPORT-ONLY, and the reason is the
+        // one this block prescribes rather than a shortfall being hidden: it is at
+        // 100% LINES and 84% branches, and what remains are DOM-capability guards
+        // (`el.setPointerCapture?.()`, `pos.current ?? …`) that a single test
+        // environment cannot drive both ways — happy-dom either has the method or
+        // does not. Pinning 90 would invite mocking the DOM into having and not
+        // having a capability, which tests the mock.
+        'lib/planning/orbPhysics.ts',
+        'lib/hooks/useDraggableOrb.ts',
         'components/planning/PlanWithAIFab.tsx',
         // MOTIR-1970 — the schedule-health detection seam. Gated because this is
         // the code that has to work on the day everything else has already
@@ -2262,6 +2273,8 @@ export default defineConfig({
         // the NEXT action entry cannot quietly ship an unexercised row.
         'lib/planning/aiCallout.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/AiCalloutMenu.tsx': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3208 — measured at 100/100/100/100 on this branch before pinning.
+        'lib/planning/orbPhysics.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanWithAIFab.tsx': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-1970 — the schedule-health detection seam (see the `include` note).
         'lib/jobs/cron.ts': { branches: 90, functions: 90, lines: 90 },
