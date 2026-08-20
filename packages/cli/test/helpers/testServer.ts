@@ -565,6 +565,21 @@ export function v1Plan(proposals: unknown[] = [], over: Record<string, unknown> 
 }
 
 /** The canned `/api/v1` answers every suite starts from. */
+/** A `WorkItemClaim` body — the happy path by default, any outcome on request. */
+export function v1Claim(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    title: `Item ${key}`,
+    outcome: 'claimed',
+    claimed: true,
+    status: { key: 'in_progress', category: 'in_progress' },
+    assignee: { id: 'user_me', name: 'Mo' },
+    transitionedBy: { id: 'user_me', name: 'Mo' },
+    transitionedAt: '2026-08-19T12:00:00.000Z',
+    ...over,
+  };
+}
+
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
     body: {
@@ -604,10 +619,13 @@ export const DEFAULT_V1: V1Script = {
   // new status; nothing in the CLI reads that body, but the transport validates
   // every success, so the default has to be a real one.
   'POST /api/v1/work-items/{key}/transitions': { body: v1Detail('PROD-1') },
-  // The CLAIM (MOTIR-2427) — a plain assignment before every dispatch, which
-  // answers with the patched item. Every dispatch path makes this call, so it
-  // belongs in the DEFAULTS rather than in each command suite's script.
+  // The plain PATCH, which is still the edit door — it is no longer the claim.
   'PATCH /api/v1/work-items/{key}': { body: v1Detail('PROD-1') },
+  // The CLAIM (MOTIR-2961/MOTIR-3048) — ONE locked call that assigns and flips,
+  // made by every dispatch path, so it belongs in the DEFAULTS rather than in
+  // each command suite's script. The default is the happy path; a test that
+  // wants a refusal scripts this key with another `outcome`.
+  'POST /api/v1/work-items/{key}/claim': { body: v1Claim('PROD-1') },
   'GET /api/v1/work-items/{key}/dispatch-prompt': { body: v1DispatchPrompt('PROD-1') },
   'POST /api/v1/work-items/{key}/integration': { body: v1Integration('PROD-1') },
   'POST /api/v1/sessions/complete': { body: v1CloseOut('motir/session-1') },

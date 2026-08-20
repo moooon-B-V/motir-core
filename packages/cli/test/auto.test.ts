@@ -26,6 +26,7 @@ import { parseAgentCommand } from '../src/agentProfiles.js';
 import { CLI_VERSION } from '../src/version.js';
 import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
 
 // `motir auto` — the sequential WHILE loop (Subtask 7.9.4 · MOTIR-882).
 //
@@ -85,8 +86,19 @@ class FakeServer {
   readonly integrated: { key: string; sessionBranch: string }[] = [];
   /** The implementation provenance each integration carried (MOTIR-2419). */
   readonly provenance: { key: string; harness: string | null; model: string | null }[] = [];
-  /** Every claim the run wrote, in order (MOTIR-2427). */
+  /** Every claim the run ATTEMPTED, in order (MOTIR-2427/MOTIR-3048). */
   readonly claims: { key: string; ownerId: string }[] = [];
+  /** What each of those attempts resolved to — the discrimination this loop
+   *  now has to act on rather than collapse. */
+  readonly claimOutcomes: { key: string; outcome: string }[] = [];
+  /** WHO this run's token belongs to. A test flips it to make a row that is
+   *  in progress under somebody else's name genuinely somebody else's. */
+  caller = 'user_me';
+  /** Fired just before a claim resolves, so a test can make a SIBLING win the
+   *  race in the exact gap the lock closes — between the pick and the claim.
+   *  There is no other way to reach the refusal from here: the pick already
+   *  narrows to rows this run may take. */
+  beforeClaim: ((key: string) => void) | null = null;
   /** The `ownerId` each pick was narrowed by — undefined means UNNARROWED. */
   readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
@@ -206,10 +218,28 @@ class FakeServer {
         this.byKey(args.key).status = args.status;
         return {};
       },
-      claimWorkItem: async (args: { key: string; ownerId: string }) => {
-        this.claims.push(args);
-        this.byKey(args.key).assigneeId = args.ownerId;
-        return {};
+      // The ATOMIC claim (MOTIR-3048): one call that assigns AND flips, and
+      // that can refuse. The fake answers by the server's own rule so a
+      // `taken` / `not_claimable` row is reachable from a test without
+      // hand-building a result.
+      claimWorkItem: async (args: { key: string }) => {
+        this.beforeClaim?.(args.key);
+        const item = this.byKey(args.key);
+        const { claim, apply } = resolveFakeClaim(item, {
+          id: this.caller,
+          name: 'Me',
+        });
+        this.claims.push({ key: args.key, ownerId: this.caller });
+        this.claimOutcomes.push({ key: args.key, outcome: claim.outcome });
+        if (apply) {
+          // The row moves, but NOT through `transitionStatus` — the whole point
+          // of MOTIR-3048 is that the dispatch flip happens inside this one
+          // locked call, so `transitions` (which records wire transitions) must
+          // stay empty for it or the tests could no longer tell the two apart.
+          item.status = apply.status;
+          item.assigneeId = apply.assigneeId;
+        }
+        return claim;
       },
       markIntegrated: async (args: {
         key: string;
@@ -507,8 +537,12 @@ describe('motir auto — the WHILE loop', () => {
       { key: 'PROD-5', title: 'Item PROD-5', reason: 'needs_planning' },
       { key: 'PROD-6', title: 'Item PROD-6', reason: 'needs_human' },
     ]);
-    // Skipped means UNTOUCHED — no status flip, no prompt fetched.
-    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-7']);
+    // Skipped means UNTOUCHED — not claimed, no status flip, no prompt fetched.
+    // The dispatch flip is the CLAIM's now (MOTIR-3048), so the claim list is
+    // what carries the "only PROD-7 was started" half of this property.
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-7']);
+    expect(server.integrated.map((r) => r.key)).toEqual(['PROD-7']);
+    expect(server.transitions).toEqual([]);
     expect(server.promptCalls.map((c) => c.key)).toEqual(['PROD-7']);
 
     const text = renderAutoSummary(summary);
@@ -796,6 +830,63 @@ describe('motir auto — failure policy', () => {
     expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
   });
 
+  // MOTIR-3048 — the pick narrows to rows this run may take, but the pick and
+  // the claim are not one act. The card can be taken in between, and until the
+  // claim could REFUSE, the loop had no way to find out.
+  it('a card a SIBLING took between the pick and the claim is a SKIP, not a failure', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    server.beforeClaim = (key) => {
+      if (key !== 'PROD-2') return;
+      const stolen = server.byKey('PROD-2');
+      stolen.status = 'in_progress';
+      stolen.assigneeId = 'user_them';
+    };
+
+    const { summary, dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(server.claimOutcomes).toEqual([
+      { key: 'PROD-1', outcome: 'claimed' },
+      { key: 'PROD-2', outcome: 'taken' },
+    ]);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    // Not a RECORD, so not a failure — the loop drained cleanly and the exit
+    // code never saw it.
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-1']);
+    expect(summary.stopReason).toBe('drained');
+    expect(autoExitCode(summary)).toBe(0);
+    // …and it is held out, so the very next `next_ready` cannot offer it back.
+    expect(server.byKey('PROD-2').assigneeId).toBe('user_them');
+  });
+
+  it('a refused claim does not HALT the loop, even without --keep-going', async () => {
+    // The failure policy stops on the first FAILED agent. A refusal is not one:
+    // no agent ran, so there is nothing half-done to protect.
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1'),
+      leaf('idB', 'PROD-2'),
+      leaf('idC', 'PROD-3'),
+    ]);
+    server.beforeClaim = (key) => {
+      if (key === 'PROD-2') server.byKey('PROD-2').status = 'done';
+    };
+
+    const { summary, dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1', 'PROD-3']);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    expect(server.transitions.map((t) => t.key)).not.toContain('PROD-2');
+    expect(autoExitCode(summary)).toBe(0);
+  });
+
   it('claims BEFORE the status moves — a claim written at the end is history', async () => {
     // The ordering is the point: a teammate reads the board WHILE the work is
     // happening, and a claim recorded afterwards tells them nothing in time.
@@ -807,7 +898,11 @@ describe('motir auto — failure policy', () => {
       },
     });
 
-    expect(server.transitions[0]).toEqual({ key: 'PROD-1', status: 'in_progress' });
+    // There is no separate status write to be BEFORE any more — the claim IS
+    // the flip (MOTIR-3048). What the property becomes: the claim landed, and
+    // it landed before anything the agent did.
+    expect(server.claimOutcomes).toEqual([{ key: 'PROD-1', outcome: 'claimed' }]);
+    expect(server.transitions.map((t) => t.status)).not.toContain('in_progress');
   });
 
   it('--keep-going finishes the remainder and never re-dispatches the failure', async () => {

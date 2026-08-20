@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CliError } from '../src/errors.js';
 import { readExcludes } from '../src/sessionExcludes.js';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
 import type {
   CompleteSessionResult,
   DispatchItem,
@@ -128,6 +129,9 @@ function setup(
     detail?: WorkItemDetail;
     prompt?: DispatchPrompt;
     transitionError?: (status: string) => Error | null;
+    /** Force the claim's answer by describing the row the server sees
+     *  (MOTIR-3048) — a card somebody else holds, or one that is finished. */
+    claimRow?: { key: string; title?: string | null; status: string; assigneeId: string | null };
     sessionResult?: CompleteSessionResult;
     repos?: string[];
   } = {},
@@ -141,9 +145,20 @@ function setup(
       calls.push({ tool: 'whoami', args: undefined });
       return { user: { id: OWNER, name: 'Me', email: 'me@motir.test' }, workspace: null };
     },
-    claimWorkItem: async (args: unknown) => {
+    // The ATOMIC claim (MOTIR-3048). One call assigns AND flips, and it can
+    // refuse — so the stub answers by the server's own rule off whatever status
+    // the fixture put on the row, and a test forces a refusal by naming a
+    // status rather than by hand-building a result.
+    claimWorkItem: async (args: { key: string }) => {
       calls.push({ tool: 'claim', args });
-      return {};
+      const row = opts.claimRow ?? {
+        key: args.key,
+        title: 'Add the thing',
+        status: opts.detail?.item.status ?? opts.item?.status?.key ?? 'todo',
+        assigneeId: opts.detail?.item.assigneeId ?? opts.item?.assigneeId ?? null,
+      };
+      const { claim } = resolveFakeClaim(row, { id: OWNER, name: 'Me' }, () => 'Ada');
+      return claim;
     },
     nextReady: async (args: unknown) => {
       calls.push({ tool: 'next_ready', args });
@@ -231,17 +246,13 @@ describe('motir next --print', () => {
     setup();
     await nextCommand({ print: true });
 
-    expect(toolNames()).toEqual([
-      'whoami',
-      'next_ready',
-      'claim',
-      'transition_status',
-      'dispatch_prompt',
-    ]);
-    // The CLAIM lands BEFORE the status moves and long before any agent
-    // launches (MOTIR-2427) — a claim written at the end is history.
-    expect(harness.calls[2]?.args).toEqual({ key: 'PROD-7', ownerId: OWNER });
-    expect(harness.calls[3]?.args).toEqual({ key: 'PROD-7', status: 'in_progress' });
+    // ONE call on the claim path (MOTIR-3048). The `updateWorkItem { assigneeId }`
+    // + `transitionStatus` pair is gone: the claim assigns AND flips, inside one
+    // locked server transaction, so a second `transition_status` here would be a
+    // write the CLI no longer has any reason to make.
+    expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim', 'dispatch_prompt']);
+    expect(harness.calls[2]?.args).toEqual({ key: 'PROD-7' });
+    expect(toolNames()).not.toContain('transition_status');
     // The prompt is the ONLY thing on stdout, verbatim — nothing prepended,
     // nothing appended but the single terminating newline.
     expect(harness.stdout).toBe(PROMPT_TEXT);
@@ -270,9 +281,14 @@ describe('motir next --print', () => {
   });
 
   it('does NOT re-flip an item that is already In Progress', async () => {
-    setup({ item: readyItem({ status: { key: 'in_progress', category: 'in_progress' } }) });
+    setup({
+      item: readyItem({ status: { key: 'in_progress', category: 'in_progress' } }),
+      claimRow: { key: 'PROD-7', status: 'in_progress', assigneeId: OWNER },
+    });
     await nextCommand({ print: true });
     expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim', 'dispatch_prompt']);
+    // `mine` — the server's word for the recovery this line has always
+    // described, and it still proceeds to dispatch (MOTIR-3048).
     expect(harness.stderr).toContain('already In Progress');
   });
 });
@@ -291,11 +307,11 @@ describe('motir next --agent', () => {
       'whoami',
       'next_ready',
       'claim',
-      'transition_status',
       'dispatch_prompt',
       'transition_status',
     ]);
-    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'implemented' });
+    // The ONLY transition left on this path is the one the agent EARNED.
+    expect(harness.calls[4]?.args).toEqual({ key: 'PROD-7', status: 'implemented' });
     expect(harness.stderr).toContain('motir done PROD-7');
   });
 
@@ -309,8 +325,9 @@ describe('motir next --agent', () => {
     await nextCommand({ agent: 'claude' }, { run: NOTHING_PUSHED });
 
     expect(runAgentMock).toHaveBeenCalledOnce();
-    const transitions = harness.calls.filter((c) => c.tool === 'transition_status');
-    expect(transitions.map((c) => (c.args as { status: string }).status)).toEqual(['in_progress']);
+    // No transition AT ALL now: the dispatch flip happened inside the claim, and
+    // the `implemented` one is refused. The card is left where the claim put it.
+    expect(harness.calls.filter((c) => c.tool === 'transition_status')).toEqual([]);
     expect(harness.calls.some((c) => c.tool === 'mark_integrated')).toBe(false);
     expect(harness.stderr).toContain('no branch naming PROD-7 is on the remote');
     expect(harness.stderr).toContain('stays In Progress');
@@ -341,8 +358,10 @@ describe('motir next --agent', () => {
       key: 'PROD-7',
       sessionBranch: 'story/PROD-9',
     });
-    // it must NOT also hand-flip the status — mark_integrated does that move
-    expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
+    // it must NOT also hand-flip the status — mark_integrated does that move,
+    // and the dispatch flip was the claim's (MOTIR-3048), so there is no
+    // `transition_status` on this path at all.
+    expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(0);
     expect(harness.stderr).toContain('motir done --session story/PROD-9');
   });
 
@@ -381,8 +400,8 @@ describe('motir next --agent', () => {
     setup();
     await nextCommand({ agent: 'claude' }, { run: PUSHED });
 
-    // only the dispatch flip — nothing moved the item afterwards
-    expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
+    // the claim made the dispatch flip; nothing moved the item afterwards
+    expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(0);
     expect(harness.stderr).toContain('stays In Progress');
     expect(process.exitCode).toBe(2);
     expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
@@ -472,13 +491,7 @@ describe('motir run <key>', () => {
       }),
     });
     await runCommand('PROD-7', { force: true, print: true });
-    expect(toolNames()).toEqual([
-      'get_work_item',
-      'whoami',
-      'claim',
-      'transition_status',
-      'dispatch_prompt',
-    ]);
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
     expect(harness.stderr).toContain('--force');
     expect(harness.stdout).toBe(PROMPT_TEXT);
   });
@@ -486,19 +499,170 @@ describe('motir run <key>', () => {
   it('dispatches a ready item straight through', async () => {
     setup();
     await runCommand('PROD-7', { print: true });
-    expect(toolNames()).toEqual([
-      'get_work_item',
-      'whoami',
-      'claim',
-      'transition_status',
-      'dispatch_prompt',
-    ]);
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
   });
 
   it('rejects an empty key before any network call', async () => {
     setup();
     await expect(runCommand('   ', {})).rejects.toThrow(CliError);
     expect(toolNames()).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE CLAIM DISCRIMINATES (MOTIR-3048)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// `ensureInProgress` used to be unable to fail meaningfully: it assigned
+// unconditionally, transitioned, and whatever it found it proceeded. It now
+// makes ONE locked call that answers with one of four outcomes, and the value
+// of the whole change is in keeping them apart rather than collapsing them back
+// into "did it throw". So each of the four is asserted on its own, through the
+// command, on both the picked and the named path.
+describe('the CLAIM DISCRIMINATES — four outcomes, four next moves (MOTIR-3048)', () => {
+  /** Every refusal shares this: no prompt was fetched, no agent launched, and
+   *  the command ended at 0 — a card somebody else holds is not a run failure. */
+  function assertRefusedCleanly() {
+    expect(toolNames()).not.toContain('dispatch_prompt');
+    expect(runAgentMock).not.toHaveBeenCalled();
+    expect(harness.stdout).toBe('');
+    expect(process.exitCode).toBeUndefined();
+  }
+
+  it('ONE server call takes the card — the assign-then-transition pair is gone', async () => {
+    setup();
+    await runCommand('PROD-7', { print: true });
+
+    // The pair this card replaced was `updateWorkItem { assigneeId }` followed
+    // by `transitionStatus`. Exactly one claim, and no status write at all.
+    expect(harness.calls.filter((c) => c.tool === 'claim')).toHaveLength(1);
+    expect(toolNames()).not.toContain('transition_status');
+  });
+
+  it('CLAIMED — proceeds to dispatch, saying nothing', async () => {
+    setup();
+    await runCommand('PROD-7', { print: true });
+
+    expect(toolNames()).toContain('dispatch_prompt');
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+    expect(harness.stderr).not.toContain('already In Progress');
+    expect(harness.stderr).not.toContain('not dispatching');
+  });
+
+  it('MINE — proceeds, and still prints the already-In-Progress line', async () => {
+    // The documented recovery for a card this owner's failed agent left behind.
+    // It is the one outcome that both refuses to write anything AND carries on.
+    setup({
+      detail: workItem({ item: { ...workItem().item, status: 'in_progress', assigneeId: OWNER } }),
+    });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('PROD-7: already In Progress — leaving the status as it is.');
+    expect(toolNames()).toContain('dispatch_prompt');
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+  });
+
+  it('TAKEN — does not dispatch, and NAMES the holder', async () => {
+    // A loser that cannot name the winner is barely better than one that never
+    // knew there was a race. `Ada` comes from the stub's holder lookup.
+    setup({
+      detail: workItem({
+        item: { ...workItem().item, status: 'in_progress', assigneeId: 'user_them' },
+      }),
+    });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('already claimed by Ada');
+    expect(harness.stderr).toContain('It is at in_progress.');
+    assertRefusedCleanly();
+  });
+
+  it('TAKEN with NOBODY assigned — the MOTIR-2958 shape still refuses, readably', async () => {
+    // A sibling that moved the status without ever assigning: `assignee` is
+    // null, so the sentence has no name to use and must not print one. This is
+    // the shape that motivated carrying `transitionedBy` at all — and when even
+    // that is absent, the refusal says so rather than interpolating a blank.
+    setup({
+      detail: workItem({ item: { ...workItem().item, status: 'in_progress' } }),
+      claimRow: { key: 'PROD-7', status: 'in_progress', assigneeId: null },
+    });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('PROD-7: already claimed by somebody else');
+    expect(harness.stderr).not.toContain('claimed by null');
+    assertRefusedCleanly();
+  });
+
+  it('NOT CLAIMABLE — does not dispatch, and names the STATUS', async () => {
+    setup({ detail: workItem({ item: { ...workItem().item, status: 'in_review' } }) });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('PROD-7: not claimable');
+    expect(harness.stderr).toContain('It is at in_review.');
+    assertRefusedCleanly();
+  });
+
+  it('a `planning` card is refused by the SERVER, not warned about by the CLI', async () => {
+    // `pickWarning` used to warn here and dispatch anyway. The warning is gone
+    // because the outcome it described can no longer happen.
+    setup({ detail: workItem({ item: { ...workItem().item, status: 'planning' } }) });
+    await runCommand('PROD-7', { print: true });
+
+    // `pickWarning`'s old sentence, gone in full — not merely reworded.
+    expect(harness.stderr).not.toContain('a human has not acted on the plan yet');
+    expect(harness.stderr).toContain('It is at planning.');
+    assertRefusedCleanly();
+  });
+
+  it('⚠️ a DONE card is REFUSED — the silent-reopen path is closed', async () => {
+    // The case with no warning at all before this card: `done → in_progress` is
+    // a legal workflow edge, so `motir run` on a card that shipped last week
+    // quietly reopened it and started an agent on finished work.
+    setup({ detail: workItem({ item: { ...workItem().item, status: 'done' } }) });
+    await runCommand('PROD-7', { print: true });
+
+    expect(harness.stderr).toContain('PROD-7: not claimable');
+    expect(harness.stderr).toContain('It is at done.');
+    assertRefusedCleanly();
+  });
+
+  it('--force on a BLOCKED card still claims and dispatches', async () => {
+    // `--force` bypasses the READINESS gate, and a not-ready card sits at
+    // `blocked`, which is inside the to-do CATEGORY — so the server's category
+    // re-assert has nothing to object to. The two gates are independent, and
+    // this is the test that keeps them so.
+    setup({
+      detail: workItem({
+        item: { ...workItem().item, status: 'blocked' },
+        readiness: {
+          ready: false,
+          openBlockers: [
+            { identifier: 'PROD-3', kind: 'subtask', title: 'Schema', status: 'todo' },
+          ],
+          blockedByAncestor: null,
+        },
+      }),
+    });
+    await runCommand('PROD-7', { force: true, print: true });
+
+    expect(harness.stderr).toContain('--force');
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
+    expect(harness.stdout).toBe(PROMPT_TEXT);
+  });
+
+  it('`motir next` refuses the same way — the ONE funnel serves both commands', async () => {
+    // The picked path can lose the card between the pick and the claim, which is
+    // exactly the window `claim_next_ready` closes for the bare loop and this
+    // closes for everything else.
+    setup({
+      item: readyItem({ status: { key: 'in_progress', category: 'in_progress' } }),
+      claimRow: { key: 'PROD-7', status: 'in_progress', assigneeId: 'user_them' },
+    });
+    await nextCommand({ print: true });
+
+    expect(harness.stderr).toContain('already claimed by Ada');
+    expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim']);
+    assertRefusedCleanly();
   });
 });
 
@@ -530,13 +694,7 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     expect(harness.stderr).toContain('PROD-5 (in_review)');
     expect(harness.stderr).toContain('NOT a blocker');
     // Byte-identical to the no-advisory run: same calls, same payload, same code.
-    expect(toolNames()).toEqual([
-      'get_work_item',
-      'whoami',
-      'claim',
-      'transition_status',
-      'dispatch_prompt',
-    ]);
+    expect(toolNames()).toEqual(['get_work_item', 'whoami', 'claim', 'dispatch_prompt']);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -546,13 +704,7 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     await nextCommand({ print: true });
 
     expect(harness.stderr).toContain('PROD-5 (in_review)');
-    expect(toolNames()).toEqual([
-      'whoami',
-      'next_ready',
-      'claim',
-      'transition_status',
-      'dispatch_prompt',
-    ]);
+    expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim', 'dispatch_prompt']);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -657,12 +809,12 @@ describe('motir done', () => {
       await nextCommand({ print: true });
 
       const names = toolNames();
-      expect(names.indexOf('claim')).toBeLessThan(names.indexOf('transition_status'));
+      // There is no status write to be BEFORE any more — the claim IS the flip
+      // (MOTIR-3048). What survives of the original property is that the claim
+      // lands before the prompt is fetched and long before an agent launches.
+      expect(names).not.toContain('transition_status');
       expect(names.indexOf('claim')).toBeLessThan(names.indexOf('dispatch_prompt'));
-      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
-        key: 'PROD-7',
-        ownerId: OWNER,
-      });
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({ key: 'PROD-7' });
     });
 
     it('`motir run <key>` claims a NAMED card too', async () => {
@@ -670,10 +822,7 @@ describe('motir done', () => {
       setup();
       await runCommand('PROD-7', { print: true });
 
-      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
-        key: 'PROD-7',
-        ownerId: OWNER,
-      });
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({ key: 'PROD-7' });
     });
 
     it('asks WHOAMI once per invocation, not once per item', async () => {
@@ -831,7 +980,6 @@ describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
       'whoami',
       'next_ready',
       'claim',
-      'transition_status',
       'dispatch_prompt',
       'transition_status',
     ]);

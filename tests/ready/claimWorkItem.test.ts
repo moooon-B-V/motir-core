@@ -70,8 +70,9 @@ describe('claimWorkItem — the happy path', () => {
     expect(claim.status).toEqual({ key: 'in_progress', category: 'in_progress' });
     expect(claim.assignee?.id).toBe(fx.ownerId);
 
-    // BOTH writes landed — the assignment is the half `ensureInProgress` did
-    // unconditionally and unlocked, and it must survive the same transaction.
+    // BOTH writes landed — the assignment is the half `ensureInProgress` used to
+    // do unconditionally and unlocked (until MOTIR-3048 moved it here), and it
+    // must survive the same transaction as the status.
     const row = await rowOf(item.id);
     expect(row.status).toBe('in_progress');
     expect(row.assigneeId).toBe(fx.ownerId);

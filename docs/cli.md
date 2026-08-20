@@ -334,7 +334,7 @@ watch it.
 
 | hop                                   | who does it                                                                                  |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `todo → in_progress`                  | **the run**, when it claims the card                                                         |
+| `todo → in_progress`                  | **the run's CLAIM** — assignment and status in one locked server call                        |
 | `in_progress → implemented`           | **the agent, or the CLI** — once the work is committed, PUSHED, and its pull request is open |
 | `implemented → in_review`             | **the webhook, when CI goes green.** Nobody at a terminal                                    |
 | `in_review → done`                    | **a human**, by merging                                                                      |
@@ -695,7 +695,7 @@ piping.
 Selection differs; the pipeline does not. Every dispatch runs:
 
 ```
-select → transition_status(in_progress) → dispatch_prompt → deliver
+select → claim (assign + in_progress, one locked call) → dispatch_prompt → deliver
 ```
 
 **The prompt is generated SERVER-SIDE** (`dispatch_prompt`) and printed
@@ -790,21 +790,50 @@ ready **only** because a dependency is integrated-awaiting-review is excluded
 and named — that dependency's code is not on `main`, so a pull request of its
 own could not even build. That lineage is `auto`'s territory.
 
-**A run CLAIMS what it takes, and takes only what is free.** Before an agent is
-launched — before the status even moves — the card is assigned to the token
-owner. That is the signal a teammate reads on the board: someone has this. And a
-run picks up only the **to-do category**, never a status key, so a project that
-defines its own statuses gets the rule for free and a card at `Planning` leaves
-circulation without anything special-casing it. A card claimed by someone else
-is not picked up at all; a card claimed by **you** and left in progress by an
-interrupted run is — that is how a killed run resumes.
+**A run CLAIMS what it takes, and the claim is a LOCK.** Every dispatch path —
+`run`, `next`, `batch`, `auto` — takes its card with ONE call
+(`POST /api/v1/work-items/{key}/claim`), which inside a single transaction locks
+the row, re-checks that it is still in the **to-do category**, assigns it to the
+token owner and moves it to In Progress. That is the signal a teammate reads on
+the board: someone has this. It is expressed on the CATEGORY and never on a
+status key, so a project that defines its own statuses gets the rule for free
+and a card at `Planning` leaves circulation without anything special-casing it.
 
-⚠️ The claim is an **advisory, not a lock**. Two runs started at the same instant
-can both see a card unassigned and both take it. Closing that needs a conditional
-write Motir does not offer today; the window is one read-to-write gap and the
-failure is loud — two branches for one card is noticed immediately. `motir run
-<key>` is the exception to the pickable rule rather than the claim: you named the
-card, so it warns and proceeds.
+**Two runs at one card: exactly one starts.** This used to be an advisory — an
+unconditional assignment with a read-to-write gap two simultaneous runs fell
+straight into, which the CLI documented as an accepted race. It is not one any
+more. The loser is told which of three things happened, because the three call
+for different next moves:
+
+| the run is told | what it means                                         | what it does                                      |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| `claimed`       | it is yours                                           | dispatches                                        |
+| `mine`          | already yours, In Progress — your own interrupted run | dispatches, saying so                             |
+| `taken`         | somebody else holds it, **and they are named**        | does not dispatch                                 |
+| `not_claimable` | outside the to-do category                            | does not dispatch, and says which status it is at |
+
+**Which statuses a run REFUSES.** Anything outside the to-do category:
+`implemented`, `in_review`, `planning`, `done`, `cancelled`, and any status your
+project's workflow adds that is not in that category. **`todo` and `blocked` are
+both inside it**, which is why `motir run --force` on a card whose dependencies
+are unmet still works — `--force` bypasses the _readiness_ gate, and readiness is
+a different question from claimability.
+
+⚠️ **`motir run <key>` refuses these too, and that is a deliberate change.** It
+used to warn about `in_review` and `planning` and dispatch anyway, on the
+reasoning that a person who names a key has a reason — and it said _nothing at
+all_ about a `done` card, which it silently reopened, because `done → in_progress`
+is a legal workflow edge. That is a good argument about who owns a card and a bad
+one about whether finished work should be restarted. So the split is: the server
+owns which STATES a run may claim from, and the CLI keeps the one warning the
+server deliberately does not enforce — **a to-do card assigned to somebody else
+is still claimable, and `motir run <key>` warns you that you are taking it.**
+
+**A refusal is not a failure.** In `run` and `next` it ends the command cleanly,
+exit 0. In `batch` and `auto` it is recorded as a SKIP with its own reason —
+_claimed by somebody else, or no longer claimable_ — beside _needs planning_ and
+_needs a human_; no agent ran, nothing was reverted, and the run's exit code is
+unaffected by it.
 
 **What both loops skip.** An unexpanded epic/story is a _planning_ item, not a
 dispatchable one — there is no agent prompt for "do the planning" — so it is
