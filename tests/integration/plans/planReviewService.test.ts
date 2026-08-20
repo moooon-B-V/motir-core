@@ -174,14 +174,15 @@ describe('planReviewService.getPlanReview', () => {
 
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const modify = review.items.find((i) => i.op === 'modify')!;
-    // Long prose, so the cell says only THAT it moved — the same treatment the
-    // description gets. It is listed at all because the explanation is the half a
-    // reviewer reads to decide whether a proposed re-shape is right; a `modify`
-    // that rewrote it invisibly would defeat the point of the review surface.
+    // ⚠️ BOTH SIDES, previewed (bug MOTIR-3191). This used to read
+    // `from: null, to: 'updated'` — a notification that the half a reviewer most
+    // needs to judge had moved, with no way to see where to. Long prose is still
+    // previewed rather than carried whole; a preview of the ACTUAL values is a
+    // diff, and the word "updated" was not.
     expect(modify.changes.find((c) => c.field === 'explanation')).toEqual({
       field: 'explanation',
-      from: null,
-      to: 'updated',
+      from: 'The rationale as first planned.',
+      to: 'The rationale the re-scope leaves behind.',
     });
   });
 
@@ -394,6 +395,191 @@ describe('planReviewService.getPlanReview', () => {
         trail: [],
       });
     }
+  });
+
+  // ── bug MOTIR-3191 — a proposal ABOUT an existing card sits where that card
+  // sits ───────────────────────────────────────────────────────────────────────
+  //
+  // A `modify` / `remove` carries no `parentRef` and cannot: its parent is the
+  // live card's, and the contract forbids a proposal from re-parenting anything.
+  // Placement read off `parentRef` alone therefore came back null, which every
+  // consumer draws as A ROOT — so an amendment to a subtask five levels down drew
+  // beside the `add`s the plan rules reserve the project root for. A plan of two
+  // modifies was declined on exactly that reading, and the reading was correct.
+  //
+  // These read the placement BACK through the review DTO, which is the only place
+  // the canvas, the breadcrumb and `get_plan` all agree from.
+
+  it('places a MODIFY at its target’s live position — parent, trail and all (MOTIR-3191)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'The agent loop');
+    const story = await seedChild(fx, 'story', 'Plan review', epic.id);
+    const task = await seedChild(fx, 'task', 'The canvas', story.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Amend one card' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: task.id, patch: { title: 'The canvas, redrawn' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items[0]!;
+
+    // THE assertion: the target's position, not the root.
+    expect(modify.parentNodeId).toBe(story.id);
+    expect(modify.parentIdentifier).toBe(story.identifier);
+    expect(modify.parentTitle).toBe('Plan review');
+    expect(modify.parentKind).toBe('story');
+    // …and the whole committed chain down to it, so the canvas opens at the level
+    // the card lives on rather than at the project root.
+    expect(modify.parentTrail).toEqual([
+      { id: epic.id, identifier: epic.identifier, title: 'The agent loop' },
+      { id: story.id, identifier: story.identifier, title: 'Plan review' },
+    ]);
+  });
+
+  it('places a REMOVE the same way — the op differs, the reason does not (MOTIR-3191)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Payouts');
+    const task = await seedChild(fx, 'task', 'Manual payout export', epic.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Drop one card' }, fx.ctx);
+    await plansService.addProposals(plan.id, [{ op: 'remove', workItemId: task.id }], fx.ctx);
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.parentNodeId).toBe(epic.id);
+    expect(review.items[0]!.parentTrail).toEqual([
+      { id: epic.id, identifier: epic.identifier, title: 'Payouts' },
+    ]);
+  });
+
+  it('leaves a MODIFY of a genuinely ROOT card at the root (MOTIR-3191)', async () => {
+    // The inherited parent is the TARGET's parent, whatever that is — including
+    // none. A root card's amendment belongs at the root, and reads as one.
+    const fx = await makeWorkItemFixture();
+    const rootCard = await seedChild(fx, 'epic', 'A root epic');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Amend a root' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: rootCard.id, patch: { title: 'A root epic, renamed' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.parentNodeId).toBeNull();
+    expect(review.items[0]!.parentIdentifier).toBeNull();
+    expect(review.items[0]!.parentTrail).toEqual([]);
+  });
+
+  it('DEGRADES a modify whose target is gone to the root rendering (MOTIR-3191)', async () => {
+    // No target ⇒ no parent to inherit. The same degrade-rather-than-throw
+    // contract an archived `parentRef` already had (MOTIR-3083 AC 5).
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Doomed branch');
+    const doomed = await seedChild(fx, 'task', 'Doomed card', epic.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Amend a ghost' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: doomed.id, patch: { title: 'Never lands' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.workItem.delete({ where: { id: doomed.id } });
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.targetMissing).toBe(true);
+    expect(review.items[0]!.parentNodeId).toBeNull();
+    expect(review.items[0]!.parentTrail).toEqual([]);
+  });
+
+  it('places BOTH halves of a mixed plan — an add under its proposed parent, a modify under its target’s (MOTIR-3191)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'The agent loop');
+    const storyA = await seedChild(fx, 'story', 'Where the add goes', epic.id);
+    const storyB = await seedChild(fx, 'story', 'Where the target lives', epic.id);
+    const target = await seedChild(fx, 'task', 'An existing card', storyB.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A mixed plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', parentRef: storyA.id, proposedFields: { title: 'A brand new card' } },
+        { op: 'modify', workItemId: target.id, patch: { title: 'An existing card, re-scoped' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const add = review.items.find((i) => i.op === 'add')!;
+    const modify = review.items.find((i) => i.op === 'modify')!;
+
+    // Two different levels — which is the drill-down model working, not a gap.
+    expect(add.parentNodeId).toBe(storyA.id);
+    expect(modify.parentNodeId).toBe(storyB.id);
+    expect(modify.parentTrail.map((c) => c.id)).toEqual([epic.id, storyB.id]);
+    // Neither is at the root, and the two do not collapse onto one level.
+    expect(add.parentNodeId).not.toBe(modify.parentNodeId);
+  });
+
+  it('renders a description change as a DIFF of the live and proposed bodies, previewed (MOTIR-3191)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card whose body moved');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { descriptionMd: '# Before\n\nThe body   as first   planned.' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Rewrite plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: target.id,
+          patch: { descriptionMd: '# After\n\nThe body the re-scope leaves behind.' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    // Whitespace squeezed (a body is multi-paragraph, the cell is one line), and
+    // the ACTUAL values on both sides — this cell used to read `— → updated`.
+    expect(review.items[0]!.changes.find((c) => c.field === 'description')).toEqual({
+      field: 'description',
+      from: '# Before The body as first planned.',
+      to: '# After The body the re-scope leaves behind.',
+    });
+  });
+
+  it('CAPS each side of a prose diff so a long body cannot ride the wire whole (MOTIR-3191)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card with a long body');
+    const long = 'x'.repeat(400);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Long plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { descriptionMd: long } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const change = review.items[0]!.changes.find((c) => c.field === 'description')!;
+    // 140 characters, the last of them the ellipsis that says so.
+    expect(change.to).toHaveLength(140);
+    expect(change.to!.endsWith('…')).toBe(true);
+    // Nothing there before ⇒ the old side is null, not an empty string.
+    expect(change.from).toBeNull();
   });
 
   // ── MOTIR-3160 (bug MOTIR-3154) — the DECIDED review model ────────────────
