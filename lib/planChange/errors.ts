@@ -95,3 +95,18 @@ export class EmptyPlanChangeTurnError extends Error {
     this.name = 'EmptyPlanChangeTurnError';
   }
 }
+
+/**
+ * A turn id that does not name a turn ON THIS THREAD (MOTIR-1818) — the read a
+ * CORRECTION makes before it re-runs a turn under the other intent. Also what a
+ * turn id from another tenant becomes: the lookup is scoped by session AND
+ * workspace, so a foreign id is simply absent. → 404, the no-existence-leak
+ * posture the rest of this file takes.
+ */
+export class PlanChangeTurnNotFoundError extends Error {
+  readonly code = 'PLAN_CHANGE_TURN_NOT_FOUND' as const;
+  constructor(turnId: string) {
+    super(`No turn ${turnId} on this plan-change conversation.`);
+    this.name = 'PlanChangeTurnNotFoundError';
+  }
+}

@@ -92,6 +92,11 @@ const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 // file, which the spec rewrites between steps.
 const CODE_HEALTH_FIXTURE = path.join(__dirname, 'out', 'e2e-code-health-fixture.json');
 const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-billing-fixture.json');
+// The motir-ai JOBS boundary fixture (MOTIR-1823): the ask journey's three
+// crossings are server-side, so the spec declares what each job settles as by
+// writing this file — re-read on every request, so it can change between turns.
+const MOTIR_AI_JOBS_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-ai-jobs-fixture.json');
+process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 process.env['MOTIR_CLOUD'] ??= 'true';
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 
@@ -230,6 +235,8 @@ export default defineConfig({
         MOTIR_AI_URL,
         E2E_TEST_CODE_HEALTH: '1',
         MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
+        E2E_TEST_AI_JOBS: '1',
+        MOTIR_AI_JOBS_FIXTURE_PATH,
         MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
         MOTIR_AI_BILLING_FIXTURE_PATH,
         // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).

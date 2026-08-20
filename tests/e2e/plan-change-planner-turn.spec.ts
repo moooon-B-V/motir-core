@@ -67,18 +67,46 @@ async function stubAiAccess(page: Page): Promise<void> {
   });
 }
 
-/** The submit hop — the only part of sending a turn that reaches motir-ai. The
- *  `session` it returns is the REAL one, re-read through the idempotent
- *  open/resume endpoint, so the persisted turns are never replaced by a stub. */
+/**
+ * The DOOR — the only part of sending a turn that reaches motir-ai.
+ *
+ * ⚠️ IT MOVED (MOTIR-1343). A project turn used to append through
+ * `…/session/turns` (pure database) and submit separately through
+ * `…/session/submit`; it now posts to `POST /api/ai/ask`, which appends AND
+ * runs. This spec is about what the PLANNER says, not about how a turn is
+ * classified, so the door is answered with the REDIRECT — the shape a
+ * plan-change turn produces — and everything downstream is the shipped
+ * plan-edit tail exactly as before.
+ *
+ * The turn itself is still appended FOR REAL, through the shipped append route,
+ * so the thread the rail reads back is the persisted one. That is the half a
+ * stub must never fake here: these tests assert what is ON the thread.
+ */
 async function stubSubmit(page: Page, jobId: string): Promise<void> {
-  await page.route('**/api/ai/plan-change/session/submit', async (route) => {
+  await page.route('**/api/ai/ask', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
-    const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
-    const live = await route.fetch({ url: sessionUrl });
+    let sent: { body?: string; isAnswer?: boolean } = {};
+    try {
+      sent = JSON.parse(route.request().postData() ?? '{}') as typeof sent;
+    } catch {
+      sent = {};
+    }
+    const turnsUrl = new URL('/api/ai/plan-change/session/turns', route.request().url()).toString();
+    const appended = await route.fetch({
+      url: turnsUrl,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      postData: JSON.stringify({ body: sent.body ?? '', isAnswer: sent.isAnswer === true }),
+    });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId, planId: null, session: await live.json() }),
+      body: JSON.stringify({
+        outcome: 'redirected',
+        jobId,
+        planId: null,
+        session: await appended.json(),
+      }),
     });
   });
 }
@@ -160,12 +188,19 @@ async function stubPlannerTurn(
 
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
 
-/** Send whatever the composer currently prompts for, waiting on the APPEND's 200
- *  — the turn is a persisted row, so its write response is the authoritative
- *  "the thread advanced" signal (never a timeout). */
+/** Send whatever the composer currently prompts for, waiting on the DOOR's 200
+ *  — the turn is a persisted row written by that call, so its write response is
+ *  the authoritative "the thread advanced" signal (never a timeout).
+ *
+ *  ⚠️ THE DOOR MOVED (MOTIR-1343). The project thread used to append through
+ *  `…/session/turns` and submit separately; it now posts to `/api/ai/ask`, which
+ *  appends AND runs, so that is where the 200 comes from. The path matched is
+ *  the door EXACTLY — `/api/ai/ask/settle` shares the prefix, and matching it
+ *  here would resolve on the previous turn's filing instead of this one's
+ *  append. */
 async function send(page: Page, text: string, button: 'Send' | 'Answer'): Promise<void> {
   const appended = page.waitForResponse(
-    (r) => r.url().includes('/api/ai/plan-change/session/turns') && r.request().method() === 'POST',
+    (r) => new URL(r.url()).pathname === '/api/ai/ask' && r.request().method() === 'POST',
   );
   await page.getByRole('textbox', { name: /Reply, or refine|Answer Motir AI/ }).fill(text);
   await page.getByRole('button', { name: button, exact: true }).click();

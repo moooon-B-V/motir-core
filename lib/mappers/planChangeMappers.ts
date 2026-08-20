@@ -2,6 +2,7 @@ import type { PlanChangeSession, PlanChangeTurn } from '@/generated/prisma/clien
 import type {
   PlanChangeSessionDto,
   PlanChangeTurnDto,
+  PlanChangeTurnIntentDto,
   PlanChangeTurnRoleDto,
 } from '@/lib/dto/planChange';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
@@ -22,6 +23,9 @@ export function toPlanChangeTurnDto(row: PlanChangeTurn): PlanChangeTurnDto {
     jobId: row.jobId,
     question: row.question,
     isAnswer: row.isAnswer,
+    intent: (row.intent as PlanChangeTurnIntentDto | null) ?? null,
+    intentCorrected: row.intentCorrected,
+    citations: row.citations,
     authorId: row.authorId,
     createdAt: row.createdAt.toISOString(),
   };

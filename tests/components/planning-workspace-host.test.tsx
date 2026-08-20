@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
@@ -152,6 +152,24 @@ function renderHost(
       initialCanvasTrail={initialCanvasTrail}
       canManage={canManage}
     />,
+  );
+}
+
+/** The same element `renderHost` mounts, for a RE-render — the way a test walks
+ *  a thread turn by turn without unmounting the surface between them, which is
+ *  the whole property the footer slot is asserted on. */
+function hostElement(searchParams: Record<string, string | string[] | undefined>) {
+  const launch = parsePlanningLaunch(searchParams);
+  return (
+    <PlanningWorkspaceHost
+      projectKey="ACME"
+      projectName="Acme"
+      launch={launch}
+      anchorId={null}
+      backHref={planningLaunchBackHref(launch)}
+      initialTarget={null}
+      canManage={false}
+    />
   );
 }
 
@@ -324,6 +342,62 @@ describe('PlanningWorkspaceHost — the proposal is reviewed on the CANVAS', () 
       expect(canvas.getAttribute('data-outcome')).toBe(decided);
     },
   );
+
+  // ── MOTIR-1820 · the FOOTER SLOT ──────────────────────────────────────────
+  //
+  // The gate used to MOUNT and UNMOUNT, and it is a `shrink-0` sibling below a
+  // `min-h-0 flex-1` canvas box — so the box grew and shrank by its full height
+  // every time. The canvas anchors three control clusters to the BOTTOM of that
+  // box, so all three hopped. Now one slot is always mounted and only its
+  // CONTENT changes, which is what makes alternating between a question and a
+  // change feel like one surface rather than two.
+
+  it('keeps a footer slot when there is nothing to confirm, and says the canvas is SAVED', () => {
+    renderHost({ mode: 'replan', from: 'project' });
+
+    const footer = screen.getByTestId('plan-change-canvas-footer');
+    expect(footer.textContent).toContain('Roadmap — as saved');
+    // The ask's own promise, made visible at the one moment somebody might
+    // wonder whether their question moved something.
+    expect(footer.textContent).toContain('Nothing proposed. The conversation has changed nothing.');
+    // …and it carries NO control: there is nothing to decide.
+    expect(within(footer).queryByRole('button')).toBeNull();
+  });
+
+  it('swaps the slot CONTENT for the gate — the two are never both present', () => {
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
+    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
+
+    conversation.state = REVIEWING;
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+
+    expect(screen.getByTestId('plan-change-confirm-bar')).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-canvas-footer')).toBeNull();
+  });
+
+  it('⭐ chrome follows the LATEST TURN across an alternating thread', () => {
+    // ask → change → ask. The rail is the same rail throughout and the user
+    // changed no mode; only what the last turn produced decides the footer.
+    const { rerender } = renderHost({ mode: 'replan', from: 'project' });
+    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
+
+    conversation.state = REVIEWING;
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.getByTestId('plan-change-confirm-bar')).toBeTruthy();
+
+    // A question after a change does NOT discard the pending proposal — asking
+    // mid-review is a lookup, not an abandonment — so the gate STAYS.
+    conversation.state = { ...REVIEWING, phase: 'idle' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.getByTestId('plan-change-confirm-bar')).toBeTruthy();
+
+    // …and once it is decided, the slot rests again.
+    conversation.state = { ...REVIEWING, phase: 'idle', decided: 'accepted' };
+    rerender(hostElement({ mode: 'replan', from: 'project' }));
+    expect(screen.getByTestId('plan-change-canvas-footer')).toBeTruthy();
+    expect(screen.queryByTestId('plan-change-confirm-bar')).toBeNull();
+  });
 
   it('drops the confirm gate once decided — a review is no longer a pending decision', () => {
     // The gate used to be keyed on "there IS a review", which was a safe proxy

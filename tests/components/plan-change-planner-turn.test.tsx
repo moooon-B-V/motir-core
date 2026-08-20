@@ -40,6 +40,9 @@ function turn(
     jobId: role === 'user' ? null : 'job-1',
     question: null,
     isAnswer: false,
+    intent: null,
+    intentCorrected: false,
+    citations: [],
     authorId: role === 'user' ? 'u1' : null,
     createdAt: '2026-08-05T10:00:00.000Z',
     ...extra,
@@ -67,6 +70,7 @@ function session(
 const handlers = {
   onSend: vi.fn(),
   onRetry: vi.fn(),
+  onCorrectTurn: vi.fn(),
   onApprove: vi.fn(),
   onDiscard: vi.fn(),
   onAddTarget: vi.fn(),

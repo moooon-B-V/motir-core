@@ -321,6 +321,9 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       jobId: null,
       question: null,
       isAnswer: false,
+      intent: null,
+      intentCorrected: false,
+      citations: [],
       authorId: 'u1',
       createdAt: now,
     });

@@ -3,8 +3,11 @@ import {
   openPlanChangeSession,
   appendPlanChangeTurn,
   recordPlannerTurn,
+  rerunAskTurn,
   resubmitContextualPlan,
   resumeContextualSession,
+  settleAskJob,
+  submitAskTurn,
   submitContextualPlan,
   submitPlanChange,
 } from '@/lib/planning/planChangeClient';
@@ -351,5 +354,102 @@ describe('the anchored transport — a work item’s own thread', () => {
     await expect(submitContextualPlan('wi_123', 'x')).rejects.toMatchObject({
       isOutOfCredits: true,
     });
+  });
+});
+
+// ── The ASK door (MOTIR-1343) ────────────────────────────────────────────────
+//
+// The project thread's ONE entrance. What these prove is the half the hook's
+// mocks hide, and it is the same property the ADR rests on: the client sends
+// TEXT and never an intent. A request body growing an `intent` key is the mode
+// the design deliberately does not have, arriving through the back door — so the
+// shape of what goes out is asserted exactly, not merely that a call was made.
+
+describe('the ask door', () => {
+  it('sends a NEW turn as text plus the affordance flag — and nothing else', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j1', turnId: 't0', session: SESSION }));
+
+    await expect(submitAskTurn('why is it blocked?')).resolves.toEqual({
+      jobId: 'j1',
+      turnId: 't0',
+      session: SESSION,
+    });
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/ask');
+    expect(init.method).toBe('POST');
+    // EXACTLY these two keys. `isAnswer` is not an intent — it records which
+    // affordance sent the turn — and there is no third field for one to hide in.
+    expect(JSON.parse(init.body as string)).toEqual({
+      body: 'why is it blocked?',
+      isAnswer: false,
+    });
+  });
+
+  it('carries `isAnswer` when the ANSWER bar sent it', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j1', turnId: 't0', session: SESSION }));
+
+    await submitAskTurn('money in', undefined, true);
+
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ body: 'money in', isAnswer: true });
+  });
+
+  it('RE-RUNS a turn by naming it — the retry, which asks for no flip', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j2', turnId: 't0', session: SESSION }));
+
+    await expect(rerunAskTurn('t0')).resolves.toEqual({
+      jobId: 'j2',
+      turnId: 't0',
+      session: SESSION,
+    });
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/ask');
+    // No `flip` key at all, rather than `flip: false` — the two mean different
+    // things to the route, and a retry is not a correction.
+    expect(JSON.parse(init.body as string)).toEqual({ turnId: 't0' });
+  });
+
+  it('asks for a FLIP by naming the turn — never the direction', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ jobId: 'j3', turnId: 't0', session: SESSION }));
+
+    await rerunAskTurn('t0', { flip: true });
+
+    // Which intent to flip TO is derived server-side from what the turn ran as.
+    // A direction on the wire would be the client resolving the intent.
+    expect(JSON.parse(lastCall()[1].body as string)).toEqual({ turnId: 't0', flip: true });
+  });
+
+  it('accepts the REDIRECT shape from either entrance', async () => {
+    // A turn can be handed straight to the plan-change submit — a reply to the
+    // planner's pending question, or a flip — so both helpers can answer with a
+    // redirect instead of a job to stream.
+    const redirect = { outcome: 'redirected', jobId: 'aug-1', planId: 'plan-1', session: SESSION };
+    // A FRESH Response per call: a body can only be read once, so reusing one
+    // instance across two awaits fails on the second with "Body is unusable".
+    fetchMock.mockImplementation(async () => jsonResponse(redirect));
+
+    await expect(submitAskTurn('money in', undefined, true)).resolves.toEqual(redirect);
+    await expect(rerunAskTurn('t0', { flip: true })).resolves.toEqual(redirect);
+  });
+
+  it('files a settled job by id', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ outcome: 'answered', session: SESSION }));
+
+    await expect(settleAskJob('j1')).resolves.toEqual({ outcome: 'answered', session: SESSION });
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/ask/settle');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ jobId: 'j1' });
+  });
+
+  it('raises the ONE error type a caller branches on', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'MOTIR_AI_OUT_OF_CREDITS' }, 402));
+
+    const err = await submitAskTurn('why?').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PlanEditsClientError);
+    expect((err as PlanEditsClientError).isOutOfCredits).toBe(true);
   });
 });

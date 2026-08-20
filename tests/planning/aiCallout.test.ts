@@ -65,10 +65,27 @@ describe('aiCalloutActions', () => {
   });
 
   it('registers ONLY landed capabilities — no "coming soon" placeholder rows', () => {
-    // MOTIR-1343 (ask) / MOTIR-1344 (help) are absent until their stories land:
-    // a dead row costs a tab stop and a screen-reader announcement, and it is a
-    // promise the product cannot keep.
-    expect(aiCalloutActions({ kind: 'project' }).map((a) => a.id)).toEqual(['plan']);
+    // A row appears when its CAPABILITY does, never before: a dead row costs a
+    // tab stop and a screen-reader announcement, and it is a promise the product
+    // cannot keep. `ask` joined with MOTIR-1343; `help` (MOTIR-1344) is still
+    // absent, and this list is what says so.
+    expect(aiCalloutActions({ kind: 'project' }).map((a) => a.id)).toEqual(['plan', 'ask']);
+  });
+
+  it('⭐ gives every row the SAME href — the registry is a capability list', () => {
+    // The one invariant the whole surface rests on (design-notes.md § "EVERY ROW
+    // OPENS THE SAME SURFACE"). A second destination here would be the ask mode
+    // the design deliberately does not have, arriving as a registry field.
+    for (const context of [
+      { kind: 'project' },
+      { kind: 'roadmap' },
+      { kind: 'work-item', itemKey: 'PAY-7' },
+    ] as const) {
+      const hrefs = aiCalloutActions(context).map((a) => a.href);
+      expect(hrefs.length).toBeGreaterThan(1);
+      expect(new Set(hrefs).size).toBe(1);
+      for (const href of hrefs) expect(href).not.toContain('intent=');
+    }
   });
 
   it('names the callout from the shell namespace, so trigger and panel cannot drift', () => {
