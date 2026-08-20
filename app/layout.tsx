@@ -186,7 +186,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeDir[locale]}
-      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} ${spaceGrotesk.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} ${spaceGrotesk.variable} ${fraunces.variable} antialiased`}
       suppressHydrationWarning
       {...serverThemeAttrs}
     >
@@ -207,7 +207,15 @@ export default async function RootLayout({
         */}
         <script dangerouslySetInnerHTML={{ __html: buildThemeInitScript(applied) }} />
       </head>
-      <body className="min-h-full">
+      <body>
+        {/*
+          No height or floor on <html>/<body>: the document floor is stated
+          ONCE, by the `body` rule in app/globals.css, in `dvh` (MOTIR-3208).
+          The `h-full` <html> + `min-h-full` <body> pair that used to sit here
+          restated the same measurement in a second vocabulary — which is how
+          the two came to disagree, one of them in `vh`, for as long as they
+          both existed.
+        */}
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider initialPreference={applied} signedIn={Boolean(session)}>
             {/* Pointer-parallax engine for the 3D / Immersive style — inert for

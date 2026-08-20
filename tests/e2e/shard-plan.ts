@@ -76,6 +76,14 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * **9.3 s**. So a local reading is in the same units and runs at or below the CI
  * cost — never above it. Re-measure from the first green run that includes it.
  *
+ * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208) carries a FOURTH provenance: it
+ * had never run in this lane, so it was measured LOCALLY against a production
+ * build on 2026-08-20. Playwright's JSON reporter put its three test BODIES at
+ * 2.6 / 1.2 / 1.1 s (4.9 s total, sign-up and seeding included, since this spec
+ * seeds inside the test rather than in a hook); 8.0 rounds that up to cover the
+ * three `resetDatabase()` hooks the reporter attributes separately. Re-measure
+ * it from the first green CI run that includes it.
+ *
  * ⚠️ `app-role-surfaces.spec.ts` (MOTIR-2816) carries a THIRD provenance and a
  * cost of ~0 that is honest for THIS lane and misleading anywhere else. Every
  * test in it calls `test.skip()` unless `E2E_APP_ROLE=1`, and the bulk legs never
@@ -202,6 +210,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'shell-empty-projects.spec.ts': 2.5,
   'shell-flows.spec.ts': 38.2,
   'shell-keyboard.spec.ts': 0,
+  'shell-viewport-floor.spec.ts': 8.0,
   'shell.spec.ts': 2.7,
   'sprint-delete.spec.ts': 6.7,
   'sprint-edit-dates.spec.ts': 5.8,
