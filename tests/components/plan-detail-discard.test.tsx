@@ -21,13 +21,20 @@ import type { PlanStatusDto } from '@/lib/dto/plans';
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
+  push: vi.fn(),
   approvePlanRequest: vi.fn(async () => ({})),
   declinePlanRequest: vi.fn(async () => ({})),
   fetchPlanReview: vi.fn(),
 }));
 
+// `PlanDetail` reads the URL for its view (MOTIR-3239), so the navigation stub
+// covers the three hooks it uses. `useSearchParams` returns an EMPTY set, which
+// is the default-view path — the view switcher's own behaviour is
+// `plan-detail-view-switch.test.tsx`.
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
+  usePathname: () => '/plans/plan_1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
