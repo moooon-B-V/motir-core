@@ -979,6 +979,10 @@ export default defineConfig({
         // method that owns a LOCK, and a gate or a decision re-implemented in
         // the route would appear here as an uncovered branch.
         'app/api/v1/work-items/[key]/claim/route.ts',
+        // MOTIR-3049 — the SCOPE CLAIM, for exactly the same reason one line up.
+        // Its two arms differ only in which identifier they resolve; the claim
+        // itself is one service method.
+        'app/api/v1/scope-claims/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
         'app/api/v1/work-items/[key]/activity/route.ts',
@@ -1447,6 +1451,11 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/work-items/[key]/claim/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/scope-claims/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

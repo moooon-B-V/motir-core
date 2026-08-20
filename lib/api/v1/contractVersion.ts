@@ -127,5 +127,14 @@
  *   calls an advisory, so two runs could start the same card. Additive: one new
  *   endpoint (§8's first allowed change) and one new resource (`WorkItemClaim`);
  *   no declared shape changed.
+ * - `1.16.0` — MOTIR-3049 adds `claimScope`, `POST /api/v1/scope-claims`: an
+ *   ATOMIC claim of a whole SCOPE — a container and its children, or a
+ *   project's active sprint — locked, re-asserted and flipped in ONE
+ *   transaction, all or nothing. `claimWorkItem` made a single card safe to
+ *   dispatch; a SCOPED run needs the whole set before its first agent starts,
+ *   or a second run takes card five while it is on card two and the story ends
+ *   up split across two pull requests. Additive: one new endpoint (§8's first
+ *   allowed change) and one new resource (`ScopeClaim`); no declared shape
+ *   changed.
  */
-export const V1_CONTRACT_VERSION = '1.15.0';
+export const V1_CONTRACT_VERSION = '1.16.0';

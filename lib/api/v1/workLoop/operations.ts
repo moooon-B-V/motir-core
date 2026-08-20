@@ -14,6 +14,8 @@ import {
   planSessionScopeBodySchema,
   planTurnBodySchema,
   workItemClaimSchema,
+  scopeClaimBodySchema,
+  scopeClaimSchema,
   ACTIVITY_VIEWS,
   activityEntrySchema,
   activityTotalsSchema,
@@ -120,6 +122,57 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
     // malformed key. A LOST claim is not an error status \u2014 see `outcome`.
     errorStatuses: [404, 422],
+  }),
+
+  // ── The SCOPE claim (MOTIR-3049) ────────────────────────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/scope-claims',
+    operationId: 'claimScope',
+    summary: 'Atomically claim a whole story or sprint, all or nothing',
+    description:
+      'CLAIM an entire SCOPE — a container work item and its children, or a project’s ACTIVE ' +
+      'sprint — so a scoped run owns the whole set before its first agent starts. In ONE ' +
+      'transaction the scope is validated, every row is locked in a deterministic order, every ' +
+      'row’s status is re-checked against the TO-DO category, and — if all of them hold ' +
+      '— every row is assigned to the caller AND moved to “In progress”. ' +
+      '⚠️ ALL OR NOTHING: if ANY member is un-claimable the whole claim rolls back and ' +
+      'NOTHING is written, because a partially-claimed scope is the one outcome with no good ' +
+      'handling — you can neither finish it nor cleanly abandon it. ' +
+      '⚠️ EVERY CARD IN A CLAIMED SCOPE READS “In progress” FOR THE WHOLE ' +
+      'RUN, while only one of them is being worked at a time. That is deliberate and it changes ' +
+      'what the status MEANS: from “an agent is on this right now” to “this run ' +
+      'owns it”. The board therefore shows the run’s FOOTPRINT rather than its cursor ' +
+      '— the price of exclusive ownership, which is what lets a scoped run promise to ' +
+      'finish what it started. ' +
+      'A refusal is a 200 with an `outcome`: `claimed`, `mine` (already yours — resume), ' +
+      '`taken` (a member is held by somebody else, and they are named), `not_claimable` (a ' +
+      'member is finished or under review), `wrong_shape` (a work-item scope whose child is ' +
+      'itself a container — re-plan it, do not retry), `not_finishable` (work OUTSIDE the ' +
+      'scope gates work inside it). ' +
+      'A STORY scope is ONE LAYER and that is checked; a SPRINT scope may span many layers and ' +
+      'no shape check applies, because `validate_sprint` has already guaranteed its membership ' +
+      'is closed. A sprint’s scope is exactly the items whose OWN `sprintId` matches — ' +
+      'an item under an in-sprint parent but not itself in the sprint is NOT claimed. ' +
+      'The claim IS the dispatch status flip — do not also POST a transition afterwards.',
+    permission: 'work_item:edit',
+    parameters: [],
+    requestBody: {
+      schema: scopeClaimBodySchema,
+      description:
+        'The scope to claim: `{ "kind": "work_item", "key": "MOTIR-42" }` for a container and ' +
+        'its children, or `{ "kind": "sprint", "projectKey": "MOTIR" }` for that project’s ' +
+        'active sprint.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: scopeClaimSchema },
+      description: 'What the claim resolved to, and — on a refusal — why.',
+    },
+    // 404 for an unknown or cross-workspace key/project (no existence leak); 409
+    // when the named project has no ACTIVE sprint; 422 for a malformed key or
+    // body. A LOST or REFUSED claim is not an error status — see `outcome`.
+    errorStatuses: [404, 409, 422],
   }),
 
   // ── Session close-out (Subtask 11.7.4 — MOTIR-2238) ─────────────────────
@@ -502,6 +555,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
 export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
   WorkItemClaim: workItemClaimSchema,
+  ScopeClaim: scopeClaimSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,
   PlanJobHandle: planJobHandleSchema,

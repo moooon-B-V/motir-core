@@ -440,8 +440,8 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 42 declarations names a GRANTABLE permission', () => {
-    expect(V1_OPERATIONS.length).toBe(42);
+  it('every one of the 43 declarations names a GRANTABLE permission', () => {
+    expect(V1_OPERATIONS.length).toBe(43);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),
