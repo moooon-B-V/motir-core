@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useCallback, useState, type CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
@@ -53,6 +53,13 @@ import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
  *     mounted by the layout and never unmounts.
  *   * `prefers-reduced-motion` skips the THROW, not the drag: the orb still goes
  *     wherever it is put, it just does not fly there.
+ *   * A MOVING orb CLOSES the callout (MOTIR-3226). The panel is a popover
+ *     anchored to this button, so an open one rode the drag across the page and
+ *     then stranded ~818px away mid-throw — Radix's `PopperContent` re-anchors on
+ *     scroll/resize and an IntersectionObserver, none of which a per-frame
+ *     `translate` fires. Hiding it is what was asked for, and it is also the only
+ *     answer that does not put a menu on a flying orb. It does NOT re-open at
+ *     rest: the release click is swallowed, so the user asked for nothing.
  *
  * ⚠️ AND ONE RULE ABOUT THIS ELEMENT'S CLASSES (MOTIR-3214). The hook writes the
  * orb's position into the `translate` property every animation frame. So:
@@ -99,9 +106,18 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
   const t = useTranslations('shell');
   const [open, setOpen] = useState(false);
   const label = t(AI_CALLOUT_NAME_KEY);
+  // A moving orb cannot carry the callout with it (MOTIR-3226), so the gesture
+  // closes it. This is a CALLBACK rather than a `useEffect` watching `moving`
+  // because both `react-hooks/set-state-in-effect` and `set-state-in-render` are
+  // errors here — and because it is the better shape anyway: it fires inside the
+  // same `pointermove` that paints the orb, so the panel is gone in the frame the
+  // orb first moves rather than a commit later.
+  const closeOnMove = useCallback(() => setOpen(false), []);
   // Drag + throw (MOTIR-3208). The hook owns pointer capture and the frame loop;
   // `lib/planning/orbPhysics.ts` owns every decision about where the orb goes.
-  const { attach, onPointerDown, onClickCapture, dragging } = useDraggableOrb();
+  const { attach, onPointerDown, onClickCapture, dragging } = useDraggableOrb({
+    onMoveStart: closeOnMove,
+  });
 
   return (
     // Non-modal, like the user menu: the page behind stays scrollable and

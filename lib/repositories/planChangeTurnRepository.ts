@@ -1,4 +1,9 @@
-import { Prisma, type PlanChangeTurn, type PlanChangeTurnRole } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type PlanChangeTurn,
+  type PlanChangeTurnIntent,
+  type PlanChangeTurnRole,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_turn` table (Story 7.30 ·
@@ -28,6 +33,43 @@ export const planChangeTurnRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn | null> {
     return tx.planChangeTurn.findFirst({ where: { sessionId, workspaceId, jobId, role } });
+  },
+
+  /** ONE turn of a session, by id — the read a CORRECTION makes before it re-runs
+   *  a turn under the other intent (MOTIR-1818; ADR §3). Scoped by `sessionId`
+   *  AND `workspaceId`, so a turn id from another thread — or another tenant —
+   *  resolves to null rather than to somebody else's sentence. `tx` is required:
+   *  every caller reads it to guard a following write. */
+  async findByIdInSession(
+    id: string,
+    sessionId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn | null> {
+    return tx.planChangeTurn.findFirst({ where: { id, sessionId, workspaceId } });
+  },
+
+  /** Patch ONE turn in place. Exactly three fields are ever updated — its INTENT,
+   *  the flag recording a correction, and the JOB that ran for it — and a turn's
+   *  `body`, `seq` and `role` are immutable by design, because the thread is a
+   *  record of who said what. Typed to those three rather than to the full update
+   *  input so that immutability is a compile-time fact, not a convention.
+   *  Requires `tx` (the write rule) — and it is called under the session's row
+   *  lock, so a concurrent correction cannot interleave with an append.
+   *
+   *  ⚠️ `jobId` on a USER turn is MOTIR-1819's addition, and it widens what the
+   *  column's own comment said ("Null on `user` turns"). Before the ask path a
+   *  user turn produced no job of its own: submitting was a separate gesture that
+   *  wrote a `system` marker. An ask submit IS the turn, so the turn is the
+   *  natural key for its job — which is what makes the settle a single keyed,
+   *  replayable lookup instead of "the most recent user turn", a guess that is
+   *  wrong under exactly the concurrency the row lock exists for. */
+  async updateIntent(
+    id: string,
+    data: { intent?: PlanChangeTurnIntent; intentCorrected?: boolean; jobId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn> {
+    return tx.planChangeTurn.update({ where: { id }, data });
   },
 
   /** The session's FULL thread in `seq` order — the ordering contract every

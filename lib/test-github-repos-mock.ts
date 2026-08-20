@@ -34,7 +34,7 @@
 //   Sharing one file would make the mock's journal write clobber a control edit
 //   the spec had just made (and vice-versa), which is a race a test must not have.
 
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
@@ -85,7 +85,7 @@ function readControl(): GithubReposControl {
   const path = process.env['MOTIR_GITHUB_CONTROL_PATH'];
   if (!path) return {};
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as GithubReposControl;
+    return JSON.parse(readFixtureFileSync(path)) as GithubReposControl;
   } catch {
     // No file yet (or a half-written one) is the "everything succeeds" default —
     // never a crash, so a spec that never writes a control still runs.
@@ -99,7 +99,7 @@ function journal(call: GithubCall): void {
   const path = process.env['MOTIR_GITHUB_JOURNAL_PATH'];
   if (!path) return;
   try {
-    appendFileSync(path, `${JSON.stringify(call)}\n`, 'utf8');
+    appendFixtureFileSync(path, `${JSON.stringify(call)}\n`);
   } catch {
     /* the journal is evidence, not behaviour — never fail a request over it */
   }

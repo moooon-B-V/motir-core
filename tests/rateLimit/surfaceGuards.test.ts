@@ -699,6 +699,11 @@ describe('the routes are actually WIRED to the guards', () => {
   // the provider, and a ceiling there would only refuse a caller the answer they
   // have already been charged for.
   const LIMITED: ReadonlyArray<string> = [
+    // The composer's ONE DOOR (Story MOTIR-1343 · MOTIR-1819). It submits an
+    // `ask_project` model job on every turn — including the one that turns out to
+    // be a plan change — so it spends real provider money and belongs here, on the
+    // same `ai:generate` bucket the plan-change submit uses.
+    'app/api/ai/ask/route.ts',
     'app/api/ai/augment/route.ts',
     'app/api/ai/chat/route.ts',
     'app/api/ai/coding-convention/refresh/route.ts',
@@ -715,6 +720,10 @@ describe('the routes are actually WIRED to the guards', () => {
   // it describes.
   const UNLIMITED_BY_DESIGN: ReadonlyArray<string> = [
     'app/api/ai/access/route.ts',
+    // The ask stream RELAYS a job already paid for at the submit door, and the
+    // settle READS one back and files it — the `…/planner-turn` precedent exactly.
+    'app/api/ai/ask/[jobId]/stream/route.ts',
+    'app/api/ai/ask/settle/route.ts',
     'app/api/ai/augment/[jobId]/stream/route.ts',
     'app/api/ai/chat/[jobId]/stream/route.ts',
     'app/api/ai/coding-convention/audit-coverage/route.ts',

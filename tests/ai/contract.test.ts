@@ -31,6 +31,14 @@ const CANONICAL_ERROR_CODES = [
   'rate_limited',
   'out_of_credits',
   'ai_job_failed',
+  // `ai_job_abandoned` (Story MOTIR-2781 — MOTIR-3222). The reaper's verdict when
+  // the worker holding a job stopped renewing its lease: NOTHING about the
+  // request was judged, so a resubmit is the right response, unlike
+  // `ai_job_failed` where the handler ran and rejected something. Added to
+  // motir-ai's copy in the same parent run; the two PRs may merge in either
+  // order because an unrecognised code falls to `errorFromProblem`'s status-class
+  // branch, and 500 already yields `MotirAiUnavailableError`.
+  'ai_job_abandoned',
   'internal_error',
 ] as const;
 
@@ -54,6 +62,10 @@ const CANONICAL_JOB_KINDS = [
   // documented while its motir-core consumer was unbuilt — which is exactly the
   // drift this guard exists to surface.
   'plan_sprint',
+  // `ask_project` (Story MOTIR-1343 — MOTIR-1817 handler / MOTIR-1819 consumer);
+  // already in motir-ai's canonical set. Adding it HERE closes the drift that
+  // card's envelope documented while this consumer was unbuilt.
+  'ask_project',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).
@@ -69,6 +81,7 @@ const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> =
   rate_limited: MotirAiUnavailableError,
   out_of_credits: MotirAiOutOfCreditsError, // 402 → its own typed error (the 8.1.8 paywall)
   ai_job_failed: MotirAiUnavailableError,
+  ai_job_abandoned: MotirAiUnavailableError, // 500 — same class as ai_job_failed; the DISCRIMINATION is the code, not the type
   internal_error: MotirAiUnavailableError,
 };
 

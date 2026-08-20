@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PERMISSION_CATALOG, type PermissionKey } from '@/lib/permissions/catalog';
 
@@ -426,16 +426,28 @@ function definesTheError(src: string): boolean {
   return /export\s+class\s+PermissionDeniedError\b/.test(src);
 }
 
-function mapsPermissionDenied(src: string): boolean {
+function mapsPermissionDenied(src: string, routePath: string): boolean {
   if (src.includes('PermissionDeniedError') && !definesTheError(src)) return true;
-  const importRe = /from '(@\/lib\/[^']+)'/g;
-  for (let m = importRe.exec(src); m !== null; m = importRe.exec(src)) {
-    const mod = join(ROOT, `${m[1]!.replace('@/', '')}.ts`);
-    try {
-      const imported = readFileSync(mod, 'utf8');
-      if (imported.includes('PermissionDeniedError') && !definesTheError(imported)) return true;
-    } catch {
-      // a directory import or a .tsx module — not an error mapper
+  // ⚠️ BOTH IMPORT FORMS, and the second was a BLIND SPOT (MOTIR-1343).
+  //
+  // This used to follow `@/lib/…` only. A route whose mapper is a SIBLING —
+  // `app/api/ai/ask/route.ts` imports `../plan-change/_errors`, which maps the
+  // refusal correctly — was reported as an offender the guard could not see
+  // through. That is worse than a miss: the remedy it prints ("add the error to
+  // the route") would have had somebody add a redundant arm to silence a guard
+  // that was wrong, and left the actual blind spot in place for the next route
+  // that reaches for a co-located mapper.
+  for (const [re, resolve] of [
+    [/from '(@\/lib\/[^']+)'/g, (spec: string) => join(ROOT, `${spec.replace('@/', '')}.ts`)],
+    [/from '(\.[^']+)'/g, (spec: string) => join(dirname(routePath), `${spec}.ts`)],
+  ] as const) {
+    for (let m = re.exec(src); m !== null; m = re.exec(src)) {
+      try {
+        const imported = readFileSync(resolve(m[1]!), 'utf8');
+        if (imported.includes('PermissionDeniedError') && !definesTheError(imported)) return true;
+      } catch {
+        // a directory import or a .tsx module — not an error mapper
+      }
     }
   }
   return false;
@@ -474,7 +486,7 @@ describe('guard 3 — every route that can RAISE the new refusal can also MAP it
       const hits = [...called].filter((k) => raising.has(k));
       if (hits.length === 0) return;
       reached += 1;
-      if (!mapsPermissionDenied(src)) {
+      if (!mapsPermissionDenied(src, p)) {
         offenders.push(`${relative(ROOT, p).replace(/\\/g, '/')} — reaches ${hits.join(', ')}`);
       }
     });

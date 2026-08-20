@@ -13,6 +13,17 @@ import type { WorkItemRefMap } from '@/lib/dto/workItems';
  *  determinate. */
 export type PlanChangeTurnRoleDto = 'user' | 'system' | 'assistant';
 
+/**
+ * Wire form of the Prisma `PlanChangeTurnIntent` enum — what a `user` turn asked
+ * for (MOTIR-1816 · `docs/decisions/conversation-turn-intent.md`).
+ *
+ * ⚠️ It travels ONE WAY ONLY. The client never sends an intent; it posts the
+ * text and reads back what Motir resolved (ADR §1). A field of this type
+ * appearing on a REQUEST body would be the mode the design deliberately does not
+ * have, re-entering through the back door.
+ */
+export type PlanChangeTurnIntentDto = 'plan_change' | 'ask';
+
 /** One turn on the thread, in `seq` order (0-based, gapless). `jobId` is set on a
  *  `system` submission marker and on an `assistant` turn (the job that produced
  *  it); `authorId` only on a `user` turn (and null once that user is deleted). */
@@ -35,6 +46,31 @@ export interface PlanChangeTurnDto {
    * render different markers — design states C and E.
    */
   isAnswer: boolean;
+  /**
+   * What this turn asked for, on `user` turns — null on `system` / `assistant`,
+   * and null on a `user` turn written before the intent model existed (no
+   * back-fill asserts a classification that never ran).
+   *
+   * It is the EFFECTIVE disposition — what actually ran — so a corrected turn
+   * reads as what it finally became, and {@link intentCorrected} is what says it
+   * changed.
+   */
+  intent: PlanChangeTurnIntentDto | null;
+  /** Whether this turn was re-run under the other intent after Motir read it
+   *  wrong. The rail renders the correction marker off the assistant turn, not
+   *  off this — this is the durable record that the correction happened. */
+  intentCorrected: boolean;
+  /**
+   * The work items an `assistant` ANSWER rests on, as identifiers in citation
+   * order — `[]` on every other role, and `[]` on an answer the graphs could not
+   * support (an honest no-answer cites nothing rather than citing loosely).
+   *
+   * Their display summaries arrive in the session's {@link
+   * PlanChangeSessionDto.workItemRefs}, resolved once for the whole thread, so
+   * the rail renders a citation through the SAME `WorkItemRefChip` path the
+   * detail page and the comment thread use rather than a second treatment.
+   */
+  citations: string[];
   authorId: string | null;
   createdAt: string;
 }

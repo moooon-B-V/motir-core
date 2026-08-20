@@ -54,10 +54,41 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
   # more, and `flyctl deploy` updates the machines that exist without adding any.
   auto_stop_machines   = "stop"
   auto_start_machines  = true
-  # NOT scale-to-zero. This app serves interactive page loads, so a cold start is
-  # user-visible in a way motir-ai's service-to-service calls are not.
-  min_machines_running = 1
+  # ⚠️ 2, AND IT IS AN AVAILABILITY DECISION — NOT A CAPACITY ONE (MOTIR-2785,
+  # executing `docs/decisions/application-hosting.md` Amendment 7 §14).
+  #
+  # This was 1, and 1 meant ONE MACHINE WAS A SINGLE POINT OF FAILURE whatever
+  # the pool said. The spare is only started by the proxy when load crosses
+  # `soft_limit` — never when its sibling dies, is redeployed, or OOMs. And
+  # `min_machines_running` is not a failover guarantee even at 2: if a running
+  # machine dies, `flyd` RESTARTS that machine, with boot latency; nothing takes
+  # over. Two machines RUNNING is the only configuration that survives losing one
+  # without a user-visible gap, and this app serves interactive page loads.
+  #
+  # MEASURED, not assumed (2026-08-20, Machines API `events[]` for the spare
+  # `7817663f103648`): it DOES start — a deploy started it at 12:29:18Z — and the
+  # PROXY stopped it at 12:34:58Z, five minutes forty seconds later. So from
+  # 12:35Z onward this app served its entire load from one machine. The pool is
+  # not decoration; what it does not do is stay up.
+  #
+  # COST: +$11.83/mo (a second `shared-cpu-2x` 2 GB, Fly pricing 2026-08-13),
+  # taking the running pair to $23.66/mo. And NO database cost — every
+  # `setInterval` in this repo is in a `'use client'` module, and scheduled work
+  # arrives via Inngest over HTTP, which reaches one machine whether or not a
+  # second is warm. Amendment 7 §21 is the standing argument against ever adding
+  # an in-process poll here: it would re-price this line.
+  min_machines_running = 2
 
+  # ⚠️ `requests` IS the right signal for this app and the NUMBERS ARE NOT
+  # MEASURED (Amendment 7 §15). Human web sessions are short requests, so HTTP
+  # concurrency genuinely is the load here — unlike motir-ai, whose load is jobs,
+  # or motir-gateway, which holds a connection open for a whole completion.
+  #
+  # 200/250 has never been measured against a 2x shared-CPU box running Next.js.
+  # It is an ESTIMATE, labelled as one so nobody reads it as a reading.
+  # TRIGGER to revise: the first sustained request-concurrency or p95-latency
+  # reading from Fly metrics. Changing it now would be a measurement with nothing
+  # behind it — the failure ADR section 10 already names.
   [http_service.concurrency]
     type       = "requests"
     soft_limit = 200
@@ -73,8 +104,11 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 # The count is created by `fly scale count 2`, an OPERATOR action owned by
 # MOTIR-2386, and read back FROM THE PLATFORM (`fly status` /
 # `GET https://api.machines.dev/v1/apps/<app>` → machine_count) by MOTIR-2392.
-# `min_machines_running = 1` above is a floor on how many of an existing pool
-# stay warm; it is not a request for a pool, and no key in this file is.
+# `min_machines_running` above is a floor on how many of an existing pool stay
+# warm; it is not a request for a pool, and no key in this file is. (It reads 2
+# since MOTIR-2785 — the POOL is still created by the command above, and the
+# FLOOR is what this file sets. Confusing the two is the whole reason this
+# paragraph exists.)
 #
 # This paragraph is deliberately an INTENT and not an assertion. motir-ai's
 # fly.toml stated the same intent in the indicative and ran ONE machine for weeks
@@ -83,13 +117,25 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 # MOTIR-2106). A config file is a claim about the deployment, not a reading of it.
 #
 # Cost, from Fly's published pricing (2026-08-07): shared-cpu-2x 2 GB =
-# $11.83/machine/month → ~$24/month for the intended pair, plus $0.02/GB
-# outbound. The standby machine is stopped in steady state and Fly does not bill
-# compute for a stopped machine, so the always-on cost is the one warm machine.
+# $11.83/machine/month → ~$24/month for the pair, plus $0.02/GB outbound.
+# ⚠️ UPDATED by MOTIR-2785: this used to end "the standby machine is stopped in
+# steady state ... so the always-on cost is the one warm machine." That was true
+# at a floor of 1 and is FALSE at 2 — BOTH machines now stay warm, deliberately,
+# and the always-on cost is the full $23.66/mo. That is what availability costs
+# here, and it is bought rather than inherited.
 #
 # ⚠️ The VM size below is INHERITED from motir-ai, not measured for this app. The
 # spike could size the artifact (375 MB) but not the resident set; MOTIR-2392
 # takes the first real memory reading (ADR §10).
+#
+# FIRST READING, 2026-08-20 (MOTIR-2785, ADR Amendment 7 section 12): `next-server`
+# resident 399,732 kB = 390 MB, of MemTotal 2,015,600 kB (~1.92 GiB usable) —
+# about 4.9x headroom. Taken with `fly ssh console -a motir-core --machine
+# 83d1300b7460e8` reading `/proc/*/status` VmRSS.
+# ⚠️ AT IDLE, so it sizes the BASELINE and says nothing about load. ADR section 10's
+# trigger asks for a SUSTAINED reading and has therefore NOT fired — this is
+# recorded so the trigger has something to fire against, which for eleven days it
+# did not.
 [[vm]]
   size   = "shared-cpu-2x"
   memory = "2gb"

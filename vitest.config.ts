@@ -578,6 +578,41 @@ export default defineConfig({
         // (MOTIR-1730) join together, once the story's code has merged and the
         // numbers are real. The client TRANSPORT is gated too: it is the only
         // path the rail reaches the server by, and it shipped untested.
+        // Story MOTIR-1343 · MOTIR-1819 — the ASK seam. Every file here is new
+        // code this card wrote, MEASURED on this branch before being pinned (the
+        // sequence this block prescribes throughout):
+        //   `aiAskService.ts`  96.2 stmts / 93.9 branches / 100 funcs / 100 lines
+        //   `askResult.ts`     100 / 100 / 100 / 100
+        // Both are GATED in `thresholds` below.
+        //
+        // ⚠️ THE THREE ROUTE FILES WERE REPORT-ONLY, AND ARE NOW GATED
+        // (MOTIR-1822). The exemption said: what is uncovered is the `throw err`
+        // rethrow of an error the shared mapper did not recognise, reachable only
+        // by an exception type no service on the path raises — so publish the
+        // number, and "the pin belongs to whoever makes that arm reachable."
+        //
+        // The story gate made it reachable, and honestly rather than by walking a
+        // line: an unmapped throw IS a real outcome, and the assertion that
+        // matters is that it surfaces as a FAULT instead of being flattened into
+        // a plausible 4xx that hides which side failed. The stream route's own
+        // arms came with it — a failure after the headers are sent can no longer
+        // choose a status, so the only way the rail learns why it stopped is a
+        // terminal `error` frame, and a stream that just ends reads as "the job
+        // finished" and files nothing.
+        //
+        // MEASURED on this branch before pinning, with `askRoutes` + `askGate` +
+        // `askStreamRoute` + `planChangeTurnIntent`:
+        //   `ask/route.ts`               92.9 branches / 100 funcs /  96.0 lines
+        //   `ask/settle/route.ts`         100 / 100 / 100
+        //   `ask/[jobId]/stream/route.ts` 94.4 / 100 / 100
+        //
+        // ⚠️ WRITTEN WITH `**`, NOT A LITERAL `[jobId]`, for the reason this file
+        // records twice already: in a glob `[jobId]` is a CHARACTER CLASS, so the
+        // literal path names a directory that does not exist and the entry would
+        // quietly cover — and gate — nothing.
+        'lib/services/aiAskService.ts',
+        'lib/planning/askResult.ts',
+        'app/api/ai/ask/**/route.ts',
         'lib/services/planChangeSessionsService.ts',
         'lib/repositories/planChangeSessionRepository.ts',
         'lib/repositories/planChangeTurnRepository.ts',
@@ -2151,6 +2186,20 @@ export default defineConfig({
         'lib/ai/codeContext.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 7.30 · Subtask MOTIR-1732 — the plan-change conversation, the
         // planning-workspace host contract, and the rail's client state machine.
+        // Story MOTIR-1343 · MOTIR-1819 — measured on this branch before pinning
+        // (see the `include` note above for the numbers and for why the three
+        // route files are report-only).
+        'lib/services/aiAskService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/askResult.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-1822 — the three ask ROUTES, pinned once the story gate made
+        // their rethrow arms reachable (see the `include` note above for the
+        // measured numbers). ⚠️ The stream route's key must use `**`, never a
+        // literal `[jobId]`: in a glob that is a CHARACTER CLASS, so the literal
+        // path names a directory that does not exist and the entry would gate
+        // nothing while looking like it gated something.
+        'app/api/ai/ask/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/ask/settle/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/ask/**/stream/route.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/planChangeSessionsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/planChangeSessionRepository.ts': {
           branches: 90,

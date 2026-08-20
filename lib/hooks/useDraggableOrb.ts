@@ -40,6 +40,12 @@ import {
 // updated only when the gesture ENDS. A `setState` per animation frame would
 // re-render the whole popover subtree 120 times a second for a purely visual
 // change, which is how a smooth control becomes a janky one on a busy page.
+//
+// That budget is what `moving` (MOTIR-3226) is written against, and it holds: the
+// flag is set through `setMovingTo`, which compares against a ref and returns
+// early when nothing changed — so a 120-move drag costs ONE re-render at the
+// threshold crossing and one at rest, not one per frame. Anything added here
+// later owes the same arithmetic.
 
 export interface DraggableOrb {
   /**
@@ -64,6 +70,41 @@ export interface DraggableOrb {
    *  it was supposed to bounce off (MOTIR-3214). A property the physics writes every
    *  frame must not be a transitioned property at all — see `PlanWithAIFab`. */
   dragging: boolean;
+  /**
+   * True while the orb is MOVING — the drag AND the throw that follows it
+   * (MOTIR-3226). It goes true on the frame the gesture first crosses
+   * {@link DRAG_THRESHOLD_PX} (the frame the orb is first painted anywhere new)
+   * and false only when `stepOrb` reports the flight at rest — or immediately on
+   * `pointerup` when no flight starts at all (reduced motion, or a drag released
+   * with no velocity).
+   *
+   * ⚠️ THIS IS A SECOND SIGNAL, NOT A WIDER `dragging` — and the two must stay
+   * apart. `dragging` goes false in `up()` BEFORE `fling()` is called, so it is
+   * false for every frame of the flight; that is exactly right for the grabbing
+   * CURSOR (the finger is gone) and exactly wrong for anything that has to
+   * survive the throw. MOTIR-3214 was that mistake made with a CSS transition;
+   * MOTIR-3226 is the same shape one layer up, with the callout's `open` state.
+   * Widening `dragging` to cover the flight would leave a grabbing cursor on an
+   * orb nobody is holding, so the fix ADDS a signal rather than stretching one.
+   */
+  moving: boolean;
+}
+
+export interface DraggableOrbOptions {
+  /** The orb's edge, in px — it decides the box the physics keeps it inside. */
+  size?: number;
+  /**
+   * Fired ONCE per gesture, on the frame {@link DraggableOrb.moving} goes true.
+   *
+   * It exists because {@link DraggableOrb.moving} alone cannot be ACTED on: the
+   * orb is a popover trigger, closing that popover is a `setState`, and this
+   * repo lints `react-hooks/set-state-in-effect` AND `set-state-in-render` as
+   * errors — so a consumer has no legal place to watch the boolean from. An
+   * event is the shape React actually wants here anyway, and it fires inside the
+   * same `pointermove` handler that paints the orb, so the panel is gone in the
+   * very frame the orb first moves rather than one commit later.
+   */
+  onMoveStart?: () => void;
 }
 
 /** Read the viewport. Split out so a test can drive it without a real window. */
@@ -71,10 +112,11 @@ function viewportSize(): { width: number; height: number } {
   return { width: window.innerWidth, height: window.innerHeight };
 }
 
-export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
+export function useDraggableOrb(options: DraggableOrbOptions = {}): DraggableOrb {
   const size = options.size ?? 56;
   const ref = useRef<HTMLButtonElement | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   // The live position, in viewport px (the orb's top-left). `null` until the orb
   // has been moved, which is what keeps the default CSS corner authoritative.
@@ -90,6 +132,31 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
   const travelled = useRef(0);
   const suppressClick = useRef(false);
   const raf = useRef<number | null>(null);
+  // `moving`, readable from inside the native pointer listeners and the frame
+  // loop. Those closures capture the state value from the render they were
+  // created in, and the flight outlives that render by ~120 frames — so the
+  // decision "is this transition a CHANGE?" is made against the ref, and the
+  // state exists only to re-render the consumer.
+  const movingRef = useRef(false);
+  // The latest `onMoveStart`, so a consumer passing an inline closure does not
+  // re-create `onPointerDown` and so the frame loop never calls a stale one.
+  const onMoveStart = useRef(options.onMoveStart);
+
+  /** Set the moving signal, and tell the consumer when it RISES. */
+  const setMovingTo = useCallback((next: boolean): void => {
+    if (movingRef.current === next) return;
+    movingRef.current = next;
+    setMoving(next);
+    if (next) onMoveStart.current?.();
+  }, []);
+
+  // Keep the callback fresh without putting it in any dependency array: a
+  // consumer that passes an inline arrow would otherwise re-create
+  // `onPointerDown` on every render, and the frame loop closes over this ref
+  // rather than over one render's value.
+  useEffect(() => {
+    onMoveStart.current = options.onMoveStart;
+  }, [options.onMoveStart]);
 
   /** The orb's untransformed corner, measured once and reused. */
   const measureHome = useCallback((): OrbPoint | null => {
@@ -129,11 +196,11 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
    *  already where the finger left it, and a ball bouncing across the screen is
    *  exactly the kind of motion that setting exists to refuse. */
   const fling = useCallback(
-    (start: OrbState) => {
+    (start: OrbState): boolean => {
       const reduced =
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (reduced) return;
+      if (reduced) return false;
 
       let state = start;
       let last = performance.now();
@@ -146,13 +213,17 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
         paint(pos.current);
         if (next.resting) {
           raf.current = null;
+          // The flight is what kept `moving` true past `pointerup`; `stepOrb`
+          // saying "resting" is the only thing that ends it.
+          setMovingTo(false);
           return;
         }
         raf.current = requestAnimationFrame(tick);
       };
       raf.current = requestAnimationFrame(tick);
+      return true;
     },
-    [paint, size],
+    [paint, setMovingTo, size],
   );
 
   const onPointerDown = useCallback(
@@ -162,6 +233,11 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
       const el = ref.current;
       if (!el) return;
       stopFrame();
+      // Catching a flying orb ENDS the flight, so it is no longer moving — and a
+      // press that goes on to stay put is a click, which must still open the
+      // callout. Lowering the signal here is also what makes `onMoveStart` fire
+      // once per GESTURE rather than once ever.
+      setMovingTo(false);
       // A gesture that ended without producing a `click` (the pointer was released
       // off the button, so the browser fires none) would otherwise leave this armed
       // and eat the NEXT genuine press. A new press is a new gesture.
@@ -200,7 +276,17 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
         // Only PAINT once the gesture is a drag. Below the threshold a shaky tap
         // would otherwise nudge the orb a pixel and leave it displaced, which
         // reads as the button drifting when you press it.
-        if (travelled.current > DRAG_THRESHOLD_PX) paint(next);
+        //
+        // The same threshold raises `moving`, in the same frame and for the same
+        // reason: the orb is MOVING exactly when it is being painted somewhere
+        // new. `setMovingTo` is a no-op after the first crossing (it compares
+        // against a ref), so the flag costs ONE re-render per gesture, not one
+        // per pointer move — see the file header on why a per-frame `setState`
+        // is not acceptable here.
+        if (travelled.current > DRAG_THRESHOLD_PX) {
+          paint(next);
+          setMovingTo(true);
+        }
 
         const t = ev.timeStamp;
         trail.current.push({ x: next.x, y: next.y, t });
@@ -227,14 +313,20 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
 
         const { vx, vy } = throwVelocity(trail.current);
         const p = pos.current;
-        if (p && (vx !== 0 || vy !== 0)) fling({ x: p.x, y: p.y, vx, vy });
+        const flying = p && (vx !== 0 || vy !== 0) ? fling({ x: p.x, y: p.y, vx, vy }) : false;
+        // ⚠️ `moving` is deliberately NOT lowered next to `setDragging(false)`
+        // above — that is precisely the ordering bug this signal exists to avoid
+        // (MOTIR-3214's transition, MOTIR-3226's popover). It stays true while a
+        // flight carries the orb on, and falls here only when no flight starts:
+        // reduced motion (`fling` refuses), or a drag released with no velocity.
+        if (!flying) setMovingTo(false);
       };
 
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', up);
     },
-    [fling, measureHome, paint, size, stopFrame],
+    [fling, measureHome, paint, setMovingTo, size, stopFrame],
   );
 
   /** Swallow the click that a drag produces, so releasing a throw does not also
@@ -259,10 +351,13 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
       measureHome();
       pos.current = clampToBounds(pos.current, boundsFor(viewportSize(), size));
       paint(pos.current);
+      // `stopFrame` above killed the flight mid-air, so nothing will ever report
+      // it resting — the signal has to be lowered by whoever cancelled it.
+      setMovingTo(false);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [measureHome, paint, size, stopFrame]);
+  }, [measureHome, paint, setMovingTo, size, stopFrame]);
 
   useEffect(() => stopFrame, [stopFrame]);
 
@@ -287,5 +382,5 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
     [paint],
   );
 
-  return { attach, onPointerDown, onClickCapture, dragging };
+  return { attach, onPointerDown, onClickCapture, dragging, moving };
 }

@@ -29,7 +29,7 @@
 // repos a press actually paid to derive — the one fact this story turns on —
 // read back from the server side rather than inferred from the browser.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 /** One repo's state, as the fixture declares it. */
@@ -59,7 +59,7 @@ function readFixture(): CodeHealthFixture {
   const p = fixturePath();
   if (!p) return { repos: [] };
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as CodeHealthFixture;
+    return JSON.parse(readFixtureFileSync(p)) as CodeHealthFixture;
   } catch {
     // An unreadable/absent fixture reads as "no repo has an audit" rather than
     // throwing — a spec that forgot to write one gets the empty surface, which
@@ -75,7 +75,7 @@ function recordRefresh(repoRef: string | null): void {
   try {
     const f = readFixture();
     f.refreshes = [...(f.refreshes ?? []), { repoRef }];
-    writeFileSync(p, JSON.stringify(f, null, 2));
+    writeFixtureFileSync(p, JSON.stringify(f, null, 2));
   } catch {
     // Recording is diagnostic only — never fail the request over it.
   }

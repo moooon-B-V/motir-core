@@ -5,6 +5,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanChangeTurnNotFoundError,
   PlanTargetLockedError,
 } from '@/lib/planChange/errors';
 import {
@@ -19,7 +20,7 @@ import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 // can rethrow (a 500). Kept out of the route files so open / append / submit map
 // identically.
 export function mapPlanChangeError(err: unknown): NextResponse | null {
-  if (err instanceof PlanChangeSessionNotFoundError) {
+  if (err instanceof PlanChangeSessionNotFoundError || err instanceof PlanChangeTurnNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
   if (err instanceof EmptyPlanChangeTurnError) {
