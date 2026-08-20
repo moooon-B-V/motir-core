@@ -145,6 +145,69 @@ describe('POST /design-evidence/upload-token', () => {
     expect(body.targets[0].pathname).not.toBe(body.targets[1].pathname);
   });
 
+  it('mints for a PARENT-RUN publish that declares the container it belongs to (MOTIR-3177)', async () => {
+    const token = await integrationToken(fx);
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.parentId! } });
+    const files = [
+      { kind: 'mock', sourcePath: 'design/work-items/p.mock.html', contentType: 'text/html' },
+    ];
+
+    const res = await MINT(
+      req('/upload-token', token, { files, withinParentKey: story.identifier }, card.identifier),
+      params(card.identifier),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).targets).toHaveLength(1);
+  });
+
+  it('mints NOTHING for a target that is not the declared container’s child', async () => {
+    // The gate is at the MINT, so a mistyped commit key never gets a grant to
+    // write with — it is refused before an upload key for it exists at all.
+    const token = await integrationToken(fx);
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.parentId! } });
+    const stranger = await createTestWorkItem(fx, { kind: 'task', title: 'Another card' });
+
+    const res = await MINT(
+      req(
+        '/upload-token',
+        token,
+        {
+          files: [{ kind: 'mock', sourcePath: 'design/x/x.mock.html', contentType: 'text/html' }],
+          withinParentKey: story.identifier,
+        },
+        stranger.identifier,
+      ),
+      params(stranger.identifier),
+    );
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('DESIGN_EVIDENCE_NOT_A_CHILD');
+  });
+
+  it('treats a BLANK `withinParentKey` as absent — not as a container named ""', async () => {
+    // A whitespace-only value is a caller that sent the field and meant nothing
+    // by it; reading it as a container would refuse every ordinary publish that
+    // happens to serialise an empty string.
+    const token = await integrationToken(fx);
+    const res = await MINT(
+      req(
+        '/upload-token',
+        token,
+        {
+          files: [
+            { kind: 'mock', sourcePath: 'design/work-items/p.mock.html', contentType: 'text/html' },
+          ],
+          withinParentKey: '   ',
+        },
+        card.identifier,
+      ),
+      params(card.identifier),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   it('refuses to mint a key for a type outside the design allowlist', async () => {
     const token = await integrationToken(fx);
     const res = await MINT(
