@@ -284,6 +284,21 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   SPRINT_NOT_COMPLETABLE: 422,
   INVALID_CARRY_OVER_TARGET: 422,
 
+  // MOTIR-3049 — `POST /api/v1/scope-claims` asked to claim a project's ACTIVE
+  // sprint and the project has none.
+  //
+  // ⚠️ 409, not 404 and not 422. The body is well-formed and the project exists,
+  // so 422 would tell the caller to fix a request that is already correct; and
+  // the sprint is not a resource this request ADDRESSED, so 404 would read as
+  // "that project is not there". What is wrong is the project's STATE, and the
+  // caller's fix is to start a sprint — the same reasoning
+  // `CANNOT_MODIFY_COMPLETED_SPRINT` above records. The error itself predates
+  // this route (`validate_sprint` has raised it since 7.8.15); this line is the
+  // first time a v1 route can surface it, which is why it is mapped now and not
+  // then — the map is grown by the operation that can produce the code, never
+  // speculatively.
+  NO_ACTIVE_SPRINT: 409,
+
   // 11.3.7 (MOTIR-2064) — the membership moves.
   //
   // 422: the batch is too large for one atomic move. The service's message names

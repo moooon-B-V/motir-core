@@ -122,7 +122,13 @@ import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import type { IssueSort } from '@/lib/issues/issueListView';
 import type { ExpansionNudge, ReadyItemDto, ReadyItemDispatchDto } from '@/lib/dto/ready';
-import type { ClaimActorDto, WorkItemClaimDto, WorkItemClaimOutcome } from '@/lib/dto/claim';
+import type { ClaimActorDto, WorkItemClaimDto } from '@/lib/dto/claim';
+import {
+  IN_PROGRESS_STATUS_CATEGORY,
+  IN_PROGRESS_STATUS_KEY,
+  isClaimableState,
+  refusedClaimOutcome,
+} from '@/lib/workItems/claimOutcome';
 import {
   toReadyItemDto,
   toReadyItemDispatchDto,
@@ -873,46 +879,9 @@ async function resolveDescriptionMentionable(
 const IMPLEMENTED_STATUS_KEY = 'implemented';
 const DONE_STATUS_KEY = 'done';
 
-/** Where a DISPATCHED item lands — the one status the two claim paths write. */
-const IN_PROGRESS_STATUS_KEY = 'in_progress';
-
-/**
- * The CLAIMABLE category (MOTIR-2961) — the CATEGORY, never the literal `todo`
- * key. It admits `todo` AND `blocked`, and that is load-bearing: `--force`
- * exists precisely to dispatch a card whose dependencies are unmet, and such a
- * card sits at `blocked`. Keying on the key alone would break that flag.
- */
-const CLAIMABLE_STATUS_CATEGORY = 'todo';
-
-/** The category a claimed item lands in — the same literal `claimNextReady`
- *  reports for the same reason: `in_progress` is a PROTECTED default key, so a
- *  project cannot recategorise it out from under dispatch. */
-const IN_PROGRESS_STATUS_CATEGORY = 'in_progress';
-
-/**
- * Classify a claim REFUSAL (MOTIR-2961) — a total function over every status
- * outside the to-do category.
- *
- * Only `in_progress` itself can be `mine` / `taken`: those two words mean
- * somebody is WORKING on the card, and they are told apart by WHO. Everything
- * else — `implemented` (its pull request is already open), `in_review`,
- * `planning`, `done`, `cancelled`, an archived row, any custom status — is
- * `not_claimable`, because `already_claimed` would be the wrong word for a card
- * that is finished.
- *
- * ⚠️ An `in_progress` card with NO assignee is `taken`, not claimable. That is
- * the MOTIR-2958 shape exactly: the runbook path flipped the status and never
- * assigned, so "unassigned" is evidence of nothing. The refusal still names the
- * winner — from the status-change history rather than from the assignee column.
- */
-function refusedClaimOutcome(
-  status: string,
-  assigneeId: string | null,
-  callerId: string,
-): Exclude<WorkItemClaimOutcome, 'claimed'> {
-  if (status !== IN_PROGRESS_STATUS_KEY) return 'not_claimable';
-  return assigneeId === callerId ? 'mine' : 'taken';
-}
+// The claim VOCABULARY — the two category literals, the target status and the
+// refusal classifier — moved to `lib/workItems/claimOutcome.ts` when MOTIR-3049
+// added the SCOPE claim as a second caller. One encoding, imported by both.
 
 /** A narrowing filter that keeps `Array.filter`'s result type honest. */
 function isPresentId(value: string | null | undefined): value is string {
@@ -5302,7 +5271,8 @@ export const workItemsService = {
    * the CLI checks none of them, so `motir run <a-done-card>` reopens finished
    * work and points an agent at it. Re-asserting the CATEGORY under the lock ends
    * that, and it does so WITHOUT breaking `--force`, whose whole purpose is to
-   * dispatch a `blocked` card (see {@link CLAIMABLE_STATUS_CATEGORY}).
+   * dispatch a `blocked` card (see `CLAIMABLE_STATUS_CATEGORY` in
+   * `lib/workItems/claimOutcome.ts`).
    *
    * ⚠️ NOTE WHAT THIS CANNOT SEE. A session that dies mid-run leaves a working
    * tree behind and no status change at all. No server-side claim can observe
@@ -5361,9 +5331,7 @@ export const workItemsService = {
       /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
       if (!state) throw new WorkItemNotFoundError(identifier);
 
-      const claimable =
-        state.archivedAt === null && state.statusCategory === CLAIMABLE_STATUS_CATEGORY;
-      if (!claimable) {
+      if (!isClaimableState(state)) {
         const held = await workItemRevisionRepository.findLatestStatusChange(item.id, tx);
         return {
           outcome: refusedClaimOutcome(state.status, state.assigneeId, ctx.userId),

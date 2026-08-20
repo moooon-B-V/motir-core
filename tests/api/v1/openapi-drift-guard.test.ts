@@ -489,6 +489,17 @@ describe('every operation’s REAL response validates against its declared schem
       { key: claimable },
     );
 
+    // ── The SCOPE claim (MOTIR-3049) ────────────────────────────────────────
+    // On its OWN container, for the same reason the keyed claim above takes its
+    // own item: a scope claim moves EVERY member to `in_progress` and assigns
+    // them, which would change the state the drives above asserted against.
+    const scopeRoot = await createItem('A container to claim as a scope');
+    await drive(
+      'claimScope',
+      () => import('@/app/api/v1/scope-claims/route'),
+      send('/api/v1/scope-claims', 'POST', { kind: 'work_item', key: scopeRoot }),
+    );
+
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
     // `in_review` and `completeSession` then closes it, so driving them on the

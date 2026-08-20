@@ -101,6 +101,15 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'cursor over two sources. Its entries are the activity DTOs the web surface renders; v1’s ' +
     '`ActivityEntry` is the narrowed wire form. Aligning them is a widening of a paged read that ' +
     'no client has asked for — a card against 11.7 if one ever does, not a divergence to keep quiet.',
+  ScopeClaim:
+    'MOTIR-3049’s SCOPE claim ships on `/api/v1` ONLY, and the absence is argued rather than ' +
+    'incidental: its caller is `motir run <story-id>` / `motir run sprint` in `packages/cli`, ' +
+    'which retired its MCP transport in 11.5.6, so a mirrored tool would be a second ' +
+    'implementation with no caller (`tests/api/v1/work-loop-story-gate.test.ts` carries the same ' +
+    'argument as that operation’s unmirrored entry). Its SIBLING, the keyed claim, probes ' +
+    '`WorkItemClaim` whole — so the shape family IS checked here, on the tool that has an ' +
+    'agent-facing reason to exist. ⚠️ If an agent surface is ever added for a scoped run, ' +
+    'this entry closes and `claim_scope` probes this resource; it is not a permanent divergence.',
   TransitionList:
     'The list of legal transition targets is published by `GET …/transitions`. On MCP it is ' +
     'not a payload at all: `transition_status` names the allowed targets inside an ERROR ' +

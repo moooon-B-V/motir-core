@@ -6,6 +6,7 @@ import {
 } from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
+import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
@@ -434,6 +435,179 @@ export function presentWorkItemClaim(dto: WorkItemClaimDto): V1WorkItemClaim {
         ? null
         : { id: dto.transitionedBy.id, name: dto.transitionedBy.name },
     transitionedAt: dto.transitionedAt,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The SCOPE CLAIM (MOTIR-3049)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WHAT to claim — a container by key, or a project's ACTIVE sprint.
+ *
+ * ⚠️ ONE OPERATION AND A DISCRIMINATED BODY, not two endpoints. The two scopes
+ * are named by DIFFERENT things — a `MOTIR-<n>` key on one side, a project key
+ * on the other — so neither can be a path parameter of the other, and splitting
+ * them would give the identical lock, the identical category re-assert and the
+ * identical six-member outcome vocabulary two places to drift apart in. The body
+ * is the only part that actually differs, so the body is where the difference
+ * lives. (`POST /api/v1/sessions/complete` is the shipped precedent for a write
+ * addressed by its body rather than by its path.)
+ */
+export const scopeClaimBodySchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('work_item'),
+      /** The container's key — a story, task or bug. Case-insensitive. */
+      key: z.string().min(1).max(64),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('sprint'),
+      /** The project whose ACTIVE sprint to claim. Case-insensitive. */
+      projectKey: z.string().min(1).max(64),
+    })
+    .strict(),
+]);
+export type V1ScopeClaimBody = z.infer<typeof scopeClaimBodySchema>;
+
+/** What a scope claim resolved to. A CLOSED enum, for the reason
+ *  `workItemClaimOutcomeSchema` states: it decides whether the caller may START
+ *  WORK, and a client meeting a seventh member would have to guess. */
+export const scopeClaimOutcomeSchema = z.enum([
+  'claimed',
+  'mine',
+  'taken',
+  'not_claimable',
+  'wrong_shape',
+  'not_finishable',
+]);
+
+/** One work item now held by the caller. */
+export const scopeClaimMemberSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  status: z.object({ key: z.string(), category: z.string().nullable() }),
+});
+
+/** The member whose state refused the claim, with its holder named. */
+export const scopeClaimOffenderSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  status: z.object({ key: z.string(), category: z.string().nullable() }),
+  /** Who it is assigned to — `null` when a sibling flipped the status without assigning. */
+  assignee: actorRefSchema.nullable(),
+  /** Who moved it there. The field that names a holder the assignee column cannot. */
+  transitionedBy: actorRefSchema.nullable(),
+  transitionedAt: z.string().datetime().nullable(),
+});
+
+/** Why a `wrong_shape` scope is not runnable. */
+export const scopeClaimShapeSchema = z.object({
+  /** The child that is itself a container. */
+  child: workItemKeySchema,
+  childTitle: z.string(),
+  /** Hops from the scope root to the work under `child`. `1` is the only
+   *  claimable depth, so this is always at least `2`. */
+  depth: z.number().int(),
+});
+
+/** One reason a scope cannot be finished — the validators' own shape. */
+export const scopeClaimBlockerSchema = z.object({
+  /** The in-scope item that is gated. */
+  item: workItemKeySchema,
+  /** The out-of-scope, not-done item gating it. */
+  blockedBy: workItemKeySchema,
+  blockerStatus: z.string(),
+  blockerSprintId: z.string().nullable(),
+});
+
+/**
+ * The result of claiming ONE scope.
+ *
+ * ⚠️ **A REFUSAL IS A 200, NOT AN ERROR**, for the same reason the keyed claim
+ * gives: most refusals are ordinary states a dispatcher meets on the happy path,
+ * and two of them (`wrong_shape`, `not_finishable`) are findings the caller acts
+ * on by submitting a re-plan rather than by retrying. Genuine failures keep their
+ * statuses: an unknown or cross-workspace key is 404, a malformed one 422, and a
+ * project with no active sprint is 409.
+ *
+ * ⚠️ **`members` IS EMPTY ON EVERY REFUSAL**, and that is the contract rather
+ * than an omission: a refused claim claimed NOTHING. A partially-claimed scope is
+ * the one outcome with no good handling — you can neither finish it nor cleanly
+ * abandon it — so there is no shape here that can express one.
+ */
+export const scopeClaimSchema = z.object({
+  scope: z.object({
+    kind: z.enum(['work_item', 'sprint']),
+    /** The container's key, or `null` for a sprint scope. */
+    key: workItemKeySchema.nullable(),
+    /** The sprint's id, or `null` for a work-item scope. */
+    sprintId: z.string().nullable(),
+    /** The container's title, or the sprint's name. */
+    name: z.string(),
+  }),
+  outcome: scopeClaimOutcomeSchema,
+  /** `outcome === "claimed"`, as its own boolean. */
+  claimed: z.boolean(),
+  /** Every row the caller now holds, by key. `[]` on every refusal. */
+  members: z.array(scopeClaimMemberSchema),
+  /** Present for `mine` / `taken` / `not_claimable`; `null` otherwise. */
+  offender: scopeClaimOffenderSchema.nullable(),
+  /** Present for `wrong_shape`; `null` otherwise. */
+  shape: scopeClaimShapeSchema.nullable(),
+  /** Present for `not_finishable`; `[]` otherwise. */
+  blockers: z.array(scopeClaimBlockerSchema),
+});
+export type V1ScopeClaim = z.infer<typeof scopeClaimSchema>;
+
+/** Map the scope-claim result to the wire — field by field, never a spread. */
+export function presentScopeClaim(dto: ScopeClaimDto): V1ScopeClaim {
+  return {
+    scope: {
+      kind: dto.scope.kind,
+      key: dto.scope.key,
+      sprintId: dto.scope.sprintId,
+      name: dto.scope.name,
+    },
+    outcome: dto.outcome,
+    claimed: dto.claimed,
+    members: dto.members.map((m) => ({
+      key: m.key,
+      title: m.title,
+      status: { key: m.status.key, category: m.status.category },
+    })),
+    offender:
+      dto.offender === null
+        ? null
+        : {
+            key: dto.offender.key,
+            title: dto.offender.title,
+            status: { key: dto.offender.status.key, category: dto.offender.status.category },
+            assignee:
+              dto.offender.assignee === null
+                ? null
+                : { id: dto.offender.assignee.id, name: dto.offender.assignee.name },
+            transitionedBy:
+              dto.offender.transitionedBy === null
+                ? null
+                : {
+                    id: dto.offender.transitionedBy.id,
+                    name: dto.offender.transitionedBy.name,
+                  },
+            transitionedAt: dto.offender.transitionedAt,
+          },
+    shape:
+      dto.shape === null
+        ? null
+        : { child: dto.shape.child, childTitle: dto.shape.childTitle, depth: dto.shape.depth },
+    blockers: dto.blockers.map((b) => ({
+      item: b.item,
+      blockedBy: b.blockedBy,
+      blockerStatus: b.blockerStatus,
+      blockerSprintId: b.blockerSprintId,
+    })),
   };
 }
 

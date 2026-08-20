@@ -995,6 +995,10 @@ export default defineConfig({
         // bound re-implemented in the route rather than enforced in the service
         // would show up here as an uncovered branch.
         'app/api/v1/work-items/[key]/plan-approval/route.ts',
+        // MOTIR-3049 — the SCOPE CLAIM, for exactly the same reason one line up.
+        // Its two arms differ only in which identifier they resolve; the claim
+        // itself is one service method.
+        'app/api/v1/scope-claims/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
         'app/api/v1/work-items/[key]/activity/route.ts',
@@ -1468,6 +1472,11 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/work-items/[key]/plan-approval/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/scope-claims/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

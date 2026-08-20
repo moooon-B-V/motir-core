@@ -111,6 +111,12 @@ const GROUPS: readonly { key: string; label: string; test: (path: string) => boo
   // branch, so it belongs to the work loop but is addressed by the branch, not
   // by an item.
   { key: 'sessions', label: 'Session close-out', test: (p) => p.startsWith('/api/v1/sessions') },
+  // MOTIR-3049's scope claim, and it sits here for the same reason the session
+  // close-out does: it acts on a SET of work items and is addressed by neither
+  // one of them — the scope is named in the body, as a container key or a
+  // project's active sprint. Filing it under work items would put an endpoint no
+  // `/api/v1/work-items/…` path leads to in the middle of the ones that do.
+  { key: 'scope-claims', label: 'Scope claims', test: (p) => p.startsWith('/api/v1/scope-claims') },
   { key: 'sprints', label: 'Sprints', test: (p) => p.startsWith('/api/v1/sprints') },
   {
     key: 'planning',
