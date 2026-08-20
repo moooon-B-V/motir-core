@@ -29,17 +29,72 @@
  * already answered for; leaving it in the report would make the sweep look
  * unfinished forever. Pass `--include-withdrawn` to see them.
  *
+ * ══════════════════════════════════════════════════════════════════════════
+ * ⚠️ THE CREDENTIAL IS PART OF THE ASSERTION (MOTIR-3227)
+ * ══════════════════════════════════════════════════════════════════════════
+ * `design_evidence` is `ENABLE` **and** `FORCE ROW LEVEL SECURITY`, with a
+ * policy keyed on `current_setting('app.workspace_id')`. This script opens a
+ * plain `pg` connection and sets no tenant GUC, so under a role WITHOUT
+ * `rolbypassrls` every policy matches nothing:
+ *
+ *   connection                 role            rolbypassrls   rows seen
+ *   -------------------------  --------------  ------------   ---------
+ *   DATABASE_URL (pooled)      motir_app       false                  0
+ *   DATABASE_URL_UNPOOLED      neondb_owner    true                  47
+ *
+ * The first version of this script's USAGE named the POOLED url, and on
+ * 2026-08-20 a production run of it printed `Scanned 0 … No stray or
+ * over-published design results. ✓` and exited 0 against 42 live rows. That is
+ * why the population count is read FIRST and an empty one exits 3 — the guard
+ * is on ABSENCE, not on presence, because the old shape's only failure mode
+ * was `flagged.length > 0` and an empty population has zero flagged rows.
+ *
  * USAGE
- *   DATABASE_URL=<postgres url> GITHUB_TOKEN=<repo:read token> \
+ *   # The credential must be able to READ design_evidence under RLS — i.e. a
+ *   # role with rolbypassrls (Neon's `neondb_owner`, reached by the UNPOOLED
+ *   # url), NOT the pooled `motir_app` role the app runs as.
+ *   DATABASE_URL="$DATABASE_URL_UNPOOLED" GITHUB_TOKEN=<token> \
  *     node scripts/detect-stray-design-results.mjs [--repo owner/name] \
  *                                                  [--include-withdrawn] [--json]
  *
- * Read-only. It opens one connection, issues one SELECT, and writes nothing.
+ *   Inside the motir-core Fly machine both urls are already in the environment,
+ *   so this is the whole command:
+ *     DATABASE_URL="$DATABASE_URL_UNPOOLED" node scripts/detect-stray-design-results.mjs
+ *
+ *   The pooled url works too IF it carries the tenant context the policy reads,
+ *   but it then scans that ONE workspace rather than the table:
+ *     DATABASE_URL="$DATABASE_URL&options=-c%20app.workspace_id%3D<workspace-id>"
+ *
+ * THE GITHUB CREDENTIAL. `GITHUB_TOKEN` may be any token with `repo:read` — but
+ * nothing needs to travel to run this in production: the machine already holds
+ * `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY`, and a GitHub **App installation
+ * token** minted from them works here and expires in an hour. Mint it with the
+ * app JWT (`POST /app/installations/{id}/access_tokens`) and pass the result as
+ * `GITHUB_TOKEN`. That is how the 2026-08-20 production run was done.
+ *
+ * EXIT CODES
+ *   0  scanned a non-empty population and found nothing to flag
+ *   1  findings — stray or over-published rows are listed
+ *   2  usage: a required environment variable is missing
+ *   3  BLIND READ — the population was empty, so the scan asserted nothing
+ *
+ * NOTE ON THE PATH. `prisma/migrations/20260820140100_withdraw_stray_design_
+ * results/migration.sql` cites this file as `scripts/design-evidence/detect-
+ * stray-design-results.mjs`. There is no `scripts/design-evidence/` directory
+ * and never was; the file is, and has always been, `scripts/detect-stray-
+ * design-results.mjs`. A merged migration's SQL cannot be edited (Prisma
+ * checksums it), so the correction lives here.
+ *
+ * Read-only. It opens one connection, issues three SELECTs, and writes nothing.
+ * The logic is in `scripts/detectStrayDesignResults.mjs` so that it can be
+ * tested (`tests/scripts/detect-stray-design-results.test.ts`); this file is
+ * the half that owns the connection, stdout and the exit code.
  */
 
 /* eslint-disable no-console -- this is a CLI script; stdout is its interface. */
 
 import { Client } from 'pg';
+import { EXIT_USAGE, formatJson, formatResult, scan } from './detectStrayDesignResults.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -55,11 +110,11 @@ const TOKEN = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is required.');
-  process.exit(2);
+  process.exit(EXIT_USAGE);
 }
 if (!TOKEN) {
   console.error('GITHUB_TOKEN (or GH_TOKEN) is required — the file counts come from the API.');
-  process.exit(2);
+  process.exit(EXIT_USAGE);
 }
 
 const gh = async (path) => {
@@ -74,98 +129,23 @@ const gh = async (path) => {
   return res.json();
 };
 
-/** Every file of a pull request, following Link pagination to the end. */
-const designFileCount = async (prNumber) => {
-  let page = 1;
-  let count = 0;
-  for (;;) {
-    const files = await gh(`/repos/${REPO}/pulls/${prNumber}/files?per_page=100&page=${page}`);
-    if (files.length === 0) break;
-    count += files.filter((f) => f.filename.startsWith('design/')).length;
-    if (files.length < 100) break;
-    page += 1;
-  }
-  return count;
-};
-
-const runIdOf = (ciRunUrl) => {
-  const m = /\/actions\/runs\/(\d+)/.exec(ciRunUrl ?? '');
-  return m ? m[1] : null;
-};
-
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
-const { rows } = await client.query(
-  `SELECT e.id, w.identifier, e.is_current, e.ci_run_url, e.withdrawn_at,
-          (SELECT count(*)::int FROM design_asset a WHERE a.design_evidence_id = e.id) AS assets
-     FROM design_evidence e
-     JOIN work_item w ON w.id = e.work_item_id
-    ${INCLUDE_WITHDRAWN ? '' : 'WHERE e.withdrawn_at IS NULL'}
-    ORDER BY e.created_at`,
-);
-await client.end();
-
-const branchCache = new Map();
-const prCache = new Map();
-const filesCache = new Map();
-const report = [];
-
-for (const row of rows) {
-  const runId = runIdOf(row.ci_run_url);
-  if (!runId) {
-    report.push({ ...row, verdict: 'no-run-url' });
-    continue;
-  }
-  if (!branchCache.has(runId)) {
-    branchCache.set(
-      runId,
-      await gh(`/repos/${REPO}/actions/runs/${runId}`)
-        .then((r) => r.head_branch)
-        .catch(() => null),
-    );
-  }
-  const branch = branchCache.get(runId);
-  if (!branch) {
-    report.push({ ...row, verdict: 'run-gone' });
-    continue;
-  }
-  if (!prCache.has(branch)) {
-    const prs = await gh(
-      `/repos/${REPO}/pulls?state=all&per_page=1&head=${encodeURIComponent(`${REPO.split('/')[0]}:${branch}`)}`,
-    );
-    prCache.set(branch, prs[0]?.number ?? null);
-  }
-  const pr = prCache.get(branch);
-  if (!pr) {
-    report.push({ ...row, branch, verdict: 'no-pull-request' });
-    continue;
-  }
-  if (!filesCache.has(pr)) filesCache.set(pr, await designFileCount(pr));
-  const designFiles = filesCache.get(pr);
-
-  const verdict = designFiles === 0 ? 'STRAY' : row.assets > designFiles ? 'OVER-PUBLISH' : 'ok';
-  report.push({ ...row, branch, pr, designFiles, verdict });
+let result;
+try {
+  result = await scan({
+    query: (sql) => client.query(sql),
+    gh,
+    repo: REPO,
+    includeWithdrawn: INCLUDE_WITHDRAWN,
+  });
+} finally {
+  await client.end();
 }
 
-const flagged = report.filter((r) => r.verdict !== 'ok');
-
-if (AS_JSON) {
-  console.log(JSON.stringify({ repo: REPO, scanned: report.length, flagged }, null, 2));
-} else {
-  console.log(`Scanned ${report.length} design_evidence row(s) against ${REPO}.\n`);
-  if (flagged.length === 0) {
-    console.log('No stray or over-published design results. ✓');
-  } else {
-    for (const r of flagged) {
-      console.log(
-        `${r.verdict.padEnd(15)} ${r.id}  ${String(r.identifier).padEnd(11)} ` +
-          `PR ${r.pr ? `#${r.pr}` : '—'}  design files: ${r.designFiles ?? '—'}  assets: ${r.assets}` +
-          `${r.is_current ? '' : '  (superseded)'}`,
-      );
-    }
-  }
-}
+console.log(AS_JSON ? formatJson(result) : formatResult(result));
 
 // A flagged row is a finding, not a crash — but the exit code is what lets the
 // post-withdrawal re-run be an assertion rather than something somebody reads.
-process.exit(flagged.length === 0 ? 0 : 1);
+// An EMPTY population is not a clean sweep and exits 3, for the same reason.
+process.exit(result.exitCode);
