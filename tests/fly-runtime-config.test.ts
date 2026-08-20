@@ -345,10 +345,36 @@ describe('fly.toml — the deployment configuration', () => {
     expect(flyToml).not.toMatch(/release_command[^\n]*pnpm/);
   });
 
-  it('declares the machine POLICY', () => {
-    expect(flyToml).toMatch(/^\s*min_machines_running\s*=\s*1$/m);
+  it('declares the machine POLICY — and keeps BOTH machines warm', () => {
+    // ⚠️ `min_machines_running` WAS 1, AND 2 IS A DECISION (MOTIR-2785,
+    // executing `docs/decisions/application-hosting.md` Amendment 7 §14). This
+    // assertion went red on that change, which is the guard working.
+    //
+    // The distinction the old value blurred: the POOL is a ceiling an operator
+    // creates, and this is a FLOOR on how many of it the proxy will not stop.
+    // A pool of two with a floor of one is a single point of failure — the spare
+    // wakes on load, never on its sibling dying — and `min_machines_running` is
+    // not a failover guarantee even at 2, because a dead machine is RESTARTED by
+    // flyd rather than replaced. Two machines RUNNING is the only configuration
+    // that survives losing one without a user-visible gap, and this app serves
+    // interactive page loads.
+    //
+    // Measured 2026-08-20 rather than argued: the spare DID start on a deploy at
+    // 12:29:18Z and the PROXY stopped it 5m40s later, so this app served its
+    // whole load from one machine from 12:35Z onward.
+    expect(flyToml).toMatch(/^\s*min_machines_running\s*=\s*2$/m);
     expect(flyToml).toMatch(/^\s*auto_stop_machines\s*=\s*"stop"$/m);
     expect(flyToml).toMatch(/^\s*auto_start_machines\s*=\s*true$/m);
+  });
+
+  it('still separates the FLOOR from the POOL in prose, now that they differ from 1', () => {
+    // The floor and the pool are both 2 today, which is exactly when a reader
+    // starts believing this file sets the count. It does not, and MOTIR-2102 is
+    // what that belief cost. The paragraph that says so is asserted below in
+    // 'records the intended count as an INTENT'; this pins the distinction being
+    // drawn explicitly rather than left to be inferred from two equal numbers.
+    expect(flyToml).toMatch(/AVAILABILITY DECISION/);
+    expect(flyToml).toMatch(/floor on how many of an existing pool/);
   });
 
   it('records the intended count as an INTENT, and never asserts one', () => {
