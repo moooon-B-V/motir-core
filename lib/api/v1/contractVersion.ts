@@ -145,10 +145,11 @@
  *   today, so no existing caller moves; an unrecognised capability is refused
  *   (`INVALID_FINDINGS_POLICY`, 422) rather than ignored, which is a new
  *   CONDITION getting a status on an existing operation — §8's allowed shape.
- *   (2) `POST /api/v1/work-items/{key}/plan-approval`, the bounded public
- *   entrance to `plansService.approvePlan` that `motir auto --auto-approve-replan`
- *   drives: a new operation, gated by the `ai:view_plan` key the service already
- *   asserts, with no declared shape changed. Its 409 additionally carries
+ *   (2) `approveWorkItemPlan` — `POST /api/v1/work-items/{key}/plan-approval`,
+ *   the bounded public entrance to `plansService.approvePlan` that
+ *   `motir auto --auto-approve-replan` drives: a new operation, gated by the
+ *   `ai:view_plan` key the service already asserts, with no declared shape
+ *   changed. Its 409 additionally carries
  *   `planStatus`, an enrichment on a NEW condition rather than a change to an
  *   existing one. See `docs/decisions/run-findings-protocol.md`.
  *
