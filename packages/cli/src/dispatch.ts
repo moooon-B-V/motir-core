@@ -6,7 +6,7 @@ import {
   isRepoStraddleAdvisory,
   isSubsumptionAdvisory,
 } from './client.js';
-import type { DispatchPrompt, DispatchWorkflowMode } from './client.js';
+import type { DispatchPrompt, DispatchWorkflowMode, WorkItemClaim } from './client.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
 // where an item's agent runs, what the human is told about it, and how a
@@ -535,6 +535,34 @@ export function renderAgentFailure(
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * WHY this run is not dispatching a card it was told to take (MOTIR-3048).
+ *
+ * The server refused the claim, and the refusal DISCRIMINATES — so this does
+ * too. `taken` is somebody else's live work and the answer is a name; the
+ * others are a state the card is in and the answer is that state. Collapsing
+ * the two into "could not claim it" is exactly what the outcome vocabulary
+ * exists to prevent: a loser that cannot say who won learns nothing it can act
+ * on.
+ */
+export function renderClaimRefusal(claim: WorkItemClaim): string {
+  const where = `It is at ${claim.status.key}.`;
+  if (claim.outcome === 'taken') {
+    const holder = claim.assignee?.name ?? claim.transitionedBy?.name ?? null;
+    return [
+      `${claim.key}: already claimed${holder ? ` by ${holder}` : ' by somebody else'} — not dispatching.`,
+      `${where} Two agents on one card is the failure this refusal exists to prevent;`,
+      'nothing was changed. Take it over by hand if you know the other run is dead.',
+    ].join('\n');
+  }
+  return [
+    `${claim.key}: not claimable — not dispatching.`,
+    `${where} A run claims from the TO-DO category only, so a card that is under`,
+    'review, being re-planned, or finished is not work an agent may be started on.',
+    'Nothing was changed.',
+  ].join('\n');
 }
 
 /** The per-item outcome lines of a `complete_session` bulk close-out. */

@@ -8,12 +8,19 @@
 // the decider into THIS shape, so the client renders without touching the
 // service layer or issuing N work-item reads.
 //
-// Refs are RESOLVED to canvas node ids server-side: an `add`'s node id is its
-// PlanItem id; a `modify`/`remove`'s node id is the target work-item id (so a
-// `modify` is the SAME node as the existing item, not a ghost copy). The
-// intra-plan temp-ref (`planItem:<id>`) is stripped to the referenced add's
-// node id; a real work-item ref stays as-is.
+// Refs are RESOLVED to canvas node ids server-side, by ONE rule for all three
+// ops (MOTIR-3160): a node id is the WORK ITEM the proposal is about, falling
+// back to the PlanItem id when there is not one yet. So a `modify`/`remove` is
+// the SAME node as the existing item rather than a ghost copy; an
+// un-materialized `add` keys by its own id, because it is not about anything
+// yet; and an `add` that HAS been materialized keys by the work item it became,
+// which is what lets a decided proposal land ON that node instead of beside it.
+// The intra-plan temp-ref (`planItem:<id>`) is resolved to the referenced item's
+// NODE id — not to the referenced id itself, which would point at a node that is
+// no longer on the canvas once that item materialized; a real work-item ref
+// stays as-is.
 
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
   PlanStatusDto,
@@ -84,8 +91,9 @@ export interface PlanReviewItemDto {
   /** The PlanItem id — the stable review key. */
   planItemId: string;
   op: PlanItemOpDto;
-  /** The canvas node id: the PlanItem id for an `add`; the target work-item id
-   *  for `modify` / `remove` (same id — not a ghost copy). */
+  /** The canvas node id: the target work-item id whenever the proposal HAS one
+   *  (a `modify` / `remove`, or an `add` that has been materialized — same id,
+   *  not a ghost copy); the PlanItem id for an `add` that has not. */
   nodeId: string;
   /** The resolved parent node id (drill placement), or null for a root. */
   parentNodeId: string | null;
@@ -122,7 +130,8 @@ export interface PlanReviewItemDto {
   parentTrail: PlanParentCrumbDto[];
   /** Resolved blocked-by node ids (within the proposed forest). */
   blockedByNodeIds: string[];
-  /** The target's identifier (`PROD-12`) — null for an un-materialized `add`. */
+  /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
+   *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;
   /** The display title: the proposed title (`add`) or the live target title. */
   title: string;
@@ -161,8 +170,17 @@ export interface PlanReviewItemDto {
   targetRepoRole: string | null;
   executor: string | null;
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;
-  /** The target's current status key — null for a proposed `add` (none yet). */
+  /** The target's current status key — null for an un-materialized `add` (it is
+   *  not a work item yet); the live status for every proposal that has one. */
   status: string | null;
+  /** The target status's own display LABEL, from the project's workflow (bug
+   *  MOTIR-3170). Null for an `add`, and for a target whose status the workflow
+   *  no longer holds. The canvas chip cannot name a CUSTOM status out of the
+   *  `labels.defaultStatus` catalog, so the identity travels beside the key. */
+  statusLabel: string | null;
+  /** The target status's lifecycle CATEGORY — the chip's fallback tone when the
+   *  canvas has no per-key treatment (see `statusLabel`). */
+  statusCategory: StatusCategoryDto | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */
   hasChildren: boolean;
   /** The `modify` diff (old→new) — empty for `add` / `remove`. */

@@ -112,7 +112,7 @@ swatch** + a plain-language meaning:
 - **dashed arrow ⟶ "pending"** — _blocker is not done yet_
 - **red arrow → "blocked elsewhere"** — _blocker sits elsewhere in the plan (a bad plan)_
 
-(Header "Dependencies", `--el-text-faint` uppercase caption; rows
+(Header "Dependencies", `--el-text-secondary` uppercase caption; rows
 `--el-text-strong`, the meanings `--el-text-muted`.) It is the SAME three styles
 the edges use, so the canvas is self-documenting.
 

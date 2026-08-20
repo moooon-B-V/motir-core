@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectSquareService } from '@/lib/services/projectSquareService';
@@ -6,6 +8,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFix
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { scannedTestCount, testsRidingTheDefaultTimeout } from '../helpers/timeoutBudget';
 import type { ProjectSquareCardDto } from '@/lib/dto/projectSquare';
 
 // Story 6.13 · Subtask 6.13.7 — the PROJECT SQUARE comprehensive guarantee
@@ -104,6 +107,36 @@ async function tagProject(projectId: string, slug: string, label: string): Promi
 const NOW = Date.now();
 const days = (n: number) => new Date(NOW - n * 24 * 60 * 60 * 1000);
 
+/**
+ * The budget for every test in this file (MOTIR-3167).
+ *
+ * ⚠️ THIS FILE DID NOT FAIL — IT IS THE MORE EXPOSED OF THE TWO. MOTIR-3167 was
+ * filed against `projectSquareRanking.test.ts`, which lost a case to
+ * `vitest.config.ts`'s global 15 s `testTimeout` on CI. Measuring both in the
+ * same pass says this one is nearer the edge and has simply not been unlucky:
+ *
+ * | file                            | CI green   | worst test, local (quiet) |
+ * |---------------------------------|------------|---------------------------|
+ * | projectSquareRanking.test.ts    | 13 979 ms  |   804 ms                  |
+ * | projectSquareGuarantees.test.ts | 30 955 ms  | 3 591 ms (Guarantee 4)    |
+ *
+ * Scaling by this file's own CI/local factor (30 955 / 13 659 ≈ 2.3×) puts the
+ * three Guarantee-4 cursor walks at ~8 s of CI time EACH against a 15 s ceiling
+ * — under two-fold headroom, where the ranking file's worst case had four-fold
+ * and still lost. The excursion that took the ranking case past 15 s was at
+ * least 4.6×; the same excursion here is ~38 s, which is why 30 s would not have
+ * been enough either.
+ *
+ * 60 s matches `projectSquareRanking.test.ts` and `vitest.guards.config.ts`, and
+ * is chosen on the same principle as MOTIR-2017's `SUBPROCESS_TIMEOUT_MS`: the
+ * number is not measuring the work, it is where we would rather hear "this hung"
+ * than keep waiting.
+ *
+ * Every test here awaits real Postgres — there is no pure-CPU case, so unlike
+ * the ranking file this one needs a single constant.
+ */
+const DB_TEST_TIMEOUT_MS = 60_000;
+
 /** Walk EVERY page of a rank over the keyset cursor, returning the identifiers in order. */
 async function walkAllPages(rank: string): Promise<string[]> {
   const ordered: string[] = [];
@@ -125,79 +158,98 @@ async function walkAllPages(rank: string): Promise<string[]> {
 // Guarantee 1 — lists ONLY public projects, cross-org, and is FULLY PUBLIC.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Project square · Guarantee 1 — public-only, cross-org, fully public', () => {
-  it('lists every PUBLIC project across orgs and excludes EVERY non-public level', async () => {
-    // Four distinct orgs (each fixture mints its own organization/workspace):
-    // two public, plus one each of the three non-public levels.
-    await makeProject({ name: 'Alpha', identifier: 'PUA', access: 'public' });
-    await makeProject({ name: 'Bravo', identifier: 'PUB', access: 'public' });
-    await makeProject({ name: 'Charlie', identifier: 'OPN', access: 'open' });
-    await makeProject({ name: 'Delta', identifier: 'LIM', access: 'limited' });
-    await makeProject({ name: 'Echo', identifier: 'PRV', access: 'private' });
+  it(
+    'lists every PUBLIC project across orgs and excludes EVERY non-public level',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // Four distinct orgs (each fixture mints its own organization/workspace):
+      // two public, plus one each of the three non-public levels.
+      await makeProject({ name: 'Alpha', identifier: 'PUA', access: 'public' });
+      await makeProject({ name: 'Bravo', identifier: 'PUB', access: 'public' });
+      await makeProject({ name: 'Charlie', identifier: 'OPN', access: 'open' });
+      await makeProject({ name: 'Delta', identifier: 'LIM', access: 'limited' });
+      await makeProject({ name: 'Echo', identifier: 'PRV', access: 'private' });
 
-    const page = await projectSquareService.listDirectory();
-    const ids = page.items.map((c) => c.identifier).sort();
+      const page = await projectSquareService.listDirectory();
+      const ids = page.items.map((c) => c.identifier).sort();
 
-    // Both public projects appear — from DIFFERENT orgs, with no membership in
-    // either (the read takes no actor; it is a system-level cross-org index).
-    expect(ids).toEqual(['PUA', 'PUB']);
-    // None of open / limited / private ever leaks, for anyone.
-    for (const hidden of ['OPN', 'LIM', 'PRV']) {
-      expect(page.items.some((c) => c.identifier === hidden)).toBe(false);
-    }
-  });
+      // Both public projects appear — from DIFFERENT orgs, with no membership in
+      // either (the read takes no actor; it is a system-level cross-org index).
+      expect(ids).toEqual(['PUA', 'PUB']);
+      // None of open / limited / private ever leaks, for anyone.
+      for (const hidden of ['OPN', 'LIM', 'PRV']) {
+        expect(page.items.some((c) => c.identifier === hidden)).toBe(false);
+      }
+    },
+  );
 
-  it('returns ONLY the card projection — no internal project field crosses the wire', async () => {
-    const fx = await makeProject({
-      name: 'Projection Co',
-      identifier: 'PRJ',
-      access: 'public',
-      overview: 'Readme.',
-    });
+  it(
+    'returns ONLY the card projection — no internal project field crosses the wire',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const fx = await makeProject({
+        name: 'Projection Co',
+        identifier: 'PRJ',
+        access: 'public',
+        overview: 'Readme.',
+      });
 
-    const page = await projectSquareService.listDirectory();
-    const card = page.items.find((c) => c.identifier === 'PRJ')!;
-    expect(card).toBeDefined();
-    // EXACTLY the card-projection keys — the DTO structurally lacks workspaceId,
-    // accessLevel, estimation config, and every other internal field. Asserted
-    // at the payload level (the structural guarantee), not the DOM.
-    expect(Object.keys(card as ProjectSquareCardDto).sort()).toEqual([
-      'description',
-      'identifier',
-      'name',
-      'org',
-      'stats',
-    ]);
-    expect(Object.keys(card.org).sort()).toEqual(['name', 'slug']);
-    expect(Object.keys(card.stats).sort()).toEqual(['lastActivityAt', 'upvotes']);
-    // No reference to the seeding fixture's internal ids anywhere in the payload.
-    expect(JSON.stringify(card)).not.toContain(fx.projectId);
-    expect(JSON.stringify(card)).not.toContain(fx.workspaceId);
-  });
+      const page = await projectSquareService.listDirectory();
+      const card = page.items.find((c) => c.identifier === 'PRJ')!;
+      expect(card).toBeDefined();
+      // EXACTLY the card-projection keys — the DTO structurally lacks workspaceId,
+      // accessLevel, estimation config, and every other internal field. Asserted
+      // at the payload level (the structural guarantee), not the DOM.
+      expect(Object.keys(card as ProjectSquareCardDto).sort()).toEqual([
+        'description',
+        'identifier',
+        'name',
+        'org',
+        'stats',
+      ]);
+      expect(Object.keys(card.org).sort()).toEqual(['name', 'slug']);
+      expect(Object.keys(card.stats).sort()).toEqual(['lastActivityAt', 'upvotes']);
+      // No reference to the seeding fixture's internal ids anywhere in the payload.
+      expect(JSON.stringify(card)).not.toContain(fx.projectId);
+      expect(JSON.stringify(card)).not.toContain(fx.workspaceId);
+    },
+  );
 
-  it('an UNAUTHENTICATED request to /explore succeeds and returns the same public list', async () => {
-    await makeProject({ name: 'Open Source One', identifier: 'OS1', access: 'public' });
-    await makeProject({ name: 'Open Source Two', identifier: 'OS2', access: 'public' });
-    await makeProject({ name: 'Closed', identifier: 'CLS', access: 'limited' });
+  it(
+    'an UNAUTHENTICATED request to /explore succeeds and returns the same public list',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      await makeProject({ name: 'Open Source One', identifier: 'OS1', access: 'public' });
+      await makeProject({ name: 'Open Source Two', identifier: 'OS2', access: 'public' });
+      await makeProject({ name: 'Closed', identifier: 'CLS', access: 'limited' });
 
-    // The route has NO getSession() call — a logged-out visitor / crawler reads
-    // it. A bare Request with no cookies must succeed (no account gate to
-    // reject it), and the page is identical to the service's public list.
-    const res = await exploreRoute(new Request('http://localhost/api/public/explore'));
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: ProjectSquareCardDto[]; nextCursor: string | null };
-    const ids = body.items.map((c) => c.identifier).sort();
-    expect(ids).toEqual(['OS1', 'OS2']);
-    expect(body.items.some((c) => c.identifier === 'CLS')).toBe(false);
-  });
+      // The route has NO getSession() call — a logged-out visitor / crawler reads
+      // it. A bare Request with no cookies must succeed (no account gate to
+      // reject it), and the page is identical to the service's public list.
+      const res = await exploreRoute(new Request('http://localhost/api/public/explore'));
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        items: ProjectSquareCardDto[];
+        nextCursor: string | null;
+      };
+      const ids = body.items.map((c) => c.identifier).sort();
+      expect(ids).toEqual(['OS1', 'OS2']);
+      expect(body.items.some((c) => c.identifier === 'CLS')).toBe(false);
+    },
+  );
 
-  it('an EMPTY directory (no public projects) returns an empty page, not an error', async () => {
-    // Only non-public projects exist.
-    await makeProject({ name: 'Hidden', identifier: 'HID', access: 'private' });
+  it(
+    'an EMPTY directory (no public projects) returns an empty page, not an error',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // Only non-public projects exist.
+      await makeProject({ name: 'Hidden', identifier: 'HID', access: 'private' });
 
-    const page = await projectSquareService.listDirectory();
-    expect(page.items).toEqual([]);
-    expect(page.nextCursor).toBeNull();
-  });
+      const page = await projectSquareService.listDirectory();
+      expect(page.items).toEqual([]);
+      expect(page.nextCursor).toBeNull();
+    },
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,6 +258,7 @@ describe('Project square · Guarantee 1 — public-only, cross-org, fully public
 describe('Project square · Guarantee 2 — deterministic total order per rank', () => {
   it.each(['popular', 'recent', 'trending'] as const)(
     'the %s rank yields an IDENTICAL order across two reads, with a stable id tiebreak',
+    { timeout: DB_TEST_TIMEOUT_MS },
     async (rank) => {
       // Five public projects: TWO share a tied rank key (zero votes / same
       // made-public time) so the secondary `id` tiebreak decides their order —
@@ -246,83 +299,95 @@ describe('Project square · Guarantee 2 — deterministic total order per rank',
 // Guarantee 3 — search + category + rank COMPOSE; search is injection-safe.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('Project square · Guarantee 3 — search + category + rank compose, safely', () => {
-  it('search + category + the rank tab compose under one read, and the rank still orders', async () => {
-    // Three public projects that match BOTH the name search and the tag, with
-    // distinct vote totals so the `popular` rank imposes a known order.
-    const hi = await makeProject({ name: 'Kanban High', identifier: 'KHI', access: 'public' });
-    await tagProject(hi.projectId, 'ai-ml', 'AI & Machine Learning');
-    await addVotesAt(hi, 3, days(0));
-    const mid = await makeProject({ name: 'Kanban Mid', identifier: 'KMI', access: 'public' });
-    await tagProject(mid.projectId, 'ai-ml', 'AI & Machine Learning');
-    await addVotesAt(mid, 2, days(0));
-    const lo = await makeProject({ name: 'Kanban Low', identifier: 'KLO', access: 'public' });
-    await tagProject(lo.projectId, 'ai-ml', 'AI & Machine Learning');
-    await addVotesAt(lo, 1, days(0));
+  it(
+    'search + category + the rank tab compose under one read, and the rank still orders',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // Three public projects that match BOTH the name search and the tag, with
+      // distinct vote totals so the `popular` rank imposes a known order.
+      const hi = await makeProject({ name: 'Kanban High', identifier: 'KHI', access: 'public' });
+      await tagProject(hi.projectId, 'ai-ml', 'AI & Machine Learning');
+      await addVotesAt(hi, 3, days(0));
+      const mid = await makeProject({ name: 'Kanban Mid', identifier: 'KMI', access: 'public' });
+      await tagProject(mid.projectId, 'ai-ml', 'AI & Machine Learning');
+      await addVotesAt(mid, 2, days(0));
+      const lo = await makeProject({ name: 'Kanban Low', identifier: 'KLO', access: 'public' });
+      await tagProject(lo.projectId, 'ai-ml', 'AI & Machine Learning');
+      await addVotesAt(lo, 1, days(0));
 
-    // Decoys that each fail exactly one predicate — none may survive the compose.
-    const wrongTag = await makeProject({ name: 'Kanban X', identifier: 'KWT', access: 'public' });
-    await tagProject(wrongTag.projectId, 'analytics', 'Analytics'); // matches name + public, wrong tag
-    const wrongName = await makeProject({ name: 'Other', identifier: 'KWN', access: 'public' });
-    await tagProject(wrongName.projectId, 'ai-ml', 'AI & Machine Learning'); // matches tag + public, wrong name
-    const nonPublic = await makeProject({
-      name: 'Kanban Hidden',
-      identifier: 'KNP',
-      access: 'limited',
-    });
-    await tagProject(nonPublic.projectId, 'ai-ml', 'AI & Machine Learning'); // matches name + tag, NOT public
+      // Decoys that each fail exactly one predicate — none may survive the compose.
+      const wrongTag = await makeProject({ name: 'Kanban X', identifier: 'KWT', access: 'public' });
+      await tagProject(wrongTag.projectId, 'analytics', 'Analytics'); // matches name + public, wrong tag
+      const wrongName = await makeProject({ name: 'Other', identifier: 'KWN', access: 'public' });
+      await tagProject(wrongName.projectId, 'ai-ml', 'AI & Machine Learning'); // matches tag + public, wrong name
+      const nonPublic = await makeProject({
+        name: 'Kanban Hidden',
+        identifier: 'KNP',
+        access: 'limited',
+      });
+      await tagProject(nonPublic.projectId, 'ai-ml', 'AI & Machine Learning'); // matches name + tag, NOT public
 
-    const page = await projectSquareService.listDirectory({
-      search: 'kanban',
-      category: 'ai-ml',
-      rank: 'popular',
-    });
+      const page = await projectSquareService.listDirectory({
+        search: 'kanban',
+        category: 'ai-ml',
+        rank: 'popular',
+      });
 
-    // Only the three that satisfy ALL of {name search, tag, public}, and the
-    // `popular` rank still orders the narrowed set by lifetime upvotes desc.
-    expect(page.items.map((i) => i.identifier)).toEqual(['KHI', 'KMI', 'KLO']);
-    expect(page.items.map((i) => i.stats.upvotes)).toEqual([3, 2, 1]);
-  });
+      // Only the three that satisfy ALL of {name search, tag, public}, and the
+      // `popular` rank still orders the narrowed set by lifetime upvotes desc.
+      expect(page.items.map((i) => i.identifier)).toEqual(['KHI', 'KMI', 'KLO']);
+      expect(page.items.map((i) => i.stats.upvotes)).toEqual([3, 2, 1]);
+    },
+  );
 
-  it('a blank search and an absent category narrow NOTHING (empty-search / empty-category)', async () => {
-    await makeProject({ name: 'One', identifier: 'ON1', access: 'public' });
-    await makeProject({ name: 'Two', identifier: 'TW2', access: 'public' });
+  it(
+    'a blank search and an absent category narrow NOTHING (empty-search / empty-category)',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      await makeProject({ name: 'One', identifier: 'ON1', access: 'public' });
+      await makeProject({ name: 'Two', identifier: 'TW2', access: 'public' });
 
-    // A whitespace-only search must NOT compile an empty `ILIKE '%%'` match-all
-    // narrowing — it is treated as ABSENT, so the whole directory returns.
-    const blankSearch = await projectSquareService.listDirectory({ search: '   ' });
-    expect(blankSearch.items.map((i) => i.identifier).sort()).toEqual(['ON1', 'TW2']);
+      // A whitespace-only search must NOT compile an empty `ILIKE '%%'` match-all
+      // narrowing — it is treated as ABSENT, so the whole directory returns.
+      const blankSearch = await projectSquareService.listDirectory({ search: '   ' });
+      expect(blankSearch.items.map((i) => i.identifier).sort()).toEqual(['ON1', 'TW2']);
 
-    // An absent category likewise narrows nothing.
-    const noCategory = await projectSquareService.listDirectory({ category: '  ' });
-    expect(noCategory.items.map((i) => i.identifier).sort()).toEqual(['ON1', 'TW2']);
-  });
+      // An absent category likewise narrows nothing.
+      const noCategory = await projectSquareService.listDirectory({ category: '  ' });
+      expect(noCategory.items.map((i) => i.identifier).sort()).toEqual(['ON1', 'TW2']);
+    },
+  );
 
-  it('a search full of SQL / LIKE metacharacters is parameterized — matches literally, never errors or matches-all', async () => {
-    // A project whose name contains the literal metacharacters, plus an innocent
-    // bystander that must NOT be swept in by an unescaped wildcard.
-    await makeProject({
-      name: `Bobby '; DROP TABLE project; --`,
-      identifier: 'INJ',
-      access: 'public',
-    });
-    await makeProject({ name: 'Innocent Bystander', identifier: 'BYS', access: 'public' });
+  it(
+    'a search full of SQL / LIKE metacharacters is parameterized — matches literally, never errors or matches-all',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      // A project whose name contains the literal metacharacters, plus an innocent
+      // bystander that must NOT be swept in by an unescaped wildcard.
+      await makeProject({
+        name: `Bobby '; DROP TABLE project; --`,
+        identifier: 'INJ',
+        access: 'public',
+      });
+      await makeProject({ name: 'Innocent Bystander', identifier: 'BYS', access: 'public' });
 
-    // The exact metacharacter string is bound as a parameter (not concatenated),
-    // so it matches its literal owner only — and the table obviously survives.
-    const literal = await projectSquareService.listDirectory({
-      search: `'; DROP TABLE project; --`,
-    });
-    expect(literal.items.map((i) => i.identifier)).toEqual(['INJ']);
+      // The exact metacharacter string is bound as a parameter (not concatenated),
+      // so it matches its literal owner only — and the table obviously survives.
+      const literal = await projectSquareService.listDirectory({
+        search: `'; DROP TABLE project; --`,
+      });
+      expect(literal.items.map((i) => i.identifier)).toEqual(['INJ']);
 
-    // A lone `%` is escaped to a literal percent — it matches NEITHER name (no
-    // literal `%` in them), it does NOT behave as a match-all wildcard.
-    const percent = await projectSquareService.listDirectory({ search: '%' });
-    expect(percent.items).toEqual([]);
+      // A lone `%` is escaped to a literal percent — it matches NEITHER name (no
+      // literal `%` in them), it does NOT behave as a match-all wildcard.
+      const percent = await projectSquareService.listDirectory({ search: '%' });
+      expect(percent.items).toEqual([]);
 
-    // The directory is intact afterwards — no injection took effect.
-    const all = await projectSquareService.listDirectory();
-    expect(all.items.map((i) => i.identifier).sort()).toEqual(['BYS', 'INJ']);
-  });
+      // The directory is intact afterwards — no injection took effect.
+      const all = await projectSquareService.listDirectory();
+      expect(all.items.map((i) => i.identifier).sort()).toEqual(['BYS', 'INJ']);
+    },
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,6 +396,7 @@ describe('Project square · Guarantee 3 — search + category + rank compose, sa
 describe('Project square · Guarantee 4 — cursor pagination, no skip / no dupe, per rank', () => {
   it.each(['popular', 'recent', 'trending'] as const)(
     'walks every public project EXACTLY once past the page boundary on the %s rank',
+    { timeout: DB_TEST_TIMEOUT_MS },
     async (rank) => {
       // 27 public projects (> the 24-row page size → at least two pages). Each
       // gets a distinct made-public time AND a small, TIED-on-purpose vote total
@@ -355,4 +421,22 @@ describe('Project square · Guarantee 4 — cursor pagination, no skip / no dupe
       expect([...ordered].sort()).toEqual([...expected].sort());
     },
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The guard that keeps the budget above true for tests written LATER.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('this file does not ride the global testTimeout (MOTIR-3167)', () => {
+  it('EVERY test declares an explicit budget', { timeout: DB_TEST_TIMEOUT_MS }, () => {
+    // A SCAN, NOT A COUNT — see the twin guard in
+    // `projectSquareRanking.test.ts` for why, and `tests/helpers/timeoutBudget.ts`
+    // for the chunking. The `it.each` form matters here specifically: the two
+    // most expensive tests in this file are `it.each`, so a scan blind to that
+    // spelling would exempt exactly the cases the budget exists for.
+    const source = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+    const offenders = testsRidingTheDefaultTimeout(source, ['DB_TEST_TIMEOUT_MS']);
+
+    expect(offenders, 'these tests inherit vitest.config.ts’s 15 s default').toEqual([]);
+    expect(scannedTestCount(source)).toBeGreaterThanOrEqual(9);
+  });
 });

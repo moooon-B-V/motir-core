@@ -8,6 +8,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
@@ -82,6 +83,7 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const straddles = result.advisories.filter(isRepoStraddleAdvisory);
   const subsumed = result.advisories.filter(isSubsumptionAdvisory);
   const oversized = result.advisories.filter(isSizingAdvisory);
+  const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
 
   const lines: string[] = [];
   if (references.length > 0) {
@@ -160,6 +162,29 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
         'split" into the description is NOT the remedy: that is the exact shape this check ' +
         'exists to catch, four times over. A card with CHILDREN is sized by rollup and is never ' +
         'reported here, and neither is a human executor — its minutes are human work.',
+    );
+  }
+  // The SELF-BLOCKING-DESIGN member of the shape family (MOTIR-3178) — the
+  // planning-time design gate read for its purpose. MOTIR-3154 carried its own
+  // `design/ai-planning/` amendment as criterion 1 and the UI built against that
+  // drawing as criteria 4-5, and this surface returned `valid: true` with one
+  // unrelated advisory (`notes.html` #329; planning bug MOTIR-3158).
+  if (selfBlocking.length > 0) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): these cards are their OWN design blocker — one criterion draws ` +
+        'the design, another builds the surface it draws:',
+      ...selfBlocking.map(
+        (a) =>
+          `  ${a.item}: criterion ${a.designCriterionIndex} produces a design asset, ` +
+          `criterion ${a.surfaceCriterionIndex} builds a rendered surface (${a.severity})`,
+      ),
+      'The remedy is a LIFT, not a cut: make the design criterion its OWN type: design card and ' +
+        'leave the rest of this one blocked_by it, so somebody sees the drawing before the files ' +
+        'written to match it (Principle #13). Read literally the design gate is satisfied here — ' +
+        'the design subtask a UI card must be linked to IS this card — which is why a check says ' +
+        'it rather than a sentence. A card with CHILDREN is never reported: its design child can ' +
+        'be reviewed before its code children run, which is the shape this asks for.',
     );
   }
   // The SUBSUMPTION family (MOTIR-2903) — and this surface is the one whose
@@ -281,11 +306,15 @@ export function registerValidateWorkItem(
         'on post-merge state (with the matched phrase), `likely-repo-straddle` when it names a ' +
         "path in a repo that is not the card's `targetRepo` (with the path, that repo, and " +
         '`reason: "contradiction"`, or `"unpinnable"` when the card pins no repo and its criteria ' +
-        'name two or more) — both with the 1-based criterion index to cut at — or ' +
+        'name two or more) — both with the 1-based criterion index to cut at — ' +
         '`likely-over-gate-sizing` when a CHILDLESS coding_agent card is sized over the estimation ' +
         'gate, at 13+ story points or more than 60 estimated minutes (with `threshold`, the ' +
         'observed `storyPoints` and `estimateMinutes`, and no criterion index, because the remedy ' +
-        'is to SPLIT the card rather than cut it at a line). Advisories ' +
+        'is to SPLIT the card rather than cut it at a line), or `likely-self-blocking-design` when ' +
+        'a CHILDLESS card is its OWN design blocker — one criterion produces a design asset and ' +
+        'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
+        '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
+        'criterion onto its own card rather than cutting the list at a line). Advisories ' +
         'never affect `valid` or `blockers` — a card with advisories is still valid and ready. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +

@@ -204,6 +204,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',
   claim_next_ready: 'work_items:write',
+  // The KEYED claim (MOTIR-2961) — the same write as `claim_next_ready`, on a
+  // card named rather than picked.
+  claim_work_item: 'work_items:write',
   add_comment: 'work_items:write',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',

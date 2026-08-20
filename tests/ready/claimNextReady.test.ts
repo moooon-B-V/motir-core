@@ -6,6 +6,9 @@ import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+// Shared with `claimWorkItem.test.ts` (MOTIR-2961): one warm-up, one raw
+// statement — see `tests/helpers/warmPool.ts` for why it is not copied.
+import { warmPool } from '../helpers/warmPool';
 
 // `claim_next_ready` (MOTIR-1330) — the ATOMIC, race-safe dispatch claim over
 // real Postgres. The behaviour: pick the highest-ranked ready item in the ACTIVE
@@ -50,13 +53,6 @@ async function activeSprintWith(fx: WorkItemFixture, itemIds: string[]): Promise
   }
   await sprintsService.startSprint(sprint.id, {}, fx.ctx);
   return sprint.id;
-}
-
-/** Force ≥ n physical connections so two racing claims run truly concurrently —
- *  the FOR-UPDATE SKIP LOCKED (not a single shared connection) is then what
- *  separates them. A cold pool would serialise and mask the race. */
-async function warmPool(n = 6): Promise<void> {
-  await Promise.all(Array.from({ length: n }, () => db.$queryRaw`SELECT 1`));
 }
 
 async function statusOf(id: string): Promise<string> {

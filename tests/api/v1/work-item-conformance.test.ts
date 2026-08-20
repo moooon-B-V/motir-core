@@ -546,7 +546,8 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // 11.7's own conformance suite (MOTIR-2243). Listing them here would make
     // this guard pass by covering them in the wrong story's walk.
     // (`…/implementation` joined them in MOTIR-2421 — it is `…/integration`'s
-    // sibling, minus the branch.)
+    // sibling, minus the branch; `…/claim` in MOTIR-2961, which is dispatch and
+    // therefore belongs to the work loop's walk, not to this story's.)
     // (`…/plan-approval` joined them in MOTIR-3023 — it approves the plan a
     // dispatched agent's refusal produced, which is a work-LOOP act through and
     // through. It hangs off a work item because the CARD is its address: the
@@ -555,7 +556,7 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // caller-supplied data. Its journey is `work-item-plan-approval-route.test.ts`,
     // and the drift guard drives it end to end.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity|plan-approval)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { WorkItemNode } from '@/components/planning/WorkItemNode';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -42,6 +43,8 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     executor: null,
     planningProvenance: null,
     status: null,
+    statusLabel: null,
+    statusCategory: null,
     hasChildren: false,
     changes: [],
     stale: false,
@@ -69,6 +72,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-14',
           title: 'Seller onboarding',
           status: 'in_progress',
+          statusLabel: null,
+          statusCategory: null,
           changes: [
             { field: 'priority', from: 'medium', to: 'high' },
             { field: 'title', from: 'old', to: 'new' },
@@ -93,12 +98,99 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-19',
           title: 'Manual payout export',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
         })}
       />,
     );
     expect(screen.getByText('remove')).toBeTruthy();
     const title = screen.getByText('Manual payout export');
     expect(title.className).toContain('line-through');
+  });
+
+  // ── The STATUS chip is the SHARED one (bug MOTIR-3170) ──────────────────
+  //
+  // This node used to keep its OWN six-member status literal and coerce
+  // anything else to `todo`, so a `modify` whose live target had an open pull
+  // request drew as "To Do" on the plan-detail canvas. There is now ONE
+  // resolver — `WorkItemStatusPill` → `lib/workflows/canvasStatusMeta.ts` —
+  // and these assert on the rendered TEXT, which is what a reviewer reads.
+  it('renders a modify whose live target is at `implemented` as "Implemented"', () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_impl',
+          identifier: 'PROD-31',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    expect(screen.getByText('Implemented')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it("renders a target at a CUSTOM workflow status with that status's own label", () => {
+    renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_custom',
+          identifier: 'PROD-32',
+          title: 'Seller onboarding',
+          status: 'awaiting_legal',
+          statusLabel: 'Awaiting legal',
+          statusCategory: 'todo',
+        })}
+      />,
+    );
+    expect(screen.getByText('Awaiting legal')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it('draws the chip from the SAME resolver as the roadmap node — same key, same fill', () => {
+    // The AC is "no second copy of the mapping in `components/planning/`". A
+    // rendered comparison is what proves it: if this file ever grows its own map
+    // again, the two fills diverge here rather than in production.
+    const proposal = renderWithIntl(
+      <PlanItemNode
+        item={item({
+          op: 'modify',
+          nodeId: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    const onProposal = proposal.container.querySelector(
+      '[data-status="implemented"]',
+    ) as HTMLElement;
+    const chipClass = onProposal.className;
+    const chipText = onProposal.textContent;
+    cleanup();
+
+    const node = renderWithIntl(
+      <WorkItemNode
+        item={{
+          id: 'wi_same',
+          identifier: 'PROD-33',
+          title: 'Seller onboarding',
+          kind: 'subtask',
+          status: 'implemented',
+          statusLabel: 'Implemented',
+          statusCategory: 'in_progress',
+        }}
+      />,
+    );
+    const onNode = node.container.querySelector('[data-status="implemented"]') as HTMLElement;
+    expect(onNode.className).toBe(chipClass);
+    expect(onNode.textContent).toBe(chipText);
   });
 
   it('shows a stale badge with the reasons in the tooltip', () => {
@@ -134,6 +226,8 @@ describe('PlanItemNode', () => {
           identifier: 'PROD-21',
           title: 'Seller onboarding',
           status: 'todo',
+          statusLabel: null,
+          statusCategory: null,
           changes: [{ field, from, to }],
         })}
       />,
@@ -153,6 +247,84 @@ describe('PlanItemNode', () => {
       expect(screen.queryByTestId('edit-proposal')).toBeNull();
       cleanup();
     }
+  });
+});
+
+// ── MOTIR-3161 (bug MOTIR-3154) — the DECIDED axis ──────────────────────────
+//
+// `design/ai-planning/design-notes.md` Part VI §3: the outcome CROSSES the three
+// op languages rather than joining them (every op can be accepted and every op
+// can be declined ⇒ six renderings), so the op frame is untouched and the
+// outcome rides the chip's second SEGMENT plus a decorative spine.
+
+describe('PlanItemNode — the decided outcome', () => {
+  const OPS = ['add', 'modify', 'remove'] as const;
+
+  it.each(OPS)('names the outcome in TEXT on a %s, for both decisions', (op) => {
+    for (const [outcome, word] of [
+      ['accepted', 'accepted'],
+      ['declined', 'declined'],
+    ] as const) {
+      renderWithIntl(<PlanItemNode item={item({ op })} outcome={outcome} />);
+      // Queried by TEXT, not by class: the word is the whole of the meaning, and
+      // the a11y rule this asset holds itself to is that state is never carried
+      // by colour alone.
+      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(word);
+      // …and the op is STILL named beside it — the chip reads op × outcome.
+      expect(screen.getByTestId('plan-item-op-chip').textContent).toContain(word);
+      cleanup();
+    }
+  });
+
+  it('leaves the op frame untouched — the axis CROSSES it, it does not replace it', () => {
+    for (const op of OPS) {
+      renderWithIntl(<PlanItemNode item={item({ op })} />);
+      const undecided = screen.getByTestId('plan-item-node').className;
+      cleanup();
+
+      renderWithIntl(<PlanItemNode item={item({ op })} outcome="accepted" />);
+      const decided = screen.getByTestId('plan-item-node').className;
+      cleanup();
+
+      // Every class the op treatment sets is still set. The only additions are
+      // the ones the decided axis owns.
+      for (const cls of undecided.split(/\s+/).filter((c) => c && c !== 'opacity-80')) {
+        expect(decided.split(/\s+/)).toContain(cls);
+      }
+    }
+  });
+
+  it('renders NOTHING new while the plan is still planned', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} />);
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
+    // The undecided badge is the shipped one, byte for byte — no chip wrapper.
+    expect(screen.queryByTestId('plan-item-op-chip')).toBeNull();
+    expect(screen.getByText('add')).toBeTruthy();
+  });
+
+  it('drops the fade on a DECIDED remove, and keeps it on an undecided one', () => {
+    // `opacity` means "this is about to happen"; on a decided card it either
+    // already happened or never will — and it would mute the outcome spine, the
+    // one signal that settles which.
+    renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} />);
+    expect(screen.getByTestId('plan-item-node').className).toContain('opacity-80');
+    cleanup();
+
+    renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} outcome="declined" />);
+    const node = screen.getByTestId('plan-item-node');
+    expect(node.className).not.toContain('opacity-80');
+    // …and the strike stays: a declined remove is the one place a reader could be
+    // misled, which is exactly why the word must be there to correct it.
+    expect(screen.getByText('A proposed item').className).toContain('line-through');
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+  });
+
+  it('carries the spine as DECORATION only', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} outcome="accepted" />);
+    const spine = screen.getByTestId('plan-item-outcome-spine');
+    expect(spine.getAttribute('aria-hidden')).toBe('true');
+    expect(spine.textContent).toBe('');
   });
 });
 
@@ -229,6 +401,70 @@ describe('mergePlanLevel', () => {
     expect(proposalsAtLevel(items, 'parent_1').map((i) => i.nodeId)).toEqual(['p1']);
     expect(proposalsAtLevel(items, null).map((i) => i.nodeId)).toEqual(['p3']);
     expect(mergePlanLevel(committed([]), items, 'parent_1').nodes.map((n) => n.id)).toEqual(['p1']);
+  });
+
+  it('holds exactly ONE node per approved add — on the work item it became', () => {
+    // MOTIR-3160 keys a materialized `add` by its work item, so the proposal now
+    // MATCHES the committed node and the treatment lands ON it. Before that it
+    // never matched and was pushed out as a second, keyless node beside the real
+    // one — two nodes for one thing, on a canvas whose job is the tree's shape.
+    const level = mergePlanLevel(
+      committed(['wi_new', 'wi_sibling']),
+      [
+        item({
+          planItemId: 'pi_1',
+          nodeId: 'wi_new',
+          op: 'add',
+          identifier: 'MOTIR-3166',
+          parentNodeId: 'parent_1',
+          status: 'todo',
+        }),
+      ],
+      'parent_1',
+      'accepted',
+    );
+
+    expect(level.nodes.map((n) => n.id)).toEqual(['wi_new', 'wi_sibling']);
+    expect(level.nodes.filter((n) => n.id === 'wi_new')).toHaveLength(1);
+    expect(level.nodes.some((n) => n.id === 'pi_1')).toBe(false);
+
+    renderWithIntl(<>{level.nodes[0]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('accepted');
+    expect(screen.getByText('MOTIR-3166')).toBeTruthy();
+  });
+
+  it('draws a DECLINED plan proposals in the declined treatment, re-skinning modify/remove in place', () => {
+    const level = mergePlanLevel(
+      committed(['wi_mod', 'wi_untouched']),
+      [
+        item({ planItemId: 'pi_a', nodeId: 'pi_a', op: 'add', parentNodeId: 'parent_1' }),
+        item({
+          planItemId: 'pi_b',
+          nodeId: 'wi_mod',
+          op: 'modify',
+          identifier: 'MOTIR-9',
+          parentNodeId: 'parent_1',
+        }),
+      ],
+      'parent_1',
+      'declined',
+    );
+
+    // The modify re-skinned IN PLACE; the add appended; the untouched sibling
+    // left alone. No ghosts.
+    expect(level.nodes.map((n) => n.id)).toEqual(['wi_mod', 'wi_untouched', 'pi_a']);
+
+    renderWithIntl(<>{level.nodes[0]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    cleanup();
+
+    renderWithIntl(<>{level.nodes[2]!.content}</>);
+    expect(screen.getByTestId('plan-item-outcome').textContent).toBe('declined');
+    cleanup();
+
+    // The committed neighbour the plan decided NOTHING about carries no outcome.
+    renderWithIntl(<>{level.nodes[1]!.content}</>);
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
   });
 
   it('renders the proposals alone when the committed level is empty', () => {

@@ -130,6 +130,41 @@ describe('usePlanEditsJob — the run settles on its PLAN', () => {
     });
     // Decided: the confirm target is released rather than lingering as a stale one.
     expect(result.current.state.planId).toBeNull();
+    // …but the REVIEW stays (MOTIR-3162; bug MOTIR-3154). `phase: 'done'` says
+    // the job is over, not that there is nothing left to show:
+    // `PlanningWorkspaceHost` derives its whole diff index from this field, so
+    // nulling it erased the overlay in the same tick the decision landed.
+    expect(result.current.state.review).not.toBeNull();
+    expect(result.current.state.decided).toBe('accepted');
+  });
+
+  it('a NEW job supersedes the decided overlay — it never bleeds into the next run', async () => {
+    submitReplan.mockResolvedValue({ jobId: 'job_2b', planId: 'plan_2b' });
+    streamReplan.mockImplementation(settles());
+    fetchReview.mockResolvedValue(planReview([planReviewItem()]));
+    approve.mockResolvedValue({ items: [] } as unknown as PlanWithItemsDto);
+
+    const { result } = renderHook(() => usePlanEditsJob());
+    await act(async () => {
+      await result.current.startJob('replan', { itemKey: 'MOTIR-9' });
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe('review'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBe('accepted');
+    expect(result.current.state.review).not.toBeNull();
+
+    // `startJob` resets to INITIAL, which is what makes this true — asserted
+    // rather than assumed, because it is the whole guard against a stale overlay.
+    await act(async () => {
+      await result.current.startJob('replan', { itemKey: 'MOTIR-10' });
+    });
+    // `decided` is the guard: the NEW run legitimately reads its own review, so
+    // what must not survive is the MARK that would draw a decided treatment over
+    // it. (The review itself is reset by `startJob`'s INITIAL and then refilled
+    // by this run's own read, which is the correct sequence.)
+    expect(result.current.state.decided).toBeNull();
   });
 
   it('DISCARD declines the plan — a waved-away run is decided, not orphaned', async () => {

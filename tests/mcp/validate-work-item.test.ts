@@ -1395,3 +1395,296 @@ describe('validate_work_item (MCP) — THE ESTIMATION GATE advisory reaches the 
     await client.close();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SELF-BLOCKING-DESIGN ADVISORY (MOTIR-3178) — the fourth SHAPE member, on
+// the surface the SEALING AUTHOR reads.
+//
+// This is the surface whose `valid: true` is the observation the check exists to
+// invert. MOTIR-3154 carried a `design/ai-planning/` three-file amendment as
+// criterion 1 and the UI built against that drawing as criteria 4-5; readiness
+// was `true`, `openBlockers` `[]`, and `validate_work_item` returned `valid:
+// true` with one unrelated `reference` advisory (`notes.html` #329; planning bug
+// MOTIR-3158). Read literally the planning-time design gate was SATISFIED —
+// the `type: design` subtask a UI card must be linked to WAS the card.
+//
+// The wire half is pinned in `tests/api/v1/dispatch-prompt-route.test.ts` and
+// the dispatch half in `tests/dispatch/dispatchAdvisories.test.ts`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * MOTIR-3154's criteria set, RECONSTRUCTED — it is not available verbatim and
+ * cannot be quoted. `get_work_item_activity` records a `descriptionMd` edit at
+ * 2026-08-19T20:53:52.716Z (that card's re-plan `modify`, fifteen minutes after
+ * MOTIR-3158 was filed), and the tenant keeps no prior body: activity parts carry
+ * `from`/`to` for `status`, `priority` and links only. `notes.html` #329 and the
+ * `motir run MOTIR-3154` comment both PARAPHRASE criteria 1 / 4 / 5.
+ *
+ * So this is rebuilt from the table in MOTIR-3178's own body — its durable source
+ * — and is SYNTHETIC on purpose: it consumes nothing MOTIR-3154 produces, so it
+ * cannot rot when that card is re-scoped again.
+ */
+const RECONSTRUCTED_SELF_BLOCKING_BODY = [
+  '## Acceptance criteria',
+  '',
+  '1. a `design/ai-planning/` three-file amendment — the accepted and declined node',
+  '   treatments, plus an explicit re-decision of what the plan-detail canvas pane',
+  '   holds after approve',
+  '2. decline no longer deletes the proposal rows',
+  '3. approve leaves the pane on the plan rather than handing it to the establish step',
+  '4. the plan-detail canvas draws a DECIDED plan — one node per approved `add`, in',
+  '   the treatment the design decides',
+  '5. the planning-workspace canvas KEEPS its decided overlay',
+].join('\n');
+
+describe('workItemsService.validateWorkItem — the SELF-BLOCKING-DESIGN advisory', () => {
+  const card = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    title: string,
+    descriptionMd: string,
+    placement: { kind?: IssueType; parentId?: string } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: placement.kind ?? 'task',
+        title,
+        descriptionMd,
+        parentId: placement.parentId,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 3,
+        estimateMinutes: 45,
+      },
+      fx.ctx,
+    );
+
+  it('MOTIR-3154 REGRESSION: `valid: true` no longer means the composition is invisible', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await card(fx, 'A decided plan on the canvas', RECONSTRUCTED_SELF_BLOCKING_BODY);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: item.identifier,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 4,
+      },
+    ]);
+  });
+
+  it('says nothing when only ONE of the two roles is present — the quiet direction', async () => {
+    const fx = await makeWorkItemFixture();
+    const designOnly = await card(
+      fx,
+      'Draw the plan canvas',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. `design/ai-planning/plan-canvas.mock.html` is built from the real design system',
+        '2. `design/ai-planning/design-notes.md` names the primitives and the access path',
+      ].join('\n'),
+    );
+    const surfaceOnly = await card(
+      fx,
+      'Build the plan canvas',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. the plan-detail canvas draws one node per approved add',
+        '2. the planning-workspace canvas renders the decided overlay',
+      ].join('\n'),
+    );
+
+    const advisoriesOf = async (identifier: string) =>
+      (await workItemsService.validateWorkItem(fx.projectId, identifier, fx.ctx)).advisories;
+    expect(await advisoriesOf(designOnly.identifier)).toEqual([]);
+    expect(await advisoriesOf(surfaceOnly.identifier)).toEqual([]);
+  });
+
+  it('says nothing on a design card describing its own export — the near-miss', async () => {
+    // The false-positive class the predicate must not have: a drawing's whole job
+    // is to describe a surface, so a `design` card's criteria are full of surface
+    // nouns and render verbs. Both roles on the SAME criterion is one card doing
+    // one thing, which is exactly the shape the gate wants.
+    const fx = await makeWorkItemFixture();
+    const item = await card(
+      fx,
+      'Amend the work-items detail asset',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. `design/work-items/design-notes.md` records the relationships panel treatment',
+        '2. the `design/work-items/detail.png` export shows the panel with the picker open',
+      ].join('\n'),
+    );
+    const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+    expect(result.advisories).toEqual([]);
+  });
+
+  it('EXEMPTS a card that HOLDS children — childless is the condition, not the kind', async () => {
+    // A container's design child CAN be reviewed before its code children run,
+    // which is precisely the shape this finding asks a leaf to be pushed into. So
+    // the parent is never reported, whatever its own criteria say.
+    const fx = await makeWorkItemFixture();
+    const container = await card(
+      fx,
+      'A decided plan on the canvas',
+      RECONSTRUCTED_SELF_BLOCKING_BODY,
+    );
+    await card(fx, 'A right-shaped child', '## Acceptance criteria\n\n- the thing is built.', {
+      kind: 'subtask',
+      parentId: container.id,
+    });
+
+    // Validating the container scans its whole subtree, so an empty array says
+    // BOTH that the parent is exempt and that the child is clean.
+    const result = await workItemsService.validateWorkItem(
+      fx.projectId,
+      container.identifier,
+      fx.ctx,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toEqual([]);
+  });
+
+  it('⚠️ `valid`, `blockers` and READINESS are identical whether or not it is emitted', async () => {
+    const fx = await makeWorkItemFixture();
+    const selfBlocking = await card(fx, 'Draws and builds', RECONSTRUCTED_SELF_BLOCKING_BODY);
+    const clean = await card(fx, 'Clean', '## Acceptance criteria\n\n- the thing is built.');
+
+    const a = await workItemsService.validateWorkItem(
+      fx.projectId,
+      selfBlocking.identifier,
+      fx.ctx,
+    );
+    const b = await workItemsService.validateWorkItem(fx.projectId, clean.identifier, fx.ctx);
+    expect(a.advisories).toHaveLength(1);
+    expect(b.advisories).toEqual([]);
+    expect({ valid: a.valid, blockers: a.blockers }).toEqual({
+      valid: b.valid,
+      blockers: b.blockers,
+    });
+
+    // …and the readiness both dispatch surfaces gate on: a card mid-re-plan, which
+    // is exactly the card this finding describes, stays claimable.
+    const readinessOf = async (identifier: string) =>
+      (await workItemsService.getIssueDetail(fx.projectId, identifier, fx.ctx)).readiness;
+    expect(await readinessOf(selfBlocking.identifier)).toEqual(await readinessOf(clean.identifier));
+    expect((await readinessOf(selfBlocking.identifier)).ready).toBe(true);
+  });
+
+  it('scans a whole SUBTREE — the story reports its self-blocking child', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The planning canvas' },
+      fx.ctx,
+    );
+    const child = await card(fx, 'Draws and builds', RECONSTRUCTED_SELF_BLOCKING_BODY, {
+      kind: 'subtask',
+      parentId: story.id,
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.advisories).toMatchObject([
+      { item: child.identifier, severity: 'likely-self-blocking-design' },
+    ]);
+  });
+});
+
+describe('validate_work_item (MCP) — the SELF-BLOCKING-DESIGN advisory reaches the author', () => {
+  const struct = (r: CallToolResult) => r.structuredContent as unknown as WorkItemValidityDto;
+  const text = (r: CallToolResult) => JSON.stringify(r.content);
+
+  it('names BOTH criteria and the LIFT remedy — and the card is still VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'bug',
+        title: 'A decided plan vanishes from the canvas',
+        descriptionMd: RECONSTRUCTED_SELF_BLOCKING_BODY,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 5,
+        estimateMinutes: 55,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: item.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    expect(struct(res).advisories).toMatchObject([
+      {
+        kind: 'shape',
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 4,
+      },
+    ]);
+    expect(text(res)).toContain('is VALID');
+    expect(text(res)).toContain('NOT a blocker');
+    expect(text(res)).toContain('their OWN design blocker');
+    expect(text(res)).toContain('criterion 1 produces a design asset');
+    expect(text(res)).toContain('criterion 4 builds a rendered surface');
+    // The remedy is a LIFT, not a cut — the distinction the other criterion
+    // members' single index would have hidden.
+    expect(text(res)).toContain('The remedy is a LIFT, not a cut');
+    await client.close();
+  });
+
+  it('renders ALL FOUR shape members as separate blocks when one card carries them all', async () => {
+    // Each member keeps its own block because each has a DIFFERENT remedy — cut
+    // here, split per repo, split by size, lift the design out — and folding them
+    // into a shared sentence would lose exactly that.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx, 'motir-core');
+    await connectRepo(fx, 'motir-ai');
+    const item = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'All four shape defects',
+        descriptionMd: [
+          '## Acceptance criteria',
+          '- `design/ai-planning/design-notes.md` records the node treatments',
+          '- the plan-detail canvas draws the decided plan',
+          '- `motir-ai/src/x.ts` is updated',
+          '- the row is visible on `main`',
+        ].join('\n'),
+        targetRepo: 'motir-core',
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 21,
+        estimateMinutes: 480,
+      },
+      fx.ctx,
+    );
+
+    const client = await connectClient(fx.ctx);
+    const res = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: item.identifier },
+    })) as CallToolResult;
+
+    expect(struct(res).advisories).toHaveLength(4);
+    expect(text(res)).toContain("which exists only AFTER the card's own PR has merged");
+    expect(text(res)).toContain("discharged in a repo that is not the card's own");
+    expect(text(res)).toContain('sized OVER the estimation gate');
+    expect(text(res)).toContain('their OWN design blocker');
+    // Still VALID: four advisories, no blockers, at every severity.
+    expect(struct(res).valid).toBe(true);
+    expect(struct(res).blockers).toEqual([]);
+    await client.close();
+  });
+});

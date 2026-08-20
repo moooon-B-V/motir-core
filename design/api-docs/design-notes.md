@@ -102,16 +102,16 @@ are Getting started and Stability & deprecation, followed by the operation group
 | ------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Catalogue rail                  | `Sidebar` grammar                                                 | `--el-sidebar-bg`, border `--el-border`                                       | —                                                             |
 | Search box                      | `Input`                                                           | bg `--el-page-bg`, border `--el-border-strong`, placeholder `--el-text-faint` | `--radius-input`, `--height-control`, `--spacing-control-x`   |
-| `/` hint                        | `<kbd>` chip                                                      | border `--el-border`, text `--el-text-faint`                                  | `--radius-kbd`, `--spacing-kbd-x/y`                           |
-| Nav group heading               | `SectionLabel`                                                    | `--el-text-faint`                                                             | —                                                             |
+| `/` hint                        | `<kbd>` chip                                                      | border `--el-border`, text `--el-text-secondary`                              | `--radius-kbd`, `--spacing-kbd-x/y`                           |
+| Nav group heading               | `SectionLabel`                                                    | `--el-text-secondary`                                                         | —                                                             |
 | Nav row                         | sidebar row                                                       | `--el-text-secondary`; hover `--el-sidebar-item-bg-hover`                     | `--radius-control`, `--height-control`, `--spacing-control-x` |
 | Nav row, active                 | sidebar row                                                       | bg `--el-sidebar-item-bg-active`, text `--el-text`                            | `--shadow-subtle`                                             |
-| Sub-area group heading (tier 2) | `SectionLabel` — **the same primitive as tier 1**, no new element | `--el-text-faint`                                                             | —                                                             |
+| Sub-area group heading (tier 2) | `SectionLabel` — **the same primitive as tier 1**, no new element | `--el-text-secondary`                                                         | —                                                             |
 | Right-hand contents             | plain list                                                        | `--el-text-muted`; active `--el-text`                                         | —                                                             |
 
 **Content-column typography.** `h1` is `--font-serif` at 26px (the app's page-title
 convention); `h2` is 16px semibold; `h3` is an 11–13px uppercase
-`--el-text-faint` label, the same eyebrow the settings panes use. Body copy is
+`--el-text-secondary` label, the same eyebrow the settings panes use. Body copy is
 14px / 1.65 at `max-width: 68ch` — long-form prose, so the measure is the reading
 constraint rather than the container.
 

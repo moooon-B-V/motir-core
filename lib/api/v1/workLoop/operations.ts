@@ -13,6 +13,7 @@ import {
   planSessionSchema,
   planSessionScopeBodySchema,
   planTurnBodySchema,
+  workItemClaimSchema,
   ACTIVITY_VIEWS,
   activityEntrySchema,
   activityTotalsSchema,
@@ -80,6 +81,44 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     // 404 covers both "no such item" and "outside your workspace" (§4); 422 is a
     // malformed key or an unsafe `sessionBranch`.
+    errorStatuses: [404, 422],
+  }),
+
+  // ── The keyed CLAIM (MOTIR-2961) ────────────────────────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/claim',
+    operationId: 'claimWorkItem',
+    summary: 'Atomically claim one work item by key',
+    description:
+      'CLAIM one work item, named by key, so that concurrent dispatchers cannot both start it. ' +
+      'In ONE transaction the row is locked, its status is re-checked against the TO-DO ' +
+      'category, and — if it holds — the item is assigned to the caller AND moved to ' +
+      '\u201cIn progress\u201d. The to-do category is `todo` AND `blocked`, so a deliberately ' +
+      'forced dispatch of a card whose dependencies are unmet still works. ' +
+      '\u26a0\ufe0f A refusal is a 200 with an `outcome`, not an error, because three of the ' +
+      'four outcomes are ordinary: `claimed` (it is yours), `mine` (already yours \u2014 resume ' +
+      'your own interrupted run), `taken` (somebody else holds it, and they are named), ' +
+      '`not_claimable` (finished, under review, or otherwise outside the to-do category). ' +
+      'Claiming is IDEMPOTENT for the holder and never re-opens finished work. ' +
+      'The claim IS the dispatch status flip \u2014 do not also POST a transition afterwards.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item\u2019s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemClaimSchema },
+      description: 'What the claim resolved to, and who holds the item.',
+    },
+    // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
+    // malformed key. A LOST claim is not an error status \u2014 see `outcome`.
     errorStatuses: [404, 422],
   }),
 
@@ -506,6 +545,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
 /** The named component schemas this resource contributes to the document. */
 export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
+  WorkItemClaim: workItemClaimSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,
   PlanJobHandle: planJobHandleSchema,

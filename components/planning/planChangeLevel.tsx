@@ -1,4 +1,5 @@
 import { PlanChangeDiffFrame, ProposedAddNode } from '@/components/planning/PlanChangeDiffNode';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { RoadmapLevel } from '@/components/planning/ProjectRoadmapCanvas';
 import {
   diffStateForItem,
@@ -27,6 +28,9 @@ export function decoratePlanChangeLevel(
    *  item's id, which is exactly what a proposal parented on it carries, so
    *  placement needs no second key. */
   focusNodeId: string | null,
+  /** The plan's DECISION, once it has one (MOTIR-3162) — drawn on the nodes the
+   *  proposal touches, in the one treatment Part VI specifies. */
+  outcome: PlanItemOutcome | null = null,
 ): RoadmapLevel {
   if (index.isEmpty) return base;
 
@@ -53,7 +57,7 @@ export function decoratePlanChangeLevel(
       // is findable with the canvas's own search-to-locate, not only visible.
       searchText: `${node.searchText} ${state}`,
       content: (
-        <PlanChangeDiffFrame state={state} {...(proposal ? { proposal } : {})}>
+        <PlanChangeDiffFrame state={state} outcome={outcome} {...(proposal ? { proposal } : {})}>
           {node.content}
         </PlanChangeDiffFrame>
       ),
@@ -68,7 +72,7 @@ export function decoratePlanChangeLevel(
     drillable: add.hasChildren,
     // A proposal has no work item to peek at yet — no View action.
     viewable: false,
-    content: <ProposedAddNode add={add} />,
+    content: <ProposedAddNode add={add} outcome={outcome} />,
   }));
 
   return { nodes: [...nodes, ...proposed], deps: base.deps };

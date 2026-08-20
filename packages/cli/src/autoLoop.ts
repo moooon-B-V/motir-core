@@ -108,7 +108,15 @@ export interface DispatchRecord {
 export interface SkipRecord {
   key: string;
   title: string | null;
-  reason: 'needs_planning' | 'needs_human';
+  /**
+   * The first two are read off the ready ROW, before anything is touched. The
+   * third, `claim_refused`, can only be learned by ASKING (MOTIR-3048): the
+   * pick already narrowed to rows this run may take, and a sibling can still
+   * take one between the pick and the claim. It is a SKIP and not a failure —
+   * no agent ran, nothing was reverted — so `autoExitCode`, which reads only
+   * `records`, is unaffected by it.
+   */
+  reason: 'needs_planning' | 'needs_human' | 'claim_refused';
 }
 
 /** How ONE `--include-planning` expansion trigger ended (MOTIR-886).
@@ -258,6 +266,7 @@ const STOP_LABEL: Record<StopReason, string> = {
 const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
   needs_planning: 'needs planning',
   needs_human: 'needs a human',
+  claim_refused: 'claimed by somebody else, or no longer claimable',
 };
 
 /** The PR title for a session branch. Carries NO `MOTIR-<n>`: see
@@ -402,7 +411,7 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     blocks.push(formatTable(SUMMARY_HEADERS, rows));
   }
 
-  for (const reason of ['needs_planning', 'needs_human'] as const) {
+  for (const reason of ['needs_planning', 'needs_human', 'claim_refused'] as const) {
     const group = summary.skipped.filter((s) => s.reason === reason);
     if (group.length === 0) continue;
     blocks.push(

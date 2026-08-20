@@ -69,11 +69,4 @@ export const planItemRepository = {
   ): Promise<PlanItem> {
     return tx.planItem.update({ where: { id }, data: { workItemId } });
   },
-
-  /** Drop every PlanItem in a plan — the decline path (the tree was never
-   *  touched, so this is a clean no-op on the work-item tree). */
-  async deleteByPlan(planId: string, tx: Prisma.TransactionClient): Promise<number> {
-    const r = await tx.planItem.deleteMany({ where: { planId } });
-    return r.count;
-  },
 };

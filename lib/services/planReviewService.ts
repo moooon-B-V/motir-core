@@ -6,6 +6,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 
 import type {
   PlanItemDto,
@@ -133,9 +134,13 @@ export const planReviewService = {
     // One batched, workspace-scoped read of every existing target (modify/remove)
     // — includes archived rows, so a "will be archived" / drifted target still
     // resolves; a hard-deleted / cross-tenant id simply doesn't come back.
-    const targetIds = plan.items
-      .filter((i) => i.op !== 'add' && i.workItemId)
-      .map((i) => i.workItemId!);
+    //
+    // ⚠️ A MATERIALIZED `add` is in this set too (MOTIR-3160). `approvePlan`
+    // stamps `plan_item.workItemId` for every add it creates, so an approved
+    // proposal HAS a live target — and until this filter stopped excluding it by
+    // `op`, the review model could not read the identifier of the very card the
+    // approval produced.
+    const targetIds = plan.items.filter((i) => i.workItemId).map((i) => i.workItemId!);
     // …AND every COMMITTED parent (MOTIR-3083). A `parentRef` is either an
     // intra-plan temp-ref (`planItem:<id>`, which already has a node in the
     // proposed set) or a real work-item id — and the second kind is the one the
@@ -212,13 +217,47 @@ export const planReviewService = {
 
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
+    // The project's WORKFLOW, so a target's status can carry its own identity —
+    // label + lifecycle category — to the canvas chip (bug MOTIR-3170). The chip
+    // used to receive a bare key and narrow it against a six-member literal,
+    // which drew a `modify` whose target sits at `implemented` as "To Do". One
+    // read per plan page; the statuses are per-project and there is one project.
+    const statusByKey = new Map(
+      (await workflowsService.listStatusesByProject(plan.projectId, ctx.workspaceId)).map((s) => [
+        s.key,
+        s,
+      ]),
+    );
+
     // Resolve node ids first, so `hasChildren` can be computed across the forest.
+    //
+    // ONE rule for all three ops (MOTIR-3160): the work item this proposal is
+    // ABOUT, falling back to the plan-item id when there is not one yet. An
+    // un-materialized `add` still keys by its own id — it is not about anything
+    // yet — and `modify` / `remove` are unchanged, since they always had a
+    // target. What changes is the `add` that has BEEN materialized: it used to
+    // keep the plan-item id even after approve wrote down which work item it
+    // became, so `mergePlanLevel` (which matches proposals to committed nodes by
+    // node id) could never land it ON that node and pushed it out as a second,
+    // keyless ghost beside the real one.
     const withNodeIds = plan.items.map((item) => ({
       item,
-      nodeId: item.op === 'add' ? item.id : (item.workItemId ?? item.id),
+      nodeId: item.workItemId ?? item.id,
     }));
+    // …and once a node id can DIFFER from the plan-item id, an intra-plan
+    // (`planItem:<id>`) ref can no longer resolve to the referenced id itself:
+    // it has to resolve to that item's NODE id, or a materialized parent's
+    // children point at a node that is not on the canvas. Same for a
+    // `blocked_by` edge between two proposals in one plan.
+    const nodeIdByPlanItemId = new Map(withNodeIds.map(({ item, nodeId }) => [item.id, nodeId]));
+    const resolveNodeRef = (ref: string): string => {
+      const resolved = resolveRef(ref);
+      return ref.startsWith(TEMP_REF_PREFIX)
+        ? (nodeIdByPlanItemId.get(resolved) ?? resolved)
+        : resolved;
+    };
     const parentNodeIdOf = (item: PlanItemDto): string | null =>
-      item.parentRef ? resolveRef(item.parentRef) : null;
+      item.parentRef ? resolveNodeRef(item.parentRef) : null;
     const childParentIds = new Set(
       withNodeIds.map(({ item }) => parentNodeIdOf(item)).filter((p): p is string => p !== null),
     );
@@ -248,9 +287,15 @@ export const planReviewService = {
         parentIdentifier: committedParent?.identifier ?? null,
         parentTitle: committedParent?.title ?? null,
         parentKind: committedParent?.kind ?? null,
+        // MOTIR-3152's committed ancestor trail — unchanged by this merge.
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
-        blockedByNodeIds: item.blockedByRefs.map(resolveRef),
-        identifier: item.op === 'add' ? null : (target?.identifier ?? null),
+        blockedByNodeIds: item.blockedByRefs.map(resolveNodeRef),
+        // The target's key, for EVERY op that has a target (MOTIR-3160). An
+        // un-materialized `add` still reports null — it has no key and inventing
+        // one would be the surface asserting a work item that does not exist —
+        // but an approved one now names the card it became, which is what lets a
+        // reader answer *what did I just say yes to?* on the surface that asked.
+        identifier: target?.identifier ?? null,
         title:
           item.op === 'add'
             ? (proposed?.title ?? 'Untitled item')
@@ -273,7 +318,19 @@ export const planReviewService = {
         targetRepoRole: item.op === 'add' ? (proposed?.targetRepoRole ?? null) : null,
         executor: item.op === 'add' ? (proposed?.executor ?? null) : null,
         planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
-        status: item.op === 'add' ? null : (target?.status ?? null),
+        // Same rule, same source, same read (MOTIR-3160): a materialized `add`
+        // has a live status because it is a live work item. Populating the
+        // identifier off `target` and leaving the status null would split one
+        // batched read across two cards for no reason.
+        status: target?.status ?? null,
+        // The status's own IDENTITY (bug MOTIR-3170) — its label and lifecycle
+        // category, so the canvas chip can name a status it has no per-key
+        // treatment for instead of coercing it to `todo`. Resolved off the SAME
+        // `target`, and therefore under MOTIR-3160's rule directly above rather
+        // than the `op === 'add'` guard that rule removed: a status that is
+        // non-null must be nameable, or the chip is back to guessing.
+        statusLabel: statusByKey.get(target?.status ?? '')?.label ?? null,
+        statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
         stale: reasons.length > 0,

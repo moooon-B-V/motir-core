@@ -214,10 +214,14 @@ describe('motir batch — a whole run through the real session', () => {
     );
 
     expect(prompts).toEqual(['PROMPT PROD-1', 'PROMPT PROD-2']);
-    // Each item walked its own lifecycle to In Review — its own pull request.
+    // Each item walked its own lifecycle — its own pull request. The DISPATCH
+    // half of it is the CLAIM now (MOTIR-3048): one locked call per item that
+    // assigns and flips, so the only transitions left on the wire are the ones
+    // the agents earned.
+    expect(v1CallsTo('POST', '/claim').map((c) => c.params['key'])).toEqual(['PROD-1', 'PROD-2']);
     expect(
       v1CallsTo('POST', '/transitions').map((c) => (c.body as { status: string }).status),
-    ).toEqual(['in_progress', 'implemented', 'in_progress', 'implemented']);
+    ).toEqual(['implemented', 'implemented']);
     // No session branch was ever created: the integration route is scripted to
     // refuse, so calling it at all would surface here.
     expect(v1CallsTo('POST', '/integration')).toEqual([]);
@@ -250,9 +254,10 @@ describe('motir batch — a whole run through the real session', () => {
     expect(process.exitCode).toBe(1);
     // Halted on the first failure: the second item was never touched.
     expect(v1CallsTo('GET', '/dispatch-prompt').map((c) => c.params['key'])).toEqual(['PROD-1']);
-    expect(
-      v1CallsTo('POST', '/transitions').map((c) => (c.body as { status: string }).status),
-    ).toEqual(['in_progress']);
+    // It was CLAIMED — that is what left it In Progress — and nothing moved it
+    // afterwards, because the agent never earned `implemented`.
+    expect(v1CallsTo('POST', '/claim').map((c) => c.params['key'])).toEqual(['PROD-1']);
+    expect(v1CallsTo('POST', '/transitions')).toEqual([]);
   });
 
   it('--max caps the run and --keep-going carries it past a failure', async () => {

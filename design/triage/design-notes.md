@@ -104,7 +104,7 @@ tapping a row pushes the detail).
 ### The queue (left)
 
 - **Queue head** — a `SectionLabel`-style caption **"Queue · newest first"**
-  (`text-(--el-text-faint)`, uppercase) + the count.
+  (`text-(--el-text-secondary)`, uppercase) + the count.
 - **Search** — an `Input`-styled search box **"Search submissions"** (icon
   `Search`, `--radius-input`, `--height-control`). Filters the queue only.
 - **Rows** — each row is a NEW arrangement (not a new primitive):
@@ -117,7 +117,7 @@ tapping a row pushes the detail).
     issue-cell avatar; tinted bg, `--el-text-strong`) + name; a **public**
     submitter (a signed-in viewer who is not a workspace member, via the 6.12
     submit) shows the `Avatar` + name + a **"Public" chip** (see colour roles).
-  - **age** — relative time, `text-(--el-text-faint)`.
+  - **age** — relative time, `text-(--el-text-secondary)`.
   - A **snoozed** row shows a lavender **"Snoozed · {day}"** chip and is dimmed
     out of the active set (it returns at its time or on new activity).
   - The **active** row carries an inset accent rail
@@ -203,7 +203,7 @@ first.
 ### Panel 2 — empty state + toasts
 
 - **Empty** — the shipped `EmptyState`: a `--el-surface` icon circle (`Inbox`,
-  `--el-text-faint`), `font-serif` heading **"No items to triage"**, and body
+  `--el-text-faint`), `font-serif` heading **"No items to triage"**, and body (faint is correct here: the 40px empty-state glyph, not the heading beside it)
   **"New bug reports and feature requests land here — from the in-app 'Report'
   button or a signed-in 'Submit a request' on the public project page."**
 - **Toasts** — the shipped `Toast` (dark `--el-text` bubble, inverted text) for
@@ -223,7 +223,7 @@ A `Modal` (`--radius-modal`, `--shadow-modal`), launched from the shell. Header
   work_item kind (`bug` / `task`).
 - **Title** — `FormField` + `Input`, label **"Title"**.
 - **Description** — `FormField` + `Textarea`, label **"What happened?"** with an
-  optional hint **"— steps, expected vs. actual"** (`--el-text-faint`).
+  optional hint **"— steps, expected vs. actual"** (`--el-text-secondary`).
 - **Attachment (optional)** — a dashed `--el-border-strong` dropzone reusing the
   2.3.7 upload affordance (icon `Paperclip`, copy "Add a screenshot or file").
 - **Footer** — `Button variant="ghost"` **"Cancel"** + `Button variant="primary"`

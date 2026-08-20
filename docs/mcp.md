@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **46 tools**.
+`initialize` handshake and registers **47 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -368,7 +368,8 @@ item they return:
   { "item": "ACME-7", "referenced": "ACME-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
   { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 },
-  { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 }
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-over-gate-sizing", "threshold": "both", "storyPoints": 13, "estimateMinutes": 600 },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-self-blocking-design", "designCriterionIndex": 1, "surfaceCriterionIndex": 4 }
 ]
 ```
 
@@ -383,14 +384,15 @@ acceptance criterion is what the card is closed against, so naming a not-done
 item there is consuming it — and the graph, which is the only part a ready set
 can read, does not say so.
 
-A **`shape`** entry has no far end at all: the card contradicts itself. Three
+A **`shape`** entry has no far end at all: the card contradicts itself. Four
 severities, each with its own remedy:
 
-| severity                    | what it found                                                                                        | remedy                                     |
-| --------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `likely-ordering-violation` | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged | CUT the card at that criterion             |
-| `likely-repo-straddle`      | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY      | SPLIT the card per repo (one repo, one PR) |
-| `likely-over-gate-sizing`   | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                        | SPLIT the card by size                     |
+| severity                      | what it found                                                                                                                | remedy                                                     |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `likely-ordering-violation`   | criterion `criterionIndex` carries `phrase` — state that exists only after this card's own PR merged                         | CUT the card at that criterion                             |
+| `likely-repo-straddle`        | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                              | SPLIT the card per repo (one repo, one PR)                 |
+| `likely-over-gate-sizing`     | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate                                                | SPLIT the card by size                                     |
+| `likely-self-blocking-design` | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws | LIFT the design criterion onto its own `type: design` card |
 
 **`likely-over-gate-sizing` is the one member that carries no `criterionIndex`**,
 because its finding is about two COLUMNS rather than a criterion and its remedy
@@ -404,6 +406,19 @@ only for a card that is **childless** (a container is sized by rollup) and whose
 not agent run time); the two thresholds are `storyPoints >= 13` — the split
 signal read literally — and `estimateMinutes > 60`, a run that must fit in an
 hour.
+
+**`likely-self-blocking-design` carries a PAIR of indices and no `criterionIndex`
+either** — `designCriterionIndex` and `surfaceCriterionIndex`, because its remedy
+is a LIFT rather than a cut: the design criterion becomes its own `type: design`
+card and what is left is `blocked_by` it, so somebody sees the drawing before the
+files written to match it (Principle #13). It fires only for a **childless** card
+— a container's design child can be reviewed before its code children run, which
+is exactly the shape the finding asks for — and a criterion whose own deliverable
+is a design asset is never also read as the rendered surface, so a `design` card
+describing what its own mock shows stays quiet. Read literally the planning-time
+design gate is SATISFIED on such a card, because the `type: design` subtask a UI
+card must be linked to is the card itself; that degenerate reading is what this
+member exists to say out loud.
 
 `likely-repo-straddle` carries `reason`: `"contradiction"` when the card CARRIES
 repositories and the criterion's path is in none of them, or `"unpinnable"` when
@@ -535,6 +550,65 @@ claimed the last one — or check there is unblocked work to start). Requires
 
 **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
 Always present, `[]` when there are none, on BOTH arms.
+
+#### `claim_work_item`
+
+ATOMICALLY **claim ONE NAMED work item** for dispatch. Same lock as
+`claim_next_ready`, for the caller that was **handed a card** rather than asking
+for whatever is next: in one transaction the row is locked, its status is
+re-checked against the **to-do CATEGORY**, and — if that holds — the item is
+**assigned to you** and moved to **In Progress**. The claim **IS** the dispatch
+status flip, so do NOT call `transition_status` afterwards.
+
+**Which dispatch path uses which.** They are not alternatives; they answer
+different questions, and both go through the same service method as the v1
+route:
+
+| You are…                      | Use                | Where it is served                                |
+| ----------------------------- | ------------------ | ------------------------------------------------- |
+| asking for whatever is next   | `claim_next_ready` | MCP only                                          |
+| handed a specific card by key | `claim_work_item`  | MCP **and** `POST /api/v1/work-items/{key}/claim` |
+
+`packages/cli` (`motir run` / `next` / `batch` / `auto`) speaks **v1**, not MCP —
+it retired its MCP transport in 11.5.6 — which is why the keyed claim's primary
+surface is the route and this tool is a second CALLER of the same service method.
+There is one lock and one implementation behind both.
+
+**The to-do CATEGORY, not the `todo` key.** The claimable set is `todo` **and**
+`blocked`. That is load-bearing rather than incidental: a deliberately forced
+dispatch of a card whose dependencies are unmet targets a card sitting at
+`blocked`, and keying on the literal `todo` would refuse exactly the case the
+force exists for.
+
+| Input | Type   | Required | Notes                                  |
+| ----- | ------ | -------- | -------------------------------------- |
+| `key` | string | yes      | Work item identifier, e.g. `"ACME-7"`. |
+
+**Output** — `structuredContent`: v1's `WorkItemClaim` resource —
+`{ key, title, outcome, claimed, status: { key, category }, assignee, transitionedBy, transitionedAt }`.
+
+**A refusal is a RESULT, not an error**, and it discriminates — the whole point
+of the tool. `outcome` is one of four:
+
+- **`claimed`** — it was in the to-do category; it is yours, In Progress, and
+  assigned to you.
+- **`mine`** — already In Progress **and already assigned to you**. This is a
+  RESUME of your own interrupted run, not a lost race. Proceed — and read what
+  is already committed on its branch before redoing anything.
+- **`taken`** — In Progress and held by somebody else. `assignee` names them
+  when the holder assigned it; `transitionedBy` + `transitionedAt` name them
+  from the status history **even when nobody was assigned**, which is the common
+  case for a session that flipped the status and never wrote the label.
+- **`not_claimable`** — outside the to-do category: `implemented`, `in_review`,
+  `planning`, `done`, `cancelled`, an archived row, or any custom status. A
+  claim never re-opens finished work, which is a hole the CLI's own
+  assign-then-transition pair left open.
+
+Requires `work_item:edit` (it assigns and flips status).
+
+> ⚠️ **A server-side claim cannot see the DISK.** A session that dies mid-run
+> leaves a working tree behind and no status change at all. The lock and a
+> worktree pre-flight answer different questions, and a runbook needs both.
 
 #### `dispatch_prompt`
 
@@ -1265,10 +1339,13 @@ ITSELF, with no second work item involved: `likely-ordering-violation` (a
 criterion that turns on the card's own merge — cut there), `likely-repo-straddle`
 (a criterion naming a path outside the card's `targetRepo` — split per repo), or
 `likely-over-gate-sizing` (a childless `coding_agent` card at `storyPoints >= 13`
-or `estimateMinutes > 60` — split by size). The first two carry the
-`criterionIndex` they cut at; the third carries `threshold`, `storyPoints` and
-`estimateMinutes` and no criterion index, so narrow on `severity` before reading
-one.
+or `estimateMinutes > 60` — split by size), or `likely-self-blocking-design` (a
+childless card one of whose criteria produces a design asset while another builds
+the rendered surface it draws — LIFT the design criterion onto its own
+`type: design` card). The first two carry the `criterionIndex` they cut at; the
+third carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth
+carries `designCriterionIndex` and `surfaceCriterionIndex`. Only two of the four
+carry `criterionIndex`, so narrow on `severity` before reading one.
 
 `valid`, `blockers`, and an item's readiness are **identical** whether or not
 advisories are emitted, at EVERY severity — a card legitimately names cards it
@@ -1284,6 +1361,11 @@ document it produces, not in its card body — are outside its reach; and
 repo a reader happens to know. `likely-over-gate-sizing` has no blind spot of
 that kind — its input is two integer columns and an enum — but for the same
 reason it has no opt-out either: a card that fires is over the gate.
+`likely-self-blocking-design` reads criterion PROSE, so it has the opposite
+profile: a real false-positive class (a card amending an asset and adjusting the
+one surface that reads it), accepted deliberately because the channel never
+gates — a blocking version would hold out of the ready set exactly the card a
+re-plan is in the middle of splitting.
 
 #### `create_sprint`
 

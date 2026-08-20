@@ -66,17 +66,17 @@ The token block in the mock is copied **1:1 at build time** from
 The sub-area's index. A reader arrives here from the rail or from Settings, and
 leaves with a wired agent.
 
-| Element        | Primitive / shipped class                     | Tokens                                                                                   |
-| -------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Page title     | `h1` in `.doc`                                | `--font-serif`, `--el-text`                                                              |
-| Lede           | `p.lede`                                      | `--el-text-muted`, max-width `68ch`                                                      |
-| The fork table | `table.spec` — `DocBlocks`' `table` kind      | header `--el-text-faint` / body `--el-text-secondary`, `--el-border`, `--el-border-soft` |
-| Both callouts  | `DocBlocks`' `callout`                        | info `--el-tint-sky`, warning `--el-tint-peach`, ink `--el-text-strong`, `--radius-card` |
-| Step headings  | `h2` + `.stepnum`                             | ordinal in `--font-mono` / `--el-text-faint`, matching the shipped `StepHeading`         |
-| Code samples   | `CodeBlock` — `.codeblock` + `.cap` + `.copy` | `--el-code-bg`, `--el-code-text`, `--radius-card`, caption `--el-text-faint`             |
-| Client heading | `h3.client-h`                                 | `--el-text-secondary`, uppercase — a label above a block, not a section start            |
-| Client meta    | `p.clientmeta`                                | `--el-text-faint`; carries the vendor link and the `format checked` date                 |
-| Inline code    | `.doc code`                                   | `--el-code-bg` / `--el-code-text`, `--radius-kbd`                                        |
+| Element        | Primitive / shipped class                     | Tokens                                                                                       |
+| -------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Page title     | `h1` in `.doc`                                | `--font-serif`, `--el-text`                                                                  |
+| Lede           | `p.lede`                                      | `--el-text-muted`, max-width `68ch`                                                          |
+| The fork table | `table.spec` — `DocBlocks`' `table` kind      | header `--el-text-secondary` / body `--el-text-secondary`, `--el-border`, `--el-border-soft` |
+| Both callouts  | `DocBlocks`' `callout`                        | info `--el-tint-sky`, warning `--el-tint-peach`, ink `--el-text-strong`, `--radius-card`     |
+| Step headings  | `h2` + `.stepnum`                             | ordinal in `--font-mono` / `--el-text-secondary`, matching the shipped `StepHeading`         |
+| Code samples   | `CodeBlock` — `.codeblock` + `.cap` + `.copy` | `--el-code-bg`, `--el-code-text`, `--radius-card`, caption `--el-text-secondary`             |
+| Client heading | `h3.client-h`                                 | `--el-text-secondary`, uppercase — a label above a block, not a section start                |
+| Client meta    | `p.clientmeta`                                | `--el-text-secondary`; carries the vendor link and the `format checked` date                 |
+| Inline code    | `.doc code`                                   | `--el-code-bg` / `--el-code-text`, `--radius-kbd`                                            |
 
 **The fork is the first thing on the page below the lede, and it is a table.**
 A reader arriving at this surface is choosing between two programmatic surfaces
@@ -140,7 +140,7 @@ size: all 39 rows, in six groups.**
 | Anchor bar           | `.anchorbar a`         | `--el-surface`, `--el-border-soft`, `--radius-badge`, `--spacing-chip-x/y`                                  |
 | Group heading        | `.cat-group-head h3`   | `--el-text`, uppercase (see below)                                                                          |
 | Scope pill           | `.scope-pill`          | `--el-tint-lavender` + `--el-text-strong`, `--radius-badge`; the off-by-default one takes `--el-tint-peach` |
-| Group count          | `.cat-count`           | `--font-mono`, `--el-text-faint`                                                                            |
+| Group count          | `.cat-count`           | `--font-mono`, `--el-text-secondary`                                                                        |
 | What the scope gates | `.cat-gates`           | `--el-text-secondary`, max-width `68ch`                                                                     |
 | The rows             | `table.spec.cat-table` | as Panel 1's table; first column fixed at `15.5rem`, `nowrap`                                               |
 

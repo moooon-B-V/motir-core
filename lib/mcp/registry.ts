@@ -10,6 +10,7 @@ import {
 import { LIST_READY_TOOL_NAME, registerListReady } from './tools/listReady';
 import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
 import { CLAIM_NEXT_READY_TOOL_NAME, registerClaimNextReady } from './tools/claimNextReady';
+import { CLAIM_WORK_ITEM_TOOL_NAME, registerClaimWorkItem } from './tools/claimWorkItem';
 import { DISPATCH_PROMPT_TOOL_NAME, registerDispatchPrompt } from './tools/dispatchPrompt';
 import {
   EXPAND_ITEM_TOOL_NAME,
@@ -90,6 +91,7 @@ export const MCP_TOOL_NAMES = [
   LIST_READY_TOOL_NAME,
   NEXT_READY_TOOL_NAME,
   CLAIM_NEXT_READY_TOOL_NAME,
+  CLAIM_WORK_ITEM_TOOL_NAME,
   DISPATCH_PROMPT_TOOL_NAME,
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
@@ -184,6 +186,11 @@ export function registerMcpTools(
   // Atomic, race-safe dispatch claim (MOTIR-1330) — the write-side counterpart
   // of next_ready: lock + flip to in_progress so concurrent claims never collide.
   registerClaimNextReady(target, resolveContext);
+  // The KEYED claim (MOTIR-2961) — the same lock for the caller that was HANDED
+  // a card rather than asking for the next one. A SECOND CALLER of
+  // `workItemsService.claimWorkItem`, whose primary surface is the v1 route the
+  // CLI speaks; never a second implementation.
+  registerClaimWorkItem(target, resolveContext);
   // The canonical dispatch PROMPT (MOTIR-1802) — the server-generated agent
   // instruction the CLI prints verbatim, so no client assembles its own grammar.
   registerDispatchPrompt(target, resolveContext);

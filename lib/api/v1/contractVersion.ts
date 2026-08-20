@@ -28,6 +28,12 @@
  * to report — and, since 1.1.0, it lies on a header every client reads off the
  * happy path rather than in a document nobody fetches at runtime.
  *
+ * ⚠️ **FOR A NEW OPERATION THAT OBLIGATION HAS AN EXECUTOR** —
+ * `tests/api/v1/contract-version-guard.test.ts` fails when the operation
+ * registry holds an id that no entry below names (MOTIR-3157). It cannot check
+ * a new FIELD or a new HEADER, so for those the rule above is still discharged
+ * by whoever remembers it; for an endpoint it is not.
+ *
  * - `1.0.0` — the contract as Stories 11.1–11.4 and 11.7 shipped it.
  * - `1.1.0` — MOTIR-2275 adds the `X-Motir-Api-Version` response header.
  * - `1.2.0` — MOTIR-2279 adds the minimal ACTOR object to a collection row
@@ -102,23 +108,55 @@
  *   one, because it carries no `criterionIndex` and making that field optional
  *   would be a nullability change §8 forbids. Every existing member is
  *   byte-identical.
- * - `1.14.0` — MOTIR-3017 adds two things a run needs in order to report what it
+ * - `1.14.0` — MOTIR-3157 records `uploadWorkItemAttachment`, the
+ *   `POST /api/v1/work-items/{key}/attachments` operation MOTIR-3000 shipped
+ *   WITHOUT moving this number. Additive: a new endpoint, §8's first allowed
+ *   change — so the contract grew when that operation merged and only the
+ *   number stood still, which is the one thing this string exists not to do.
+ *   The bump is therefore RETROACTIVE, and the entry names the OPERATION rather
+ *   than the position: which minor it lands on depends on merge order, and a
+ *   reader asking "when did the attachment door arrive?" needs the id, not the
+ *   ordinal. Nothing on the wire changes here — the endpoint has been live
+ *   since #2145; what changes is that a client pinning a minor to get it is now
+ *   told the truth by `X-Motir-Api-Version`.
+ * - `1.15.0` — MOTIR-2961 adds `claimWorkItem`,
+ *   `POST /api/v1/work-items/{key}/claim`: an ATOMIC claim of one work item BY
+ *   KEY — lock the row, re-assert the to-do category, assign and transition, in
+ *   one transaction. Every dispatch path except `claim_next_ready`'s "give me
+ *   whatever is next" was serialising claimants with an assignment its own code
+ *   calls an advisory, so two runs could start the same card. Additive: one new
+ *   endpoint (§8's first allowed change) and one new resource (`WorkItemClaim`);
+ *   no declared shape changed.
+ * - `1.16.0` — MOTIR-3178 adds the SELF-BLOCKING-DESIGN member to the dispatch
+ *   prompt's `advisories` union: a CHILDLESS card one of whose acceptance
+ *   criteria produces a design ASSET while another builds the rendered SURFACE
+ *   that drawing decides — the planning-time design gate's degenerate reading,
+ *   where the `type: design` subtask a UI card must be linked to IS the card.
+ *   Additive on the same terms as the sizing member — a new member of the same
+ *   union, on the same field clients must tolerate unknown members of. It is a
+ *   THIRD `kind: "shape"` variant rather than a fourth severity inside the
+ *   criterion-carrying one, because it carries a PAIR of indices
+ *   (`designCriterionIndex` / `surfaceCriterionIndex`) and no `criterionIndex`
+ *   at all. Every existing member is byte-identical.
+ * - `1.17.0` — MOTIR-3017 adds two things a run needs in order to report what it
  *   found, both additive. (1) An optional `findingsPolicy` query parameter on
  *   `GET …/dispatch-prompt`: a comma-separated list of the capabilities this run
  *   switches OFF for its agent. Omitted renders the protocol byte-identically to
  *   today, so no existing caller moves; an unrecognised capability is refused
  *   (`INVALID_FINDINGS_POLICY`, 422) rather than ignored, which is a new
  *   CONDITION getting a status on an existing operation — §8's allowed shape.
- *   (2) `POST /api/v1/plans/{planId}/approval`, the bounded public entrance to
- *   `plansService.approvePlan` that `motir auto --auto-approve-replan` drives:
- *   a new operation, gated by the `ai:view_plan` key the service already
- *   asserts, with no declared shape changed. See
- *   `docs/decisions/run-findings-protocol.md`.
+ *   (2) `POST /api/v1/work-items/{key}/plan-approval`, the bounded public
+ *   entrance to `plansService.approvePlan` that `motir auto --auto-approve-replan`
+ *   drives: a new operation, gated by the `ai:view_plan` key the service already
+ *   asserts, with no declared shape changed. Its 409 additionally carries
+ *   `planStatus`, an enrichment on a NEW condition rather than a change to an
+ *   existing one. See `docs/decisions/run-findings-protocol.md`.
  *
- *   ⚠️ THIS NUMBER IS A SERIALIZED RESOURCE. It was `1.13.0` on `origin/main`
- *   when this was written, and every other in-flight additive pull request
- *   claims the next MINOR too. Whoever merges second renumbers — one line here
- *   plus a regenerate — and the entry above names the OPERATIONS rather than a
- *   position so that renumbering stays one line.
+ *   ⚠️ RENUMBERED 1.14.0 → 1.17.0 ON MERGE, which is the process working rather
+ *   than a correction. This number is a SERIALIZED RESOURCE: every in-flight
+ *   additive pull request claims the next MINOR, and three landed while this one
+ *   was open (MOTIR-3157, MOTIR-2961, MOTIR-3178). The entry above names the
+ *   OPERATIONS rather than a position precisely so renumbering stays one line,
+ *   and it did.
  */
-export const V1_CONTRACT_VERSION = '1.14.0';
+export const V1_CONTRACT_VERSION = '1.17.0';

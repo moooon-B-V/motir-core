@@ -776,3 +776,168 @@ export function overGateSizing(card: {
     estimateMinutes,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SELF-BLOCKING-DESIGN CHECK (MOTIR-3178) — the fourth member of the SHAPE
+// family, and the planning-time design gate read for its PURPOSE rather than its
+// letter.
+//
+// The gate (`plan-rules/kind-leaf.md`) requires a UI-touching card to be linked
+// to the design asset AND to *"the `type: design` subtask that produced (or will
+// produce) it"*. On a card that DRAWS its own design that second link resolves to
+// the card itself: the requirement is literally satisfied, and Principle #13 is
+// exactly inverted — the drawing and the files written to match it arrive in one
+// pull request, approved by one click. MOTIR-3154 carried its `design/ai-planning/`
+// amendment as criterion 1 and the UI built against that drawing as criteria 4
+// and 5, and every signal read green: `readiness.ready`, `openBlockers: []`,
+// `valid: true` (`notes.html` #329, planning bug MOTIR-3158).
+//
+// So the question this asks is answerable from the card ALONE, which is what
+// makes it a `shape` member rather than a reference one: does one criterion
+// produce a DESIGN ASSET while another builds a RENDERED SURFACE? That is the
+// same criterion-by-criterion method {@link criterionRepoPaths} already runs on
+// the REPO axis, pointed at the DESIGN axis.
+//
+// ⚠️ A DESIGN-ASSET criterion is NEVER also read as a surface criterion, and
+// that exclusion is the check's main precision instrument, not a tidiness rule.
+// A `design` card's own criteria talk about surfaces constantly — the mock SHOWS
+// the empty state, the export DRAWS the picker open — because describing a
+// surface is what a drawing does. Attributing the two roles to two DIFFERENT
+// criteria is the whole finding: one card producing the drawing AND the code.
+//
+// ⚠️ Advisory, never a blocker, and here the false-positive class is real and
+// accepted rather than argued away (MOTIR-3158's decision): the predicate is
+// lexical over criterion prose, so a design card that amends an asset and
+// adjusts the one rendered surface reading it can fire. Blocking would hold such
+// a card out of the ready set with no override — and a card that is its own
+// design blocker is precisely the card a re-plan is in the middle of splitting.
+// Where the enforcement needs to bite it already does: `run.md` guard #3 PAUSES
+// a run about to build UI with no drawing. This makes the composition VISIBLE at
+// seal time and at claim time; it is not a second, weaker copy of that guard.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tells that a criterion's DELIVERABLE is a DESIGN ASSET — the three-file set
+ * `motir-core/design/<area>/` holds (`design-notes.md` + a `.pen` source or a
+ * `*.mock.html` + a same-basename export).
+ *
+ * Deliberately the SHAPE of the deliverable and never the word "design": a
+ * criterion saying *"in the treatment the design decides"* is CONSUMING a
+ * drawing, which is the other half of the finding and must not be mistaken for
+ * producing one.
+ */
+const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
+  // A `design/<area>/…` path, with or without a repo prefix in front of it.
+  /(?:^|[^A-Za-z0-9_.-])design\/[A-Za-z0-9_.-]+\//i,
+  /\.mock\.html\b/i,
+  /\bdesign-notes\.md\b/i,
+  /\.pen\b/i,
+  /\bthree-file\b/i,
+];
+
+/**
+ * Nouns that name a RENDERED SURFACE — something a person looks at in the running
+ * app. Kept UI-specific on purpose: `card`, `row`, `list`, `field` and `table` all
+ * mean something else far more often in this corpus, and one of them would fire
+ * on nearly every criterion ever written here.
+ */
+const SURFACE_NOUN_RE =
+  /\b(?:page|screen|view|panel|pane|canvas|modal|dialog|drawer|sidebar|rail|tab|toolbar|banner|toast|tooltip|popover|overlay|breadcrumb|board|picker|combobox|dropdown|menu|nav|navigation|surface|component|badge|chip|button|empty state)\b/i;
+
+/** Verbs that put such a noun ON SCREEN — the criterion is about what renders. */
+const SURFACE_VERB_RE =
+  /\b(?:renders?|rendered|draws?|drawn|shows?|shown|displays?|displayed|paints?|painted|appears?|is visible|opens?|highlights?|lists)\b/i;
+
+/**
+ * A React component path — a `.tsx` / `.jsx` file that is NOT part of a design
+ * asset. An independent tell, because a criterion naming
+ * `app/(authed)/plans/[id]/page.tsx` is a rendered surface whatever verbs it uses.
+ */
+const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[jt]sx\b/i;
+
+/** Whether a criterion's own deliverable is a design asset. */
+function namesDesignAsset(text: string): boolean {
+  return DESIGN_ASSET_MATCHERS.some((re) => re.test(text));
+}
+
+/**
+ * Whether a criterion builds or changes a RENDERED SURFACE — a surface noun put
+ * on screen by a render verb, or a component path named outright.
+ */
+function namesRenderedSurface(text: string): boolean {
+  if (COMPONENT_PATH_RE.test(text)) return true;
+  return SURFACE_NOUN_RE.test(text) && SURFACE_VERB_RE.test(text);
+}
+
+/** The SELF-BLOCKING-DESIGN finding: the two criteria that must not share a card. */
+export interface SelfBlockingDesignCriteria {
+  /** 1-based index of the criterion whose deliverable is the DESIGN ASSET. */
+  designCriterionIndex: number;
+  /** 1-based index of the criterion that BUILDS the surface that drawing decides. */
+  surfaceCriterionIndex: number;
+}
+
+/**
+ * The two criteria that make a card its OWN design blocker, or `null`.
+ *
+ * Scope and attribution are {@link firstPostMergeCriterion}'s exactly — the
+ * acceptance-criteria span only, enumerated criteria only, a continuation line
+ * belonging to the bullet it wraps from — so all three criterion-reading shape
+ * checks report ONE numbering and a card carrying several findings can be read
+ * against it.
+ *
+ * Both indices are the FIRST of their kind, and BOTH are reported rather than one:
+ * unlike gate 14's ordering violation the remedy is not a cut line but a LIFT —
+ * the design criterion becomes its own `type: design` card that the rest of this
+ * one is `blocked_by`. A reader needs to see both ends of the inversion to do that,
+ * and a single index would name the half they already knew about.
+ *
+ * A criterion that names a design asset is excluded from the surface arm (see the
+ * module note above), so a design card describing what its own drawing shows
+ * stays quiet — and a card with no acceptance-criteria heading returns `null`
+ * here, the same never-suppress-on-a-heuristic contract
+ * {@link firstPostMergeCriterion} has.
+ */
+export function selfBlockingDesignCriteria(
+  md: string | null | undefined,
+): SelfBlockingDesignCriteria | null {
+  if (!md) return null;
+  const span = acceptanceCriteriaSpan(md);
+  if (!span) return null;
+
+  let criterionIndex = 0;
+  let designCriterionIndex: number | null = null;
+  let surfaceCriterionIndex: number | null = null;
+  // A criterion spans its bullet plus every continuation line, so the two roles
+  // are decided per CRITERION and not per line: a criterion whose asset path sits
+  // on the bullet and whose verb wraps to the next line is one criterion, once.
+  let designHere = false;
+  let surfaceHere = false;
+
+  const settle = () => {
+    if (criterionIndex === 0) return;
+    if (designHere) {
+      if (designCriterionIndex === null) designCriterionIndex = criterionIndex;
+      return; // a design-asset criterion is never also the surface criterion
+    }
+    if (surfaceHere && surfaceCriterionIndex === null) surfaceCriterionIndex = criterionIndex;
+  };
+
+  for (const raw of md.slice(span.start, span.end).split('\n')) {
+    if (CRITERION_BULLET_RE.test(raw)) {
+      settle();
+      criterionIndex += 1;
+      designHere = false;
+      surfaceHere = false;
+    }
+    if (criterionIndex === 0) continue; // the heading and any lead-in prose
+    const text = raw.replace(INLINE_MARKUP_RE, '');
+    if (namesDesignAsset(text)) designHere = true;
+    if (namesRenderedSurface(text)) surfaceHere = true;
+  }
+  settle();
+
+  return designCriterionIndex !== null && surfaceCriterionIndex !== null
+    ? { designCriterionIndex, surfaceCriterionIndex }
+    : null;
+}

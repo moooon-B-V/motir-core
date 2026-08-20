@@ -12,6 +12,7 @@ import {
   toCompleteSessionResult,
   toDispatchPrompt,
   toExpandSubmitResult,
+  toWorkItemClaim,
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
@@ -188,13 +189,20 @@ export interface SearchPage {
  * loop that cannot resume its own interrupted work needs a human to continue,
  * which is the opposite of what it is for.
  *
- * ⚠️ THIS IS AN ADVISORY, NOT A LOCK, and the claim that follows it is a plain
- * assignment. Two runs starting together both read the same page, both see the
- * row unassigned, both take it. That race is ACCEPTED: closing it needs a
- * conditional write ("assign only if unassigned") that the server does not
- * offer, the window is one read-to-write gap, and the failure is loud — two
- * branches for one card is noticed immediately. Do NOT add a re-read here that
- * checks again before assigning: it closes nothing and reads like a guarantee.
+ * ⚠️ THIS IS AN ADVISORY, AND IT NO LONGER STANDS ALONE (MOTIR-2961/MOTIR-3048).
+ * It used to be the whole story — the claim that followed was a plain assignment,
+ * so two runs starting together both read the same page, saw the row unassigned
+ * and took it. That race was documented here as ACCEPTED, for want of a
+ * conditional write the server did not offer. The server offers one now:
+ * {@link MotirClient.claimWorkItem} is a single locked transaction that
+ * re-asserts the to-do category, assigns and transitions, and answers with an
+ * OUTCOME. The loser is told it lost, by name.
+ *
+ * So this function keeps the job it is actually good at and loses the one it
+ * never could do. It is a FILTER over a page the server ranked — it keeps a
+ * teammate's live card out of a pick, so an unattended loop does not spend a
+ * request finding out. It is not, and never was, the thing that makes a claim
+ * safe. Do NOT add a re-read before the claim: the claim itself is the check.
  */
 export function isPickable(
   item: Pick<DispatchItem, 'status' | 'assigneeId'>,
@@ -460,6 +468,53 @@ export interface DispatchPrompt {
 export interface ExpandSubmitResult {
   jobId: string;
   planId: string;
+}
+
+// ── the keyed CLAIM (MOTIR-2961) ────────────────────────────────────────────
+
+/** An actor named on a claim result — who holds a card, or who moved it. */
+export interface ClaimActor {
+  id: string;
+  name: string;
+}
+
+/**
+ * What one claim attempt resolved to (`lib/dto/claim.ts`).
+ *
+ * Four values because a dispatcher's next move differs for each, and a client
+ * that collapsed them into "did it throw" would have to make a second read to
+ * work out which of them it was looking at.
+ */
+export type WorkItemClaimOutcome = 'claimed' | 'mine' | 'taken' | 'not_claimable';
+
+/**
+ * The result of claiming one card by key.
+ *
+ * ⚠️ A refusal is a 200, not an error. Three of the four outcomes are ordinary
+ * states a dispatcher meets on the happy path — resuming its own interrupted
+ * run, losing a race, or being pointed at finished work — so the server reports
+ * them as values and the CLI branches on them.
+ */
+export interface WorkItemClaim {
+  key: string;
+  title: string;
+  outcome: WorkItemClaimOutcome;
+  /** `outcome === 'claimed'`, carried by the server so the happy path can be
+   *  read without knowing the vocabulary. */
+  claimed: boolean;
+  /** Where the item is AFTER the call: the new status on a claim, the untouched
+   *  one on every refusal. `category` is null for a status the project's
+   *  workflow does not define. */
+  status: { key: string; category: string | null };
+  /** Who holds it now — the caller on a claim, the winner on a refusal, and
+   *  null when a sibling moved the status without ever assigning. */
+  assignee: ClaimActor | null;
+  /** WHO made the transition that put it where it is — the field that names a
+   *  winner even when nothing was assigned. */
+  transitionedBy: ClaimActor | null;
+  /** WHEN that transition happened, ISO-8601; null for a row whose status was
+   *  never moved. */
+  transitionedAt: string | null;
 }
 
 // ── the plan-change CONVERSATION (MOTIR-1832) + the plan read (MOTIR-1837) ──
@@ -1211,23 +1266,28 @@ export class MotirClient {
   }
 
   /**
-   * CLAIM a work item for the token owner (MOTIR-2427) — a plain assignment.
+   * CLAIM a work item for the token owner — ONE locked call (MOTIR-3048).
    *
-   * Written BEFORE the agent is launched, never after: a claim recorded at the
-   * end is history, and the only version that tells a teammate anything is the
-   * one that lands while the work is happening. Assignment already exists and
-   * the board already renders it, so this turns an invisible act into a visible
-   * one with machinery that is entirely built.
+   * This used to be a plain `PATCH { assigneeId }` that the caller followed with
+   * a separate `transition_status` (MOTIR-2427): two unlocked writes, and a race
+   * between them that the comment on {@link isPickable} recorded as accepted.
+   * `POST /work-items/{key}/claim` (MOTIR-2961) does both inside one
+   * transaction, under a row lock, having re-asserted the TO-DO category — so
+   * there is nothing left to follow it with. **Do not also transition after
+   * this: the claim IS the dispatch status flip.**
    *
-   * ⚠️ Idempotent and unconditional. Re-claiming a card already mine is a no-op
-   * write, and there is deliberately no "only if unassigned" — see
-   * {@link isPickable} for why that race is accepted rather than simulated.
+   * ⚠️ THE OWNER IS GONE FROM THE ARGUMENTS, deliberately. It comes from the
+   * TOKEN now: the server assigns to whoever is calling, which is the only
+   * assignment a claim could honestly make, and an owner a client could name is
+   * an owner a client could get wrong. Callers still resolve `whoami` — the
+   * PICK needs it, and so does `pickWarning` — but they no longer send it here.
+   *
+   * ⚠️ It can say NO, and that is the point. A refusal comes back as a 200 with
+   * an `outcome` — `taken` names the holder, `not_claimable` names the status —
+   * so a loser learns which of the two it is without a second read.
    */
-  async claimWorkItem(args: { key: string; ownerId: string }): Promise<void> {
-    await this.v1.request('updateWorkItem', {
-      path: { key: args.key },
-      body: { assigneeId: args.ownerId },
-    });
+  async claimWorkItem(args: { key: string }): Promise<WorkItemClaim> {
+    return toWorkItemClaim(await this.v1.request('claimWorkItem', { path: { key: args.key } }));
   }
 
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on

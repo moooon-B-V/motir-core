@@ -590,6 +590,100 @@ describe('the dispatch-prompt schema', () => {
     expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
     expect(dispatchPromptSchema.parse(envelope([ordering])).advisories[0]).toEqual(ordering);
   });
+
+  it('carries a SELF-BLOCKING-DESIGN advisory field-for-field, with BOTH indices (MOTIR-3178)', () => {
+    // The third `kind: 'shape'` variant, and a variant for the same §8 reason the
+    // sizing one is: it carries no `criterionIndex` at all — a PAIR of named
+    // indices instead, because its remedy LIFTS the design criterion onto its own
+    // card rather than cutting the list at a line.
+    const mapped = presentDispatchPrompt({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: 'motir-core',
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr',
+      sessionBranch: null,
+      advisories: [
+        {
+          kind: 'shape',
+          item: 'PROD-1',
+          severity: 'likely-self-blocking-design',
+          designCriterionIndex: 1,
+          surfaceCriterionIndex: 4,
+        },
+      ],
+    } as unknown as Parameters<typeof presentDispatchPrompt>[0]);
+
+    expect(mapped.advisories[0]).toEqual({
+      kind: 'shape',
+      item: 'PROD-1',
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 4,
+    });
+    // No `criterionIndex` is invented on the way out, and no other member's
+    // fields ride along — the point of the field-by-field mapper.
+    expect(mapped.advisories[0]).not.toHaveProperty('criterionIndex');
+    expect(mapped.advisories[0]).not.toHaveProperty('threshold');
+    expect(() => dispatchPromptSchema.parse(mapped)).not.toThrow();
+  });
+
+  it('all THREE `kind: "shape"` variants stay disjoint — none parses as another', () => {
+    // The union is plain, not discriminated, so this guarantee rests entirely on
+    // the three variants' REQUIRED fields being disjoint: `criterionIndex` /
+    // `threshold` / the index PAIR. Asserted directly, because the day it stops
+    // holding the failure is a silently stripped payload rather than an error.
+    const selfBlocking = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 4,
+    };
+    const sizing = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-over-gate-sizing',
+      threshold: 'both',
+      storyPoints: 13,
+      estimateMinutes: 600,
+    };
+    const straddle = {
+      kind: 'shape' as const,
+      item: 'PROD-1',
+      severity: 'likely-repo-straddle',
+      criterionIndex: 2,
+      path: 'motir-ai/src/x.ts',
+      repo: 'motir-ai',
+      reason: 'contradiction',
+    };
+    const envelope = (advisories: unknown[]) => ({
+      key: 'PROD-1',
+      prompt: 'text',
+      parentKey: null,
+      targetRepo: null,
+      targetRepoCloneUrl: null,
+      targetRepoDefaultBranch: null,
+      targetRepos: [],
+      workflowMode: 'per_item_pr' as const,
+      sessionBranch: null,
+      advisories,
+    });
+
+    expect(dispatchPromptSchema.parse(envelope([selfBlocking])).advisories[0]).toEqual(
+      selfBlocking,
+    );
+    expect(dispatchPromptSchema.parse(envelope([sizing])).advisories[0]).toEqual(sizing);
+    expect(dispatchPromptSchema.parse(envelope([straddle])).advisories[0]).toEqual(straddle);
+    // …and all three together, in one array, since that is how a card carrying
+    // several defects actually arrives.
+    expect(
+      dispatchPromptSchema.parse(envelope([selfBlocking, sizing, straddle])).advisories,
+    ).toEqual([selfBlocking, sizing, straddle]);
+  });
 });
 
 describe('the work-loop job handle (ADR Amendment 6 Q3)', () => {

@@ -2130,9 +2130,22 @@ export const plansService = {
   },
 
   /**
-   * Decline a `planned` plan: set `declined` + decidedAt/decidedById and DROP
-   * all PlanItems. The tree was NEVER touched (adds never materialized;
+   * Decline a `planned` plan: set `declined` + decidedAt/decidedById, and KEEP
+   * every PlanItem. The tree was NEVER touched (adds never materialized;
    * modify/remove targets untouched) → a clean no-op on the work-item tree.
+   *
+   * ⚠️ This used to drop every item inside the same transaction, and that is
+   * the defect MOTIR-3154 reports (fixed here, MOTIR-3160). Not writing
+   * to the tree is what declining MEANS; erasing the proposal is a separate act
+   * nobody asked for, and it destroyed the only record of what the planner
+   * offered and a person turned down. A declined plan read `0 items` for ever —
+   * indistinguishable from a plan that proposed nothing — so the review model
+   * had nothing to draw and MOTIR-1377 had to short-circuit the empty state to
+   * stop it shadowing the declined outcome.
+   *
+   * The rows are now the RECORD of a decision instead of a hole, and the delete
+   * had exactly one caller, so the repository method went with it — an abandoned
+   * path left behind is the next reader's live option.
    */
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -2141,7 +2154,7 @@ export const plansService = {
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
-    const row = await withWorkspaceContext(
+    const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
@@ -2151,19 +2164,26 @@ export const plansService = {
         if (fresh.status !== 'planned') {
           throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
         }
-        await planItemRepository.deleteByPlan(planId, tx);
-        return planRepository.update(
+        const updated = await planRepository.update(
           planId,
           { status: 'declined', decidedAt: new Date(), decidedById: ctx.userId },
           tx,
         );
+        // The real count, read inside the same transaction — `markPlanned` above
+        // does exactly this. The return used to be `toPlanDto(row, 0)`, a
+        // hardcoded zero that was true only while the delete above existed; with
+        // the rows retained it would tell the caller that just declined a plan it
+        // has no items while `listPlans` (which counts through
+        // `countByPlanIds`) says otherwise (MOTIR-3160).
+        const n = await planItemRepository.countByPlan(planId, tx);
+        return { row: updated, count: n };
       },
     );
     // Declining is as terminal for the lock as approving: the output will never
     // exist, so continuing to hold the targets blocks a colleague for nothing
     // (MOTIR-2787). The tree was never touched, so there is nothing else to undo.
     await releasePlanTargetLocks(plan, ctx);
-    return toPlanDto(row, 0);
+    return toPlanDto(row, count);
   },
 };
 

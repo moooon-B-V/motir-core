@@ -10,6 +10,7 @@ import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { isProposedNodeId, type PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
@@ -41,6 +42,9 @@ export interface PlanChangeCanvasProps {
   index: PlanChangeDiffIndex;
   /** Bumped by the host whenever the proposal (or the committed tree) changed. */
   diffKey: string | number;
+  /** The plan's DECISION, once it has one (MOTIR-3162) — the overlay SURVIVES
+   *  the decision now, and this is what turns it into the decided treatment. */
+  outcome?: PlanItemOutcome | null;
   /** The chat's planning TARGETS, by work-item id (MOTIR-1491) — the ones on the
    *  CURRENT level take the target ring, so the user sees what the planner is
    *  pointed at. */
@@ -65,6 +69,7 @@ export function PlanChangeCanvas({
   projectKey,
   index,
   diffKey,
+  outcome = null,
   targetIds,
   initialTrail,
   ariaLabel,
@@ -100,7 +105,13 @@ export function PlanChangeCanvas({
       if (parentId !== null && isProposedNodeId(parentId)) {
         // A proposed item's children are not work items, so none of them can be
         // a target — no target pass here.
-        return decoratePlanChangeLevel({ nodes: [], deps: [] }, EMPTY_LEVEL, diff, parentId);
+        return decoratePlanChangeLevel(
+          { nodes: [], deps: [] },
+          EMPTY_LEVEL,
+          diff,
+          parentId,
+          outcome,
+        );
       }
 
       if (cacheKeyRef.current !== diffKey) {
@@ -118,11 +129,17 @@ export function PlanChangeCanvas({
       // Targets are marked LAST, so the ring sits outside the diff frame when a
       // node is both targeted and touched by a pending proposal.
       return decorateTargetLevel(
-        decoratePlanChangeLevel(buildWorkItemLevel(wi, { markActive: true }), wi, diff, parentId),
+        decoratePlanChangeLevel(
+          buildWorkItemLevel(wi, { markActive: true }),
+          wi,
+          diff,
+          parentId,
+          outcome,
+        ),
         targets,
       );
     },
-    [projectKey, diffKey, index, registerItems, targetKey],
+    [projectKey, diffKey, index, registerItems, targetKey, outcome],
   );
 
   return (
@@ -132,7 +149,7 @@ export function PlanChangeCanvas({
         // Re-runs the CURRENT level's load when the proposal — or the target set
         // — changes, so the diff and the target ring appear (and disappear)
         // without a remount, drill / zoom / pan preserved.
-        reloadKey={`plan-change:${diffKey}:${targetKey}`}
+        reloadKey={`plan-change:${diffKey}:${targetKey}:${outcome ?? 'pending'}`}
         // The anchored arrival (MOTIR-2070). A seed, read once at mount — the
         // reloads above re-run the CURRENT level, wherever the user has since
         // navigated to, and never drag them back here.

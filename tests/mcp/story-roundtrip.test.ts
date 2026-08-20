@@ -254,6 +254,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },
+        // The KEYED claim (MOTIR-2961) — item-keyed, so a non-member must read
+        // tenant A's card as not-found rather than take it.
+        claim_work_item: { key: item1 },
         dispatch_prompt: { key: item1 },
         get_plan_status: { planId: plan.id },
         get_plan: { planId: plan.id },
@@ -661,6 +664,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_ready: { projectKey: 'PROD' },
         next_ready: { projectKey: 'PROD' },
         claim_next_ready: { projectKey: 'PROD' },
+        // The KEYED claim (MOTIR-2961) — item-keyed, so a non-member must read
+        // tenant A's card as not-found rather than take it.
+        claim_work_item: { key: item1 },
         dispatch_prompt: { key: item1 },
         get_plan_status: { planId: plan.id },
         get_plan: { planId: plan.id },

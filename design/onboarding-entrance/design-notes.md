@@ -176,7 +176,7 @@ project" — never a preference; importing a codebase you already have is not a 
 | "Build with AI" eyebrow    | badge chip (as on the hero)                                 | `--el-tint-lavender` bg, `--el-text-strong` text, `--radius-badge`, `--spacing-chip-x/y`                       |
 | "See how Motir works" link | inline text link                                            | `--el-link` / `--el-accent-on-surface`; underline on hover                                                     |
 | Icon tile (import)         | tinted square (as on the hero preview)                      | `--el-tint-sky`; ink `--el-text-strong`; `--radius-control`                                                    |
-| "OR" divider               | hairline rule + mono label                                  | `--el-border` rule, `--el-text-faint` label                                                                    |
+| "OR" divider               | hairline rule + mono label                                  | `--el-border` rule, `--el-text-secondary` label                                                                |
 | Info callout (Panel 3)     | callout box + `Info`/`Code`/`GitBranch` lucide              | `--el-surface-soft`, `--el-border`, `--radius-input`; icon `--el-info`                                         |
 | Carried-over label         | inline label + dot                                          | `--el-accent-on-surface` text + dot                                                                            |
 | Avatar                     | circular chip                                               | `--el-tint-mint` bg, `--el-text-strong` ink, `rounded-full`                                                    |

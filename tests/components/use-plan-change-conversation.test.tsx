@@ -443,7 +443,13 @@ describe('usePlanChangeConversation — approve / discard', () => {
 
     // The PLAN is what gets confirmed — the same operation `/plans/[id]` performs.
     expect(approve).toHaveBeenCalledWith('plan-1');
-    expect(result.current.state.review).toBeNull();
+    // ⚠️ AMENDED by MOTIR-3162 (bug MOTIR-3154). This asserted `review` was
+    // NULLED. `PlanningWorkspaceHost` derives its entire diff index from that
+    // field, so nulling it erased the overlay in the same tick the decision
+    // landed — the canvas stopped saying which cards you had just accepted. The
+    // review is the RECORD of the decision; `decided` is what marks it.
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(result.current.state.decided).toBe('accepted');
     expect(result.current.state.approved).toEqual({
       created: ['wi_new'],
       updated: [],
@@ -455,6 +461,27 @@ describe('usePlanChangeConversation — approve / discard', () => {
     expect(result.current.state.session?.turns).toHaveLength(1);
     // The caller is told, so it can refresh the server surfaces AND the island.
     expect(onApproved).toHaveBeenCalledTimes(1);
+  });
+
+  it('a NEW turn supersedes a decided overlay — it never bleeds into the next run', async () => {
+    // The review is kept THROUGH the decision so the canvas can draw it; a new
+    // run is the moment it stops describing anything.
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await result.current.discard();
+    });
+    expect(result.current.state.decided).toBe('declined');
+
+    await act(async () => {
+      await result.current.send('Now add refunds.');
+    });
+
+    expect(result.current.state.decided).toBeNull();
+    // …and it is the NEW run's proposals on the canvas, not the discarded ones.
+    expect(result.current.state.phase).toBe('review');
   });
 
   it('WRITES NOTHING while the proposal is merely on screen', async () => {
@@ -485,6 +512,9 @@ describe('usePlanChangeConversation — approve / discard', () => {
     expect(result.current.state.errorCode).toBe('immutable');
     expect(result.current.state.phase).toBe('review');
     expect(result.current.state.review).toEqual(REVIEW);
+    // Still PENDING — a failed decision is not a decision, so the canvas must
+    // not draw a decided treatment over a proposal the server still awaits.
+    expect(result.current.state.decided).toBeNull();
   });
 
   it('DISCARD declines the PLAN, touches no work item, and leaves the thread intact', async () => {
@@ -501,7 +531,12 @@ describe('usePlanChangeConversation — approve / discard', () => {
     // at `planned` forever — and it is the only write a discard makes.
     expect(decline).toHaveBeenCalledWith('plan-1');
     expect(approve).not.toHaveBeenCalled();
-    expect(result.current.state.review).toBeNull();
+    // ⚠️ AMENDED by MOTIR-3162. This is the case where NOTHING survived: a
+    // discarded plan left the workspace with no trace, the conversation that
+    // produced the tree still on screen beside the space where the tree had
+    // been. The proposals stay, marked declined.
+    expect(result.current.state.review).toEqual(REVIEW);
+    expect(result.current.state.decided).toBe('declined');
     expect(result.current.state.planId).toBeNull();
     expect(result.current.state.phase).toBe('idle');
     expect(result.current.state.session?.turns).toHaveLength(1);
@@ -731,6 +766,9 @@ describe('usePlanChangeConversation — anchored at a work item (MOTIR-910)', ()
     });
 
     expect(approve).toHaveBeenCalledWith('plan-anchored-1');
-    expect(result.current.state.review).toBeNull();
+    // ⚠️ AMENDED by MOTIR-3162: the review SURVIVES the decision on this path
+    // too — the anchor changes the thread, not what the canvas keeps.
+    expect(result.current.state.review).not.toBeNull();
+    expect(result.current.state.decided).toBe('accepted');
   });
 });

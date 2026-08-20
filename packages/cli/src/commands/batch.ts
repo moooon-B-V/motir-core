@@ -2,6 +2,7 @@ import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
+  claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
   resolveOwnerId,
@@ -18,6 +19,7 @@ import {
   checkBootstrapCheckout,
   cwdReasonLabel,
   findingsPolicyOf,
+  renderClaimRefusal,
   renderFindingsPolicy,
   renderNothingPushed,
   renderReplanSubmitted,
@@ -291,7 +293,6 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         agent,
         clock,
         runAgentFn,
-        ownerId,
         run: gitRun,
       });
       if (outcome.kind === 'skipped') {
@@ -362,8 +363,6 @@ interface DispatchOneInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
-  /** Claimed for this owner before the agent launches (MOTIR-2427). */
-  ownerId: string;
   /** The git runner the push check uses (MOTIR-3004) — the same injection seam
    *  `motir auto` takes its runner through. */
   run: CommandRunner;
@@ -375,7 +374,7 @@ type DispatchOneResult =
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
-  const { session, entry, agent, clock, runAgentFn, ownerId, run } = input;
+  const { session, entry, agent, clock, runAgentFn, run } = input;
   const { client, link } = session;
 
   // The prompt is fetched BEFORE the status flip, which is the opposite order to
@@ -405,7 +404,24 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  await ensureInProgress(client, entry.key, entry.statusKey, ownerId);
+  // THE CLAIM, and it can say no (MOTIR-3048). It comes after the lineage check
+  // for the same reason that check comes first: a refusal there must leave the
+  // card untouched, and a claim already made would have to be undone. From here
+  // on nothing else can refuse, so this is the last point at which the run can
+  // walk away having changed nothing.
+  const claim = await ensureInProgress(client, entry.key);
+  if (!claimAllowsDispatch(claim)) {
+    // A SKIP, not a failure: the snapshot froze a set this run could take, and
+    // a sibling took one of them in between. No agent ran, nothing was
+    // reverted, and `batchExitCode` reads only `records` — so the run's exit
+    // code is unaffected, which is the honest report of "somebody else has it".
+    info('');
+    info(renderClaimRefusal(claim));
+    return {
+      kind: 'skipped',
+      skip: { key: entry.key, title: entry.title, reason: 'claim_refused' },
+    };
+  }
   // MOTIR-3133 — the same per-repository resolution `deliver()` makes, from the
   // same function, rendered by the same block. Batch prints its own lines rather
   // than going through `deliver()`, and a second rendering of these facts is

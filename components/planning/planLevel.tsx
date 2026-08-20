@@ -1,4 +1,4 @@
-import { PlanItemNode } from '@/components/planning/PlanItemNode';
+import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
@@ -52,6 +52,13 @@ export function mergePlanLevel(
   committed: PlanCanvasLevel,
   items: PlanReviewItemDto[],
   parentId: string | null,
+  /**
+   * The plan's DECISION, once it has one (MOTIR-3161) — drawn on every node the
+   * plan contributes, and on none of the committed neighbours, which the plan
+   * decided nothing about. `null` while the plan is still `planned`, which is
+   * every level that rendered before this.
+   */
+  outcome: PlanItemOutcome | null = null,
 ): PlanCanvasLevel {
   const atLevel = proposalsAtLevel(items, parentId);
   const pending = new Map(atLevel.map((i) => [i.nodeId, i]));
@@ -62,7 +69,7 @@ export function mergePlanLevel(
     const proposal = pending.get(node.id);
     if (!proposal) return node;
     pending.delete(node.id);
-    return { ...node, content: <PlanItemNode item={proposal} /> };
+    return { ...node, content: <PlanItemNode item={proposal} outcome={outcome} /> };
   });
 
   // Whatever is left is proposed and has no committed node yet: every `add`, plus
@@ -85,7 +92,7 @@ export function mergePlanLevel(
       crumbLabel: item.identifier ?? item.title,
       drillable: item.hasChildren,
       viewable: true,
-      content: <PlanItemNode item={item} />,
+      content: <PlanItemNode item={item} outcome={outcome} />,
     });
   }
 

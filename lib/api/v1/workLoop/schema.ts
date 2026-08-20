@@ -1,7 +1,12 @@
 import { z } from 'zod/v4';
-import { commentThreadSchema, workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import {
+  actorRefSchema,
+  commentThreadSchema,
+  workItemKeySchema,
+} from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
-import { isSizingAdvisory } from '@/lib/dto/workItems';
+import type { WorkItemClaimDto } from '@/lib/dto/claim';
+import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
@@ -47,8 +52,10 @@ export const dispatchWorkflowModeSchema = z.enum(['per_item_pr', 'session_lineag
  * ADR §8 permits "a new enum value on a field documented as open-ended", and
  * this field is documented as exactly that. Two families ship today
  * (`advisory` / `likely-missing-edge` on a reference; `likely-ordering-violation`
- * / `likely-repo-straddle` on a shape) and the advisory channel is designed to
- * grow — MOTIR-2175 and MOTIR-2177 each added a severity to a shipped surface.
+ * / `likely-repo-straddle` / `likely-over-gate-sizing` / `likely-self-blocking-design`
+ * on a shape) and the advisory channel is designed to grow — MOTIR-2175,
+ * MOTIR-2177, MOTIR-3110 and MOTIR-3178 each added a severity to a shipped
+ * surface.
  *
  * A closed enum here would make the NEXT severity a breaking change for every
  * generated client, and — worse — would make this endpoint 500 on its own
@@ -138,6 +145,34 @@ const sizingShapeAdvisorySchema = z.object({
 });
 
 /**
+ * A SELF-BLOCKING-DESIGN SHAPE advisory — one criterion of the card produces a
+ * DESIGN ASSET while another builds the RENDERED SURFACE that drawing decides
+ * (MOTIR-3178).
+ *
+ * ⚠️ `kind: 'shape'` and a PAIR of indices under their own names, which is why it
+ * is a third variant beside {@link criterionShapeAdvisorySchema} rather than a
+ * fourth severity inside it. It carries no `criterionIndex` at all — its remedy
+ * LIFTS the design criterion onto its own card rather than cutting the list at a
+ * line — and the three shape variants are disjoint on their REQUIRED fields
+ * (`criterionIndex` / `threshold` / this pair), so the plain union below resolves
+ * each unambiguously whichever order it tries them in.
+ *
+ * ⚠️ Additive under §8, on the same terms as the sizing and subsumption variants:
+ * a new member of a union whose `severity` was already open-ended, on a field
+ * every client must tolerate unknown members of. `V1_CONTRACT_VERSION` moves with
+ * it (Amendment 8's obligation).
+ */
+const selfBlockingDesignShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** 1-based index of the criterion whose deliverable is the design asset. */
+  designCriterionIndex: z.number().int(),
+  /** 1-based index of the criterion that builds the surface that drawing decides. */
+  surfaceCriterionIndex: z.number().int(),
+});
+
+/**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
  * filed, so its deliverable may already be in the repository (MOTIR-2903).
@@ -176,6 +211,7 @@ const subsumptionAdvisorySchema = z.object({
 export const dispatchAdvisorySchema = z.union([
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
+  selfBlockingDesignShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -266,8 +302,20 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {
-      // The SIZING member first, because it is the one `shape` variant with no
-      // `criterionIndex` — narrowing it out is what lets the branch below read
+      // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
+      // same reason the SIZING member below is: it carries no `criterionIndex`,
+      // and the generic `shape` branch further down reads one.
+      if (isSelfBlockingDesignAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          designCriterionIndex: advisory.designCriterionIndex,
+          surfaceCriterionIndex: advisory.surfaceCriterionIndex,
+        };
+      }
+      // The SIZING member next, because it is the other `shape` variant with no
+      // `criterionIndex` — narrowing both out is what lets the branch below read
       // the index off the two members that have one (MOTIR-3110).
       if (isSizingAdvisory(advisory)) {
         return {
@@ -308,6 +356,84 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
         severity: advisory.severity,
       };
     }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The KEYED CLAIM (MOTIR-2961)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What a claim attempt resolved to.
+ *
+ * A CLOSED enum, unlike `advisorySeveritySchema` above, and deliberately: an
+ * advisory is a thing a client may ignore, so an unknown member is safe there.
+ * This value decides whether the caller may START WORK, and a client that met a
+ * fifth outcome it did not know would have to guess which of "go" and "stop" it
+ * meant. Adding a member here is therefore a §8 event with a version bump, not
+ * a quiet extension.
+ */
+export const workItemClaimOutcomeSchema = z.enum(['claimed', 'mine', 'taken', 'not_claimable']);
+
+/**
+ * The result of claiming ONE work item by key.
+ *
+ * ⚠️ **A REFUSAL IS A 200, NOT AN ERROR** — the shape follows the same rule
+ * `POST /api/v1/sessions/complete` states for its per-item outcomes: a partial
+ * result is a real result. Three of the four outcomes are things a dispatcher
+ * routinely meets on the happy path (it resumed its own work, a sibling was
+ * faster, the card is finished), and turning two of them into HTTP failures
+ * would make a client parse an error body to learn it may simply proceed.
+ * Genuine failures keep their own statuses: an unknown or cross-workspace key is
+ * the usual 404, a malformed one a 422.
+ *
+ * ⚠️ **`assignee` and `transitionedBy` are BOTH here because either can be the
+ * only one that names the holder.** The assignee column is a LABEL a dispatcher
+ * writes for its teammates and nothing guarantees it was written: the incident
+ * this endpoint exists for (MOTIR-2958) is a session that flipped the status and
+ * never assigned, so the loser reads `assignee: null` on a card somebody is
+ * plainly working on. `transitionedBy` comes from the status-change history and
+ * answers the question the column cannot.
+ */
+export const workItemClaimSchema = z.object({
+  key: workItemKeySchema,
+  /** The item's title, so a refusal is legible without a second call. */
+  title: z.string(),
+  outcome: workItemClaimOutcomeSchema,
+  /** `outcome === "claimed"`, as its own boolean — the happy-path branch a
+   *  client can take without knowing the vocabulary. */
+  claimed: z.boolean(),
+  /** The status AFTER this call: the new one on a claim, the untouched one on
+   *  every refusal. `category` is what the claim decision was made on, and is
+   *  `null` for a status the project's workflow does not define — an unknown
+   *  category is never claimable, so `null` reads as "not available" rather
+   *  than as a missing field. */
+  status: z.object({ key: z.string(), category: z.string().nullable() }),
+  /** Who the item is assigned to now — the caller on a claim, the holder on a
+   *  refusal, `null` when nobody was ever assigned. */
+  assignee: actorRefSchema.nullable(),
+  /** Who performed the status transition that put the item where it is. */
+  transitionedBy: actorRefSchema.nullable(),
+  /** When that transition happened, or `null` for an item whose status has
+   *  never moved. */
+  transitionedAt: z.string().datetime().nullable(),
+});
+export type V1WorkItemClaim = z.infer<typeof workItemClaimSchema>;
+
+/** Map the claim result to the wire — field by field, never a spread. */
+export function presentWorkItemClaim(dto: WorkItemClaimDto): V1WorkItemClaim {
+  return {
+    key: dto.key,
+    title: dto.title,
+    outcome: dto.outcome,
+    claimed: dto.claimed,
+    status: { key: dto.status.key, category: dto.status.category },
+    assignee: dto.assignee === null ? null : { id: dto.assignee.id, name: dto.assignee.name },
+    transitionedBy:
+      dto.transitionedBy === null
+        ? null
+        : { id: dto.transitionedBy.id, name: dto.transitionedBy.name },
+    transitionedAt: dto.transitionedAt,
   };
 }
 

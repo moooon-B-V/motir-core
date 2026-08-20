@@ -23,6 +23,7 @@ import type { AgentRunResult } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
 
 // `motir batch` — the FROZEN snapshot (Subtask 7.9.10 · MOTIR-888).
 //
@@ -81,6 +82,10 @@ class FakeServer {
   readonly provenance: Record<string, unknown>[] = [];
   /** Every claim the run wrote, in order (MOTIR-2427). */
   readonly claims: { key: string; ownerId: string }[] = [];
+  /** What each claim attempt resolved to (MOTIR-3048). */
+  readonly claimOutcomes: { key: string; outcome: string }[] = [];
+  /** WHO this run's token belongs to. */
+  caller = 'user_me';
   /** The `ownerId` each enumeration was narrowed by. */
   readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; seeded: boolean }[] = [];
@@ -193,10 +198,28 @@ class FakeServer {
           sessionBranch: branch,
         };
       },
-      claimWorkItem: async (args: { key: string; ownerId: string }) => {
-        this.claims.push(args);
-        this.byKey(args.key).assigneeId = args.ownerId;
-        return {};
+      // The ATOMIC claim (MOTIR-3048) — one call that assigns AND flips, and
+      // that can refuse. Answered by the server's own rule, so a snapshot item
+      // a sibling takes mid-drain is reachable from a test.
+      claimWorkItem: async (args: { key: string }) => {
+        // The claim is a WRITE, and it is now the FIRST one every dispatch
+        // makes — so a read-only token fails here rather than on a transition.
+        if (this.readOnly) {
+          throw new CliError('FORBIDDEN: this token cannot write to the project.');
+        }
+        const item = this.byKey(args.key);
+        const { claim, apply } = resolveFakeClaim(item, { id: this.caller, name: 'Me' });
+        this.claims.push({ key: args.key, ownerId: this.caller });
+        this.claimOutcomes.push({ key: args.key, outcome: claim.outcome });
+        if (apply) {
+          // The row moves, but NOT through `transitionStatus` — the whole point
+          // of MOTIR-3048 is that the dispatch flip happens inside this one
+          // locked call, so `transitions` (which records wire transitions) must
+          // stay empty for it or the tests could no longer tell the two apart.
+          item.status = apply.status;
+          item.assigneeId = apply.assigneeId;
+        }
+        return claim;
       },
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
@@ -472,11 +495,11 @@ describe('motir batch — per-item pull requests', () => {
       { key: 'PROD-1', seeded: false },
       { key: 'PROD-2', seeded: false },
     ]);
-    // Each item walks its own todo → in_progress → implemented lifecycle.
+    // Each item walks its own todo → in_progress → implemented lifecycle — the
+    // first hop written by the CLAIM (MOTIR-3048), the second by this command.
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-1', 'PROD-2']);
     expect(server.transitions).toEqual([
-      { key: 'PROD-1', status: 'in_progress' },
       { key: 'PROD-1', status: 'implemented' },
-      { key: 'PROD-2', status: 'in_progress' },
       { key: 'PROD-2', status: 'implemented' },
     ]);
     expect(batchExitCode(summary)).toBe(0);
@@ -539,8 +562,9 @@ describe('motir batch — exclusions', () => {
       { key: 'PROD-6', title: 'Item PROD-6', reason: 'needs_human' },
       { key: 'PROD-8', title: 'Item PROD-8', reason: 'integrated_dep' },
     ]);
-    // Excluded means UNTOUCHED — no status flip, no prompt fetched.
-    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-9', 'PROD-9']);
+    // Excluded means UNTOUCHED — not claimed, no status flip, no prompt fetched.
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-9']);
+    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-9']);
     expect(server.promptCalls.map((c) => c.key)).toEqual(['PROD-9']);
 
     const text = renderBatchSummary(summary);
@@ -796,7 +820,10 @@ describe('motir batch — a single item’s outcomes', () => {
         repo: 'motir-ai',
       }),
     ]);
-    expect(server.transitions).toEqual([{ key: 'PROD-1', status: 'in_progress' }]);
+    // Claimed — that is what left it In Progress — and nothing moved it after:
+    // a failed dispatch earns no `implemented`.
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-1']);
+    expect(server.transitions).toEqual([]);
     expect(printed()).toContain('still has no checkout');
     expect(printed()).toContain('motir link add motir-ai');
   });
@@ -909,6 +936,69 @@ describe('motir batch — a single item’s outcomes', () => {
     expect(dispatched).toEqual(['PROD-1']);
   });
 
+  // MOTIR-3048 — the snapshot narrows at ENUMERATION, and that is a MEASUREMENT
+  // with a timestamp rather than a property that holds for the whole drain. A
+  // card can be taken by a sibling in the minutes between the freeze and its
+  // turn, and the atomic claim is the only thing that can find that out.
+  it('a card a SIBLING took mid-drain is a SKIP, not an agent failure', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const { summary, dispatched } = await drive(server, {
+      // While PROD-1's agent works, somebody else starts PROD-2.
+      onDispatch: (key) => {
+        if (key !== 'PROD-1') return;
+        const stolen = server.byKey('PROD-2');
+        stolen.status = 'in_progress';
+        stolen.assigneeId = 'user_them';
+      },
+    });
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(server.claimOutcomes).toEqual([
+      { key: 'PROD-1', outcome: 'claimed' },
+      { key: 'PROD-2', outcome: 'taken' },
+    ]);
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    // NOT a record, therefore not a failure — and the drain carried on rather
+    // than halting, because nothing went wrong.
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-1']);
+    expect(batchExitCode(summary)).toBe(0);
+    expect(printed()).toContain('PROD-2: already claimed by user_them');
+  });
+
+  it('a refused claim leaves the card UNTOUCHED and does not halt the drain', async () => {
+    // Three items, the middle one taken. The refusal is not a failure, so
+    // `--keep-going` is not needed for the run to reach the third.
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1'),
+      leaf('idB', 'PROD-2'),
+      leaf('idC', 'PROD-3'),
+    ]);
+    const { summary, dispatched } = await drive(server, {
+      onDispatch: (key) => {
+        if (key !== 'PROD-1') return;
+        server.byKey('PROD-2').status = 'done';
+      },
+    });
+
+    expect(dispatched).toEqual(['PROD-1', 'PROD-3']);
+    expect(summary.stopReason).toBe('completed');
+    expect(summary.skipped).toContainEqual({
+      key: 'PROD-2',
+      title: 'Item PROD-2',
+      reason: 'claim_refused',
+    });
+    // Nothing was written for it: no transition, and the row is where the
+    // sibling left it.
+    expect(server.transitions.map((t) => t.key)).not.toContain('PROD-2');
+    expect(server.byKey('PROD-2').status).toBe('done');
+    expect(batchExitCode(summary)).toBe(0);
+    expect(printed()).toContain('PROD-2: not claimable');
+  });
+
   it('names the refusal readably when the server reports lineage without a branch name', async () => {
     // `sessionBranch` is nullable on the dispatch payload, so the refusal cannot
     // assume a name to print. It must still say what happened rather than
@@ -927,8 +1017,10 @@ describe('motir batch — a single item’s outcomes', () => {
     expect(printed()).toContain(
       'PROD-1: skipped — a dependency was integrated on a session branch after the snapshot was taken.',
     );
-    // Refused UNTOUCHED — the refusal precedes the status flip.
-    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-2', 'PROD-2']);
+    // Refused UNTOUCHED — the refusal precedes the CLAIM, so the card was never
+    // taken and never moved (MOTIR-3048).
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-2']);
+    expect(server.transitions.map((t) => t.key)).toEqual(['PROD-2']);
   });
 });
 

@@ -9,6 +9,7 @@ import { setCredential } from '../src/config/userConfig.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
   startTestServer,
+  v1Claim,
   v1Detail,
   v1DispatchPrompt,
   v1Integration,
@@ -177,6 +178,15 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
           sessionBranch: mode === 'session_lineage' ? (seed ?? 'motir/auto-run') : null,
         }),
       };
+    },
+    // MOTIR-3048 — the ATOMIC claim. Every dispatch path now takes a card
+    // through this endpoint rather than through an assign-then-transition pair,
+    // so a tenant that does not model it leaves the card at `todo` and every
+    // later transition is illegal. It moves the row, exactly as the real one does.
+    'POST /api/v1/work-items/{key}/claim': (req) => {
+      const key = String(req.params['key']);
+      statuses.set(key, 'in_progress');
+      return { body: v1Claim(key) };
     },
     'POST /api/v1/work-items/{key}/transitions': (req) => {
       const key = String(req.params['key']);

@@ -2,6 +2,7 @@ import { CliError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
+  claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
   resolveOwnerId,
@@ -16,6 +17,7 @@ import {
   contradictoryReplanFlags,
   cwdReasonLabel,
   findingsPolicyOf,
+  renderClaimRefusal,
   renderFindingsPolicy,
   renderReplanSubmitted,
   renderRepositoriesBlock,
@@ -499,7 +501,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         });
       }
 
-      const record = await dispatchOne({
+      const outcome = await dispatchOne({
         client,
         item,
         dispatch,
@@ -509,12 +511,20 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         agent,
         clock,
         runAgentFn,
-        ownerId,
         run,
         // The card is integrated in EVERY repository of its lineage, so it is
         // carried by every one of their pull requests (MOTIR-3135).
         onIntegrated: (key) => repo?.forEach((s) => s.keys.push(key)),
       });
+      if (outcome.kind === 'skipped') {
+        // The claim was refused. Recorded beside the loop's other skips — not in
+        // `records`, which is what the failure policy and the exit code read —
+        // and excluded so the next `next_ready` does not offer it straight back.
+        skipped.push({ key: item.key, title: item.title, reason: outcome.reason });
+        excludedKeys.add(item.key.toUpperCase());
+        continue;
+      }
+      const record = outcome.record;
       records.push(record);
 
       // ⚠️ A REFUSED CARD STOPS THE RUN, and `--keep-going` does not override it
@@ -641,8 +651,6 @@ interface DispatchOneInput {
   clock: () => number;
   runAgentFn: typeof runAgent;
   onIntegrated: (key: string) => void;
-  /** Claimed for this owner before the agent launches (MOTIR-2427). */
-  ownerId: string;
   /** The loop's git runner — the push check (MOTIR-3004) uses it. */
   run: CommandRunner;
 }
@@ -661,12 +669,34 @@ interface DispatchOneInput {
 const APPROVE_ATTEMPTS = Number(process.env['MOTIR_APPROVE_ATTEMPTS'] ?? '') || 12;
 const APPROVE_WAIT_MS = Number(process.env['MOTIR_APPROVE_WAIT_MS'] ?? '') || 5_000;
 
-/** Run ONE item through the single-dispatch pipeline and record how it ended. */
-async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId, run } =
-    input;
+/**
+ * What one loop iteration's dispatch resolved to.
+ *
+ * A SKIP is not a record: nothing ran, so there is no outcome, no duration and
+ * no repo to report — and `records` is what the failure policy and the exit
+ * code read. Modelled as a union rather than a nullable record so the caller
+ * cannot forget which of the two it is holding (the same shape `motir batch`'s
+ * drain uses).
+ */
+type DispatchOneResult =
+  | { kind: 'record'; record: DispatchRecord }
+  | { kind: 'skipped'; reason: SkipRecord['reason'] };
 
-  await ensureInProgress(client, item.key, item.status?.key, ownerId);
+/** Run ONE item through the single-dispatch pipeline and record how it ended. */
+async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, run } = input;
+
+  // THE CLAIM, and it can say no (MOTIR-3048). The pick already narrowed to rows
+  // this loop may take, but that read and this write are not one act — so a
+  // sibling can have taken the card in between, and the server is the only thing
+  // that can tell us so. Nothing below has run yet, so a refusal costs the loop
+  // one request and no state.
+  const claim = await ensureInProgress(client, item.key);
+  if (!claimAllowsDispatch(claim)) {
+    info('');
+    info(renderClaimRefusal(claim));
+    return { kind: 'skipped', reason: 'claim_refused' };
+  }
 
   info('');
   info(`── ${item.key} — ${item.title}`);
@@ -703,10 +733,13 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
   if (result.exitCode !== 0) {
     info(`${item.key}: agent exited ${result.exitCode} — left In Progress, nothing reverted.`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+      },
     };
   }
 
@@ -722,7 +755,13 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     // `sessionBranch: null` is the substantive claim here, not bookkeeping: the
     // card was never integrated, so it must not appear among the cards the
     // branch carries or in the pull request this run opens.
-    return { ...base, outcome: 'replanned', sessionBranch: null };
+    // A RECORD, not a skip — and the distinction is the point. A skip means
+    // nothing ran; here an agent ran, read its card and reported. The run has an
+    // outcome to name (MOTIR-3048 introduced the union around this).
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'replanned', sessionBranch: null },
+    };
   }
 
   // A bootstrap dispatch that did not produce its checkout is a FAILED dispatch,
@@ -733,10 +772,13 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     info(`${item.key}: ${suspect.message}`);
     info(`Hint: ${suspect.hint}`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: 'bootstrap checkout missing',
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: 'bootstrap checkout missing',
+      },
     };
   }
 
@@ -752,7 +794,10 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     });
     onIntegrated(item.key);
     info(`${item.key}: integrated on ${dispatch.sessionBranch} in ${formatDuration(durationMs)}.`);
-    return { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch };
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'integrated', sessionBranch: dispatch.sessionBranch },
+    };
   }
 
   // The server kept this item off the session lineage — a target with no repo
@@ -764,17 +809,23 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
   if (workReachedRemote(target.cwd, item.key, null, run) === 'nothing') {
     info(`${item.key}: agent exited 0 but nothing reached the remote — left In Progress.`);
     return {
-      ...base,
-      outcome: 'failed',
-      sessionBranch: null,
-      detail: 'nothing reached the remote',
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: 'nothing reached the remote',
+      },
     };
   }
   await client.transitionStatus({ key: item.key, status: 'implemented' });
   info(
     `${item.key}: Implemented via its own pull request in ${formatDuration(durationMs)} — CI decides when it is reviewable.`,
   );
-  return { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' };
+  return {
+    kind: 'record',
+    record: { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' },
+  };
 }
 
 // ── the end-of-run close-out ────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
   findingsPolicyOf,
   renderAgentFailure,
   renderAgentSuccess,
+  renderClaimRefusal,
   renderNothingPushed,
   renderFindingsPolicy,
   renderReplanSubmitted,
@@ -31,7 +32,7 @@ import {
   type DispatchTarget,
   type FindingsPolicyOptions,
 } from '../dispatch.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
+import type { DispatchItem, DispatchPrompt, MotirClient, WorkItemClaim } from '../client.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
 // (Story 7.9 · Subtask 7.9.3 · MOTIR-881). The heart of the CLI: take one work
@@ -51,18 +52,19 @@ import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 // Code, Codex, opencode, a human reading it — gets the identical instruction
 // and the grammar versions with the product.
 
-/** The workflow status keys the CLI names. Both are the default workflow's
- *  (lib/workflows/defaultWorkflow.ts); a project on a custom workflow surfaces
- *  the server's own allowed-targets error, which is the honest failure. */
-const IN_PROGRESS = 'in_progress';
+/** The workflow status keys the CLI still names. All three are the default
+ *  workflow's (lib/workflows/defaultWorkflow.ts); a project on a custom workflow
+ *  surfaces the server's own allowed-targets error, which is the honest failure.
+ *
+ *  ⚠️ `in_progress` is NOT among them any more (MOTIR-3048): the dispatch flip
+ *  happens inside the server's claim, so no path here writes that status and a
+ *  constant for it would be a name with no caller. `planning` has gone the same
+ *  way — the claim refuses it, so nothing here needs to recognise it. */
 /** Where a FINISHED run leaves the card (MOTIR-3003 / MOTIR-3004): built, pushed,
  *  pull request open, CI not yet green. In Review is written by CI, never here. */
 const IMPLEMENTED = 'implemented';
 const IN_REVIEW = 'in_review';
 const DONE = 'done';
-/** The status a re-planned card sits at (MOTIR-2425) — in the in-progress
- *  category, so a picked run never sees it; `run <key>` warns about it. */
-const PLANNING = 'planning';
 
 /**
  * What `motir done --session` reports about how the work was implemented: the
@@ -139,35 +141,44 @@ export function resolveAgent(
 // ── the shared pipeline ─────────────────────────────────────────────────────
 
 /**
- * Flip an item to In Progress, unless it is already there.
+ * TAKE the card — one locked call, and it can say no (MOTIR-3048).
  *
- * The skip is not an optimisation: the default workflow has no `in_progress →
- * in_progress` self-edge, so re-dispatching an item already in progress (a
- * `motir run` after a failed agent — the documented recovery) would otherwise
- * die on an illegal-transition error before it ever printed a prompt.
+ * This is the single funnel every dispatch path in the CLI goes through, which
+ * is why the claim lives here rather than being repeated in four commands that
+ * could drift. It used to make TWO unlocked writes — a `PATCH { assigneeId }`
+ * followed by a `transition_status` — with a read-to-write gap between them
+ * that two runs starting together fell straight into. Both are now ONE
+ * `POST /work-items/{key}/claim` (MOTIR-2961), which locks the row, re-asserts
+ * the TO-DO category, assigns and transitions inside one transaction. **There
+ * is nothing to transition afterwards: the claim IS the status flip.**
+ *
+ * ⚠️ IT RETURNS THE OUTCOME, AND CALLERS MUST BRANCH ON IT. Not because a
+ * refusal throws — it does not, it is a 200 — but because the four answers call
+ * for four different next moves, and the value of the whole change is in
+ * keeping them apart rather than collapsing them back into "did it throw". This
+ * function handles the one that is pure output (`mine` prints the line the
+ * documented recovery has always printed) and hands the rest to the caller,
+ * whose vocabulary for a refusal differs: `run` / `next` end the command,
+ * `batch` / `auto` record a SKIP and keep going.
  */
-export async function ensureInProgress(
-  client: MotirClient,
-  key: string,
-  currentStatus: string | undefined,
-  ownerId?: string,
-): Promise<void> {
-  // THE CLAIM, and it goes FIRST (MOTIR-2427). Every dispatch path in the CLI
-  // funnels through here, which is why the claim lives here rather than being
-  // repeated in three commands that could drift. Written before the status
-  // moves and long before the agent launches: a claim recorded at the end is
-  // history, and the only version that tells a teammate anything is the one
-  // that lands while the work is happening.
-  //
-  // `ownerId` is optional so a caller that has not resolved `whoami` still
-  // dispatches — an unclaimed run is worse than no run, and on a single-operator
-  // project the claim changes nothing anyone reads.
-  if (ownerId !== undefined) await client.claimWorkItem({ key, ownerId });
-  if (currentStatus === IN_PROGRESS) {
+export async function ensureInProgress(client: MotirClient, key: string): Promise<WorkItemClaim> {
+  const claim = await client.claimWorkItem({ key });
+  if (claim.outcome === 'mine') {
     info(`${key}: already In Progress — leaving the status as it is.`);
-    return;
   }
-  await client.transitionStatus({ key, status: IN_PROGRESS });
+  return claim;
+}
+
+/**
+ * May this run dispatch, given what the claim resolved to?
+ *
+ * `claimed` and `mine` are both a yes — the second is the interrupted run this
+ * session is resuming, which is the recovery `motir run <key>` exists to serve.
+ * Exported so the four entry points ask the SAME question rather than each
+ * writing its own list of outcome strings.
+ */
+export function claimAllowsDispatch(claim: WorkItemClaim): boolean {
+  return claim.outcome === 'claimed' || claim.outcome === 'mine';
 }
 
 interface DeliverInput {
@@ -383,7 +394,14 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
       return;
     }
 
-    await ensureInProgress(client, item.key, item.status?.key, ownerId);
+    const claim = await ensureInProgress(client, item.key);
+    if (!claimAllowsDispatch(claim)) {
+      // The server refused between the pick and the claim — a sibling took it,
+      // or it left the to-do category. `next` has nothing else in hand, so it
+      // reports and ends: re-running picks whatever is next.
+      info(renderClaimRefusal(claim));
+      return;
+    }
     const dispatch = await client.dispatchPrompt(item.key, {
       findingsPolicy: findingsPolicyOf(opts),
     });
@@ -412,9 +430,18 @@ export async function resolveOwnerId(client: MotirClient): Promise<string> {
 /**
  * Why a NAMED card would not have been picked — or null when it would have been.
  *
- * Only for `motir run <key>`, which is told which card to take. It reports the
- * same two conditions {@link isPickable} refuses on, in the words a person needs
- * in order to decide whether to carry on: WHOSE it is, or WHERE it is.
+ * ONE axis now: WHOSE it is (MOTIR-3048). It used to warn about WHERE it is too
+ * — `in_review`, `planning` — and then dispatch anyway, on the reasoning that a
+ * person who names a key has a reason. That is a good argument about ownership
+ * and a bad one about state, and the server settles the state half now: the
+ * claim refuses anything outside the TO-DO category, so those two warnings
+ * would describe outcomes that can no longer happen. A warning for something
+ * that cannot occur is noise, and eventually a lie.
+ *
+ * The assignee axis stays here because it is the one the server deliberately
+ * does NOT refuse: a to-do card assigned to a teammate is still claimable, and
+ * taking a card off somebody is a thing a person is allowed to decide. They
+ * just have to be told they are doing it.
  */
 export function pickWarning(
   item: { status: string; assigneeId: string | null },
@@ -422,12 +449,6 @@ export function pickWarning(
 ): string | null {
   if (item.assigneeId !== null && item.assigneeId !== ownerId) {
     return 'assigned to someone else — dispatching it anyway will put two agents on one card.';
-  }
-  if (item.status === IN_REVIEW) {
-    return 'already In Review — its pull request is waiting on a human, not on an agent.';
-  }
-  if (item.status === PLANNING) {
-    return 'being re-planned — a human has not acted on the plan yet.';
   }
   return null;
 }
@@ -520,16 +541,30 @@ export async function runCommand(
     }
 
     // `run` is GIVEN a card by a person; `next` / `auto` / `batch` PICK one. So
-    // the pickable rule WARNS here instead of refusing (MOTIR-2427): a human who
-    // names a key has a reason, and refusing outright would break the documented
-    // recovery for a card an agent left in progress. The warning still has to be
-    // said — dispatching onto a teammate's live card is the failure this whole
-    // card exists to make visible, and silence is what made it invisible.
+    // the ASSIGNEE axis warns here instead of refusing (MOTIR-2427): a human who
+    // names a key has a reason to take a card off a teammate, and refusing
+    // outright would break the documented recovery for a card an agent left in
+    // progress. The warning still has to be said — dispatching onto a
+    // teammate's live card is the failure this whole card exists to make
+    // visible, and silence is what made it invisible.
+    //
+    // The STATUS axis is no longer warned about (MOTIR-3048). The claim below
+    // refuses anything outside the to-do category, so `in_review`, `planning`
+    // and `done` are answered by the server, in the one place they can actually
+    // be enforced.
     const ownerId = await resolveOwnerId(client);
     const warning = pickWarning(item, ownerId);
     if (warning) info(`${item.identifier}: ${warning}`);
 
-    await ensureInProgress(client, item.identifier, item.status, ownerId);
+    const claim = await ensureInProgress(client, item.identifier);
+    if (!claimAllowsDispatch(claim)) {
+      // ⚠️ A REFUSAL ENDS THE COMMAND — cleanly, not as an error. `run` was
+      // given ONE card and cannot substitute another, and the four outcomes are
+      // ordinary states rather than failures, so there is nothing to throw:
+      // the refusal names who holds it, or where it is, and exits 0.
+      info(renderClaimRefusal(claim));
+      return;
+    }
     const dispatch = await client.dispatchPrompt(item.identifier, {
       findingsPolicy: findingsPolicyOf(opts),
     });

@@ -429,6 +429,9 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     ['openPlanSession', 'open_plan_session'],
     ['appendPlanTurn', 'append_plan_turn'],
     ['submitPlanSession', 'submit_plan_session'],
+    // MOTIR-2961 — the keyed claim ships on BOTH surfaces over one service
+    // method, so the two must ask for the same permission.
+    ['claimWorkItem', 'claim_work_item'],
   ];
 
   it.each(MIRRORED)('%s asks for the same permission as the %s tool', (operationId, tool) => {
@@ -437,9 +440,11 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 42 declarations names a GRANTABLE permission', () => {
-    // 42 since MOTIR-3021 added `POST /api/v1/plans/{planId}/approval`.
-    expect(V1_OPERATIONS.length).toBe(42);
+  it('every one of the 43 declarations names a GRANTABLE permission', () => {
+    // 43: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim` and MOTIR-3017's
+    // `POST …/work-items/{key}/plan-approval`. Both branches independently wrote
+    // 42 for their own addition, which is what this count exists to catch.
+    expect(V1_OPERATIONS.length).toBe(43);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

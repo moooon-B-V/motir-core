@@ -500,7 +500,11 @@ describe('motir auto — a whole run through the real session', () => {
       },
     );
 
-    expect(v1CallsTo('POST', '/transitions').length).toBeGreaterThan(0);
+    // The card was CLAIMED — the dispatch flip lives inside that one call now
+    // (MOTIR-3048) — and nothing moved it afterwards: a bootstrap dispatch that
+    // produced no checkout is a FAILED dispatch, so it earns no `implemented`.
+    expect(v1CallsTo('POST', '/claim').length).toBeGreaterThan(0);
+    expect(v1CallsTo('POST', '/transitions')).toEqual([]);
     expect(v1CallsTo('POST', '/integration')).toEqual([]);
     expect(process.exitCode).toBe(1);
   });

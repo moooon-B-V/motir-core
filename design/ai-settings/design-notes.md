@@ -218,7 +218,7 @@ the set from `PLANNER_MODELS` at implementation time.
 1. **Default / off.** Every AI setting ships off or at its default, so an existing project is
    untouched until someone opts in. A dependent control is **present but disabled**, never hidden —
    the reader sees what the switch will unlock (the Linear cycle-settings shape). The disabled
-   dependent keeps its layout; only its opacity + text tokens drop (`--el-text-faint`).
+   dependent keeps its layout; only its opacity + text tokens drop (`--el-text-faint`). — faint is correct here: a disabled dependent, which WCAG 1.4.3 exempts.
 2. **Configured.** Parent on → dependent live **and that group's explanatory callout appears**. The
    callouts render only when the setting is live, so the default view stays quiet.
 3. **Validation.** `threshold ≥ 1`; `sprintLengthDays` within 1–14. The stepper's `−`/`+` disables at

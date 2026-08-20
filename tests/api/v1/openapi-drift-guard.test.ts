@@ -477,6 +477,18 @@ describe('every operation’s REAL response validates against its declared schem
       { key },
     );
 
+    // ── The keyed CLAIM (MOTIR-2961) ────────────────────────────────────────
+    // On its OWN item, and deliberately not the shared one: a claim moves the
+    // card to `in_progress` and assigns it, which would change the state the
+    // drives above asserted against.
+    const claimable = await createItem('An item to claim');
+    await drive(
+      'claimWorkItem',
+      () => import('@/app/api/v1/work-items/[key]/claim/route'),
+      send(`/api/v1/work-items/${claimable}/claim`, 'POST'),
+      { key: claimable },
+    );
+
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
     // `in_review` and `completeSession` then closes it, so driving them on the
