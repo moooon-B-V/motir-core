@@ -25,6 +25,13 @@
 //     fixture, so the audit-coverage journey (MOTIR-2244) can drive the
 //     SERVER-rendered /code-health page — which a browser `page.route` cannot
 //     reach — with no motir-ai instance.
+//   - E2E_TEST_AI_JOBS=1 → lib/test-ai-jobs-mock intercepts the motir-ai JOBS
+//     seam (the MOTIR_AI_URL origin's POST /v1/jobs, GET /v1/jobs/:id and its
+//     /stream). The ask journey crosses that seam three times and only the
+//     stream RELAY is browser-visible, so a `page.route` stub would have to fake
+//     the answer — and an answer the browser faked was never written, which is
+//     precisely what MOTIR-1823's reload step has to prove.
+//
 //   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
 //     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
 //     readiness read, the CI stub, the admin invite), so the repository-set
@@ -53,6 +60,7 @@ export async function register() {
   const wantBillingMock = process.env['E2E_TEST_BILLING'] === '1';
   const wantGithubReposMock = process.env['E2E_TEST_GITHUB_REPOS'] === '1';
   const wantCodeHealthMock = process.env['E2E_TEST_CODE_HEALTH'] === '1';
+  const wantAiJobsMock = process.env['E2E_TEST_AI_JOBS'] === '1';
   if (
     !wantOauthMock &&
     !wantBlobMock &&
@@ -107,5 +115,11 @@ export async function register() {
     installCodeHealthBoundaryMock(agent);
     // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
     console.log('[INSTRUMENT] E2E_TEST_CODE_HEALTH active — motir-ai code-health seam mocked.');
+  }
+  if (wantAiJobsMock) {
+    const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
+    installAiJobsBoundaryMock(agent);
+    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
+    console.log('[INSTRUMENT] E2E_TEST_AI_JOBS active — motir-ai jobs seam mocked.');
   }
 }

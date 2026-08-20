@@ -1,0 +1,271 @@
+import { writeFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test, expect } from './_helpers/acceptance-video';
+import { resetDatabase, db } from './_helpers/db-reset';
+import { signIn } from './_helpers/shell-session';
+import {
+  seedAiAugmentReplan,
+  seedPlanChangeProposal,
+  markProjectOnboarded,
+  PLAN_CHANGE_JOB_ID,
+} from './_helpers/ai-augment-replan-seed';
+
+// ACCEPTANCE — ask about this project, then act on it, in ONE conversation
+// (Story MOTIR-1343 · Subtask MOTIR-1823).
+//
+// ⚠️ WHAT THE CLIP HAS TO SHOW, and why step 6 is the whole point. Every other
+// step here proves a feature works. Step 6 proves the SHAPE of the product: the
+// callout's rows share one surface *because a person changes topic mid-sentence*,
+// so a thread that could answer but not act would be the failure the design was
+// built to prevent. A viewer has to watch somebody ask a question, get a cited
+// answer, and then — with no control touched, no mode chosen, nothing closed —
+// ask for a change and see the confirm chrome arrive. That absence of a gesture
+// is the deliverable, which is exactly why it has to be filmed rather than
+// asserted in a unit test.
+//
+// ── THE BOUNDARY, and why it is not a `page.route` ──────────────────────────
+// The ask journey crosses motir-core → motir-ai three times and only the STREAM
+// is a browser-visible relay; the submit and the settle happen inside the Next
+// server. Stubbing the two core routes at the browser would mean faking the
+// answer — and an answer the browser faked was never written, which is precisely
+// what step 4's reload has to prove. So the seam is `lib/test-ai-jobs-mock.ts`,
+// an undici intercept under the routes (`E2E_TEST_AI_JOBS=1`), and the real
+// route → service → repository → Postgres chain runs for all seven steps.
+//
+// ── THE LANE ────────────────────────────────────────────────────────────────
+// The ACCEPTANCE lane, and the reason is the environment as much as the receipt:
+// the workspace only mounts with `MOTIR_AI_URL` set, and the jobs mock this spec
+// declares its fixtures to is installed by that lane's config.
+
+test.describe.configure({ timeout: 120_000 });
+
+const JOBS_FIXTURE =
+  process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ?? '/tmp/motir-acceptance-ai-jobs-fixture.json';
+
+/** What the next ask job(s) settle as, consumed in order by the boundary mock. */
+function declareAskOutcomes(
+  outcomes: { intent: 'ask' | 'plan_change'; answer?: string | null; citations?: string[] }[],
+): void {
+  writeFileSync(JOBS_FIXTURE, JSON.stringify({ ask: outcomes }, null, 2));
+}
+
+// ── Locators ─────────────────────────────────────────────────────────────────
+
+const orb = (page: Page) => page.getByRole('button', { name: 'Motir AI' });
+const calloutPanel = (page: Page) => page.getByRole('dialog', { name: 'Motir AI' });
+const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
+const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or refine/ });
+const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
+const canvasFooter = (page: Page) => page.getByTestId('plan-change-canvas-footer');
+const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
+const answers = (page: Page) => rail(page).getByTestId('plan-change-report');
+
+/**
+ * Send a turn and wait on the ASK DOOR's own 200 — the authoritative signal that
+ * the thread advanced, because the turn is a persisted row written by that call.
+ * Never a timeout: the answer streams, which is the exact shape the repo's
+ * flaky-spec rule exists for.
+ */
+async function sendTurn(page: Page, text: string): Promise<void> {
+  const asked = page.waitForResponse(
+    // The DOOR itself, not the settle — `/api/ai/ask/settle` shares the prefix,
+    // and matching it here would resolve on the previous turn's filing.
+    (r) => new URL(r.url()).pathname === '/api/ai/ask' && r.request().method() === 'POST',
+  );
+  await composer(page).fill(text);
+  await page.getByRole('button', { name: 'Send' }).click();
+  expect((await asked).status()).toBe(200);
+}
+
+/** …and wait for the SETTLE, which is what files the answer on the thread. */
+async function settled(page: Page): Promise<void> {
+  await page.waitForResponse(
+    (r) => r.url().includes('/api/ai/ask/settle') && r.request().method() === 'POST',
+  );
+}
+
+test.beforeEach(async () => {
+  await resetDatabase();
+});
+
+test.afterAll(async () => {
+  await db.$disconnect();
+});
+
+test('ask about this project — a cited answer, then a plan change in the SAME thread', async ({
+  page,
+  chapter,
+  beat,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-1343');
+  const seed = await seedAiAugmentReplan(`ask-project-${Date.now()}@example.com`);
+  await markProjectOnboarded(seed.projectId);
+
+  // The plan the REDIRECTED turn produces — a real Plan, exactly as the shipped
+  // plan-change path leaves one. Step 6 drives that path; it does not fake it.
+  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
+    jobId: PLAN_CHANGE_JOB_ID,
+    title: 'Split notifications',
+    adds: ['Email notifications'],
+    rename: { workItemId: seed.notifId, title: 'Notifications & alerts' },
+  });
+
+  // Turn 1 answers with a citation; turn 2 is the redirect that becomes a plan
+  // change; turn 3 is the honest no-answer.
+  declareAskOutcomes([
+    {
+      intent: 'ask',
+      answer: `Two are waiting on work that has not started. [${seed.notifKey}](motir:${seed.notifId}) is the one to look at first.`,
+      citations: [seed.notifKey],
+    },
+    { intent: 'plan_change' },
+    {
+      intent: 'ask',
+      answer: "I can't answer that from this project. Nothing in the plan covers SSO pricing.",
+      citations: [],
+    },
+  ]);
+
+  // ⚠️ THE ONE THING THIS SPEC REDIRECTS RATHER THAN RUNS, and why.
+  //
+  // Step 6's turn takes the real redirect: the ask handler hands it back, and
+  // motir-core dispatches the SHIPPED plan-change submit, which opens a Plan of
+  // its own server-side. In production motir-ai then appends that run's
+  // proposals into it; here nothing does, so the Plan the rail reads would be
+  // empty and the gate would never appear — a false red about a path that works.
+  //
+  // So the plan READ is pointed at a SEEDED plan carrying the proposals such a
+  // run would have left. It is a real Plan, read through the real route by the
+  // real client: what is faked is WHICH plan, never what a plan is. The submit,
+  // the redirect, the dispatch and the turn's recorded intent are all live.
+  await page.route('**/api/plans/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.pathname === `/api/plans/${planId}`) {
+      await route.continue();
+      return;
+    }
+    await route.continue({ url: `${url.origin}/api/plans/${planId}` });
+  });
+
+  await signIn(page, seed.email, seed.password);
+
+  await chapter('The Motir orb offers to answer questions about the project', async () => {
+    // ⚠️ ADDRESSED BY ITS ACCESSIBLE NAME, never by its glyph. The orb renders an
+    // `aria-hidden` <svg> now — the mark, not a letter — so a text handle would
+    // both fail and quietly re-assert the placeholder this story retired.
+    await expect(orb(page)).toBeVisible();
+    await orb(page).click();
+
+    const panel = calloutPanel(page);
+    await expect(panel.getByRole('link', { name: /Ask about this project/ })).toBeVisible();
+    await expect(
+      panel.getByText('Answer questions about the plan, docs and work items'),
+    ).toBeVisible();
+
+    // ⭐ ONE HREF, asserted as EQUALITY. The row is a LABEL, not a route: it
+    // advertises what the surface can do and narrows nothing. A second
+    // destination here would be the "ask mode" the design deliberately does not
+    // have, arriving through the door.
+    const askHref = await panel
+      .getByRole('link', { name: /Ask about this project/ })
+      .getAttribute('href');
+    const planHref = await panel.getByRole('link', { name: /Plan with AI/ }).getAttribute('href');
+    expect(askHref).toBe(planHref);
+    expect(askHref).not.toContain('mode=ask');
+    await beat();
+  });
+
+  await chapter('It opens the one workspace — the same one Plan with AI opens', async () => {
+    await calloutPanel(page)
+      .getByRole('link', { name: /Ask about this project/ })
+      .click();
+    await page.waitForURL(/\/planning\?/);
+
+    await expect(canvas(page)).toBeVisible({ timeout: 30_000 });
+    await expect(rail(page)).toBeVisible();
+    // The opener names BOTH capabilities — the surface answers and it acts.
+    await expect(
+      rail(page).getByText('What should change — or what would you like to know?'),
+    ).toBeVisible();
+    await expect(
+      rail(page).getByRole('button', { name: "What's blocked, and why?" }),
+    ).toBeVisible();
+    // Nothing is proposed, and the canvas footer says so rather than vanishing.
+    await expect(confirmBar(page)).toHaveCount(0);
+    await expect(canvasFooter(page)).toContainText('Roadmap — as saved');
+    await beat();
+  });
+
+  await chapter('Ask a question — the answer arrives with its sources', async () => {
+    await sendTurn(page, 'Which stories are blocked, and why?');
+    await settled(page);
+
+    await expect(answers(page)).toContainText('Two are waiting on work that has not started');
+    // The citation is the SHIPPED work-item chip, not a treatment invented here.
+    await expect(answers(page).getByText(seed.notifKey, { exact: true })).toBeVisible();
+    await expect(page.getByTestId('plan-change-citation-count')).toContainText(
+      'Answered from 1 work item',
+    );
+    await beat();
+  });
+
+  await chapter('An answer changed nothing — and the canvas says so', async () => {
+    // The no-mutation claim, checked on the TREE rather than on the absence of a
+    // bar: the roadmap still shows the project as saved, with no diff on it.
+    await expect(confirmBar(page)).toHaveCount(0);
+    await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);
+    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(0);
+    await expect(canvasFooter(page)).toContainText('Nothing proposed');
+    await beat();
+  });
+
+  await chapter('Click a source — it opens the work item it cited', async () => {
+    await answers(page).getByText(seed.notifKey, { exact: true }).click();
+    await page.waitForURL(new RegExp(`(items/${seed.notifKey}|peek=)`));
+    await beat();
+  });
+
+  await chapter('Come back and reload — the answer is still on the thread', async () => {
+    await page.goBack();
+    await page.waitForURL(/\/planning\?/);
+    await page.reload();
+
+    // The persistence claim, which only an E2E can really make: the answer is a
+    // row, not client state, and its citation resolves again on a fresh read.
+    await expect(answers(page)).toContainText('Two are waiting on work that has not started');
+    await expect(answers(page).getByText(seed.notifKey, { exact: true })).toBeVisible();
+    await beat();
+  });
+
+  await chapter('⭐ Ask for a CHANGE in the same thread — the chrome comes back', async () => {
+    // Nothing is switched, closed or chosen. The next sentence is simply a
+    // different kind of sentence, and the surface follows it.
+    await sendTurn(page, 'Then split the notifications story into email and in-app.');
+
+    await expect(confirmBar(page)).toContainText('1 added, 1 changed', { timeout: 30_000 });
+    await expect(confirmBar(page)).toContainText('Nothing is saved until you approve.');
+    await expect(page.locator('[data-diff-state="add"]')).toHaveCount(1);
+
+    // BOTH turn kinds are on the one thread, in order — the answer above, the
+    // proposal below it.
+    await expect(rail(page).getByText('turn 1')).toBeVisible();
+    await expect(answers(page).first()).toContainText('Two are waiting');
+    await beat();
+  });
+
+  await chapter('And it can still answer — honestly, when it cannot', async () => {
+    await sendTurn(page, 'What did we decide about SSO pricing?');
+    await settled(page);
+
+    // An empty answer is a real answer: an ordinary bubble that says what it
+    // could not find, never an invented one and never an error.
+    await expect(answers(page).last()).toContainText("I can't answer that from this project");
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await beat();
+  });
+
+  // The proposal from step 6 is still pending — asking a question mid-review is
+  // a LOOKUP, not an abandonment, so the gate is exactly where it was.
+  await expect(confirmBar(page)).toBeVisible();
+});
