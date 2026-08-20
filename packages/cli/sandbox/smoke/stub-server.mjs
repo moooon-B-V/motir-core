@@ -131,16 +131,26 @@ const ITEMS = Array.from({ length: ITEM_COUNT }, (_unused, i) => ({
  *
  * So the stub has to model the real rule instead, and the real rule is simple —
  * `workItemsService.listReady` returns childless leaves in the **todo** status
- * CATEGORY. `motir auto` flips an item to `in_progress` before fetching its
- * prompt, and that flip is what drops it out. Modelling it any other way (a
- * counter, an integration flag) would let a loop that never transitioned an item
- * still drain the set — which is precisely the regression the sequence
- * assertions exist to catch.
+ * CATEGORY. `motir auto` moves an item to `in_progress` before launching its
+ * agent, and that move is what drops it out. Modelling it any other way (a
+ * counter, an integration flag) would let a loop that never took an item still
+ * drain the set — which is precisely the regression the sequence assertions
+ * exist to catch.
+ *
+ * ⚠️ THE MOVE IS THE CLAIM'S NOW (MOTIR-3048), not a separate transition. The
+ * loop used to write `PATCH { assigneeId }` and then `POST /transitions`; both
+ * are one `POST /claim`, which assigns and flips under one lock. So `claim()`
+ * below is what mutates this map — and a stub that kept the flip on the
+ * transition would drain on a request the CLI no longer makes.
  */
 const statuses = new Map(ITEMS.map((item) => [item.key, item.status]));
-/** Who has claimed each item — written by the PATCH the loop makes before every
- *  dispatch (MOTIR-2427), and read back by the detail body. */
+/** Who has claimed each item — written by the CLAIM the loop makes before every
+ *  dispatch (MOTIR-2427/MOTIR-3048), and read back by the detail body. */
 const assignees = new Map();
+/** The token owner every claim assigns to. It comes from the TOKEN on the real
+ *  endpoint, not from a body, so the stub reads it off `me()` rather than off
+ *  the request — which is the property that makes the assertion meaningful. */
+const OWNER = { id: 'u1', name: 'Smoke User' };
 
 const IN_PROGRESS = { key: 'in_progress', category: 'in_progress' };
 const IN_REVIEW = { key: 'in_review', category: 'in_progress' };
@@ -247,15 +257,61 @@ function transition(key, body) {
 }
 
 /**
- * The CLAIM (MOTIR-2427) — a plain assignment before every dispatch.
+ * The CLAIM (MOTIR-2961/MOTIR-3048) — ONE locked call that assigns AND flips.
  *
- * Answers the full `WorkItemDetail` the PATCH declares, for the same reason the
- * transition does: the CLI discards the body but VALIDATES it first, so a thin
- * one fails the run with a field name rather than a routing error.
+ * It replaced the `PATCH { assigneeId }` + `POST /transitions` pair the loop
+ * used to make, so this is now the ONLY thing that moves an item out of the
+ * ready set on the dispatch path. There is no request body at all: the owner
+ * comes from the token, which is why the stub assigns {@link OWNER} rather than
+ * echoing something back.
+ *
+ * ⚠️ IT DISCRIMINATES, and the stub answers with the same four outcomes the real
+ * service does — the CLI branches on them, so a stub that always said `claimed`
+ * would let a refusal-handling regression through. The rule is the to-do
+ * CATEGORY, never a status key: `todo` and `blocked` are claimable, an
+ * `in_progress` row is `mine` or `taken` depending on who holds it, and
+ * everything else is `not_claimable`.
  */
-function claim(key, body) {
-  if (typeof body?.assigneeId === 'string') assignees.set(key, body.assigneeId);
-  return workItemDetail(key);
+function claim(key) {
+  const status = statuses.get(key) ?? { key: 'todo', category: 'todo' };
+  const holder = assignees.get(key) ?? null;
+  const base = {
+    key,
+    title: ITEMS.find((row) => row.key === key)?.title ?? `Smoke item ${key}`,
+    transitionedAt: NOW,
+  };
+
+  if (status.category === 'todo') {
+    statuses.set(key, IN_PROGRESS);
+    assignees.set(key, OWNER.id);
+    return {
+      ...base,
+      outcome: 'claimed',
+      claimed: true,
+      status: IN_PROGRESS,
+      assignee: { id: OWNER.id, name: OWNER.name },
+      transitionedBy: { id: OWNER.id, name: OWNER.name },
+    };
+  }
+  if (status.key === 'in_progress') {
+    const mine = holder === OWNER.id;
+    return {
+      ...base,
+      outcome: mine ? 'mine' : 'taken',
+      claimed: false,
+      status: IN_PROGRESS,
+      assignee: holder ? { id: holder, name: mine ? OWNER.name : holder } : null,
+      transitionedBy: holder ? { id: holder, name: mine ? OWNER.name : holder } : null,
+    };
+  }
+  return {
+    ...base,
+    outcome: 'not_claimable',
+    claimed: false,
+    status,
+    assignee: holder ? { id: holder, name: holder } : null,
+    transitionedBy: null,
+  };
 }
 
 function integration(key, body) {
@@ -365,7 +421,7 @@ const ROUTES = [
     '/api/v1/work-items/{key}/transitions',
     (params, _query, body) => transition(params.key, body),
   ],
-  ['PATCH', '/api/v1/work-items/{key}', (params, _query, body) => claim(params.key, body)],
+  ['POST', '/api/v1/work-items/{key}/claim', (params) => claim(params.key)],
   [
     'POST',
     '/api/v1/work-items/{key}/integration',
@@ -443,6 +499,7 @@ export const __fixtures = {
   workItemDetail,
   dispatchPrompt,
   transition,
+  claim,
   integration,
   matchRoute,
   ITEMS,

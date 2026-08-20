@@ -304,6 +304,30 @@ export interface AgentStep {
    * which is precisely the failure the story is about.
    */
   perRepoPr?: { file: string };
+  /**
+   * Do what the prompt's THE-CARD-IS-WRONG branch tells a real agent to do
+   * (MOTIR-3025): read the key and the transition instruction OUT OF THE PROMPT,
+   * move the card to `planning`, submit the re-plan the prompt spells out, and
+   * exit 0.
+   *
+   * ⚠️ EVERYTHING COMES FROM THE PROMPT — the key, the status and the `motir
+   * plan --detach` line — so an assertion about what the card ends up at is
+   * evidence about the PROMPT, not about this fixture. An agent handed a prompt
+   * with no re-plan branch (the `--disable-replan` case) finds no submit line
+   * and correctly does not submit, which is exactly what that case has to prove.
+   */
+  refuseCard?: { finding: string };
+  /**
+   * Do what the prompt's FOUND A DEFECT branch tells a real agent to do
+   * (MOTIR-3025): file a `bug` under the parent the prompt NAMES, carrying a
+   * reproduction and evidence, then carry on and finish its own card.
+   *
+   * Reads the parent key out of the prompt's `parentKey:` line, so a prompt that
+   * named the wrong parent — or a run whose policy removed the branch entirely —
+   * shows up as a bug in the wrong place, or no bug at all, rather than as this
+   * fixture's own opinion.
+   */
+  fileBug?: { title: string; file?: string };
 }
 
 export interface FakeAgent {
@@ -468,6 +492,102 @@ if (step.perRepoPr) {
       ],
       wtDir,
     );
+  }
+}
+
+// ── the FINDINGS branches (MOTIR-3025) ──────────────────────────────────────
+// Both read the PROMPT and do what it says. The API base and the token come
+// from the environment the CLI itself was configured with, because that is what
+// a real dispatched agent has.
+const promptText = (promptFile && existsSync(promptFile) ? readFileSync(promptFile, 'utf8') : stdin);
+
+async function api(path, init) {
+  const base = process.env.MOTIR_FAKE_AGENT_SERVER;
+  const token = process.env.MOTIR_FAKE_AGENT_TOKEN;
+  if (!base || !token) {
+    process.stderr.write('fake-agent: no server/token in the environment' + '\\n');
+    process.exit(9);
+  }
+  const res = await fetch(base + path, {
+    ...init,
+    headers: {
+      authorization: 'Bearer ' + token,
+      'content-type': 'application/json',
+      ...(init && init.headers ? init.headers : {}),
+    },
+  });
+  // A real agent would read the refusal and say so; a fixture that swallowed it
+  // would make a missing write look like a policy that was switched off, which
+  // is the one thing these tests must be able to tell apart.
+  if (!res.ok) {
+    const body = await res.text();
+    process.stderr.write('fake-agent: ' + path + ' -> ' + res.status + ' ' + body + '\\n');
+  }
+  return res;
+}
+
+if (step.refuseCard) {
+  // The key, as the prompt's own header states it.
+  const key = (promptText.match(/executing \\w+ ([A-Z][A-Z0-9]*-\\d+)/) ?? promptText.match(/([A-Z][A-Z0-9]*-\\d+)/) ?? [])[1];
+  if (!key) {
+    process.stderr.write('fake-agent: no work item key in the prompt\\\n');
+    process.exit(9);
+  }
+  // Step 3 of the branch, always present: comment the finding.
+  await api('/api/v1/work-items/' + key + '/comments', {
+    method: 'POST',
+    body: JSON.stringify({ bodyMd: step.refuseCard.finding }),
+  });
+  // ⚠️ ONLY IF THE PROMPT SAYS SO. A run launched with --disable-replan renders
+  // no 'status planning' step and no submit line; an agent reading that prompt
+  // leaves the card In Progress, which is what the disabled case must show.
+  if (/status planning/.test(promptText)) {
+    await api('/api/v1/work-items/' + key + '/transitions', {
+      method: 'POST',
+      body: JSON.stringify({ status: 'planning' }),
+    });
+  }
+  const submit = promptText.match(/motir plan --detach ([A-Z][A-Z0-9]*-\\d+)/);
+  if (submit) {
+    const anchored = submit[1];
+    const project = anchored.split('-')[0];
+    await api('/api/v1/projects/' + project + '/plan-session/turns', {
+      method: 'POST',
+      body: JSON.stringify({ body: step.refuseCard.finding, targetKeys: [anchored] }),
+    });
+    await api('/api/v1/projects/' + project + '/plan-session/submissions', {
+      method: 'POST',
+      body: JSON.stringify({ targetKeys: [anchored] }),
+    });
+  }
+}
+
+if (step.fileBug) {
+  // ⚠️ THE PARENT COMES FROM THE PROMPT, which names it outright. A prompt with
+  // no FOUND A DEFECT branch has no 'parentKey:' line, so this files nothing —
+  // the absence the --disable-log-bug case has to prove.
+  const parent = (promptText.match(/parentKey: ([A-Z][A-Z0-9]*-\\d+)/) ?? [])[1];
+  const key = (promptText.match(/executing \\w+ ([A-Z][A-Z0-9]*-\\d+)/) ?? [])[1];
+  if (parent) {
+    await api('/api/v1/projects/' + parent.split('-')[0] + '/work-items', {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'bug',
+        title: step.fileBug.title,
+        parentKey: parent,
+        descriptionMd: [
+          '## Reproduction',
+          'Open the surface named above and repeat the action.',
+          '## Evidence',
+          'The command pnpm vitest run tests/x.test.ts printed 1 failed.',
+          '## Seen on',
+          (key ?? 'the card in flight') + ', on the branch this run worked in.',
+        ].join('\\n'),
+      }),
+    });
+  }
+  if (step.fileBug.file) {
+    writeFileSync(join(process.cwd(), step.fileBug.file), 'work by the fake agent\\\n');
   }
 }
 

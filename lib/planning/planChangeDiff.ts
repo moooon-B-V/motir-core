@@ -43,9 +43,30 @@ export function isProposedNodeId(id: string): boolean {
  */
 const TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 
+/**
+ * Has this `add` BECOME a work item? `materialize` stamps `plan_item.workItemId`
+ * on every add it creates, `getPlanReview` then keys the item's `nodeId` by that
+ * work item and populates its `identifier` (MOTIR-3160) — so a non-null
+ * identifier on an `add` is the review model saying "this is a card now".
+ *
+ * It matters here because the overlay OUTLIVES the decision (MOTIR-3162): a
+ * materialized add is no longer a proposal beside the tree, it IS the committed
+ * card, and drawing it as a synthetic `proposed:` node puts a second, keyless
+ * copy of every accepted card on the canvas (bug MOTIR-3206). A DECLINED add
+ * never materialized, keeps a null identifier, and correctly stays a ghost —
+ * Part VI §3: *"a declined `add` keeps `new`, and must"*.
+ */
+function isMaterializedAdd(item: PlanReviewItemDto): boolean {
+  return item.op === 'add' && item.identifier !== null;
+}
+
 /** One proposed `add`, placed in the drill-down forest. */
 export interface ProposedAdd {
-  /** The synthetic canvas node id (`proposed:<planItemId>`). */
+  /** The canvas node id: the synthetic `proposed:<planItemId>` while the add is
+   *  still a proposal, and the WORK ITEM's own id once it has materialized — the
+   *  same id the committed node on the level carries, which is what lets
+   *  `decoratePlanChangeLevel` land the decided treatment ON that node instead of
+   *  beside it (MOTIR-3160's rule, on this canvas). */
   nodeId: string;
   /** The review item itself — already the shape `PlanItemNode` draws. */
   item: PlanReviewItemDto;
@@ -95,14 +116,22 @@ export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanC
     else removalsById.set(item.nodeId, item);
   }
 
-  // Which node ids belong to a PROPOSED item, so a parent ref pointing at one is
-  // prefixed and a parent ref pointing at a committed item is left alone.
-  const addNodeIds = new Set(addItems.map((item) => item.nodeId));
+  // Which node ids belong to a still-PROPOSED item, so a parent ref pointing at
+  // one is prefixed and a parent ref pointing at a committed item is left alone.
+  //
+  // A MATERIALIZED add is deliberately not in this set: its node id is already a
+  // real work-item id, so it needs no prefix and a child of it must point at that
+  // same id — otherwise a decided add's children would be parented on a node that
+  // is not on the canvas (the same failure `getPlanReview`'s ref resolution fixes
+  // server-side).
+  const proposedNodeIds = new Set(
+    addItems.filter((item) => !isMaterializedAdd(item)).map((item) => item.nodeId),
+  );
   const canvasNodeId = (nodeId: string) =>
-    addNodeIds.has(nodeId) ? `${PROPOSED_NODE_PREFIX}${nodeId}` : nodeId;
+    proposedNodeIds.has(nodeId) ? `${PROPOSED_NODE_PREFIX}${nodeId}` : nodeId;
 
   const adds: ProposedAdd[] = addItems.map((item) => ({
-    nodeId: `${PROPOSED_NODE_PREFIX}${item.nodeId}`,
+    nodeId: canvasNodeId(item.nodeId),
     item,
     parentNodeId: item.parentNodeId === null ? null : canvasNodeId(item.parentNodeId),
     hasChildren: false,

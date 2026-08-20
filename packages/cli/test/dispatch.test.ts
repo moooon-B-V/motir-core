@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentSubmittedReplan,
   checkBootstrapCheckout,
   cwdReasonLabel,
   renderAgentFailure,
   renderAgentSuccess,
   renderDispatchAdvisories,
   renderDispatchSummary,
+  renderReplanSubmitted,
   renderRepositoriesBlock,
   renderResumeNotice,
   renderSessionOutcomes,
@@ -757,5 +759,42 @@ describe('renderAgentFailure names how wide the half-done work is', () => {
     expect(renderAgentFailure('PROD-7', 3)).toBe(
       renderAgentFailure('PROD-7', 3, withRepos(['motir-core', 'awaiting'])),
     );
+  });
+});
+
+describe('the submitted RE-PLAN read-back (MOTIR-3018)', () => {
+  it('reports a card left at planning as a submitted re-plan', async () => {
+    const client = { getWorkItem: async () => ({ item: { status: 'planning' } }) };
+    await expect(agentSubmittedReplan(client, 'PROD-7')).resolves.toBe(true);
+  });
+
+  it.each(['in_progress', 'implemented', 'todo', 'in_review', 'done'])(
+    'reports a card at %s as an ordinary outcome',
+    async (status) => {
+      const client = { getWorkItem: async () => ({ item: { status } }) };
+      await expect(agentSubmittedReplan(client, 'PROD-7')).resolves.toBe(false);
+    },
+  );
+
+  // ⚠️ A READ THAT FAILS SAYS NOTHING ABOUT THE STATUS. Answering `true` on a
+  // transport error would park a card on the strength of a network blip; the
+  // caller falls through to today's close-out instead, which then surfaces its
+  // own error rather than swallowing two.
+  it('answers false when the read itself fails, rather than guessing', async () => {
+    const client = {
+      getWorkItem: async () => {
+        throw new Error('ECONNRESET');
+      },
+    };
+    await expect(agentSubmittedReplan(client, 'PROD-7')).resolves.toBe(false);
+  });
+
+  it('leads with the fact that this is a correct outcome, not a failure', () => {
+    const text = renderReplanSubmitted('PROD-7');
+    expect(text.split('\n')[0]).toContain('not a failure');
+    expect(text).toContain('Planning');
+    // It must not tell the operator to re-run the card as though it had broken —
+    // the plan is what they act on next.
+    expect(text).toContain('waiting for a human in Motir');
   });
 });

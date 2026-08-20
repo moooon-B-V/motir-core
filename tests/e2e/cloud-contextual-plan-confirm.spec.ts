@@ -485,9 +485,21 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(rail(page).getByText(/Added 2 work items/)).toBeVisible();
     await expect(composer(page)).toBeEnabled();
 
-    // The gate is gone with the proposal, and what is drawn now is real work.
+    // The gate is gone — and the cards STAY, now wearing the decision
+    // (`design/ai-planning/design-notes.md` Part VI §3 / MOTIR-3162, via bug
+    // MOTIR-3206). This read `addFrames → 0`, which was right while a decision
+    // ERASED the overlay: the pane held proposals, and a proposal is spent by
+    // the decision that resolves it. It holds the RECORD of that decision now —
+    // produced by it, not spent by it — so the frames are what a reader comes
+    // back to for "what did I just say yes to".
+    //
+    // Asserted by the outcome WORD, not by the attribute alone, so a
+    // colour-only treatment cannot pass this (Part VI §3's a11y rule: the word
+    // in the chip carries the meaning, the spine is decoration).
     await expect(confirmBar(page)).toHaveCount(0);
-    await expect(addFrames(page)).toHaveCount(0);
+    await expect(addFrames(page)).toHaveCount(2);
+    await expect(addFrames(page).first()).toHaveAttribute('data-outcome', 'accepted');
+    await expect(page.getByTestId('plan-change-outcome').first()).toHaveText('accepted');
     await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
 
     // The real substrate: both landed UNDER the anchor, as subtasks, and the Plan

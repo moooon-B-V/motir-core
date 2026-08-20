@@ -324,6 +324,50 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [404],
   }),
 
+  // ── Automatic plan approval (MOTIR-3021 / MOTIR-3023) ───────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/plan-approval',
+    operationId: 'approveWorkItemPlan',
+    summary: 'Approve the plan this work item produced',
+    description:
+      'APPROVE the plan a work item’s own re-plan produced, without a browser session — the ' +
+      'entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an ' +
+      '`add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ IT IS ' +
+      'ADDRESSED BY THE CARD, and that is the bound: the server resolves the plan from the ' +
+      'planning conversation ANCHORED at this key, so there is no way to name a plan the card ' +
+      'did not produce. Every other plan — a cadence plan, an onboarding generation, one ' +
+      'submitted from the project-wide panel — is refused here and keeps the human decision it ' +
+      'was written under. It calls the same service the in-app approve does, so the ' +
+      'confirmation gate, the re-validation and the one-shot concurrency guard are identical; a ' +
+      'plan that has already been approved or declined answers 409, exactly as it does in the app.',
+    permission: 'ai:view_plan',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item whose plan is approved (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: planSchema },
+      description:
+        'The approved plan and its proposals, each now carrying the `workItemKey` it ' +
+        'materialized into. The plan’s own id is on the body, which is how a caller that never ' +
+        'knew it can report what was approved.',
+    },
+    // 404: no such work item, or one in another tenant. 422: no plan anchored to
+    // the card, or a proposal the confirmation gate rejected before any write —
+    // including the malformed-set refusals the browser route answers 400 for,
+    // which take 422 here because this API's status vocabulary is closed and has
+    // no 400 (`lib/api/v1/errors.ts` says why on the row). 409: already decided,
+    // or a target that moved under the proposal.
+    errorStatuses: [404, 409, 422],
+  }),
+
   // ── The planning conversation (Subtask 11.7.6 — MOTIR-2240) ─────────────
   defineOperation({
     method: 'POST',

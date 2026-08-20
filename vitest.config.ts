@@ -979,6 +979,11 @@ export default defineConfig({
         // method that owns a LOCK, and a gate or a decision re-implemented in
         // the route would appear here as an uncovered branch.
         'app/api/v1/work-items/[key]/claim/route.ts',
+        // Story MOTIR-3017: the bounded public entrance to plan approval. Gated
+        // for the same reason — it is a thin adapter over one service path, so a
+        // bound re-implemented in the route rather than enforced in the service
+        // would show up here as an uncovered branch.
+        'app/api/v1/work-items/[key]/plan-approval/route.ts',
         'app/api/v1/work-items/[key]/integration/route.ts',
         'app/api/v1/work-items/[key]/expansions/route.ts',
         'app/api/v1/work-items/[key]/activity/route.ts',
@@ -1447,6 +1452,11 @@ export default defineConfig({
           lines: 90,
         },
         'app/api/v1/work-items/[key]/claim/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/plan-approval/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

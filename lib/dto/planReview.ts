@@ -20,6 +20,7 @@
 // no longer on the canvas once that item materialized; a real work-item ref
 // stays as-is.
 
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   PlanItemOpDto,
   PlanStatusDto,
@@ -172,6 +173,14 @@ export interface PlanReviewItemDto {
   /** The target's current status key — null for an un-materialized `add` (it is
    *  not a work item yet); the live status for every proposal that has one. */
   status: string | null;
+  /** The target status's own display LABEL, from the project's workflow (bug
+   *  MOTIR-3170). Null for an `add`, and for a target whose status the workflow
+   *  no longer holds. The canvas chip cannot name a CUSTOM status out of the
+   *  `labels.defaultStatus` catalog, so the identity travels beside the key. */
+  statusLabel: string | null;
+  /** The target status's lifecycle CATEGORY — the chip's fallback tone when the
+   *  canvas has no per-key treatment (see `statusLabel`). */
+  statusCategory: StatusCategoryDto | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */
   hasChildren: boolean;
   /** The `modify` diff (old→new) — empty for `add` / `remove`. */

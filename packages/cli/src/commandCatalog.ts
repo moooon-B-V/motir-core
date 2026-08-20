@@ -110,6 +110,23 @@ export interface CommandOption {
   readonly flags: string;
   /** The one-line flag description shown in help. */
   readonly description: string;
+  /**
+   * ACCEPTED but not PUBLISHED (MOTIR-3022) — omitted from `motir help` (via
+   * commander's `Option.hideHelp()`) and from the `/docs/cli` table.
+   *
+   * ⚠️ WHY THE CATALOG CARRIES IT AT ALL. `test/commandCatalog.test.ts` compares
+   * this record against the REGISTERED tree exactly, in both directions and in
+   * order — so an alias declared only in `program.ts` fails that audit, and
+   * weakening the audit to a subset match to accommodate one flag would cost the
+   * property that makes the record trustworthy. One record, with the publishing
+   * decision stated ON the row, beats two records that can disagree.
+   *
+   * The one member so far is the pair of `--no-*` aliases for the findings
+   * flags: someone typing the repo's own house convention on instinct gets the
+   * behaviour they meant instead of `unknown option`. The point is NOT to offer
+   * two documented spellings, which is exactly why they are not documented.
+   */
+  readonly hidden?: boolean;
 }
 
 /** One command in the tree — what a reader types, and what it does. */
@@ -390,6 +407,31 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--reset',
         description: 'Clear this project’s session exclude list before picking.',
       },
+      {
+        flags: '--disable-log-bug',
+        description:
+          'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+      },
+      {
+        flags: '--disable-replan',
+        description:
+          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      },
+      {
+        flags: '--no-log-bug',
+        description: 'Hidden alias for --disable-log-bug.',
+        hidden: true,
+      },
+      {
+        flags: '--no-replan',
+        description: 'Hidden alias for --disable-replan.',
+        hidden: true,
+      },
+      {
+        flags: '--auto-approve-replan',
+        description:
+          'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+      },
     ],
   },
   {
@@ -409,6 +451,31 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--force',
         description: 'Dispatch even though the item is not ready (dependencies unmet).',
+      },
+      {
+        flags: '--disable-log-bug',
+        description:
+          'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+      },
+      {
+        flags: '--disable-replan',
+        description:
+          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      },
+      {
+        flags: '--no-log-bug',
+        description: 'Hidden alias for --disable-log-bug.',
+        hidden: true,
+      },
+      {
+        flags: '--no-replan',
+        description: 'Hidden alias for --disable-replan.',
+        hidden: true,
+      },
+      {
+        flags: '--auto-approve-replan',
+        description:
+          'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
       },
     ],
   },
@@ -447,6 +514,31 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--print',
         description: 'Not supported — an unattended loop has nobody to paste a prompt.',
       },
+      {
+        flags: '--disable-log-bug',
+        description:
+          'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+      },
+      {
+        flags: '--disable-replan',
+        description:
+          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      },
+      {
+        flags: '--no-log-bug',
+        description: 'Hidden alias for --disable-log-bug.',
+        hidden: true,
+      },
+      {
+        flags: '--no-replan',
+        description: 'Hidden alias for --disable-replan.',
+        hidden: true,
+      },
+      {
+        flags: '--auto-approve-replan',
+        description:
+          'Approve a re-plan the agent submitted and keep looping, instead of stopping for you.',
+      },
     ],
   },
   {
@@ -478,6 +570,31 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--print',
         description: 'Not supported — a frozen snapshot has nobody to paste a prompt.',
+      },
+      {
+        flags: '--disable-log-bug',
+        description:
+          'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',
+      },
+      {
+        flags: '--disable-replan',
+        description:
+          'Do not let the agent submit a re-plan for a wrong card; it comments and stops.',
+      },
+      {
+        flags: '--no-log-bug',
+        description: 'Hidden alias for --disable-log-bug.',
+        hidden: true,
+      },
+      {
+        flags: '--no-replan',
+        description: 'Hidden alias for --disable-replan.',
+        hidden: true,
+      },
+      {
+        flags: '--auto-approve-replan',
+        description:
+          'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
       },
     ],
   },

@@ -14,6 +14,7 @@ import {
   isOrderingCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
+  selfBlockingDesignCriteria,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 import { listConnectedRepoNames } from '@/lib/workItems/targetRepo';
@@ -103,9 +104,11 @@ export interface ProseAdvisorySubject {
   id?: string | null;
   createdAt?: Date | null;
   /**
-   * The card's two sizing columns and whether it HOLDS children — read ONLY by
-   * the ESTIMATION-GATE check (MOTIR-3110), which compares them against the
-   * gate's two ceilings for a childless `coding_agent` leaf.
+   * The card's two sizing columns and whether it HOLDS children — the two sizing
+   * columns read ONLY by the ESTIMATION-GATE check (MOTIR-3110), which compares
+   * them against the gate's two ceilings for a childless `coding_agent` leaf, and
+   * `hasChildren` read by that check AND by the SELF-BLOCKING-DESIGN check
+   * (MOTIR-3178), whose entire scope test it is.
    *
    * Required for the same reason `targetRepos` is: every caller has to decide
    * what it knows. `null` on either number is a real answer (unestimated, which
@@ -235,6 +238,8 @@ export async function buildProseVsGraphAdvisories(
     if (straddle) advisories.push(straddle);
     const sizing = sizingAdvisory(s.subject);
     if (sizing) advisories.push(sizing);
+    const selfBlocking = selfBlockingDesignAdvisory(s.subject);
+    if (selfBlocking) advisories.push(selfBlocking);
     const subsumed = subsumptionAdvisory(s.subject, subsumption);
     if (subsumed) advisories.push(subsumed);
     for (const [id, severity] of s.refs) {
@@ -364,6 +369,36 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
     threshold: found.threshold,
     storyPoints: found.storyPoints,
     estimateMinutes: found.estimateMinutes,
+  };
+}
+
+/**
+ * THE SELF-BLOCKING-DESIGN advisory for ONE subject (MOTIR-3178) — the design
+ * gate's degenerate reading, asked of the card's own criteria.
+ *
+ * Pure prose plus ONE boolean: like {@link orderingAdvisory} it fires on a card
+ * that names nothing and has no edges, which is exactly the MOTIR-3154 fixture —
+ * a card whose design blocker was itself, so there was never a far end for the
+ * reference scan to resolve.
+ *
+ * `hasChildren` is the whole scope test, and it is the gate's own scope rather
+ * than a noise filter: a container's design child CAN be reviewed before its code
+ * children run, which is the shape this check wants a card pushed into. So a
+ * parent is never reported, whatever its criteria say — the finding is about a
+ * LEAF that holds both halves.
+ */
+function selfBlockingDesignAdvisory(
+  subject: ProseAdvisorySubject,
+): WorkItemProseAdvisoryDto | null {
+  if (subject.hasChildren) return null;
+  const found = selfBlockingDesignCriteria(subject.descriptionMd);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'likely-self-blocking-design',
+    designCriterionIndex: found.designCriterionIndex,
+    surfaceCriterionIndex: found.surfaceCriterionIndex,
   };
 }
 
@@ -631,7 +666,23 @@ export async function buildDispatchProseAdvisories(
           storyPoints: item.storyPoints,
           estimateMinutes: item.estimateMinutes,
         }) !== null;
-  if (namesNothing && wellOrdered && namesNoPath && namesNoFile && !sizingCandidate) return [];
+  // The SELF-BLOCKING-DESIGN check's own clear-ness (MOTIR-3178) — the SIXTH
+  // scan, pure prose over the acceptance-criteria span. Children are ignored here
+  // for the same reason the sizing term ignores them: they only ever SUPPRESS the
+  // finding, so a body that is clear with children ignored is clear either way,
+  // and no caller carries `hasChildren` on its row shape. Only a card that WOULD
+  // fire pays for the row read below.
+  const selfBlockingCandidate = selfBlockingDesignCriteria(item.descriptionMd) !== null;
+  if (
+    namesNothing &&
+    wellOrdered &&
+    namesNoPath &&
+    namesNoFile &&
+    !sizingCandidate &&
+    !selfBlockingCandidate
+  ) {
+    return [];
+  }
 
   // The SUBSUMPTION check's `since`, when the caller's row shape carries it.
   // `ReadyItemDispatchDto` does not, so it is read below — inside the batch that
@@ -649,15 +700,18 @@ export async function buildDispatchProseAdvisories(
       ancestors: await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
       blockerLinks: await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
       rows:
-        (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate
+        (suppliedCreatedAt === null && !namesNoFile) || sizingCandidate || selfBlockingCandidate
           ? await workItemRepository.findDescriptionsByIds([item.id], ctx.workspaceId, tx)
           : [],
     }),
   );
   const createdAt = suppliedCreatedAt ?? rows[0]?.createdAt ?? null;
-  // The row is read ONLY when `sizingCandidate` (above), so its absence means
-  // the check could not fire — the fallbacks below are the values that emit
-  // nothing, not a guess about a card nobody looked at.
+  // The row is read ONLY when `sizingCandidate` or `selfBlockingCandidate`
+  // (above), so its absence means neither check could fire — the fallbacks below
+  // are the values that emit nothing, not a guess about a card nobody looked at.
+  // `hasChildren` in particular falls back to `false`, which is safe precisely
+  // because both checks that read it are SUPPRESSED by children and never
+  // triggered by them.
   const storyPoints =
     item.storyPoints !== undefined ? item.storyPoints : (rows[0]?.storyPoints ?? null);
   const estimateMinutes =

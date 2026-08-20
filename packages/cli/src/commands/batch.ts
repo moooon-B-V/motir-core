@@ -2,6 +2,7 @@ import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
+  claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
   resolveOwnerId,
@@ -13,9 +14,15 @@ import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
+  agentSubmittedReplan,
+  autoOnlyFlagError,
   checkBootstrapCheckout,
   cwdReasonLabel,
+  findingsPolicyOf,
+  renderClaimRefusal,
+  renderFindingsPolicy,
   renderNothingPushed,
+  renderReplanSubmitted,
   renderRepositoriesBlock,
   resolveDispatchTarget,
   resolveDispatchTargets,
@@ -151,6 +158,16 @@ export function planSnapshot(items: DispatchItem[]): Snapshot {
 // ── the command ─────────────────────────────────────────────────────────────
 
 export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Promise<void> {
+  // `--auto-approve-replan` is registered here in order to be REFUSED
+  // (MOTIR-3022), and the reason is `batch`'s defining contract: the snapshot is
+  // frozen before the first agent starts and nothing re-reads the ready set, so
+  // cards a newly-approved plan creates would be approved and then never
+  // dispatched. Approving a change to a plan and declining to act on it is worse
+  // than not offering the flag.
+  if (opts.autoApproveReplan) {
+    const { message, hint } = autoOnlyFlagError('batch');
+    throw new CliError(message, { hint });
+  }
   const kinds = parseKinds(opts.kinds);
   const max = parseMax(opts.max);
   const agent = requireAgent(opts);
@@ -171,6 +188,7 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
     });
     info('');
     info(renderBatchSummary(summary));
+    info(renderFindingsPolicy(opts));
     process.exitCode = batchExitCode(summary);
   });
 }
@@ -271,10 +289,10 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
       const outcome = await dispatchOne({
         session,
         entry,
+        opts,
         agent,
         clock,
         runAgentFn,
-        ownerId,
         run: gitRun,
       });
       if (outcome.kind === 'skipped') {
@@ -339,11 +357,12 @@ async function countNewlyReady(
 interface DispatchOneInput {
   session: ProjectSession;
   entry: SnapshotEntry;
+  /** The run's flags — read for the per-run findings policy alone (MOTIR-3022),
+   *  which has to reach the PROMPT rather than stay in this process. */
+  opts: BatchOptions;
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
-  /** Claimed for this owner before the agent launches (MOTIR-2427). */
-  ownerId: string;
   /** The git runner the push check uses (MOTIR-3004) — the same injection seam
    *  `motir auto` takes its runner through. */
   run: CommandRunner;
@@ -355,7 +374,7 @@ type DispatchOneResult =
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
-  const { session, entry, agent, clock, runAgentFn, ownerId, run } = input;
+  const { session, entry, agent, clock, runAgentFn, run } = input;
   const { client, link } = session;
 
   // The prompt is fetched BEFORE the status flip, which is the opposite order to
@@ -364,7 +383,9 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   // touched it — no flip to undo. NO `sessionBranch` seed is passed, ever: this
   // command has no session branch to offer, and the server can then only answer
   // with the lineage the item genuinely has.
-  const dispatch = await client.dispatchPrompt(entry.key);
+  const dispatch = await client.dispatchPrompt(entry.key, {
+    findingsPolicy: findingsPolicyOf(input.opts),
+  });
 
   if (dispatch.workflowMode === 'session_lineage') {
     // The snapshot filter already excluded every item with an inherited
@@ -383,7 +404,24 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  await ensureInProgress(client, entry.key, entry.statusKey, ownerId);
+  // THE CLAIM, and it can say no (MOTIR-3048). It comes after the lineage check
+  // for the same reason that check comes first: a refusal there must leave the
+  // card untouched, and a claim already made would have to be undone. From here
+  // on nothing else can refuse, so this is the last point at which the run can
+  // walk away having changed nothing.
+  const claim = await ensureInProgress(client, entry.key);
+  if (!claimAllowsDispatch(claim)) {
+    // A SKIP, not a failure: the snapshot froze a set this run could take, and
+    // a sibling took one of them in between. No agent ran, nothing was
+    // reverted, and `batchExitCode` reads only `records` — so the run's exit
+    // code is unaffected, which is the honest report of "somebody else has it".
+    info('');
+    info(renderClaimRefusal(claim));
+    return {
+      kind: 'skipped',
+      skip: { key: entry.key, title: entry.title, reason: 'claim_refused' },
+    };
+  }
   // MOTIR-3133 — the same per-repository resolution `deliver()` makes, from the
   // same function, rendered by the same block. Batch prints its own lines rather
   // than going through `deliver()`, and a second rendering of these facts is
@@ -433,6 +471,20 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     return {
       kind: 'record',
       record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
+    };
+  }
+
+  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+  // both exit 0, so ask the card which it was before deciding anything else —
+  // and ask BEFORE the push check, because a refusing agent reverts and pushes
+  // nothing by design, so that check would otherwise report a correctly-refused
+  // card as work that went missing. A skip, not a record: the run implemented
+  // nothing, and `keepGoing` is not consulted because there was no failure.
+  if (await agentSubmittedReplan(client, entry.key)) {
+    info(renderReplanSubmitted(entry.key));
+    return {
+      kind: 'skipped',
+      skip: { key: entry.key, title: entry.title, reason: 'replan_submitted' },
     };
   }
 

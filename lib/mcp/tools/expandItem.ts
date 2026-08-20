@@ -35,7 +35,9 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 //     working. `get_plan_status` is the come-back-later half.
 //  2. A PROPOSAL IS NOT A TREE WRITE. An expansion emits a `Plan` of `PlanItem`
 //     PROPOSALS. `plansService.approvePlan` is the ONLY path from a proposal to
-//     a work item, and an `add`'s `workItemId` stays NULL until then. So firing
+//     a work item, and an `add`'s `workItemId` stays NULL until then — which is
+//     unchanged by MOTIR-3021's public approval entrance, since that entrance
+//     CALLS this same service rather than adding a second path. So firing
 //     this tool does NOT grow the tree, and polling it to `planned` does not
 //     either. Both tool descriptions say so in as many words, because the whole
 //     failure mode here is a client — human or agent — inferring otherwise and

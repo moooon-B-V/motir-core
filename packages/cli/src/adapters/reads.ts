@@ -32,6 +32,7 @@ import type {
   WorkItemDetail,
   WorkItemLink,
   WorkItemSummary,
+  WorkItemClaim,
 } from '../client.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
@@ -517,6 +518,24 @@ export function toCompleteSessionResult(body: CloseOutBody): CompleteSessionResu
  */
 export function toExpandSubmitResult(body: JobHandleBody): ExpandSubmitResult {
   return { jobId: body.jobId, planId: body.planId };
+}
+
+/** The keyed CLAIM result (MOTIR-2961). The wire shape and the view model agree
+ *  field for field, so this adapter re-states rather than translates — and it
+ *  exists anyway, because `client.ts` may not see a generated wire type (Q4). */
+export function toWorkItemClaim(body: SuccessBody<'claimWorkItem'>): WorkItemClaim {
+  return {
+    key: body.key,
+    title: body.title,
+    outcome: body.outcome,
+    claimed: body.claimed,
+    status: { key: body.status.key, category: body.status.category },
+    assignee: body.assignee ? { id: body.assignee.id, name: body.assignee.name } : null,
+    transitionedBy: body.transitionedBy
+      ? { id: body.transitionedBy.id, name: body.transitionedBy.name }
+      : null,
+    transitionedAt: body.transitionedAt,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

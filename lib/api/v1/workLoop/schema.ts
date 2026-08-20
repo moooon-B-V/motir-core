@@ -6,7 +6,7 @@ import {
 } from '@/lib/api/v1/workItems/schema';
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
-import { isSizingAdvisory } from '@/lib/dto/workItems';
+import { isSelfBlockingDesignAdvisory, isSizingAdvisory } from '@/lib/dto/workItems';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 
@@ -52,8 +52,10 @@ export const dispatchWorkflowModeSchema = z.enum(['per_item_pr', 'session_lineag
  * ADR §8 permits "a new enum value on a field documented as open-ended", and
  * this field is documented as exactly that. Two families ship today
  * (`advisory` / `likely-missing-edge` on a reference; `likely-ordering-violation`
- * / `likely-repo-straddle` on a shape) and the advisory channel is designed to
- * grow — MOTIR-2175 and MOTIR-2177 each added a severity to a shipped surface.
+ * / `likely-repo-straddle` / `likely-over-gate-sizing` / `likely-self-blocking-design`
+ * on a shape) and the advisory channel is designed to grow — MOTIR-2175,
+ * MOTIR-2177, MOTIR-3110 and MOTIR-3178 each added a severity to a shipped
+ * surface.
  *
  * A closed enum here would make the NEXT severity a breaking change for every
  * generated client, and — worse — would make this endpoint 500 on its own
@@ -143,6 +145,34 @@ const sizingShapeAdvisorySchema = z.object({
 });
 
 /**
+ * A SELF-BLOCKING-DESIGN SHAPE advisory — one criterion of the card produces a
+ * DESIGN ASSET while another builds the RENDERED SURFACE that drawing decides
+ * (MOTIR-3178).
+ *
+ * ⚠️ `kind: 'shape'` and a PAIR of indices under their own names, which is why it
+ * is a third variant beside {@link criterionShapeAdvisorySchema} rather than a
+ * fourth severity inside it. It carries no `criterionIndex` at all — its remedy
+ * LIFTS the design criterion onto its own card rather than cutting the list at a
+ * line — and the three shape variants are disjoint on their REQUIRED fields
+ * (`criterionIndex` / `threshold` / this pair), so the plain union below resolves
+ * each unambiguously whichever order it tries them in.
+ *
+ * ⚠️ Additive under §8, on the same terms as the sizing and subsumption variants:
+ * a new member of a union whose `severity` was already open-ended, on a field
+ * every client must tolerate unknown members of. `V1_CONTRACT_VERSION` moves with
+ * it (Amendment 8's obligation).
+ */
+const selfBlockingDesignShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  /** 1-based index of the criterion whose deliverable is the design asset. */
+  designCriterionIndex: z.number().int(),
+  /** 1-based index of the criterion that builds the surface that drawing decides. */
+  surfaceCriterionIndex: z.number().int(),
+});
+
+/**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
  * filed, so its deliverable may already be in the repository (MOTIR-2903).
@@ -181,6 +211,7 @@ const subsumptionAdvisorySchema = z.object({
 export const dispatchAdvisorySchema = z.union([
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
+  selfBlockingDesignShapeAdvisorySchema,
   subsumptionAdvisorySchema,
   referenceAdvisorySchema,
 ]);
@@ -271,8 +302,20 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
     advisories: dto.advisories.map((advisory) => {
-      // The SIZING member first, because it is the one `shape` variant with no
-      // `criterionIndex` — narrowing it out is what lets the branch below read
+      // The SELF-BLOCKING-DESIGN member (MOTIR-3178) — narrowed out here for the
+      // same reason the SIZING member below is: it carries no `criterionIndex`,
+      // and the generic `shape` branch further down reads one.
+      if (isSelfBlockingDesignAdvisory(advisory)) {
+        return {
+          kind: 'shape' as const,
+          item: advisory.item,
+          severity: advisory.severity,
+          designCriterionIndex: advisory.designCriterionIndex,
+          surfaceCriterionIndex: advisory.surfaceCriterionIndex,
+        };
+      }
+      // The SIZING member next, because it is the other `shape` variant with no
+      // `criterionIndex` — narrowing both out is what lets the branch below read
       // the index off the two members that have one (MOTIR-3110).
       if (isSizingAdvisory(advisory)) {
         return {

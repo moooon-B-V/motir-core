@@ -43,7 +43,38 @@ export function decoratePlanChangeLevel(
     index.adds.map((add) => add.parentNodeId).filter((id): id is string => id !== null),
   );
 
+  // The adds that belong on this level, keyed by the node they draw ON. A
+  // MATERIALIZED add (the plan is decided and it became a work item) carries that
+  // work item's own id, so it MERGES onto the committed node below and is dropped
+  // from this map; whatever is left is still a proposal and is appended as its own
+  // node, exactly as before.
+  const pendingAdds = new Map(proposedAddsForLevel(index, focusNodeId).map((a) => [a.nodeId, a]));
+
   const nodes: ProjectCanvasNode[] = base.nodes.map((node) => {
+    // ⚠️ THE DECIDED ADD LANDS ON ITS CARD, NOT BESIDE IT (bug MOTIR-3206;
+    // `design/ai-planning/design-notes.md` Part VI §3 — *"it lands ON the
+    // committed node rather than beside it as a keyless ghost"*). Checked BEFORE
+    // the diff-state pass, because an accepted add is not a `modify` of an
+    // existing card and would otherwise fall through untouched — and then be
+    // appended a second time as a proposal, which is the duplicate this fixes.
+    //
+    // The node keeps its own content — the real card, with its real `MOTIR-<n>`
+    // and its live status pill, which is what Part VI asks an accepted add to
+    // show — wrapped in the SAME add frame the pending proposal wore. One
+    // language across the pending and the decided state, not a second one.
+    const merged = pendingAdds.get(node.id);
+    if (merged) {
+      pendingAdds.delete(node.id);
+      return {
+        ...node,
+        searchText: `${node.searchText} add`,
+        content: (
+          <PlanChangeDiffFrame state="add" outcome={outcome}>
+            {node.content}
+          </PlanChangeDiffFrame>
+        ),
+      };
+    }
     const item = itemById.get(node.id);
     if (!item) return node; // a ghost anchor / the planning-origin cluster
     const state = diffStateForItem(index, item);
@@ -64,7 +95,9 @@ export function decoratePlanChangeLevel(
     };
   });
 
-  const proposed: ProjectCanvasNode[] = proposedAddsForLevel(index, focusNodeId).map((add) => ({
+  // Whatever did not merge above is still a proposal — an undecided add, or a
+  // declined one, which never became anything and correctly keeps its ghost.
+  const proposed: ProjectCanvasNode[] = [...pendingAdds.values()].map((add) => ({
     id: add.nodeId,
     parentId: focusNodeId,
     searchText: `${add.item.title} ${add.item.kind} proposed`,
