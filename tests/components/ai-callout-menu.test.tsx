@@ -37,7 +37,7 @@ function orb() {
   return screen.getByRole('button', { name: 'Motir AI' });
 }
 
-describe('the "M" orb as the callout trigger', () => {
+describe('the Motir orb as the callout trigger', () => {
   it('is a BUTTON named after the callout — "Plan with AI" moved inside', () => {
     renderWithIntl(<PlanWithAIFab />);
 
