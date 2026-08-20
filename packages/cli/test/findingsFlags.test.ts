@@ -378,3 +378,96 @@ describe('the refusals are CliErrors, so the binary renders them as guidance', (
     ).rejects.toBeInstanceOf(CliError);
   });
 });
+
+// ── the guards the STORY owes, not any one card (MOTIR-3024) ────────────────
+
+describe('the guards coverage cannot see', () => {
+  /** Every approval call the run made — none is the assertion in most of these. */
+  function approvalsRequested(): number {
+    return server.v1Calls.filter((c) => c.path.endsWith('/plan-approval')).length;
+  }
+
+  it.each([
+    ['run', () => runCommand('PROD-7', { ...AGENT, autoApproveReplan: true })],
+    ['next', () => nextCommand({ ...AGENT, autoApproveReplan: true })],
+    ['batch', () => batchCommand({ ...AGENT, autoApproveReplan: true })],
+  ] as const)('`motir %s` refuses --auto-approve-replan and approves NOTHING', async (_n, run) => {
+    // The refusal is asserted elsewhere; what this adds is the absence a
+    // refusal alone does not prove — a command that refused the flag and then
+    // approved anyway would pass every message assertion.
+    await expect(run()).rejects.toThrow();
+    expect(approvalsRequested()).toBe(0);
+  });
+
+  it('`motir batch`s snapshot stays FROZEN — nothing this story added re-reads the ready set', async () => {
+    // `batch`'s defining contract, re-asserted after the story: it takes the
+    // ready set ONCE. A findings flag that caused a second read would let a card
+    // that became ready mid-run be dispatched, which is the one guarantee this
+    // command exists to make.
+    let readyReads = 0;
+    const statuses = new Map<string, string>([
+      ['PROD-7', 'todo'],
+      ['PROD-8', 'todo'],
+    ]);
+    server.resetV1();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': () => {
+        readyReads += 1;
+        // ⚠️ PROD-8 BECOMES READY DURING THE RUN, which is the only fixture that
+        // can test this: it is invisible at snapshot time and appears the moment
+        // PROD-7 leaves `todo`. A run that re-read the ready set to pick work
+        // would find and dispatch it.
+        const ready = ['PROD-7'].filter((k) => statuses.get(k) === 'todo');
+        if (statuses.get('PROD-7') !== 'todo') ready.push('PROD-8');
+        return { body: v1Page(ready.map((k) => v1ReadyRow(k, { title: `Item ${k}` }))) };
+      },
+      'GET /api/v1/work-items/{key}': (req) => ({
+        body: v1Detail(String(req.params['key']), {
+          status: statuses.get(String(req.params['key'])) ?? 'todo',
+        }),
+      }),
+      'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
+        body: v1DispatchPrompt(String(req.params['key']), {
+          prompt: 'PROMPT',
+          targetRepo: 'motir-core',
+          workflowMode: 'per_item_pr',
+          sessionBranch: null,
+        }),
+      }),
+      'POST /api/v1/work-items/{key}/transitions': (req) => {
+        const key = String(req.params['key']);
+        const status = String((req.body as { status: string }).status);
+        statuses.set(key, status);
+        return { body: v1Detail(key, { status }) };
+      },
+      'POST /api/v1/work-items/{key}/implementation': (req) => ({
+        body: v1Integration(String(req.params['key']), {
+          status: 'implemented',
+          sessionBranch: null,
+          implementationSource: 'byok',
+        }),
+      }),
+    });
+
+    let stderr = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      stderr += String(c);
+      return true;
+    });
+    // NO `--max`: the drain stops because its frozen list is exhausted, not
+    // because a cap hid the second card from it.
+    await batchCommand({ ...AGENT, disableLogBug: true }, { run: PUSHED });
+
+    // ⚠️ TWO reads, and that is CORRECT — the assertion is about what feeds the
+    // DRAIN, not about arithmetic. The first is the snapshot; the second is
+    // `countNewlyReady`, which runs AFTER the drain and is reporting only. An
+    // earlier version of this test asserted `1` and was simply wrong about the
+    // command it was guarding.
+    expect(readyReads).toBe(2);
+    // The property that matters: PROD-8 was ready the whole time and was NEVER
+    // dispatched — and the run SAYS so rather than silently dropping it.
+    expect(statuses.get('PROD-8')).toBe('todo');
+    expect(stderr).toContain('became ready during the run');
+    expect(stderr).toContain('PROD-8');
+  });
+});
