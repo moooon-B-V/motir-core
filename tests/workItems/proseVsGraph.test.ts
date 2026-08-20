@@ -16,6 +16,7 @@ import {
   isSubsumptionCheckExempt,
   overGateSizing,
   resolvePathRepo,
+  selfBlockingDesignCriteria,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 
@@ -774,5 +775,155 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
     // test rather than a check that quietly stops matching the rule.
     expect(ESTIMATION_GATE_STORY_POINTS).toBe(13);
     expect(ESTIMATION_GATE_ESTIMATE_MINUTES).toBe(60);
+  });
+});
+
+describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (MOTIR-3178)', () => {
+  /**
+   * The FIXTURE, and it is a **RECONSTRUCTION** — labelled as one here because it
+   * cannot be anything else.
+   *
+   * MOTIR-3158 asked for MOTIR-3154's criteria set "as authored on 2026-08-19 —
+   * the seven-criterion leaf". That text no longer exists anywhere and cannot be
+   * quoted: `get_work_item_activity` records a `descriptionMd` edit at
+   * 2026-08-19T20:53:52.716Z (its re-plan's `modify`, fifteen minutes after
+   * MOTIR-3158 was filed), and the tenant retains no prior body — activity parts
+   * carry `from`/`to` for `status`, `priority` and links only. `notes.html` #329
+   * and the `motir run MOTIR-3154` comment both PARAPHRASE criteria 1 / 4 / 5;
+   * neither quotes the set.
+   *
+   * So this is rebuilt from the table in MOTIR-3178's own body, which is its
+   * durable source. It is SYNTHETIC on purpose — it consumes nothing MOTIR-3154
+   * produces, so it cannot rot when that card is re-scoped again.
+   */
+  const RECONSTRUCTED_MOTIR_3154 = [
+    '## Acceptance criteria',
+    '',
+    '1. a `design/ai-planning/` three-file amendment — the accepted and declined node',
+    '   treatments, plus an explicit re-decision of what the plan-detail canvas pane holds',
+    '   after approve',
+    '2. decline no longer deletes the proposal rows',
+    '3. approve leaves the pane on the plan rather than handing it to the establish step',
+    '4. the plan-detail canvas draws a DECIDED plan — one node per approved `add`, in the',
+    '   treatment the design decides',
+    '5. the planning-workspace canvas KEEPS its decided overlay',
+  ].join('\n');
+
+  it('fires on the reconstructed MOTIR-3154 set, naming criteria 1 and 4', () => {
+    // The whole finding in one assertion: criterion 1's deliverable is the
+    // drawing, criterion 4's is the surface built against it, and they are on one
+    // card. `readiness.ready` was `true`, `openBlockers` `[]` and
+    // `validate_work_item` `valid: true` on exactly this shape.
+    expect(selfBlockingDesignCriteria(RECONSTRUCTED_MOTIR_3154)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 4,
+    });
+  });
+
+  it('says nothing when the criteria name a DESIGN ASSET only — the quiet direction', () => {
+    // A pure design card: it draws, and nothing here builds. This is the ordinary
+    // `type: design` subtask the gate WANTS, so silence is the correct answer and
+    // is asserted rather than assumed.
+    const designOnly = [
+      '## Acceptance criteria',
+      '',
+      '1. `design/ai-planning/plan-canvas.mock.html` is built from the real design system',
+      '2. `design/ai-planning/design-notes.md` names the composing primitives and the access path',
+      '3. the same-basename `.png` export is regenerated from the mock',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(designOnly)).toBeNull();
+  });
+
+  it('says nothing when the criteria name a RENDERED SURFACE only — the other quiet direction', () => {
+    // The ordinary UI code card: it builds against a drawing somebody else
+    // approved. Nothing here produces an asset, so there is no inversion.
+    const surfaceOnly = [
+      '## Acceptance criteria',
+      '',
+      '1. the plan-detail canvas draws one node per approved `add`',
+      '2. `app/(authed)/plans/[id]/page.tsx` renders the decided overlay',
+      '3. the empty state shows the establish prompt',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(surfaceOnly)).toBeNull();
+  });
+
+  it('says nothing on a design card that describes what its OWN drawing shows — the near-miss', () => {
+    // The false positive the predicate must not have, and the reason a
+    // design-asset criterion is NEVER also read as the surface criterion: a
+    // drawing's whole job is to describe a surface, so a `design` card's criteria
+    // are full of surface nouns and render verbs. Both roles landing on the SAME
+    // criterion is one card doing one thing.
+    const nearMiss = [
+      '## Acceptance criteria',
+      '',
+      '1. `design/ai-planning/design-notes.md` records the accepted and declined treatments',
+      '2. the `design/ai-planning/plan-canvas.png` export shows the canvas with a decided plan',
+      '   and the picker open',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(nearMiss)).toBeNull();
+  });
+
+  it('attributes a wrapped criterion to the bullet it wraps from, like the other two checks', () => {
+    // Same attribution contract as `firstPostMergeCriterion` /
+    // `criterionRepoPaths`, so a card carrying several findings can be read
+    // against ONE numbering. Here the asset path is on the bullet and the surface
+    // clause is two lines below its own.
+    const wrapped = [
+      '## Acceptance criteria',
+      '',
+      '- a `design/work-items/detail.mock.html` amendment covering the relationships panel,',
+      '  with its `design-notes.md` naming the primitives',
+      '- the detail route renders that panel',
+      '  in the treatment the drawing decides',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(wrapped)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+  });
+
+  it('reads the ACCEPTANCE-CRITERIA span only, and degrades to silence without one', () => {
+    // The same heuristic contract `firstPostMergeCriterion` has, and the same
+    // inversion: no AC heading means nothing is emitted, because both phrases are
+    // perfectly legitimate in a body's narrative. A card's explanation saying "we
+    // will amend design/x/ and then the panel renders it" is describing a plan,
+    // not asking to be closed against one.
+    const noHeading = [
+      'The card amends `design/ai-planning/design-notes.md`.',
+      '',
+      '- and then the canvas renders the decided plan',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(noHeading)).toBeNull();
+    expect(selfBlockingDesignCriteria(null)).toBeNull();
+    expect(selfBlockingDesignCriteria('')).toBeNull();
+  });
+
+  it('does not read the word "design" as a design ASSET — consuming a drawing is the other half', () => {
+    // The tell is the shape of the DELIVERABLE, never the word. A criterion
+    // saying "in the treatment the design decides" is the CONSUMER; reading it as
+    // a producer would make every well-written UI card its own design blocker.
+    const consumesOnly = [
+      '## Acceptance criteria',
+      '',
+      '1. the design system primitives are reused rather than hand-rolled',
+      '2. the plan-detail canvas draws the decided plan in the treatment the design decides',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(consumesOnly)).toBeNull();
+  });
+
+  it('reports the FIRST criterion of each role when several qualify', () => {
+    const many = [
+      '## Acceptance criteria',
+      '',
+      '1. the service returns the projected rows',
+      '2. `design/ai-planning/design-notes.md` records the node treatments',
+      '3. `design/ai-planning/plan-canvas.mock.html` is built from the real design system',
+      '4. the plan-detail canvas draws one node per approved `add`',
+      '5. the planning-workspace canvas renders the decided overlay',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(many)).toEqual({
+      designCriterionIndex: 2,
+      surfaceCriterionIndex: 4,
+    });
   });
 });

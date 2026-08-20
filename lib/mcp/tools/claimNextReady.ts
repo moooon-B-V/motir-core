@@ -11,6 +11,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
@@ -73,6 +74,7 @@ function summarize(
   const straddles = advisories.filter(isRepoStraddleAdvisory);
   const subsumed = advisories.filter(isSubsumptionAdvisory);
   const oversized = advisories.filter(isSizingAdvisory);
+  const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
   if (references.length > 0) {
     lines.push(
       `Advisory (NOT a blocker — the claim stands): this card's acceptance criteria name ` +
@@ -102,6 +104,18 @@ function summarize(
         'Read the card for a split it has already worked out — four cards over this gate each ' +
         'carried the correct remedy in their own description — and SPLIT it rather than ' +
         'starting a run the size says will not finish.',
+    );
+  }
+  // THE DESIGN GATE (MOTIR-3178). The claimer is the party this lands on: it has
+  // just been handed a card that asks it to draw a design and then build the
+  // files that match it, in one pull request, with nobody looking in between.
+  for (const d of selfBlocking) {
+    lines.push(
+      `Advisory (NOT a blocker — the claim stands): this card is its OWN design blocker — ` +
+        `criterion ${d.designCriterionIndex} produces a design asset and criterion ` +
+        `${d.surfaceCriterionIndex} builds the surface that drawing decides. Principle #13 is ` +
+        'design before code WITHIN a story, so propose the design criterion as its own card and ' +
+        'leave the rest blocked_by it rather than approving your own drawing by building on it.',
     );
   }
   // The REPO-STRADDLE advisory (MOTIR-2177). The claimer is about to create ONE

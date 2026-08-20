@@ -1,5 +1,5 @@
 import type { IssueType } from '@/lib/issues/parentRules';
-import type { WorkItemStatus } from '@/components/planning/WorkItemNode';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 
@@ -23,7 +23,20 @@ export interface RoadmapLevelItem {
   identifier: string;
   title: string;
   kind: IssueType;
-  status: WorkItemStatus;
+  /** The workflow status KEY, verbatim (bug MOTIR-3170) — NOT narrowed to a
+   *  closed set. The wire carries whatever the project's workflow defines, and a
+   *  hand-copied six-member literal here coerced everything else to `todo`, so
+   *  `implemented` / `planning` and every custom status drew as "To Do". Any
+   *  treatment for it is resolved at render time from `canvasStatusMeta`, which
+   *  falls back by CATEGORY and then to a neutral chip. */
+  status: string;
+  /** The status's own display LABEL, from the project's workflow. Optional
+   *  client-side: an older / onboarding read that omits it degrades to the
+   *  translated catalog label for a default key, else the raw key. */
+  statusLabel?: string | null;
+  /** The status's lifecycle CATEGORY — the chip's fallback tone for a key the
+   *  canvas has no treatment for. Optional client-side (see `statusLabel`). */
+  statusCategory?: StatusCategoryDto | null;
   /** The leaf's work TYPE (Story 2.7) — `code` / `design` / `manual` / … or `null`
    *  on a container / untyped leaf. Together with {@link RoadmapLevelItem.executor}
    *  it drives the manual/human node chip (MOTIR-1642 / 8.8.36). Optional
@@ -84,6 +97,8 @@ interface RoadmapNode {
   identifier: string;
   title: string;
   status: string;
+  statusLabel?: string | null;
+  statusCategory?: string | null;
   isDone: boolean;
   hasChildren: boolean;
   progress?: { done: number; total: number } | null;
@@ -91,23 +106,34 @@ interface RoadmapNode {
   inActiveSprint?: boolean;
 }
 
-const KNOWN_STATUSES: WorkItemStatus[] = [
-  'todo',
-  'in_progress',
-  'in_review',
-  'blocked',
-  'done',
-  'cancelled',
-];
-
-/** Map a roadmap status string to a canvas status; fall back via `isDone`. */
-function toStatus(raw: string, isDone: boolean): WorkItemStatus {
-  const s = raw.toLowerCase().replace(/[\s-]+/g, '_');
-  if ((KNOWN_STATUSES as string[]).includes(s)) return s as WorkItemStatus;
-  return isDone ? 'done' : 'todo';
-}
+// The hand-copied STATUS literal that used to stand here is GONE (bug
+// MOTIR-3170). It listed
+// exactly `todo · in_progress · in_review · blocked · done · cancelled` and
+// coerced everything else to `isDone ? 'done' : 'todo'` — so `implemented`
+// (MOTIR-3003) and `planning` (MOTIR-2425), both `in_progress`-category and both
+// added to the default workflow long after this file was written, arrived here as
+// **`todo`** and the canvas told the reader a card with an open pull request had
+// not been started. Every project-defined custom status did the same.
+//
+// This is the identical move `KNOWN_TYPES` below already made for the TYPE enum
+// (MOTIR-2632), whose comment describes this exact hazard and was written three
+// declarations under the status literal it did not sweep. The set of statuses is
+// DATABASE-defined and cannot be enumerated here at all, so the wire key passes
+// through verbatim and the RENDERER resolves a treatment for it —
+// `lib/workflows/canvasStatusMeta.ts`, key-first, category-second, neutral-last.
 
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
+
+// The lifecycle CATEGORY is a frozen three-member taxonomy (`StatusCategoryDto`),
+// not a project-extensible set — so unlike the status KEY it IS guardable here,
+// and an unrecognised wire value degrades to `null` (the neutral chip) the same
+// way `kind` / `type` degrade. This is a totality guard on a closed enum, which is
+// the opposite of the open-set literal removed above.
+const KNOWN_STATUS_CATEGORIES: ReadonlySet<StatusCategoryDto> = new Set([
+  'todo',
+  'in_progress',
+  'done',
+]);
 
 // The work-item TYPE members (Story 2.7 · the 2.7.2 taxonomy ADR). Used to
 // guard the raw wire value the SAME way `KNOWN_KINDS` guards `kind`: an
@@ -134,7 +160,12 @@ export function toItem(n: RoadmapNode): RoadmapLevelItem {
     kind: KNOWN_KINDS.has(n.kind as IssueType) ? (n.kind as IssueType) : 'subtask',
     type: KNOWN_TYPES.has(n.type as WorkItemTypeDto) ? (n.type as WorkItemTypeDto) : null,
     executor: n.executor === 'human' || n.executor === 'coding_agent' ? n.executor : null,
-    status: toStatus(n.status, n.isDone),
+    // Verbatim — no narrowing, no fallback. See the note above the kind guard.
+    status: n.status,
+    statusLabel: n.statusLabel ?? null,
+    statusCategory: KNOWN_STATUS_CATEGORIES.has(n.statusCategory as StatusCategoryDto)
+      ? (n.statusCategory as StatusCategoryDto)
+      : null,
     hasChildren: n.hasChildren,
     progress: n.progress ?? null,
     ready: n.ready ?? false,

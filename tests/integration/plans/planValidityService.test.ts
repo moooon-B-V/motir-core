@@ -1429,3 +1429,92 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
     expect(res.advisories).toEqual([]);
   });
 });
+
+describe('planValidityService.validateProjectedWorkItem — THE DESIGN GATE, projected', () => {
+  // MOTIR-3178's earliest moment, and the one the card's own explanation names:
+  // the author SEALING the plan. MOTIR-3154 said the correct shape out loud in
+  // its own body — *the design amendment is this card's first child, with the
+  // code criteria behind it* — and was then sealed as a childless leaf carrying
+  // both halves (`notes.html` #329). A plan is where that is still one edit away.
+
+  /** The reconstructed MOTIR-3154 criteria set — see MOTIR-3178's body. */
+  const selfBlockingBody = [
+    '## Acceptance criteria',
+    '',
+    '1. a `design/ai-planning/` three-file amendment — the accepted and declined node treatments',
+    '2. decline no longer deletes the proposal rows',
+    '3. the plan-detail canvas draws a DECIDED plan, one node per approved add',
+  ].join('\n');
+
+  it("fires on an `add`'s PROPOSED body — before the card has a row or a key", async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Draws and builds',
+        kind: 'subtask',
+        executor: 'coding_agent',
+        descriptionMd: selfBlockingBody,
+      },
+      parentRef: story.id,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.blockers).toEqual([]);
+    expect(res.advisories).toEqual([
+      {
+        kind: 'shape',
+        item: `planItem:${itemIdByTitle(p, 'Draws and builds')}`,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 3,
+      },
+    ]);
+  });
+
+  it('goes QUIET when the plan gives the proposal a child — the PROJECTED adjacency decides', async () => {
+    // The remedy, expressed as a plan: the design criterion becomes a child card
+    // and the parent is a container. `hasChildren` comes from the projection, not
+    // from the stored row, so the advisory has to disappear the moment the plan
+    // proposes the split — which is exactly the feedback loop this member exists
+    // to give the sealing author.
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const parent = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Draws and builds',
+        kind: 'task',
+        executor: 'coding_agent',
+        descriptionMd: selfBlockingBody,
+      },
+      parentRef: story.id,
+    });
+    const parentRef = `planItem:${itemIdByTitle(parent, 'Draws and builds')}`;
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'The design amendment', kind: 'subtask', executor: 'coding_agent' },
+      parentRef,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    expect(res.advisories).toEqual([]);
+  });
+});

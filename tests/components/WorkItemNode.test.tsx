@@ -5,6 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import {
   GhostAnchor,
   WorkItemNode,
+  WorkItemStatusPill,
   type WorkItemNodeData,
 } from '@/components/planning/WorkItemNode';
 
@@ -257,5 +258,127 @@ describe('WorkItemNode — manual / human work-type chip (MOTIR-1642)', () => {
     // the done chrome strikes the title but the chip still shows
     expect(screen.getByText('Manual')).toBeTruthy();
     expect(screen.getByText('Done')).toBeTruthy();
+  });
+});
+
+// ── THE STATUS CHIP (bug MOTIR-3170) ────────────────────────────────────────
+//
+// The node used to type `status` as a CLOSED six-member union with a
+// `Record<WorkItemStatus, StatusMeta>` beside it. That reads as total and is
+// not: the union IS the hand-authored subset, so the compiler certified a map
+// that had no row for `implemented` (MOTIR-3003) or `planning` (MOTIR-2425),
+// and every producer narrowed to it by coercing the rest to `todo`. The chip
+// then rendered `CircleDashed` + "To Do" on a card whose pull request was open.
+//
+// These assert on RENDERED TEXT, never on the resolver's map — a test that read
+// the map would have passed at every point in that history.
+describe('WorkItemNode — the status chip (bug MOTIR-3170)', () => {
+  const at = (status: string, over: Partial<WorkItemNodeData> = {}): WorkItemNodeData => ({
+    ...item,
+    assigneeName: null,
+    status,
+    ...over,
+  });
+
+  it('renders `implemented` as "Implemented", not "To Do"', () => {
+    render(<WorkItemNode item={at('implemented', { statusCategory: 'in_progress' })} />);
+    expect(screen.getByText('Implemented')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it('renders `planning` as "Planning", not "To Do"', () => {
+    render(<WorkItemNode item={at('planning', { statusCategory: 'in_progress' })} />);
+    expect(screen.getByText('Planning')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+  });
+
+  it("a status in NO map renders its OWN label in its category's tone — never To Do", () => {
+    // A custom workflow's own status. The canvas has no per-key treatment for it
+    // and must not invent one; it takes the category's chip and its own name.
+    const { container } = render(
+      <WorkItemNode
+        item={at('awaiting_legal', { statusLabel: 'Awaiting legal', statusCategory: 'todo' })}
+      />,
+    );
+    expect(screen.getByText('Awaiting legal')).toBeTruthy();
+    expect(screen.queryByText('To Do')).toBeNull();
+    // The `todo` category's tone is the receded neutral chip — the same one
+    // `todo` itself draws, which is the point of a category fallback.
+    const chip = container.querySelector('[data-status="awaiting_legal"]') as HTMLElement;
+    expect(chip.className).toContain('bg-(--el-muted)');
+  });
+
+  it("an in_progress-category custom status takes THAT category's tone, not the neutral one", () => {
+    const { container } = render(
+      <WorkItemNode
+        item={at('awaiting_vendor', {
+          statusLabel: 'Awaiting vendor',
+          statusCategory: 'in_progress',
+        })}
+      />,
+    );
+    expect(screen.getByText('Awaiting vendor')).toBeTruthy();
+    const chip = container.querySelector('[data-status="awaiting_vendor"]') as HTMLElement;
+    expect(chip.className).toContain('bg-(--el-tint-sky)');
+  });
+
+  it('does not crash on a status with NEITHER a key treatment NOR a category', () => {
+    // The degrade of last resort: a row pointing at a status the project's
+    // workflow no longer holds. It renders the key it has rather than throwing
+    // on a missing map row (the old `STATUS_META[status]` would have).
+    const { container } = render(<WorkItemNode item={at('ghost_status')} />);
+    expect(screen.getByText('ghost_status')).toBeTruthy();
+    const chip = container.querySelector('[data-status="ghost_status"]') as HTMLElement;
+    expect(chip.className).toContain('bg-(--el-muted)');
+  });
+
+  it('a DEFAULT status is named from the localized catalog, not from the wire label', () => {
+    // Protected default statuses cannot be renamed, so their canonical label is
+    // translated by key — the shipped rule (`IssueFilterBar`, the advanced-filter
+    // editor + summary). Reading the workflow row first would regress every
+    // default status to English under `zh`.
+    render(<WorkItemNode item={at('in_review', { statusLabel: 'WHATEVER THE ROW SAYS' })} />);
+    expect(screen.getByText('In Review')).toBeTruthy();
+    expect(screen.queryByText('WHATEVER THE ROW SAYS')).toBeNull();
+  });
+
+  it('the six statuses that rendered before render EXACTLY as they did', () => {
+    // The regression half. Labels + fills are compared across the whole set that
+    // shipped, so the widening cannot have quietly re-skinned one of them.
+    const expected: Array<[string, string, string]> = [
+      ['todo', 'To Do', 'bg-(--el-muted)'],
+      ['in_progress', 'In Progress', 'bg-(--el-tint-sky)'],
+      ['in_review', 'In Review', 'bg-(--el-tint-lavender)'],
+      ['blocked', 'Blocked', 'bg-(--el-tint-peach)'],
+      ['done', 'Done', 'bg-(--el-tint-mint)'],
+      ['cancelled', 'Cancelled', 'bg-(--el-muted)'],
+    ];
+    for (const [key, label, fill] of expected) {
+      // `done` swaps the chip for the solid "Done" stamp on the card itself
+      // (MOTIR-1422), so the pill is asserted through the shared component the
+      // way `PlanItemNode` mounts it — one chip, one resolver, both surfaces.
+      const { container, unmount } = render(<WorkItemStatusPill status={key} />);
+      const chip = container.querySelector(`[data-status="${key}"]`) as HTMLElement;
+      expect(chip.textContent).toBe(label);
+      expect(chip.className).toContain(fill);
+      unmount();
+    }
+  });
+
+  it('the two new statuses take DISTINCT fills — no chip impersonates another', () => {
+    const fillOf = (key: string) => {
+      const { container, unmount } = render(<WorkItemStatusPill status={key} />);
+      const cls = (container.querySelector(`[data-status="${key}"]`) as HTMLElement).className;
+      const fill = /bg-\(--el-[a-z-]+\)/.exec(cls)?.[0] ?? '';
+      unmount();
+      return fill;
+    };
+    const implemented = fillOf('implemented');
+    const planning = fillOf('planning');
+    expect(implemented).not.toBe(planning);
+    for (const other of ['todo', 'in_progress', 'in_review', 'blocked', 'done']) {
+      expect(fillOf(other)).not.toBe(implemented);
+      expect(fillOf(other)).not.toBe(planning);
+    }
   });
 });

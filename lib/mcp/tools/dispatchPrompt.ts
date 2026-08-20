@@ -8,6 +8,7 @@ import {
   isOrderingAdvisory,
   isReferenceAdvisory,
   isRepoStraddleAdvisory,
+  isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
@@ -72,6 +73,7 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
   const straddles = dto.advisories.filter(isRepoStraddleAdvisory);
   const subsumed = dto.advisories.filter(isSubsumptionAdvisory);
   const oversized = dto.advisories.filter(isSizingAdvisory);
+  const selfBlocking = dto.advisories.filter(isSelfBlockingDesignAdvisory);
   const lines: string[] = [];
   if (references.length > 0) {
     lines.push(
@@ -104,6 +106,16 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
         `${s.storyPoints ?? '—'} story points / ${s.estimateMinutes ?? '—'} estimated minutes, ` +
         'over the estimation gate (13+ points is the SPLIT signal; a coding_agent run must fit ' +
         'in 60 minutes). Split it before starting.',
+    );
+  }
+  // THE DESIGN GATE (MOTIR-3178).
+  for (const d of selfBlocking) {
+    lines.push(
+      `Advisory (NOT a blocker — ${dto.key} still dispatches): it is its OWN design blocker — ` +
+        `criterion ${d.designCriterionIndex} produces a design asset and criterion ` +
+        `${d.surfaceCriterionIndex} builds the surface that drawing decides. Design before code, ` +
+        'within every story: lift the design criterion onto its own card rather than drawing and ' +
+        'building in one pull request.',
     );
   }
   // The SUBSUMPTION advisory (MOTIR-2903).

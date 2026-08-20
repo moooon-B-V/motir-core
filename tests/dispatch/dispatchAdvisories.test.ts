@@ -1047,3 +1047,175 @@ describe('THE ESTIMATION GATE advisory — a card whose own sizing says it is mo
     expect(row.status).toBe('in_progress');
   });
 });
+
+describe('THE DESIGN GATE advisory — a card that draws its own design and then builds it', () => {
+  /**
+   * MOTIR-3154's criteria set, RECONSTRUCTED — the as-authored text no longer
+   * exists. `get_work_item_activity` records a `descriptionMd` edit at
+   * 2026-08-19T20:53:52.716Z (that card's re-plan `modify`), and the tenant keeps
+   * no prior body; `notes.html` #329 and the `motir run MOTIR-3154` comment both
+   * PARAPHRASE criteria 1 / 4 / 5. Rebuilt here from the table in MOTIR-3178's
+   * own body, which is its durable source, and SYNTHETIC so it cannot rot when
+   * MOTIR-3154 is re-scoped again.
+   *
+   * Everything else about the body is CLEAN — no reference token, no post-merge
+   * phrase, no repo-qualified path — because that is the point: the card the
+   * defect was found on had nothing else wrong with it.
+   */
+  const reconstructedBody = () =>
+    [
+      '## Acceptance criteria',
+      '',
+      '1. a `design/ai-planning/` three-file amendment — the accepted and declined node',
+      '   treatments, plus an explicit re-decision of what the plan-detail canvas pane',
+      '   holds after approve',
+      '2. decline no longer deletes the proposal rows',
+      '3. approve leaves the pane on the plan rather than handing it to the establish step',
+      '4. the plan-detail canvas draws a DECIDED plan — one node per approved add, in',
+      '   the treatment the design decides',
+      '5. the planning-workspace canvas KEEPS its decided overlay',
+    ].join('\n');
+
+  async function makeDesignCard(
+    fx: WorkItemFixture,
+    title: string,
+    descriptionMd: string,
+    placement: { kind?: 'task' | 'subtask'; parentId?: string } = {},
+  ) {
+    const { kind = 'task', parentId } = placement;
+    return workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind,
+        title,
+        descriptionMd,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 5,
+        estimateMinutes: 55,
+        ...(parentId ? { parentId } : {}),
+      },
+      fx.ctx,
+    );
+  }
+
+  it('MOTIR-3154 REGRESSION: one advisory naming BOTH criteria', async () => {
+    // The card `motir run MOTIR-3154` was handed. `readiness.ready` was `true`,
+    // `openBlockers` `[]`, `validate_work_item` `valid: true` — and criterion 1
+    // was the drawing that criteria 4-5 were to be built against, in one pull
+    // request, approved by one click (`notes.html` #329; MOTIR-3158).
+    const fx = await makeWorkItemFixture();
+    const card = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+
+    expect(await buildDispatchProseAdvisories(card, fx.ctx)).toEqual([
+      {
+        kind: 'shape',
+        item: card.identifier,
+        severity: 'likely-self-blocking-design',
+        designCriterionIndex: 1,
+        surfaceCriterionIndex: 4,
+      },
+    ]);
+  });
+
+  it('says NOTHING about a card carrying only one of the two roles', async () => {
+    const fx = await makeWorkItemFixture();
+    const designOnly = await makeDesignCard(
+      fx,
+      'Draw the plan canvas',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. `design/ai-planning/plan-canvas.mock.html` is built from the real design system',
+        '2. `design/ai-planning/design-notes.md` names the primitives and the access path',
+      ].join('\n'),
+    );
+    const surfaceOnly = await makeDesignCard(
+      fx,
+      'Build the plan canvas',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. the plan-detail canvas draws one node per approved add',
+        '2. the planning-workspace canvas renders the decided overlay',
+      ].join('\n'),
+    );
+
+    expect(await buildDispatchProseAdvisories(designOnly, fx.ctx)).toEqual([]);
+    expect(await buildDispatchProseAdvisories(surfaceOnly, fx.ctx)).toEqual([]);
+  });
+
+  it('EXEMPTS a card that HOLDS children — and the child count is read, not assumed', async () => {
+    // The dispatch path does not carry `hasChildren` on its row shape, so this
+    // also pins that the lazy row read actually happens for a card whose PROSE
+    // qualifies. Guessing `false` here would report a container.
+    const fx = await makeWorkItemFixture();
+    const container = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+    await makeDesignCard(fx, 'A right-shaped child', '## Acceptance criteria\n\n- built.', {
+      kind: 'subtask',
+      parentId: container.id,
+    });
+
+    expect(await buildDispatchProseAdvisories(container, fx.ctx)).toEqual([]);
+  });
+
+  it('reaches the AGENT through dispatch_prompt — prompt, DTO and human summary', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toHaveLength(1);
+    expect(dto.prompt).toContain('THIS CARD IS ITS OWN DESIGN BLOCKER');
+    expect(dto.prompt).toContain('criterion 1 produces a design asset; criterion 4 builds');
+    expect(dto.prompt).toContain('The remedy is a LIFT, not a cut');
+    // …and it still dispatches, in the same workflow mode.
+    expect(dto.workflowMode).toBe('per_item_pr');
+
+    const res = await runDispatchPrompt({ key: card.identifier }, fx.ctx);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('Advisory (NOT a blocker');
+    expect(text).toContain('its OWN design blocker');
+  });
+
+  it('a clean card renders no design-gate section at all', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeDesignCard(
+      fx,
+      'Right-shaped',
+      '## Acceptance criteria\n\n- the service returns the projected rows.',
+    );
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect(dto.advisories).toEqual([]);
+    expect(dto.prompt).not.toContain('OWN DESIGN BLOCKER');
+  });
+
+  it('reaches the CLAIMER through claim_next_ready — and the claim still stands', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeDesignCard(fx, 'A decided plan on the canvas', reconstructedBody());
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
+    await adminDb.workItem.updateMany({ where: { id: card.id }, data: { sprintId: sprint.id } });
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+
+    const res = await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx);
+    const payload = res.structuredContent as {
+      item: { key: string } | null;
+      advisories: WorkItemProseAdvisoryDto[];
+    };
+    expect(payload.item?.key).toBe(card.identifier);
+    expect(payload.advisories).toMatchObject([{ severity: 'likely-self-blocking-design' }]);
+    const text = (res.content as { text: string }[])[0]!.text;
+    expect(text).toContain('its OWN design blocker');
+
+    // The claim happened — the advisory is not a gate on this path either.
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(row.status).toBe('in_progress');
+  });
+});

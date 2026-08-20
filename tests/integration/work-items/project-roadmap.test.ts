@@ -271,3 +271,126 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     expect(byId.get(code.id)?.executor).toBe('coding_agent');
   });
 });
+
+// ── The status's OWN IDENTITY on the wire (bug MOTIR-3170) ──────────────────
+//
+// The level read has always carried a bare status KEY, and the canvas narrowed
+// it against a hand-copied six-member literal — so `implemented` (MOTIR-3003)
+// and `planning` (MOTIR-2425), added to the default workflow long after the node
+// was written, arrived as `todo` and drew as "To Do". A key alone cannot fix
+// that: the chip's TEXT has to come from somewhere, and the `labels.defaultStatus`
+// catalog by construction has no entry for a project's CUSTOM status.
+//
+// So the read resolves each node's status against the project's workflow — the
+// SAME `statuses` list it already loads to compute `isDone` / `ready` — and
+// carries its label + lifecycle category beside the key.
+describe('workItemsService.getProjectRoadmap — the status label + category (bug MOTIR-3170)', () => {
+  it('carries the LABEL and CATEGORY of a node at `implemented`', async () => {
+    const fx = await makeFixture();
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story S' });
+    const built = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'A built subtask',
+      parentId: story.id,
+    });
+    await setStatus(built.id, 'implemented');
+
+    const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, story.id, fx.ctx);
+    const node = nodes.find((n) => n.id === built.id)!;
+    expect(node.status).toBe('implemented');
+    expect(node.statusLabel).toBe('Implemented');
+    // `implemented` is in the in_progress CATEGORY (MOTIR-3003) — which is
+    // exactly why `isDone` is false and why the old `isDone ? 'done' : 'todo'`
+    // fallback routed it into `todo`.
+    expect(node.statusCategory).toBe('in_progress');
+    expect(node.isDone).toBe(false);
+  });
+
+  it('carries them for `planning` too, and for every default status on the level', async () => {
+    const fx = await makeFixture();
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story S' });
+    const expected: Array<[string, string, string]> = [
+      ['todo', 'To Do', 'todo'],
+      ['blocked', 'Blocked', 'todo'],
+      ['in_progress', 'In Progress', 'in_progress'],
+      ['implemented', 'Implemented', 'in_progress'],
+      ['planning', 'Planning', 'in_progress'],
+      ['in_review', 'In Review', 'in_progress'],
+      ['done', 'Done', 'done'],
+      ['cancelled', 'Cancelled', 'done'],
+    ];
+    const ids: Array<[string, string, string, string]> = [];
+    for (const [key, label, category] of expected) {
+      const child = await createWorkItem(fx, {
+        kind: 'subtask',
+        title: `At ${key}`,
+        parentId: story.id,
+      });
+      await setStatus(child.id, key);
+      ids.push([child.id, key, label, category]);
+    }
+
+    const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, story.id, fx.ctx);
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    for (const [id, key, label, category] of ids) {
+      expect([key, byId.get(id)!.statusLabel, byId.get(id)!.statusCategory]).toEqual([
+        key,
+        label,
+        category,
+      ]);
+    }
+  });
+
+  it("carries a CUSTOM workflow status's own label — the case the i18n catalog cannot serve", async () => {
+    const fx = await makeFixture();
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story S' });
+    const child = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Waiting on counsel',
+      parentId: story.id,
+    });
+    // A project defines its own status — a shipped feature, and the reason
+    // `RoadmapNodeDto.status` is a bare `string` rather than an enum.
+    const anyStatus = await adminDb.workflowStatus.findFirst({
+      where: { projectId: fx.projectId },
+    });
+    await adminDb.workflowStatus.create({
+      data: {
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        key: 'awaiting_legal',
+        label: 'Awaiting legal',
+        category: 'todo',
+        position: `${anyStatus!.position}z`,
+        isInitial: false,
+      },
+    });
+    await setStatus(child.id, 'awaiting_legal');
+
+    const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, story.id, fx.ctx);
+    const node = nodes.find((n) => n.id === child.id)!;
+    expect(node.status).toBe('awaiting_legal');
+    expect(node.statusLabel).toBe('Awaiting legal');
+    expect(node.statusCategory).toBe('todo');
+  });
+
+  it('degrades to the raw key + a null category for a status the workflow no longer holds', async () => {
+    const fx = await makeFixture();
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story S' });
+    const child = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Orphaned status',
+      parentId: story.id,
+    });
+    // A row pointing at a deleted status. The read must not throw and must not
+    // substitute a status the card is not in — the neutral chip is the honest
+    // answer, and a null category is what selects it.
+    await setStatus(child.id, 'ghost_status');
+
+    const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, story.id, fx.ctx);
+    const node = nodes.find((n) => n.id === child.id)!;
+    expect(node.status).toBe('ghost_status');
+    expect(node.statusLabel).toBe('ghost_status');
+    expect(node.statusCategory).toBeNull();
+  });
+});
