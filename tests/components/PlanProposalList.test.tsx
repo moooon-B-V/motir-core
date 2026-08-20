@@ -148,7 +148,8 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
     // reader deciding whether to approve.
     renderWithIntl(<PlanProposalList items={[modify()]} decided={false} />);
 
-    expect(screen.getByText('title')).toBeTruthy();
+    // The LABEL, not the wire name — see the field-label totality guard.
+    expect(screen.getByText('Title')).toBeTruthy();
     expect(screen.getByText('Payout ledger + reconciliation')).toBeTruthy();
     // The TITLE is also 'Payout ledger', so pick the one inside the diff line.
     const old = screen.getAllByText('Payout ledger').find((n) => n.closest('dd') != null)!;
@@ -169,6 +170,7 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
       />,
     );
 
+    expect(screen.getByText('Description')).toBeTruthy();
     expect(screen.getByText('rewritten — open the card to read it')).toBeTruthy();
     expect(screen.queryByText(/a completely new body/)).toBeNull();
   });
@@ -182,6 +184,98 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
     );
 
     expect(screen.getByText('high')).toBeTruthy();
+  });
+});
+
+describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)', () => {
+  it('falls back to the parent IDENTIFIER when the title is not carried', () => {
+    renderWithIntl(
+      <PlanProposalList
+        items={[add({ parentNodeId: 'wi_p', parentIdentifier: 'MOTIR-653', parentTitle: null })]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText(/under MOTIR-653/)).toBeTruthy();
+    // A committed parent is NOT marked proposed.
+    expect(screen.queryByText('(proposed)')).toBeNull();
+  });
+
+  it('renders a row that carries a live STATUS', () => {
+    renderWithIntl(
+      <PlanProposalList
+        items={[
+          modify({
+            status: 'in_progress',
+            statusLabel: 'In Progress',
+            statusCategory: 'in_progress',
+          }),
+        ]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText('In Progress')).toBeTruthy();
+  });
+
+  it('a change that REMOVES a value shows the em-dash, not an empty slot', () => {
+    // `to: null` is the shape a `modify` takes when it clears a field. An empty
+    // cell in a diff reads as a rendering failure.
+    renderWithIntl(
+      <PlanProposalList
+        items={[modify({ changes: [{ field: 'priority', from: 'high', to: null }] })]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText('—')).toBeTruthy();
+  });
+
+  it('a row with NO facts at all still renders', () => {
+    // Every fact is optional on the DTO; a proposal with none must not produce an
+    // empty separator line.
+    renderWithIntl(
+      <PlanProposalList
+        items={[
+          add({
+            kind: '',
+            type: null,
+            storyPoints: null,
+            estimateMinutes: null,
+            targetRepo: null,
+            parentNodeId: null,
+            parentIdentifier: null,
+            parentTitle: null,
+          }),
+        ]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText('A proposed story')).toBeTruthy();
+  });
+
+  it('every member of the op enum has a section — asserted at BUILD time', () => {
+    // ⚠️ THE RUNTIME TEST THIS REPLACES WAS WRONG, and writing it is what found
+    // the gap. It asserted that an unrecognised op "renders no chip rather than
+    // throwing" — and the row does not render AT ALL, because the list is built
+    // by iterating the three sections. A proposal that silently never appears,
+    // under an item count that includes it, is precisely the self-contradiction
+    // the three-section decision exists to prevent.
+    //
+    // So the guarantee is moved to the compiler: `AssertTotalListOps` in
+    // `PlanProposalList.tsx` makes a fourth `PlanItemOpDto` member a BUILD error
+    // rather than an invisible row. This test states that the three the enum has
+    // today all reach a section, so the runtime half is covered too.
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('an unknown KIND falls back to the task glyph rather than throwing', () => {
+    renderWithIntl(<PlanProposalList items={[add({ kind: 'epicish' })]} decided={false} />);
+
+    expect(screen.getByText('A proposed story')).toBeTruthy();
   });
 });
 
@@ -207,5 +301,36 @@ describe('the states (MOTIR-3239)', () => {
     // header's.
     expect(screen.getByText('created')).toBeTruthy();
     expect(screen.queryByText('add')).toBeNull();
+  });
+});
+
+describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
+  it('renders the catalogue label for a camelCase wire field', () => {
+    // `storyPoints` would otherwise read as STORYPOINTS — the shape that once put
+    // `planReview.field_storyPoints` on the canvas in front of a reviewer.
+    renderWithIntl(
+      <PlanProposalList
+        items={[modify({ changes: [{ field: 'storyPoints', from: '3', to: '5' }] })]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText('Story points')).toBeTruthy();
+    expect(screen.queryByText('storyPoints')).toBeNull();
+  });
+
+  it('a field with NO copy degrades to the wire name rather than leaking a key path', () => {
+    // `PlanItemChangeDto.field` is deliberately a plain `string`: a client bundle
+    // can be older than the server that answered it, and a surface that cannot
+    // represent an unknown field cannot fall back for one.
+    renderWithIntl(
+      <PlanProposalList
+        items={[modify({ changes: [{ field: 'somethingNew', from: 'a', to: 'b' }] })]}
+        decided={false}
+      />,
+    );
+
+    expect(screen.getByText('somethingNew')).toBeTruthy();
+    expect(screen.queryByText(/planReview\.field_/)).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanItemOpDto } from '@/lib/dto/plans';
 
 // The plan detail's LIST body (MOTIR-3239, built to
 // `design/ai-planning/design-notes.md` Part VIII §3 and
@@ -49,6 +50,18 @@ const SECTIONS = [
     decidedChip: 'opArchived',
   },
 ] as const;
+
+// ⚠️ TOTAL over `PlanItemOpDto`, at BUILD time (MOTIR-3242). The list renders one
+// section per op, so an op the sections do not cover is a proposal that silently
+// never appears — under a plan item COUNT that includes it, which is exactly the
+// self-contradiction the three-section decision exists to prevent. A fourth op
+// must therefore be a compile error here, not a row nobody sees. Same shape as
+// `lib/dto/plans.ts`'s `PLAN_DECISION_REASONS`.
+type AssertTotalListOps = [Exclude<PlanItemOpDto, (typeof SECTIONS)[number]['op']>] extends [never]
+  ? true
+  : never;
+const _planListOpsTotal: AssertTotalListOps = true;
+void _planListOpsTotal;
 
 const KNOWN_KINDS: readonly IssueType[] = ['epic', 'story', 'task', 'bug', 'subtask'];
 
@@ -93,6 +106,20 @@ function OpChip({ op, decided }: { op: string; decided: boolean }) {
  */
 const BODY_FIELDS = new Set(['description', 'explanation']);
 
+/** The field's human LABEL, not its wire name (MOTIR-3242).
+ *
+ *  ⚠️ The key is INTERPOLATED (`field_<name>`), so nothing checks it at build
+ *  time — which is how the canvas once rendered `planReview.field_storyPoints`
+ *  to a person deciding whether to approve a plan, with nothing red anywhere
+ *  (MOTIR-3151). `t.has()` degrades to the wire name, which is at least a word;
+ *  `tests/components/plan-change-field-labels.test.tsx` is what keeps every
+ *  member of `PLAN_ITEM_CHANGE_FIELDS` from needing that fallback, and this list
+ *  is the FOURTH surface it now covers rather than a fifth copy of the idea. */
+function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
+  const key = `field_${field}`;
+  return t.has(key) ? t(key) : field;
+}
+
 function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
   const t = useTranslations('planReview');
   if (changes.length === 0) return null;
@@ -101,7 +128,7 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
       {changes.map((change) => (
         <div key={change.field} className="grid grid-cols-[6rem_1fr] items-baseline gap-2">
           <dt className="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase">
-            {change.field}
+            {fieldLabel(t, change.field)}
           </dt>
           <dd className="min-w-0">
             {BODY_FIELDS.has(change.field) ? (

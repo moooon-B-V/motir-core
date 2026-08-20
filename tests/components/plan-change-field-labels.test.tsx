@@ -19,8 +19,13 @@ import zhMessages from '@/messages/zh.json';
 //
 // This file is the check that was missing: the wire vocabulary is a closed list
 // (`PLAN_ITEM_CHANGE_FIELDS`), and every member of it owes copy in every catalog
-// and a name in each of the THREE hand-maintained maps that stand between a
-// field and its label. The DiffLine cases at the foot cover the other half —
+// and a name in each of the hand-maintained maps that stand between a field and
+// its label.
+//
+// ⚠️ MOTIR-3242 added a FOURTH such surface — the plan detail's LIST body
+// (`PlanProposalList`), which names a `modify`'s changed fields the same
+// interpolated way. It is covered by EXTENDING this file rather than by a fifth
+// copy of the idea, which is the whole reason the file exists. The DiffLine cases at the foot cover the other half —
 // what a field with NO copy must degrade to, so the next gap is readable rather
 // than a leaked key path.
 

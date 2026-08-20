@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   push: vi.fn(),
   search: { value: '' },
+  defaultView: { value: null as null | 'canvas' | 'list' },
   approvePlanRequest: vi.fn(async () => ({})),
   declinePlanRequest: vi.fn(async () => ({})),
   fetchPlanReview: vi.fn(),
@@ -31,6 +32,18 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/plans/plan_1',
   useSearchParams: () => new URLSearchParams(mocks.search.value),
 }));
+
+// MOTIR-3242's seam guard: the DEFAULT is stubbed, and the rendered view must
+// follow it. A test that re-implements the straddle rule would pass against a
+// derivation that had been inlined back into the island — this one cannot.
+vi.mock('@/lib/planning/planView', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/planning/planView')>();
+  return {
+    ...actual,
+    defaultPlanView: (...args: never[]) =>
+      mocks.defaultView.value ?? actual.defaultPlanView(...(args as [never])),
+  };
+});
 
 vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/planning/planReviewClient')>();
@@ -154,6 +167,7 @@ const approved = () =>
 
 beforeEach(() => {
   mocks.search.value = '';
+  mocks.defaultView.value = null;
   mocks.fetchPlanReview.mockResolvedValue(approved());
 });
 
@@ -343,5 +357,31 @@ describe('the List / Canvas switcher (MOTIR-3239)', () => {
 
     expect(screen.getByRole('group', { name: 'Plan view' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Canvas/ })).toBeTruthy();
+  });
+});
+
+describe('GUARD: the default-view seam is CALLED, not inlined (MOTIR-3242)', () => {
+  it('stubbing `defaultPlanView` moves which body renders', () => {
+    // Replacing that ONE symbol must change the page. If the rule were inlined in
+    // the island's derivation expression, this stub would change nothing and the
+    // next card to alter the rule would be rewriting this card's logic.
+    mocks.defaultView.value = 'list';
+
+    renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
+
+    expect(screen.getByTestId('plan-proposal-list')).toBeTruthy();
+    expect(screen.queryByTestId('plan-review-canvas')).toBeNull();
+  });
+
+  it('and it decides which side of the switch writes a CLEAN url', () => {
+    // The clean-URL property is defined against the seam's answer, not against a
+    // literal `'canvas'` — so it survives the seam changing.
+    mocks.defaultView.value = 'list';
+    mocks.search.value = 'view=canvas';
+
+    renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
+    fireEvent.click(screen.getByRole('button', { name: /List/ }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1', { scroll: false });
   });
 });

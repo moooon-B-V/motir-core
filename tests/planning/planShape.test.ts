@@ -154,6 +154,36 @@ describe('depth walks the whole proposal chain', () => {
     expect(depthOf(null)).toBe(0);
   });
 
+  it('a committed ancestor NOBODY names directly still terminates the walk', () => {
+    // Reached when the chain climbs THROUGH a proposal into a committed
+    // container that no item names as its own `parentNodeId` — the proposal
+    // above it carries the trail instead. The walk must end with a depth rather
+    // than looking for a namer that is not there.
+    const story = planReviewItem({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      op: 'add',
+      parentNodeId: 'wi_unnamed',
+      parentIdentifier: null,
+      parentTitle: null,
+      parentTrail: [],
+    });
+    const sub = planReviewItem({
+      planItemId: 'pi_sub',
+      nodeId: 'pi_sub',
+      op: 'add',
+      parentNodeId: 'pi_story',
+      parentIdentifier: null,
+      parentTrail: [],
+    });
+
+    const containers = planContainers([story, sub]);
+    const committed = containers.find((c) => c.parentNodeId === 'wi_unnamed')!;
+
+    expect(committed.depth).toBeGreaterThan(0);
+    expect(planContainerCount([story, sub])).toBe(2);
+  });
+
   it('a cycle cannot hang the walk', () => {
     // The DTO cannot produce one, but a pure function that walks a graph should
     // not depend on that for termination.
