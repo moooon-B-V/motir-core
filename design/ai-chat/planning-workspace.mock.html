@@ -15,7 +15,15 @@
   components/onboarding/DiscoveryChatRail.tsx; the global launcher composes the
   shipped components/ui/CommandPalette.tsx.
 
-  Colours are the real Motir light palette (globals.css --el-* values, inlined).
+  Colours: this sheet is an older light-only sketch that inlines the default
+  Motir palette by hand as its own --text/--accent/--border names. THE ORB IS
+  NOT drawn that way (MOTIR-3217). Its fill, rim, glow and glyph are the shipped
+  `PlanWithAIFab` recipe, expressed in the same tokens the app uses and
+  extracted verbatim from `packages/design-system/theme.css`:
+  Tier-0 `--color-*` -> Tier-3 `--el-*` -> the paint. That is exactly the chain
+  a `[data-palette]` block re-points, so the orb re-tints with the palette
+  instead of being frozen to one set of invented hexes -- which is what sheet
+  4's palette strip shows, under all ten shipped palettes.
 -->
 <html lang="en">
   <head>
@@ -62,6 +70,81 @@
           'Segoe UI',
           Roboto,
           sans-serif;
+      }
+      /* ── THE ORB'S COLOUR CHAIN — generated, not typed (MOTIR-3217) ──────
+         Extracted verbatim from `packages/design-system/theme.css`, so the orb
+         in this sheet cannot drift from the shipped `PlanWithAIFab`. Only the
+         tokens the orb reads are here; the rest of the sheet keeps its own
+         hand-inlined light palette above.
+
+         Tier-3 is re-emitted on `[data-palette]` for the same reason
+         theme.css declares it on `:root,[data-appearance-scope]`: a custom
+         property resolves where it is DECLARED, so a nested subtree that
+         re-points Tier-0 must re-declare the `--el-*` layer or it inherits
+         `:root`'s already-resolved value. ── */
+      :root {
+        /* Tier 0 — the default `motir` palette */
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #ff64c8;
+      }
+      :root,
+      [data-palette] {
+        /* Tier 3 — the element layer */
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        /* Recipe knob — theme.css `:root` (MOTIR-3207). The first stop mixes
+           this much of the glyph's own colour into the fill; it is the orb's
+           CONTRAST knob, so it is read, never retyped. */
+        --orb-lit-mix: 26%;
+      }
+      /* Tier 0 per palette — the three properties the orb reads, from each
+         `[data-palette='<id>']` block in theme.css. */
+      [data-palette='cobalt'] {
+        --color-primary-fill: #3650c2;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #0e93a8;
+      }
+      [data-palette='graphite'] {
+        --color-primary-fill: #1a1d21;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #2563c9;
+      }
+      [data-palette='evergreen'] {
+        --color-primary-fill: #0c7a52;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #8257e6;
+      }
+      [data-palette='spectrum'] {
+        --color-primary-fill: #5a37c9;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #e23d97;
+      }
+      [data-palette='amber'] {
+        --color-primary-fill: #f0b90b;
+        --color-primary-foreground: #181a20;
+        --color-accent: #97751a;
+      }
+      [data-palette='sienna'] {
+        --color-primary-fill: #fa520f;
+        --color-primary-foreground: #2a1205;
+        --color-accent: #b5660a;
+      }
+      [data-palette='garnet'] {
+        --color-primary-fill: #c30021;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #9c2d7f;
+      }
+      [data-palette='citrine'] {
+        --color-primary-fill: #ffd02f;
+        --color-primary-foreground: #050038;
+        --color-accent: #3859ff;
+      }
+      [data-palette='candy'] {
+        --color-primary-fill: #efbfdd;
+        --color-primary-foreground: #651249;
+        --color-accent: #ab4aba;
       }
       * {
         box-sizing: border-box;
@@ -974,23 +1057,36 @@
         border-radius: 50%;
         display: grid;
         place-items: center;
-        color: #fff;
+        color: var(--el-accent-text);
         font-size: 21px;
-        background: radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd);
+        background-image: radial-gradient(
+          circle at 33% 27%,
+          /* The first stop's mix is `--orb-lit-mix`, read from the token layer
+             above — NOT a percentage typed here. It is the gradient's lightest
+             point, it sits under the centred white mark, and it is therefore
+             the orb's contrast knob (MOTIR-3207). */
+          color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+          var(--el-accent) 56%,
+          color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+        );
         box-shadow:
-          inset 0 1px 0 #ffffff6e,
-          0 10px 24px -5px #5645d4cc,
-          0 0 34px -3px #ff64c895;
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
       }
       .fab .spark {
-        filter: drop-shadow(0 0 6px #ffffffd6);
+        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--el-accent-text) 84%, transparent));
       }
       .fab::before {
         content: '';
         position: absolute;
         inset: -12px;
         border-radius: 50%;
-        background: radial-gradient(circle, #ff64c855, transparent 66%);
+        background: radial-gradient(
+          circle,
+          color-mix(in srgb, var(--el-highlight) 33%, transparent),
+          transparent 66%
+        );
         z-index: -1;
       }
       .fab.collapsed {
@@ -1067,6 +1163,49 @@
       .anatomy li b {
         color: var(--strong);
       }
+      /* the orb under every shipped palette — the proof that its paint is
+         palette-derived rather than three frozen hexes (MOTIR-3217) */
+      .palstrip {
+        margin-top: 16px;
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        background: var(--soft);
+        padding: 13px 15px 16px;
+      }
+      .palstrip .psh {
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+        margin: 0 0 14px;
+      }
+      .palstrip .psrow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px 20px;
+        align-items: flex-start;
+      }
+      .palstrip .pscell {
+        position: relative;
+        isolation: isolate;
+        display: grid;
+        justify-items: center;
+        gap: 9px;
+        width: 72px;
+      }
+      .palstrip .pscell .nm {
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--muted);
+      }
+      .palstrip .orb {
+        width: 46px;
+        height: 46px;
+      }
+      .palstrip .orb .mlogo {
+        width: 21px;
+        height: 21px;
+      }
       .anatomy li .dotk {
         margin-top: 5px;
         width: 8px;
@@ -1117,7 +1256,7 @@
         display: block;
       }
       .mlogo path {
-        stroke: #fff;
+        stroke: var(--el-accent-text);
         stroke-width: 2.6;
         fill: none;
         stroke-linecap: round;
@@ -1130,18 +1269,31 @@
         border-radius: 50%;
         display: grid;
         place-items: center;
-        background: radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd);
+        background-image: radial-gradient(
+          circle at 33% 27%,
+          /* The first stop's mix is `--orb-lit-mix`, read from the token layer
+             above — NOT a percentage typed here. It is the gradient's lightest
+             point, it sits under the centred white mark, and it is therefore
+             the orb's contrast knob (MOTIR-3207). */
+          color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+          var(--el-accent) 56%,
+          color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+        );
         box-shadow:
-          inset 0 1px 0 #ffffff6e,
-          0 10px 24px -5px #5645d4cc,
-          0 0 34px -3px #ff64c895;
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
       }
       .orb::before {
         content: '';
         position: absolute;
         inset: -12px;
         border-radius: 50%;
-        background: radial-gradient(circle, #ff64c855, transparent 66%);
+        background: radial-gradient(
+          circle,
+          color-mix(in srgb, var(--el-highlight) 33%, transparent),
+          transparent 66%
+        );
         z-index: -1;
       }
       /* the callout menu the orb opens (planning is ONE of its actions) */
@@ -2068,16 +2220,20 @@
             <li>
               <span class="dotk"></span
               ><span
-                ><b>Gradient fill</b>, accent → violet (<code>--el-accent</code> →
-                <code>--el-highlight</code>-derived) — AA-safe white text over the accent-dominant
-                region; the pink lives only in the glow.</span
+                ><b>Gradient fill</b>, a lit sphere: <code>--el-accent</code> mixed with the
+                glyph&rsquo;s own <code>--el-accent-text</code> at the 33%/27% highlight, the accent
+                body at 56%, then an <code>--el-highlight</code>-leaning edge — the shipped
+                <code>ORB_STYLE</code>, stop for stop. The highlight mix is
+                <code>--orb-lit-mix</code>, the contrast knob that keeps the mark at 3:1
+                (MOTIR-3207); the pink lives in the glow.</span
               >
             </li>
             <li>
               <span class="dotk"></span
               ><span
-                ><b>Aura / outer glow</b> — a soft pink + violet halo so it lifts off the chrome and
-                reads as “special”.</span
+                ><b>Aura / outer glow</b> — a soft <code>--el-highlight</code> + accent halo so it
+                lifts off the chrome and reads as “special”; both are token mixes, so the halo
+                re-tints with the palette rather than staying brand pink.</span
               >
             </li>
             <li>
@@ -2097,6 +2253,97 @@
           </ul>
         </div>
 
+        <!-- the orb is PALETTE-DERIVED (MOTIR-3217) -->
+        <div class="palstrip">
+          <p class="psh">
+            <b>The orb is palette-derived, not painted.</b> One rule, ten
+            <code>data-palette</code> values: its fill is
+            <code>color-mix(--el-accent-text var(--orb-lit-mix), --el-accent)</code> &rarr;
+            <code>--el-accent</code> 56% &rarr;
+            <code>color-mix(--el-accent 68%, --el-highlight)</code>, its rim and glow are the same
+            three tokens, and its mark is <code>--el-accent-text</code> &mdash; the shipped
+            <code>PlanWithAIFab</code> recipe, tokens extracted verbatim from
+            <code>packages/design-system/theme.css</code>. The first stop&rsquo;s mix is read from
+            <code>--orb-lit-mix</code> and never typed here: it is the gradient&rsquo;s lightest
+            point and the white mark sits on it, so it is a WCAG 1.4.11 contrast knob (<b>3.77:1</b>
+            light &middot; <b>3.09:1</b> dark in the default palette, and every one of the twenty
+            palette&nbsp;&times;&nbsp;theme contexts clears 3:1 &mdash; MOTIR-3207). Note the four
+            palettes whose <code>--color-primary-foreground</code> is not white: the mark follows
+            the token, so it stays the ink its own fill was chosen for.
+          </p>
+          <div class="psrow">
+            <span class="pscell">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">motir</span>
+            </span>
+            <span class="pscell" data-palette="cobalt">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">cobalt</span>
+            </span>
+            <span class="pscell" data-palette="graphite">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">graphite</span>
+            </span>
+            <span class="pscell" data-palette="evergreen">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">evergreen</span>
+            </span>
+            <span class="pscell" data-palette="spectrum">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">spectrum</span>
+            </span>
+            <span class="pscell" data-palette="amber">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">amber</span>
+            </span>
+            <span class="pscell" data-palette="sienna">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">sienna</span>
+            </span>
+            <span class="pscell" data-palette="garnet">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">garnet</span>
+            </span>
+            <span class="pscell" data-palette="citrine">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">citrine</span>
+            </span>
+            <span class="pscell" data-palette="candy">
+              <span class="orb"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+              <span class="nm">candy</span>
+            </span>
+          </div>
+        </div>
         <!-- ONE entrance, mode adapts to context -->
         <div class="modemap">
           <div class="mm">
@@ -2137,8 +2384,14 @@
         (MOTIR-1011) are the same launcher in context. The floating <b>M</b> is the broader
         <b>universal AI callout</b> — planning is one of its actions; project Q&amp;A + task
         assistance are future capabilities reached through the same button.
-        <code>--el-*</code> palette-derived colour + semantic shape tokens; AA holds;
-        keyboard-reachable (⌘K + focusable).
+        <b>The orb&rsquo;s colour is <code>--el-*</code> palette-derived for real</b>
+        (MOTIR-3217): fill, rim, glow and mark resolve
+        <code>--color-*</code> &rarr; <code>--el-*</code> &rarr; the paint, so the strip above
+        re-tints under every <code>data-palette</code> and the first stop tracks
+        <code>--orb-lit-mix</code>. (The rest of this older sheet still inlines the default palette
+        by hand as <code>--accent</code> / <code>--border</code> / &hellip; &mdash; it is a
+        light-only overview, and only the orb is drawn from the token layer.) Semantic shape tokens;
+        AA holds; keyboard-reachable (⌘K + focusable).
       </div>
     </section>
 
