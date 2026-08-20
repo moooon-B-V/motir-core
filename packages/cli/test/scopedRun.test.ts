@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   SCOPE_SPRINT,
+  childrenBelowClaimBar,
   classifyScopeTarget,
   dispositionOf,
   epicRefusal,
   parseScopeArgument,
   renderClaimedScope,
+  openChildrenHoldReason,
   renderEmptyScope,
+  renderOpenChildrenHold,
   renderScopeRefusal,
   unexpandedRefusal,
 } from '../src/scopedRun.js';
@@ -360,5 +363,87 @@ describe('renderEmptyScope', () => {
     // Distinguishable from a refusal: it never says NOT claimed, which is the
     // phrase every refusal above leads with.
     expect(out).not.toContain('NOT claimed');
+  });
+});
+
+// ── the CLOSE-OUT gate (Bug MOTIR-3268) ─────────────────────────────────────
+
+describe('childrenBelowClaimBar', () => {
+  const child = (identifier: string, status: string) => ({
+    identifier,
+    kind: 'subtask',
+    title: `Item ${identifier}`,
+    status,
+  });
+
+  it('clears `implemented`-or-better and names everything below it', () => {
+    expect(
+      childrenBelowClaimBar([
+        child('A', 'implemented'),
+        child('B', 'in_review'),
+        child('C', 'done'),
+        child('D', 'cancelled'),
+        child('E', 'todo'),
+        child('F', 'in_progress'),
+        child('G', 'blocked'),
+        child('H', 'planning'),
+      ]),
+    ).toEqual(['E', 'F', 'G', 'H']);
+  });
+
+  it('an UNKNOWN status ranks below the bar — the conservative direction', () => {
+    // ⚠️ A status nobody can classify is not evidence that anything is finished,
+    // and this side ranks by KEY because the child rows v1 publishes carry no
+    // category. The error it can make is to HOLD a pull request the server would
+    // have allowed; it cannot open one the server would refuse.
+    expect(childrenBelowClaimBar([child('A', 'shipped-ish')])).toEqual(['A']);
+  });
+
+  it('is case-insensitive, and a container with no children holds nothing', () => {
+    expect(childrenBelowClaimBar([child('A', 'IMPLEMENTED')])).toEqual([]);
+    expect(childrenBelowClaimBar([])).toEqual([]);
+  });
+});
+
+describe('openChildrenHoldReason', () => {
+  it("mirrors the server's sentence — count, grammar and the named children", () => {
+    expect(openChildrenHoldReason('PROD-1', ['PROD-9'])).toBe(
+      'PROD-1 cannot claim to be implemented while 1 of its children has not been: PROD-9.',
+    );
+    expect(openChildrenHoldReason('PROD-1', ['PROD-9', 'PROD-10'])).toContain(
+      '2 of its children have not been: PROD-9, PROD-10.',
+    );
+  });
+
+  it('names five and COUNTS the rest, exactly as the server error does', () => {
+    const many = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    const out = openChildrenHoldReason('PROD-1', many);
+    expect(out).toContain('A, B, C, D, E (+2 more)');
+    expect(out).not.toContain('F');
+  });
+});
+
+describe('renderOpenChildrenHold', () => {
+  it('names every open child and all three dispositions', () => {
+    const out = renderOpenChildrenHold('PROD-1', ['PROD-9', 'PROD-10']);
+    expect(out).toContain('NO pull request was opened');
+    expect(out).toContain('PROD-9 — not implemented');
+    expect(out).toContain('PROD-10 — not implemented');
+    // ⚠️ THE RUN PICKS NONE OF THEM. Each is a decision about SCOPE — is this
+    // card part of the story or not — which an unattended run has no standing to
+    // answer, so naming all three is what makes this a stop rather than a
+    // failure the operator has to diagnose.
+    expect(out).toContain('LAND them — `motir run PROD-9`');
+    expect(out).toContain('RE-PARENT them out of PROD-1');
+    expect(out).toContain('move PROD-1 to Done');
+    // It says out loud that nothing was lost — the branch is pushed.
+    expect(out).toContain('work IS pushed');
+  });
+
+  it('never prints `undefined` when the open list is somehow empty', () => {
+    // Not reachable through the command, which only renders this with a
+    // non-empty list — answered anyway so the function is total over its own
+    // signature rather than over today's one caller.
+    expect(renderOpenChildrenHold('PROD-1', [])).toContain('`motir run <key>`');
   });
 });

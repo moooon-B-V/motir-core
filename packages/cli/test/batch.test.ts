@@ -18,7 +18,7 @@ import {
 import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import type { CommandRunner } from '../src/git.js';
-import { CliError } from '../src/errors.js';
+import { CliError, ContainerHasOpenChildrenError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
@@ -103,6 +103,9 @@ class FakeServer {
   readonly readBackFails = new Set<string>();
   /** Set to make the reconcile fail as a WHOLE. */
   readBackDown = false;
+  /** Make `transition_status` REFUSE for a key, the way the container-completeness
+   *  gate does (MOTIR-3229's 422) — Bug MOTIR-3268. */
+  refuseTransitionFor: ((args: { key: string; status: string }) => Error | null) | null = null;
   /** Every key the reconcile read back, in order. */
   readonly readBackCalls: string[] = [];
 
@@ -242,6 +245,13 @@ class FakeServer {
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
           throw new CliError('FORBIDDEN: this token cannot write to the project.');
+        }
+        const refusal = this.refuseTransitionFor?.(args);
+        if (refusal) {
+          // Recorded as ATTEMPTED, then thrown — the run made the call and the
+          // server said no, which is the state the test asserts about.
+          this.transitions.push(args);
+          throw refusal;
         }
         this.transitions.push(args);
         this.byKey(args.key).status = args.status;
@@ -591,6 +601,35 @@ describe('motir batch — exclusions', () => {
     expect(text).toContain(
       'Not in the snapshot — ready only via an integrated dependency (not on main) (1)',
     );
+  });
+
+  it("the CONTAINER gate's 422 is a named outcome, and the batch keeps going (MOTIR-3268)", async () => {
+    // ⚠️ `motir batch` takes an explicit LIST of keys, so a container — a `task`
+    // or `bug` with children of its own — genuinely reaches the per-item
+    // transition. An unhandled throw there ends the whole batch on one card's
+    // status, abandoning the close-out of everything already built. It is a
+    // record, not a crash, and the SECOND card still runs.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    server.refuseTransitionFor = ({ key, status }) =>
+      key === 'PROD-1' && status === 'implemented'
+        ? new ContainerHasOpenChildrenError(
+            'This item cannot reach "implemented" while 1 of its children has not been ' +
+              'implemented: PROD-77.',
+          )
+        : null;
+
+    const { summary, dispatched } = await drive(server, { opts: { keepGoing: true } });
+
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
+    const first = summary.records.find((r) => r.key === 'PROD-1');
+    expect(first?.outcome).toBe('failed');
+    expect(first?.detail).toBe('container has open children');
+    // The card honestly stays where the server left it — nothing was reverted.
+    expect(server.byKey('PROD-1').status).toBe('in_progress');
+    // The server's own sentence reaches the operator, naming the open child.
+    expect(printed()).toContain('PROD-77');
+    // And the refusal did not cost the second card its run.
+    expect(summary.records.find((r) => r.key === 'PROD-2')?.outcome).toBe('implemented');
   });
 
   it('a read-only PAT cannot dispatch: the write fails and no agent is launched', async () => {
