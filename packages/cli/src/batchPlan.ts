@@ -81,11 +81,23 @@ export interface SnapshotEntry {
   statusKey?: string | undefined;
 }
 
+/**
+ * Why an item the run did not implement was left out.
+ *
+ * The first three are decided at SNAPSHOT time, off the row itself. The fourth,
+ * `claim_refused`, can only be decided at DISPATCH time (MOTIR-3048): the
+ * snapshot filtered out every row this run could not take when it was frozen,
+ * and a card can still be taken by a sibling — or leave the to-do category — in
+ * the minutes between that freeze and its turn. It is a SKIP and not a failure
+ * because nothing went wrong and no agent ran; the run's exit code is unmoved.
+ */
+export type SnapshotSkipReason = Exclude<SnapshotDisposition, 'take'> | 'claim_refused';
+
 /** One item the snapshot left out, with the reason a human needs. */
 export interface SnapshotSkip {
   key: string;
   title: string | null;
-  reason: Exclude<SnapshotDisposition, 'take'>;
+  reason: SnapshotSkipReason;
 }
 
 /** The frozen plan of the run: what will be implemented, and what will not. */
@@ -147,14 +159,20 @@ const STOP_LABEL: Record<BatchStopReason, string> = {
   interrupted: 'interrupted (Ctrl-C)',
 };
 
-const SKIP_LABEL: Record<SnapshotSkip['reason'], string> = {
+const SKIP_LABEL: Record<SnapshotSkipReason, string> = {
   needs_planning: 'needs planning',
   needs_human: 'needs a human',
   integrated_dep: 'ready only via an integrated dependency (not on main)',
+  claim_refused: 'claimed by somebody else, or no longer claimable',
 };
 
 /** The reasons in the order the summary groups them. */
-const SKIP_ORDER: SnapshotSkip['reason'][] = ['needs_planning', 'needs_human', 'integrated_dep'];
+const SKIP_ORDER: SnapshotSkipReason[] = [
+  'needs_planning',
+  'needs_human',
+  'integrated_dep',
+  'claim_refused',
+];
 
 // ⚠️ No REPO column. The snapshot freezes WHICH ITEMS the run will take; where
 // each one runs is assembled per iteration, from the dispatch prompt, at the
