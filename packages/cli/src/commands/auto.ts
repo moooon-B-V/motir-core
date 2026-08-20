@@ -32,6 +32,7 @@ import {
   renderAutoSummary,
   renderSessionPrBody,
   sessionPrTitle,
+  type ApprovalRecord,
   type AutoSummary,
   type DispatchRecord,
   type PlanningRecord,
@@ -355,6 +356,8 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
+  /** What `--auto-approve-replan` approved (MOTIR-3023). */
+  const approvals: ApprovalRecord[] = [];
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
@@ -513,11 +516,45 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // that the PLAN is wrong, and the cards the loop would take next are the
       // ones the submitted plan may be about to change. The prompt's own branch
       // tells the agent not to pick up other work; the loop honours the same
-      // instruction. Not excluded, either: `planning` is in the in-progress
-      // category, so the server already holds the card out of the ready set.
+      // instruction.
+      //
+      // ⚠️ UNLESS THE OPERATOR SAID OTHERWISE (MOTIR-3023). With
+      // `--auto-approve-replan` the run approves the plan the card produced and
+      // CONTINUES — which is the whole value of the flag: an overnight sweep of
+      // twenty cards should not end at card three because one premise was stale.
       if (record.outcome === 'replanned') {
-        stopReason = 'replanned';
-        break;
+        if (!opts.autoApproveReplan) {
+          stopReason = 'replanned';
+          break;
+        }
+        // ⚠️ HELD OUT FIRST, BEFORE the approval — and this is the guard that
+        // costs real money if it is missed. Approve → the card returns to the
+        // ready set → dispatched again → refused again → another submit, and
+        // every submit spends the token owner's AI credits. The exclusion goes
+        // in whether or not the approval succeeds, because a card that refused
+        // itself once will refuse itself again.
+        addExclude(serverUrl, projectKey, { key: item.key });
+        excludedKeys.add(item.key.toUpperCase());
+
+        const approved = await approveSubmittedPlan(client, item.key);
+        if (!approved.ok) {
+          // ⚠️ A REFUSED APPROVAL STOPS THE RUN, with the SERVER's own message.
+          // Continuing would dispatch against a tree the operator has not agreed
+          // to — and the server's refusals are exactly the bounds that say so
+          // (no plan of this card's own, a plan already decided, a scope the
+          // token lacks). None of them is a reason to carry on regardless.
+          info('');
+          info(`${item.key}: the re-plan could NOT be approved — ${approved.message}`);
+          info('Stopping rather than continuing against a tree nobody approved.');
+          stopReason = 'replanned';
+          break;
+        }
+        approvals.push({ key: item.key, ...approved.plan });
+        info(
+          `${item.key}: its re-plan was APPROVED (plan ${approved.plan.planId}, ` +
+            `${approved.plan.proposalCount} proposal(s) materialized). Continuing.`,
+        );
+        continue;
       }
 
       if (record.outcome === 'failed') {
@@ -536,7 +573,16 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     process.off('SIGINT', onSigint);
   }
 
-  return { runId, records, skipped, planning, repos: repos.touched(), prs: [], stopReason };
+  return {
+    runId,
+    records,
+    skipped,
+    planning,
+    repos: repos.touched(),
+    prs: [],
+    approvals,
+    stopReason,
+  };
 }
 
 /**
@@ -778,5 +824,38 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
       outcome: 'failed',
       message: err instanceof Error ? err.message : String(err),
     };
+  }
+}
+
+/**
+ * Approve the plan a refused card produced. NEVER THROWS.
+ *
+ * ⚠️ THE REFUSALS ARE THE INTERESTING RETURN VALUE, which is why this reports
+ * rather than raises. Every one of them is a BOUND the server is enforcing —
+ * there is no plan of this card's own, the plan was already decided, the token
+ * lacks `ai:view_plan` — and each means the same thing to the loop: it must not
+ * carry on against a tree nobody approved. Letting the error propagate would
+ * take the run's close-out down with it (the shape MOTIR-3018's reproduction
+ * found), abandoning work that has nothing to do with this plan.
+ *
+ * ⚠️ IT SENDS NO PLAN ID, and cannot. The plan was submitted by the AGENT, in a
+ * sandbox, with `motir plan --detach <KEY>`; its id came back on that agent's
+ * stdout, which this process streams straight to the terminal and never
+ * captures. The card IS the address, and the server derives the plan from the
+ * conversation anchored at it — so the run cannot approve a plan the card did
+ * not produce even by mistake.
+ */
+async function approveSubmittedPlan(
+  client: MotirClient,
+  key: string,
+): Promise<
+  { ok: true; plan: { planId: string; proposalCount: number } } | { ok: false; message: string }
+> {
+  try {
+    return { ok: true, plan: await client.approveWorkItemPlan(key) };
+  } catch (err) {
+    // The SERVER's own sentence, verbatim. A message this loop composed would
+    // describe the refusal it guessed at rather than the one it received.
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
 }

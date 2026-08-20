@@ -110,10 +110,25 @@ There is no `--no-auto-approve-replan`: that flag is positive and has no negatio
 
 `plansService.approvePlan` gains a second CALLER, never a second implementation.
 
-**Route: `POST /api/v1/plans/{id}/approval`.** It resolves the workspace from the
-bearer token, calls the shipped service, and maps its typed errors. `canEdit`
-stays asserted inside `approvePlan`; the re-validation on the way through is
-untouched.
+**Route: `POST /api/v1/work-items/{key}/plan-approval`.** It resolves the
+workspace from the bearer token, calls the shipped service, and maps its typed
+errors. Everything that decides whether a proposal becomes a row stays inside
+`approvePlan`; the re-validation on the way through is untouched.
+
+> **⚠️ AMENDED 2026-08-19 while building the loop half (MOTIR-3023).** This was
+> written as `POST /api/v1/plans/{planId}/approval`, with the card named in the
+> body. **The caller cannot learn a plan id.** The plan is submitted by the
+> AGENT, in a sandbox, with `motir plan --detach <KEY>`; the id comes back on
+> that agent's stdout, which the loop streams straight to the terminal and never
+> captures — and MOTIR-3023 forbids scraping it for exactly that reason. A
+> plan-addressed route therefore needed either a second `/api/v1` read to
+> discover the id or a second source of truth, and B1's anchoring check would
+> have been a check on data the CALLER supplied.
+>
+> Addressed by the CARD, the bound stops being a check and becomes structural:
+> **there is no way to name a plan the card did not produce.** The server derives
+> it, and the route takes no body at all — so there is nowhere for a plan id to
+> creep back in. One operation instead of two, and a stronger guarantee.
 
 **Scope: `ai:view_plan`** — the key `lib/mcp/toolPermissions.ts` already records
 as gating the plan DECISIONS (`approvePlan` / `declinePlan` / `addProposals`). No
@@ -134,19 +149,20 @@ refusal working as intended, and it must not be "fixed" by widening the grant.
 
 ### The bounds — each implementable and testable from this text alone
 
-**B1 — the caller names the CARD, and the plan must be anchored to it.**
-The request body carries `workItemKey`. The server refuses unless the plan is
-anchored to that card, where **anchored** means: `plan.sourceJobId` resolves,
-through `planChangeSessionRepository.findByProjectAndLastJobId(projectId,
-sourceJobId, workspaceId, tx)`, to a plan-change session whose `targetKeys`
-contains the key. That chain is shipped and already used by the plan decisions to
-release a target lock; nothing new is stored.
+**B1 — the CARD is the address, and the plan is DERIVED from it.**
+The key is in the path and there is no request body. The server resolves the plan
+through `buildScope([key])` → `planChangeSessionRepository.findByProjectAndScope`
+→ that session's `lastJobId` → `plansService.findPlanIdForJob`. Every hop is
+shipped; nothing new is stored. A `motir plan --detach <KEY>` thread is anchored
+at exactly that scope, so this reaches the plan the card's refusal caused and
+nothing else.
 
-Refusal is a typed error naming why — `PLAN_NOT_ANCHORED_TO_WORK_ITEM` — never a
+Refusal is a typed error naming why — `NO_PLAN_FOR_WORK_ITEM`, 422 — never a
 silent narrowing. Two consequences worth stating:
 
-- A plan with **no** resolvable session (a cadence plan, an onboarding
-  generation, a plan submitted from the web panel) is **not** approvable here.
+- A card with **no** anchored conversation, or one that has never submitted, is
+  **not** approvable here — and neither is a plan from the project-wide thread,
+  which is the shape a cadence plan and an onboarding generation both have.
   That is correct: this endpoint exists for a plan a run's agent submitted about
   the card it was handed, and every other plan keeps the human gate.
 - It bounds the endpoint to the plan a run **caused**, which is stronger than
@@ -424,6 +440,8 @@ prompt.
 
 - **MOTIR-3020** — Q1's parameter shape and Q3's parenting rule, in the prompt.
 - **MOTIR-3021** — Q2's surface, scope and bounds B1–B6, and the comment list.
+  Its two amendments above (B3's status and B1's address) were both made while
+  building, from code that contradicted the text.
 - **MOTIR-3022** — Q1's naming, Q4's registration-to-refuse and the contradictory-flag refusal.
 - **MOTIR-3023** — Q2's B5 loop obligations and B6.
 - **MOTIR-3026 / MOTIR-3027** — the documented protocol, in `motir-core` and in `motir-meta`.

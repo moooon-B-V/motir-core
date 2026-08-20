@@ -9,7 +9,7 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   getJob: vi.fn(),
 }));
 
-import { POST as APPROVE } from '@/app/api/v1/plans/[planId]/approval/route';
+import { POST as APPROVE } from '@/app/api/v1/work-items/[key]/plan-approval/route';
 import { POST as SESSION_SUBMIT } from '@/app/api/v1/projects/[projectKey]/plan-session/submissions/route';
 import { POST as SESSION_TURN } from '@/app/api/v1/projects/[projectKey]/plan-session/turns/route';
 import { submitJob } from '@/lib/ai/motirAiClient';
@@ -26,18 +26,18 @@ import {
 } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
-// POST /api/v1/plans/{planId}/approval (MOTIR-3021) — the bounded public
-// entrance `motir auto --auto-approve-replan` drives, against real Postgres.
-// `docs/decisions/run-findings-protocol.md` Q2 is its specification.
+// POST /api/v1/work-items/{key}/plan-approval (MOTIR-3021 / MOTIR-3023) — the
+// bounded public entrance `motir auto --auto-approve-replan` drives, against
+// real Postgres. `docs/decisions/run-findings-protocol.md` Q2 is its spec.
 //
 // This endpoint reverses a deliberate absence, so the tests that matter are the
 // ones about what it REFUSES:
 //
-//   • THE ANCHOR (B1). An automated approval reaches the plan the run's own
-//     refused card produced, and nothing else. Every other plan — a cadence
-//     plan, an onboarding generation, one submitted from the web panel — keeps
-//     the human decision it was written under, and the way that is enforced is
-//     that they have no plan-change session naming the card.
+//   • THE ANCHOR (B1), and it is STRUCTURAL here rather than checked: the route
+//     takes no plan id at all, so a caller cannot name a plan the card did not
+//     produce. Every other plan — a cadence plan, an onboarding generation, one
+//     submitted from the project-wide panel — keeps the human decision it was
+//     written under, because none of them is reachable from a card's key.
 //   • NO SECOND IMPLEMENTATION. The one-shot guard, the confirmation gate and
 //     the `ai:view_plan` assertion are the shipped service's; a 409 on a second
 //     approve is the SAME 409 the in-app route answers.
@@ -51,14 +51,13 @@ const BASE = 'http://localhost:3000/api/v1';
 /** The permission set an OPERATOR driving `motir auto` holds. */
 const OPERATOR = ['project:browse', 'work_item:edit', 'ai:plan', 'ai:view_plan'] as const;
 
-function approve(caller: V1ProjectCaller, planId: string, body: unknown): Promise<Response> {
+function approve(caller: V1ProjectCaller, key: string): Promise<Response> {
   return APPROVE(
-    new Request(`${BASE}/plans/${planId}/approval`, {
+    new Request(`${BASE}/work-items/${key}/plan-approval`, {
       method: 'POST',
-      headers: { ...caller.headers, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: caller.headers,
     }),
-    { params: Promise.resolve({ planId }) },
+    { params: Promise.resolve({ key }) },
   );
 }
 
@@ -118,17 +117,17 @@ async function refusedCardWithPlan(
   return { key: item.identifier, planId };
 }
 
-describe('POST /api/v1/plans/{planId}/approval', () => {
+describe('POST /api/v1/work-items/{key}/plan-approval', () => {
   beforeEach(async () => {
     await truncateAuthTables();
     vi.clearAllMocks();
   });
 
-  it('approves the plan the named card produced, and materializes its proposals', async () => {
+  it('approves the plan the card produced, and materializes its proposals', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { key, planId } = await refusedCardWithPlan(caller);
+    const { key } = await refusedCardWithPlan(caller);
 
-    const res = await approve(caller, planId, { workItemKey: key });
+    const res = await approve(caller, key);
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as V1Plan;
@@ -137,62 +136,67 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
     // The proposal became a row — asserted through the payload, which is what a
     // client reads, rather than by counting the table behind it.
     expect(body.proposals[0]?.workItemKey).not.toBeNull();
+    // And the plan's own id comes back, which is how a caller that never knew it
+    // reports WHAT it approved.
+    expect(body.id).toBeTruthy();
   });
 
   it('accepts the key case-insensitively — a caller types either', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { key, planId } = await refusedCardWithPlan(caller);
+    const { key } = await refusedCardWithPlan(caller);
 
-    const res = await approve(caller, planId, { workItemKey: key.toLowerCase() });
-
-    expect(res.status).toBe(200);
+    expect((await approve(caller, key.toLowerCase())).status).toBe(200);
   });
 
   // ── B1, the bound ─────────────────────────────────────────────────────────
 
-  it('REFUSES a plan not anchored to the named card, and says why', async () => {
+  it('REFUSES a card with no plan of its own, and says why', async () => {
+    // The card exists and the caller may edit it; there is simply no plan its
+    // own refusal produced. A DIFFERENT card's plan is not reachable from here
+    // at all — the route takes no plan id — which is what makes this bound
+    // structural rather than a check.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { planId } = await refusedCardWithPlan(caller);
+    await refusedCardWithPlan(caller);
     const other = await makeItem(caller, 'a different card entirely');
 
-    const res = await approve(caller, planId, { workItemKey: other.identifier });
+    const res = await approve(caller, other.identifier);
 
-    expect(res.status).toBe(DOMAIN_ERROR_STATUS['PLAN_NOT_ANCHORED']);
+    expect(res.status).toBe(DOMAIN_ERROR_STATUS['NO_PLAN_FOR_WORK_ITEM']);
     const body = (await res.json()) as { code: string; error: string };
-    expect(body.code).toBe('PLAN_NOT_ANCHORED');
-    // Actionable, not a bare refusal: it names both sides and where to go.
+    expect(body.code).toBe('NO_PLAN_FOR_WORK_ITEM');
+    // Actionable, not a bare refusal: it names the card and where to go instead.
     expect(body.error).toContain(other.identifier);
     expect(body.error).toContain('approve any other plan in Motir');
   });
 
-  it('REFUSES a plan with no conversation behind it — unanchored is not unrestricted', async () => {
-    // The case the bound most protects: a project-wide plan (no `targetKeys`),
-    // which is the shape a cadence plan and an onboarding generation both have.
-    // Treating "no session anchor" as "no restriction" would invert the bound at
-    // exactly the plans a person is most expected to decide on.
+  it('REFUSES when the plan came from the PROJECT-WIDE thread — unanchored is not unrestricted', async () => {
+    // The case the bound most protects: a project-wide plan is the shape a
+    // cadence plan and an onboarding generation both have. Treating "no anchor"
+    // as "no restriction" would invert the bound at exactly the plans a person
+    // is most expected to decide on.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key, planId } = await refusedCardWithPlan(caller, { anchored: false });
 
-    const res = await approve(caller, planId, { workItemKey: key });
+    const res = await approve(caller, key);
 
     expect(res.status).toBe(422);
-    expect(((await res.json()) as { code: string }).code).toBe('PLAN_NOT_ANCHORED');
+    expect(((await res.json()) as { code: string }).code).toBe('NO_PLAN_FOR_WORK_ITEM');
     // And nothing was approved: the plan is where it was.
-    const after = await plansService.getPlan(planId, caller.ctx);
-    expect(after.status).toBe('planned');
+    expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
   });
 
-  it('requires `workItemKey` — the bound cannot be skipped by omitting it', async () => {
+  it('REFUSES a card whose conversation exists but has never submitted', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { planId } = await refusedCardWithPlan(caller);
+    const item = await makeItem(caller, 'talked about, never submitted');
+    await SESSION_TURN(
+      sessionReq(caller, '/turns', { body: 'thinking about it', targetKeys: [item.identifier] }),
+      { params: Promise.resolve({ projectKey: caller.projectKey }) },
+    );
 
-    for (const body of [{}, { workItemKey: '' }, { workItemKey: '   ' }, { workItemKey: 7 }]) {
-      const res = await approve(caller, planId, body);
-      expect(res.status).toBe(422);
-      expect(((await res.json()) as { code: string }).code).toBe('INVALID_REQUEST');
-    }
-    const after = await plansService.getPlan(planId, caller.ctx);
-    expect(after.status).toBe('planned');
+    const res = await approve(caller, item.identifier);
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('NO_PLAN_FOR_WORK_ITEM');
   });
 
   // ── B2 / B3, inherited from the service ───────────────────────────────────
@@ -201,10 +205,10 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
     // Mirrored, not softened into a no-op. Two entrances answering one condition
     // two ways is what "no second approval implementation" exists to prevent.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { key, planId } = await refusedCardWithPlan(caller);
+    const { key } = await refusedCardWithPlan(caller);
 
-    expect((await approve(caller, planId, { workItemKey: key })).status).toBe(200);
-    const second = await approve(caller, planId, { workItemKey: key });
+    expect((await approve(caller, key)).status).toBe(200);
+    const second = await approve(caller, key);
 
     expect(second.status).toBe(409);
     expect(((await second.json()) as { code: string }).code).toBe('PLAN_NOT_IN_EXPECTED_STATUS');
@@ -215,7 +219,7 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
     const { key, planId } = await refusedCardWithPlan(caller);
     await plansService.declinePlan(planId, caller.ctx);
 
-    const res = await approve(caller, planId, { workItemKey: key });
+    const res = await approve(caller, key);
 
     expect(res.status).toBe(409);
     expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('declined');
@@ -223,27 +227,27 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
 
   // ── B4, and the scope ─────────────────────────────────────────────────────
 
-  it('404s an unknown plan and another tenant’s plan IDENTICALLY — no existence leak', async () => {
+  it('404s an unknown card and another tenant’s card IDENTICALLY — no existence leak', async () => {
     const mine = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const theirs = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    // ⚠️ A DISTINCT project prefix, and it is load-bearing. Both fixtures
+    // default to `PROD`, so the other tenant's `PROD-1` would RESOLVE inside
+    // this one — to a different card that happens to share the number — and the
+    // test would assert a cross-tenant refusal it never made.
+    const theirs = await createV1ProjectCaller({
+      permissions: [...OPERATOR],
+      workspaceName: 'the other tenant',
+      identifier: 'ACME',
+    });
     const { key, planId } = await refusedCardWithPlan(theirs);
 
-    const foreign = await approve(mine, planId, { workItemKey: key });
-    const invented = await approve(mine, 'plan_does_not_exist', { workItemKey: key });
+    const foreign = await approve(mine, key);
+    const invented = await approve(mine, 'ACME-9999');
 
     expect(foreign.status).toBe(404);
     expect(invented.status).toBe(404);
-    // ⚠️ The bodies are not byte-identical and must not be asserted so: each
-    // names the id THE CALLER SUPPLIED, which differs by construction. What the
-    // no-leak property actually says is that the answer for a plan that exists
-    // elsewhere is indistinguishable IN KIND from one that never existed, and
-    // that the message carries nothing the caller did not already send.
-    const foreignBody = (await foreign.json()) as { code: string; error: string };
-    const inventedBody = (await invented.json()) as { code: string; error: string };
-    expect(foreignBody.code).toBe(inventedBody.code);
-    expect(foreignBody.code).toBe('PLAN_NOT_FOUND');
-    expect(foreignBody.error).toBe(`Plan ${planId} was not found.`);
-    expect(foreignBody.error).not.toContain(theirs.projectKey);
+    expect(((await foreign.json()) as { code: string }).code).toBe(
+      ((await invented.json()) as { code: string }).code,
+    );
     // And theirs is untouched.
     expect((await plansService.getPlan(planId, theirs.ctx)).status).toBe('planned');
   });
@@ -258,7 +262,7 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
       permissions: ['project:browse', 'work_item:edit', 'ai:plan'],
     });
 
-    const res = await approve({ ...caller, ...reader }, planId, { workItemKey: key });
+    const res = await approve({ ...caller, ...reader }, key);
 
     expect(res.status).toBe(403);
     expect((await plansService.getPlan(planId, caller.ctx)).status).toBe('planned');
@@ -272,25 +276,28 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
     expect(CLI_TOKEN_GRANT).not.toContain('ai:view_plan');
 
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
-    const { key, planId } = await refusedCardWithPlan(caller);
+    const { key } = await refusedCardWithPlan(caller);
     const agent = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
       projectId: caller.fixture.projectId,
       permissions: [...CLI_TOKEN_GRANT],
     });
 
-    expect((await approve({ ...caller, ...agent }, planId, { workItemKey: key })).status).toBe(403);
+    expect((await approve({ ...caller, ...agent }, key)).status).toBe(403);
   });
 
   // ── the contract ──────────────────────────────────────────────────────────
 
   it('is DECLARED in the operation registry, with the permission the route enforces', () => {
-    const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approvePlan');
+    const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approveWorkItemPlan');
     expect(op).toBeDefined();
     expect(op?.method).toBe('POST');
-    expect(op?.path).toBe('/api/v1/plans/{planId}/approval');
+    expect(op?.path).toBe('/api/v1/work-items/{key}/plan-approval');
     expect(op?.permission).toBe('ai:view_plan');
     // The statuses it can actually answer, all of them exercised above.
     expect(op?.errorStatuses).toEqual(expect.arrayContaining([404, 409, 422]));
+    // It takes NO request body: the card in the path is the whole address, which
+    // is the bound. A body would be somewhere for a plan id to creep back in.
+    expect(op?.requestBody).toBeUndefined();
   });
 
   it('leaves the IN-APP approve exactly as it was', async () => {
@@ -299,8 +306,6 @@ describe('POST /api/v1/plans/{planId}/approval', () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { planId } = await refusedCardWithPlan(caller);
 
-    const plan = await plansService.approvePlan(planId, caller.ctx);
-
-    expect(plan.status).toBe('approved');
+    expect((await plansService.approvePlan(planId, caller.ctx)).status).toBe('approved');
   });
 });

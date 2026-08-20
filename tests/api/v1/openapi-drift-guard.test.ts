@@ -588,6 +588,8 @@ describe('every operation’s REAL response validates against its declared schem
       send(`/api/v1/projects/${pk}/plan-session/submissions`, 'POST', anchored),
       { projectKey: pk },
     );
+    // The plan id is read HERE only to seed it into `planned` — the route itself
+    // never takes one, which is the point of addressing by the card.
     const anchoredPlanId = ((await anchoredSubmit.json()) as { planId: string }).planId;
     await plansService.addProposals(
       anchoredPlanId,
@@ -596,10 +598,10 @@ describe('every operation’s REAL response validates against its declared schem
     );
     await plansService.markPlanned(anchoredPlanId, caller.ctx);
     await drive(
-      'approvePlan',
-      () => import('@/app/api/v1/plans/[planId]/approval/route'),
-      send(`/api/v1/plans/${anchoredPlanId}/approval`, 'POST', { workItemKey: key }),
-      { planId: anchoredPlanId },
+      'approveWorkItemPlan',
+      () => import('@/app/api/v1/work-items/[key]/plan-approval/route'),
+      send(`/api/v1/work-items/${key}/plan-approval`, 'POST'),
+      { key },
     );
 
     // ── The activity read (Story 11.7) ──────────────────────────────────────

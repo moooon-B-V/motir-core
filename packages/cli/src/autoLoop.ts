@@ -132,6 +132,24 @@ export interface PlanningRecord {
   detail?: string;
 }
 
+/**
+ * One plan the run APPROVED on its own (MOTIR-3023) — what
+ * `--auto-approve-replan` actually did to the operator's tree.
+ *
+ * ⚠️ THE SUMMARY OWES THIS MORE THAN ANYTHING ELSE IN THE RUN. Every other
+ * record says what the loop BUILT; this one says what it DECIDED, while nobody
+ * was watching, about a plan someone else owns. The first thing they read in the
+ * morning should be what changed, not a tree that is quietly different.
+ */
+export interface ApprovalRecord {
+  /** The card whose refusal produced the plan. */
+  key: string;
+  /** The plan that was approved — the id to open in Motir. */
+  planId: string;
+  /** How many proposals it carried. */
+  proposalCount: number;
+}
+
 /** One repo the run touched: its session branch and the items carried on it. */
 export interface RepoSession {
   repoName: string | null;
@@ -179,6 +197,9 @@ export interface AutoSummary {
   planning: PlanningRecord[];
   repos: RepoSession[];
   prs: PrReport[];
+  /** The plans `--auto-approve-replan` approved. Empty without the flag, and
+   *  empty with it when no agent refused a card. */
+  approvals: ApprovalRecord[];
   stopReason: StopReason;
 }
 
@@ -418,6 +439,21 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     );
   }
 
+  if (summary.approvals.length > 0) {
+    blocks.push(
+      [
+        // Named PLAN BY PLAN, with the card each was approved FOR. A count would
+        // tell an operator that their tree moved without telling them where.
+        `Plans APPROVED by this run — your tree changed while you were away (${summary.approvals.length}):`,
+        ...summary.approvals.map(
+          (a) =>
+            `  ${a.planId} — approved for ${a.key}, ${a.proposalCount} proposal${a.proposalCount === 1 ? '' : 's'} materialized`,
+        ),
+        '  Each card that was re-planned is held out of THIS run; re-run to pick the new work up.',
+      ].join('\n'),
+    );
+  }
+
   const replanned = summary.records.filter((r) => r.outcome === 'replanned');
   if (replanned.length > 0) {
     blocks.push(
@@ -426,7 +462,14 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
         // what is now waiting for the operator, because the plan is the thing
         // they have to act on and it is not in this terminal.
         `Re-planned — refused by their agent, left in Planning (${replanned.length}):`,
-        ...replanned.map((r) => `  ${r.key} — review the submitted plan in Motir, then re-run it`),
+        ...replanned.map((r) => {
+          // Do not tell the operator to review a plan this run already approved
+          // — the approvals block above says what happened to it.
+          const approved = summary.approvals.some((a) => a.key === r.key);
+          return approved
+            ? `  ${r.key} — its plan was approved by this run (above); the card itself stays in Planning`
+            : `  ${r.key} — review the submitted plan in Motir, then re-run it`;
+        }),
         '  Nothing was recorded for these: no branch, no pull request, no status moved by this run.',
       ].join('\n'),
     );

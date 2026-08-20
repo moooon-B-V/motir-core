@@ -262,30 +262,27 @@ export class PlanTargetImmutableError extends Error {
 }
 
 /**
- * An automated approval named a plan that is not ANCHORED to the work item it
- * claims to be approving on behalf of (MOTIR-3021,
+ * There is no plan for this work item to approve (MOTIR-3021 / MOTIR-3023,
  * `docs/decisions/run-findings-protocol.md` Q2 bound B1). → 422
  *
  * ⚠️ THIS IS THE BOUND, and it is what keeps the public approval entrance from
  * being "approve any pending plan in the workspace". An unattended loop may
  * approve the plan its own refused card CAUSED, and nothing else — every other
- * plan (a cadence plan, an onboarding generation, one submitted from the web
- * panel) keeps the human gate it was written under.
+ * plan (a cadence plan, an onboarding generation, one submitted from the
+ * project-wide panel) keeps the human gate it was written under.
  *
- * A plan is anchored to a card when its `sourceJobId` resolves to the
- * plan-change session that submitted it AND that session's `targetKeys` name the
- * card. A plan with no resolvable session is therefore never approvable here —
- * refused, deliberately, rather than treated as unanchored-so-allowed.
+ * A plan belongs to a card when the plan-change conversation ANCHORED at that
+ * card submitted the job the plan was produced by. No such conversation, or one
+ * that has never submitted, means there is nothing here for an automated
+ * approval to act on — refused, deliberately, rather than read as
+ * unanchored-so-allowed.
  */
-export class PlanNotAnchoredError extends Error {
-  readonly code = 'PLAN_NOT_ANCHORED' as const;
-  constructor(
-    readonly planId: string,
-    readonly workItemKey: string,
-  ) {
+export class NoPlanForWorkItemError extends Error {
+  readonly code = 'NO_PLAN_FOR_WORK_ITEM' as const;
+  constructor(readonly workItemKey: string) {
     super(
-      `Plan ${planId} is not anchored to ${workItemKey}. Automatic approval is limited to the plan a run's own refused card produced; approve any other plan in Motir.`,
+      `No submitted plan is anchored to ${workItemKey}. Automatic approval acts only on the plan a run's own refused card produced; approve any other plan in Motir.`,
     );
-    this.name = 'PlanNotAnchoredError';
+    this.name = 'NoPlanForWorkItemError';
   }
 }

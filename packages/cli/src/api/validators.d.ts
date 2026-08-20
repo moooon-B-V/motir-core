@@ -28,7 +28,7 @@ export interface ValidateFunction {
 
 /** Validators for each operation's 2xx response body, keyed by operationId. */
 export declare const operation_appendPlanTurn: ValidateFunction;
-export declare const operation_approvePlan: ValidateFunction;
+export declare const operation_approveWorkItemPlan: ValidateFunction;
 export declare const operation_archiveWorkItem: ValidateFunction;
 export declare const operation_completeSession: ValidateFunction;
 export declare const operation_completeSprint: ValidateFunction;

@@ -49,7 +49,7 @@ import {
   PlanItemUnknownTargetRepoRoleError,
   PlanNotFoundError,
   PlanNotGeneratingError,
-  PlanNotAnchoredError,
+  NoPlanForWorkItemError,
   PlanNotInExpectedStatusError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
@@ -71,6 +71,7 @@ import type {
 } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { buildScope } from '@/lib/planChange/scope';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 
 // The AI-planning Plan substrate (Story 7.21 · MOTIR-1336) — the foundation
@@ -1789,59 +1790,58 @@ export const plansService = {
   },
 
   /**
-   * Approve a plan ON BEHALF OF the work item whose refusal produced it
-   * (MOTIR-3021) — the BOUNDED entrance an unattended run drives, and the only
-   * thing standing between `--auto-approve-replan` and "approve any pending plan
-   * in this workspace".
+   * Approve THE PLAN A CARD PRODUCED — the bounded entrance an unattended run
+   * drives (MOTIR-3021 / MOTIR-3023,
+   * `docs/decisions/run-findings-protocol.md` Q2).
+   *
+   * ⚠️ IT IS ADDRESSED BY THE CARD, NOT BY A PLAN ID, and that is not
+   * convenience — it is what makes the bound structural. The caller is a loop
+   * whose AGENT ran `motir plan --detach <KEY>` in a sandbox; the plan id came
+   * back on that agent's stdout, which the loop streams straight to the terminal
+   * and never captures. So a plan-addressed entrance would have forced either a
+   * second read to discover the id or a scrape of the agent's output, and the
+   * anchoring check would have been a check on caller-supplied data. Addressed
+   * by the card, there is no way to NAME a plan that is not the card's.
+   *
+   * ⚠️ ANCHORING IS DERIVED, and every hop is a shipped one:
+   *
+   *   the card's key → `buildScope([key])` → the plan-change session for that
+   *   anchor set → its `lastJobId` → the plan that job produced.
+   *
+   * A `motir plan --detach <KEY>` thread is anchored at exactly that scope, so
+   * this resolves the plan that card's refusal caused and nothing else.
+   *
+   * ⚠️ NO CONVERSATION MEANS NO. A cadence plan, an onboarding generation and a
+   * plan submitted from the project-wide panel all have no session at this
+   * scope — and every one of them is a plan a person is expected to decide on.
+   * Treating "no anchor" as "no restriction" would invert the bound at exactly
+   * the plans it most protects.
    *
    * ⚠️ IT ADDS A BOUND, NEVER A SECOND APPROVAL. Everything that decides whether
    * a proposal may become a row — the confirmation gate, the `ai:view_plan`
    * assertion, the one-shot status guard, the re-validation — happens in
-   * {@link plansService.approvePlan}, which this delegates to unchanged. What
-   * lives here is the one question that entrance cannot ask: *is this the plan
-   * this card caused?*
-   *
-   * ⚠️ ANCHORING IS DERIVED, NOT STORED, and the chain is one the plan decisions
-   * already walk: `plan.sourceJobId` → the plan-change session that submitted
-   * that job (`findByProjectAndLastJobId`, workspace-scoped) → its `targetKeys`.
-   * A `motir plan --detach <KEY>` thread is anchored at that key, so the plan its
-   * submit produces is reachable from the card and from nothing else.
-   *
-   * ⚠️ NO SESSION MEANS NO. A cadence plan, an onboarding generation and a plan
-   * submitted from the web panel all resolve to no session — and every one of
-   * them is a plan a person is expected to decide on. Treating "unanchored" as
-   * "unrestricted" would invert the bound at exactly the plans it most protects.
-   *
-   * The key match is case-insensitive because a caller types `motir-42` as
-   * readily as `MOTIR-42`, and the identifier is not case-bearing anywhere else
-   * on this API.
+   * {@link plansService.approvePlan}, which this delegates to unchanged.
    */
   async approvePlanForWorkItem(
-    planId: string,
+    projectId: string,
     workItemKey: string,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planRepository.findById(planId, ctx.workspaceId, tx),
-    );
-    // Read-then-refuse in the SAME shape the plain approve uses: a plan in
-    // another workspace and one that never existed are one answer (§4).
-    if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanBrowse(plan.projectId, ctx);
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
 
-    const wanted = workItemKey.trim().toUpperCase();
-    const session = plan.sourceJobId
-      ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-          planChangeSessionRepository.findByProjectAndLastJobId(
-            plan.projectId,
-            plan.sourceJobId!,
-            ctx.workspaceId,
-            tx,
-          ),
-        )
+    const scope = buildScope([workItemKey]);
+    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        projectId,
+        scope.scopeKey,
+        ctx.workspaceId,
+        tx,
+      ),
+    );
+    const planId = session?.lastJobId
+      ? await plansService.findPlanIdForJob(session.lastJobId, ctx)
       : null;
-    const anchored = (session?.targetKeys ?? []).some((key) => key.toUpperCase() === wanted);
-    if (!anchored) throw new PlanNotAnchoredError(planId, workItemKey);
+    if (!planId) throw new NoPlanForWorkItemError(workItemKey);
 
     return plansService.approvePlan(planId, ctx);
   },

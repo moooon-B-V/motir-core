@@ -681,7 +681,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/plans/{planId}/approval": {
+    "/api/v1/work-items/{key}/plan-approval": {
         parameters: {
             query?: never;
             header?: never;
@@ -691,12 +691,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Approve a plan on behalf of the work item that produced it
-         * @description APPROVE a `planned` plan without a browser session — the entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an `add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ THIS IS BOUNDED, and the bound is the point: `workItemKey` names the card the approval is made for, and the plan must be ANCHORED to it — the plan-change session that submitted it names that key. Every other plan (a cadence plan, an onboarding generation, one submitted from the web panel) is refused here and keeps the human decision it was written under. It calls the same service the in-app approve does, so the confirmation gate, the re-validation and the one-shot concurrency guard are identical; a plan that has already been approved or declined answers 409, exactly as it does in the app.
+         * Approve the plan this work item produced
+         * @description APPROVE the plan a work item’s own re-plan produced, without a browser session — the entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an `add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ IT IS ADDRESSED BY THE CARD, and that is the bound: the server resolves the plan from the planning conversation ANCHORED at this key, so there is no way to name a plan the card did not produce. Every other plan — a cadence plan, an onboarding generation, one submitted from the project-wide panel — is refused here and keeps the human decision it was written under. It calls the same service the in-app approve does, so the confirmation gate, the re-validation and the one-shot concurrency guard are identical; a plan that has already been approved or declined answers 409, exactly as it does in the app.
          *
          *     Requires the `ai:view_plan` permission.
          */
-        post: operations["approvePlan"];
+        post: operations["approveWorkItemPlan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7227,27 +7227,19 @@ export interface operations {
             };
         };
     };
-    approvePlan: {
+    approveWorkItemPlan: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The plan to approve. */
-                planId: string;
+                /** @description The work item whose plan is approved (case-insensitive). */
+                key: string;
             };
             cookie?: never;
         };
-        /** @description The work item this approval is made on behalf of. */
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description The `MOTIR-<n>` key of the work item this approval is made for — the card whose refusal produced the plan. The plan must be ANCHORED to it (its submitting plan-change session names it) or the request is refused; case-insensitive. */
-                    workItemKey: string;
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description The approved plan and its proposals, each now carrying the `workItemKey` it materialized into. */
+            /** @description The approved plan and its proposals, each now carrying the `workItemKey` it materialized into. The plan’s own id is on the body, which is how a caller that never knew it can report what was approved. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */

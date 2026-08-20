@@ -13,8 +13,11 @@ import {
   v1DispatchPrompt,
   v1Integration,
   v1Page,
+  v1Plan,
+  v1Proposal,
   v1ReadyRow,
   type TestServer,
+  type V1Reply,
   type V1Request,
   type V1Script,
 } from './helpers/testServer.js';
@@ -389,5 +392,189 @@ describe('the run that FINISHES is unchanged', () => {
     expect(t.statuses.get('PROD-7')).toBe('implemented');
     expect(callsTo('POST', '/integration')).toHaveLength(1);
     expect(process.exitCode ?? 0).toBe(0);
+  });
+});
+
+// ── `motir auto --auto-approve-replan` (MOTIR-3023) ─────────────────────────
+//
+// The loop half. What it approves is bounded server-side; what it does AFTER is
+// the whole risk surface, and the two guards below are the ones that cost real
+// money or a wrong tree if they are missed.
+
+/** Every plan-approval call the run made, in order. */
+function approvalsRequested(): string[] {
+  return server.v1Calls
+    .filter((c) => c.method === 'POST' && c.path.endsWith('/plan-approval'))
+    .map((c) => c.path);
+}
+
+/**
+ * A tenant with TWO cards, where the second becomes ready only once the first
+ * has left the ready set — the cascade a continuing loop has to reach.
+ *
+ * `approvable` scripts the approval endpoint: `true` answers a materialized
+ * plan, `false` answers the server's own bound refusal, which is the case the
+ * loop must STOP on rather than continue past.
+ */
+function twoCardTenant(opts: { approvable: boolean }): Tenant {
+  const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
+  const approvals: string[] = [];
+  t.v1['POST /api/v1/work-items/{key}/plan-approval'] = (req) => {
+    const key = String(req.params['key']);
+    approvals.push(key);
+    if (!opts.approvable) {
+      return {
+        status: 422,
+        body: {
+          code: 'NO_PLAN_FOR_WORK_ITEM',
+          error: `No submitted plan is anchored to ${key}.`,
+        },
+      };
+    }
+    return {
+      body: v1Plan([v1Proposal('pi_1', { workItemKey: 'PROD-9' })], {
+        id: `plan_for_${key}`,
+        status: 'approved',
+        decidedAt: '2026-01-01T00:02:00.000Z',
+      }),
+    };
+  };
+  return t;
+}
+
+describe('motir auto --auto-approve-replan', () => {
+  it('WITHOUT the flag, stops and approves nothing — the default is unchanged', async () => {
+    const t = twoCardTenant({ approvable: true });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5' }, { run });
+
+    expect(approvalsRequested()).toEqual([]);
+    expect(t.statuses.get('PROD-7')).toBe('planning');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('WITH the flag, approves the card’s own plan and keeps looping', async () => {
+    const t = twoCardTenant({ approvable: true });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    // Approved — addressed by the CARD, with no plan id anywhere in the request.
+    expect(approvalsRequested()).toEqual(['/api/v1/work-items/PROD-7/plan-approval']);
+    // …and it CONTINUED: the second card was dispatched AND finished. The
+    // scripted agent only parks PROD-7, so PROD-8 runs to its ordinary outcome —
+    // which is the stronger evidence, since it says the loop carried on rather
+    // than merely taking one more turn.
+    expect(t.statuses.get('PROD-8')).toBe('implemented');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('never dispatches the same card twice, however many times it refuses itself', async () => {
+    // ⚠️ THE GUARD THAT COSTS MONEY. Approve → the card returns to the ready set
+    // → dispatched again → refused again → another submit, and every submit
+    // spends the token owner's AI credits. The agent here ALWAYS refuses, so a
+    // missing hold-out is an unbounded loop rather than one extra turn.
+    const t = tenant('per_item_pr', ['PROD-7']);
+    let dispatched = 0;
+    // The server keeps offering the card — the loop's own hold-out is the only
+    // thing that can stop this, which is exactly what is under test.
+    t.v1['GET /api/v1/projects/{projectKey}/ready'] = () => ({
+      body: v1Page([v1ReadyRow('PROD-7', { title: 'refuses itself forever' })]),
+    });
+    t.v1['GET /api/v1/work-items/{key}/dispatch-prompt'] = (req) => {
+      dispatched += 1;
+      return {
+        body: v1DispatchPrompt(String(req.params['key']), {
+          prompt: 'PROMPT',
+          targetRepo: 'motir-core',
+          workflowMode: 'per_item_pr',
+          sessionBranch: null,
+        }),
+      };
+    };
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = () => ({
+      body: v1Plan([], { id: 'plan_1', status: 'approved', decidedAt: '2026-01-01T00:02:00.000Z' }),
+    });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '10', autoApproveReplan: true }, { run });
+
+    // Dispatched ONCE, and its plan submitted for approval ONCE — the assertion
+    // is the COUNT, because a run that took it twice would look identical in the
+    // final state and cost twice as much.
+    expect(dispatched).toBe(1);
+    expect(approvalsRequested()).toHaveLength(1);
+  });
+
+  it('STOPS when the server refuses the approval, with the server’s own message', async () => {
+    // Continuing would dispatch against a tree nobody approved. The refusals are
+    // the ADR's bounds — no plan of this card's own, a plan already decided, a
+    // scope the token lacks — and none of them is a reason to carry on.
+    const t = twoCardTenant({ approvable: false });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toHaveLength(1);
+    // The SECOND card was never dispatched.
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+    // …and a correctly-refused approval is still not a failed run.
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('does not crash when the approved plan removed the card in flight', async () => {
+    // An approved plan may archive the very card that produced it — which is the
+    // CORRECT output when the card's premise was false. The run records the
+    // outcome and proceeds; a card that stopped existing is an ordinary result,
+    // not an error.
+    const t = twoCardTenant({ approvable: true });
+    const detail = t.v1['GET /api/v1/work-items/{key}'] as (req: V1Request) => V1Reply;
+    let approved = false;
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = (req) => {
+      approved = true;
+      return {
+        body: v1Plan(
+          [
+            v1Proposal('pi_1', {
+              op: 'remove',
+              workItemKey: String(req.params['key']),
+              proposedFields: null,
+            }),
+          ],
+          { id: 'plan_1', status: 'approved', decidedAt: '2026-01-01T00:02:00.000Z' },
+        ),
+      };
+    };
+    // After the approval the card is gone: every read of it 404s.
+    t.v1['GET /api/v1/work-items/{key}'] = (req) =>
+      approved && String(req.params['key']) === 'PROD-7'
+        ? { status: 404, body: { code: 'WORK_ITEM_NOT_FOUND', error: 'gone' } }
+        : detail(req);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toHaveLength(1);
+    expect(t.statuses.get('PROD-8')).toBe('implemented');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('--max still bounds the run when an approved plan enlarges the ready set', async () => {
+    const t = twoCardTenant({ approvable: true });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '1', autoApproveReplan: true }, { run });
+
+    // One dispatch, one approval, and the second card untouched — the cap binds
+    // before the newly-approved work can be reached.
+    expect(approvalsRequested()).toHaveLength(1);
+    expect(t.statuses.get('PROD-8')).toBe('todo');
   });
 });

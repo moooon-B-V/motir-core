@@ -305,11 +305,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // `assertCanBrowse`, so a plan in another tenant and one that never existed
   // are the same answer (§4's existence-oracle rule).
   PLAN_NOT_FOUND: 404,
-  // MOTIR-3021 — the automatic-approval BOUND (`run-findings-protocol.md` Q2,
-  // B1). 422, not 403: the caller's credential is fine and the request is
-  // fixable — they named a plan that this card did not produce, and the message
-  // says so. 403 would read as "you may not approve", which is false.
-  PLAN_NOT_ANCHORED: 422,
+  // MOTIR-3021 / MOTIR-3023 — the automatic-approval BOUND
+  // (`run-findings-protocol.md` Q2, B1). 422, not 403 or 404: the caller's
+  // credential is fine and the card exists — there is simply no plan of this
+  // card's own to approve. 403 would read as "you may not approve", which is
+  // false; 404 would deny the card, which the caller can see.
+  NO_PLAN_FOR_WORK_ITEM: 422,
   // The one-shot approve guard, reaching the public entrance for the first time
   // (MOTIR-3021). 409 — the SAME status the in-app approve answers, because it
   // is the same condition arriving through a second door: the plan already left

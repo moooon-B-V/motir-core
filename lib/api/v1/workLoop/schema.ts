@@ -492,27 +492,6 @@ export const planProposalSchema = z.object({
 });
 
 /** A plan WITH the proposals it bundles. */
-/**
- * The body of `POST /api/v1/plans/{planId}/approval` (MOTIR-3021).
- *
- * ONE required field, and it is the BOUND rather than a convenience: the caller
- * names the work item this approval is made on behalf of, and the server refuses
- * unless the plan is anchored to it (`docs/decisions/run-findings-protocol.md`
- * Q2, B1). Without it the endpoint would read "approve any pending plan in this
- * workspace", which is a different and much larger capability than the one that
- * was asked for.
- */
-export const approvePlanBodySchema = z.object({
-  workItemKey: z
-    .string()
-    .min(1)
-    .describe(
-      'The `MOTIR-<n>` key of the work item this approval is made for — the card whose ' +
-        'refusal produced the plan. The plan must be ANCHORED to it (its submitting ' +
-        'plan-change session names it) or the request is refused; case-insensitive.',
-    ),
-});
-
 export const planSchema = z.object({
   id: z.string(),
   status: planStatusSchema,

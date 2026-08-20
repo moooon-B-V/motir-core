@@ -121,8 +121,8 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     '`mark_integrated` when it has a branch, and the per-item-PR path this serves is the ' +
     'CLI runner’s. It takes `mark_integrated`’s scope (the same actor, the same §3 row) ' +
     'without duplicating its tool.',
-  approvePlan:
-    'MOTIR-3021 · `docs/decisions/run-findings-protocol.md` Q2 — approval is deliberately NOT ' +
+  approveWorkItemPlan:
+    'MOTIR-3021 / MOTIR-3023 · `docs/decisions/run-findings-protocol.md` Q2 — approval is deliberately NOT ' +
     'an MCP tool, and that absence is the sharpest bound in the design rather than an ' +
     'oversight. MCP is the AGENT’s surface, and the agent whose card was refused is the one ' +
     'party that must never approve its own re-plan; the approving party is the OPERATOR’s ' +

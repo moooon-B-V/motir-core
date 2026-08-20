@@ -2,7 +2,6 @@ import { z } from 'zod/v4';
 import type { ZodType } from 'zod/v4';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import {
-  approvePlanBodySchema,
   dispatchPromptSchema,
   implementationReportBodySchema,
   implementationReportSchema,
@@ -286,50 +285,47 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [404],
   }),
 
-  // ── Automatic plan approval (MOTIR-3021) ────────────────────────────────
+  // ── Automatic plan approval (MOTIR-3021 / MOTIR-3023) ───────────────────
   defineOperation({
     method: 'POST',
-    path: '/api/v1/plans/{planId}/approval',
-    operationId: 'approvePlan',
-    summary: 'Approve a plan on behalf of the work item that produced it',
+    path: '/api/v1/work-items/{key}/plan-approval',
+    operationId: 'approveWorkItemPlan',
+    summary: 'Approve the plan this work item produced',
     description:
-      'APPROVE a `planned` plan without a browser session — the entrance `motir auto ' +
-      '--auto-approve-replan` drives. Its proposals become work items: an `add` creates, a ' +
-      '`modify` applies to the same item, a `remove` archives. ⚠️ THIS IS BOUNDED, and the ' +
-      'bound is the point: `workItemKey` names the card the approval is made for, and the ' +
-      'plan must be ANCHORED to it — the plan-change session that submitted it names that ' +
-      'key. Every other plan (a cadence plan, an onboarding generation, one submitted from ' +
-      'the web panel) is refused here and keeps the human decision it was written under. ' +
-      'It calls the same service the in-app approve does, so the confirmation gate, the ' +
-      're-validation and the one-shot concurrency guard are identical; a plan that has ' +
-      'already been approved or declined answers 409, exactly as it does in the app.',
+      'APPROVE the plan a work item’s own re-plan produced, without a browser session — the ' +
+      'entrance `motir auto --auto-approve-replan` drives. Its proposals become work items: an ' +
+      '`add` creates, a `modify` applies to the same item, a `remove` archives. ⚠️ IT IS ' +
+      'ADDRESSED BY THE CARD, and that is the bound: the server resolves the plan from the ' +
+      'planning conversation ANCHORED at this key, so there is no way to name a plan the card ' +
+      'did not produce. Every other plan — a cadence plan, an onboarding generation, one ' +
+      'submitted from the project-wide panel — is refused here and keeps the human decision it ' +
+      'was written under. It calls the same service the in-app approve does, so the ' +
+      'confirmation gate, the re-validation and the one-shot concurrency guard are identical; a ' +
+      'plan that has already been approved or declined answers 409, exactly as it does in the app.',
     permission: 'ai:view_plan',
     parameters: [
       {
-        name: 'planId',
+        name: 'key',
         in: 'path',
         required: true,
-        description: 'The plan to approve.',
+        description: 'The work item whose plan is approved (case-insensitive).',
         schema: z.string(),
       },
     ],
-    requestBody: {
-      schema: approvePlanBodySchema,
-      description: 'The work item this approval is made on behalf of.',
-    },
     response: {
       status: 200,
       body: { kind: 'object', schema: planSchema },
       description:
         'The approved plan and its proposals, each now carrying the `workItemKey` it ' +
-        'materialized into.',
+        'materialized into. The plan’s own id is on the body, which is how a caller that never ' +
+        'knew it can report what was approved.',
     },
-    // 404: no such plan, or one in another tenant. 422: a missing `workItemKey`,
-    // a plan not anchored to it, or a proposal the confirmation gate rejected
-    // before any write — including the malformed-set refusals the browser route
-    // answers 400 for, which take 422 here because this API's status vocabulary
-    // is closed and has no 400 (`lib/api/v1/errors.ts` says why on the row).
-    // 409: already decided, or a target that moved under the proposal.
+    // 404: no such work item, or one in another tenant. 422: no plan anchored to
+    // the card, or a proposal the confirmation gate rejected before any write —
+    // including the malformed-set refusals the browser route answers 400 for,
+    // which take 422 here because this API's status vocabulary is closed and has
+    // no 400 (`lib/api/v1/errors.ts` says why on the row). 409: already decided,
+    // or a target that moved under the proposal.
     errorStatuses: [404, 409, 422],
   }),
 

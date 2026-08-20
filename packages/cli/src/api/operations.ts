@@ -65,9 +65,9 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "PlanSession",
   },
-  "approvePlan": {
+  "approveWorkItemPlan": {
     method: "POST",
-    path: "/api/v1/plans/{planId}/approval",
+    path: "/api/v1/work-items/{key}/plan-approval",
     permission: "ai:view_plan",
     successStatus: 200,
     responseComponent: "Plan",
