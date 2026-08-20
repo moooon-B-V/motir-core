@@ -23,7 +23,7 @@ code. It never reads the agent's credential and never inspects its output.
 **Contents** — [Install](#install) · [Authenticate](#authenticate) ·
 [Link](#link-a-workspace-root) · [Preflight](#preflight) ·
 [Your first run](#your-first-run) · [Command reference](#command-reference) ·
-[The three run shapes](#the-three-run-shapes) ·
+[The run shapes](#the-run-shapes) ·
 [Planning](#planning-from-the-terminal) ·
 [Session branches](#session-branches-what-motir-auto-actually-does) ·
 [Failure policy](#failure-policy) · [Agent wiring](#agent-wiring) ·
@@ -743,7 +743,7 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 | Command                | Flags                                                                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `motir next`           | `--kinds <list>` · `--print` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
-| `motir run <key>`      | `--print` · `--agent <cmd>` · `--force` · `--disable-log-bug` · `--disable-replan`                                                                                        |
+| `motir run <scope>`    | `--print`¹ · `--agent <cmd>` · `--force`¹ · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`                                |
 | `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
 | `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                  |
 | `motir plan [args...]` | `--detach`                                                                                                                                                                |
@@ -752,8 +752,10 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 ```sh
 motir next --kinds subtask --print
 motir next --agent "claude --dangerously-skip-permissions" --reset
-motir run MOTIR-42 --print                  # a SPECIFIC item
+motir run MOTIR-42 --print                  # ONE item
 motir run MOTIR-42 --force                  # dispatch it even though it isn't ready
+motir run MOTIR-40 --agent "…"              # a whole STORY: claim its leaves, work them all
+motir run sprint --agent "…" --max 5        # the ACTIVE sprint, first five cards
 motir auto --agent "claude --dangerously-skip-permissions" --max 5 --keep-going
 motir auto --agent "…" --include-planning   # also fire expansions for unexpanded containers
 motir batch --agent "codex exec --sandbox workspace-write --ask-for-approval never"
@@ -764,8 +766,15 @@ motir done --via in_review MOTIR-42         # …when the CLI never saw the agen
 motir done --session motir/auto-20260729-011830
 ```
 
-`--print` is **registered but refused** on `auto` and `batch`: an unattended run
-has nobody to paste a prompt, so the flag fails with guidance rather than
+¹ **Leaf-only.** `--print` and `--force` mean something about ONE card and
+nothing about a set: a scope has no single prompt to paste, and a scope that
+cannot be finished needs a re-plan rather than a forced run. Passed with a
+container they fail with that sentence. `--kinds` is refused on a scope for a
+sharper reason — the claim is all-or-nothing over the whole membership, so a
+filtered run would HOLD cards it never worked.
+
+`--print` is **registered but refused** on `auto` and `batch` too: an unattended
+run has nobody to paste a prompt, so the flag fails with guidance rather than
 commander's bare "unknown option". `--auto-approve-replan` is refused the same
 way on `run`, `next` and `batch` — see **What a run does when it finds trouble**
 below, which is where the three findings flags are explained.
@@ -788,7 +797,7 @@ piping.
 
 ---
 
-## The three run shapes
+## The run shapes
 
 Selection differs; the pipeline does not. Every dispatch runs:
 
@@ -821,14 +830,92 @@ produces (a repository you have never cloned, and one that lives somewhere other
 than where the convention says) are visible in one glance rather than as an
 agent failing in a directory that does not exist.
 
-|                       | `motir next` / `motir run`                                                            | `motir auto`                                                                                                                  | `motir batch`                                        |
-| --------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Work list             | one item                                                                              | **live** — one `next_ready` per iteration                                                                                     | **frozen** — the ready set snapshotted up front      |
-| Becomes ready mid-run | n/a                                                                                   | picked up (the loop cascades the dependency graph)                                                                            | **not** picked up — counted and named                |
-| Git lineage           | none — the item's own branch off `main`, the SAME name in every repository it carries | ONE session branch per repo, `motir/auto-<run-id>` — opened in every repository a dispatched card carries, or in none of them | **none** — each item branches off `origin/main`      |
-| Pull requests         | **one per repository the item carries**, opened by the agent                          | ONE per repo, opened by the CLI at the end — including every repository a dispatched card carries                             | **one per item per repository**, opened by the agent |
-| Close-out             | `motir done <key>`                                                                    | `motir done --session <branch>` (bulk)                                                                                        | `motir done <key>` (per item)                        |
-| Agent required        | no (`--print` is the default)                                                         | **yes**                                                                                                                       | **yes**                                              |
+|                       | `motir next` / `motir run <leaf>`                                                     | `motir run <story>` / `motir run sprint`                                  | `motir auto`                                                                                                                  | `motir batch`                                        |
+| --------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Work list             | one item                                                                              | **the scope, claimed up front** — every card under it, in one transaction | **live** — one `next_ready` per iteration                                                                                     | **frozen** — the ready set snapshotted up front      |
+| Becomes ready mid-run | n/a                                                                                   | n/a — the run already owns the whole set and never re-asks                | picked up (the loop cascades the dependency graph)                                                                            | **not** picked up — counted and named                |
+| Order                 | n/a                                                                                   | the scope's own `blocked_by` graph, computed once                         | the server's ready rank, re-asked every iteration                                                                             | the rank, frozen at the snapshot                     |
+| Git lineage           | none — the item's own branch off `main`, the SAME name in every repository it carries | ONE session branch per repo, exactly as `auto` does                       | ONE session branch per repo, `motir/auto-<run-id>` — opened in every repository a dispatched card carries, or in none of them | **none** — each item branches off `origin/main`      |
+| Pull requests         | **one per repository the item carries**, opened by the agent                          | **ONE per repo for the whole scope**, opened by the CLI at the end        | ONE per repo, opened by the CLI at the end — including every repository a dispatched card carries                             | **one per item per repository**, opened by the agent |
+| Close-out             | `motir done <key>`                                                                    | `motir done --session <branch>` (bulk)                                    | `motir done --session <branch>` (bulk)                                                                                        | `motir done <key>` (per item)                        |
+| Agent required        | no (`--print` is the default)                                                         | **yes** — a set has no single prompt to paste                             | **yes**                                                                                                                       | **yes**                                              |
+
+### `motir run <scope>` — a whole story, or the active sprint
+
+`motir run` takes a **scope**: a work-item key, or the reserved word `sprint`.
+What it does is decided by the target's **shape**, not by its kind.
+
+| you type                 | it does                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `motir run MOTIR-42`     | a **leaf** — one card, exactly as it always did                              |
+| `motir run MOTIR-40`     | a **container with children** — claim the scope, work its leaves             |
+| `motir run sprint`       | the project's **active** sprint                                              |
+| an epic                  | **refused.** An epic groups stories; run one of its stories                  |
+| a story with no children | **refused** — it is a planning item. `--include-planning` expands it instead |
+
+It is the shape and not the kind because a `task` and a `bug` can each have
+children, and a `story` can have none. "One commit per child" is a true
+description of a container exactly when no child is itself a container.
+
+#### ⚠️ Every card in the scope reads In Progress for the whole run
+
+This is the one thing about a scoped run you have to know before you use it,
+because the board will look wrong otherwise.
+
+A scoped run **claims the whole scope before it starts** — the container and
+every card under it, in one transaction, all of them or none. So the board shows
+the run's **footprint**, not its cursor: eight cards In Progress while one agent
+is working. "In Progress" stops meaning _somebody is on this right now_ and
+starts meaning _this run owns it_.
+
+That was weighed and accepted, and the reason is what a scoped run promises. It
+says it will take a story and finish it, and that is only keepable if it owns the
+story when it starts. Claiming card by card instead leaves a window in which a
+second run takes card five while the first is on card two — and the two then
+integrate onto different branches, so the story arrives as half a pull request
+in two places. That is worse than either run refusing.
+
+The corollary is the good news: a **second** run against a story the first one
+holds is refused by name, telling you who has it. Your own re-run of an
+interrupted scope is not refused — it resumes.
+
+#### The shape rule is a STORY rule, and a sprint has none
+
+A story is expected to be **one layer**: its children are the work. A story whose
+child is itself a container is refused, naming that child and how many levels
+down the work actually sits, and the run submits a re-plan of the story (unless
+you passed `--disable-replan`, which suppresses the submission and not the
+diagnosis).
+
+A **sprint** has no such rule, and that is not an oversight. A real sprint holds
+stories, their subtasks and loose cards together at mixed depths, and that is
+legitimate. Sprint membership is a **direct** field — a card is in a sprint or it
+is not, never by inheritance — and a sprint that validates has already had its
+membership closed, so there is nothing for a shape check to catch.
+
+#### One pull request per REPOSITORY, not one per run
+
+The headline is "one pull request, one CI run", and it is exactly true for a
+scope whose cards all ship in one repository. A story **may** span repositories,
+and then it produces one pull request per repository it touched — one branch
+each, opened by the CLI at the end, and the summary names every one of them.
+Nothing here claims a single pull request for a multi-repository scope, and you
+should not either when you go to merge: the container closes when the LAST of
+them merges.
+
+#### When NOT to use it
+
+- **The story contains human work.** A `manual` / `executor: human` card is
+  claimed with the rest, skipped by name, and left where it was — so the story
+  correctly stays open. If the story is mostly human work, a scoped run mostly
+  claims cards nobody will touch.
+- **The story has not been decomposed.** There is nothing under it to run; the
+  refusal says so, and `motir plan <key>` (or `--include-planning`) is the
+  answer.
+- **You want the run to FOLLOW the ready set.** A scoped run is deliberately
+  snapshot-shaped: it holds a fixed list and orders it from the dependency graph,
+  so work that becomes ready elsewhere during the run is not picked up. That is
+  `motir auto`'s job.
 
 ### A card that ships in more than one repository
 
@@ -887,6 +974,23 @@ no session branch: each item rides the per-item flow unchanged. An item that is
 ready **only** because a dependency is integrated-awaiting-review is excluded
 and named — that dependency's code is not on `main`, so a pull request of its
 own could not even build. That lineage is `auto`'s territory.
+
+**`motir batch` tells you where its cards actually ENDED UP.** After the drain
+and before it exits, it reads each dispatched card back and prints its CURRENT
+status — not the outcome the run observed, which answers a different question.
+Three groups:
+
+- **In Review** — CI went green while the run was still going. Review and merge.
+- **Implemented** — the pull request is open and CI has not spoken yet. **This is
+  the normal, healthy row, and it is what most of them will say.** Nothing is
+  wrong with it and there is nothing to do: the card moves to In Review on its
+  own when its checks pass.
+- anything else — named with the status actually read, because that is the only
+  group that needs a person.
+
+A card the run could not read back is shown as **unread with its reason**, never
+dropped and never assumed to be Implemented. It is a READ, not a wait: nothing
+polls CI and nothing retries, so what you get is an honest snapshot at exit.
 
 **A run CLAIMS what it takes, and the claim is a LOCK.** Every dispatch path —
 `run`, `next`, `batch`, `auto` — takes its card with ONE call
