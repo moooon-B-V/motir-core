@@ -42,6 +42,16 @@
 // the global dispatcher — installing two agents would silently disconnect
 // the first mock's intercepts (only the last setGlobalDispatcher wins).
 //
+// Each seam above is ONE record in the `MOCKS` table inside `register()`: its
+// flag, what it installs, and the line it prints at boot. The early return is
+// DERIVED from that table rather than re-listing the flags, because re-listing
+// them is what broke: `E2E_TEST_AI_JOBS` was read into a local and then left
+// out of a hand-copied five-of-six enumeration, so a lane that set only that
+// flag returned before the shared agent was installed and the jobs seam never
+// registered — silently, and several layers from where it surfaced
+// (MOTIR-3244). A seam added to the table now cannot be half-wired: there is
+// no second list to forget it in.
+//
 // Why dynamic import to separate modules: Next compiles instrumentation.ts
 // for BOTH Node and Edge runtimes. A static `import 'undici'` or
 // `import 'node:crypto'` at the top of this file would make the Edge
@@ -53,73 +63,99 @@
 // outside the Playwright run — `register()` returns immediately when neither
 // flag is set.
 
+/**
+ * One E2E boundary seam: the env flag that turns it on, the clause its boot
+ * line completes, and the installer to run. `install` receives the shared
+ * MockAgent; a seam that intercepts elsewhere (E2E_TEST_BLOB replaces the S3
+ * client's transport) simply ignores it.
+ */
+interface MockSeam {
+  readonly flag: string;
+  readonly message: string;
+  readonly install: (agent: SharedMockAgent) => Promise<void>;
+}
+
+/**
+ * The agent `installSharedMockAgent()` hands back. Written as a type-position
+ * import so no value-level `undici` import reaches the Edge bundler — the same
+ * reason every import below is dynamic.
+ */
+type SharedMockAgent = ReturnType<typeof import('@/lib/test-mock-agent').installSharedMockAgent>;
+
 export async function register() {
   if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
-  const wantOauthMock = process.env['E2E_TEST_OAUTH'] === '1';
-  const wantBlobMock = process.env['E2E_TEST_BLOB'] === '1';
-  const wantBillingMock = process.env['E2E_TEST_BILLING'] === '1';
-  const wantGithubReposMock = process.env['E2E_TEST_GITHUB_REPOS'] === '1';
-  const wantCodeHealthMock = process.env['E2E_TEST_CODE_HEALTH'] === '1';
-  const wantAiJobsMock = process.env['E2E_TEST_AI_JOBS'] === '1';
-  if (
-    !wantOauthMock &&
-    !wantBlobMock &&
-    !wantBillingMock &&
-    !wantGithubReposMock &&
-    !wantCodeHealthMock
-  )
-    return;
+
+  const MOCKS: readonly MockSeam[] = [
+    {
+      flag: 'E2E_TEST_OAUTH',
+      message: 'Google + GitHub + GitLab OAuth endpoints mocked.',
+      install: async (agent) => {
+        const { installGoogleTokenMock, installGithubOAuthMock, installGitlabOAuthMock } =
+          await import('@/lib/test-oauth-mock');
+        installGoogleTokenMock(agent);
+        // GitHub identity grant (Story 7.10 · MOTIR-897): the server-side
+        // code→token exchange + /user read the OAuth callback performs — same
+        // env gate, same shared agent.
+        installGithubOAuthMock(agent);
+        // GitLab connect grant (Story 7.23 · MOTIR-1480): the server-side
+        // code→token exchange + /api/v4/user read — same env gate, same shared agent.
+        installGitlabOAuthMock(agent);
+      },
+    },
+    {
+      flag: 'E2E_TEST_BLOB',
+      message: 'in-process object store installed.',
+      install: async () => {
+        const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
+        // No `agent` — this seam replaces the S3 client's transport, not undici's.
+        installBlobStoreMock();
+      },
+    },
+    {
+      flag: 'E2E_TEST_BILLING',
+      message: 'motir-ai billing seam mocked.',
+      install: async (agent) => {
+        const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');
+        installBillingBoundaryMock(agent);
+      },
+    },
+    {
+      flag: 'E2E_TEST_GITHUB_REPOS',
+      message: 'GitHub repo creation + collaborator API mocked.',
+      install: async (agent) => {
+        const { installGithubReposMock } = await import('@/lib/test-github-repos-mock');
+        installGithubReposMock(agent);
+      },
+    },
+    {
+      flag: 'E2E_TEST_CODE_HEALTH',
+      message: 'motir-ai code-health seam mocked.',
+      install: async (agent) => {
+        const { installCodeHealthBoundaryMock } = await import('@/lib/test-code-health-mock');
+        installCodeHealthBoundaryMock(agent);
+      },
+    },
+    {
+      flag: 'E2E_TEST_AI_JOBS',
+      message: 'motir-ai jobs seam mocked.',
+      install: async (agent) => {
+        const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
+        installAiJobsBoundaryMock(agent);
+      },
+    },
+  ];
+
+  // The gate reads the SAME table the installs below iterate, so every flag
+  // that can install something can also open the gate (MOTIR-3244).
+  const active = MOCKS.filter((seam) => process.env[seam.flag] === '1');
+  if (active.length === 0) return;
 
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
   const agent = installSharedMockAgent();
 
-  if (wantOauthMock) {
-    const { installGoogleTokenMock, installGithubOAuthMock, installGitlabOAuthMock } =
-      await import('@/lib/test-oauth-mock');
-    installGoogleTokenMock(agent);
-    // GitHub identity grant (Story 7.10 · MOTIR-897): the server-side
-    // code→token exchange + /user read the OAuth callback performs — same
-    // env gate, same shared agent.
-    installGithubOAuthMock(agent);
-    // GitLab connect grant (Story 7.23 · MOTIR-1480): the server-side
-    // code→token exchange + /api/v4/user read — same env gate, same shared agent.
-    installGitlabOAuthMock(agent);
+  for (const seam of active) {
+    await seam.install(agent);
     // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log(
-      '[INSTRUMENT] E2E_TEST_OAUTH active — Google + GitHub + GitLab OAuth endpoints mocked.',
-    );
-  }
-  if (wantBlobMock) {
-    const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
-    // No `agent` — this seam replaces the S3 client's transport, not undici's.
-    installBlobStoreMock();
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_BLOB active — in-process object store installed.');
-  }
-  if (wantBillingMock) {
-    const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');
-    installBillingBoundaryMock(agent);
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_BILLING active — motir-ai billing seam mocked.');
-  }
-  if (wantGithubReposMock) {
-    const { installGithubReposMock } = await import('@/lib/test-github-repos-mock');
-    installGithubReposMock(agent);
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log(
-      '[INSTRUMENT] E2E_TEST_GITHUB_REPOS active — GitHub repo creation + collaborator API mocked.',
-    );
-  }
-  if (wantCodeHealthMock) {
-    const { installCodeHealthBoundaryMock } = await import('@/lib/test-code-health-mock');
-    installCodeHealthBoundaryMock(agent);
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_CODE_HEALTH active — motir-ai code-health seam mocked.');
-  }
-  if (wantAiJobsMock) {
-    const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
-    installAiJobsBoundaryMock(agent);
-    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_AI_JOBS active — motir-ai jobs seam mocked.');
+    console.log(`[INSTRUMENT] ${seam.flag} active — ${seam.message}`);
   }
 }
