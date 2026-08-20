@@ -258,6 +258,7 @@ export const githubProvider: GitProvider = {
         context: typeof checkRun['name'] === 'string' ? checkRun['name'] : 'check',
         prNumbers: readPrNumbers(checkRun['pull_requests']),
         headBranch: readHeadBranch(asRecord(checkRun['check_suite'])),
+        suiteId: readSuiteId(asRecord(checkRun['check_suite'])),
       };
     }
 
@@ -280,6 +281,7 @@ export const githubProvider: GitProvider = {
         context: typeof appSlug === 'string' && appSlug.length > 0 ? appSlug : 'check_suite',
         prNumbers: readPrNumbers(checkSuite['pull_requests']),
         headBranch: readHeadBranch(checkSuite),
+        suiteId: readSuiteId(checkSuite),
       };
     }
 
@@ -294,6 +296,10 @@ export const githubProvider: GitProvider = {
         context: typeof payload['context'] === 'string' ? payload['context'] : 'status',
         prNumbers: [],
         headBranch: null,
+        // A commit-`status` event predates check suites entirely — there is no
+        // run to name, and the rows it writes degrade to the one no-identity
+        // group `liveCheckRows` leaves alone.
+        suiteId: null,
       };
     }
 
@@ -582,6 +588,14 @@ function readPrNumbers(value: unknown): number[] {
 function readHeadBranch(checkSuite: Record<string, unknown> | null): string | null {
   const branch = checkSuite?.['head_branch'];
   return typeof branch === 'string' && branch.length > 0 ? branch : null;
+}
+
+/** The `id` off a `check_suite` object — the CI RUN's identity (MOTIR-3209), on
+ *  both the `check_suite` event and the object nested in a `check_run`. Null
+ *  when the payload carries none, which a delivery from before this was read
+ *  (or a hand-built fixture) legitimately does. */
+function readSuiteId(checkSuite: Record<string, unknown> | null): string | null {
+  return checkSuite ? idToString(checkSuite['id']) : null;
 }
 
 // Register the GitHub provider on import. `lib/git/index.ts` imports this module

@@ -108,7 +108,7 @@ describe('github.parseCiStatusEvent', () => {
         status: 'completed',
         conclusion: 'success',
         name: 'ci',
-        check_suite: { head_branch: 'feat/x' },
+        check_suite: { id: 87626227873, head_branch: 'feat/x' },
         pull_requests: [{ number: 7 }],
       },
     });
@@ -119,7 +119,26 @@ describe('github.parseCiStatusEvent', () => {
       context: 'ci',
       prNumbers: [7],
       headBranch: 'feat/x',
+      // The RUN this check belongs to (MOTIR-3209) — GitHub gives every workflow
+      // run its own check suite, which is what lets a re-run at one commit
+      // supersede the run it cancelled instead of merging into it by name.
+      suiteId: '87626227873',
     });
+  });
+
+  it('carries no suite id when the payload has none — the pre-MOTIR-3209 shape', () => {
+    const ev = github.parseCiStatusEvent({
+      repository: { id: 9 },
+      check_run: {
+        head_sha: 'abc123',
+        status: 'completed',
+        conclusion: 'success',
+        name: 'ci',
+        check_suite: { head_branch: 'feat/x' },
+        pull_requests: [],
+      },
+    });
+    expect(ev).toMatchObject({ suiteId: null });
   });
 
   it('normalizes a completed check_suite conclusion (aggregate; app slug as context)', () => {
@@ -132,6 +151,7 @@ describe('github.parseCiStatusEvent', () => {
         conclusion: 'failure',
         app: { slug: 'github-actions' },
         pull_requests: [{ number: 7 }, { number: 8 }],
+        id: 87626129473,
       },
     });
     expect(ev).toEqual({
@@ -141,6 +161,7 @@ describe('github.parseCiStatusEvent', () => {
       context: 'github-actions',
       prNumbers: [7, 8],
       headBranch: 'feat/x',
+      suiteId: '87626129473',
     });
   });
 
@@ -174,6 +195,9 @@ describe('github.parseCiStatusEvent', () => {
       context: 'continuous-integration/ci',
       prNumbers: [],
       headBranch: null,
+      // A commit-`status` event predates check suites — there is no run to name,
+      // and the rows it writes degrade to the one no-identity group.
+      suiteId: null,
     });
   });
 

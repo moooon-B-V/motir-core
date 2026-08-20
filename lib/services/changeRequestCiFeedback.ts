@@ -4,6 +4,7 @@ import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
+import { liveCheckRows } from '@/lib/github/checkSuites';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
@@ -30,10 +31,10 @@ import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 // `withSystemContext` (a webhook has no active workspace).
 //
 // ⚠️ ONE COMMENT PER `(changeRequest, headSha)` — not per check (MOTIR-2946). The
-// INGESTION key is still `(pr, headSha, checkName)`: one `githubCheckRun` row per
-// check, which is what the Development surface derives "Checks running" and the
-// `ciState` pill from, and what makes a redelivery of an already-recorded
-// conclusion a no-op. The COMMENT key is one level coarser, and that is the whole
+// INGESTION key is `(pr, headSha, checkName, checkSuiteId)`: one `githubCheckRun`
+// row per check PER RUN, which is what the Development surface derives "Checks
+// running" and the `ciState` pill from, and what makes a redelivery of an
+// already-recorded conclusion a no-op. The COMMENT key is one level coarser, and that is the whole
 // point of the card: keyed per check, a motir-core PR (~34 checks) put ~34
 // comments on one work item, each asserting "this work is verified" on the
 // authority of a single check that has no view of the whole — so a run in flight
@@ -46,6 +47,18 @@ import { promoteDeliveredCardsOnGreen } from './ciPromotion';
 // "Checks running", MOTIR-1579) with NONE of the terminal side-effects; a neutral
 // conclusion, a check for a change request we don't track, or one with no linked
 // work item are all clean no-ops.
+//
+// ⚠️ AND THE VERDICT READS ONLY THE RUNS THAT HAVE NOT BEEN REPLACED
+// (MOTIR-3209). Two workflow runs at one head commit is ordinary —
+// `cancel-in-progress` (MOTIR-3106) makes a label added after `gh pr create`
+// cancel the run in flight — and the cancelled one's rows must decide nothing:
+// its matrix legs are named `Vitest (${{ matrix.shard }}/…)` because GitHub had
+// not expanded them yet, and `cancelled` maps to `failure`. `liveCheckRows`
+// retires them, and the `neutral`-records-nothing rule below needs no exception
+// for the mirror case (`Deploy to Fly`: cancelled in the loser, skipped in the
+// winner) because the loser is no longer consulted at all. BOTH derivations
+// share that one function — the comment's and the promotion's — since two
+// opinions about one commit is exactly what MOTIR-2946 removed.
 
 /** The CI-feedback result — the canonical outcome shared by both providers. The
  *  `event: 'ci'` tag is for logging / test assertions, not a wire contract. */
@@ -105,6 +118,12 @@ export async function applyCiStatusFeedback(
     return { event: 'ci', outcome: 'ignored_pending' };
   }
 
+  // The CI run this check belongs to, as the row stores it: `''` is "no run
+  // identity" — a legacy commit-`status` event, or any provider that reports
+  // none — and NOT null, because Postgres treats NULLs in a unique index as
+  // distinct and the upsert would stop converging (MOTIR-3209).
+  const suiteId = event.suiteId ?? '';
+
   // Phase 1 — resolve under system context (one tx, no writes): connection + repo
   // (via the provider's resolver) → change request (by PR/MR-number list, else head
   // branch) → linked work item, the prior check row (for idempotency), and the
@@ -145,6 +164,7 @@ export async function applyCiStatusFeedback(
       cr.id,
       event.commitSha,
       event.context,
+      suiteId,
       tx,
     );
     // `repo.workspaceId`, never `installation.workspaceId` (MOTIR-1931) — the repo
@@ -185,6 +205,7 @@ export async function applyCiStatusFeedback(
           pullRequestId: resolved.prId,
           commitSha: event.commitSha,
           checkName: event.context,
+          checkSuiteId: suiteId,
           conclusion: 'pending',
           feedbackCommentId: resolved.existing?.feedbackCommentId ?? null,
         },
@@ -259,6 +280,7 @@ export async function applyCiStatusFeedback(
         pullRequestId: resolved.prId,
         commitSha: event.commitSha,
         checkName: event.context,
+        checkSuiteId: suiteId,
         conclusion: event.conclusion,
         feedbackCommentId: existingCommentId,
       },
@@ -266,8 +288,12 @@ export async function applyCiStatusFeedback(
     );
 
     // The authoritative check set at this head commit: the siblings plus this
-    // delivery's own row, which the upsert either created or just refreshed.
-    const rows = [...siblings.filter((r) => r.id !== recorded.id), recorded];
+    // delivery's own row, which the upsert either created or just refreshed —
+    // MINUS every run a later run has replaced (MOTIR-3209). Filtering here
+    // rather than in the query is deliberate: `existingCommentId` above must see
+    // the WHOLE set, because the comment belongs to the head commit and a
+    // replacement run has to edit the one its predecessor opened.
+    const rows = liveCheckRows([...siblings.filter((r) => r.id !== recorded.id), recorded]);
     const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
 
     // The first terminal conclusion CREATES the comment; every later one EDITS it
@@ -282,6 +308,7 @@ export async function applyCiStatusFeedback(
           pullRequestId: resolved.prId,
           commitSha: event.commitSha,
           checkName: event.context,
+          checkSuiteId: suiteId,
           conclusion: event.conclusion,
           feedbackCommentId: created.id,
         },

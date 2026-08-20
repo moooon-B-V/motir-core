@@ -212,6 +212,11 @@ export const gitlabProvider: GitProvider = {
       context: 'pipeline',
       prNumbers: typeof mrIid === 'number' && Number.isInteger(mrIid) ? [mrIid] : [],
       headBranch: typeof attrs['ref'] === 'string' && attrs['ref'].length > 0 ? attrs['ref'] : null,
+      // GitLab's answer to GitHub's check suite: the PIPELINE is the run, and a
+      // retry at one sha is a new pipeline id (MOTIR-3209). Every job of one
+      // pipeline reports under `context: 'pipeline'`, so a later pipeline at the
+      // same commit shares that name and retires the one it replaced.
+      suiteId: idToString(attrs['id']),
     };
   },
 
