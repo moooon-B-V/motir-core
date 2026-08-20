@@ -9,6 +9,17 @@ import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding
 // every step that returns the user to the app WITHOUT losing progress (the tier
 // state is persisted server-side). An unsent composer message is the only thing
 // exit could drop, so a light confirm guards that case only.
+//
+// MOTIR-3173 — and the destination is `/home`, the signed-in landing. This file
+// already exercised the exit through a real click, and it still went stale: it
+// asserted the LITERAL `/dashboard` because that was the landing when MOTIR-1488
+// was written, so when MOTIR-2654 and MOTIR-2921 moved both credential flows to
+// `/home`, the assertion moved the wrong way — it kept the old destination green.
+// A test that pins a literal is a comment with a runner attached unless it also
+// says WHY that literal is the answer, so the constant below carries the reason:
+// the destination is whatever post-auth lands on (`docs/decisions/home-scope.md`
+// §2.3 — `sign-in/page.tsx:78`, `sign-up/page.tsx:80`), and if that moves again,
+// this file moves with it rather than holding the product to a retired route.
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('next/navigation', () => ({
@@ -45,6 +56,17 @@ function stubFetch() {
 const EXIT = 'Save & exit';
 const CONFIRM_TITLE = 'Leave onboarding?';
 
+// The app's signed-in landing — where both credential flows default to
+// (`docs/decisions/home-scope.md` §2.3) and therefore where a person who steps
+// out of onboarding belongs. `/home` resolves the ACTIVE project and renders the
+// shipped create-first door when there is none (§2.2), so it is a safe
+// destination for an actor who has just described a project and may not have one
+// yet.
+const HOME = '/home';
+// The retired landing. `/dashboard` keeps its route and its own rail entry and is
+// reached by navigating to it; nothing lands a reader there any more.
+const RETIRED_LANDING = '/dashboard';
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -64,7 +86,7 @@ describe('DiscoveryOnboarding — Save & exit (MOTIR-1488)', () => {
     fireEvent.click(exit);
     // No confirm (nothing unsent) — a direct navigation to the app home.
     expect(screen.queryByText(CONFIRM_TITLE)).toBeNull();
-    expect(push).toHaveBeenCalledWith('/dashboard');
+    expect(push).toHaveBeenCalledWith(HOME);
   });
 
   it('confirms before discarding an UNSENT composer message, then leaves on confirm', async () => {
@@ -82,7 +104,7 @@ describe('DiscoveryOnboarding — Save & exit (MOTIR-1488)', () => {
     expect(push).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
-    expect(push).toHaveBeenCalledWith('/dashboard');
+    expect(push).toHaveBeenCalledWith(HOME);
   });
 
   it('keeps planning (no navigation) when the exit guard is dismissed', async () => {
@@ -98,5 +120,37 @@ describe('DiscoveryOnboarding — Save & exit (MOTIR-1488)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
     await waitFor(() => expect(screen.queryByText(CONFIRM_TITLE)).toBeNull());
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('the exit destination is the signed-in landing (MOTIR-3173)', () => {
+  // Asserted off the RENDERED affordance — a real click on the "Save & exit"
+  // button in the top bar — and never off `ONBOARDING_EXIT_PATH`. The bar draws
+  // one button, but the exit reaches `router.push` down TWO paths (direct, and
+  // through the unsent-draft confirm), and a test reading the constant would
+  // prove one thing about both.
+  it.each([
+    ['with nothing unsent — a direct exit', false],
+    ['through the unsent-draft confirm', true],
+  ])('lands on the home, not the retired landing: %s', async (_name, viaConfirm) => {
+    stubFetch();
+    renderWithIntl(<DiscoveryOnboarding initialIdea="An invoicing app" projectName="PayFlow" />);
+
+    await screen.findByRole('button', { name: EXIT });
+    if (viaConfirm) {
+      const input = screen.getByLabelText('Reply, or ask a question…') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'wait — one more thing' } });
+    }
+    fireEvent.click(screen.getByRole('button', { name: EXIT }));
+    if (viaConfirm) {
+      await screen.findByText(CONFIRM_TITLE);
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    }
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(HOME);
+    // The defect this card closes: the same click used to land here, under a
+    // comment calling `/dashboard` "the app's default authed landing".
+    expect(push).not.toHaveBeenCalledWith(RETIRED_LANDING);
   });
 });

@@ -41,10 +41,23 @@ import {
 // the "Go to plan" exit is 7.3.28 / MOTIR-1041 (drawn disabled here). Conversation
 // is the only input; Continue is navigation, not sign-off (nothing locks).
 
-// Where "Save & exit" returns the user (MOTIR-1488) — the app's default authed
-// landing (the sign-in/sign-up callback target). An in-progress onboarding
-// session is preserved server-side, so re-entering `/onboarding` resumes it.
-const ONBOARDING_EXIT_PATH = '/dashboard';
+// Where "Save & exit" returns the user (MOTIR-1488) — `/home`, the app's
+// signed-in landing. Both credential flows default to it
+// (`app/(auth)/sign-in/page.tsx:78`, `app/(auth)/sign-up/page.tsx:80`), and
+// `docs/decisions/home-scope.md` §2.3 decides post-auth lands there
+// unconditionally; §2.2 gives it the shipped create-first door when the actor
+// has no project yet, which is exactly the actor leaving onboarding. An
+// in-progress onboarding session is preserved server-side, so re-entering
+// `/onboarding` resumes it.
+//
+// This read `/dashboard` until MOTIR-3173, under a comment calling that "the
+// app's default authed landing (the sign-in/sign-up callback target)" — true
+// when MOTIR-1488 wrote it and false from MOTIR-2654 / MOTIR-2921 onwards.
+// `/dashboard` keeps its route and its own rail entry and is reached by
+// navigating to it (`app/(authed)/dashboard/page.tsx` carries the same
+// warning). `tests/components/OnboardingExit.test.tsx` is the guard on the
+// rendered affordance's destination, down both exit paths.
+const ONBOARDING_EXIT_PATH = '/home';
 
 export interface DiscoveryOnboardingProps {
   /** The idea preserved across the auth redirect (the 7.3.14 cookie), seeded as
