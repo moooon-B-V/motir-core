@@ -26,12 +26,18 @@ import {
 // dispatches `system.ci-runner-boot` itself, in the same request that records the
 // intent (`lib/ciFleet/bootDispatch.ts`).
 //
-// THE SWEEP STAYS, unchanged and load-bearing, as the RECOVERY path — for an
-// intent whose hot dispatch was dropped (a transport blip the webhook swallows
-// rather than 500s on), and as the retry loop every gate DEFERRAL depends on: a
-// project at its in-flight cap leaves its intent pending, and this is what comes
-// back for it. The two triggers race by design; `claimPending`'s compare-and-set
-// means one of them wins and the other gets `already_claimed`.
+// THE SWEEP STAYS, load-bearing, as the RECOVERY path — for an intent whose
+// dispatch was dropped (a transport blip a sender swallows rather than 500s on).
+// The triggers race by design; `claimPending`'s compare-and-set means one of them
+// wins and the other gets `already_claimed`.
+//
+// ⚠️ AND IT IS NO LONGER "the retry loop every gate DEFERRAL depends on" — that
+// clause stood here until MOTIR-2852 and is what made a minute cadence look
+// mandatory. A deferred intent is now dispatched by the admission WAKE the moment
+// the slot it was waiting for is released
+// (`ciRunnerBootService.dispatchNextPendingForProject`, called from the one
+// funnel every terminal transition goes through). A slot freeing is an event this
+// service already observes; rediscovering it on a timer was the poll.
 //
 // MOTIR-1922's ADMISSION GATE sits inside `runIntent` either way — so a sweep
 // that fans out 25 boots does not fan out 25 containers, and a faster trigger
@@ -40,8 +46,25 @@ import {
 // System-scoped, like every `system.*` job: the fleet spans tenants because
 // Motir's infrastructure bill does.
 
-/** Every minute. The floor Inngest cron granularity allows, which is also the
- *  honest statement of what this trigger can and cannot promise (§6). */
+/**
+ * Every minute. The floor Inngest cron granularity allows, which is also the
+ * honest statement of what this trigger can and cannot promise (§6).
+ *
+ * ⚠️ WHO OWNS ADMISSION LATENCY, AS OF MOTIR-2852: NOT THIS. A queued job is
+ * dispatched by the `workflow_job` webhook (MOTIR-1996) and a DEFERRED one by the
+ * admission WAKE the moment its project's slot is released
+ * (`ciRunnerBootService.dispatchNextPendingForProject`). Both are events the
+ * service already observes, so neither waits on a cron minute. **This cadence is
+ * now purely a BACKSTOP** — the cover for a dispatch that was dropped in transit
+ * — and the module header above is the older framing, corrected in place.
+ *
+ * ⚠️ AND IT IS DELIBERATELY UNCHANGED IN THIS CARD. Whether a backstop still
+ * needs to run every minute is a question about the compute bill, and the honest
+ * answer needs measurement taken AFTER the wake ships — which is MOTIR-2853, not
+ * a number to guess here. What a shorter cadence costs is not the query: a
+ * managed database that suspends on idle is held permanently awake by any
+ * sub-five-minute read, so this line is worth ~$19/month whatever it finds.
+ */
 export const CI_RUNNER_PROVISION_SWEEP_CRON = '* * * * *';
 
 /** Every 10 minutes, offset off the hour so it never lines up with the other

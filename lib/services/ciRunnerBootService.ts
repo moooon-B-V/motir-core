@@ -19,6 +19,7 @@ import {
   RunnerRegistrationRateLimitedError,
   RUNNER_JIT_REQUEST_TIMEOUT_MS,
 } from '@/lib/github/runnerJitConfig';
+import { dispatchCiRunnerBoot, type CiRunnerBootDispatchOutcome } from '@/lib/ciFleet/bootDispatch';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
@@ -109,10 +110,17 @@ import type {
 // deciding from a count that excludes the decisions already made. This service
 // still reads no cap, no ceiling and no balance itself — it asks, and it obeys.
 //
-// The pending-intent sweep below remains the trigger. It is honest but slow (a
-// minute-granularity cron cannot meet §6's ≤30s p50 budget); a hot-path call from
-// the `workflow_job` webhook straight to this service is the remaining half of
-// that budget and is tracked as its own card.
+// ⚠️ THE PENDING-INTENT SWEEP IS NO LONGER A TRIGGER OF ANYTHING (this paragraph
+// used to say it "remains the trigger"). Both halves moved to events, one card
+// each, and what is left on the cron is recovery:
+//
+//   * a QUEUED job reaches the gate from the `workflow_job` webhook, in the same
+//     request that records the intent (MOTIR-1996, `lib/ciFleet/bootDispatch.ts`)
+//     — a minute-granularity cron cannot meet §6's ≤30s p50 budget;
+//   * a DEFERRED job reaches it from the admission WAKE, the moment the slot it
+//     was waiting for is released (MOTIR-2852,
+//     {@link ciRunnerBootService.dispatchNextPendingForProject}) — see
+//     `settleIntent`, which is the one funnel every terminal transition uses.
 
 /**
  * WHAT THIS SERVICE BOOTS (MOTIR-2025). The orchestrator port carries a workload
@@ -409,6 +417,23 @@ export type RunIntentOutcome =
       usage: ContainerUsage;
     };
 
+/**
+ * What one {@link ciRunnerBootService.dispatchNextPendingForProject} did. A
+ * superset of {@link CiRunnerBootDispatchOutcome}, because a wake can decline
+ * before it ever reaches the transport.
+ */
+export type CiRunnerAdmissionWakeOutcome =
+  | CiRunnerBootDispatchOutcome
+  /** The freed slot belonged to no project, so no per-project cap ever deferred
+   *  anything behind it. */
+  | 'no_project'
+  /** The queue for that project is empty — the ordinary case, and the reason this
+   *  is cheap: one indexed read per teardown, not one per minute forever. */
+  | 'no_pending'
+  /** The queue could not be read. Logged and swallowed; the sweep still covers
+   *  the intent. */
+  | 'read_failed';
+
 function sleepFor(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -565,7 +590,7 @@ export const ciRunnerBootService = {
       );
       if (!intent) continue;
       await deregisterQuietly(intent.githubRunnerId, intent.id);
-      await settleIntent(intent.id, {
+      await settleIntent(intent.id, intent.projectId, {
         status: CI_RUNNER_INTENT_FAILED,
         teardownReason: 'reaped',
         settledAt: now(),
@@ -643,12 +668,61 @@ export const ciRunnerBootService = {
     };
   },
 
-  /** The pending-intent sweep — the interim trigger (see the module header: the
-   *  hot path is MOTIR-1922's). Returns what it dispatched so the job can log it. */
+  /** The pending-intent sweep — the BACKSTOP trigger (see the module header: the
+   *  hot path is the webhook's, and admission latency is the wake's). Returns what
+   *  it dispatched so the job can log it. */
   async listRunnableIntentIds(limit = 25): Promise<string[]> {
     if (!isOrchestratorConfigured()) return [];
     const pending = await withSystemContext((tx) => intents.listPending(limit, tx));
     return pending.map((intent) => intent.id);
+  },
+
+  /**
+   * THE ADMISSION WAKE (MOTIR-2852) — a slot in this project just freed, so boot
+   * whatever has been waiting for one.
+   *
+   * The moment a slot frees is an event this service ALREADY OBSERVES: an intent
+   * leaving the in-flight set is a write it makes itself. Before this existed the
+   * only thing that came back for a deferred intent was
+   * `system.ci-runner-provision-sweep`, so the worst-case wait between a slot
+   * freeing and a deferred job being admitted was the cron's cadence — which is
+   * why that cadence had to be one minute, and why a database that suspends on
+   * idle was billed around the clock to hold it. Dispatching here makes the cron a
+   * genuine backstop rather than the mechanism.
+   *
+   * ⚠️ BEST-EFFORT, AND THAT IS STRUCTURAL RATHER THAN DEFENSIVE. Every caller is
+   * a TEARDOWN, and a teardown that throws leaves a container's bookkeeping
+   * half-written — the exact failure `settleSupervisedContainer`'s guarantee
+   * exists to prevent. So nothing in here propagates: a read that throws and a
+   * send that throws both resolve to an outcome the caller ignores, and the sweep
+   * covers what was missed. The outcome is RETURNED rather than only logged so the
+   * seam is assertable without reading stdout.
+   *
+   * ⚠️ IT DISPATCHES, IT DOES NOT ADMIT. The event re-enters the gate like any
+   * other, so a wake fired into a fleet that is still at its ceiling is deferred
+   * again and costs one refused boot. What it must never do is fire on a
+   * DEFERRAL — see the `no wake on a deferral` note at `bootOnce`.
+   */
+  async dispatchNextPendingForProject(
+    projectId: string | null,
+  ): Promise<CiRunnerAdmissionWakeOutcome> {
+    // No project means no per-project cap was ever consulted (`admit` skips guard
+    // 1 for a null project), so nothing was queued behind this slot.
+    if (!projectId) return 'no_project';
+    if (!isOrchestratorConfigured()) return 'not_configured';
+    try {
+      const next = await withSystemContext((tx) =>
+        intents.findNextPendingForProject(projectId, tx),
+      );
+      if (!next) return 'no_pending';
+      return await dispatchCiRunnerBoot(next.id, 'admission-wake');
+    } catch (err) {
+      console.error('[ciRunnerBootService] the admission wake could not read its queue', {
+        projectId,
+        detail: detailOf(err),
+      });
+      return 'read_failed';
+    }
   },
 };
 
@@ -685,6 +759,23 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   const verdict = await ciRunnerAdmissionService.admit(intent);
   if (verdict.outcome === 'already_claimed') return terminal({ outcome: 'already_claimed' });
   if (verdict.outcome === 'deferred') {
+    // ⚠️ NO WAKE ON A DEFERRAL, AND THAT IS A DECISION WITH A PROOF (MOTIR-2852).
+    //
+    // The obvious symmetry — a deferral means work is queued, so dispatch the
+    // next pending intent for the project — DOES NOT TERMINATE. A deferral takes
+    // no claim, so this intent is still `pending`, and it is ordinarily the
+    // OLDEST pending intent for its project: `findNextPendingForProject` would
+    // hand back the very row that just deferred, the boot would re-enter a gate
+    // whose caps have not moved, and the two would trade events with no wait
+    // between them. Excluding the trigger does not fix it either — two queued
+    // intents then ping-pong. `tests/ciFleet/ciRunnerAdmissionWake.test.ts`
+    // demonstrates the first turn of that loop against the real queue.
+    //
+    // Nor would it buy anything: a deferral IS the statement that no slot is
+    // free, so there is nothing for a wake to admit. The event that changes the
+    // answer is a slot being RELEASED, which is where the wake lives — see
+    // `settleIntent`. Until then the intent waits, and the sweep is what comes
+    // back for it.
     console.warn('[ciRunnerBootService] the admission gate deferred an intent', {
       intentId,
       reason: verdict.reason,
@@ -697,13 +788,18 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   if (!intent.projectId) {
     // No project means no runner group (§7.3) and no tenant the container's
     // cost could be attributed to. Both are disqualifying on their own.
-    await settleFailed(intentId, 'provision_failed', 'the intent names no project');
+    await settleFailed(intentId, null, 'provision_failed', 'the intent names no project');
     return terminal({ outcome: 'no_runner_group', detail: 'the intent names no project' });
   }
 
   const workflowJobId = Number(intent.jobId);
   if (!Number.isInteger(workflowJobId) || workflowJobId <= 0) {
-    await settleFailed(intentId, 'provision_failed', 'the intent has a malformed job id');
+    await settleFailed(
+      intentId,
+      intent.projectId,
+      'provision_failed',
+      'the intent has a malformed job id',
+    );
     return terminal({ outcome: 'provision_failed', detail: 'the intent has a malformed job id' });
   }
 
@@ -722,7 +818,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       err instanceof RunnerGroupNotProvisionedError
         ? err.message
         : `could not read the project's runner group: ${detailOf(err)}`;
-    await settleFailed(intentId, 'provision_failed', detail);
+    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'no_runner_group', detail });
   }
 
@@ -783,7 +879,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
       return terminal({ outcome: 'rate_limited', retryAfterSeconds: null });
     }
     const detail = `could not mint a JIT config: ${detailOf(err)}`;
-    await settleFailed(intentId, 'provision_failed', detail);
+    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
 
@@ -834,12 +930,12 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
         image: err.imageReference,
         detail: detailOf(err),
       });
-      await settleFailed(intentId, 'provision_failed', detail);
+      await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
       return terminal({ outcome: 'image_unpullable', detail });
     }
 
     const detail = `could not boot a container: ${detailOf(err)}`;
-    await settleFailed(intentId, 'provision_failed', detail);
+    await settleFailed(intentId, intent.projectId, 'provision_failed', detail);
     return terminal({ outcome: 'provision_failed', detail });
   }
 
@@ -1052,7 +1148,7 @@ async function settleSupervisedContainer(
 
   if (usage) {
     await recordContainerUsage(usage);
-    await settleIntent(intentId, {
+    await settleIntent(intentId, session.attribution.projectId, {
       status:
         verdict.reason === 'job_completed' ? CI_RUNNER_INTENT_COMPLETED : CI_RUNNER_INTENT_FAILED,
       teardownReason: verdict.reason,
@@ -1158,8 +1254,25 @@ async function deregisterByNameQuietly(runnerName: string, intentId: string): Pr
   }
 }
 
+/**
+ * Move one intent to a terminal status — AND WAKE ITS PROJECT (MOTIR-2852).
+ *
+ * ⚠️ `projectId` IS REQUIRED, POSITIONALLY, AND THAT IS THE POINT. Every settle is
+ * an intent leaving the in-flight set (`provisioning` / `running`), which is
+ * exactly what {@link ciRunnerProvisioningIntentRepository.countInFlightForProject}
+ * counts — so every settle frees a slot, and there is no such thing as a settle
+ * that should not wake. Threading the project through the ONE funnel every path
+ * already goes through makes that total by construction: a new terminal path
+ * cannot be added without the compiler asking whose slot it just freed. Pass
+ * `null` only where the intent genuinely names no project.
+ *
+ * The wake runs only when the settle COMMITTED. A settle that threw freed no
+ * slot — the intent is still in flight, and waking on it would dispatch a boot
+ * into capacity that is still occupied.
+ */
 async function settleIntent(
   intentId: string,
+  projectId: string | null,
   record: {
     status: string;
     teardownReason: string | null;
@@ -1176,15 +1289,18 @@ async function settleIntent(
       intentId,
       detail: detailOf(err),
     });
+    return;
   }
+  await ciRunnerBootService.dispatchNextPendingForProject(projectId);
 }
 
 async function settleFailed(
   intentId: string,
+  projectId: string | null,
   reason: TeardownReason,
   detail: string,
 ): Promise<void> {
-  await settleIntent(intentId, {
+  await settleIntent(intentId, projectId, {
     status: CI_RUNNER_INTENT_FAILED,
     teardownReason: reason,
     settledAt: new Date(),
@@ -1213,7 +1329,7 @@ async function sweepStaleClaims(now: () => Date): Promise<number> {
   const stale = await withSystemContext((tx) => intents.listStaleClaims(claimedBefore, 50, tx));
   for (const intent of stale) {
     await deregisterQuietly(intent.githubRunnerId, intent.id);
-    await settleIntent(intent.id, {
+    await settleIntent(intent.id, intent.projectId, {
       status: CI_RUNNER_INTENT_FAILED,
       teardownReason: 'provision_failed',
       settledAt: now(),
