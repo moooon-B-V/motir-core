@@ -249,7 +249,7 @@ function bindsGucInline(node: ts.Node): boolean {
 /**
  * `@/lib/x` / `./x` -> an existing `.ts` file, or undefined. A path join, not
  * type resolution — anything that does not land on a file is skipped. Same
- * resolver `systemContextScan` uses, kept a copy for the reason the two scans
+ * resolver `contextArmScan` uses, kept a copy for the reason the two scans
  * are separate modules at all: they answer different questions and neither
  * should be able to break the other by widening its walk.
  */

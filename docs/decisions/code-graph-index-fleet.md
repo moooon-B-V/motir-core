@@ -824,3 +824,48 @@ design card if the copy turns out to need an element the dialogs cannot express.
 - `notes.html` **#50** (a decision ships nothing), **#143** (a new affordance owes a design amendment),
   **#185** (enforcement in terms the product controls), **#206** (a method with no caller is not a path),
   **#223** (a deferral is a card filed in the same action — written about §11 of this file).
+
+## §15 — Decision 11 — the container may be handed its PREVIOUS snapshot (MOTIR-3252)
+
+**Appended 2026-08-20.** §4's rule is unchanged and this is an instance of it, not an exception:
+the container's isolation is credential SCOPE, and this adds a third **pre-signed URL**, not a
+third kind of credential.
+
+**What changed.** An index run has always rebuilt the whole tree, because that is the only thing
+the container could do: the engine's incremental call needs the PREVIOUS graph, and the container
+holds no object-storage credential to fetch it with and no database credential to look up its key.
+Both of those are §4/§5 decisions and neither is being relaxed. Instead **motir-ai — which has the
+`CodeRepo` row and the bucket — resolves the key and mints a single-key, `GET`-only, minutes-long
+grant**, returned alongside the run credential motir-core already fetches at dispatch
+(`POST /v1/code-graph/run-credential`) and forwarded into the spec as `MOTIR_INDEX_SNAPSHOT_URL`.
+
+So the boot contract is four variables, or five. Everything §10 and §5 list as ABSENT is still
+absent: no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
+no service token, no Fly token.
+
+**Why it is worth the fifth variable.** Measured on a dev box, ten changed files in motir-core sync
+in **0.7 s / 256 MB** against **32.0 s / 1191 MB** for the rebuild the fleet performs today — and
+the fleet performs it on every debounced push, per repo, per project.
+
+**Three conditions, all decided rather than defensive.** The grant is offered only when a snapshot
+exists AND its stored `codegraphVersion` is the engine the container will run AND the grant mints.
+The middle one is `prisma/schema.prisma`'s _"a `codegraphVersion` bump forces a re-index"_, kept at
+the only layer that can see the column — and it is the **one sanctioned rebuild trigger**: there is
+deliberately no drift threshold and no "rebuild if the diff is large" branch (MOTIR-3249,
+decision 1). The third degrades to a full build rather than failing the dispatch: a run with no
+snapshot indexes correctly, just slowly, and turning "object storage hiccuped" into "this repo is
+not indexed" would be strictly worse than the rebuild it replaces.
+
+**The container's side of the same decision** (MOTIR-3253, in `motir-ai`): the run verifies the
+snapshot exactly as `graphSnapshotStore.pull` does — decompress, then check the SHA-256 the object
+carries — and **falls back to a full build that SUCCEEDS** on every disappointment: pruned (only
+the latest three survive), expired, truncated, unverifiable, tampered, unreachable, or an engine
+that will not open it. A stale pointer must never turn a refresh into a failed job. The restored
+snapshot lands inside the run's work directory, so §5's retention invariant — _"delete everything,
+always"_ — covers it by construction rather than by a second rule.
+
+**What this does NOT decide.** The warm per-org sync worker (MOTIR-3254 through MOTIR-3256) is a
+separate question and a separate amendment: it would replace _one container, one repo, then it dies
+holding nothing_ with _one machine, one org, over time_, which is a change to §4's isolation
+argument and to §5's retention invariant. Nothing here touches either. This decision is about a
+per-run container that still dies holding nothing.

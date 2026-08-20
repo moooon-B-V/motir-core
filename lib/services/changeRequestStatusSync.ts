@@ -27,7 +27,11 @@ import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { CompleteSessionItemResultDto } from '@/lib/dto/workItems';
-import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
+import {
+  ContainerHasOpenChildrenError,
+  IllegalTransitionError,
+  UnknownStatusError,
+} from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // The provider-agnostic change-request → work-item status-sync state machine
@@ -104,6 +108,7 @@ export type ChangeRequestSyncResult = {
     | 'no_work_item'
     | 'no_matching_status'
     | 'illegal_transition'
+    | 'open_children' // the item is a CONTAINER whose own children are not landed — it stays where it is (MOTIR-3229)
     | 'access_denied'
     | 'unknown_installation'
     | 'unknown_repo'
@@ -780,6 +785,15 @@ function classifyTransitionError(
     return { event: 'pull_request', outcome: 'no_matching_status', workItemId };
   if (err instanceof ProjectAccessDeniedError || err instanceof ProjectNotFoundError)
     return { event: 'pull_request', outcome: 'access_denied', workItemId };
+  // The container-completeness gate (MOTIR-3229). A container whose own children
+  // are not landed is a legitimate REFUSAL, not a fault: the sync leaves the item
+  // where it is and says so, exactly as it does for a workflow with no legal edge.
+  // Rethrowing would fail the webhook job and have the host retry it forever, on a
+  // condition only a person adding work to the tree can clear. This is also the
+  // shape MOTIR-1343 actually took — the PR-link automation moved the story to In
+  // Review while two children sat at `todo`.
+  if (err instanceof ContainerHasOpenChildrenError)
+    return { event: 'pull_request', outcome: 'open_children', workItemId, toStatus };
   throw err;
 }
 

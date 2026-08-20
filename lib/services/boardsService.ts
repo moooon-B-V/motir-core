@@ -71,6 +71,7 @@ import {
 import {
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  ContainerHasOpenChildrenError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
@@ -607,6 +608,15 @@ export const boardsService = {
             // to its column with the three accepted forms named rather than a
             // bare "something went wrong".
             if (err instanceof MissingArtifactEvidenceError) {
+              throw new IllegalBoardMoveError(item.status, targetStatus.key, err.message);
+            }
+            // And for the container-completeness refusal (MOTIR-3229): dragging a
+            // story into Implemented or In Review while a child of its own is
+            // still open is a move the board must SNAP BACK. The reason carries
+            // the whole refusal, so the card returns to its column NAMING the
+            // children that are not landed — the one fact that turns "why won't
+            // this move?" into a one-second answer.
+            if (err instanceof ContainerHasOpenChildrenError) {
               throw new IllegalBoardMoveError(item.status, targetStatus.key, err.message);
             }
             throw err;

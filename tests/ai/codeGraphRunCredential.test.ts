@@ -59,6 +59,52 @@ describe('mintCodeGraphRunCredential', () => {
     expect(JSON.parse(String(init.body))).toEqual(INPUT);
   });
 
+  it('carries the PREVIOUS-snapshot grant through when motir-ai offers one', async () => {
+    // MOTIR-3252. The grant is opaque here for the same reason the credential is:
+    // motir-core does not know the snapshot key, cannot compute it, and holds no
+    // object-storage credential — all three by decision. It carries the URL to the
+    // container's environment and never opens it.
+    const expiresAt = new Date(Date.now() + 900_000).toISOString();
+    const previousSnapshotUrl = 'https://storage.example/bucket/codegraph/p/r/abc.db.gz?X-Amz=1';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ credential: 'mrc1.a.b', expiresAt, previousSnapshotUrl }, 201),
+      ),
+    );
+
+    await expect(mintCodeGraphRunCredential(INPUT)).resolves.toEqual({
+      credential: 'mrc1.a.b',
+      expiresAt,
+      previousSnapshotUrl,
+    });
+  });
+
+  it('treats an ABSENT or malformed snapshot grant as normal, never as a failure', async () => {
+    // Absent is the routine answer — a first index, a pruned object, an engine
+    // version bump — and all three mean the container builds the whole tree,
+    // which is what it did unconditionally before this field existed. It is also
+    // what makes the two repos' halves free to merge in EITHER order: an older
+    // motir-ai simply never returns it.
+    //
+    // A malformed one is DROPPED rather than fatal, and that is the difference
+    // from the two fields above: a missing `credential` boots a container that
+    // cannot work at all, while a missing grant only costs a rebuild.
+    const expiresAt = new Date(Date.now() + 900_000).toISOString();
+    for (const previousSnapshotUrl of [undefined, '', 42, null, {}]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          jsonResponse({ credential: 'mrc1.a.b', expiresAt, previousSnapshotUrl }, 201),
+        ),
+      );
+      await expect(mintCodeGraphRunCredential(INPUT)).resolves.toEqual({
+        credential: 'mrc1.a.b',
+        expiresAt,
+      });
+    }
+  });
+
   it('carries the SERVICE token — this is the one call in the flow that may', async () => {
     // The mint is `serviceAuth`-gated because motir-core is the caller. The
     // container-facing routes deliberately REFUSE this token; that refusal is

@@ -199,6 +199,97 @@ describe('the cascade — a done parent completes its children', () => {
 // concurrent derivation has moved the row in between, which is the one case rung 4
 // made common. Every test below therefore states its own trigger where the trigger
 // is the subject.
+// ── The DEFECT-REPORT exemption (Bug MOTIR-3229) ──────────────────────────
+//
+// MOTIR-1343's merge cascaded `done` onto MOTIR-3218 and MOTIR-3219 — two bug
+// reports the run itself had filed under that story while shipping it — three
+// minutes into a session's investigation of them. Measured from the Inngest REST
+// API, not predicted: `"cascade": { "outcome": "cascaded", "childIds":
+// ["<MOTIR-3218>", "<MOTIR-3219>"] }`. A story closing itself must not silently
+// close the defects found while shipping it.
+describe('a `bug` child is EXEMPT — a defect report is not a decomposition', () => {
+  /** A done story over children of mixed KIND. */
+  async function doneStoryWith(fx: WorkItemFixture, spec: Array<[kind: string, status: string]>) {
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
+    await setStatus(story.id, 'done');
+    const children = [];
+    for (const [i, [kind, status]] of spec.entries()) {
+      const c = await createTestWorkItem(fx, {
+        kind: kind as 'subtask' | 'bug' | 'task',
+        title: `child ${i}`,
+        parentId: story.id,
+      });
+      await setStatus(c.id, status);
+      children.push(c);
+    }
+    return { story, children };
+  }
+
+  it('leaves an open bug open while completing the subtasks beside it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWith(fx, [
+      ['subtask', 'todo'],
+      ['bug', 'todo'],
+    ]);
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
+    expect(res).toMatchObject({ exemptIds: [children[1]!.id] });
+    expect(await statusOf(children[0]!.id)).toBe('done'); // the subtask completed
+    expect(await statusOf(children[1]!.id)).toBe('todo'); // ⭐ the defect report survived
+  });
+
+  it('reports `exempt_only` when EVERY open child is a bug — distinct from nothing to do', async () => {
+    // MOTIR-1343's exact shape: the scope children already done, and the only
+    // remaining open children the two bugs the run filed. A log that could not
+    // tell this from `no_open_children` could not answer why a done parent still
+    // has open children.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWith(fx, [
+      ['subtask', 'done'],
+      ['bug', 'todo'],
+      ['bug', 'in_progress'],
+    ]);
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'exempt_only', itemId: story.id });
+    expect((res as { exemptIds: string[] }).exemptIds.sort()).toEqual(
+      [children[1]!.id, children[2]!.id].sort(),
+    );
+    expect(await statusOf(children[1]!.id)).toBe('todo');
+    expect(await statusOf(children[2]!.id)).toBe('in_progress');
+    expect(sent).toHaveLength(0); // nothing moved ⇒ nothing to notify
+  });
+
+  it('a bug that is ALREADY done is not reported as exempt — it was never open', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWith(fx, [
+      ['subtask', 'todo'],
+      ['bug', 'done'],
+    ]);
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
+    expect(res).not.toHaveProperty('exemptIds');
+  });
+
+  it('a `task` child is NOT exempt — only a defect record is', async () => {
+    // The exemption is about what a kind MEANS under its parent, not about
+    // "anything that is not a subtask". A task decomposes its parent exactly as a
+    // subtask does, so completing the parent really does complete it.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWith(fx, [['task', 'todo']]);
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
+    expect(await statusOf(children[0]!.id)).toBe('done');
+  });
+});
+
 describe('entry-triggered only, gates, and no-ops', () => {
   it('a NON-done transition is a clean no-op (the trigger is entry into done)', async () => {
     const fx = await makeWorkItemFixture();

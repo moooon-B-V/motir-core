@@ -4,7 +4,11 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from './workItemsService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
-import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
+import {
+  ContainerHasOpenChildrenError,
+  IllegalTransitionError,
+  UnknownStatusError,
+} from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 
 // CI GREEN IS WHAT MAKES A CARD REVIEWABLE (MOTIR-3006).
@@ -51,7 +55,18 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
  * edit rights there — and none of them says anything about the OTHER cards the
  * same run delivered. Anything not on this list is a real fault and is rethrown.
  */
-const SKIPPABLE = [IllegalTransitionError, UnknownStatusError, ProjectAccessDeniedError];
+const SKIPPABLE = [
+  IllegalTransitionError,
+  UnknownStatusError,
+  ProjectAccessDeniedError,
+  // The container-completeness gate (MOTIR-3229). A green build says nothing
+  // about a card's own children, so a CONTAINER whose children are not landed is
+  // refused In Review — and that refusal is precisely what the card is for: In
+  // Review is a promise to a person, and MOTIR-1343 made it over two `todo`
+  // children. Skippable rather than fatal for this list's stated reason: it says
+  // nothing about the OTHER cards the same run delivered.
+  ContainerHasOpenChildrenError,
+];
 
 /** The ONLY status a promotion moves a card out of. */
 const SOURCE_STATUS = 'implemented';

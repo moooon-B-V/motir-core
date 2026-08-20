@@ -18,7 +18,7 @@ import { SINGLETON_ONLY, isClientExpression } from './testCallSiteScan';
 //   singletonReadScan     lib/repositories  repository METHODS reading unbound
 //   callSiteScan          lib + app         production call sites passing no tx
 //   bareTransactionScan   lib + app         a db.$transaction binding no GUC
-//   systemContextScan     lib + app + tests withSystemContext over unarmed tables
+//   contextArmScan        lib + app + tests a bound GUC over unarmed tables
 //   testCallSiteScan      tests             `<x>Repository.<method>(…)` calls ONLY
 //
 // The last one is the near miss: it reads the same directory this one does and

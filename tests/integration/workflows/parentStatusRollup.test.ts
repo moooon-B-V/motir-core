@@ -18,7 +18,8 @@ import { truncateAuthTables } from '../../helpers/db';
 // MOTIR-2888 · Subtask MOTIR-2891). Real Postgres.
 //
 // It is a RECOMPUTE, not a ratchet: the parent's status is a function of its
-// children's current statuses over a FOUR-rung ladder, applied forward OR
+// children's current statuses over a FIVE-rung ladder (MOTIR-3229 added
+// `implemented` between in-progress and in-review), applied forward OR
 // backward. The `forward-only` describe block these tests used to carry asserted
 // the opposite of the third block below, and was replaced rather than extended —
 // two suites disagreeing about which way a parent may move is worse than either.
@@ -134,6 +135,80 @@ describe('the ladder — each rung moves the parent to the right status', () => 
 
     await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
     expect(await statusOf(story.id)).toBe('done');
+  });
+
+  // ── The `implemented` rung (Bug MOTIR-3229) ─────────────────────────────
+  //
+  // `implemented` is an `in_progress`-CATEGORY status, so before this rung the
+  // ladder collapsed it into rung `in_progress` and a parent whose children were
+  // ALL built derived to "something has started" — the ladder could not say
+  // "everything below me is BUILT", which is exactly the state a story run ends
+  // in. MOTIR-1343 claimed `implemented` with two `todo` children and nothing
+  // contradicted it.
+  it('implemented rung: every child implemented ⇒ parent implemented', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['implemented', 'implemented']);
+    await setStatus(story.id, 'in_progress');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'implemented' });
+    expect(await statusOf(story.id)).toBe('implemented');
+  });
+
+  it('implemented rung: implemented-or-better mixes count — done and in_review too', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['implemented', 'done']);
+    await setStatus(story.id, 'in_progress');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'rolled_up', toStatus: 'implemented' });
+    expect(await statusOf(story.id)).toBe('implemented');
+  });
+
+  it('the in-review rung beats the implemented rung when both could match', async () => {
+    // Every child is implemented-or-better AND at least one is in review, so both
+    // rungs match. First match wins, and in-review is the higher one.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['in_review', 'done']);
+    await setStatus(story.id, 'implemented');
+
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+    expect(await statusOf(story.id)).toBe('in_review');
+  });
+
+  it('implemented rung does NOT fire while ANY child is below it', async () => {
+    // ⭐ THE DEFECT, at the derivation altitude. MOTIR-1343's exact child set: the
+    // scope children built, two bugs the run filed still at `todo`. The parent
+    // must read "something has started", never "everything is built".
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, [
+      'implemented',
+      'implemented',
+      'todo',
+      'todo',
+    ]);
+    await setStatus(story.id, 'in_progress');
+
+    const res = await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'already_there', toStatus: 'in_progress' });
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('a parent whose children are ALL implemented no longer reads as merely in_progress', async () => {
+    // The regression guard for the collapse itself: `inProgress` in the aggregate
+    // now EXCLUDES implemented children, so a reader asking "has anything
+    // started?" must ask all three buckets. If that were missed, this set would
+    // match NO rung above `todo` and the parent would come BACK to todo — a worse
+    // failure than the one being fixed.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await storyWithChildren(fx, ['implemented']);
+    await setStatus(story.id, 'todo');
+
+    await parentStatusRollupService.rollUpForChild(children[0]!.id, fx.workspaceId);
+    expect(await statusOf(story.id)).toBe('implemented');
   });
 
   it('rolls up an EPIC from its stories, not just a story from its subtasks', async () => {
@@ -365,16 +440,19 @@ describe('gates and no-ops', () => {
     // review edge goes with it (MOTIR-2901): the forward arm now WALKS the ladder,
     // so leaving `in_progress → in_review` in place would give it the path
     // `in_progress → in_review → done` and this would no longer be an illegal
-    // move at all. What the test asserts is unchanged — a graph with no PATH to
-    // the wanted rung is a logged no-op — only the fixture has to cut every path
-    // rather than one edge.
+    // move at all. ⚠️ And the `implemented` edge goes with THEM (MOTIR-3229): the
+    // ladder gained a fifth rung, so `in_progress → implemented → done` is a
+    // fourth path this fixture has to cut. What the test asserts is unchanged —
+    // a graph with no PATH to the wanted rung is a logged no-op — only the
+    // fixture has to cut every path rather than one edge, and there is now one
+    // more of them.
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
     await adminDb.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('in_progress'),
-        toStatusId: { in: [idOf('done'), idOf('in_review')] },
+        toStatusId: { in: [idOf('done'), idOf('in_review'), idOf('implemented')] },
       },
     });
 
@@ -519,13 +597,18 @@ describe('gates and no-ops', () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await storyWithChildren(fx, ['in_review', 'done']);
     await setStatus(story.id, 'in_progress');
+    // ⚠️ `in_progress → implemented` goes too (MOTIR-3229). The fifth rung is a
+    // legal stepping stone at or below the in-review target, so leaving it in
+    // place hands the walk `in_progress → implemented → in_review` and this stops
+    // being a fallback case at all. Same fixture obligation as the illegal-move
+    // test above: cut every PATH, not one edge.
     const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
     await adminDb.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
         fromStatusId: idOf('in_progress'),
-        toStatusId: idOf('in_review'),
+        toStatusId: { in: [idOf('in_review'), idOf('implemented')] },
       },
     });
 

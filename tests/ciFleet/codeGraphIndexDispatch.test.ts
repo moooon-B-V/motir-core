@@ -54,6 +54,10 @@ const TARBALL_URL =
   'https://codeload.github.com/moooon-B-V/motir-core/legacy.tar.gz/refs/heads/main' +
   '?token=PRESIGNED&X-Amz-Expires=300';
 const RUN_CREDENTIAL = 'mrc1.payload.signature';
+/** The third pre-signed URL (MOTIR-3252) — the PREVIOUS snapshot, when there is one. */
+const SNAPSHOT_URL =
+  'https://fly.storage.tigris.dev/bucket/codegraph/ai-proj/moooon-B-V_motir-core/abc.db.gz' +
+  '?X-Amz-Signature=PRESIGNED&X-Amz-Expires=1800';
 const AI_URL = 'https://ai.example.test';
 const SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
 const INSTALLATION_TOKEN = 'ghs_installation_must_never_reach_a_container';
@@ -267,6 +271,45 @@ describe('buildIndexSpec — the container gets the image its boot contract name
       MOTIR_AI_BASE_URL: AI_URL,
       MOTIR_INDEX_RUN_CREDENTIAL: RUN_CREDENTIAL,
     });
+  });
+
+  // ── The FIFTH variable, which came past the line above (MOTIR-3252) ────────
+
+  it('adds MOTIR_INDEX_SNAPSHOT_URL — and ONLY that — when motir-ai offered one', () => {
+    // The key-set assertion above is the guard this had to pass, so it is
+    // re-asserted here in its widened form rather than relaxed: exactly five keys,
+    // and the fifth is another PRE-SIGNED URL. A container that ingests untrusted
+    // source gains no credential class from this — one object, one method, minutes
+    // — and every absence the doc comment lists is still an absence.
+    const spec = codeGraphIndexDispatchService.buildIndexSpec({
+      ...SPEC_ARGS,
+      previousSnapshotUrl: SNAPSHOT_URL,
+    });
+
+    expect(Object.keys(spec.env).sort()).toEqual([
+      'MOTIR_AI_BASE_URL',
+      'MOTIR_INDEX_REPO_REF',
+      'MOTIR_INDEX_RUN_CREDENTIAL',
+      'MOTIR_INDEX_SNAPSHOT_URL',
+      'MOTIR_INDEX_TARBALL_URL',
+    ]);
+    expect(spec.env['MOTIR_INDEX_SNAPSHOT_URL']).toBe(SNAPSHOT_URL);
+  });
+
+  it('OMITS the variable entirely when there is none — never an empty string', () => {
+    // An empty value would boot a container that believes it was handed a
+    // snapshot and then fails to fetch it — trading a fast path for a slow path
+    // WITH a spurious failure in the log. Absent is the first-index case, the
+    // pruned case and the engine-version-bump case, and all three mean "build the
+    // whole tree", which is what this container did before any of this existed.
+    for (const previous of [undefined, '']) {
+      const spec = codeGraphIndexDispatchService.buildIndexSpec({
+        ...SPEC_ARGS,
+        ...(previous === undefined ? {} : { previousSnapshotUrl: previous }),
+      });
+      expect(spec.env['MOTIR_INDEX_SNAPSHOT_URL']).toBeUndefined();
+      expect(Object.keys(spec.env)).toHaveLength(4);
+    }
   });
 
   it('tags the workload and carries NO workflow job — an index container has none', () => {
