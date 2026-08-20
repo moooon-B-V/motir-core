@@ -110,6 +110,14 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'work_item:triage',
   'ai:plan',
   'ai:view_plan',
+  // MOTIR-3188 — DECIDE, split out of the conflated `ai:view_plan`. It enters
+  // here and at `member` (below) and nowhere else, which is what makes the split
+  // behaviour-neutral: every actor who could approve a plan before can approve
+  // one after. `levelGrants` names only the three edit-ish keys, so this one
+  // takes the default arm and resolves exactly as `ai:view_plan` does on all
+  // four access levels and both rails — `tests/permissions/planDecisionSplit.test.ts`
+  // proves that equivalence rather than asserting it here.
+  'ai:decide_plan',
 ];
 
 /**
@@ -148,6 +156,10 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
     'work_item:triage',
     'ai:plan',
     'ai:view_plan',
+    // MOTIR-3188 — the DECIDE half. `member` is where approve/decline already
+    // resolved through `ai:view_plan`, so the key lands beside it; `viewer` and
+    // the implicit workspace-member grant take neither, exactly as before.
+    'ai:decide_plan',
   ]),
   viewer: new Set<PermissionKey>(['project:browse', 'report:view']),
 };

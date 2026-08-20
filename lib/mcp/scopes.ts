@@ -94,16 +94,26 @@ export function isLegacyTokenScope(value: unknown): value is TokenScope {
  *     MCP tool to assert it, and this map must confer whatever `TOOL_SCOPES`
  *     files under a scope or a legacy row silently loses a tool
  *     (`tests/tokens/story-gate.test.ts` asserts exactly that). It confers no
- *     other reach over MCP: `approvePlan` / `declinePlan` assert the same key and
- *     neither is an MCP tool, so the widening is one tool wide HERE.
+ *     other reach over MCP: neither `approvePlan` nor `declinePlan` is an MCP
+ *     tool, so the widening is one tool wide HERE.
  *
  *     ⚠️ AMENDED 2026-08-19 (MOTIR-3021): "not token-reachable at all" is no
  *     longer true of `approvePlan`. It has a bounded `/api/v1` entrance —
- *     `POST /api/v1/plans/{planId}/approval`, gated by this same key — which an
- *     operator's `motir auto --auto-approve-replan` drives. It is NOT an MCP
- *     tool, deliberately (`docs/decisions/run-findings-protocol.md` Q2), so the
+ *     `POST /api/v1/work-items/{key}/plan-approval` — which an operator's
+ *     `motir auto --auto-approve-replan` drives. It is NOT an MCP tool,
+ *     deliberately (`docs/decisions/run-findings-protocol.md` Q2), so the
  *     sentence above stays correct about this map and wrong only about the API
  *     as a whole. `declinePlan` remains unreachable by any token.
+ *
+ *     ⚠️ AMENDED AGAIN 2026-08-20 (MOTIR-3188), and the two amendments met at a
+ *     merge. The 3021 note said that entrance is "gated by this same key". It is
+ *     not any more: the plan DECISIONS moved to `ai:decide_plan`, so the route
+ *     declares that one and this legacy map cannot confer it at all — no legacy
+ *     scope expands to a key no MCP tool asserts. So a legacy token's reach over
+ *     approval is now zero by CONSTRUCTION rather than by the absence of a
+ *     route, which is the stronger of the two reasons and survives the next
+ *     entrance somebody adds. What a legacy `work_items:write` still confers is
+ *     `ai:view_plan`, i.e. plan AUTHORING and nothing else.
  *   * `work_items:archive` / `work_items:delete` — both archive and delete
  *     assert `work_item:delete`, so the old two-scope split has no counterpart
  *     in the gates.

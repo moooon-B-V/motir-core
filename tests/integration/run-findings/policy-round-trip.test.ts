@@ -69,7 +69,16 @@ async function makeCard(caller: V1ProjectCaller, title: string) {
   );
 }
 
-const OPERATOR = ['project:browse', 'work_item:edit', 'ai:plan', 'ai:view_plan'] as const;
+const OPERATOR = [
+  'project:browse',
+  'work_item:edit',
+  'ai:plan',
+  'ai:view_plan',
+  // MOTIR-3188 — approval moved to `ai:decide_plan` when that key was split out
+  // of `ai:view_plan`. The operator holds BOTH: their agent authors the plan and
+  // their loop decides it.
+  'ai:decide_plan',
+] as const;
 
 describe('the findings policy round-trips from a CLI FLAG to the PROMPT TEXT', () => {
   beforeEach(async () => {

@@ -428,8 +428,12 @@
       "description": "Submit a planning job that spends the workspace’s AI credits and proposes plan changes."
     },
     "ai_view_plan": {
-      "label": "View AI plans",
-      "description": "Open a generated plan and read its proposals."
+      "label": "Author AI plans",
+      "description": "Add proposals to a generated plan and close it for review. Reading a plan needs only project access."
+    },
+    "ai_decide_plan": {
+      "label": "Approve or decline AI plans",
+      "description": "Turn a plan’s proposals into real work items, or end the plan without creating any."
     }
   },
   "localeToggle": {

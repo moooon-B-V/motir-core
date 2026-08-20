@@ -37,6 +37,7 @@ import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/op
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { plansService } from '@/lib/services/plansService';
+import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { v1RouteFiles } from '../../helpers/v1RouteAudit';
@@ -263,8 +264,45 @@ describe('every operation’s REAL response validates against its declared schem
   beforeAll(async () => {
     await truncateAuthTables();
     resetRateLimitStore();
+    // The legacy five, PLUS the one key no legacy scope can confer.
+    //
+    // ⚠️ THE `permissions` ARM IS WHY THIS IS SPELLED OUT (MOTIR-3188). The
+    // fixture's `scopes` arm expands through `LEGACY_SCOPE_PERMISSIONS`, and the
+    // whole point of driving the suite that way is that it exercises the
+    // compatibility promise on every run. But `approveWorkItemPlan` is gated by
+    // `ai:decide_plan`, which NO legacy scope expands to — deliberately: that key
+    // gates plan APPROVAL, whose only token entrance was created in 2026, long
+    // after those six strings stopped being written, and a legacy row may never
+    // WIDEN access (`docs/decisions/token-permissions.md` §5, amended).
+    //
+    // So the caller is expressed in the modern vocabulary: the legacy five
+    // expanded through the shipped map — so the compatibility path is still
+    // exercised and every other operation's grant is byte-identical to before —
+    // plus the one key added by name. Handing it `DEFAULT_TOKEN_GRANT` instead
+    // would have been shorter and wrong: that set omits `work_item:delete`, which
+    // `work_items:archive` confers and this suite's archive/delete operations
+    // need.
+    //
+    // ⚠️ AND THE PREVIOUS GREEN WAS ITSELF THE BUG. Until this change the route
+    // was gated on `ai:view_plan`, which `work_items:write` DOES expand to — so a
+    // legacy-scoped token could approve a proposed subtree into somebody's tree,
+    // and this guard passed because of it. The 403 that replaced it is the fix
+    // reporting itself.
     caller = await createV1ProjectCaller({
-      scopes: ['read', 'work_items:write', 'work_items:archive', 'sprints:write', 'integration'],
+      permissions: [
+        ...new Set(
+          (
+            [
+              'read',
+              'work_items:write',
+              'work_items:archive',
+              'sprints:write',
+              'integration',
+            ] as const
+          ).flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]),
+        ),
+        'ai:decide_plan',
+      ],
     });
     const pk = caller.projectKey;
 

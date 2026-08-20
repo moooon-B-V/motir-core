@@ -60,19 +60,31 @@ export const DESIGN_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
  * Permissions reachable ONLY through `/api/v1` — i.e. asserted by some v1
  * operation and by no MCP tool and not by the publish route.
  *
- * **Empty today, and that is a measured fact, not an assumption**: every one of
- * the 40 declarations names a key that {@link TOOL_PERMISSIONS} already carries.
- * It exists as the extension point so a future v1-only operation widens the
- * grantable set HERE, with a reason, instead of silently failing the derivation
- * guard — `tests/tokens/grant.test.ts` asserts the v1 declarations are a subset
- * of {@link GRANTABLE_PERMISSIONS} and will name the offender if one appears.
+ * **No longer empty (MOTIR-3188), and the extension point worked exactly as it
+ * was built to.** It held zero entries for as long as every v1 declaration named
+ * a key {@link TOOL_PERMISSIONS} already carried. `ai:decide_plan` is the first
+ * key that does not: it gates `approvePlan` / `declinePlan`, neither of which is
+ * an MCP tool, and `POST /api/v1/work-items/{key}/plan-approval` (MOTIR-3021 —
+ * the bounded entrance `motir auto --auto-approve-replan` drives) is the ONE
+ * operation any token can reach it through.
+ *
+ * ⚠️ ITS ABSENCE WOULD HAVE FAILED LOUDLY, WHICH IS THE POINT — the guard in
+ * `tests/tokens/grant.test.ts` asserts the v1 declarations are a subset of
+ * {@link GRANTABLE_PERMISSIONS} and names the offender. The two cards' own
+ * records predicted this exact pairing before either merged
+ * (`docs/decisions/agent-authored-plans.md` AMENDMENT 5): whichever landed
+ * second owed the route AND this entry, and doing one without the other is a red
+ * build rather than a silently unusable operation.
+ *
+ * `declinePlan` gains nothing from this. It has no v1 entrance and no tool, so
+ * the key is grantable because of approval alone.
  *
  * `lib/api/v1/**` is deliberately NOT imported to compute this: those modules
  * pull in Zod and every request/response schema, and this module is consumed by
  * the create-token modal in the browser. The guard closes that seam at test
  * time; the import would open it at bundle time.
  */
-export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = [];
+export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = ['ai:decide_plan'];
 
 /**
  * The permissions a token may be granted — DERIVED, never hand-listed.

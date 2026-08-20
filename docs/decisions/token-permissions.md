@@ -218,6 +218,24 @@ The union of the six equals the set the pre-change default grant conferred plus
 `work_item:delete` — i.e. everything — and a test checks that rather than
 asserting it.
 
+> ⚠️ **AMENDED 2026-08-20 (MOTIR-3188): "everything" now has exactly one
+> exclusion, and it is the rule working rather than a gap.** The union of the six
+> is everything the six's OPERATIONS could reach — which was the whole grantable
+> set until a key arrived for an operation that postdates these strings.
+> `ai:decide_plan` gates plan APPROVAL, whose only token entrance
+> (`POST /api/v1/work-items/{key}/plan-approval`) MOTIR-3021 created in 2026. No
+> legacy scope expands to it, because a legacy row is stale data and stale data
+> may never WIDEN access — the same posture `expandStoredValue`'s third arm takes
+> for a value it cannot interpret at all.
+>
+> **And the split is what kept it from widening.** `work_items:write` expands to
+> `ai:view_plan`, and for the hours between MOTIR-3021 merging and MOTIR-3188
+> landing, that key gated plan approval — so a token carrying a legacy string
+> could have approved a proposed subtree into somebody's tree. Nobody planned that
+> and nobody would have noticed it; separating DECIDE from AUTHOR removed it as a
+> side effect. `tests/tokens/grant.test.ts` pins the exclusion by name so the next
+> reader meets it as a decision instead of an anomaly.
+
 **⚠️ ONE pair does not preserve exactly, and the direction is stated here.**
 `integration` and `work_items:write` both expand through `work_item:edit`,
 because `markIntegrated` and `completeSession` reach
