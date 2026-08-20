@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
@@ -36,6 +38,22 @@ import {
 
 const ROOT = process.cwd();
 const REAL_NOTES = join(ROOT, 'design/work-items/design-notes.md');
+
+// ⚠️ EVERY `main` TEST DECLARES ITS DIFF BASE, for two reasons (MOTIR-3213).
+//
+// 1. A publish now requires a TRUSTED base. These tests pass a
+//    `DESIGN_BASE_SHA` that is not a real revision, so the default resolver
+//    walks all three rungs and lands on `event-base` — from which `main`
+//    correctly refuses to publish. What they are about is the note loop and the
+//    publish call, not base resolution, so they should say so.
+// 2. The default resolver runs REAL git in `process.cwd()`, and in the
+//    `design-guards` job that is a genuinely SHALLOW checkout of the whole
+//    repository — so an un-injected test makes a NETWORK FETCH against
+//    `motir-core` from inside the suite. That is how this block came to exist:
+//    one such test took 104 s in CI and timed out. A unit test must not reach
+//    the network, and a spec that resolves a base for real belongs in the
+//    fixture block below, where the repository is one it built itself.
+const TRUSTED_BASE = ({ base }: { base: string }) => ({ base, source: 'merge-parent' as const });
 
 describe('parseWorkItemKey / resolveTargetKey', () => {
   it('reads a key out of a branch ref or a PR title', () => {
@@ -177,6 +195,219 @@ describe('resolveDiffBase — the PR measures from where IT diverged (MOTIR-3104
       throw new Error('fatal: bad revision');
     });
     expect(resolveDiffBase({ base: 'eventBase', git, cwd: ROOT }).source).toBe('event-base');
+  });
+});
+
+describe('resolveDiffBase in a REAL depth-1 clone (MOTIR-3213)', () => {
+  // ⚠️ WHY THIS SPEC BUILDS REPOSITORIES INSTEAD OF INJECTING A `git` MOCK, and
+  // why the neighbouring describe's mocks are not enough. MOTIR-3104's rung 1
+  // reads HEAD's parent list and was documented as "safe in the depth-1 clone
+  // this job runs in", because reading a commit's own parents needs no ancestry
+  // walk. That is true of git and false of a SHALLOW git: a shallow clone GRAFTS
+  // its boundary commits, and a grafted commit reports NO parents at all. So
+  // `rev-list --parents -n 1 HEAD` returns one field where a full clone returns
+  // three, rung 1 could not fire in the only environment it existed for, and
+  // every `pull_request` run fell through to the `event-base` behaviour the fix
+  // replaced — publishing another card's design under a green check.
+  //
+  // A mocked `git` cannot tell the two apart, because the mock is where the
+  // three fields come from. Neither can a test run in this repository's own
+  // checkout, which is not shallow. The only assertion that distinguishes an
+  // inert rung from a working one is one made against a real shallow clone, so
+  // that is what these build.
+
+  const TMP: string[] = [];
+
+  afterAll(() => {
+    for (const dir of TMP) rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** Run git in `cwd`, with an identity so a bare CI runner can commit. */
+  const g = (args: string[], cwd: string) =>
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=T',
+        '-c',
+        'user.email=t@example.com',
+        '-c',
+        'commit.gpgsign=false',
+        ...args,
+      ],
+      { cwd, encoding: 'utf8' },
+    );
+
+  /**
+   * The exact shape a `pull_request` run sees, built for real:
+   *
+   *   c0 ─────────────── other card's design ─── M   ← main, and HEAD
+   *    └── this PR's commit ──────────────────────┘
+   *
+   * `eventBase` is c0 — `github.event.pull_request.base.sha`, the base tip when
+   * the event was snapshotted, i.e. BEFORE the other card's design merged. HEAD
+   * is GitHub's merge commit M, whose first parent already contains that design.
+   * So a diff from `eventBase` reports the other card's files as this PR's, and
+   * a diff from parent 1 reports only what this branch did — which is the whole
+   * distinction, and it is invisible until the clone is shallow.
+   *
+   * Returns the SHALLOW clone, fetched exactly as `ci.yml`'s step fetches.
+   */
+  function shallowPullRequestFixture({ branchTouchesDesign }: { branchTouchesDesign: boolean }) {
+    const root = mkdtempSync(join(tmpdir(), 'design-shallow-'));
+    TMP.push(root);
+    const src = join(root, 'src');
+    mkdirSync(join(src, 'design/work-items'), { recursive: true });
+    g(['init', '-q', '-b', 'main', '.'], src);
+    writeFileSync(join(src, 'design/work-items/design-notes.md'), '## Detail\n\nthe card page\n');
+    g(['add', '-A'], src);
+    g(['commit', '-qm', 'c0'], src);
+    const eventBase = g(['rev-parse', 'HEAD'], src).trim();
+
+    g(['checkout', '-q', '-b', 'feat'], src);
+    if (branchTouchesDesign) {
+      writeFileSync(join(src, 'design/work-items/detail.mock.html'), '<main>mine</main>\n');
+    } else {
+      writeFileSync(join(src, 'app.ts'), 'export const x = 1;\n');
+    }
+    g(['add', '-A'], src);
+    g(['commit', '-qm', 'this PR'], src);
+    const prHead = g(['rev-parse', 'HEAD'], src).trim();
+
+    // The base branch moves on: ANOTHER card's design merges to `main`.
+    g(['checkout', '-q', 'main'], src);
+    mkdirSync(join(src, 'design/ai-chat'), { recursive: true });
+    writeFileSync(join(src, 'design/ai-chat/design-notes.md'), '## Callout\n\nthe orb\n');
+    writeFileSync(join(src, 'design/ai-chat/ai-callout-menu.png'), 'png-bytes');
+    g(['add', '-A'], src);
+    g(['commit', '-qm', "another card's design"], src);
+    const parent1 = g(['rev-parse', 'HEAD'], src).trim();
+
+    g(['merge', '-q', '--no-ff', prHead, '-m', 'Merge pull request'], src);
+
+    const clone = join(root, 'clone');
+    execFileSync('git', ['clone', '-q', '--depth=1', `file://${src}`, clone], { encoding: 'utf8' });
+    // `ci.yml` fetches the base OBJECT and nothing else — the fetch this whole
+    // defect hides behind, reproduced rather than described.
+    g(['fetch', '-q', '--depth=1', 'origin', eventBase], clone);
+    return { clone, eventBase, parent1 };
+  }
+
+  it('is genuinely shallow, and the graft HIDES the parents rung 1 reads', () => {
+    const { clone } = shallowPullRequestFixture({ branchTouchesDesign: false });
+
+    // The precondition, asserted rather than assumed — without it the test below
+    // would pass just as well in a full clone and prove nothing.
+    expect(g(['rev-parse', '--is-shallow-repository'], clone).trim()).toBe('true');
+    expect(g(['rev-list', '--parents', '-n', '1', 'HEAD'], clone).trim().split(/\s+/)).toHaveLength(
+      1,
+    );
+  });
+
+  it('reaches rung 1 anyway — it buys the parents it needs and returns merge-parent', () => {
+    const { clone, eventBase, parent1 } = shallowPullRequestFixture({ branchTouchesDesign: false });
+
+    expect(resolveDiffBase({ base: eventBase, cwd: clone })).toEqual({
+      base: parent1,
+      source: 'merge-parent',
+    });
+  });
+
+  it('END TO END: a PR that changed no file under design/** publishes NOTHING', async () => {
+    // AC3, and the property this card's own reporting branch violated: the run
+    // that filed MOTIR-3213 was a pure `/api/v1` card whose diff touched zero
+    // `design/**` files, and it published three of MOTIR-3183's artifacts.
+    const { clone, eventBase } = shallowPullRequestFixture({ branchTouchesDesign: false });
+    const log = { lines: [] as string[], log: (m: string) => log.lines.push(m) };
+    const publish = vi.fn();
+
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: eventBase,
+        DESIGN_PR_REF: 'subtask/MOTIR-3049-scope-claim',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      {
+        resolveBase: (a: { base: string }) => resolveDiffBase({ ...a, cwd: clone }),
+        collect: (a: { base: string }) => collectChangedDesignFiles({ ...a, cwd: clone }),
+        extractNote: (a: { notePath: string; base: string }) =>
+          extractChangedNoteSections({ ...a, cwd: clone }),
+        publish,
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(publish).not.toHaveBeenCalled();
+    expect(log.lines.join(' ')).toContain('Nothing to publish');
+  });
+
+  it('END TO END: a PR that DID change a design file publishes that file and not the base branch’s', async () => {
+    // The other direction, so the fix cannot be "publish nothing, ever". The
+    // base branch's `design/ai-chat/**` moved in the same window and must not
+    // appear; the branch's own mock must.
+    const { clone, eventBase } = shallowPullRequestFixture({ branchTouchesDesign: true });
+    const log = { lines: [] as string[], log: (m: string) => log.lines.push(m) };
+    const publish = vi.fn(async (_args: Record<string, unknown>) => ({ id: 'ev-3213' }));
+
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: eventBase,
+        DESIGN_PR_REF: 'design/MOTIR-2669-panel',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      {
+        resolveBase: (a: { base: string }) => resolveDiffBase({ ...a, cwd: clone }),
+        collect: (a: { base: string }) => collectChangedDesignFiles({ ...a, cwd: clone }),
+        extractNote: (a: { notePath: string; base: string }) =>
+          extractChangedNoteSections({ ...a, cwd: clone }),
+        publish,
+      },
+    );
+
+    expect(code).toBe(0);
+    const call = publish.mock.calls[0]![0] as unknown as {
+      assets: Array<{ sourcePath: string }>;
+    };
+    expect(call.assets.map((a) => a.sourcePath)).toEqual(['design/work-items/detail.mock.html']);
+  });
+
+  it('an UNTRUSTED base publishes nothing and goes RED, naming what it refused', async () => {
+    // AC2. Before this the run WARNED and published anyway, which is how a real
+    // evidence id landed on a stranger's card under a green check. The assets
+    // here are the base branch's — exactly what the old path would have sent.
+    const { clone, eventBase } = shallowPullRequestFixture({ branchTouchesDesign: false });
+    const log = { lines: [] as string[], log: (m: string) => log.lines.push(m) };
+    const publish = vi.fn();
+
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: eventBase,
+        DESIGN_PR_REF: 'subtask/MOTIR-3049-scope-claim',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      {
+        // The deepen failing is the one way `event-base` is still reachable —
+        // no reachable remote, or a server that will not serve the parents.
+        resolveBase: ({ base }: { base: string }) => ({ base, source: 'event-base' }),
+        collect: (a: { base: string }) => collectChangedDesignFiles({ ...a, cwd: clone }),
+        extractNote: (a: { notePath: string; base: string }) =>
+          extractChangedNoteSections({ ...a, cwd: clone }),
+        publish,
+      },
+    );
+
+    expect(code).toBe(1);
+    expect(publish).not.toHaveBeenCalled();
+    const said = log.lines.join('\n');
+    expect(said).toContain('Refusing to publish from an untrusted diff base');
+    // It names the card it would have written to and the bytes it would have
+    // sent — the operator should not have to re-run anything to see the damage
+    // that did not happen.
+    expect(said).toContain('MOTIR-3049');
+    expect(said).toContain('design/ai-chat/ai-callout-menu.png');
   });
 });
 
@@ -636,6 +867,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main({ DESIGN_BASE_SHA: 'base' }, log as never, {
       collect: () => ({ assets: [], notes: [], ignored: [], deleted: [] }),
       publish,
+      resolveBase: TRUSTED_BASE,
     });
 
     expect(code).toBe(0);
@@ -649,6 +881,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main({ DESIGN_BASE_SHA: 'base' }, log as never, {
       collect: () => oneMock,
       publish,
+      resolveBase: TRUSTED_BASE,
     });
 
     expect(code).toBe(0);
@@ -681,7 +914,12 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
         MOTIR_UPLOAD_TOKEN: 'pat',
       },
       log as never,
-      { collect: () => oneMock, publish, attribute: () => emptyAttribution },
+      {
+        collect: () => oneMock,
+        publish,
+        attribute: () => emptyAttribution,
+        resolveBase: TRUSTED_BASE,
+      },
     );
 
     expect(code).toBe(0);
@@ -723,6 +961,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
           deleted: [],
         }),
         publish,
+        resolveBase: TRUSTED_BASE,
         attribute: () => ({
           byPath: new Map([
             ['design/a/x.mock.html', 'MOTIR-11'],
@@ -776,6 +1015,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
         }),
         extractNote: () => ({ noteMd: '## A\nbody', reason: 'ok', sections: 1 }),
         publish,
+        resolveBase: TRUSTED_BASE,
         attribute: () => ({
           byPath: new Map([
             ['design/a/x.mock.html', 'CONT-9'],
@@ -824,6 +1064,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
       {
         collect: () => oneMock,
         publish,
+        resolveBase: TRUSTED_BASE,
         attribute: () => ({
           byPath: new Map([['design/a/x.mock.html', 'MOTIR-3147']]),
           coTouched: new Map(),
@@ -848,6 +1089,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
       {
         collect: () => oneMock,
         publish,
+        resolveBase: TRUSTED_BASE,
         attribute: () => {
           throw new Error("fatal: bad revision 'base..HEAD'");
         },
@@ -867,7 +1109,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
       main(
         { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x', MOTIR_UPLOAD_TOKEN: 'pat' },
         log as never,
-        { collect: () => oneMock, publish },
+        { collect: () => oneMock, publish, resolveBase: TRUSTED_BASE },
       ),
     ).rejects.toThrow(/upstream is down/);
   });
@@ -878,7 +1120,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     const code = await main(
       { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'design/MOTIR-1-x' },
       log as never,
-      { collect: () => oneMock, requestOidc: async () => null, publish },
+      { collect: () => oneMock, requestOidc: async () => null, publish, resolveBase: TRUSTED_BASE },
     );
 
     expect(code).toBe(0);
@@ -904,6 +1146,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
         extractNote: () => ({ noteMd: '## X\n\nbody', reason: 'ok', sections: 1 }),
         requestOidc: async () => 'oidc-jwt',
         publish,
+        resolveBase: TRUSTED_BASE,
       },
     );
 
@@ -945,6 +1188,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
             : { noteMd: '## Mono\n\nbody', reason: 'ok', sections: 7 },
         requestOidc: async () => null,
         publish,
+        resolveBase: TRUSTED_BASE,
       },
     );
 
@@ -979,6 +1223,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
             : { noteMd: null, reason: 'above-first-section', sections: 0 },
         requestOidc: async () => null,
         publish,
+        resolveBase: TRUSTED_BASE,
       },
     );
 
@@ -1000,6 +1245,7 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
         extractNote: () => ({ noteMd: null, reason: 'above-first-section', sections: 0 }),
         requestOidc: async () => null,
         publish,
+        resolveBase: TRUSTED_BASE,
       },
     );
 

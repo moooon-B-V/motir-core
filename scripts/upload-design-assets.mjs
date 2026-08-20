@@ -34,10 +34,17 @@
 //     attached to none: it makes another card look designed when it is not, and
 //     the design gate that reads it would pass on a lie.
 //
+// ⚠️ AND ONE WAY IT EXITS NON-ZERO WITHOUT PUBLISHING (MOTIR-3213): an UNTRUSTED
+//   DIFF BASE. When `resolveDiffBase` can only offer the event's base snapshot,
+//   the collected assets are not known to be this PR's — so the run refuses,
+//   loudly, instead of warning and publishing. That is a THIRD meaning for red,
+//   and it is the one the line below did not have room for.
+//
 // Everything else that goes wrong is a real failure and exits non-zero. There is
 // no `continue-on-error` on the step (MOTIR-2499 removed one from the acceptance
 // publish after it reported success for days while receipts were being lost), so
-// red here means exactly one thing: a publish that should have happened did not.
+// red here means one of exactly two things: a publish that should have happened
+// did not, or a publish that should NOT have happened was refused.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -209,7 +216,31 @@ export function partitionAssetsByCard({ assets, byPath }) {
 }
 
 /**
- * The commit the PR's changes should be measured FROM (MOTIR-3104).
+ * Is this checkout SHALLOW — i.e. does it carry grafted commits whose recorded
+ * parents are hidden? `git rev-parse --is-shallow-repository` prints `true` /
+ * `false`; anything else (an ancient git, an unreadable repo) is treated as NOT
+ * shallow, because the only thing this answer gates is an optional extra fetch.
+ */
+export function isShallowRepository(git = runGit, cwd = process.cwd()) {
+  try {
+    return git(['rev-parse', '--is-shallow-repository'], cwd).trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** HEAD's `<commit> <parent…>` fields, or `[]` when HEAD is unreadable. */
+function headParents(git, cwd) {
+  try {
+    return git(['rev-list', '--parents', '-n', '1', 'HEAD'], cwd).trim().split(/\s+/);
+  } catch {
+    // An unreadable HEAD is the caller's problem, not this one's.
+    return [];
+  }
+}
+
+/**
+ * The commit the PR's changes should be measured FROM (MOTIR-3104, MOTIR-3213).
  *
  * ⚠️ NOT `DESIGN_BASE_SHA` directly, and the difference is a whole class of bug.
  * `github.event.pull_request.base.sha` is the base branch's tip when the EVENT
@@ -228,26 +259,70 @@ export function partitionAssetsByCard({ assets, byPath }) {
  *   1. **The merge commit's FIRST PARENT.** On a `pull_request` checkout HEAD is
  *      GitHub's merge commit: parent 1 is the base tip it was merged with,
  *      parent 2 is the PR head. Diffing parent 1 → HEAD asks exactly "what did
- *      this branch change", needs no ancestry, and is therefore safe in the
- *      depth-1 clone this job runs in — where `merge-base` may have no common
- *      history to walk.
+ *      this branch change" and needs no ancestry walk.
  *   2. **`git merge-base <base> HEAD`**, for a non-merge checkout deep enough to
  *      compute one (a local run, a `push` event with history).
- *   3. **The supplied base**, the pre-MOTIR-3104 behaviour, with the caveat
- *      LOGGED rather than silent — so a surprising publish set has a stated
- *      reason in the job output instead of looking authoritative.
+ *   3. **The supplied base**, the pre-MOTIR-3104 behaviour — reported as
+ *      UNTRUSTED, and since MOTIR-3213 a base that publishes nothing rather than
+ *      one that publishes with a warning. See `main`.
+ *
+ * ⚠️ RUNG 1 HAS TO BUY ITS OWN PRECONDITION — a shallow clone HIDES the parents
+ * (MOTIR-3213). This function's first version claimed rung 1 was "safe in the
+ * depth-1 clone this job runs in", reasoning that reading a commit's own parent
+ * list needs no ancestry. The reasoning is sound and the premise is false: a
+ * shallow clone GRAFTS its boundary commits, and a grafted commit reports **no
+ * parents at all**. So `rev-list --parents -n 1 HEAD` returns ONE field where a
+ * full clone returns three, rung 1 could not fire in the only environment it was
+ * written for, and every `pull_request` run fell through rungs 2 and 3 to exactly
+ * the behaviour MOTIR-3104 existed to replace. Measured, in a depth-1 clone of a
+ * merge commit:
+ *
+ *     git rev-list --parents -n 1 HEAD          →  <sha>                      1 field
+ *     git fetch --depth=2 --no-tags origin <sha>
+ *     git rev-list --parents -n 1 HEAD          →  <sha> <parent1> <parent2>  3 fields
+ *
+ * Fetching HEAD's own sha at `--depth=2` moves the shallow boundary one commit
+ * outward for that commit alone, which materializes both parents AND their trees
+ * — enough for the diff, at a bounded cost, paid only when the clone is actually
+ * shallow and HEAD actually looks grafted. See the body for why this is not
+ * `--deepen=1`.
+ * It is done HERE rather than in `ci.yml` so the property holds for any caller in
+ * a shallow checkout, and so a test can assert it against a real shallow clone —
+ * a full-clone test cannot tell an inert rung from a working one, which is why
+ * this went unnoticed for the whole life of the fix.
  *
  * @param {{ base: string, git?: (args: string[], cwd?: string) => string, cwd?: string }} args
  * @returns {{ base: string, source: 'merge-parent' | 'merge-base' | 'event-base' }}
  */
 export function resolveDiffBase({ base, git = runGit, cwd = process.cwd() }) {
-  try {
-    const parents = git(['rev-list', '--parents', '-n', '1', 'HEAD'], cwd).trim().split(/\s+/);
-    // `<commit> <parent1> <parent2>` — three fields means HEAD is a merge.
-    if (parents.length === 3 && parents[1]) return { base: parents[1], source: 'merge-parent' };
-  } catch {
-    // Fall through — an unreadable HEAD is the caller's problem, not this one's.
+  let parents = headParents(git, cwd);
+  // `<commit> <parent1> <parent2>` — three fields means HEAD is a merge. Fewer
+  // than three in a SHALLOW clone is unproven rather than false: deepen by one
+  // and ask again. A full clone has already given its final answer.
+  if (parents.length < 3 && isShallowRepository(git, cwd)) {
+    // ⚠️ ONE BOUNDED FETCH, NAMING HEAD'S OWN SHA — deliberately NOT
+    // `git fetch --deepen=1 origin`. `--deepen` walks the remote's CONFIGURED
+    // REFSPEC, so its cost is a property of the checkout rather than of this
+    // one commit: measured against `motir-core`, it is ~2 s under the
+    // single-branch refspec `actions/checkout` usually leaves, and does not
+    // finish in 100 s under the `+refs/heads/*` refspec it sometimes leaves,
+    // because it deepens EVERY branch. Asking for HEAD's sha at `--depth=2` is
+    // ~2 s under either: it names one commit and takes its parents, and that
+    // is all the diff needs.
+    //
+    // Failure is not an error and is deliberately not retried with a wider
+    // form: a local shallow clone has no reachable remote, and a server that
+    // will not serve the sha leaves us on rung 3 — which since MOTIR-3213
+    // publishes nothing and reddens the step. Degrading to a refused publish is
+    // safe; degrading to an unbounded fetch is not.
+    try {
+      git(['fetch', '--depth=2', '--no-tags', 'origin', parents[0] || 'HEAD'], cwd);
+      parents = headParents(git, cwd);
+    } catch {
+      // Fall through to rung 2, then to the refusal.
+    }
   }
+  if (parents.length === 3 && parents[1]) return { base: parents[1], source: 'merge-parent' };
   try {
     const mergeBase = git(['merge-base', base, 'HEAD'], cwd).trim();
     if (mergeBase) return { base: mergeBase, source: 'merge-base' };
@@ -770,8 +845,9 @@ export async function main(env = process.env, log = console, deps = {}) {
   const { base: diffBase, source: diffBaseSource } = resolveBase({ base: baseSha });
   if (diffBaseSource === 'event-base') {
     log.log(
-      `Could not resolve a merge base; diffing against DESIGN_BASE_SHA directly. ` +
-        `The publish set may include design changes made on the base branch.`,
+      `Could not resolve a trustworthy diff base; DESIGN_BASE_SHA is the base branch's ` +
+        `tip at the EVENT, so a diff against it reports the base branch's own design ` +
+        `changes as this PR's. Nothing will be published from this base — see MOTIR-3213.`,
     );
   }
 
@@ -825,6 +901,31 @@ export async function main(env = process.env, log = console, deps = {}) {
   if (!oidcToken && !patToken) {
     log.log('No OIDC identity and no MOTIR_UPLOAD_TOKEN — publishing is opt-in; skipping.');
     return 0;
+  }
+
+  // ⚠️ FAIL CLOSED ON AN UNTRUSTED BASE (MOTIR-3213). Everything above this line
+  // has decided that a publish WOULD happen: there are assets, a resolvable card
+  // and a credential. If the only base we could get is the event snapshot, those
+  // assets are not known to be this PR's — and the pre-MOTIR-3213 behaviour was
+  // to warn and publish anyway, which is how MOTIR-3183's design landed on
+  // MOTIR-3049 with a real evidence id under a green check. A warning nobody
+  // reads is not a safeguard; a red check on the pull request that caused it is.
+  //
+  // ⚠️ Why HERE and not at the resolve. This is deliberately the LAST gate, after
+  // the three exits that already return 0 — an empty publish set, no resolvable
+  // target, and no credential (a fork PR, which must never fail the build). An
+  // untrusted base only matters when it would otherwise put bytes on a card, so
+  // those runs stay green and only a real mis-publish goes red.
+  if (diffBaseSource === 'event-base') {
+    log.log(
+      `::error::Refusing to publish from an untrusted diff base. ` +
+        `Would have published ${assets.length} artifact(s) to ${targetKey}: ` +
+        `${assets.map((a) => `${a.kind}:${a.sourcePath}`).join(', ')} — but the base is ` +
+        `DESIGN_BASE_SHA (${baseSha}), which cannot distinguish this PR's design changes ` +
+        `from the base branch's. Deepen the checkout so the merge commit's parents are ` +
+        `readable (see resolveDiffBase), then re-run.`,
+    );
+    return 1;
   }
 
   const baseUrl = (env['MOTIR_BASE_URL'] ?? 'https://app.motir.co').replace(/\/$/, '');
