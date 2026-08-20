@@ -132,8 +132,8 @@ describe('the curated overview', () => {
       WORK LOOP COMMANDS:
         next [options]            Dispatch the next ready work item: claim it and
                                   deliver its prompt.
-        run [options] <key>       Dispatch a SPECIFIC work item (e.g. ACME-7), ready
-                                  or forced.
+        run [options] <scope>     Run a scope: one work item, a whole story, or
+                                  \`sprint\` for the active one.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one

@@ -436,13 +436,18 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   },
   {
     path: 'run',
-    signature: '<key>',
-    description: 'Dispatch a SPECIFIC work item (e.g. ACME-7), ready or forced.',
+    // A SCOPE, not a key (`docs/decisions/scoped-run-command-surface.md`): a
+    // work-item key, or the reserved word `sprint`. Which run it performs is
+    // decided by the target's SHAPE — a leaf dispatches exactly as it always
+    // did, a container with children runs its leaves.
+    signature: '<scope>',
+    description: 'Run a scope: one work item, a whole story, or `sprint` for the active one.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {
         flags: '--print',
-        description: 'Print the prompt to stdout instead of launching an agent (default).',
+        description:
+          'Print the prompt to stdout instead of launching an agent (default). One work item only.',
       },
       {
         flags: '--agent <cmd>',
@@ -450,7 +455,8 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--force',
-        description: 'Dispatch even though the item is not ready (dependencies unmet).',
+        description:
+          'Dispatch even though the item is not ready (dependencies unmet). One work item only.',
       },
       {
         flags: '--disable-log-bug',
@@ -476,6 +482,31 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--auto-approve-replan',
         description:
           'Not supported — approving a submitted re-plan and continuing is a `motir auto` flag.',
+      },
+      // ── The SCOPE flags (MOTIR-3198) ──────────────────────────────────────
+      // Spelled and described to match `auto`'s entries word for word wherever
+      // the meaning is identical, so the published table never describes one
+      // behaviour two ways.
+      {
+        flags: '--max <n>',
+        description: 'Stop after dispatching n work items from the scope.',
+      },
+      {
+        flags: '--keep-going',
+        description: 'Continue past a failed agent instead of halting on the first one.',
+      },
+      {
+        flags: '--include-planning',
+        description:
+          'Trigger an AI expansion for an unexpanded story instead of refusing it. Never waits: the plan needs your approval.',
+      },
+      // Registered in order to be REFUSED, like `--auto-approve-replan` above:
+      // the claim is all-or-nothing over the whole scope, so a filtered run
+      // would hold cards it never worked.
+      {
+        flags: '--kinds <list>',
+        description:
+          'Not supported — a scoped run drains the whole claimed set, not a filtered subset.',
       },
     ],
   },

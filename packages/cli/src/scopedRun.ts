@@ -1,0 +1,279 @@
+import { formatTable, truncate } from './render.js';
+import type { DispatchItem, ScopeClaim } from './client.js';
+
+// The PURE half of the SCOPED run (Story MOTIR-3001 · MOTIR-3198): what a scope
+// argument MEANS, what each typed claim outcome says to a person, and what the
+// run exits with — with no request, no spawn, no git and no stdout. The I/O half
+// lives in `commands/scope.ts`.
+//
+// The split is the one `autoLoop.ts` and `batchPlan.ts` already keep from their
+// command files, and it is worth the file here for the same reason: the
+// interesting behaviour of this card is a six-way branch over a typed result,
+// and a six-way branch tested through a scripted HTTP client is a six-way branch
+// tested badly.
+//
+// ── The surface this file implements is DECIDED, not invented ───────────────
+// `docs/decisions/scoped-run-command-surface.md` settles the verb, the
+// positional, the reserved word, the flag dispositions and the refusal copy.
+// Where this file quotes a message, that ADR is where the wording comes from and
+// where it should be changed.
+
+/** The reserved positional that names the project's ACTIVE sprint. */
+export const SCOPE_SPRINT = 'sprint';
+
+/** What `motir run <scope>` was pointed at. */
+export type ScopeTarget =
+  /** The literal word `sprint` — the project's ACTIVE sprint. */
+  | { kind: 'sprint' }
+  /** A `MOTIR-<n>` work-item key, still unresolved: whether it is a leaf, a
+   *  container or an epic is a question only the server can answer. */
+  | { kind: 'work_item'; key: string };
+
+/**
+ * Read the positional.
+ *
+ * ⚠️ THE DISAMBIGUATION IS A LITERAL EQUALITY CHECK, NOT A HEURISTIC. A work
+ * item key is `<PROJECT>-<digits>` — it always carries a hyphen and ends in
+ * digits — and `sprint` carries neither, so there is no overlap to resolve. Even
+ * a project whose key were literally `SPRINT` addresses its cards as `SPRINT-7`,
+ * which is not equal to `sprint`. Anything that is not the reserved word is
+ * passed through as a key and refused downstream if it names nothing; guessing
+ * here would put a second opinion about identifiers in a file that has no
+ * business having one.
+ */
+export function parseScopeArgument(raw: string): ScopeTarget {
+  const trimmed = raw.trim();
+  if (trimmed.toLowerCase() === SCOPE_SPRINT) return { kind: 'sprint' };
+  return { kind: 'work_item', key: trimmed.toUpperCase() };
+}
+
+/**
+ * Whether a target the server has now described is a SCOPE or a single card.
+ *
+ * ⚠️ THE SHAPE DECIDES, NOT THE KIND — with one deliberate exception. The
+ * kind-parent matrix (`lib/issues/parentRules.ts`) permits `story → task →
+ * subtask` and `task → bug`, so a `task` and a `bug` can each be a container. A
+ * rule keyed on kind would run a container `bug` as one card and a childless
+ * `task` as a scope; both are wrong, and "one commit per child" is a total
+ * description of a container's work exactly when no child is itself a container
+ * — which is a statement about shape.
+ *
+ * The exception is an `epic`, refused by KIND before any shape analysis. An epic
+ * groups STORIES, so running one means a multi-story pull request nobody can
+ * review — which contradicts Principle #18 in the same breath as invoking it.
+ */
+export type ScopeShape =
+  /** No children, and not a planning container: today's single-card dispatch. */
+  | { kind: 'leaf' }
+  /** Children, none of which is itself a container: run its leaves. */
+  | { kind: 'scope' }
+  /** An epic — never a run target. */
+  | { kind: 'refuse_epic' }
+  /** A childless `story` / `epic`: a planning item with no work under it. */
+  | { kind: 'refuse_unexpanded' };
+
+const CONTAINER_KINDS = new Set(['epic', 'story']);
+
+export function classifyScopeTarget(item: { kind: string; childCount: number }): ScopeShape {
+  const kind = item.kind.toLowerCase();
+  if (kind === 'epic') return { kind: 'refuse_epic' };
+  if (item.childCount > 0) return { kind: 'scope' };
+  if (CONTAINER_KINDS.has(kind)) return { kind: 'refuse_unexpanded' };
+  return { kind: 'leaf' };
+}
+
+/**
+ * The refusal for an `epic`, quoted from the ADR so the copy has one home.
+ *
+ * Returned as `{ message, hint }` rather than as a string because that is the
+ * shape `CliError` takes, and the hint is the half that tells a person what to
+ * do instead — the difference between a refusal and a wall.
+ */
+export function epicRefusal(key: string): { message: string; hint: string } {
+  return {
+    message: `${key} is an epic — an epic is never a run target.`,
+    hint: `An epic groups stories; run one of its stories instead. \`motir show ${key}\` lists them.`,
+  };
+}
+
+/** The refusal for a childless container — a planning item, not work. */
+export function unexpandedRefusal(key: string): { message: string; hint: string } {
+  return {
+    message: `${key} has no children to run — it is a planning item, not work.`,
+    hint: `Expand it first (\`motir plan ${key}\`), or pass --include-planning to trigger the expansion now.`,
+  };
+}
+
+// ── the typed claim outcomes ────────────────────────────────────────────────
+//
+// ⚠️ EVERY REFUSAL BELOW IS A RESULT, NOT AN ERROR, and each has a DIFFERENT
+// thing for the reader to do. Rendering them as one "claim failed" line throws
+// away precisely the information the endpoint was built to carry — which is why
+// the server answers 200 with an `outcome` instead of a status code in the first
+// place (`app/api/v1/scope-claims/route.ts`).
+
+/** What the run does after a claim attempt. */
+export type ScopeDisposition =
+  /** The run owns the scope — proceed. `mine` lands here too: it is a RESUME. */
+  | 'proceed'
+  /** Stop, and submit a re-plan of the container unless told not to. */
+  | 'replan'
+  /** Stop. Nothing to submit; the answer is elsewhere in the tree. */
+  | 'stop';
+
+export function dispositionOf(outcome: ScopeClaim['outcome']): ScopeDisposition {
+  if (outcome === 'claimed' || outcome === 'mine') return 'proceed';
+  if (outcome === 'wrong_shape') return 'replan';
+  return 'stop';
+}
+
+/**
+ * What a person is told about a claim that did not proceed.
+ *
+ * Each branch names what the SERVER named — the offending card and its holder,
+ * the container child and its depth, the blocking pairs — rather than
+ * paraphrasing them into a generic sentence. A second run against a story the
+ * first one holds is then refused BY NAME rather than by silence, which is the
+ * whole reason `offender` carries a `transitionedBy`: it names a holder even
+ * when a sibling flipped the status without assigning (the MOTIR-2958 shape).
+ */
+export function renderScopeRefusal(claim: ScopeClaim): string {
+  const scope = scopeLabel(claim);
+  switch (claim.outcome) {
+    case 'taken': {
+      const o = claim.offender;
+      const holder = o?.assignee?.name ?? o?.transitionedBy?.name ?? null;
+      return [
+        `${scope}: NOT claimed — a card in it is already held${holder ? ` by ${holder}` : ' by another run'}.`,
+        `  ${o?.key ?? 'a member'} — ${o?.title ?? ''} (at ${o?.status.key ?? 'an unknown status'})`,
+        'Nothing was locked. Two runs on one story is the failure this refusal exists to',
+        'prevent; wait for the other run, or take the card over by hand if you know it is dead.',
+      ].join('\n');
+    }
+    case 'mine':
+      // Not reachable through `renderScopeRefusal` in the command — `mine` is a
+      // RESUME and dispositions to `proceed`. It is answered here anyway so the
+      // function is total over the vocabulary rather than over today's callers.
+      return `${scope}: already yours — resuming.`;
+    case 'not_claimable': {
+      const o = claim.offender;
+      return [
+        `${scope}: NOT claimed — a card in it is past the point a run may start it.`,
+        `  ${o?.key ?? 'a member'} — ${o?.title ?? ''} (at ${o?.status.key ?? 'an unknown status'})`,
+        'A run claims from the TO-DO category only, so a card that is implemented, under',
+        'review, being re-planned or finished is not work an agent may be started on.',
+        'Nothing was locked.',
+      ].join('\n');
+    }
+    case 'wrong_shape': {
+      const s = claim.shape;
+      return [
+        `${scope}: NOT claimed — its shape is not runnable.`,
+        `  ${s?.child ?? 'a child'} — ${s?.childTitle ?? ''} is itself a container;` +
+          ` the work under it sits ${s?.depth ?? 2} levels from the story.`,
+        'A scoped run lands one commit per child, which is only a true description of the',
+        'story when no child is a container of its own. Nothing was locked.',
+      ].join('\n');
+    }
+    case 'not_finishable': {
+      const lines = claim.blockers.map(
+        (b) =>
+          `  ${b.item} is blocked by ${b.blockedBy} (${b.blockerStatus}), which is OUTSIDE the scope`,
+      );
+      return [
+        `${scope}: NOT claimed — it cannot be finished from inside itself.`,
+        ...(lines.length > 0 ? lines : ['  (the validator named no specific pair)']),
+        'A run that took this scope could not finish it, so it did not take it. Finish the',
+        'work above, or pull it into the scope. Nothing was locked.',
+      ].join('\n');
+    }
+    default:
+      return `${scope}: claimed.`;
+  }
+}
+
+/** `MOTIR-42 "Run a whole story"` / `the active sprint "Sprint 44"`. */
+function scopeLabel(claim: ScopeClaim): string {
+  return claim.scope.kind === 'sprint'
+    ? `The active sprint "${claim.scope.name}"`
+    : `${claim.scope.key ?? 'The scope'} "${claim.scope.name}"`;
+}
+
+const CLAIMED_HEADERS = ['ITEM', 'STATUS', 'TITLE'];
+
+/**
+ * The claimed scope, printed as the plan of the run — the moment a person can
+ * still press Ctrl-C.
+ *
+ * ⚠️ THE ORDER IS THE READY RANK, and the container is not in it. `members`
+ * carries every row the claim locked, INCLUDING the container itself and
+ * including leaves that are not ready yet (their blockers are elsewhere in the
+ * same scope, which is exactly why the claim took them). What the run WORKS is
+ * the ready set, in the server's dispatch rank; everything else claimed is
+ * listed after it as work this run also owns but cannot start yet.
+ *
+ * Both halves are shown on purpose. Printing only the ready set would hide the
+ * In-Progress-from-t=0 cost — the cards that now read as in progress on the
+ * board while nothing is happening to them — which is the one consequence of
+ * this design a person has to be told about rather than discover.
+ */
+export function renderClaimedScope(
+  claim: ScopeClaim,
+  ready: readonly DispatchItem[],
+  titleWidth = 44,
+): string {
+  const blocks: string[] = [];
+  const readyKeys = new Set(ready.map((r) => r.key.toUpperCase()));
+  const containerKey = claim.scope.key?.toUpperCase() ?? null;
+  const held = claim.members.filter((m) => m.key.toUpperCase() !== containerKey);
+
+  blocks.push(
+    `Claimed ${scopeLabel(claim)} — ${held.length} card${held.length === 1 ? '' : 's'}, ` +
+      'all of them, or none.',
+  );
+
+  if (ready.length === 0) {
+    blocks.push('Nothing in it is ready to start.');
+  } else {
+    blocks.push(
+      formatTable(
+        CLAIMED_HEADERS,
+        ready.map((r) => [r.key, r.status.key, truncate(r.title ?? '', titleWidth)]),
+      ),
+    );
+  }
+
+  const waiting = held.filter((m) => !readyKeys.has(m.key.toUpperCase()));
+  if (waiting.length > 0) {
+    blocks.push(
+      [
+        `Also claimed, not startable yet (${waiting.length}) — their blockers are inside this scope:`,
+        ...waiting.map((m) => `  ${m.key} — ${truncate(m.title, titleWidth)}`),
+      ].join('\n'),
+    );
+  }
+
+  blocks.push(
+    [
+      '⚠️ Every card above now reads In Progress, while only one is worked at a time.',
+      '   That is the claim, not a bug: "In Progress" here means THIS RUN OWNS IT.',
+    ].join('\n'),
+  );
+  return blocks.join('\n\n');
+}
+
+/**
+ * What a scope with nothing to do is told.
+ *
+ * ⚠️ DISTINGUISHABLE FROM A REFUSAL, and exit 0. A story nobody has decomposed
+ * yet, or one whose every leaf is already in flight, is a PLAN STATE — nothing
+ * went wrong, and a stack trace here would teach an operator that an ordinary
+ * tree is an error.
+ */
+export function renderEmptyScope(label: string): string {
+  return [
+    `${label}: nothing is ready to start.`,
+    'Every card under it is either already in flight, finished, or waiting on work',
+    'outside it. Nothing was claimed and nothing was changed.',
+  ].join('\n');
+}

@@ -12,6 +12,12 @@ import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, workReachedRemote, type CommandRunner } from '../git.js';
 import {
+  claimScopeForRun,
+  refuseLeafOnlyFlag,
+  resolveScopeTarget,
+  type ScopeRunOptions,
+} from './scope.js';
+import {
   agentSubmittedReplan,
   autoOnlyFlagError,
   checkBootstrapCheckout,
@@ -490,7 +496,7 @@ function keyList(entries: { key: string }[]): string {
 
 // ── motir run <key> ─────────────────────────────────────────────────────────
 
-export interface RunOptions extends DeliveryOptions {
+export interface RunOptions extends DeliveryOptions, ScopeRunOptions {
   /** `--force` — dispatch even though the item is not ready. */
   force?: boolean;
 }
@@ -526,7 +532,36 @@ export async function runCommand(
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
     const { client } = session;
-    const detail = await client.getWorkItem(trimmed);
+
+    // ── SCOPE or CARD? The SHAPE decides (MOTIR-3195 / MOTIR-3198) ──────────
+    //
+    // `motir run` takes a SCOPE now: a work-item key, or the reserved word
+    // `sprint`. Which run it performs is decided by what the target turns out to
+    // be — a leaf falls through to everything below, unchanged, byte for byte;
+    // a container with children runs its leaves; an epic and a childless
+    // container are refused, by `resolveScopeTarget`, with the copy the ADR
+    // spells out.
+    //
+    // ⚠️ THIS BRANCH COSTS NOTHING, AND THAT IS LOAD-BEARING.
+    // `resolveScopeTarget` makes the SAME `getWorkItem` read this function
+    // already made as its first act — one line earlier — and HANDS IT BACK on
+    // the leaf arm. Re-reading it here instead would put a second round-trip on
+    // the path every dispatched card takes, to save threading one value.
+    const decision = await resolveScopeTarget(client, trimmed, opts, session.serverUrl);
+    if (decision.action === 'stop') return;
+    if (decision.action === 'scope') {
+      refuseLeafOnlyFlag(opts);
+      const ownerId = await resolveOwnerId(client);
+      await claimScopeForRun(session, decision.target, opts, ownerId);
+      // ⚠️ AND STOP. Working the claimed set — a session branch per repo, one
+      // fresh agent per card, one pull request each — is MOTIR-3199, which is
+      // `blocked_by` this card. Until it lands, a scoped run claims the scope
+      // and prints it, which is exactly the seam `motir batch` draws between its
+      // snapshot and its drain.
+      return;
+    }
+
+    const detail = decision.detail;
     const { item, readiness } = detail;
 
     if (!readiness.ready && !opts.force) {
