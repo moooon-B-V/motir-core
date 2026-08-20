@@ -96,6 +96,29 @@ export async function streamAugmentJob(
   );
 }
 
+/** The ASK stream (MOTIR-1819's relay, consumed by the conversation rail). Same
+ *  SSE shape as `streamAugmentJob` — the same `streamJob` proxy, the same
+ *  terminal `error` frame — over an `ask_project` job.
+ *
+ *  ⚠️ THE STREAM IS NOT THE ANSWER. What lands on the thread is filed by
+ *  `settleAskJob`, which the caller invokes when this settles; a reader who took
+ *  the streamed text as the deliverable would lose it on reload. */
+export async function streamAskJob(
+  jobId: string,
+  signal: AbortSignal,
+  onError: (code: string | null) => void,
+  onDone: () => void,
+  onFrame?: (event: string, data: unknown) => void,
+): Promise<void> {
+  return consumeStream(
+    `/api/ai/ask/${encodeURIComponent(jobId)}/stream`,
+    signal,
+    onError,
+    onDone,
+    onFrame,
+  );
+}
+
 /** The ITEM-ANCHORED stream (7.12.3 · MOTIR-909's relay, consumed by the
  *  MOTIR-910 entrance). Same SSE shape as `streamAugmentJob` — the job IS an
  *  ordinary `augment` — but subscribed through the anchored route, which re-gates

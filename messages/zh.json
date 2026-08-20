@@ -912,6 +912,10 @@
         "plan": {
           "title": "用 AI 规划",
           "description": "生成、扩展或重新规划项目"
+        },
+        "ask": {
+          "title": "询问这个项目",
+          "description": "回答关于计划、文档与工作项的问题"
         }
       }
     }
@@ -5292,7 +5296,7 @@
     "emptyCanvasDescription": "该项目还没有可绘制的工作项。可以手动添加一个，或从路线图开始规划第一版计划。",
     "railLabel": "Motir AI",
     "conversation": {
-      "opener": "想改什么？",
+      "opener": "想改动什么 —— 或者想了解什么？",
       "turn": "第 {n} 轮",
       "turnRefine": "第 {n} 轮 · 细化",
       "turnAnswer": "第 {n} 轮 · 回答",
@@ -5321,14 +5325,17 @@
       "starters": {
         "addWork": "为某个篇章补充工作",
         "resequence": "重新排列剩下的工作",
-        "drop": "去掉不需要的部分"
+        "drop": "去掉不需要的部分",
+        "blocked": "哪些卡被阻塞了，为什么？"
       },
       "progress": {
         "submitted": "正在把对话发送给 Motir AI…",
         "searching": "正在读取你的计划…",
         "drilling": "正在梳理工作项树…",
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
-        "validating": "正在对照你的计划校验提议…"
+        "validating": "正在对照你的计划校验提议…",
+        "reading": "正在理解你的请求……",
+        "redirected": "正在生成方案……"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -5336,7 +5343,8 @@
         "immutable": "其中部分工作项已完成，无法改动。其余内容仍在画布上。",
         "session": "这段对话加载失败。请重试 —— 你的计划没有任何变化。",
         "decided": "这份提议已经处理过了 —— 没有需要再确认的内容，也不会重复写入。",
-        "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。"
+        "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。",
+        "askSilent": "没有得到任何回复。换一种方式提问试试。"
       },
       "diff": {
         "add": "新增",
@@ -5355,7 +5363,14 @@
         },
         "remove": "移除",
         "willRemove": "确认后移除"
-      }
+      },
+      "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
+      "correctToPlan": "改为提出变更",
+      "correctToAsk": "改为回答这个问题",
+      "correcting": "正在重新理解……",
+      "correctedToPlan": "已改按计划变更理解",
+      "correctedToAsk": "已改按提问理解",
+      "handoff": "按计划变更理解 — 正在生成方案"
     },
     "targets": {
       "sectionLabel": "工作项",
@@ -5387,7 +5402,9 @@
       "contextualItem": "已在 {item} 的上下文中打开。",
       "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
       "roadmap": "已从路线图打开。"
-    }
+    },
+    "footerRestingTitle": "路线图 —— 已保存的版本",
+    "footerRestingBody": "暂无提议。这段对话没有改动任何内容。"
   },
   "codeHealth": {
     "title": "代码健康度",

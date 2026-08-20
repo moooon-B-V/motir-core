@@ -77,6 +77,28 @@ const redirected = {
   result: { ask: { intent: 'plan_change', answer: null, citations: [] } },
 };
 
+/**
+ * Put the thread into the WAITING state the composer's answer bar keys off: a
+ * submitted run whose planner turn asked something.
+ *
+ * It goes through the SHIPPED path rather than writing the row directly —
+ * submit (which sets `lastJobId`, the guard `recordPlannerTurn` requires), then
+ * file a planner utterance carrying a question — so the state under test is the
+ * one the product actually produces.
+ */
+async function seedPendingQuestion(question: string): Promise<void> {
+  submitJobMock.mockResolvedValue({ jobId: 'job-augment-q' });
+  await planChangeSessionsService.appendTurn('add payments', activeCtx.current!);
+  await planChangeSessionsService.submit(activeCtx.current!);
+  getJobMock.mockResolvedValue({
+    status: 'succeeded',
+    result: { turn: { message: 'One thing first.', question } },
+  });
+  await planChangeSessionsService.recordPlannerTurn('job-augment-q', activeCtx.current!);
+  submitJobMock.mockClear();
+  submitJobMock.mockResolvedValue({ jobId: 'job-augment-answer' });
+}
+
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
@@ -174,6 +196,65 @@ describe('POST /api/ai/ask — the ONE door', () => {
       intentCorrected: false,
       jobId: 'job-ask-1',
     });
+  });
+
+  it('⭐ an ANSWER to a pending question skips the classifier and RESUMES planning', async () => {
+    // The planner asked something and is blocked on it. A reply is usually a
+    // fragment ("money in") that is neither a question nor a request — so
+    // classifying it lands on `ask` by default, Motir answers it as a project
+    // question, and the run never resumes. The affordance already settled the
+    // disposition; there is nothing to classify.
+    await seedPendingQuestion('in, or out?');
+
+    const res = await ask(askReq({ body: 'money in', isAnswer: true }));
+    const dto = (await res.json()) as { outcome?: string; jobId: string; planId: string };
+
+    expect(dto.outcome).toBe('redirected');
+    // NO ask job was opened — the plan-edit submit ran instead.
+    expect(submitJobMock.mock.calls.map((c) => (c as unknown as [string])[0])).not.toContain(
+      'ask_project',
+    );
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    const reply = thread.turns.filter((t) => t.role === 'user').at(-1)!;
+    // The turn records what actually RAN, and keeps the affordance fact.
+    expect(reply).toMatchObject({ body: 'money in', isAnswer: true, intent: 'plan_change' });
+  });
+
+  it('IGNORES `isAnswer` when the thread is waiting on nothing — the flag alone is not trusted', async () => {
+    // Otherwise this would be a client-supplied intent wearing another name: set
+    // the flag and you would pick the expensive job yourself. The server checks
+    // the THREAD, which is the same derivation the rail uses to decide whether
+    // to show the answer bar at all.
+    const res = await ask(askReq({ body: 'split the billing epic', isAnswer: true }));
+    const dto = (await res.json()) as { outcome?: string };
+
+    expect(dto.outcome).toBeUndefined();
+    expect((submitJobMock.mock.calls[0] as unknown as [string])[0]).toBe('ask_project');
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    // The affordance fact is still recorded — the transcript keeps facts rather
+    // than tidying away one that turned out not to route anything.
+    expect(thread.turns.at(-1)).toMatchObject({ isAnswer: true, intent: 'ask' });
+  });
+
+  it('carries `isAnswer` through — it is an AFFORDANCE record, not an intent', async () => {
+    // ADR §1's wire table is `body, targets?, isAnswer?`, unchanged from the
+    // shipped shape. Dropping `isAnswer` at this door would silently cost the
+    // rail its "Answered — planning resumed" marker on every reply to a planner
+    // question — which is now every reply, since this is the only door.
+    const res = await ask(askReq({ body: 'money in', isAnswer: true }));
+    const dto = (await res.json()) as { turnId: string };
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    expect(thread.turns.at(-1)).toMatchObject({ id: dto.turnId, isAnswer: true, intent: 'ask' });
+  });
+
+  it('defaults `isAnswer` to false — it is opt-in, and never inferred from words', async () => {
+    await ask(askReq({ body: 'why is it blocked?' }));
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    expect(thread.turns.at(-1)!.isAnswer).toBe(false);
   });
 
   it('IGNORES an intent supplied by the client — the mode has no back door', async () => {

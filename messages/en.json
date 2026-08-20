@@ -912,6 +912,10 @@
         "plan": {
           "title": "Plan with AI",
           "description": "Generate, expand or re-plan the project"
+        },
+        "ask": {
+          "title": "Ask about this project",
+          "description": "Answer questions about the plan, docs and work items"
         }
       }
     }
@@ -5296,7 +5300,7 @@
     "emptyCanvasDescription": "This project has no work items to draw. Add one by hand, or plan the first tree from the roadmap.",
     "railLabel": "Motir AI",
     "conversation": {
-      "opener": "What should change?",
+      "opener": "What should change — or what would you like to know?",
       "turn": "turn {n}",
       "turnRefine": "turn {n} · refine",
       "turnAnswer": "turn {n} · answer",
@@ -5325,14 +5329,17 @@
       "starters": {
         "addWork": "Add work to an epic",
         "resequence": "Re-sequence what's left",
-        "drop": "Drop something we don't need"
+        "drop": "Drop something we don't need",
+        "blocked": "What's blocked, and why?"
       },
       "progress": {
         "submitted": "Sending the conversation to Motir AI…",
         "searching": "Reading your plan…",
         "drilling": "Working through the tree…",
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
-        "validating": "Checking the proposal against your plan…"
+        "validating": "Checking the proposal against your plan…",
+        "reading": "Reading your request…",
+        "redirected": "Working on the proposal…"
       },
       "error": {
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
@@ -5340,7 +5347,8 @@
         "immutable": "Some of those work items are already finished, so they can't be changed. The rest is still on the canvas.",
         "session": "This conversation couldn't be loaded. Try again — nothing in your plan has changed.",
         "decided": "This proposal was already decided — nothing was left to confirm, and nothing was written twice.",
-        "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it."
+        "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
+        "askSilent": "Nothing came back. Try asking that a different way."
       },
       "diff": {
         "add": "added",
@@ -5359,7 +5367,14 @@
         },
         "remove": "removed",
         "willRemove": "goes on approve"
-      }
+      },
+      "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
+      "correctToPlan": "Propose changes instead",
+      "correctToAsk": "Answer this instead",
+      "correcting": "Re-reading…",
+      "correctedToPlan": "Re-read as a plan change",
+      "correctedToAsk": "Re-read as a question",
+      "handoff": "Reading it as a plan change — working on the proposal"
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -5391,7 +5406,9 @@
       "contextualItem": "Opened in the context of {item}.",
       "conventionRefine": "Opened to refine {repo}'s coding convention.",
       "roadmap": "Opened from the roadmap."
-    }
+    },
+    "footerRestingTitle": "Roadmap — as saved",
+    "footerRestingBody": "Nothing proposed. The conversation has changed nothing."
   },
   "codeHealth": {
     "title": "Code health",

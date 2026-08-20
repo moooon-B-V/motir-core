@@ -20,7 +20,12 @@ import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 // and `tests/ai/askRoutes.test.ts` asserts that it is not.
 //
 // Two bodies, one door:
-//   { body }                     — a new turn.
+//   { body, isAnswer? }          — a new turn. `isAnswer` is ADR §1's wire field
+//                                  and is NOT an intent: it records which
+//                                  affordance sent the turn (the shipped
+//                                  `isAnswer` precedent), so the thread can say
+//                                  later whether the planner's question was
+//                                  answered or superseded.
 //   { turnId, flip? }            — RE-RUN a turn already on the thread: the retry
 //                                  after a failed submit (`flip` absent) and the
 //                                  correction affordance (`flip: true`). The
@@ -50,7 +55,12 @@ export async function POST(req: Request): Promise<Response> {
   } catch {
     return NextResponse.json({ code: 'BAD_REQUEST', error: 'Invalid JSON body.' }, { status: 400 });
   }
-  const body = raw as { body?: unknown; turnId?: unknown; flip?: unknown };
+  const body = raw as {
+    body?: unknown;
+    turnId?: unknown;
+    flip?: unknown;
+    isAnswer?: unknown;
+  };
 
   try {
     if (typeof body.turnId === 'string' && body.turnId.length > 0) {
@@ -63,7 +73,9 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
-    const result = await aiAskService.submitTurn(body.body, ctx);
+    const result = await aiAskService.submitTurn(body.body, ctx, {
+      isAnswer: body.isAnswer === true,
+    });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     const mapped = mapPlanChangeError(err);

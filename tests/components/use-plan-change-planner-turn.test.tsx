@@ -15,7 +15,20 @@ import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChan
 //   * a turn that ASKED proposes nothing BY DESIGN, so the "nothing came back to
 //     change" error must not fire on the one turn with the most to say.
 
-const { open, append, submit, stream, fetchReview, approve, decline, record } = vi.hoisted(() => ({
+const {
+  open,
+  append,
+  submit,
+  stream,
+  fetchReview,
+  approve,
+  decline,
+  record,
+  submitAsk,
+  rerunAsk,
+  settleAsk,
+  streamAsk,
+} = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
   submit: vi.fn(),
@@ -24,6 +37,10 @@ const { open, append, submit, stream, fetchReview, approve, decline, record } = 
   approve: vi.fn(),
   decline: vi.fn(),
   record: vi.fn(),
+  submitAsk: vi.fn(),
+  rerunAsk: vi.fn(),
+  settleAsk: vi.fn(),
+  streamAsk: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -34,11 +51,19 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   resumeContextualSession: vi.fn(),
   submitContextualPlan: vi.fn(),
   resubmitContextualPlan: vi.fn(),
+  submitAskTurn: submitAsk,
+  rerunAskTurn: rerunAsk,
+  settleAskJob: settleAsk,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/planning/planEditsClient')>();
-  return { ...actual, streamAugmentJob: stream, streamContextualPlanJob: vi.fn() };
+  return {
+    ...actual,
+    streamAugmentJob: stream,
+    streamAskJob: streamAsk,
+    streamContextualPlanJob: vi.fn(),
+  };
 });
 
 vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
@@ -107,6 +132,29 @@ beforeEach(() => {
   record.mockReset();
   record.mockResolvedValue(session([]));
   fetchReview.mockResolvedValue(null);
+  // ── the ASK door (MOTIR-1343) — the project thread's only entrance. The
+  // default settle REDIRECTS, so these suites keep exercising the same
+  // plan-change tail they were written against.
+  submitAsk.mockImplementation(async (body: string) => ({
+    jobId: 'ask-1',
+    turnId: 't0',
+    session: session([turn('user', body)]),
+  }));
+  rerunAsk.mockImplementation(async () => ({
+    jobId: 'ask-2',
+    turnId: 't0',
+    session: session([turn('user', 'add payments')]),
+  }));
+  // `planId: null` mirrors the `submit` default just above: this suite is about
+  // the PLANNER TURN the settle records, not about the proposals a plan read
+  // returns, so it deliberately leaves nothing for the review leg to fetch.
+  settleAsk.mockResolvedValue({
+    outcome: 'redirected',
+    jobId: 'job-1',
+    planId: null,
+    session: session([turn('user', 'add payments')]),
+  });
+  streamAsk.mockImplementation(async () => {});
 });
 
 afterEach(() => {
@@ -216,7 +264,12 @@ describe('the answer flag is derived from the thread the user was looking at', (
 
     // The same derivation the composer used to show the answer bar — so the
     // recorded disposition and the affordance that sent it cannot disagree.
-    expect(append).toHaveBeenCalledWith('money in', expect.anything(), true);
+    // The same derivation the composer used to show the answer bar — so the
+    // recorded disposition and the affordance that sent it cannot disagree. It
+    // rides the ONE DOOR now (ADR §1's wire table lists `isAnswer` on it), which
+    // is why routing the reply through a classifier does not cost the thread its
+    // "Answered — planning resumed" marker.
+    expect(submitAsk).toHaveBeenCalledWith('money in', expect.anything(), true);
   });
 
   it('does NOT flag it when nothing is pending', async () => {
@@ -224,6 +277,6 @@ describe('the answer flag is derived from the thread the user was looking at', (
     await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
     await sendOne(hook);
 
-    expect(append).toHaveBeenCalledWith('add payments', expect.anything(), false);
+    expect(submitAsk).toHaveBeenCalledWith('add payments', expect.anything(), false);
   });
 });

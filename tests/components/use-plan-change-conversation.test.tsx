@@ -22,6 +22,10 @@ const {
   submitAnchored,
   resubmitAnchored,
   streamAnchored,
+  submitAsk,
+  rerunAsk,
+  settleAsk,
+  streamAsk,
 } = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
@@ -34,6 +38,10 @@ const {
   submitAnchored: vi.fn(),
   resubmitAnchored: vi.fn(),
   streamAnchored: vi.fn(),
+  submitAsk: vi.fn(),
+  rerunAsk: vi.fn(),
+  settleAsk: vi.fn(),
+  streamAsk: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -43,6 +51,9 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   resumeContextualSession: resumeAnchored,
   submitContextualPlan: submitAnchored,
   resubmitContextualPlan: resubmitAnchored,
+  submitAskTurn: submitAsk,
+  rerunAskTurn: rerunAsk,
+  settleAskJob: settleAsk,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -51,6 +62,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
     ...actual,
     streamAugmentJob: stream,
     streamContextualPlanJob: streamAnchored,
+    streamAskJob: streamAsk,
   };
 });
 
@@ -170,6 +182,28 @@ beforeEach(() => {
     session: session(['Add recurring invoices.']),
   });
   stream.mockImplementation(okStream());
+  // ── the ASK door (MOTIR-1343), which is now the project thread's ONLY
+  // entrance. The default settle REDIRECTS, because these suites are about the
+  // plan-change flow and a redirect hands off to exactly the tail they assert —
+  // so "what a plan-change turn does" is unchanged by the new door, which is the
+  // property worth holding.
+  submitAsk.mockImplementation(async (body: string) => ({
+    jobId: 'ask-1',
+    turnId: 't0',
+    session: session([body]),
+  }));
+  rerunAsk.mockImplementation(async () => ({
+    jobId: 'ask-2',
+    turnId: 't0',
+    session: session(['Add recurring invoices.']),
+  }));
+  settleAsk.mockResolvedValue({
+    outcome: 'redirected',
+    jobId: 'job-1',
+    planId: 'plan-1',
+    session: session(['Add recurring invoices.']),
+  });
+  streamAsk.mockImplementation(okStream());
   fetchReview.mockResolvedValue(REVIEW);
   approve.mockResolvedValue(MATERIALIZED);
   decline.mockResolvedValue({ ...MATERIALIZED, status: 'declined', items: [] });
@@ -320,25 +354,32 @@ describe('usePlanChangeConversation — a TARGETED turn (MOTIR-1491)', () => {
     });
 
     expect(submitAnchored).not.toHaveBeenCalled();
-    expect(append).toHaveBeenCalledTimes(1);
-    expect(submit).toHaveBeenCalledTimes(1);
+    // The project turn now goes through the ONE DOOR, which appends and submits
+    // server-side; the client's own append is gone with the second entrance.
+    expect(submitAsk).toHaveBeenCalledTimes(1);
+    expect(append).not.toHaveBeenCalled();
   });
 });
 
 describe('usePlanChangeConversation — a turn', () => {
-  it('appends the turn, then submits the ACCUMULATED intent and reviews the PROPOSALS', async () => {
+  it('sends the turn through the ONE DOOR, and a redirect reaches the shipped review', async () => {
     const { result } = await mounted();
 
     await act(async () => {
       await result.current.send('Add recurring invoices.');
     });
 
-    expect(append).toHaveBeenCalledWith('Add recurring invoices.', expect.anything(), false);
-    // The submit takes NO prompt — the server builds it from every turn in order.
-    expect(submit).toHaveBeenCalledTimes(1);
+    // ONE door and no intent on the wire (MOTIR-1343 · ADR §1): the client posts
+    // the text and the `isAnswer` affordance flag, and nothing else.
+    expect(submitAsk).toHaveBeenCalledWith('Add recurring invoices.', expect.anything(), false);
+    expect(append).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    // …and when the door says the turn was a plan change, the run lands in
+    // EXACTLY the shipped review — same job, same proposals, same phase.
     expect(result.current.state.phase).toBe('review');
     expect(result.current.state.review).toEqual(REVIEW);
     expect(result.current.state.jobId).toBe('job-1');
+    expect(result.current.state.planId).toBe('plan-1');
   });
 
   it('ignores an empty turn — nothing is appended and nothing is submitted', async () => {
@@ -348,6 +389,7 @@ describe('usePlanChangeConversation — a turn', () => {
       await result.current.send('   ');
     });
 
+    expect(submitAsk).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
   });
@@ -405,7 +447,9 @@ describe('usePlanChangeConversation — failure is recoverable in place', () => 
   });
 
   it('flags an out-of-credits refusal as GATED, not as an error', async () => {
-    submit.mockRejectedValue(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
+    // The refusal now arrives at the ONE DOOR, which is where the `ai:generate`
+    // ceiling and the credit gate are spent for a project turn.
+    submitAsk.mockRejectedValue(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
     const { result } = await mounted();
 
     await act(async () => {
@@ -416,19 +460,23 @@ describe('usePlanChangeConversation — failure is recoverable in place', () => 
     expect(result.current.state.errorCode).toBeNull();
   });
 
-  it('re-sends the accumulated intent on retry WITHOUT appending a new turn', async () => {
+  it('re-runs the TURN on retry — no second user turn, and no fresh submit', async () => {
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
     });
     append.mockClear();
+    submitAsk.mockClear();
 
     await act(async () => {
       await result.current.retry();
     });
 
+    // A retry re-runs the TURN, naming it — no second `user` turn is appended
+    // and no fresh submit is invented (ADR §3: the person said one thing once).
+    expect(rerunAsk).toHaveBeenCalledWith('t0', {}, expect.anything());
+    expect(submitAsk).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
-    expect(submit).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -637,7 +685,13 @@ describe('usePlanChangeConversation — approve / discard', () => {
   it('does not approve when there is no Plan to address', async () => {
     // The defensive read: a stub / older response carried only a jobId, so there
     // is nothing to confirm — the gate must no-op rather than POST to `undefined`.
-    submit.mockResolvedValue({ jobId: 'job-1', session: session(['Add recurring invoices.']) });
+    // Since MOTIR-1343 the hand-off response is where that shape arrives, so the
+    // stub is the redirect's, not the submit's.
+    settleAsk.mockResolvedValue({
+      outcome: 'redirected',
+      jobId: 'job-1',
+      session: session(['Add recurring invoices.']),
+    });
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');

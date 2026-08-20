@@ -80,8 +80,45 @@ describe('the callout menu', () => {
     fireEvent.click(orb());
 
     const panel = screen.getByRole('dialog', { name: 'Motir AI' });
-    expect(panel.querySelectorAll('a[data-action]')).toHaveLength(1);
+    // Two capabilities have landed: `plan` (MOTIR-1812) and `ask` (MOTIR-1343).
+    // `help` (MOTIR-1344) is deliberately absent until it exists — a row appears
+    // when its capability does, never before.
+    expect(panel.querySelectorAll('a[data-action]')).toHaveLength(2);
     expect(panel.querySelector('a[data-action="plan"]')).not.toBeNull();
+    expect(panel.querySelector('a[data-action="ask"]')).not.toBeNull();
+    expect(panel.querySelector('a[data-action="help"]')).toBeNull();
+  });
+
+  it('⭐ every row shares ONE href — the menu is a capability list, not a router', () => {
+    // The load-bearing assertion of the whole surface (design-notes.md § "EVERY
+    // ROW OPENS THE SAME SURFACE"): the hrefs are EQUAL, not merely both
+    // navigable. A second destination here would be the ask "mode" the design
+    // deliberately does not have, arriving through the door.
+    renderWithIntl(<PlanWithAIFab context={{ kind: 'roadmap' }} />);
+    fireEvent.click(orb());
+
+    const panel = screen.getByRole('dialog', { name: 'Motir AI' });
+    const hrefs = [...panel.querySelectorAll('a[data-action]')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toHaveLength(2);
+    expect(new Set(hrefs).size).toBe(1);
+    // …and no row carries a mode or intent of its own.
+    for (const href of hrefs) {
+      expect(href).toBe('/planning?mode=roadmap&from=roadmap');
+      expect(href).not.toContain('intent=');
+      expect(href).not.toContain('mode=ask');
+    }
+  });
+
+  it('the ask row carries the icon and copy the design specifies', () => {
+    renderWithIntl(<PlanWithAIFab />);
+    fireEvent.click(orb());
+
+    const row = screen.getByRole('link', { name: /Ask about this project/ });
+    expect(row.getAttribute('data-action')).toBe('ask');
+    expect(screen.getByText('Answer questions about the plan, docs and work items')).toBeTruthy();
+    // Position 2: the primary tile marks position 1, and `help` takes 3.
+    const panel = screen.getByRole('dialog', { name: 'Motir AI' });
+    expect([...panel.querySelectorAll('a[data-action]')].indexOf(row)).toBe(1);
   });
 
   it('carries the originating context into the row href', () => {

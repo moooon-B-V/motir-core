@@ -5,16 +5,21 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
-  appendPlanChangeTurn,
   openPlanChangeSession,
   recordPlannerTurn,
+  rerunAskTurn,
   resubmitContextualPlan,
   resumeContextualSession,
+  settleAskJob,
+  submitAskTurn,
   submitContextualPlan,
   submitPlanChange,
+  type AskRedirectResponse,
+  type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
 import {
+  streamAskJob,
   streamAugmentJob,
   streamContextualPlanJob,
   PlanEditsClientError,
@@ -83,6 +88,14 @@ export type PlanChangePhase = 'loading' | 'idle' | 'streaming' | 'review' | 'dec
 /** A progress frame the run narrates while the job works. */
 export type PlanChangeProgress =
   | { kind: 'submitted' }
+  /** An ask turn is being READ — the first phase of the one door, before Motir
+   *  knows whether it is answering or planning. */
+  | { kind: 'reading' }
+  /** The ask job settled saying the turn was a PLAN CHANGE, and the run has
+   *  attached to the plan-edit job (ADR Consequence 3). The rail names the
+   *  hand-off here rather than letting the user watch a spinner stop and a
+   *  different one start. */
+  | { kind: 'redirected' }
   | { kind: 'searching' }
   | { kind: 'drilling' }
   | { kind: 'proposed'; count: number }
@@ -238,6 +251,10 @@ export function usePlanChangeConversation({
   // What the LAST run was anchored at, so a retry resubmits to the same thread —
   // which, once the picker is in play, may be a different set than the entrance's.
   const lastAnchorRef = useRef<RunAnchor | null>(null);
+  /** The `user` turn the last ASK run was for. A retry on the project thread
+   *  re-runs THAT turn (no second user turn — ADR §3), and the correction
+   *  affordance flips it. Null whenever the last run was a plan-change one. */
+  const lastAskTurnRef = useRef<string | null>(null);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -302,6 +319,115 @@ export function usePlanChangeConversation({
     return () => controller.abort();
   }, [anchorId]);
 
+  /**
+   * STREAM a plan-edit job to its end, then file what it proposed — the tail of
+   * every plan-change run.
+   *
+   * It is a named helper rather than the inline block it used to be because a
+   * REDIRECTED ask hands off to exactly this (`docs/decisions/conversation-turn-intent.md`
+   * Consequence 3): the ask job settles saying the turn was a plan change, and
+   * from that moment the run must be indistinguishable from one the plan-change
+   * door submitted. Re-implementing the tail beside the ask path would be two
+   * settle behaviours for one outcome, and they would drift.
+   */
+  const finishPlanRun = useCallback(
+    async (
+      jobId: string,
+      planId: string | undefined,
+      anchor: RunAnchor | null,
+      controller: AbortController,
+    ) => {
+      let failed = false;
+      // Anchored runs subscribe through the item's own relay (which re-gates the
+      // anchor on subscribe); the project thread keeps the shipped augment SSE.
+      const stream = anchor
+        ? (
+            onError: (code: string | null) => void,
+            onDone: () => void,
+            onFrame: (event: string, data: unknown) => void,
+          ) =>
+            streamContextualPlanJob(
+              anchor.anchorId,
+              jobId,
+              controller.signal,
+              onError,
+              onDone,
+              onFrame,
+            )
+        : (
+            onError: (code: string | null) => void,
+            onDone: () => void,
+            onFrame: (event: string, data: unknown) => void,
+          ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
+      await stream(
+        (code) => {
+          failed = true;
+          if (!mountedRef.current) return;
+          const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+          // The thread and any PRIOR proposal survive — recoverable in place.
+          setState((s) => ({
+            ...s,
+            phase: s.review ? 'review' : 'idle',
+            progress: null,
+            errorCode: gated ? null : (code ?? 'FAILED'),
+            outOfCredits: gated,
+          }));
+        },
+        () => {},
+        (event, data) => {
+          if (!mountedRef.current) return;
+          const progress = narrateFrame(event, data);
+          if (progress) setState((s) => ({ ...s, progress }));
+        },
+      );
+      if (failed || !mountedRef.current) return;
+
+      // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
+      // carries the findings report it owes on every turn, and the one question
+      // it asks when the request was not determinate; recording it here is what
+      // puts either into the persisted thread. Best-effort and non-fatal: a
+      // failed recording costs the narration, never the proposals, so it must
+      // not take the run down with it.
+      let asked = false;
+      try {
+        const withTurn = await recordPlannerTurn(jobId, anchor, controller.signal);
+        if (!mountedRef.current) return;
+        asked = pendingQuestion(withTurn.turns) !== null;
+        setState((s) => ({ ...s, session: withTurn }));
+      } catch {
+        /* the run still happened; the thread simply carries no narration */
+      }
+
+      // Then read what the run actually PROPOSED, from its Plan. The job
+      // result's `planDelta` is not consulted: it is empty by construction.
+      const pending = planId ? await readPendingProposal(planId, controller.signal) : null;
+      if (!mountedRef.current) return;
+      if (pending) {
+        setState((s) => ({
+          ...s,
+          phase: 'review',
+          review: pending,
+          progress: null,
+          errorCode: null,
+        }));
+      } else {
+        // Nothing came back. The thread stays; the previous proposal (if any) too.
+        //
+        // A turn that ASKED proposes nothing BY DESIGN — the planner is blocked
+        // on the answer and the canvas stays untouched (design state B) — so
+        // "nothing came back to change" would be a false error on the one turn
+        // where the rail has the most to say. The question is the outcome.
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          errorCode: asked ? null : 'EMPTY',
+        }));
+      }
+    },
+    [],
+  );
+
   /** Submit the thread's ACCUMULATED intent, then stream + settle the job. Shared
    *  by `send` (after the turn is appended) and `retry` (nothing new to append).
    *
@@ -356,93 +482,7 @@ export function usePlanChangeConversation({
           outOfCredits: false,
         }));
 
-        let failed = false;
-        // Anchored runs subscribe through the item's own relay (which re-gates the
-        // anchor on subscribe); the project thread keeps the shipped augment SSE.
-        const stream = anchor
-          ? (
-              onError: (code: string | null) => void,
-              onDone: () => void,
-              onFrame: (event: string, data: unknown) => void,
-            ) =>
-              streamContextualPlanJob(
-                anchor.anchorId,
-                jobId,
-                controller.signal,
-                onError,
-                onDone,
-                onFrame,
-              )
-          : (
-              onError: (code: string | null) => void,
-              onDone: () => void,
-              onFrame: (event: string, data: unknown) => void,
-            ) => streamAugmentJob(jobId, controller.signal, onError, onDone, onFrame);
-        await stream(
-          (code) => {
-            failed = true;
-            if (!mountedRef.current) return;
-            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
-            // The thread and any PRIOR proposal survive — recoverable in place.
-            setState((s) => ({
-              ...s,
-              phase: s.review ? 'review' : 'idle',
-              progress: null,
-              errorCode: gated ? null : (code ?? 'FAILED'),
-              outOfCredits: gated,
-            }));
-          },
-          () => {},
-          (event, data) => {
-            if (!mountedRef.current) return;
-            const progress = narrateFrame(event, data);
-            if (progress) setState((s) => ({ ...s, progress }));
-          },
-        );
-        if (failed || !mountedRef.current) return;
-
-        // SETTLED → first, let the PLANNER SPEAK (MOTIR-2226). The run's result
-        // carries the findings report it owes on every turn, and the one question
-        // it asks when the request was not determinate; recording it here is what
-        // puts either into the persisted thread. Best-effort and non-fatal: a
-        // failed recording costs the narration, never the proposals, so it must
-        // not take the run down with it.
-        let asked = false;
-        try {
-          const withTurn = await recordPlannerTurn(jobId, anchor, controller.signal);
-          if (!mountedRef.current) return;
-          asked = pendingQuestion(withTurn.turns) !== null;
-          setState((s) => ({ ...s, session: withTurn }));
-        } catch {
-          /* the run still happened; the thread simply carries no narration */
-        }
-
-        // Then read what the run actually PROPOSED, from its Plan. The job
-        // result's `planDelta` is not consulted: it is empty by construction.
-        const pending = planId ? await readPendingProposal(planId, controller.signal) : null;
-        if (!mountedRef.current) return;
-        if (pending) {
-          setState((s) => ({
-            ...s,
-            phase: 'review',
-            review: pending,
-            progress: null,
-            errorCode: null,
-          }));
-        } else {
-          // Nothing came back. The thread stays; the previous proposal (if any) too.
-          //
-          // A turn that ASKED proposes nothing BY DESIGN — the planner is blocked
-          // on the answer and the canvas stays untouched (design state B) — so
-          // "nothing came back to change" would be a false error on the one turn
-          // where the rail has the most to say. The question is the outcome.
-          setState((s) => ({
-            ...s,
-            phase: s.review ? 'review' : 'idle',
-            progress: null,
-            errorCode: asked ? null : 'EMPTY',
-          }));
-        }
+        await finishPlanRun(jobId, planId, anchor, controller);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
@@ -458,7 +498,148 @@ export function usePlanChangeConversation({
         if (abortRef.current === controller) abortRef.current = null;
       }
     },
-    [],
+    [finishPlanRun],
+  );
+
+  /**
+   * Run ONE turn through the ask door — the project thread's only entrance since
+   * MOTIR-1343 (`docs/decisions/conversation-turn-intent.md` §2).
+   *
+   * The shape is deliberately NOT "ask, and separately plan": the client posts
+   * text, streams the `ask_project` job, and asks the server what it produced.
+   * Exactly one of three things comes back, and the third is the interesting one:
+   *
+   *  * `answered` — an assistant turn with its citations is on the thread.
+   *  * `silent`   — the job said nothing at all. Core persists nothing for it
+   *    (inventing a body would be motir-core writing the assistant's words), so
+   *    the rail says so honestly rather than showing an empty bubble.
+   *  * `redirected` — the turn was a plan change. From here the run hands off to
+   *    {@link finishPlanRun}, the SAME tail a plan-change submit uses, so the
+   *    shipped diff + confirm chrome returns in the same thread.
+   *
+   * ⚠️ THE WAITING STATE IS CONTINUOUS ACROSS THE HAND-OFF. `phase` stays
+   * `streaming` and only `progress` changes, because a bubble that unmounts and
+   * returns reads as "that failed, it is trying again" — and nothing failed.
+   */
+  const runAsk = useCallback(
+    async (
+      submitter: (signal: AbortSignal) => Promise<AskSubmitResponse | AskRedirectResponse>,
+    ) => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      // An ask is project-wide by construction, so a retry after one must not
+      // re-aim at an anchor an earlier plan-change run happened to use.
+      lastAnchorRef.current = null;
+
+      try {
+        const submitted = await submitter(controller.signal);
+        if (!mountedRef.current) return;
+
+        // REDIRECTED AT THE DOOR — no ask job was opened at all. Two turns reach
+        // this: a reply to the planner's pending question (the affordance
+        // already settled the disposition, so there was nothing to classify) and
+        // a re-run the handler hands back before streaming.
+        //
+        // There is no hand-off to name here, because nothing was read and
+        // re-read: the run IS a plan-change run from its first frame, and the
+        // waiting row says what it has always said for one.
+        if ('outcome' in submitted) {
+          lastAskTurnRef.current = null;
+          setState((s) => ({
+            ...s,
+            phase: 'streaming',
+            session: submitted.session,
+            jobId: submitted.jobId,
+            planId: submitted.planId,
+            review: s.decided ? null : s.review,
+            decided: null,
+            progress: { kind: 'submitted' },
+            errorCode: null,
+            outOfCredits: false,
+          }));
+          await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
+          return;
+        }
+
+        lastAskTurnRef.current = submitted.turnId;
+        setState((s) => ({
+          ...s,
+          phase: 'streaming',
+          session: submitted.session,
+          jobId: submitted.jobId,
+          planId: null,
+          // The same supersede rule `run` applies: a DECIDED overlay stops
+          // describing anything the moment a new run starts; a still-pending
+          // proposal survives, because asking a question mid-review is a lookup
+          // and not an abandonment.
+          review: s.decided ? null : s.review,
+          decided: null,
+          progress: { kind: 'reading' },
+          errorCode: null,
+          outOfCredits: false,
+        }));
+
+        let failed = false;
+        await streamAskJob(
+          submitted.jobId,
+          controller.signal,
+          (code) => {
+            failed = true;
+            if (!mountedRef.current) return;
+            const gated = code !== null && OUT_OF_CREDITS_CODES.has(code);
+            setState((s) => ({
+              ...s,
+              phase: s.review ? 'review' : 'idle',
+              progress: null,
+              errorCode: gated ? null : (code ?? 'FAILED'),
+              outOfCredits: gated,
+            }));
+          },
+          () => {},
+        );
+        if (failed || !mountedRef.current) return;
+
+        const settled = await settleAskJob(submitted.jobId, controller.signal);
+        if (!mountedRef.current) return;
+
+        if (settled.outcome === 'redirected') {
+          setState((s) => ({
+            ...s,
+            session: settled.session,
+            jobId: settled.jobId,
+            planId: settled.planId,
+            progress: { kind: 'redirected' },
+          }));
+          await finishPlanRun(settled.jobId, settled.planId, null, controller);
+          return;
+        }
+
+        setState((s) => ({
+          ...s,
+          session: settled.session,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          // `silent` is NOT the honest "I could not find that" — that is prose
+          // the handler returns, and it lands as an ordinary answer with no
+          // citations. This is the job producing nothing at all.
+          errorCode: settled.outcome === 'silent' ? 'ASK_SILENT' : null,
+        }));
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (!mountedRef.current) return;
+        const gated = err instanceof PlanEditsClientError && err.isOutOfCredits;
+        setState((s) => ({
+          ...s,
+          phase: s.review ? 'review' : 'idle',
+          progress: null,
+          errorCode: gated ? null : 'FAILED',
+          outOfCredits: gated,
+        }));
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+      }
+    },
+    [finishPlanRun],
   );
 
   /**
@@ -505,8 +686,15 @@ export function usePlanChangeConversation({
         return;
       }
 
-      const controller = new AbortController();
-      abortRef.current = controller;
+      // PROJECT: the ONE DOOR (MOTIR-1343). The composer has no switch and sends
+      // no intent — `POST /api/ai/ask` appends the turn and submits it, and what
+      // the turn turns out to be comes back. A plan change is handed off inside
+      // `runAsk`, so this branch does not choose between two endpoints; there is
+      // only one, and choosing here is exactly the mode the design does not have.
+      //
+      // `isAnswer` still rides along (ADR §1's wire table): it is not an intent,
+      // it is which affordance sent the turn — the record that lets the thread
+      // say later whether the planner's question was answered or superseded.
       setState((s) => ({
         ...s,
         phase: 'streaming',
@@ -514,27 +702,9 @@ export function usePlanChangeConversation({
         errorCode: null,
         outOfCredits: false,
       }));
-
-      try {
-        const session = await appendPlanChangeTurn(body, controller.signal, isAnswer);
-        if (!mountedRef.current) return;
-        setState((s) => ({ ...s, session }));
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (!mountedRef.current) return;
-        setState((s) => ({
-          ...s,
-          phase: s.review ? 'review' : 'idle',
-          progress: null,
-          errorCode: 'FAILED',
-        }));
-        abortRef.current = null;
-        return;
-      }
-      abortRef.current = null;
-      await run(null);
+      await runAsk((signal) => submitAskTurn(body, signal, isAnswer));
     },
-    [run],
+    [run, runAsk],
   );
 
   /** Re-send the accumulated intent after a failure — no new turn, so the
@@ -549,8 +719,44 @@ export function usePlanChangeConversation({
     const anchor =
       lastAnchorRef.current ??
       (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+    // PROJECT thread: re-run the TURN the failed ask was for, not the thread's
+    // accumulated intent. No second `user` turn is appended either way — the
+    // person said one thing once — but naming the turn is what keeps the retry
+    // pointed at what actually failed.
+    if (!anchor && lastAskTurnRef.current) {
+      const turnId = lastAskTurnRef.current;
+      await runAsk((signal) => rerunAskTurn(turnId, {}, signal));
+      return;
+    }
     await run(anchor);
-  }, [run]);
+  }, [run, runAsk]);
+
+  /**
+   * CORRECT a mis-read turn — the affordance under the assistant bubble (ADR §3).
+   *
+   * It re-runs the ORIGINAL user turn under the OTHER intent. Nothing is
+   * re-typed, no second user turn is appended, and the superseded assistant turn
+   * stays on the thread: a correction is a second answer, not an erasure.
+   *
+   * ⚠️ THE CLIENT NAMES THE TURN, NEVER THE DIRECTION. Which intent to flip TO is
+   * derived server-side from what the turn currently ran as — so even the one
+   * affordance where a person is explicitly asking for a different reading keeps
+   * the intent server-resolved (§1).
+   */
+  const correctTurn = useCallback(
+    async (turnId: string) => {
+      if (abortRef.current) return;
+      setState((s) => ({
+        ...s,
+        phase: 'streaming',
+        progress: { kind: 'reading' },
+        errorCode: null,
+        outOfCredits: false,
+      }));
+      await runAsk((signal) => rerunAskTurn(turnId, { flip: true }, signal));
+    },
+    [runAsk],
+  );
 
   /**
    * PERSIST the proposal — `POST /api/plans/[id]/approve` → `approvePlan` →
@@ -648,5 +854,5 @@ export function usePlanChangeConversation({
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
   }, []);
 
-  return { state, send, retry, approve, discard, dismissError };
+  return { state, send, retry, correctTurn, approve, discard, dismissError };
 }
