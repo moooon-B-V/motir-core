@@ -869,3 +869,231 @@ separate question and a separate amendment: it would replace _one container, one
 holding nothing_ with _one machine, one org, over time_, which is a change to §4's isolation
 argument and to §5's retention invariant. Nothing here touches either. This decision is about a
 per-run container that still dies holding nothing.
+
+## §16 — Decision 12 — the warm per-org sync worker (MOTIR-3254)
+
+**Appended 2026-08-20.** MOTIR-3249 settled the worker's OUTLINE — per-org, its own org's syncs
+only, never cross-org, expiring when idle. This section settles what that costs and what it
+forces, because **two of this file's written invariants do not survive it unchanged** and a
+container that quietly breaks them is worse than no worker at all.
+
+It ships no behaviour. §16.5 names the card that implements each part.
+
+### §16.0 — The measurement everything below rests on
+
+`indexer-v0.3.0`, production, 2026-08-20, seven refreshes across two repos and two projects
+(MOTIR-3250 carries the full table). The sharpest single row — motir-core, an already-indexed
+repo, a two-file push:
+
+```
+sync:   filesChecked 3570 · filesAdded 1 · filesModified 1 · nodesUpdated 33
+phases: fetch 14075 · snapshot 3083 · build 124364 · compress 5448 · upload 1274
+total:  148 369 ms
+```
+
+**Two files changed; 124 seconds in the build phase.** The same 3 569-file tree syncs in **5.3 s**
+on a warm local process, and that box's _full build_ of it takes 41 s against production's ~124 s
+— so production is **3× slower at parsing and 23× slower at syncing**. A gap that is not
+proportional to the work is not the algorithm. What remains is per-container and cold: a 2-vCPU
+machine, an empty page cache, a freshly extracted tree, an engine loading its grammars and opening
+a ~100 MB SQLite from scratch, every single run.
+
+**So the worker's value is NOT what MOTIR-3249 assumed.** The parent says _"the saving is not boot
+time — it is the data movement a per-sync container repeats."_ The data movement is 14 s in and
+6.7 s out: **14 % of the run.** The other ~84 % is work redone from cold, which is neither boot nor
+bytes. A worker sized to save 20 s and one sized to save 135 s are different machines with
+different idle policies, and every number below is derived from the second figure.
+
+### §16.1 — Q1 · Isolation, which §4 makes a property of the CREDENTIAL
+
+§4's rule is _"every container the fleet boots carries only narrowly-scoped, short-lived
+credentials, whatever its workload."_ **The worker keeps it, and the mechanism is that the worker
+is PUSHED work and never picks any up.**
+
+**Decision: there is no job pickup.** The control plane hands the worker one job at a time — a
+`repoRef`, the pre-signed snapshot GET, a pre-signed tarball URL when its checkout is cold, and a
+run credential scoped to `(aiProject, repoRef, run)` exactly as a per-sync container gets today.
+The worker holds no queue reader, no job list, no credential that names an org, and no way to ask
+for work. **Cross-org pickup is impossible by construction because there is no pickup** — which is
+what the card asks for, and it is a stronger property than an authorization check on a pull.
+
+**The boundary is the ORG**, not the workspace and not the project: org is where Motir's tenancy
+actually binds — billing, offboarding (§14) and metering (§7) all key on it, so a machine that
+never crosses one crosses nothing that matters. An org with fifty repos does not need fifty warm
+checkouts to be worth having; the disk is bounded and evicted LRU (§16.2).
+
+**What a compromised worker reaches, stated plainly.** A per-run container today: one repo's
+source and one snapshot key, for minutes, then it dies holding nothing. A warm worker: **one
+org's source and the graphs derived from it, for as long as it lives**. That is strictly more
+reach, and it is the price of the change rather than a detail of it. It is bounded by three
+things and no others — one org per machine (enforced at provision, never by filtering), no
+credential at rest that outlives the job it was handed, and a lifetime measured in minutes
+(§16.3).
+
+**⚠️ §14 GAINS A FOURTH DELETION, and this is not optional.** Offboarding removes the snapshot,
+then the local root, then the coordination row, in that order and for the reason §14.4 gives. A
+warm worker is a **fourth place a tenant's source lives**, and it is the only one that is not
+reachable from a database row. An offboard that leaves a live worker holding the source of the
+project it just erased is the failure §14 exists to prevent, arriving through a door §14 did not
+know about. **No card owns this today** — see §16.5.
+
+### §16.2 — Q2 · Retention, which the worker contradicts by design
+
+`runIndex.ts` states it as _"delete everything, always"_, on the ground that _"a container's disk
+is not private: it is a rootfs on shared infrastructure, and the machine may be paused rather than
+destroyed."_ A worker keeps tenant source **precisely so it does not have to re-fetch it**. The
+invariant is therefore amended here, in writing, as MOTIR-3249 required — not excepted.
+
+**The amendment.** The invariant was never really "delete after every run"; that was the shape it
+took when the boundary and the run were the same thing. What it protects is:
+
+> **No tenant's data outlives the boundary it was fetched for, and no boundary spans two tenants.**
+
+For a per-run container the boundary IS the run, and the old wording and the new one describe the
+same behaviour — `runIndex.ts` is unchanged and stays the invariant's home for that path. For a
+worker the boundary is **its own lifetime, within one org**. So the worker: holds one org's data
+and never a second org's; deletes everything when it expires; and can be made to delete on demand
+when that org offboards (§16.1).
+
+**The compensating controls, which are what make the amendment more than a relabelling:**
+
+1. **One org per machine**, decided at provision — a worker is never re-pointed at a second org.
+2. **A bounded lifetime**, in minutes (§16.3), so "as long as it lives" is a short sentence.
+3. **No credential at rest.** Every credential is per-job and expires in minutes; a worker at rest
+   holds source and graphs, never a key to fetch more.
+4. **Expiry DESTROYS the machine rather than stopping it.** The rootfs goes with it. A stopped or
+   suspended machine keeps its disk, which is the exact case the original invariant's own sentence
+   was written against.
+5. **Offboarding reaches it** (§16.1).
+
+**And the eviction bound:** a worker holds at most the checkouts and graphs it can serve, evicting
+least-recently-used when its disk fills. An org with fifty repos gets a warm few, not fifty — and
+a cold repo on a warm worker is served exactly as it is today, by fetching.
+
+### §16.3 — Q3 · Idle policy: DIE AFTER N. Suspend is rejected
+
+**Decision: die after N seconds idle, N derived below. Suspend/resume is rejected on three
+independently sufficient grounds**, and the card's instruction to _"investigate SUSPEND first"_ is
+discharged by investigating it and finding it unavailable rather than by adopting it.
+
+1. **The port cannot express it, and its Fly adapter reads it as death.**
+   `ContainerOrchestrator` has exactly three operations — `provision`, `teardown`, `describe`
+   (`lib/orchestrator/types.ts`). There is no suspend and no resume. Worse:
+   `flyMachines.ts` has `TERMINAL_STATES = new Set(['stopped', 'suspended', …])`, so a suspended
+   machine reads to the dispatcher as a container that has **finished**. Adding suspension means
+   new port operations and a change to that set — which CI runners share.
+2. **Motir's own meter would not benefit.** `ContainerAccrual.accruedSeconds` is
+   `ceil(observedAt − startedAt)` (`billableSecondsFor`) — **wall clock, not running time**.
+   Suspending stops Fly's CPU/RAM invoice; it does **not** stop the number this project reports as
+   its own COGS. _"A suspended machine stops accruing"_ is false of Motir's meter as it stands,
+   and making it true is a change to the accrual model, i.e. MOTIR-3255's territory, not a free
+   property of the platform.
+3. **It fights §16.2.** A suspended machine keeps its rootfs **and** a memory snapshot,
+   indefinitely — _"the machine may be paused rather than destroyed"_, which is the sentence the
+   retention invariant was written against, quoted back at us.
+
+**And the benefit is not guaranteed even where it applies.** Fly's own documentation: starting a
+suspended Machine _"will attempt (but is not guaranteed) to resume the Machine from the snapshot,
+rather than performing a cold boot"_, and stopping a suspended Machine _"will invalidate its
+snapshot"_. A policy whose saving is best-effort cannot carry a break-even.
+
+**⚠️ The known "a stopped machine restarts itself" trap does not apply here, verified rather than
+assumed.** That trap is `http_service` + `auto_start_machines` + a public hostname — Fly's proxy
+restarting a machine on inbound traffic. `motir-index-runners` has no public route and is
+orchestrator-managed; nothing routes to it. It is also moot under this decision, which destroys
+rather than stops.
+
+**N is DERIVED — and NOT from the fetch cost, which MOTIR-3254 asked for before the numbers
+existed.** The fetch is 14 s, 9 % of a run; an N computed from it would be an order of magnitude
+too small. The quantity a warm worker actually saves is the whole cold cost:
+
+| saved by staying warm                                        | seconds  |
+| ------------------------------------------------------------ | -------- |
+| fetch + extract                                              | 14.1     |
+| snapshot GET + restore                                       | 3.1      |
+| the cold half of the build (124.4 measured − ~5.3 warm)      | ~119.1   |
+| **total avoided per warm sync**                              | **~136** |
+| still paid, warm or cold (compress + upload + control plane) | ~6.8     |
+
+Idling and working are the same machine class at the same rate
+(`performance-2x / 8192 MB`, `$0.000031636049`/s), so the seconds compare one to one:
+
+> **Idling N seconds costs N seconds. Serving one sync warm saves ~136. So the break-even is
+> N ≈ 136 s, at a sync-arrival probability of 1 — which means N must be materially BELOW that to
+> be positive under uncertainty.** At N = 60 s the policy pays whenever a second sync arrives
+> within the minute more than 44 % of the time.
+
+**Observed arrival, same evening, one active development session:** refreshes at 21:41, 21:42,
+21:44 (×2), 21:47, 22:01, 22:30 — gaps of 1, 2, 3, 14 and 29 minutes. Bursts of a few minutes,
+then nothing. **A short N captures the burst and expires before the silence**, which is exactly
+the shape the arrival data has. **Recommended starting value: N = 90 s**, tunable by env, with
+the invariant — _N < the measured cold cost it avoids_ — recorded as the thing that must stay
+true when the number is tuned.
+
+### §16.4 — Q4 · What the admission cap means for a worker
+
+**A worker must NOT hold an index slot for its whole life.** `DEFAULT_INDEX_IN_FLIGHT_CAP = 6` is
+index fairness under the fleet ceiling, and six idling workers would hard-cap indexing at zero —
+which is precisely the failure `limits.ts` records against the job's old `concurrency: 2`, _"which
+under the stepped supervision shape would have held its Inngest slot for the CONTAINER'S WHOLE
+LIFE."_ Repeating it one layer down would be the same mistake with a new name.
+
+**Decision, in three parts:**
+
+1. **The SYNC still takes an index slot.** A sync served by a worker is index work and is admitted
+   exactly as a per-sync container is, so §7's fairness math is untouched and the existing
+   per-tenant relation (`ceil(global / 2)`) keeps meaning what it means.
+2. **The worker's IDLE LIFE takes a worker slot, from its own ceiling** — a fourth workload with
+   its own bound (`MOTIR_FLEET_MAX_WARM_WORKERS`), so "N orgs become N permanent machines" is
+   answered by a number an operator sets rather than by the org count.
+3. **Admission for a worker FAILS CLOSED to a per-sync container.** Over the worker ceiling, the
+   sync is served the way it is served today. MOTIR-3256 already requires that fallback for
+   availability; it is also what keeps this ceiling safe to set low.
+
+**The fleet-wide ceiling still binds everything.** `MOTIR_FLEET_MAX_IN_FLIGHT = 24` counts a
+worker like any other machine, and §7.2 is why that matters more here than anywhere else: there is
+**no provider-side spend cap** underneath it — _"there's no soft ceiling. If you go over, we'll
+bill you."_ A long-lived machine class makes Motir's own counter the only thing between an idle
+policy bug and an invoice, so the worker ceiling is a spend control, not a tuning knob.
+
+### §16.5 — Which card implements what, and the one that does not exist
+
+| part                                                                           | card                                   |
+| ------------------------------------------------------------------------------ | -------------------------------------- |
+| the sync path the worker rides on                                              | **MOTIR-3251 / 3252 / 3253** — shipped |
+| the measurement every number here is derived from                              | **MOTIR-3250** — shipped               |
+| attribution when one handle serves many repos, incl. **who owns idle seconds** | **MOTIR-3255**                         |
+| the worker itself: provision per org, pushed jobs, die-after-N, fallback       | **MOTIR-3256**                         |
+| **§14 offboarding reaching a live worker's checkout**                          | **NONE — a gap, see below**            |
+
+**⚠️ The offboarding gap is filed as a deferral rather than left in prose.** §16.1 establishes that
+a warm worker is a fourth home for tenant source and that §14's deletion order must reach it.
+Nothing in MOTIR-3249's tree covers it: MOTIR-3256's criteria are about provisioning, scoping,
+expiry, metering and fallback, and none of them says the word offboard. **The worker must not ship
+before that card exists** — an offboard that leaves a live machine holding the source of a project
+it just erased is a data-deletion failure, not a latency one.
+
+### §16.6 — Rejected, with the reasons that make them tempting
+
+- **Suspend/resume** — §16.3, three grounds. Recorded first because the card asked for it
+  explicitly and because it is the intuitive answer: keeping the disk _and_ the memory is exactly
+  what "warm" means. It fails on Motir's port, on Motir's meter, and on Motir's retention rule —
+  each sufficient alone.
+- **Per-workspace or per-project workers** — finer isolation, and the tempting evidence is real:
+  two projects of the same org indexed the same repo at the same commit within seventeen seconds
+  tonight (21:44:01 and 21:44:18). But it multiplies idle machines by the workspace count, and the
+  org boundary is where offboarding and billing already bind. **Note what this does NOT license:**
+  a per-org worker may reuse a CHECKOUT across projects of the same org, but each `(project, repo)`
+  keeps its own graph and its own snapshot — the content-hash dedupe is DECLINED (MOTIR-3249,
+  decision 2) and a warm worker is not a reason to re-open it.
+- **A worker that PULLS jobs from a queue** — the shape the card's own wording suggests
+  (_"picks up sync jobs"_). Rejected: pulling requires a credential naming a scope wider than one
+  job, which is the §4 property the entire fleet rests on. Pushing keeps the credential model
+  identical to today's.
+- **Keep the per-sync container and make the image boot faster** — rejected on §16.0's
+  measurement. The cold cost is not boot; it is whole-tree work redone cold, 124 s for a two-file
+  diff against 5.3 s warm. A faster boot moves a number that is not in the table.
+- **Do nothing.** The honest baseline: a refresh costs ~148 s and the sync path already made it
+  correct and bounded. If the worker does not ship, that is what Motir keeps — which is
+  substantially better than the ~30-minute runs MOTIR-3245 measured, and is why none of the above
+  is urgent enough to justify shipping it without §16.5's missing card.
