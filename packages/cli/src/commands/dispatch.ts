@@ -19,10 +19,12 @@ import {
 } from '../git.js';
 import {
   claimScopeForRun,
+  readOpenChildren,
   refuseLeafOnlyFlag,
   resolveScopeTarget,
   type ScopeRunOptions,
 } from './scope.js';
+import { openChildrenHoldReason, renderOpenChildrenHold } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import { closeOutRepos, parseMax, requireAgent } from './auto.js';
@@ -643,10 +645,28 @@ export async function runCommand(
         clock: deps.clock ?? Date.now,
         runAgentFn: deps.runAgentFn ?? runAgent,
       });
+      // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
+      // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
+      // (MOTIR-3017) parents itself under this very container, so the set this
+      // run holds is a statement about the past by the time it is finished. A
+      // pull request opened over it would claim the story is built while a child
+      // of its own is not — which MOTIR-3229 made REFUSABLE at the transition,
+      // but only after the pull request already exists. One `get_work_item`,
+      // here, is what keeps it from existing.
+      const open = await readOpenChildren(client, decision.target);
+      const hold =
+        open && open.openChildren.length > 0
+          ? openChildrenHoldReason(open.containerKey, open.openChildren)
+          : null;
+      if (open && hold) {
+        info('');
+        info(renderOpenChildrenHold(open.containerKey, open.openChildren));
+      }
       // ONE pull request per TOUCHED repo, through the shipped close-out. On a
       // multi-repo scope that is one PER REPO, and the summary names each — "one
       // pull request, one CI run" is exactly true for a single-repo scope only.
-      closeOutRepos(summary, run);
+      // Under a hold it still PUSHES every branch and opens none.
+      closeOutRepos(summary, run, hold);
       info('');
       info(renderAutoSummary(summary));
       info(renderFindingsPolicy(opts));

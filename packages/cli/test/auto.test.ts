@@ -22,7 +22,7 @@ import {
   type DispatchRecord,
 } from '../src/autoLoop.js';
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
-import { CliError } from '../src/errors.js';
+import { CliError, ContainerHasOpenChildrenError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
 import { CLI_VERSION } from '../src/version.js';
@@ -108,6 +108,10 @@ class FakeServer {
   readonly expandCalls: string[] = [];
   /** Return a message to make `expand_item` reject for that key. */
   expandFailure: ((key: string) => string | null) | null = null;
+  /** Make `transition_status` REFUSE for a key, the way the container gate does
+   *  (MOTIR-3229's 422). The refusal is the one a run reports and continues from
+   *  rather than dies on — Bug MOTIR-3268. */
+  refuseTransitionFor: ((args: { key: string; status: string }) => Error | null) | null = null;
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -216,6 +220,13 @@ class FakeServer {
         };
       },
       transitionStatus: async (args: { key: string; status: string }) => {
+        const refusal = this.refuseTransitionFor?.(args);
+        if (refusal) {
+          // Recorded as ATTEMPTED, then thrown: the run made the call and the
+          // server said no, which is exactly the state the test asserts about.
+          this.transitions.push(args);
+          throw refusal;
+        }
         this.transitions.push(args);
         this.byKey(args.key).status = args.status;
         return {};
@@ -1116,6 +1127,87 @@ describe('an item with no lineage ships as its own pull request', () => {
   });
 });
 
+describe("the CONTAINER gate's refusal is an outcome, not a crash (MOTIR-3268)", () => {
+  it('names it, keeps the card In Progress, and still closes the run out', async () => {
+    // ⚠️ THE 422 CAN STILL ARRIVE. The scoped run's close-out re-read narrows the
+    // window — a child filed between that read and this transition still lands
+    // here — and the per-card transition is reachable for a `task` or `bug` that
+    // acquired children of its own. An unhandled throw escapes the loop BEFORE
+    // `closeOutRepos`, abandoning finished work that has nothing to do with this
+    // card; that is the shape this test pins shut.
+    let printed = '';
+    stderrSpy.mockImplementation((chunk: unknown) => {
+      printed += String(chunk);
+      return true;
+    });
+    const server = new FakeServer([leaf('row-1', 'PROD-1', { targetRepo: null })]);
+    const git = new FakeGit();
+    server.refuseTransitionFor = ({ status }) =>
+      status === 'implemented'
+        ? new ContainerHasOpenChildrenError(
+            'This item cannot reach "implemented" while 1 of its children has not been ' +
+              'implemented: PROD-9.',
+          )
+        : null;
+    const rootIsNotARepo: typeof git.runner = (bin, args, cwd) =>
+      bin === 'git' && cwd === root
+        ? { exitCode: 128, stdout: '', stderr: 'not a git repository' }
+        : git.runner(bin, args, cwd);
+
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260820-010203',
+      branch: BRANCH,
+      run: rootIsNotARepo,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
+    });
+
+    // Not a throw: the loop returned a summary.
+    expect(summary.records[0]?.outcome).toBe('failed');
+    expect(summary.records[0]?.detail).toBe('container has open children');
+    // The card honestly stays where the server left it — nothing was reverted.
+    expect(server.byKey('PROD-1').status).toBe('in_progress');
+    // The server's own sentence reaches the operator, naming the open child.
+    expect(printed).toContain('PROD-9');
+  });
+
+  it('re-throws every OTHER transition failure — a blanket catch would hide them', async () => {
+    // ⚠️ Narrowing to the one code is the point. A blanket catch here would turn
+    // an auth failure, a rate limit or a 500 into a card-shaped outcome, which is
+    // how a run reports "the container has open children" for a server that was
+    // simply unreachable.
+    const server = new FakeServer([leaf('row-1', 'PROD-1', { targetRepo: null })]);
+    const git = new FakeGit();
+    server.refuseTransitionFor = () => new CliError('the server is on fire');
+    const rootIsNotARepo: typeof git.runner = (bin, args, cwd) =>
+      bin === 'git' && cwd === root
+        ? { exitCode: 128, stdout: '', stderr: 'not a git repository' }
+        : git.runner(bin, args, cwd);
+
+    await expect(
+      runAutoLoop({
+        session: session(server),
+        opts: {},
+        kinds: undefined,
+        max: null,
+        agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+        runId: '20260820-010203',
+        branch: BRANCH,
+        run: rootIsNotARepo,
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+        ownerId: OWNER,
+      }),
+    ).rejects.toThrow('the server is on fire');
+  });
+});
+
 describe('the close-out survives a git failure', () => {
   it('reports the repo as failed instead of throwing away a finished run', async () => {
     const server = new FakeServer([leaf('row-1', 'PROD-1')]);
@@ -1151,6 +1243,66 @@ describe('the close-out survives a git failure', () => {
     expect(summary.prs[0]?.message).toContain('protected branch');
     // The item is still recorded as integrated — the failure is downstream of it.
     expect(server.integrated.map((r) => r.key)).toEqual(['PROD-1']);
+  });
+});
+
+describe('closeOutRepos under a HOLD pushes and opens nothing (MOTIR-3268)', () => {
+  it('reports HELD, having pushed the branch — a hold is about the pull REQUEST', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260820-010203',
+      branch: BRANCH,
+      run: git.runner,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
+    });
+
+    closeOutRepos(summary, git.runner, 'PROD-1 cannot claim to be implemented …');
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'held', url: null });
+    expect(summary.prs[0]?.message).toContain('cannot claim to be implemented');
+    // ⚠️ The COMMITS are finished work, and a hold says nothing about them —
+    // leaving them in a local checkout for a human to discover would be a
+    // strictly worse outcome than the pull request this run declined to open.
+    expect(git.prCreated).toBe(0);
+    expect(git.log.some((line) => line.startsWith('git push origin'))).toBe(true);
+
+    const rendered = renderAutoSummary(summary);
+    expect(rendered).toContain('HELD — no pull request opened');
+    expect(rendered).toContain(`The work IS pushed to ${BRANCH}`);
+  });
+
+  it('an EMPTY branch still reports `empty` — the more specific of the two truths', async () => {
+    // The hold is checked AFTER the emptiness check on purpose: a branch that
+    // carries nothing cost the hold nothing, and saying `held` there would
+    // invite the operator to go looking for work that does not exist.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    git.commitsOnBranch = 0;
+    const summary = await runAutoLoop({
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260820-010203',
+      branch: BRANCH,
+      run: git.runner,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
+    });
+
+    closeOutRepos(summary, git.runner, 'PROD-1 cannot claim to be implemented …');
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'empty' });
   });
 });
 

@@ -1,4 +1,4 @@
-import { CliError, PlanNotDecidableError } from '../errors.js';
+import { CliError, ContainerHasOpenChildrenError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
@@ -841,7 +841,26 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
       },
     };
   }
-  await client.transitionStatus({ key: item.key, status: 'implemented' });
+  // ⚠️ THE REFUSAL IS AN OUTCOME, NOT A CRASH (Bug MOTIR-3268). A CONTAINER
+  // reaching this line — a `task` or `bug` that acquired children of its own —
+  // is told `CONTAINER_HAS_OPEN_CHILDREN`, and an unhandled throw here escapes
+  // the loop before `closeOutRepos`, abandoning every other repository's
+  // finished work. The card honestly stays In Progress, which is what `failed`
+  // means in this vocabulary: nothing was reverted, and the work IS on the
+  // remote.
+  const refusal = await transitionToImplemented(client, item.key);
+  if (refusal) {
+    info(`${item.key}: ${refusal}`);
+    return {
+      kind: 'record',
+      record: {
+        ...base,
+        outcome: 'failed',
+        sessionBranch: null,
+        detail: 'container has open children',
+      },
+    };
+  }
   info(
     `${item.key}: Implemented via its own pull request in ${formatDuration(durationMs)} — CI decides when it is reviewable.`,
   );
@@ -849,6 +868,30 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     kind: 'record',
     record: { ...base, outcome: 'implemented', sessionBranch: null, detail: 'own pull request' },
   };
+}
+
+/**
+ * Move one card to Implemented, answering the ONE refusal a run reports rather
+ * than dies on: `null` on success, the server's own sentence when the container
+ * gate refused it (Bug MOTIR-3268).
+ *
+ * ⚠️ IT NARROWS TO THAT ONE CODE AND RETHROWS EVERYTHING ELSE. A blanket catch
+ * here would swallow an auth failure, a rate limit and a 500 into a card-shaped
+ * outcome, which is how a run reports "the container has open children" for a
+ * server that was simply unreachable. Shared by `motir auto`'s loop and `motir
+ * batch` so the two cannot disagree about what a 422 means.
+ */
+export async function transitionToImplemented(
+  client: MotirClient,
+  key: string,
+): Promise<string | null> {
+  try {
+    await client.transitionStatus({ key, status: 'implemented' });
+    return null;
+  } catch (err) {
+    if (err instanceof ContainerHasOpenChildrenError) return err.message;
+    throw err;
+  }
 }
 
 // ── the end-of-run close-out ────────────────────────────────────────────────
@@ -861,14 +904,33 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
  * three. This is the loop's only human gate: main has none of this work until
  * somebody merges these.
  */
-export function closeOutRepos(summary: AutoSummary, run: CommandRunner): void {
+export function closeOutRepos(
+  summary: AutoSummary,
+  run: CommandRunner,
+  /**
+   * A one-line reason to PUSH but not to open (Bug MOTIR-3268), or `null` for the
+   * ordinary close-out.
+   *
+   * ⚠️ THE PUSH STILL HAPPENS, and that is the substantive half of the choice. A
+   * hold is a statement about the pull REQUEST — that a parent must not claim to
+   * be built while a child of its own is not — and it says nothing about the
+   * commits, which are finished work that must not be left sitting in a local
+   * checkout for a human to discover.
+   */
+  hold: string | null = null,
+): void {
   for (const repo of summary.repos) {
-    const report = closeOutRepo(summary, repo, run);
+    const report = closeOutRepo(summary, repo, run, hold);
     summary.prs.push(report);
   }
 }
 
-function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunner): PrReport {
+function closeOutRepo(
+  summary: AutoSummary,
+  repo: RepoSession,
+  run: CommandRunner,
+  hold: string | null,
+): PrReport {
   const base = { repoName: repo.repoName, branch: repo.branch };
   try {
     // Normally a no-op: the prompt already had the agent push. This catches the
@@ -878,6 +940,12 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
 
     if (!sessionBranchHasCommits(repo.cwd, repo.branch, run)) {
       return { ...base, url: null, outcome: 'empty' };
+    }
+    // ⚠️ AFTER the emptiness check, so a branch carrying nothing still reports
+    // `empty` — the more specific of the two truths, and the one that says the
+    // hold cost this repository nothing.
+    if (hold !== null) {
+      return { ...base, url: null, outcome: 'held', message: hold };
     }
     // Only THIS repo's items belong in THIS repo's pull request: the branch
     // carries the ones integrated onto it, and the failures listed alongside are

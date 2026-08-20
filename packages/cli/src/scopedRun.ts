@@ -347,6 +347,109 @@ export function unsatisfiedBlockers(
   return (edges[key] ?? []).filter((dep) => inScope.has(dep) && !satisfied.has(dep));
 }
 
+// ── the CLOSE-OUT gate: the container's CURRENT children (Bug MOTIR-3268) ───
+//
+// ⚠️ THE CLAIM IS TAKEN AT t=0 AND THE PULL REQUEST IS OPENED AT t=END, and
+// between those two moments the container's child set can GROW. `motir run`
+// may file a bug (MOTIR-3017) and it parents it under the in-flight card's
+// parent — which, on a scoped run, is the container this run is about to open a
+// pull request for. Neither feature is wrong alone: MOTIR-3001 claims the scope
+// up front on purpose, and MOTIR-3017 inserts children on purpose. What was
+// missing is the one read that reconciles them.
+//
+// ⚠️ AND THE SERVER'S GATE IS NOT THAT READ. MOTIR-3229 made the container's
+// move into `implemented` / `in_review` REFUSABLE (`CONTAINER_HAS_OPEN_CHILDREN`,
+// 422), so the false claim can no longer be made — but the run opens the pull
+// request BEFORE anything transitions, so the refusal lands on a pull request
+// that already exists. The point of MOTIR-3229's fourth clause is that the
+// parent's pull request should not EXIST while the story is not implemented, and
+// only a check on this side of the `gh pr create` can deliver that.
+
+/**
+ * The status KEYS at which a child has cleared the container-completeness bar —
+ * `implemented`-or-better (`lib/workItems/statusLadder.ts`).
+ *
+ * ⚠️ RESTATED HERE, NOT IMPORTED, and by KEY rather than by category. The CLI is
+ * a standalone package that cannot reach into the Next app — the same reason
+ * `classifyReadyItem` restates the server's `isManualReadyItem` — and the child
+ * rows `/api/v1` publishes carry a status KEY with no category beside it, so
+ * ranking by category is not available to this side at all.
+ *
+ * ⚠️ SO THE TWO CAN DISAGREE, IN EXACTLY ONE DIRECTION, and that is the safe one.
+ * The server ranks a `done`-CATEGORY status as cleared, so a project that added
+ * its own done-category status clears the bar there and not here: this side holds
+ * a pull request the server would have allowed. A hold is a stop the operator can
+ * act on in one command; the opposite error is the defect this card exists to
+ * remove. Nothing here can permit what the server refuses.
+ */
+export const CHILD_CLAIM_BAR_KEYS: ReadonlySet<string> = new Set([
+  'implemented',
+  'in_review',
+  'done',
+  'cancelled',
+]);
+
+/**
+ * The container's children that have NOT reached the bar, by key.
+ *
+ * Keys rather than rows because that is what the report needs: a stop that names
+ * WHICH cards are open is one the reader can act on in one hop, and this fires at
+ * the moment somebody believes the run is finished.
+ */
+export function childrenBelowClaimBar(
+  children: readonly { identifier: string; status: string }[],
+): string[] {
+  return children
+    .filter((child) => !CHILD_CLAIM_BAR_KEYS.has(child.status.toLowerCase()))
+    .map((child) => child.identifier);
+}
+
+/**
+ * The one-line reason a held pull request carries into the summary's PR block.
+ *
+ * ⚠️ IT MIRRORS THE SERVER'S OWN SENTENCE (`ContainerHasOpenChildrenError`) on
+ * purpose. The two surfaces answer the same question — which children are open —
+ * and a run that paraphrased would leave an operator comparing two descriptions
+ * of one fact and wondering which is current.
+ */
+export function openChildrenHoldReason(
+  containerKey: string,
+  openChildren: readonly string[],
+): string {
+  const named = openChildren.slice(0, 5).join(', ');
+  const rest = openChildren.length > 5 ? ` (+${openChildren.length - 5} more)` : '';
+  return (
+    `${containerKey} cannot claim to be implemented while ${openChildren.length} of its ` +
+    `children ${openChildren.length === 1 ? 'has' : 'have'} not been: ${named}${rest}.`
+  );
+}
+
+/**
+ * What a person is told when the close-out re-read found the set had grown.
+ *
+ * ⚠️ THREE DISPOSITIONS, AND THE RUN PICKS NONE OF THEM. Each is a decision about
+ * SCOPE — is this card part of the story or not — which is the one question an
+ * unattended run has no standing to answer. Naming all three is what makes this a
+ * stop the operator chose rather than a failure they have to diagnose.
+ */
+export function renderOpenChildrenHold(
+  containerKey: string,
+  openChildren: readonly string[],
+): string {
+  return [
+    `${containerKey}: NO pull request was opened — its child set grew while this run was working.`,
+    ...openChildren.map((key) => `  ${key} — not implemented`),
+    'A parent pull request is opened on the claim that everything under it is built, and these',
+    'cards were not in the set this run claimed. Nothing was reverted and nothing was lost: the',
+    'work IS pushed, and the branch is named below.',
+    'Three ways forward — this run may not pick one for you:',
+    `  • LAND them — \`motir run ${openChildren[0] ?? '<key>'}\` — then re-run ${containerKey} to open the pull request.`,
+    `  • RE-PARENT them out of ${containerKey} if they are no longer in its scope.`,
+    `  • Take it by hand — open the pull request yourself, or move ${containerKey} to Done, which`,
+    '    completes its children deliberately rather than as a side effect.',
+  ].join('\n');
+}
+
 /**
  * What a scope with nothing to do is told.
  *

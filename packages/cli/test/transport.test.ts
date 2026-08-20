@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AuthError,
   CliError,
+  ContainerHasOpenChildrenError,
   IncompatibleServerError,
   NotFoundError,
   RateLimitError,
@@ -376,6 +377,34 @@ describe('the status map', () => {
 
     expect((error as CliError).message).toBe('That cursor is not ours.');
     expect((error as CliError).hint).toBeUndefined();
+  });
+
+  it('a 422 `CONTAINER_HAS_OPEN_CHILDREN` is TYPED, so a run can continue from it', async () => {
+    // ⚠️ Bug MOTIR-3268. Every other documented 422 is a plain `CliError` the
+    // caller reports and dies on. This one is a state an unattended run REPORTS
+    // and continues from — the container's children are not built — and an
+    // unhandled throw at the transition would take the run's close-out down with
+    // it. The branch reads the machine CODE; the open children live only in the
+    // server's sentence, and a client does not parse sentences.
+    stub.queue({
+      status: 422,
+      body: {
+        code: 'CONTAINER_HAS_OPEN_CHILDREN',
+        error:
+          'This item cannot reach "implemented" while 1 of its children has not been ' +
+          'implemented: MOTIR-9.',
+      },
+    });
+
+    const error = await transport()
+      .request('getProject', { path: { projectKey: 'MOTIR' } })
+      .catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ContainerHasOpenChildrenError);
+    // The server's sentence, verbatim — the two surfaces cannot disagree about
+    // what is open if only one of them composes the answer.
+    expect((error as CliError).message).toContain('MOTIR-9');
+    expect((error as CliError).hint).toContain('re-parent them out');
   });
 
   it('a 4xx with NO envelope still produces a legible error', async () => {
