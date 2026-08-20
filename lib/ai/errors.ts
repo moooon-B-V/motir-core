@@ -114,6 +114,13 @@ export function errorFromProblem(p: Problem): MotirAiError {
       return new MotirAiOutOfCreditsError(p.detail ?? p.title);
     case 'rate_limited':
     case 'ai_job_failed':
+    // `ai_job_abandoned` (MOTIR-3222) — the machine holding the job stopped
+    // renewing its lease and motir-ai's reaper failed it. Named EXPLICITLY rather
+    // than left to the 5xx fallback below, which would produce the same class by
+    // accident: the point of the distinct code is that a reader of this switch
+    // can see the case exists and that a resubmit is the right response to it,
+    // where `ai_job_failed` means the handler ran and rejected something.
+    case 'ai_job_abandoned':
     case 'internal_error':
       return new MotirAiUnavailableError(p.detail ?? p.title);
     default:
