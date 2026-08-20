@@ -1,0 +1,1515 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The plan detail — a LIST beside the canvas — MOTIR-3234</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock uses
+         the same VALUES so it renders without the Tailwind build, exactly as the
+         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
+         Nothing here re-defines shape/colour semantics — it re-states them so a
+         plain browser paints the real palette.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        /* tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --danger-surface: #fde0ec;
+        --warning-surface: #ffe8d4;
+        /* work-item type hues */
+        --t-epic: #ff64c8;
+        --t-epic-soft: #ffe3f5;
+        --t-story: #1aae39;
+        --t-story-soft: #d9f3e1;
+        --t-task: #0075de;
+        --t-task-soft: #dcecfa;
+        --t-bug: #e03131;
+        --t-subtask: #2a9d99;
+        --t-subtask-soft: #d6f0ee;
+        /* shape */
+        --r-card: 12px;
+        --r-btn: 10px;
+        --r-control: 8px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 4px 14px #00000014;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 70ch;
+      }
+      .doc-head .refs {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 11px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap span.note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .frame {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--sh-card);
+        overflow: hidden;
+      }
+
+      /* ---- app shell: left nav + main ---- */
+      .app {
+        display: grid;
+        grid-template-columns: 212px 1fr;
+        height: 560px;
+      }
+      .nav a.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .nav a.on svg {
+        color: var(--accent);
+      }
+      .nav a .count {
+        margin-left: auto;
+        font: 600 11px var(--mono);
+        color: var(--muted);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        height: 50px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 18px;
+        flex: none;
+      }
+      .topbar h3 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .topbar .sub {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .topbar .grow {
+        margin-left: auto;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: var(--r-btn);
+        padding: 8px 13px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.secondary {
+        background: transparent;
+        color: var(--strong);
+        border: 1px solid var(--border-strong);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--secondary);
+      }
+      /* ⚠️ `.ghost` is ALSO the canvas's off-level blocker anchor — absolutely
+         positioned, danger-dashed, hatched. A `class="btn ghost"` therefore
+         inherits that rule and lands on top of whatever is above it. The quiet
+         button variant is `.btn.quiet`; `.btn.ghost` is kept above so an older
+         citation still resolves, and is used nowhere. (Found by rendering panel
+         J — MOTIR-3234.) */
+      .btn.quiet {
+        background: transparent;
+        color: var(--secondary);
+      }
+      .btn.sm {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      /* ---- plans list ---- */
+      .list {
+        padding: 14px 18px;
+        overflow: auto;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.generating {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .pill.planned {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.approved {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.declined {
+        background: var(--mutedfill);
+        color: var(--muted);
+      }
+      .pill.stale {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      .hdrtop .pill {
+        align-self: flex-start;
+        max-width: 100%;
+      }
+
+      .pill.count {
+        background: var(--hub);
+        color: var(--secondary);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      .spin {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #b9d4f2;
+        border-top-color: var(--info);
+        display: inline-block;
+        animation: sp 0.9s linear infinite;
+      }
+      @keyframes sp {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .node .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--strong);
+        line-height: 1.25;
+        margin-top: 1px;
+      }
+      .opbadge {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 8px;
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+      .opbadge svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      /* op treatments */
+      .node.add {
+        border: 1.5px dashed var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        box-shadow: 0 0 0 3px #5645d41a;
+      }
+      .opbadge.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .node.modify {
+        border-color: var(--info);
+        box-shadow:
+          0 0 0 1px var(--info) inset,
+          var(--sh-subtle);
+      }
+      .opbadge.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
+         Deliberately NOT red/dashed/hatched — that language is reserved for the
+         cross-story dependency signal (.ghost / .node.flagged below), which is
+         shipped canvas language we compose. Archive is reversible, not an error,
+         so it reads as greyscale + strike-through, like the cancelled status hue. */
+      .node.remove {
+        border: 1px solid var(--border-strong);
+        background: var(--mutedfill);
+        opacity: 0.66;
+        filter: grayscale(0.5);
+      }
+      .node.remove .ttl {
+        text-decoration: line-through;
+        text-decoration-color: var(--faint);
+        color: var(--muted);
+      }
+      .node.remove .id {
+        color: var(--faint);
+      }
+      .opbadge.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+        border: 1px solid var(--border-strong);
+      }
+
+      /* ---- review rail ---- */
+      .rail {
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .g {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+      .railhead .lab {
+        font: 600 11px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #54514b;
+      }
+      .railbody {
+        flex: 1;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        overflow: auto;
+      }
+      .opc.add {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .opc.rem {
+        background: var(--danger-surface);
+        color: #9b1c4b;
+      }
+      .tl .body {
+        padding-bottom: 13px;
+      }
+      .tl .body .ev {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+      }
+      .tl .body .at {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .tl.pending .body .ev {
+        color: var(--muted);
+      }
+
+      /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
+         treatment and would read as one. */
+      .note-box {
+        margin: 14px 18px 4px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        border-radius: var(--r-card);
+        padding: 11px 13px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .note-box b {
+        color: var(--strong);
+      }
+      .note-box code {
+        font: 600 11.5px var(--mono);
+        background: var(--hub);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+
+      .decide {
+        padding: 13px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .decide .btn {
+        justify-content: center;
+        padding: 11px;
+      }
+      .decide .hint {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .estate .acts {
+        margin-top: 4px;
+        display: flex;
+        gap: 8px;
+      }
+      @keyframes scan {
+        0% {
+          background-position: -40% 0;
+        }
+        100% {
+          background-position: 140% 0;
+        }
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .lvl .ttl {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
+         is about to happen"; on a decided card it either already happened
+         or never will, and the fade would also desaturate the outcome
+         spine — the one signal that settles which. The muted frame, the
+         strike and the strong border all stay. */
+      .node.remove.dec-ok,
+      .node.remove.dec-no {
+        opacity: 1;
+        filter: none;
+      }
+      .decrow .pill {
+        margin-left: auto;
+      }
+      .opchip .seg.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .opchip .seg.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .opchip .seg.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      /* The establish step, composed from its SHIPPED markup (MOTIR-1782).
+         Panel H changes its CONTAINER and not one pixel inside it. */
+      .estep {
+        padding: 20px 22px;
+        background: var(--surface);
+      }
+      .estep .eyebrow {
+        font: 700 10.5px var(--mono);
+        letter-spacing: 0.09em;
+        color: var(--secondary);
+      }
+      .estep h3 {
+        margin: 8px 0 6px;
+        font-size: 19px;
+        letter-spacing: -0.01em;
+      }
+      .estep p {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--secondary);
+        line-height: 1.55;
+      }
+      .estep .callout {
+        margin: 12px 0;
+        display: flex;
+        gap: 9px;
+        padding: 11px 12px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: var(--r-card);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--secondary);
+      }
+      .estep .callout svg {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        color: var(--muted);
+      }
+      .estep .callout b {
+        color: var(--strong);
+      }
+      .estep .erow {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .estep .ebtn {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--r-btn);
+        padding: 7px 14px;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .estep .ebtn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .estep .ebtn-quiet {
+        color: var(--info);
+      }
+      /* The BAND: the same step, at the top of the pane, on a hairline. */
+      .estep.band {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+      .estep.band h3 {
+        margin: 6px 0 0;
+        font-size: 16px;
+      }
+      .estep.band .erow {
+        margin-top: 10px;
+      }
+      .mini.add {
+        border-color: var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+      }
+      .mini.modify {
+        border-color: var(--info);
+      }
+      .mini .mchip i.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .mini .mchip i.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      /* ---- Part VII (MOTIR-3233): the STATUS TAB STRIP ----------------
+         The shipped `Segmented` primitive, restated in this mock's local tokens:
+         an `--el-tabnav-track` track (== `--surface`) with a 1px border and a
+         2px inset at `--radius-btn`; each option a real button at
+         `calc(--radius-btn - 2px)` so it NESTS in the track at any style;
+         the pressed option takes the `--el-page-bg` raised fill +
+         `--shadow-subtle` and `--el-text-strong` ink. Nothing new is invented —
+         these are the primitive's own rules with the token names resolved. */
+      .tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-btn);
+        background: var(--surface);
+        padding: 2px;
+      }
+      .tabs .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 36px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: calc(var(--r-btn) - 2px);
+        background: transparent;
+        color: var(--secondary);
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .tabs .tab.on {
+        background: var(--page);
+        color: var(--strong);
+        box-shadow: var(--sh-subtle);
+      }
+      .tabs .tab .n {
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary);
+      }
+      .tabs .tab.on .n {
+        color: var(--accent);
+      }
+      /* The per-tab EMPTY state — quieter than the whole-surface one, and with
+         no CTA. Composed from the shipped `EmptyState`'s structure at the
+         smaller of its two sizes. */
+      .tabempty {
+        border: 1px dashed var(--border);
+        border-radius: var(--r-card);
+        background: var(--soft);
+        padding: 26px 18px;
+        text-align: center;
+        color: var(--secondary);
+      }
+      .tabempty h4 {
+        margin: 0 0 4px;
+        font-size: 13.5px;
+        color: var(--strong);
+      }
+      .tabempty p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      .decided-strip {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 0 18px 4px;
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--secondary);
+      }
+      /* ---- Part VIII (MOTIR-3234): the plan-detail PANE HEADER, the LIST
+         body, and the DISCARD door -------------------------------------
+         The pane header is the only new chrome. Everything inside the list is
+         the shipped `ChildList` row grammar with the plan's own op language on
+         top; nothing about the canvas is redrawn. */
+      .panehead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 44px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        flex: none;
+      }
+      .panehead .right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* Part IX's control, drawn here so the pane's chrome is decided ONCE.
+         Its behaviour and treatment are NOT this Part's. */
+      .ixslot {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--r-btn);
+        background: var(--soft);
+        color: var(--secondary);
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .ixslot .tag {
+        font: 700 9.5px var(--mono);
+        letter-spacing: 0.04em;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      /* The LIST body — the shipped ChildList row, grouped by op. */
+      .plist {
+        padding: 12px 14px;
+        overflow: auto;
+      }
+      .plist .grp {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--secondary);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 14px 0 7px;
+      }
+      .plist .grp:first-child {
+        margin-top: 0;
+      }
+      .prow {
+        display: grid;
+        grid-template-columns: 18px 1fr auto;
+        gap: 10px;
+        align-items: start;
+        padding: 9px 10px;
+        border-radius: var(--r-control);
+        border: 1px solid transparent;
+      }
+      .prow:hover {
+        background: var(--soft);
+        border-color: var(--hair);
+      }
+      .prow .kind {
+        margin-top: 1px;
+        color: var(--t-task);
+      }
+      .prow .kind svg {
+        width: 15px;
+        height: 15px;
+        display: block;
+      }
+      .prow .body {
+        min-width: 0;
+      }
+      .prow .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+      }
+      .prow .ttl .key {
+        font: 600 11px var(--mono);
+        color: var(--muted);
+        flex: none;
+      }
+      .prow .ttl .nokey {
+        font: 600 11px var(--mono);
+        color: var(--faint);
+        flex: none;
+      }
+      .prow .facts {
+        margin-top: 3px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        font-size: 11.5px;
+        color: var(--secondary);
+      }
+      .prow .facts .where {
+        color: var(--secondary);
+      }
+      .prow .right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+      }
+      .prow.rem .ttl,
+      .prow.rem .facts {
+        color: var(--muted);
+      }
+      .prow.rem .ttl span:not(.key) {
+        text-decoration: line-through;
+      }
+      /* The `modify` old -> new lines. Deliberately a TWO-LINE text form, not
+         the canvas's inline overlay: see Part VIII §3. */
+      .chg {
+        margin-top: 6px;
+        display: grid;
+        gap: 3px;
+        font-size: 11.5px;
+      }
+      .chg .f {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .chg .fl {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--secondary);
+      }
+      .chg .from {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+      .chg .to {
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .chg .arrow {
+        color: var(--faint);
+        padding: 0 5px;
+      }
+      /* The discard door on a still-generating plan (panel J). */
+      .railbox {
+        width: 352px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      .railbox .lead {
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .railbox .hint {
+        font-size: 11.5px;
+        color: var(--secondary);
+        text-align: center;
+      }
+      .confirm {
+        width: 420px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        box-shadow: var(--sh-elev);
+        padding: 16px;
+      }
+      .confirm h4 {
+        margin: 0 0 6px;
+        font-size: 14.5px;
+        color: var(--text);
+      }
+      .confirm p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .confirm .acts {
+        margin-top: 14px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>The plan detail — a LIST beside the canvas</h1>
+        <p>
+          A canvas is the right way to see SHAPE and a poor way to answer
+          <i>“what exactly am I approving?”</i> — a question about a SET: these cards get created,
+          these get changed, this one gets archived. The work-item detail already learned this and
+          shipped a <b>List ↔ Graph</b> switcher on its Children section
+          (<code>design/work-items/child-panel-graph.*</code>). This is the same reader asking the
+          same question about a different tree, so it gets the same answer rather than a second
+          invention — <b>a SECOND BODY in the same pane, never a re-drawing of the first</b> — plus
+          the door for a discard valve that shipped without one.
+        </p>
+        <p>
+          <b>This is its own asset, and it draws the target — not a migration.</b> It does not amend
+          <code>plans-surface.mock.html</code>, which records the moment MOTIR-843 / 2985 / 3074 /
+          3082 / 3159 drew and is not re-exported here. The canvas, its node treatments, its
+          drill-down and the review rail are COMPOSED as that asset draws them.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-3234</span>
+          <span class="ref">Part VIII</span>
+          <span class="ref muted">story MOTIR-3232</span>
+          <span class="ref muted">composes plans-surface.mock.html panels B + G + H</span>
+          <span class="ref muted">built to design/work-items/child-panel-graph</span>
+          <span class="ref muted">Part IX owns the default view</span>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 1 — The pane header — the switcher, and the place Part IX’s control takes -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The pane header — the switcher, and the place Part IX’s control takes</h2>
+          <span class="note"
+            >· CANVAS selected · the establish band and the canvas below it, composed, not
+            redrawn</span
+          >
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr 352px; height: 420px">
+            <div class="main">
+              <div class="panehead">
+                <div class="tabs" role="group" aria-label="Plan view">
+                  <button type="button" class="tab" aria-pressed="false">List</button>
+                  <button type="button" class="tab on" aria-pressed="true">Canvas</button>
+                </div>
+                <div class="right">
+                  <span class="ixslot"><span class="tag">IX</span>Show changes</span>
+                </div>
+              </div>
+              <div class="estep band" style="border-bottom: 1px solid var(--border)">
+                <div class="erow">
+                  <div>
+                    <div class="eyebrow">Next</div>
+                    <h3>Motir will host your code</h3>
+                  </div>
+                  <button class="ebtn ebtn-primary">Create repositories</button>
+                  <button class="ebtn ebtn-quiet">I'll connect my own</button>
+                </div>
+              </div>
+              <div
+                style="
+                  flex: 1;
+                  display: grid;
+                  place-items: center;
+                  background: var(--soft);
+                  color: var(--secondary);
+                  font-size: 12.5px;
+                  text-align: center;
+                  padding: 20px;
+                "
+              >
+                the CANVAS, exactly as panels B / E / G / H draw it —<br />
+                composed here, redrawn nowhere
+              </div>
+            </div>
+            <div class="rail">
+              <div class="railhead">
+                <span class="pill planned">Planned</span>
+                <span class="lab">Marketplace payouts</span>
+              </div>
+              <div class="railbody">
+                <div style="font-size: 12.5px; color: var(--secondary)">
+                  the review rail, unchanged — its layout, its history timeline and its decision bar
+                  are panel B's
+                </div>
+              </div>
+              <div class="decide">
+                <button class="btn primary" style="justify-content: center">
+                  Approve 14 items
+                </button>
+                <button class="btn quiet" style="justify-content: center">Decline</button>
+              </div>
+            </div>
+          </div>
+          <div class="note-box">
+            <b
+              >WHERE the switcher lives: a 44px PANE HEADER at the very top of the canvas pane,
+              above the establish band.</b
+            >
+            The pane had no header at all — <code>PlanningWorkspace</code>'s
+            <code>canvas</code> slot is filled edge to edge — so one had to be decided rather than
+            found. It goes at the TOP of the pane, not between the band and the body, for one
+            reason: <b>it governs the BODY, and the band is not part of the body.</b> Part VI
+            decided the establish step STACKS above the canvas rather than replacing it; putting the
+            switcher under the band would make the band read as chrome belonging to one of the two
+            views. Above both, it is what it is — the pane's own control bar. The band keeps its
+            position relative to the body it precedes, and nothing inside the step changes.<br /><br />
+            <b
+              >The right end of that bar is Part IX's, and it is drawn here so the pane's chrome is
+              decided ONCE.</b
+            >
+            The dashed <code>Show changes</code> block is a PLACEHOLDER carrying Part IX's mark: its
+            behaviour, its treatment and its states are Part IX's to specify, and Part VIII
+            specifies only that it sits at the bar's right end, opposite the switcher. Leaving it
+            undrawn is how a pane ends up with two control bars.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 2 — The LIST body — what the plan adds, updates and archives -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>The LIST body — what the plan adds, updates and archives</h2>
+          <span class="note"
+            >· the shipped ChildList row grammar with panel B’s op language on top</span
+          >
+        </div>
+
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="panehead">
+                <div class="tabs" role="group" aria-label="Plan view">
+                  <button type="button" class="tab on" aria-pressed="true">List</button>
+                  <button type="button" class="tab" aria-pressed="false">Canvas</button>
+                </div>
+                <div class="right">
+                  <span class="ixslot"><span class="tag">IX</span>Show changes</span>
+                </div>
+              </div>
+              <div class="plist">
+                <div class="grp">Adds <span class="pill count">9</span></div>
+                <div class="prow">
+                  <span class="kind" style="color: var(--t-story)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 4h11l5 5v11H4z" />
+                      <path d="M15 4v5h5" /></svg
+                  ></span>
+                  <div class="body">
+                    <div class="ttl">
+                      <span class="nokey" title="an add has no key until the plan is approved"
+                        >no key yet</span
+                      ><span>Payout reconciliation for split settlements</span>
+                    </div>
+                    <div class="facts">
+                      <span>story · <b>5</b> pts · 90 min</span
+                      ><span
+                        ><span class="where">under <b>Marketplace payouts</b></span></span
+                      ><span>motir-core</span>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span class="opbadge add" style="margin-left: 0">+ add</span>
+                  </div>
+                </div>
+                <div class="prow">
+                  <span class="kind" style="color: var(--t-subtask)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 5h9" />
+                      <path d="M4 12h13" />
+                      <path d="M4 19h7" /></svg
+                  ></span>
+                  <div class="body">
+                    <div class="ttl">
+                      <span class="nokey" title="an add has no key until the plan is approved"
+                        >no key yet</span
+                      ><span>The reconciliation READ — service option + repository predicate</span>
+                    </div>
+                    <div class="facts">
+                      <span>subtask · code · <b>3</b> pts</span
+                      ><span
+                        ><span class="where">under <b>Payout reconciliation…</b></span>
+                        <i>(proposed)</i></span
+                      ><span>motir-core</span>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span class="opbadge add" style="margin-left: 0">+ add</span>
+                  </div>
+                </div>
+                <div class="grp">Updates <span class="pill count">4</span></div>
+                <div class="prow">
+                  <span class="kind" style="color: var(--t-task)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m9 12 2 2 4-4" /></svg
+                  ></span>
+                  <div class="body">
+                    <div class="ttl">
+                      <span class="key">MOTIR-812</span><span>Payout ledger</span>
+                    </div>
+                    <div class="facts">
+                      <span>task · code</span
+                      ><span
+                        ><span class="where">under <b>Marketplace payouts</b></span></span
+                      ><span>In Progress</span>
+                    </div>
+                    <div class="chg">
+                      <div class="f">
+                        <span class="fl">title</span>
+                        <span
+                          ><span class="from">Payout ledger</span><span class="arrow">→</span
+                          ><span class="to">Payout ledger + reconciliation</span></span
+                        >
+                      </div>
+                      <div class="f">
+                        <span class="fl">points</span>
+                        <span
+                          ><span class="from">3</span><span class="arrow">→</span
+                          ><span class="to">5</span></span
+                        >
+                      </div>
+                      <div class="f">
+                        <span class="fl">description</span>
+                        <span class="to">rewritten — open the card to read it</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span class="opbadge modify" style="margin-left: 0">change</span>
+                  </div>
+                </div>
+                <div class="prow">
+                  <span class="kind" style="color: var(--t-task)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="3" />
+                      <path d="m9 12 2 2 4-4" /></svg
+                  ></span>
+                  <div class="body">
+                    <div class="ttl">
+                      <span class="key">MOTIR-844</span><span>Settlement webhook retries</span>
+                    </div>
+                    <div class="facts">
+                      <span>task · code</span
+                      ><span
+                        ><span class="where">under <b>Marketplace payouts</b></span></span
+                      ><span>To Do</span>
+                    </div>
+                    <div class="chg">
+                      <div class="f">
+                        <span class="fl">priority</span>
+                        <span
+                          ><span class="from">medium</span><span class="arrow">→</span
+                          ><span class="to">high</span></span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span class="opbadge modify" style="margin-left: 0">change</span>
+                  </div>
+                </div>
+                <div class="grp">Archives <span class="pill count">1</span></div>
+                <div class="prow rem">
+                  <span class="kind" style="color: var(--t-subtask)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M4 5h9" />
+                      <path d="M4 12h13" />
+                      <path d="M4 19h7" /></svg
+                  ></span>
+                  <div class="body">
+                    <div class="ttl">
+                      <span class="key">MOTIR-851</span><span>Legacy payout CSV export</span>
+                    </div>
+                    <div class="facts">
+                      <span>subtask · chore</span
+                      ><span
+                        ><span class="where">under <b>Marketplace payouts</b></span></span
+                      ><span>To Do</span>
+                    </div>
+                  </div>
+                  <div class="right">
+                    <span class="opbadge remove" style="margin-left: 0">archive</span>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b
+                  >The row is the shipped <code>ChildList</code> row, with the plan's own op
+                  language on top.</b
+                >
+                Kind glyph (<code>IssueTypeIcon</code>, its <code>--el-type-*</code> hue),
+                identifier, title, a facts line, and a right-hand chip — the same grammar the
+                Children list uses, so a reader who has read one has read the other. The op chip is
+                panel B's own <code>add</code> / <code>modify</code> /
+                <code>remove</code> vocabulary, unchanged; the list introduces no fourth language
+                for the same three facts.<br /><br />
+                <b
+                  >An <code>add</code> has NO KEY, and the list says so rather than leaving a
+                  gap.</b
+                >
+                <code>identifier</code> is null until approve materializes it, so the slot the key
+                occupies reads <code>no key yet</code> in the faint monospace the key itself uses.
+                An empty slot in a column of keys reads as a missing value; this reads as the fact
+                it is.<br /><br />
+                <b
+                  >A <code>modify</code> shows its diff as TWO-LINE TEXT, per changed field — and
+                  that is deliberately NOT the canvas's inline overlay.</b
+                >
+                The canvas's overlay answers <i>this node is changing</i> inside a node card ~280px
+                wide: it is a signal. The list answers <i>changing to WHAT</i>, at the full width of
+                the pane, for a reader deciding whether to approve. So the list is the only surface
+                that spells a change out, the canvas is the only surface that marks a node, and
+                neither is built twice. A field whose new value is a BODY (<code>description</code>,
+                <code>explanation</code>) is named and not quoted — a rewritten description is not a
+                diff a review list can carry, and a truncated one is worse than a pointer.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 3 — States — empty · loading · a DECIDED plan -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>States — empty · loading · a DECIDED plan</h2>
+          <span class="note"
+            >· the decided list is a RECORD, in the same tense Part VI gave the canvas</span
+          >
+        </div>
+
+        <div class="frame" style="margin-top: 18px">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>States</h3>
+                <span class="sub">· empty · loading · a DECIDED plan</span>
+              </div>
+              <div class="plist" style="display: grid; gap: 16px">
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    A plan that proposes nothing
+                  </div>
+                  <div class="tabempty">
+                    <h4>No proposals</h4>
+                    <p>
+                      This plan finished without proposing anything. Nothing will change if you
+                      approve it.
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">Loading</div>
+                  <div class="tabempty" style="border-style: solid">
+                    <p>the canvas's own centred spinner, in the same box — no second skeleton</p>
+                  </div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    A DECIDED plan — the list is a RECORD, exactly as Part VI made the canvas one
+                  </div>
+                  <div class="plist" style="padding: 0">
+                    <div class="grp">Created <span class="pill count">9</span></div>
+                    <div class="prow">
+                      <span class="kind" style="color: var(--t-story)"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M4 4h11l5 5v11H4z" />
+                          <path d="M15 4v5h5" /></svg
+                      ></span>
+                      <div class="body">
+                        <div class="ttl">
+                          <span class="key">MOTIR-902</span
+                          ><span>Payout reconciliation for split settlements</span>
+                        </div>
+                        <div class="facts">
+                          <span>story · <b>5</b> pts</span
+                          ><span
+                            ><span class="where">under <b>Marketplace payouts</b></span></span
+                          ><span>To Do</span>
+                        </div>
+                      </div>
+                      <div class="right"><span class="pill approved">Created</span></div>
+                    </div>
+                    <div class="grp">Updated <span class="pill count">4</span></div>
+                    <div class="prow">
+                      <span class="kind" style="color: var(--t-task)"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <rect x="3" y="3" width="18" height="18" rx="3" />
+                          <path d="m9 12 2 2 4-4" /></svg
+                      ></span>
+                      <div class="body">
+                        <div class="ttl">
+                          <span class="key">MOTIR-812</span
+                          ><span>Payout ledger + reconciliation</span>
+                        </div>
+                        <div class="facts">
+                          <span>task · code</span
+                          ><span
+                            ><span class="where">under <b>Marketplace payouts</b></span></span
+                          ><span>In Progress</span>
+                        </div>
+                      </div>
+                      <div class="right"><span class="pill approved">Applied</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b
+                  >The <code>remove</code> disposition is DECIDED: a THIRD SECTION, not a footnote
+                  and not a silent drop.</b
+                >
+                A plan holds three ops. A list showing two of them under a row whose item count
+                counts all three is a surface that contradicts itself, and the count is on the row
+                that got the reader here. The request named
+                <i>the cards it adds and the cards it updates</i> because those are the two a plan
+                usually holds — not as an enumeration of what a list may show. So the list renders
+                <b>Adds · Updates · Archives</b>, each section appearing only when it is non-empty,
+                and <b>the plan's item count keeps its whole-plan scope</b> because the list now
+                covers the whole plan. An archived row takes panel B's own
+                <code>remove</code> treatment — struck title, muted ink, the archive chip — and
+                nothing red or dashed (archive is reversible; red-hatch stays reserved for the
+                canvas's cross-story dependency signal).<br /><br />
+                <b
+                  >A DECIDED plan's list is a RECORD, and it is reconciled with Part VI in one
+                  sentence:</b
+                >
+                Part VI decided the canvas pane holds the record of what was accepted rather than a
+                set of proposals, and the list is the same pane's other body, so it says the same
+                thing in the same tense — <code>Created</code> / <code>Applied</code> /
+                <code>Archived</code> rather than <code>+ add</code> / <code>change</code> /
+                <code>archive</code>, and every row that HAS a key now shows one. A declined plan's
+                list keeps the proposal tense and adds no outcome chip: nothing happened to those
+                cards.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 4 — A plan still GENERATING — the discard door -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>A plan still GENERATING — the discard door</h2>
+          <span class="note">· the valve MOTIR-3189 opened, and the control that reaches it</span>
+        </div>
+        <div class="note-box" style="margin: 0 0 16px">
+          <code>plansService.declinePlan</code> accepts a <code>generating</code> plan and records
+          <code>decisionReason: 'discarded'</code> (MOTIR-3189). <code>PlanReviewRail</code> renders
+          its Decline button with <code>disabled={!planned}</code> and the hint
+          <code>reviewLocked</code>. <b>So the valve exists and has no door</b>, and the two plans
+          this story was written about had been sitting at <code>generating</code> for the better
+          part of a day with a control that could have ended them, greyed out.
+        </div>
+
+        <div class="frame">
+          <div class="app" style="grid-template-columns: 1fr; height: auto">
+            <div class="main">
+              <div class="topbar">
+                <h3>The rail, while generating</h3>
+                <span class="sub">· before · after · the confirm</span>
+              </div>
+              <div class="list" style="display: flex; gap: 18px; flex-wrap: wrap">
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    Before — the shipped rail
+                  </div>
+                  <div class="railbox">
+                    <span class="pill generating"><span class="spin"></span> Generating</span>
+                    <div class="lead">
+                      Reading your direction and drafting the plan. Proposals appear on the canvas
+                      as I go — one level at a time.
+                    </div>
+                    <button class="btn primary" style="justify-content: center; opacity: 0.5">
+                      Approve 3 items
+                    </button>
+                    <button class="btn quiet" style="justify-content: center; opacity: 0.5">
+                      Decline
+                    </button>
+                    <div class="hint">Review &amp; Approve unlock when generation completes</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">
+                    After — one live control, and the hint tells the truth
+                  </div>
+                  <div class="railbox">
+                    <span class="pill generating"><span class="spin"></span> Generating</span>
+                    <div class="lead">
+                      Reading your direction and drafting the plan. Proposals appear on the canvas
+                      as I go — one level at a time.
+                    </div>
+                    <button class="btn primary" style="justify-content: center; opacity: 0.5">
+                      Approve 3 items
+                    </button>
+                    <button class="btn secondary" style="justify-content: center">
+                      Discard this plan
+                    </button>
+                    <div class="hint">
+                      Approve unlocks when generation completes. Discarding ends it now — nothing in
+                      your backlog changes.
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div class="decided-strip" style="padding: 0 0 7px">The confirm</div>
+                  <div class="confirm">
+                    <h4>Discard this plan?</h4>
+                    <p>
+                      It has <b>3 proposals</b> so far and is still being written. Discarding ends
+                      it now and keeps the proposals as a record — nothing in your backlog changes,
+                      and nothing is created.
+                    </p>
+                    <div class="acts">
+                      <button class="btn quiet">Keep generating</button>
+                      <button class="btn primary">Discard plan</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="note-box">
+                <b>DISCARD, not Decline — the copy is a decision.</b> The rail's
+                <code>declineCta</code> says <i>Decline</i>, and declining is what you do to a
+                finished proposal you have read. A plan that never finished is not being rejected on
+                its merits; it is being ENDED. <code>Plan.decisionReason</code> already tells the
+                two apart on the row (<code>discarded</code> vs <code>reviewed</code>, MOTIR-3189),
+                and the button is where a reader learns which one they are doing.<br /><br />
+                <b>It CONFIRMS, and the confirm names the proposals.</b> Approve confirms when items
+                are stale, and this is the sharper case: the action is irreversible from this
+                surface, the plan is still moving, and the number of proposals it has already
+                written is the one fact that tells the reader what they are throwing away. The
+                confirm reuses the shipped <code>Modal</code> at <code>size="sm"</code> — the same
+                one the stale-approve confirm uses — and its primary carries the same word as the
+                control that opened it.<br /><br />
+                <b>The <code>reviewLocked</code> hint is REPLACED, not removed.</b> It said
+                <i>“Review &amp; Approve unlock when generation completes”</i>, which was true of
+                both buttons and is now true of one. The replacement keeps that promise for Approve
+                and states what the second control does, because a hint under two buttons that
+                describes only one is how the live control reads as disabled too.<br /><br />
+                <b>Who may press it is UNCHANGED.</b> <code>ai:decide_plan</code> gates the discard
+                exactly as it gates approve; a reader without it sees the same rail without the
+                control, as they do today.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
