@@ -2,17 +2,19 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                      | Files                                                   | Card                 | Section  |
-| -------------------------------------------- | ------------------------------------------------------- | -------------------- | -------- |
-| The Plans surface                            | `plans-surface.mock.html` + `.png`                      | MOTIR-843 (7.4.1)    | Part I   |
-| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                    | MOTIR-1749 (7.13.11) | Part II  |
-| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`           | MOTIR-2985           | Part III |
-| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png` | MOTIR-3074           | Part IV  |
-| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`            | MOTIR-3082           | Part V   |
-| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`            | MOTIR-3082           | Part V   |
-| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`            | MOTIR-3159           | Part VI  |
-| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`            | MOTIR-3159           | Part VI  |
-| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`              | MOTIR-3233           | Part VII |
+| Surface                                      | Files                                                    | Card                 | Section   |
+| -------------------------------------------- | -------------------------------------------------------- | -------------------- | --------- |
+| The Plans surface                            | `plans-surface.mock.html` + `.png`                       | MOTIR-843 (7.4.1)    | Part I    |
+| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                     | MOTIR-1749 (7.13.11) | Part II   |
+| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`            | MOTIR-2985           | Part III  |
+| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png`  | MOTIR-3074           | Part IV   |
+| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`             | MOTIR-3082           | Part V    |
+| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`             | MOTIR-3082           | Part V    |
+| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`             | MOTIR-3159           | Part VI   |
+| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`             | MOTIR-3159           | Part VI   |
+| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`               | MOTIR-3233           | Part VII  |
+| The plan detail's **List ↔ Canvas** switcher | **`plan-detail-list-view.mock.html`** + `.png`           | MOTIR-3234           | Part VIII |
+| What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png` | MOTIR-3234           | Part VIII |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -54,6 +56,12 @@ them now would re-export the very asset this rule exists to leave alone.
 **Part V amends it again** — two panels on the plan DETAIL surface: a proposal drawn on its
 parent's roadmap LEVEL (nothing new — the shipped drill-down, with only the proposed card's style
 differing), and a read view for one proposal composing the shipped quick view.
+
+**Part VIII gets its own asset too** — `plan-detail-list-view.mock.html` gives the canvas pane a
+header, a **List ↔ Canvas** switcher and a second body (a list of what the plan proposes) beside the
+first, and draws the door for the discard valve MOTIR-3189 opened and nothing could reach. It
+decides everything about the switcher EXCEPT which option is preselected, which is Part IX's
+conditional rule.
 
 **Part VII is the first Part with its OWN asset, and the first to REVERSE a rule this area
 records.** `plans-tabbed-list.mock.html` tabs the list by status, draws the two different
@@ -1484,3 +1492,243 @@ its breadcrumb and the Show-changes control (Part IX); the review rail; the esta
 left-nav entry itself; the row's own shape, its pills and its staleness flag; the ten-a-page
 streaming mechanics and the scroll sentinel (drawn nowhere — they have no pixels of their own
 beyond the list this Part already shows).
+
+---
+
+# Part VIII — The plan DETAIL: a LIST beside the canvas, and what a `generating` plan offers (MOTIR-3234 / Story MOTIR-3232)
+
+**Its OWN asset**: `design/ai-planning/plan-detail-list-view.mock.html` + `plan-detail-list-view.png`,
+four panels, plus this section in the area's shared `design-notes.md`.
+
+**It does NOT amend `plans-surface.mock.html`, and that asset is not re-exported** — see _A design
+result is a MOMENT_ above. Everything it composes from that asset — the canvas, the three `op`
+languages, the decided node treatments, the establish band, the review rail — it composes by
+CITATION, drawn there and not redrawn here.
+
+It draws the `/plans/[id]` DETAIL surface and nothing else. The LIST surface is
+[Part VII](motir:cmt1lb9t600cbi3ph3fd7qqkk)'s; the CANVAS's own behaviour — which level it arrives
+at, the crumb for a proposed parent, and the **Show changes** control — is **Part IX**'s.
+
+## 0. Why a list at all
+
+A canvas is the right way to see **SHAPE**: where a proposal lands, what it hangs under, what blocks
+what. It is a poor way to answer _"what exactly am I approving?"_, which is a question about a
+**SET** — these cards get created, these get changed, this one gets archived. The work-item detail
+already learned this and shipped a **List ↔ Graph** switcher on its Children section
+(`design/work-items/child-panel-graph.*`, MOTIR-2284 / MOTIR-2285). **The plan detail is the same
+reader asking the same question about a different tree, so it gets the same answer rather than a
+second invention.**
+
+**The list is a SECOND BODY in the same pane, never a re-drawing of the first.**
+
+## 1. What this COMPOSES and must not redraw
+
+`PlanReviewCanvas` / `ProjectRoadmapCanvas` / `WorkItemNode` / `PlanItemNode`; the three `op`
+languages from Part I §3 panel B; the accepted / declined node treatments and the after-approve pane
+from **Part VI**; the per-level drill-down and its breadcrumb; the review RAIL's whole layout; the
+establish band. All composed as drawn.
+
+### What it copies from the shipped List ↔ Graph grammar, and what it deliberately does differently
+
+|                        | `child-panel-graph` (MOTIR-2284/2285)                            | Part VIII                                                                                                           |
+| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| the switcher primitive | the shipped `Segmented`, `role="group"` + `aria-pressed`         | **same, unchanged**                                                                                                 |
+| where it sits          | the section card's `headerRight` — a header that already existed | **a NEW 44px pane header**, because the canvas pane has none (§2)                                                   |
+| which view is DEFAULT  | **LIST**, fixed                                                  | **conditional — Part IX's rule** (§2), cited not restated                                                           |
+| the URL carries it     | `?children=graph`                                                | **yes**, same convention                                                                                            |
+| the list body          | the SERVER-rendered `ChildList`, byte for byte                   | **its ROW grammar**, with the plan's own op language on top (§3)                                                    |
+| the canvas box         | a fixed `h-[28rem]` inside a scrolling content column            | **not applicable** — the plan detail's pane is already a fitted two-pane workspace, and the canvas already fills it |
+
+## 2. Panel 1 — the PANE HEADER and the switcher
+
+**The pane had no header.** `PlanningWorkspace`'s `canvas` slot is filled edge to edge, and an
+approved plan stacks the establish band above the canvas (Part VI §4). So a header had to be
+DECIDED, not found.
+
+**A 44px bar at the very top of the canvas pane, above the establish band.** `--el-surface`, a
+bottom hairline (`--el-border`), `--spacing-control-x` gutters. It holds the switcher at its LEFT
+and leaves its RIGHT end for Part IX's control.
+
+**Why above the band, not between the band and the body:** the bar governs the BODY, and the band is
+not part of the body. Part VI decided the establish step STACKS above the canvas rather than
+replacing it; a control bar underneath the band would make the band read as chrome belonging to one
+of the two views. Above both, it is the pane's own control bar, and the band keeps its position
+relative to the body it precedes. **Nothing inside the step changes** — MOTIR-1782 keeps every
+decision it made.
+
+| element               | primitive                                                   | colour token                                      | shape / size                                                          |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| the pane header       | a `<div>` — new chrome, no primitive                        | `--el-surface`, bottom border `--el-border`       | 44px, `--spacing-control-x` gutters                                   |
+| the switcher          | the shipped **`Segmented`**                                 | track `--el-tabnav-track`, border `--el-border`   | `--radius-btn`, 2px inset                                             |
+| one option            | its `<button aria-pressed>`                                 | inactive `--el-text-secondary`, hover `--el-text` | `--height-control`, `--spacing-control-x`, `calc(--radius-btn - 2px)` |
+| the SELECTED option   | the same button                                             | fill `--el-page-bg`, ink `--el-text-strong`       | `--shadow-subtle`                                                     |
+| the group's a11y name | `role="group"` + `aria-label` = `planReview.viewSwitchAria` | —                                                 | not rendered                                                          |
+
+- **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*`.**
+- **Both states are drawn** — panel 1 with `Canvas` selected, panel 2 with `List`.
+
+### ⚠️ Part VIII does NOT decide which view is DEFAULT
+
+**The default is a CONDITIONAL rule, and Part IX specifies it**: the canvas by default, the LIST
+when the plan's proposals straddle more than one container. That condition is a statement about the
+plan's SHAPE, and Part IX is the Part that reasons about shape. **Part VIII cites it and does not
+restate it**, so the two Parts cannot drift into two answers. What Part VIII owns is everything
+else about the control: its placement, its primitive, its tokens, its selected treatment, its
+accessible group name, what it does to the establish band (nothing), and what **both** of its states
+look like — which is why both are drawn.
+
+### The place Part IX's control occupies
+
+**The right end of the pane header, opposite the switcher.** Panels 1 and 2 draw it as a dashed
+placeholder carrying Part IX's mark, in both frames. Its behaviour, treatment and states are Part
+IX's to specify; Part VIII specifies only WHERE it goes, so the pane's chrome is decided once
+rather than twice. Leaving it undrawn is how a pane ends up with two control bars.
+
+## 3. Panel 2 — the LIST body, per row and per FIELD
+
+**The row is the shipped `ChildList` row grammar** — kind glyph (`IssueTypeIcon`, its
+`--el-type-*` hue), identifier, title, a facts line, a right-hand chip — so a reader who has read
+the Children list has read this one. Shape routes through `--radius-control` /
+`--spacing-control-x|y`, exactly as that row does.
+
+| element           | reads                                                                         | primitive / treatment                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| the kind glyph    | `kind`                                                                        | `IssueTypeIcon`, `--el-type-{epic,story,task,bug,subtask}`                                                     |
+| the key           | `identifier`                                                                  | the row's monospace key, `--el-text-muted`; **`no key yet`** in `--el-text-faint` for an un-materialized `add` |
+| the title         | `title`                                                                       | the row's title ink, single-line ellipsis                                                                      |
+| the facts line    | `kind` · `type` · `storyPoints` · `estimateMinutes` · `targetRepo`            | `--el-text-secondary`, the row's own `text-xs`                                                                 |
+| where it lands    | `parentIdentifier` / `parentTitle`, or `parentNodeId` naming another proposal | `under <b>…</b>`; an INTRA-PLAN parent is marked _(proposed)_                                                  |
+| the live status   | `statusLabel` / `statusCategory`                                              | the shipped `StatusPill` — only where the row HAS one (never an `add`)                                         |
+| the op            | `op`                                                                          | panel B's own `add` / `modify` / `remove` chips, unchanged                                                     |
+| the stale flag    | `stale` / `staleReasons`                                                      | the row's shipped warning `Pill`, as the rail draws it                                                         |
+| a `modify`'s diff | `changes[]`                                                                   | §3's two-line text form, below                                                                                 |
+
+- **An `add` has NO KEY, and the list says so rather than leaving a gap.** `identifier` is null until
+  approve materializes it. An empty slot in a column of keys reads as a missing value; `no key yet`
+  reads as the fact it is. (`--el-text-faint` is legitimate here — it is a LABEL about absence
+  beside a value the row also carries in words, and the row's meaning does not depend on it. Where
+  it must carry meaning alone, use `--el-text-secondary`.)
+- **A `modify`'s diff is TWO-LINE TEXT, per changed field — deliberately NOT the canvas's inline
+  overlay.** The canvas overlay answers _this node is changing_, inside a node card ~280px wide: it
+  is a SIGNAL. The list answers _changing to WHAT_, at the full width of the pane, for a reader
+  deciding whether to approve. So **the list is the only surface that spells a change out and the
+  canvas is the only surface that marks a node** — neither is built twice.
+  - the field NAME in the row's monospace label ink; the OLD value struck through in
+    `--el-text-muted`; an arrow in `--el-text-faint` (`aria-hidden`, decorative); the NEW value in
+    `--el-text-strong` at `font-semibold`.
+  - **A field whose new value is a BODY (`description`, `explanation`) is NAMED, not quoted** —
+    _"rewritten — open the card to read it"_. A rewritten description is not a diff a review list
+    can carry, and a truncated one is worse than a pointer.
+
+### ⚠️ What the list says about a `remove` — DECIDED: a THIRD SECTION
+
+A plan holds three ops. **A list showing two of them, under a row whose item count counts all
+three, is a surface that contradicts itself** — and the count is on the row that got the reader
+here. The request named _the cards it adds and the cards it updates_ because those are the two a
+plan usually holds, not as an enumeration of what a list may show.
+
+**So the list renders three sections — `Adds` · `Updates` · `Archives` — each appearing only when
+it is non-empty, and the plan's item count keeps its WHOLE-PLAN scope**, which is truthful because
+the list now covers the whole plan. An archived row takes panel B's own `remove` treatment: struck
+title, muted ink, the archive chip — **nothing red, dashed or hatched**, because archive is
+reversible and red-hatch stays reserved for the canvas's cross-story dependency signal.
+
+Rejected: a one-line footnote (_"and 1 card will be archived"_) — it makes the one destructive op
+the only one you cannot see; and a count that names its own scope (_"13 of 14"_) — it fixes the
+arithmetic and leaves the reader unable to find the fourteenth.
+
+### States
+
+| state       | what it draws                                                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **empty**   | _No proposals_ — a plan that finished proposing nothing, with the one sentence that matters: _nothing will change if you approve it_ |
+| **loading** | the canvas's own centred `Spinner`, in the same box. No second skeleton: the pane has already painted                                |
+| **DECIDED** | the list is a **RECORD**, reconciled with Part VI in one sentence — see below                                                        |
+
+**The DECIDED list, reconciled with Part VI.** Part VI decided the canvas pane holds the RECORD of
+what was accepted rather than a set of proposals; **the list is the same pane's other body, so it
+says the same thing in the same tense** — `Created` / `Applied` / `Archived` rather than
+`+ add` / `change` / `archive`, and every row that has a key now shows one. A **declined** plan's
+list keeps the proposal tense and adds no outcome chip: nothing happened to those cards.
+
+## 4. Panel 4 — what a plan still GENERATING offers
+
+`plansService.declinePlan` accepts a `generating` plan and records
+`decisionReason: 'discarded'` (MOTIR-3189). `PlanReviewRail` renders its Decline button with
+`disabled={!planned}` and the hint `reviewLocked`. **The valve exists and has no door** — and the
+two plans this story was written about sat at `generating` for the better part of a day with a
+control that could have ended them, greyed out.
+
+| decision                                                       | the answer, and why                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **the control**                                                | the rail's SECOND button, in the decision bar where Decline is today — same place, same size, `Button variant="secondary"` (a real affordance, not a ghost: it is the only live control in this state)                                                                                                                                                 |
+| **the label**                                                  | **`Discard this plan`**, not _Decline_. Declining is what you do to a finished proposal you have read; a plan that never finished is not being rejected on its merits, it is being ENDED. `Plan.decisionReason` already tells the two apart on the row (`discarded` vs `reviewed`); the button is where a reader learns which one they are doing       |
+| **does it confirm?**                                           | **YES.** The shipped `Modal` at `size="sm"` — the same one the stale-approve confirm uses. Approve confirms when items are stale, and this is sharper: the action is irreversible from this surface and the plan is still moving                                                                                                                       |
+| **what the confirm says about the proposals already appended** | it NAMES them: _"It has **3 proposals** so far and is still being written. Discarding ends it now and keeps the proposals as a record — nothing in your backlog changes, and nothing is created."_ The count is the one fact that tells the reader what they are throwing away, and the second half is the reassurance the whole substrate is built on |
+| **what replaces `reviewLocked`**                               | _"Approve unlocks when generation completes. Discarding ends it now — nothing in your backlog changes."_ The old hint (_"Review & Approve unlock when generation completes"_) was true of both buttons and is now true of one; **a hint under two buttons that describes only one is how the live control reads as disabled too**                      |
+| **who may press it**                                           | UNCHANGED — `ai:decide_plan`, exactly as it gates approve. A reader without it sees the rail without the control, as they do today                                                                                                                                                                                                                     |
+
+**Approve stays disabled.** Nothing about this widens what may be approved: a plan that has not
+finished generating is not a plan anybody should be materializing, and that is the half of
+`reviewLocked` that was always right.
+
+## 5. Copy — every string these panels introduce (namespace `planReview`)
+
+Both catalogues are owed — `messages/en.json` AND `messages/zh.json` (the zh-parity gate).
+
+| key                                            | en                                                                                                                                                                                                                |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `viewSwitchAria`                               | Plan view                                                                                                                                                                                                         |
+| `viewList`                                     | List                                                                                                                                                                                                              |
+| `viewCanvas`                                   | Canvas                                                                                                                                                                                                            |
+| `listAdds`                                     | Adds                                                                                                                                                                                                              |
+| `listUpdates`                                  | Updates                                                                                                                                                                                                           |
+| `listArchives`                                 | Archives                                                                                                                                                                                                          |
+| `listCreated` / `listApplied` / `listArchived` | Created / Applied / Archived                                                                                                                                                                                      |
+| `listNoKey`                                    | no key yet                                                                                                                                                                                                        |
+| `listProposedParent`                           | (proposed)                                                                                                                                                                                                        |
+| `listBodyRewritten`                            | rewritten — open the card to read it                                                                                                                                                                              |
+| `listEmptyTitle`                               | No proposals                                                                                                                                                                                                      |
+| `listEmptyBody`                                | This plan finished without proposing anything. Nothing will change if you approve it.                                                                                                                             |
+| `discardCta`                                   | Discard this plan                                                                                                                                                                                                 |
+| `discardHint`                                  | Approve unlocks when generation completes. Discarding ends it now — nothing in your backlog changes.                                                                                                              |
+| `discardConfirmTitle`                          | Discard this plan?                                                                                                                                                                                                |
+| `discardConfirmBody`                           | It has {n, plural, one {# proposal} other {# proposals}} so far and is still being written. Discarding ends it now and keeps the proposals as a record — nothing in your backlog changes, and nothing is created. |
+| `discardConfirmCancel`                         | Keep generating                                                                                                                                                                                                   |
+| `discardConfirmCta`                            | Discard plan                                                                                                                                                                                                      |
+
+## 6. GIVES / TAKES
+
+**TAKES** (premises as well as elements):
+
+- **Part VI §4's _the establish step STACKS above the canvas_ — a PREMISE, honoured**: the pane
+  header goes ABOVE the band precisely so that relationship is not disturbed (§2).
+- **Part VI's _the decided pane holds a RECORD_ — a PREMISE, EXTENDED to the list** (§3's decided
+  state), which is why the list changes tense rather than greying out its op chips.
+- **Part I §3 panel B's three `op` languages — an ELEMENT set, unchanged.** The list introduces no
+  fourth language for the same three facts.
+- **[Part IX](motir-ref:cmt1ui496002zi1n8qe3uzt1k)'s _which view is DEFAULT_ — a PREMISE this Part
+  DOES NOT DECIDE** (§2). Part IX also TAKES this Part's pane-header slot for its Show-changes
+  control — a STRUCTURE this Part reserves and labels.
+- **`PlanReviewRail`'s _a plan that is not `planned` offers nothing_ — a PREMISE, REVERSED for one
+  control** (§4). It was true when nothing could act on a `generating` plan; MOTIR-3189 made that
+  false and the rail did not follow.
+- **MOTIR-2284 / MOTIR-2285's List ↔ Graph grammar — STRUCTURE**, cited in §1's table with what is
+  copied and what is deliberately different.
+- **`ChildList`'s row — an ELEMENT**, composed rather than redrawn.
+
+**GIVES:**
+
+- **[The plan-detail list view](motir:cmt1lba2700chi3phgktf5gn8)** takes §2's pane header and
+  switcher and §3 whole: the row per field, the `modify` diff form, the three sections, and the
+  empty / loading / decided states. It takes the DEFAULT rule from **Part IX**, not from here.
+- **[The discard valve](motir:cmt1lba3600cii3phn69q6h8h)** takes §4 whole: the control, its label,
+  its confirm, the replaced hint, and the unchanged permission.
+- **Part IX** takes the pane-header slot (§2) and owes the control that fills it.
+
+## 7. What Part VIII does NOT draw
+
+The canvas and its node treatments; **which level the canvas arrives at**; **the breadcrumb crumb
+for a PROPOSED parent**; **the Show-changes control's own behaviour and treatment** — all three are
+Part IX's. Also: the drill-down, the review rail's layout, the establish step's own content, the
+approve/decline flow for a `planned` plan, and the `/plans` list surface (Part VII).
