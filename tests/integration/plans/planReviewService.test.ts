@@ -533,6 +533,117 @@ describe('planReviewService.getPlanReview', () => {
     expect(remove.identifier).toBe(removeTarget.identifier);
   });
 
+  // ── The target status's own IDENTITY (bug MOTIR-3170) ────────────────────
+  //
+  // The canvas chip received a bare status KEY and narrowed it against a
+  // six-member literal, so a `modify` whose live target had an open pull request
+  // drew as "To Do". The key alone can never fix it — a CUSTOM workflow status
+  // has no entry in the `labels.defaultStatus` catalog the chip named itself
+  // from — so the review model carries the status's label + category too.
+  //
+  // The label and category are read off the SAME `target` as `status`, so they
+  // follow MOTIR-3160's rule directly: whenever a status is non-null it is
+  // nameable, including on a materialized `add` (asserted below).
+  it("carries the target status's LABEL and CATEGORY on a modify", async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'A built card');
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { status: 'implemented' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Status plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: target.id, patch: { priority: 'high' } },
+        { op: 'add', proposedFields: { title: 'A new card', kind: 'task' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.status).toBe('implemented');
+    expect(modify.statusLabel).toBe('Implemented');
+    expect(modify.statusCategory).toBe('in_progress');
+
+    // An UN-MATERIALIZED `add` has no live target, so it has no status at all —
+    // not a defaulted one, which is precisely the failure this card is about.
+    const add = review.items.find((i) => i.op === 'add')!;
+    expect(add.status).toBeNull();
+    expect(add.statusLabel).toBeNull();
+    expect(add.statusCategory).toBeNull();
+  });
+
+  it('names the status of a MATERIALIZED add too — label and category track `status`', async () => {
+    // MOTIR-3160 gave an approved `add` its live target, so it now HAS a status.
+    // A status the surface can show but not name is the same defect one card
+    // over, so the two identity fields have to move with it rather than keep the
+    // `op === 'add'` guard that rule removed.
+    const fx = await makeWorkItemFixture();
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Accepted' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Becomes real and named', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Becomes real and named' },
+    });
+    await adminDb.workItem.update({
+      where: { id: created.id },
+      data: { status: 'implemented' },
+    });
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const accepted = review.items[0]!;
+    expect(accepted.status).toBe('implemented');
+    expect(accepted.statusLabel).toBe('Implemented');
+    expect(accepted.statusCategory).toBe('in_progress');
+  });
+
+  it("carries a CUSTOM workflow status's own label — the catalog cannot name it", async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Waiting on counsel');
+    const anyStatus = await adminDb.workflowStatus.findFirst({
+      where: { projectId: fx.projectId },
+    });
+    await adminDb.workflowStatus.create({
+      data: {
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        key: 'awaiting_legal',
+        label: 'Awaiting legal',
+        category: 'todo',
+        position: `${anyStatus!.position}z`,
+        isInitial: false,
+      },
+    });
+    await adminDb.workItem.update({
+      where: { id: target.id },
+      data: { status: 'awaiting_legal' },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Custom plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { priority: 'high' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.statusLabel).toBe('Awaiting legal');
+    expect(modify.statusCategory).toBe('todo');
+  });
+
   it('throws PlanNotFoundError for a missing plan', async () => {
     const fx = await makeWorkItemFixture();
     await expect(

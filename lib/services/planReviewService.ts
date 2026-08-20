@@ -6,6 +6,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 
 import { plansService } from '@/lib/services/plansService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 
 import type {
   PlanItemDto,
@@ -216,6 +217,18 @@ export const planReviewService = {
 
     const staleByItem = new Map(staleness.items.map((s) => [s.planItemId, s]));
 
+    // The project's WORKFLOW, so a target's status can carry its own identity —
+    // label + lifecycle category — to the canvas chip (bug MOTIR-3170). The chip
+    // used to receive a bare key and narrow it against a six-member literal,
+    // which drew a `modify` whose target sits at `implemented` as "To Do". One
+    // read per plan page; the statuses are per-project and there is one project.
+    const statusByKey = new Map(
+      (await workflowsService.listStatusesByProject(plan.projectId, ctx.workspaceId)).map((s) => [
+        s.key,
+        s,
+      ]),
+    );
+
     // Resolve node ids first, so `hasChildren` can be computed across the forest.
     //
     // ONE rule for all three ops (MOTIR-3160): the work item this proposal is
@@ -310,6 +323,14 @@ export const planReviewService = {
         // identifier off `target` and leaving the status null would split one
         // batched read across two cards for no reason.
         status: target?.status ?? null,
+        // The status's own IDENTITY (bug MOTIR-3170) — its label and lifecycle
+        // category, so the canvas chip can name a status it has no per-key
+        // treatment for instead of coercing it to `todo`. Resolved off the SAME
+        // `target`, and therefore under MOTIR-3160's rule directly above rather
+        // than the `op === 'add'` guard that rule removed: a status that is
+        // non-null must be nameable, or the chip is back to guessing.
+        statusLabel: statusByKey.get(target?.status ?? '')?.label ?? null,
+        statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],
         stale: reasons.length > 0,

@@ -110,6 +110,8 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     executor: null,
     planningProvenance: null,
     status: 'todo',
+    statusLabel: null,
+    statusCategory: null,
     hasChildren: false,
     changes,
     stale: false,

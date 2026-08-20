@@ -655,6 +655,18 @@ export interface RoadmapNodeDto {
   identifier: string;
   title: string;
   status: string;
+  /** The status's own DISPLAY LABEL, from the project's workflow (bug MOTIR-3170).
+   *  The canvas chip used to name a status out of the `labels.defaultStatus`
+   *  catalog alone, which by construction has no entry for a project's CUSTOM
+   *  status — so the identity has to travel on the wire beside the key. Falls
+   *  back to the raw key for a row pointing at a status the workflow no longer
+   *  holds. */
+  statusLabel: string;
+  /** The status's lifecycle CATEGORY (bug MOTIR-3170) — the chip's fallback tone
+   *  when the renderer has no treatment for the key itself, exactly as
+   *  `statusPillTone` / `statusElVar` fall back. `null` only for a row whose
+   *  status is not in the project's workflow at all. */
+  statusCategory: StatusCategoryDto | null;
   /** This node's OWN done-ness (a `done`-category status other than `cancelled`). */
   isDone: boolean;
   /** Has at least one non-archived child → the canvas can DRILL into it. Computed

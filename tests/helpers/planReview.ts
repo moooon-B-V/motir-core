@@ -39,6 +39,8 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     executor: null,
     planningProvenance: null,
     status: null,
+    statusLabel: null,
+    statusCategory: null,
     hasChildren: false,
     changes: [],
     stale: false,
