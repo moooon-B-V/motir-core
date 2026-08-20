@@ -145,6 +145,46 @@ export type BatchStopReason =
   /** Ctrl-C. */
   | 'interrupted';
 
+/**
+ * One dispatched card, READ BACK from the server at exit (MOTIR-3197).
+ *
+ * ⚠️ `status` is what the SERVER returned, verbatim — never inferred from the
+ * run's own {@link BatchOutcome}, and never defaulted. The two answer different
+ * questions: the outcome says what this process observed when the agent exited,
+ * the status says where the card actually is now, minutes later, after CI may
+ * have moved it. Filling one in from the other would produce a column that
+ * looks like evidence and is not.
+ */
+export interface ReconciledCard {
+  key: string;
+  /** The status key the server returned; `null` when THIS card's read failed. */
+  status: string | null;
+  /** Why this card could not be read. Present exactly when `status` is null. */
+  detail?: string;
+}
+
+/**
+ * The end-of-run READ-BACK: where every dispatched card actually is.
+ *
+ * ⚠️ A SNAPSHOT, NOT A WAIT. The run does not block on CI — that is the
+ * standing decision MOTIR-2999 records — so the most common row here is a card
+ * still at `implemented` with its checks still running. The renderer says that
+ * in words, because a status column reading `implemented` next to a run that
+ * reported success looks like a failure to anyone who does not already know the
+ * lifecycle.
+ */
+export interface BatchReconcile {
+  cards: ReconciledCard[];
+  /**
+   * Set when the reconcile as a WHOLE could not run — the reason, verbatim.
+   *
+   * A summary that quietly drops the block is worse than one that admits it does
+   * not know: the reader would take the absence for "nothing to report" rather
+   * than "nobody looked".
+   */
+  unavailable?: string;
+}
+
 export interface BatchSummary {
   records: BatchRecord[];
   /** Everything left out of the snapshot, plus anything refused at dispatch
@@ -154,6 +194,13 @@ export interface BatchSummary {
   notReached: SnapshotEntry[];
   /** Items that became ready DURING the run — deliberately not dispatched. */
   newlyReady: { key: string; title: string | null }[];
+  /**
+   * Where the dispatched cards actually are, read back at exit (MOTIR-3197).
+   *
+   * Absent when the run dispatched nothing — there is no block to render for an
+   * empty set, and an empty one would read as a finding.
+   */
+  reconcile?: BatchReconcile;
   stopReason: BatchStopReason;
 }
 
@@ -307,6 +354,8 @@ export function renderBatchSummary(summary: BatchSummary, titleWidth = 44): stri
 
   blocks.push(...renderSkipGroups(summary.skipped, titleWidth));
 
+  if (summary.reconcile) blocks.push(...renderReconcile(summary.reconcile));
+
   if (summary.newlyReady.length > 0) {
     blocks.push(
       [
@@ -318,6 +367,87 @@ export function renderBatchSummary(summary: BatchSummary, titleWidth = 44): stri
     );
   }
   return blocks.join('\n\n');
+}
+
+/**
+ * The two statuses the lifecycle explains, and the sentence each one owes.
+ *
+ * Both are NORMAL. `implemented` in particular is the one that has to be
+ * narrated: it is the most common row in this block, it is where a healthy card
+ * sits for the minutes CI takes, and rendered as a bare status key beside a run
+ * that reported success it reads as something having gone wrong.
+ */
+const RECONCILE_GROUPS: { status: string; heading: string; note: string }[] = [
+  {
+    status: 'in_review',
+    heading: 'In Review — CI went green while the run was still going',
+    note: '  Review and merge each of these.',
+  },
+  {
+    status: 'implemented',
+    heading: 'Implemented — the pull request is open and CI has not spoken yet',
+    note: '  Nothing to do; each moves to In Review on its own when its checks pass.',
+  },
+];
+
+/**
+ * Where the dispatched cards actually are — the block a reader acts on.
+ *
+ * THREE groups, and only the third needs a person: a card that is neither In
+ * Review nor Implemented was left somewhere by a failed agent, or moved by
+ * somebody else mid-run. It is named with the status ACTUALLY READ rather than
+ * with a label of ours, because the whole value of a read-back is that it does
+ * not paraphrase the server.
+ *
+ * A card whose read FAILED gets a fourth group of its own. It is not omitted
+ * (a dropped row reads as "nothing to report") and it is not shown as
+ * Implemented (a guess wearing the same clothes as a fact).
+ */
+export function renderReconcile(reconcile: BatchReconcile): string[] {
+  if (reconcile.unavailable !== undefined) {
+    return [
+      [
+        'Where the dispatched cards ended up: COULD NOT BE READ.',
+        `  ${reconcile.unavailable}`,
+        '  The run itself is unaffected — everything above is what it observed.',
+      ].join('\n'),
+    ];
+  }
+  if (reconcile.cards.length === 0) return [];
+
+  const blocks: string[] = [];
+  const claimed = new Set<string>();
+  for (const group of RECONCILE_GROUPS) {
+    const rows = reconcile.cards.filter((c) => c.status === group.status);
+    if (rows.length === 0) continue;
+    rows.forEach((r) => claimed.add(r.key));
+    blocks.push(
+      [`${group.heading} (${rows.length}):`, ...rows.map((r) => `  ${r.key}`), group.note].join(
+        '\n',
+      ),
+    );
+  }
+
+  const elsewhere = reconcile.cards.filter((c) => c.status !== null && !claimed.has(c.key));
+  if (elsewhere.length > 0) {
+    blocks.push(
+      [
+        `Somewhere else — these need a person (${elsewhere.length}):`,
+        ...elsewhere.map((c) => `  ${c.key} — read back as \`${c.status as string}\``),
+      ].join('\n'),
+    );
+  }
+
+  const unread = reconcile.cards.filter((c) => c.status === null);
+  if (unread.length > 0) {
+    blocks.push(
+      [
+        `Could not be read back (${unread.length}) — status unknown, NOT assumed:`,
+        ...unread.map((c) => `  ${c.key} — ${c.detail ?? 'the read failed'}`),
+      ].join('\n'),
+    );
+  }
+  return blocks;
 }
 
 /** The process exit code for a finished batch: non-zero when anything needs the

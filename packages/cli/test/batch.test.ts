@@ -98,6 +98,13 @@ class FakeServer {
    *  `sessionBranch` is nullable on the dispatch payload, so the refusal has to
    *  read without a name rather than printing `null`. */
   readonly unnamedLineage = new Set<string>();
+  /** Keys whose end-of-run READ-BACK throws (MOTIR-3197) — one card's read
+   *  failing must not cost the run its exit code, nor drop it from the block. */
+  readonly readBackFails = new Set<string>();
+  /** Set to make the reconcile fail as a WHOLE. */
+  readBackDown = false;
+  /** Every key the reconcile read back, in order. */
+  readonly readBackCalls: string[] = [];
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -220,6 +227,17 @@ class FakeServer {
           item.assigneeId = apply.assigneeId;
         }
         return claim;
+      },
+      // The end-of-run READ-BACK (MOTIR-3197). Answers from the SERVER's own
+      // row rather than from what the run observed, which is the whole point:
+      // a test can move a card to `in_review` behind the run's back and the
+      // summary has to report where it actually is.
+      getWorkItem: async (key: string) => {
+        if (this.readBackDown) throw new CliError('the server is unreachable');
+        this.readBackCalls.push(key);
+        if (this.readBackFails.has(key)) throw new CliError(`cannot read ${key}`);
+        const item = this.byKey(key);
+        return { item: { identifier: item.key, status: item.status } };
       },
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
@@ -1025,6 +1043,122 @@ describe('motir batch — a single item’s outcomes', () => {
 });
 
 // ── rendering ───────────────────────────────────────────────────────────────
+
+describe('motir batch — the end-of-run reconcile (MOTIR-3197)', () => {
+  // The run's own records say what THIS PROCESS observed when each agent
+  // exited. Since MOTIR-2999 that is no longer where a card ends up: CI moves
+  // it to In Review server-side, minutes later. So the summary has to READ
+  // BACK, and every assertion here is about the gap between those two answers.
+
+  it('reads every dispatched card back and reports the SERVER’s status, not the run’s outcome', async () => {
+    const server = new FakeServer([leaf('i1', 'PROD-1'), leaf('i2', 'PROD-2')]);
+    // CI went green for PROD-1 while the run was still going — behind the run's
+    // back, exactly as the real webhook does. Both cards are `implemented` from
+    // the run's point of view; only a real read can tell them apart.
+    const { summary } = await drive(server, {
+      onDispatch: (key) => {
+        if (key === 'PROD-2') server.byKey('PROD-1').status = 'in_review';
+      },
+    });
+
+    expect(summary.records.map((r) => r.outcome)).toEqual(['implemented', 'implemented']);
+    // The LAST two reads are the reconcile's, in dispatch order. (The drain
+    // itself reads a card before dispatching it, so the array is not
+    // reconcile-only — asserting the tail is what makes this about the
+    // read-back rather than about the drain.)
+    expect(server.readBackCalls.slice(-2)).toEqual(['PROD-1', 'PROD-2']);
+    expect(summary.reconcile?.cards).toEqual([
+      { key: 'PROD-1', status: 'in_review' },
+      { key: 'PROD-2', status: 'implemented' },
+    ]);
+
+    const out = renderBatchSummary(summary as BatchSummary);
+    expect(out).toContain('In Review — CI went green while the run was still going (1)');
+    expect(out).toContain('Implemented — the pull request is open and CI has not spoken yet (1)');
+    // ⚠️ The sentence is the deliverable, not the status word: `implemented`
+    // beside a successful run reads as a failure without it.
+    expect(out).toContain('each moves to In Review on its own when its checks pass');
+  });
+
+  it('names a card that is somewhere ELSE with the status actually read', async () => {
+    // A failed agent leaves its card In Progress. This is the only group that
+    // needs a person, and it is labelled with the server's own word.
+    const server = new FakeServer([leaf('i1', 'PROD-1')]);
+    const { summary } = await drive(server, {
+      opts: { keepGoing: true },
+      agentResults: () => ({ exitCode: 3, signal: null }),
+    });
+
+    expect(summary.records[0]?.outcome).toBe('failed');
+    expect(summary.reconcile?.cards).toEqual([{ key: 'PROD-1', status: 'in_progress' }]);
+    const out = renderBatchSummary(summary as BatchSummary);
+    expect(out).toContain('Somewhere else — these need a person (1)');
+    expect(out).toContain('PROD-1 — read back as `in_progress`');
+  });
+
+  it('shows a card whose read FAILED as unread with the reason — never dropped, never assumed', async () => {
+    const server = new FakeServer([leaf('i1', 'PROD-1'), leaf('i2', 'PROD-2')]);
+    server.readBackFails.add('PROD-2');
+
+    const { summary } = await drive(server);
+
+    expect(summary.reconcile?.cards).toEqual([
+      { key: 'PROD-1', status: 'implemented' },
+      { key: 'PROD-2', status: null, detail: 'cannot read PROD-2' },
+    ]);
+    const out = renderBatchSummary(summary as BatchSummary);
+    expect(out).toContain('Could not be read back (1) — status unknown, NOT assumed:');
+    expect(out).toContain('PROD-2 — cannot read PROD-2');
+    // ⚠️ NOT quietly folded into Implemented, which is the failure mode that
+    // makes the whole block untrustworthy: one guess indistinguishable from a
+    // row of facts.
+    expect(out).toContain('Implemented — the pull request is open and CI has not spoken yet (1)');
+    expect(summary.reconcile?.cards.filter((c) => c.status === 'implemented')).toHaveLength(1);
+  });
+
+  it('a reconcile that fails ENTIRELY says so ONCE and leaves the exit code untouched', async () => {
+    // Every card unreadable is a different fact from one card unreadable: the
+    // server is gone. Printing it per card would bury one fact under a list.
+    const server = new FakeServer([leaf('i1', 'PROD-1'), leaf('i2', 'PROD-2')]);
+    const { summary } = await drive(server, {
+      onDispatch: (key) => {
+        if (key === 'PROD-2') server.readBackDown = true;
+      },
+    });
+
+    expect(summary.reconcile).toEqual({ cards: [], unavailable: 'the server is unreachable' });
+    const out = renderBatchSummary(summary as BatchSummary);
+    expect(out).toContain('Where the dispatched cards ended up: COULD NOT BE READ.');
+    expect(out).toContain('the server is unreachable');
+    // The run succeeded. A reporting read that could not run must not change
+    // that — the read-back is an observation, never a gate.
+    expect(batchExitCode(summary as BatchSummary)).toBe(0);
+  });
+
+  it('does not change the exit code: a card sitting at Implemented is a NORMAL outcome', async () => {
+    const server = new FakeServer([leaf('i1', 'PROD-1')]);
+    const { summary } = await drive(server);
+
+    expect(summary.reconcile?.cards).toEqual([{ key: 'PROD-1', status: 'implemented' }]);
+    expect(batchExitCode(summary as BatchSummary)).toBe(0);
+  });
+
+  it('renders NO reconcile block at all when the run dispatched nothing', async () => {
+    // An empty block reads as a finding. There is nothing to reconcile, so
+    // there is nothing to print — and `reconcile` is absent rather than `{
+    // cards: [] }`, which would be indistinguishable from a total failure that
+    // forgot its reason.
+    const server = new FakeServer([
+      leaf('i1', 'PROD-1', { kind: 'story', type: null, executor: null }),
+    ]);
+    const { summary, dispatched } = await drive(server);
+
+    expect(dispatched).toEqual([]);
+    expect(summary.reconcile).toBeUndefined();
+    expect(server.readBackCalls).toEqual([]);
+    expect(renderBatchSummary(summary as BatchSummary)).not.toContain('read back');
+  });
+});
 
 describe('the snapshot plan block', () => {
   it('says plainly when there is nothing to implement', () => {

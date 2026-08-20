@@ -33,9 +33,11 @@ import {
   classifySnapshotItem,
   renderBatchSummary,
   renderSnapshotPlan,
+  type BatchReconcile,
   type BatchRecord,
   type BatchStopReason,
   type BatchSummary,
+  type ReconciledCard,
   type Snapshot,
   type SnapshotEntry,
   type SnapshotSkip,
@@ -327,8 +329,78 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
     notReached,
     // Reporting only — read AFTER the drain, and never fed back into it.
     newlyReady: await countNewlyReady(client, projectKey, kinds, snapshotKeys, snapshot.skipped),
+    ...(records.length > 0 ? { reconcile: await reconcileDispatched(client, records) } : {}),
     stopReason,
   };
+}
+
+/**
+ * Read every dispatched card BACK, once, at exit (MOTIR-3197).
+ *
+ * ── Why this is one read per key, and what was ruled out ────────────────────
+ * The cheaper shape would be one collection call narrowed to the dispatched
+ * keys, and every `/api/v1` operation whose 200 embeds a work-item summary was
+ * enumerated from the generated `src/api/schema.d.ts` before settling for this:
+ *
+ *   • `listProjectWorkItems` — the fattest one, and it takes a `filter`, but
+ *     the FilterAST has NO key field (`lib/filters/ast.ts`'s
+ *     `BuiltInFilterFieldId` is kind / status / priority / type / assignee /
+ *     reporter / sprint / text / created / updated / due / storyPoints /
+ *     estimate, plus `lbl` / `cmp` / `cf:*`). It cannot express a key SET at
+ *     all, so narrowing would mean paging the whole project and discarding
+ *     most of it.
+ *   • `listSprintWorkItems` / `listProjectBacklog` — narrowed by MEMBERSHIP,
+ *     which is not the run's set: a batch snapshot spans whatever was ready.
+ *   • `getProjectReadySet` — cannot contain a dispatched card by construction.
+ *     Every one of them left the to-do category when it was claimed.
+ *   • `getWorkItem` — per key, and the only operation that can name this set.
+ *
+ * So the fallback the card allows for is the only door, and the bound is the
+ * number of cards this run dispatched — which `--max` and the frozen snapshot
+ * already cap. Sequential rather than concurrent: it is the tail of a run that
+ * has just spent minutes per card, so there is nothing to win, and a burst
+ * against the rate limiter at exit would be a poor trade for it.
+ *
+ * ⚠️ IT NEVER FAILS THE RUN. Every error is caught and rendered; none reaches
+ * `batchExitCode`, which reads only `records` and `stopReason` — so a run's
+ * exit code is exactly what it would have been before this existed.
+ *
+ * ── ONE failure, or ALL of them ────────────────────────────────────────────
+ * A single card that will not read is a NULL STATUS with its reason, kept in
+ * the block: the other rows are still facts, and dropping the odd one out is
+ * how a summary starts lying quietly.
+ *
+ * When NO card could be read the answer is different in kind, not in degree —
+ * the server is unreachable, the token was revoked, the process is coming down
+ * — and printing N identical "could not be read" rows would bury one fact
+ * under a list. That collapses to `unavailable`, which says once that nobody
+ * looked. The run's own table above still carries every key.
+ */
+async function reconcileDispatched(
+  client: MotirClient,
+  records: readonly BatchRecord[],
+): Promise<BatchReconcile> {
+  const cards: ReconciledCard[] = [];
+  for (const record of records) {
+    try {
+      const detail = await client.getWorkItem(record.key);
+      cards.push({ key: record.key, status: detail.item.status });
+    } catch (err) {
+      // ⚠️ NOT `status: 'implemented'`, and not a dropped row. The run cannot
+      // see where this card is, and saying so is the only honest column.
+      cards.push({ key: record.key, status: null, detail: errorText(err) });
+    }
+  }
+  const firstFailure = cards[0];
+  if (firstFailure && cards.every((c) => c.status === null)) {
+    return { cards: [], unavailable: firstFailure.detail ?? 'the read-back failed' };
+  }
+  return { cards };
+}
+
+/** An error's message for the summary — never a stack, never `[object Object]`. */
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
