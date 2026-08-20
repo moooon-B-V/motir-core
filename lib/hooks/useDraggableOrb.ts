@@ -13,9 +13,19 @@ import {
   type PointerSample,
 } from '@/lib/planning/orbPhysics';
 
-// The floating orb's drag + throw behaviour (MOTIR-3208) — pointer capture, the
+// The floating orb's drag + throw behaviour (MOTIR-3214) — pointer capture, the
 // animation frame, and the viewport it lives in. Every decision about WHERE the
 // orb goes is in `lib/planning/orbPhysics.ts`; this file is the wiring.
+//
+// ⚠️ THE POSITION IS WRITTEN TO `translate`, NOT TO `transform`, AND THAT IS LORE.
+// The orb's own utility classes carry `hover:scale-105` / `active:scale-95`, and
+// under Tailwind v4 those compile to the standalone `scale` property. CSS composes
+// the individual transform properties in a FIXED order — translate, rotate, scale,
+// then transform — so a position written into `transform` sits to the RIGHT of the
+// scale and gets multiplied by it: hovering an orb dragged 500px from its corner
+// moved it 25px further away, out from under the pointer chasing it (MOTIR-3214).
+// `translate` composes to the LEFT of `scale`, so the two are independent: the orb
+// grows in place, wherever it has been put.
 //
 // ⚠️ POSITION IS DELIBERATELY NOT PERSISTED. A new tab gets the orb back in its
 // default corner, which is what was asked for — and it is also the safer default:
@@ -45,12 +55,15 @@ export interface DraggableOrb {
   /** Spread onto the orb element. */
   onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onClickCapture: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  /** True while a gesture is in flight — the caller suppresses its transition so
-   *  the orb tracks the finger exactly rather than easing toward it. */
+  /** True while a DRAG is in flight — the caller shows a grabbing cursor.
+   *
+   *  It deliberately does NOT gate a CSS transition any more. It used to, and the
+   *  bug was structural: `dragging` goes false on `pointerup`, which is BEFORE the
+   *  throw starts, so the whole flight was animated by a 150ms `transition-transform`
+   *  easing toward each frame's position. The orb reversed ~350px short of the wall
+   *  it was supposed to bounce off (MOTIR-3214). A property the physics writes every
+   *  frame must not be a transitioned property at all — see `PlanWithAIFab`. */
   dragging: boolean;
-  /** True once the orb has been moved: the caller then stops applying its default
-   *  corner classes and lets the transform place it. */
-  moved: boolean;
 }
 
 /** Read the viewport. Split out so a test can drive it without a real window. */
@@ -62,24 +75,48 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
   const size = options.size ?? 56;
   const ref = useRef<HTMLButtonElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [moved, setMoved] = useState(false);
 
   // The live position, in viewport px (the orb's top-left). `null` until the orb
   // has been moved, which is what keeps the default CSS corner authoritative.
   const pos = useRef<OrbPoint | null>(null);
+  // Where the orb's CSS corner puts it when nothing is translated — the origin
+  // every offset is measured from. Cached, because `offsetLeft` FLUSHES LAYOUT,
+  // and reading it from inside the animation frame (which it used to) makes the
+  // browser lay the page out again on every one of the flight's ~120 frames.
+  // It only changes when the viewport does, so it is re-read there instead.
+  const home = useRef<OrbPoint | null>(null);
   const grab = useRef<{ dx: number; dy: number } | null>(null);
   const trail = useRef<PointerSample[]>([]);
   const travelled = useRef(0);
   const suppressClick = useRef(false);
   const raf = useRef<number | null>(null);
 
-  const paint = useCallback((p: OrbPoint) => {
+  /** The orb's untransformed corner, measured once and reused. */
+  const measureHome = useCallback((): OrbPoint | null => {
     const el = ref.current;
-    if (!el) return;
-    // `left/top` on a fixed element would lay out every frame; a transform is
-    // composited. The element keeps its `inset` classes and is offset from them.
-    el.style.transform = `translate3d(${p.x - el.offsetLeft}px, ${p.y - el.offsetTop}px, 0)`;
+    if (!el) return null;
+    // NOT `getBoundingClientRect()`: that box is the RENDERED one, so a hovered
+    // orb measures 1.4px up and left of where it actually sits (`scale-105` of
+    // 56px), and seeding the position from it made every grab creep. `offsetLeft`
+    // is the layout box, which is what "the corner the CSS put it in" means.
+    home.current = { x: el.offsetLeft, y: el.offsetTop };
+    return home.current;
   }, []);
+
+  const paint = useCallback(
+    (p: OrbPoint) => {
+      const el = ref.current;
+      if (!el) return;
+      const origin = home.current ?? measureHome();
+      if (!origin) return;
+      // `left/top` on a fixed element would lay out every frame; `translate` is
+      // composited. The element keeps its `inset` classes and is offset from them.
+      // See the header: this is `translate`, never `transform`, so the hover and
+      // press scales cannot multiply it.
+      el.style.translate = `${p.x - origin.x}px ${p.y - origin.y}px`;
+    },
+    [measureHome],
+  );
 
   const stopFrame = useCallback(() => {
     if (raf.current !== null) {
@@ -125,10 +162,19 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
       const el = ref.current;
       if (!el) return;
       stopFrame();
+      // A gesture that ended without producing a `click` (the pointer was released
+      // off the button, so the browser fires none) would otherwise leave this armed
+      // and eat the NEXT genuine press. A new press is a new gesture.
+      suppressClick.current = false;
 
-      const rect = el.getBoundingClientRect();
-      pos.current = { x: rect.left, y: rect.top };
-      grab.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+      // Where the orb is now: wherever we last put it, or — the first time — the
+      // corner the CSS put it in. Deliberately not the rendered rect; see
+      // `measureHome`.
+      const origin = measureHome();
+      if (!origin) return;
+      const at = pos.current ?? origin;
+      pos.current = at;
+      grab.current = { dx: e.clientX - at.x, dy: e.clientY - at.y };
       // The trail is seeded by the first MOVE, not by this press. Two reasons:
       // the press carries no travel, so including it drags the average down by
       // however long the finger rested before moving; and it is a React synthetic
@@ -154,10 +200,7 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
         // Only PAINT once the gesture is a drag. Below the threshold a shaky tap
         // would otherwise nudge the orb a pixel and leave it displaced, which
         // reads as the button drifting when you press it.
-        if (travelled.current > DRAG_THRESHOLD_PX) {
-          setMoved(true);
-          paint(next);
-        }
+        if (travelled.current > DRAG_THRESHOLD_PX) paint(next);
 
         const t = ev.timeStamp;
         trail.current.push({ x: next.x, y: next.y, t });
@@ -191,7 +234,7 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', up);
     },
-    [fling, paint, size, stopFrame],
+    [fling, measureHome, paint, size, stopFrame],
   );
 
   /** Swallow the click that a drag produces, so releasing a throw does not also
@@ -211,18 +254,38 @@ export function useDraggableOrb(options: { size?: number } = {}): DraggableOrb {
     const onResize = (): void => {
       if (!pos.current) return;
       stopFrame();
+      // The CSS corner moves with the viewport, so the cached origin every offset
+      // is measured from is stale the moment the window is resized.
+      measureHome();
       pos.current = clampToBounds(pos.current, boundsFor(viewportSize(), size));
       paint(pos.current);
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [paint, size, stopFrame]);
+  }, [measureHome, paint, size, stopFrame]);
 
   useEffect(() => stopFrame, [stopFrame]);
 
-  const attach = useCallback((el: HTMLButtonElement | null) => {
-    ref.current = el;
-  }, []);
+  // The element this ref last saw. Radix's `asChild` trigger composes a NEW ref
+  // callback on every render, so React detaches and reattaches this one each time
+  // — `attach` is called with null and then with the same node again, constantly.
+  // Only a genuinely different node needs anything doing.
+  const attached = useRef<HTMLButtonElement | null>(null);
 
-  return { attach, onPointerDown, onClickCapture, dragging, moved };
+  const attach = useCallback(
+    (el: HTMLButtonElement | null) => {
+      ref.current = el;
+      if (!el || el === attached.current) return;
+      attached.current = el;
+      // A fresh element is a fresh corner and carries none of the old one's inline
+      // offset, so the cached origin is dropped — and if the orb had already been
+      // put somewhere, the new node is painted there rather than snapping back to
+      // the corner behind the user's back.
+      home.current = null;
+      if (pos.current) paint(pos.current);
+    },
+    [paint],
+  );
+
+  return { attach, onPointerDown, onClickCapture, dragging };
 }

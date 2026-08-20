@@ -36,7 +36,7 @@ import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
  * Gating is the MOUNT's job (rendered only where AI planning is configured +
  * there's a project to plan into), like the header pill.
  *
- * ── DRAGGABLE, AND THROWABLE (MOTIR-3208) ───────────────────────────────────
+ * ── DRAGGABLE, AND THROWABLE (MOTIR-3214) ───────────────────────────────────
  * The orb can be dragged anywhere on screen, and a hard flick throws it: it
  * carries its release velocity, bounces off the viewport edges and settles. The
  * physics is `lib/planning/orbPhysics.ts` (pure) and the wiring is
@@ -51,6 +51,17 @@ import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
  *     mounted by the layout and never unmounts.
  *   * `prefers-reduced-motion` skips the THROW, not the drag: the orb still goes
  *     wherever it is put, it just does not fly there.
+ *
+ * ⚠️ AND ONE RULE ABOUT THIS ELEMENT'S CLASSES (MOTIR-3214). The hook writes the
+ * orb's position into the `translate` property every animation frame. So:
+ *   * NOTHING here may transition `translate` — `transition-transform` in Tailwind
+ *     v4 is `transition-property: transform, translate, scale, rotate`, and with it
+ *     on, a 150ms ease fought the frame loop for the whole flight and the orb
+ *     reversed ~350px short of the wall it was meant to bounce off. The scale is
+ *     eased on its own instead.
+ *   * NOTHING here may write `translate` or `transform` as a utility — the hover
+ *     and press scales are safe only because `scale` composes independently of
+ *     `translate`; a `translate-x-*` utility would silently fight the drag.
  */
 export interface PlanWithAIFabProps {
   /** The originating context — defaults to the global project entrance. */
@@ -98,12 +109,12 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
             // scrolling the page under it — without it the gesture is stolen by
             // the scroller before `pointermove` ever fires.
             'touch-none',
-            // The hover/active scale is a TRANSITION on the same property the drag
-            // writes, so it is dropped mid-gesture: easing toward the finger reads
-            // as lag. `cursor-grabbing` is the other half of that feedback.
-            dragging
-              ? 'cursor-grabbing'
-              : 'cursor-grab transition-transform hover:scale-105 active:scale-95',
+            // ⚠️ `transition-[scale]`, NOT `transition-transform`: the orb's position
+            // is written to `translate` every frame, and `transition-transform`
+            // covers translate too (Tailwind v4), so it would ease every one of them
+            // — see the header. Easing the scale ALONE is what was actually wanted.
+            'transition-[scale]',
+            dragging ? 'cursor-grabbing' : 'cursor-grab hover:scale-105 active:scale-95',
             'focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
             className,
           )}
