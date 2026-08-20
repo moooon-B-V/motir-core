@@ -127,5 +127,16 @@
  *   calls an advisory, so two runs could start the same card. Additive: one new
  *   endpoint (§8's first allowed change) and one new resource (`WorkItemClaim`);
  *   no declared shape changed.
+ * - `1.16.0` — MOTIR-3178 adds the SELF-BLOCKING-DESIGN member to the dispatch
+ *   prompt's `advisories` union: a CHILDLESS card one of whose acceptance
+ *   criteria produces a design ASSET while another builds the rendered SURFACE
+ *   that drawing decides — the planning-time design gate's degenerate reading,
+ *   where the `type: design` subtask a UI card must be linked to IS the card.
+ *   Additive on the same terms as the sizing member — a new member of the same
+ *   union, on the same field clients must tolerate unknown members of. It is a
+ *   THIRD `kind: "shape"` variant rather than a fourth severity inside the
+ *   criterion-carrying one, because it carries a PAIR of indices
+ *   (`designCriterionIndex` / `surfaceCriterionIndex`) and no `criterionIndex`
+ *   at all. Every existing member is byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.15.0';
+export const V1_CONTRACT_VERSION = '1.16.0';
