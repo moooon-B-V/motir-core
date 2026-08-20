@@ -174,4 +174,75 @@ describe('the relay', () => {
     expect(text).toContain('event: error');
     expect(text).toContain('MOTIR_AI_OUT_OF_CREDITS');
   });
+
+  // ── A failure AFTER the headers are sent (MOTIR-1822) ─────────────────────
+  //
+  // The two halves of the relay fail differently, and only one of them can
+  // still choose a status code. Once frames are flowing the response is
+  // committed, so the ONLY way to tell the rail why it stopped is a terminal
+  // `error` frame — and a stream that simply ends carries no reason at all,
+  // which is what a reader would then have to guess at.
+
+  it('a MID-STREAM failure closes with a typed terminal error frame', async () => {
+    const { generator } = scriptedStream([
+      { type: 'yield', value: { event: 'status', data: { status: 'running' } } },
+      { type: 'throw', error: new MotirAiUnavailableError('upstream went away') },
+    ]);
+    streamJobMock.mockReturnValue(generator);
+
+    const res = await streamReq('job-1');
+    // The status was already 200 — headers went out with the first frame.
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('event: status');
+    expect(text).toContain('event: error');
+    expect(text).toContain('upstream went away');
+  });
+
+  it('a mid-stream failure OUTSIDE the taxonomy still names itself', async () => {
+    // An unrecognised throw must not close the stream silently: the rail would
+    // read a clean end as "the job finished" and file nothing.
+    const { generator } = scriptedStream([
+      { type: 'yield', value: { event: 'status', data: { status: 'running' } } },
+      { type: 'throw', error: new Error('kaboom') },
+    ]);
+    streamJobMock.mockReturnValue(generator);
+
+    const text = await (await streamReq('job-1')).text();
+    expect(text).toContain('event: error');
+    expect(text).toContain('INTERNAL_ERROR');
+    expect(text).toContain('kaboom');
+  });
+
+  it('a non-Error thrown mid-stream still closes with a frame the rail can read', async () => {
+    // A `throw 'string'` from a transport library is not hypothetical, and the
+    // frame has to carry SOMETHING — a terminal error with an empty message
+    // reads to the rail as a stream that ended for no reason.
+    const { generator } = scriptedStream([
+      { type: 'yield', value: { event: 'status', data: { status: 'running' } } },
+      { type: 'throw', error: 'not an Error at all' as unknown as Error },
+    ]);
+    streamJobMock.mockReturnValue(generator);
+
+    const text = await (await streamReq('job-1')).text();
+    expect(text).toContain('event: error');
+    expect(text).toContain('INTERNAL_ERROR');
+    expect(text).toContain('stream failed');
+  });
+
+  it('a PRE-stream failure outside the taxonomy is RETHROWN, not flattened', async () => {
+    // Before the first frame the route can still answer with a status, so an
+    // error it does not recognise must surface as a fault rather than as a
+    // plausible 502 that blames motir-ai for something else.
+    const { generator } = scriptedStream([{ type: 'throw', error: new Error('kaboom') }]);
+    streamJobMock.mockReturnValue(generator);
+
+    await expect(streamReq('job-1')).rejects.toThrow('kaboom');
+  });
+
+  it('a GATE failure outside the AI-gate taxonomy is RETHROWN too', async () => {
+    vi.mocked(projectAccessService.assertPermission).mockRejectedValue(new Error('kaboom'));
+
+    await expect(streamReq('job-1')).rejects.toThrow('kaboom');
+  });
 });

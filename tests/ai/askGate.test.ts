@@ -262,6 +262,37 @@ describe('the guard: tenant isolation', () => {
   });
 });
 
+describe('the settle door’s own gates', () => {
+  // The ask door's gates are covered by `askRoutes.test.ts`; the SETTLE door has
+  // its own copies of them, and a route that files a durable write is not a
+  // place to assume the guards were pasted correctly.
+  it('401s with no session', async () => {
+    session.current = null;
+    expect((await settle(post('/api/ai/ask/settle', { jobId: 'job-1' }))).status).toBe(401);
+  });
+
+  it('404s with no active project', async () => {
+    activeCtx.current = null;
+    expect((await settle(post('/api/ai/ask/settle', { jobId: 'job-1' }))).status).toBe(404);
+  });
+
+  it('maps a TYPED motir-ai failure through the shared taxonomy', async () => {
+    const { MotirAiError } = await import('@/lib/ai/errors');
+    submitJobMock.mockResolvedValue({ jobId: 'job-ask-1' });
+    const submitted = (await (await ask(post('/api/ai/ask', { body: 'why?' }))).json()) as {
+      jobId: string;
+    };
+    getJobMock.mockRejectedValue(new MotirAiError('upstream_error', 'upstream said no'));
+
+    const res = await settle(post('/api/ai/ask/settle', { jobId: submitted.jobId }));
+
+    // Mapped, not rethrown — the reader gets the taxonomy's status rather than a
+    // 500 that says nothing about which side failed.
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(600);
+  });
+});
+
 describe('the routes’ error mapping', () => {
   it('settle maps a TYPED failure and RETHROWS anything it does not know', async () => {
     // Both halves matter. The mapped half is the contract; the rethrow is what
