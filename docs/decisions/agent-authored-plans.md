@@ -1374,6 +1374,112 @@ and costs none of that. AMENDMENT 2's own fallback — _"the honesty lives in th
 
 ---
 
+## AMENDMENT 7 — a plan with NO producer is judged by the decision table, not excluded by the query (MOTIR-3236, 2026-08-20)
+
+AMENDMENT 4 named a debt and declined to pay it:
+
+> **The debt this defers, named so the next card inherits it rather than rediscovers it.** An
+> MCP-authored plan abandoned mid-skeleton stays `generating`: AMENDMENT 2's reconciling sweep asks
+> motir-ai what became of the JOB, and an MCP-authored plan has no job (`sourceJobId` is null).
+> […] **This amendment does not pay that debt.**
+
+**This one does.** The mechanism is exact and was grepped rather than guessed:
+`planRepository.listAbandonedCandidates` selected
+`{ status: 'generating', sourceJobId: { not: null }, createdAt: { lte: olderThan } }`, and
+`create_plan` writes `sourceJobId: null` by construction. **The two sets are disjoint**, so the
+hourly sweep could never see an agent-authored plan, whatever its age.
+
+**The live reading that closed the hypothesis** (production `motir-core`, 2026-08-20T20:21Z, both
+rows in the `MOTIR` project — they were the entire `generating` population across every project):
+
+| age    | `source_job_id` | `author_source` | items |
+| ------ | --------------- | --------------- | ----- |
+| 21.9 h | **NULL**        | `mcp`           | 3     |
+| 19.5 h | **NULL**        | `mcp`           | 1     |
+
+### The second harm, which is not the same one
+
+AMENDMENT 1 (MOTIR-3051) keeps an **EMPTY** job-less plan from pausing the project's auto-plan
+cadence, through `findUndecidedByProject`'s
+`NOT: { status: 'generating', sourceJobId: null, items: { none: {} } }`. That exclusion is
+**presence-based**, so a job-less plan that appended a SKELETON and then stopped holds items, is
+not excluded, and **pauses that project's cadence permanently** — the exact harm AMENDMENT 2 was
+written to remove, arriving through the door AMENDMENT 1 left open. Both live rows above hold
+items, so both were doing it, for ~22 and ~20 hours.
+
+### The decision — a RE-SHAPE, not a fourth widening
+
+The predicate has now been narrowed or widened three times (AMENDMENT 1's gate exclusion,
+MOTIR-3064's sweep, AMENDMENT 6's widening to partial plans) and this is the fourth defect in the
+same shape. **They share a root: the SQL predicate was a WHITELIST of the plan shapes the sweep
+knew how to judge, so every newly-recognised shape was a new query-level edit.** The service
+already owns a pure, unit-testable decision table built for precisely this reasoning.
+
+So: **the predicate selects every `generating` plan past the grace, and
+`classifyAbandonedCandidate` decides.** `sourceJobId` becomes an INPUT to the classification
+rather than a condition of selection, and the next unrecognised shape is a new arm in a pure
+function with a test, not another migration-adjacent query change.
+
+- **`AbandonedPlanCandidate.sourceJobId` is nullable again** — the cast that narrowed it to
+  `string` is REMOVED, not weakened, so the compiler forces the caller to handle the null rather
+  than letting one reach `resolveJobState` as a job id.
+- **The new arm is `no_producer`.** A plan with no `sourceJobId` has nothing to ask, so the only
+  signal left is the passage of time — which is the argument `ABANDONED_PLAN_MAX_AGE_HOURS` already
+  makes for the crashed-worker case. It **REUSES that constant**; no second threshold is
+  introduced. Past it: `declined`, `decisionReason: 'abandoned'`, `decidedById: null` — nobody
+  decided it. Inside it: the new KEEP arm `no_producer_recent`, because an agent mid-skeleton right
+  now looks exactly like one that stopped, and the 15-minute grace is far too short to tell them
+  apart.
+- **`reconcileAbandoned` does not call `resolveJobState` for a producerless candidate.** Asking
+  about a job id that does not exist is a request that can only 404, and a 404 already means
+  something else here (`job_gone` — a producer that existed and is provably dead). Sending one
+  would launder _there was never a job_ into _the job died_.
+- **The `row_moved` re-read and the `_count.items` comparison run unchanged** for a no-producer
+  candidate, so a plan an agent appended to DURING the pass is left alone exactly as before.
+- **The sweep's log line names the absent producer** rather than printing `job null` beside a job
+  status, which would read as a failed lookup instead of a plan that never had one.
+
+### ⚠️ What this SUPERSEDES in AMENDMENT 6
+
+AMENDMENT 6's _What this does NOT do_ says, in full:
+
+> - **It does not expire or auto-decline a plan by AGE alone.** `max_age` still requires a producer
+>   that was asked about and a job that never went terminal; a plan nobody can ask about
+>   (`sourceJobId IS NULL`) is reachable only by a PERSON, through the discard path. AMENDMENT 1's
+>   line holds for it: that is a decision somebody owes.
+
+**That is reversed here, deliberately, and the reasoning that failed is worth keeping.** It rests
+on AMENDMENT 1's line — _a partial plan is a real proposal somebody owes a decision on_ — plus
+AMENDMENT 6's own new discard valve, which gives a person the door AMENDMENT 1 assumed. The part
+that did not survive contact is the assumption that **somebody is there**. A plan authored over the
+MCP is written by an agent in a session that has since ended; the person whose token it used is not
+watching the Plans list, and the two live rows sat there for the better part of a day with the
+discard valve shipped and reachable. A decision somebody owes and nobody makes is indistinguishable
+from an abandoned plan after a day — which is exactly the judgement `ABANDONED_PLAN_MAX_AGE_HOURS`
+was chosen to make. **The discard valve is not removed and is not weakened**: a person can still end
+one of these at any moment, and doing so records `discarded` rather than `abandoned`, so the two
+histories stay told apart on the row.
+
+The narrower claim in that bullet — that `max_age` itself requires a producer — remains TRUE:
+`max_age` and `no_producer` are separate arms, and `max_age` still means _asked, and told nothing
+terminal_.
+
+### What AMENDMENT 7 does NOT do
+
+- **It does not change `findUndecidedByProject`.** Its exclusion stays exactly as written and
+  becomes REDUNDANT rather than wrong: once the sweep can reach these rows, an abandoned job-less
+  plan leaves `generating` on its own and the gate never sees it. Two mechanisms narrowing the same
+  set is how they drift; one of them is now the mechanism and the other is a fast path.
+- **It does not add an inbound failure callback.** AMENDMENT 2 rejected that and the rejection
+  holds — this widening needs no producer to report anything.
+- **It does not change `declinePlan`, the cadence tick, the Plans list UI, or any `PlanStatus` /
+  `PlanDecisionReason` vocabulary.** `abandoned` already exists (AMENDMENT 6, D3) and is what this
+  arm writes.
+- **It does not shorten the grace or the max age.** Both constants are untouched; what changed is
+  which rows are measured against them.
+
+---
+
 ## Consequences
 
 - **One migration, additive, three nullable columns, no backfill** (MOTIR-2986). Every
@@ -1385,6 +1491,11 @@ and costs none of that. AMENDMENT 2's own fallback — _"the honesty lives in th
 - **An empty plan whose PRODUCER died is reconciled out of `generating`, hourly** (AMENDMENT 2,
   MOTIR-3064): the sweep asks motir-ai what became of the job and writes `declined` with a NULL
   decider — nobody decided it. `PlanStatus` gains no member, and the gate predicate is unchanged.
+- **And a plan with NO producer is reconciled too, by AGE** (AMENDMENT 7, MOTIR-3236): the sweep's
+  predicate selects every `generating` plan past the grace and the decision table judges it, so an
+  MCP-authored plan its author never closed is `declined` as `no_producer` once it passes
+  `ABANDONED_PLAN_MAX_AGE_HOURS` — the same constant, no second threshold, no new query shape for
+  the next case. This pays the debt AMENDMENT 4 named and supersedes one bullet of AMENDMENT 6.
 - **Neither tool is billable.** Authoring a plan never draws on the owner's generation
   allowance.
 - **The materialize pin is lifted, and the safety property is now held by the WRITE SEAMS

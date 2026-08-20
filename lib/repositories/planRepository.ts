@@ -1,16 +1,21 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
-/** A plan the abandoned-plan sweep may act on — a `Plan` whose `sourceJobId` the
- *  selecting predicate has already proved non-null, carrying the proposal COUNT
- *  read in the same statement.
+/** A plan the abandoned-plan sweep may act on — every `generating` plan past the
+ *  grace, carrying the proposal COUNT read in the same statement.
  *
  *  The count is what the sweep's write re-reads against (MOTIR-3189). It used to
  *  be able to assert `0` from the predicate alone; now that a PARTIAL plan is a
  *  candidate, "did the row move under us?" is a comparison rather than a
- *  presence test, and the number has to travel with the candidate to make it. */
+ *  presence test, and the number has to travel with the candidate to make it.
+ *
+ *  ⚠️ `sourceJobId` IS NULLABLE HERE, and that is the point (MOTIR-3236). This
+ *  type used to narrow it to `string`, restating the predicate's
+ *  `sourceJobId: { not: null }` in the type system. The predicate is gone, so
+ *  the narrowing is REMOVED rather than weakened: the compiler is what forces
+ *  the caller to decide what a plan with no producer means, instead of letting a
+ *  `null` reach `resolveJobState` as a job id. */
 export type AbandonedPlanCandidate = Plan & {
-  sourceJobId: string;
   _count: { items: number };
 };
 
@@ -193,23 +198,28 @@ export const planRepository = {
     limit: number,
     tx: Prisma.TransactionClient,
   ): Promise<AbandonedPlanCandidate[]> {
-    // The cast is the WHERE clause's `sourceJobId: { not: null }` stated in the
-    // type system: the caller needs a `string` to ask motir-ai with, and a
-    // runtime re-check would be a branch no query result can take. Narrowing it
-    // HERE keeps the proof next to the predicate that establishes it. The
-    // `_count` half comes from the `include` and needs no narrowing; one cast
-    // covers both, because Prisma widens `sourceJobId` back to nullable on the
-    // way out whatever the predicate said.
+    // ⚠️ NO `sourceJobId` PREDICATE (MOTIR-3236). This clause used to read
+    // `sourceJobId: { not: null }`, and the cast that followed stated that
+    // narrowing in the type system. Both are gone, and the reason is a shape
+    // rather than one more case: the predicate had become a WHITELIST of the
+    // plan shapes the sweep knew how to judge, so each newly-recognised shape
+    // cost a schema-adjacent query edit (MOTIR-3051, MOTIR-3064, MOTIR-3189, and
+    // then the job-less plan this one is about — four defects, one shape).
+    //
+    // So SELECTION is now the cheap, total question — is it `generating` and
+    // past the grace? — and the JUDGEMENT is `classifyAbandonedCandidate`, a
+    // pure decision table with a unit test per arm. `sourceJobId` is an INPUT to
+    // that table now, not a condition of being seen by it; the next unrecognised
+    // shape is a new arm, not a new migration-adjacent predicate.
     return tx.plan.findMany({
       where: {
         status: 'generating',
-        sourceJobId: { not: null },
         createdAt: { lte: olderThan },
       },
       include: { _count: { select: { items: true } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
-    }) as Promise<AbandonedPlanCandidate[]>;
+    });
   },
 
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {

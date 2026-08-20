@@ -48,6 +48,31 @@ import type { PlanJobStateDto } from '@/lib/dto/plans';
 // submit→first-append window, and a partial plan behind a LIVE job is left
 // alone by `job_in_flight` exactly as an empty one is.
 //
+// ⚠️ AND THE SELECTION HAS MOVED OUT OF SQL (MOTIR-3236, AMENDMENT 7). The
+// paragraph above says a wider GATE predicate cannot work, and that is still
+// true of `findUndecidedByProject`. What changed is this sweep's DISCOVERY
+// predicate, which used to carry `sourceJobId: { not: null }` and so could never
+// see an MCP-authored plan at all — one has no generation job by construction
+// (`create_plan`, MOTIR-2982), so the two sets were disjoint and the hourly pass
+// ran past those rows for ever. AMENDMENT 4 named that debt and declined to pay
+// it; this is where it is paid.
+//
+// The fix is a RE-SHAPE, not a fourth widening. The predicate had become a
+// whitelist of the plan shapes the sweep knew how to judge, so every newly
+// recognised shape cost a query change (MOTIR-3051, MOTIR-3064, MOTIR-3189,
+// then this). Now the predicate selects every `generating` plan past the grace
+// and `classifyAbandonedCandidate` DECIDES — `sourceJobId` is an input to the
+// table, not a condition of selection. The next unrecognised shape is a new arm
+// in a pure function with a unit test.
+//
+// The new arm is `no_producer`: nothing to ask, so the only signal is the
+// passage of time — which is precisely the argument `max_age` already makes for
+// a crashed worker, and it REUSES `ABANDONED_PLAN_MAX_AGE_HOURS` rather than
+// inventing a second threshold. Under the max age it is `no_producer_recent`
+// and kept, because an author mid-skeleton looks exactly like one who stopped.
+// `docs/decisions/agent-authored-plans.md` AMENDMENT 7 records it, including
+// the sentence in AMENDMENT 6 it supersedes.
+//
 // System-scoped: the discovery read spans workspaces (the plan policy's
 // `FOR SELECT` `app.system_admin` arm, added by this card's migration for exactly
 // this), and every WRITE then re-binds `app.workspace_id` to that row's own
@@ -101,7 +126,15 @@ export type AbandonReason =
   | 'job_gone'
   /** The job never reached a terminal state and the plan is older than
    *  {@link ABANDONED_PLAN_MAX_AGE_HOURS} — the crashed-worker arm. */
-  | 'max_age';
+  | 'max_age'
+  /** There is NO producer to ask about (`sourceJobId` is null — an MCP-authored
+   *  plan, MOTIR-2982) and the plan is older than
+   *  {@link ABANDONED_PLAN_MAX_AGE_HOURS}. The only signal a job-less plan
+   *  offers is the passage of time, which is the same argument `max_age` makes
+   *  for a job that never answered — hence the same constant, not a second one.
+   *  Kept as its own reason because the two are found out DIFFERENTLY: `max_age`
+   *  asked and was told nothing useful; this one had nobody to ask. */
+  | 'no_producer';
 
 /** Why a candidate was left alone. */
 export type KeepReason =
@@ -113,7 +146,13 @@ export type KeepReason =
   | 'ai_unreachable'
   /** The row changed under us between discovery and the write — proposals
    *  arrived, or somebody decided it. */
-  | 'row_moved';
+  | 'row_moved'
+  /** No producer, and still inside {@link ABANDONED_PLAN_MAX_AGE_HOURS} — an
+   *  agent that is mid-skeleton right now looks exactly like one that stopped,
+   *  and the grace alone is far too short to tell them apart. This is the KEEP
+   *  arm that makes `no_producer` safe: an author has a full day to close the
+   *  plan before anything touches it. */
+  | 'no_producer_recent';
 
 export type AbandonedPlanOutcome =
   | { planId: string; projectId: string; outcome: 'declined'; reason: AbandonReason }
@@ -148,9 +187,29 @@ const TERMINAL_JOB_STATUSES = new Set(['succeeded', 'failed', 'canceled']);
  * back?
  */
 export function classifyAbandonedCandidate(
-  job: PlanJobStateDto,
+  job: PlanJobStateDto | null,
   ageMs: number,
 ): { abandoned: true; reason: AbandonReason } | { abandoned: false; reason: KeepReason } {
+  // NO PRODUCER (MOTIR-3236) — `job` is null because the plan carries no
+  // `sourceJobId` and there was nothing to ask. An MCP-authored plan is written
+  // this way by construction (`create_plan` has no job), so this is not a
+  // degenerate case: it is the whole shape of one of the two ways a plan gets
+  // written.
+  //
+  // AMENDMENT 2's argument for asking — "the discriminator is not in the plan
+  // table" — is TRUE of a producer-bearing plan and FALSE here. An ABSENT
+  // producer IS a fact about the row, and it is the fact that settles the
+  // question: there is no job that could come back, so the only signal left is
+  // the passage of time. That is exactly the argument `max_age` already makes
+  // for the crashed worker, which is why this arm REUSES
+  // `ABANDONED_PLAN_MAX_AGE_HOURS` rather than introducing a threshold of its
+  // own.
+  if (job === null) {
+    if (ageMs >= ABANDONED_PLAN_MAX_AGE_HOURS * 60 * 60 * 1000) {
+      return { abandoned: true, reason: 'no_producer' };
+    }
+    return { abandoned: false, reason: 'no_producer_recent' };
+  }
   // A 404 is the one unreachable-shaped answer that IS evidence: motir-ai
   // answered, and its answer was that no such job exists.
   if (!job.reachable) {
@@ -219,13 +278,18 @@ export const abandonedPlanService = {
 
     const outcomes: AbandonedPlanOutcome[] = [];
     for (const plan of candidates) {
-      // `plan.sourceJobId` is a `string`, not `string | null`: the repository's
-      // `AbandonedPlanCandidate` states its own WHERE clause in the type, so
-      // there is no defensive branch here for a case the query cannot return.
+      // ASK only when there is somebody to ask (MOTIR-3236). A candidate with no
+      // `sourceJobId` gets NO `resolveJobState` call: asking motir-ai about a job
+      // id that does not exist is a request that can only 404, and a 404 already
+      // MEANS something else here — `job_gone`, the producer that existed and is
+      // now provably dead. Sending one would launder "there was never a job" into
+      // "the job died", on every pass, for every MCP-authored plan.
       //
-      // ASK, outside any transaction — this is a network call to motir-ai, and a
-      // slow one must never be holding a row.
-      const job = await deps.resolveJobState(plan.sourceJobId, plan.projectId);
+      // When there IS one, the ask happens outside any transaction: it is a
+      // network call to motir-ai, and a slow one must never be holding a row.
+      const job = plan.sourceJobId
+        ? await deps.resolveJobState(plan.sourceJobId, plan.projectId)
+        : null;
       const verdict = classifyAbandonedCandidate(job, now.getTime() - plan.createdAt.getTime());
 
       if (!verdict.abandoned) {
@@ -279,10 +343,18 @@ export const abandonedPlanService = {
       // `warn`, not `info`: the repo's lint allows only warn/error, and the level
       // is right anyway — a plan terminated with nobody's decision behind it is
       // the operator-visible record of a job that died, not routine chatter.
+      // The producer half of the line tells the truth about which of the two
+      // shapes this was: a job that was asked about and reported something, or a
+      // plan that never had one. Printing `job null` and a job status for a
+      // job-less plan would read as a failed lookup rather than an absent
+      // producer, which is the distinction the whole `no_producer` arm turns on.
+      const producer = job
+        ? `job ${plan.sourceJobId}; job status ${job.status ?? 'unreachable'}${
+            job.failure ? ` (${job.failure.code})` : ''
+          }`
+        : 'no producer (agent-authored — no generation job to ask about)';
       console.warn(
-        `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}, job ${plan.sourceJobId}) declined as abandoned — ${verdict.reason}; ${plan._count.items} proposal(s) retained; job status ${job.status ?? 'unreachable'}${
-          job.failure ? ` (${job.failure.code})` : ''
-        }`,
+        `[abandoned-plan-sweep] plan ${plan.id} (project ${plan.projectId}) declined as abandoned — ${verdict.reason}; ${plan._count.items} proposal(s) retained; ${producer}`,
       );
       outcomes.push({
         planId: plan.id,
