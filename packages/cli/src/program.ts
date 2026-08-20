@@ -222,7 +222,23 @@ export function buildProgram(): Command {
   // first members of the reserved WORK LOOP group (`auto` / `batch` join them).
   register(program, 'next')
     .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
-    .option('--print', 'Print the prompt to stdout instead of launching an agent (default).')
+    .option(
+      '--print',
+      'Print the prompt to stdout INSTEAD of launching an agent (default). Not --print-prompt.',
+    )
+    // ── THE PROMPT ECHO (MOTIR-3052) ────────────────────────────────────────
+    // ⚠️ ONE WORD FROM `--print`, AND THE OPPOSITE KIND OF THING. `--print`
+    // prints the prompt INSTEAD of running an agent; this prints it IN ADDITION
+    // to the run, on stderr, so the two compose on one command line instead of
+    // putting two copies of a 200-line prompt on one stream. Commander gives
+    // them distinct attributes (`print` vs `printPrompt`), which is what keeps
+    // the `--print` refusals on `auto` / `batch` from catching this flag — and
+    // they must not: an unattended loop is exactly where a transcript is worth
+    // having.
+    .option(
+      '--print-prompt',
+      'ALSO echo the assembled prompt to stderr as it is sent, and still run the agent.',
+    )
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
     .option('--reset', 'Clear this project’s session exclude list before picking.')
     // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
@@ -255,7 +271,23 @@ export function buildProgram(): Command {
   register(program, 'run')
     .option(
       '--print',
-      'Print the prompt to stdout instead of launching an agent (default). One work item only.',
+      'Print the prompt to stdout INSTEAD of launching an agent (default). One item; not --print-prompt.',
+    )
+    // ── THE PROMPT ECHO (MOTIR-3052) ────────────────────────────────────────
+    // ⚠️ ONE WORD FROM `--print`, AND THE OPPOSITE KIND OF THING. `--print`
+    // prints the prompt INSTEAD of running an agent; this prints it IN ADDITION
+    // to the run, on stderr, so the two compose on one command line instead of
+    // putting two copies of a 200-line prompt on one stream. Commander gives
+    // them distinct attributes (`print` vs `printPrompt`), which is what keeps
+    // the `--print` refusals on `auto` / `batch` from catching this flag — and
+    // they must not: an unattended loop is exactly where a transcript is worth
+    // having.
+    // ⚠️ AND IT IS NOT LEAF-ONLY, unlike `--print` right above it: a scoped run
+    // prints one block per dispatched leaf, which is the case the flag exists
+    // for. `refuseLeafOnlyFlag` reads `opts.print`, never this.
+    .option(
+      '--print-prompt',
+      'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
     )
     .option('--agent <cmd>', 'Run THIS agent command on the prompt (overrides MOTIR_AGENT).')
     .option(
@@ -319,7 +351,23 @@ export function buildProgram(): Command {
     // which told the user nothing and made `autoCommand`'s own guard, the one
     // carrying the "use `motir next --print` instead" hint, unreachable from the
     // command line. A rejected flag with guidance beats an unknown flag.
-    .option('--print', 'Not supported — an unattended loop has nobody to paste a prompt.')
+    .option(
+      '--print',
+      'Not supported — an unattended loop has nobody to paste a prompt. --print-prompt IS.',
+    )
+    // ── THE PROMPT ECHO (MOTIR-3052) ────────────────────────────────────────
+    // ⚠️ ONE WORD FROM `--print`, AND THE OPPOSITE KIND OF THING. `--print`
+    // prints the prompt INSTEAD of running an agent; this prints it IN ADDITION
+    // to the run, on stderr, so the two compose on one command line instead of
+    // putting two copies of a 200-line prompt on one stream. Commander gives
+    // them distinct attributes (`print` vs `printPrompt`), which is what keeps
+    // the `--print` refusals on `auto` / `batch` from catching this flag — and
+    // they must not: an unattended loop is exactly where a transcript is worth
+    // having.
+    .option(
+      '--print-prompt',
+      'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
+    )
     // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
     // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
     // come back as different PROMPT TEXT, because the prompt is the entire
@@ -359,7 +407,23 @@ export function buildProgram(): Command {
     // that flag, or commander rejects it first and the guard is dead code from
     // the command line. `test/optionRegistrationAudit.test.ts` now enforces it
     // across every command, so this cannot go unswept a third time.
-    .option('--print', 'Not supported — a frozen snapshot has nobody to paste a prompt.')
+    .option(
+      '--print',
+      'Not supported — a frozen snapshot has nobody to paste a prompt. --print-prompt IS.',
+    )
+    // ── THE PROMPT ECHO (MOTIR-3052) ────────────────────────────────────────
+    // ⚠️ ONE WORD FROM `--print`, AND THE OPPOSITE KIND OF THING. `--print`
+    // prints the prompt INSTEAD of running an agent; this prints it IN ADDITION
+    // to the run, on stderr, so the two compose on one command line instead of
+    // putting two copies of a 200-line prompt on one stream. Commander gives
+    // them distinct attributes (`print` vs `printPrompt`), which is what keeps
+    // the `--print` refusals on `auto` / `batch` from catching this flag — and
+    // they must not: an unattended loop is exactly where a transcript is worth
+    // having.
+    .option(
+      '--print-prompt',
+      'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
+    )
     // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
     // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
     // come back as different PROMPT TEXT, because the prompt is the entire

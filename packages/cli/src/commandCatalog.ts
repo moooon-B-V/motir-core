@@ -397,7 +397,13 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--print',
-        description: 'Print the prompt to stdout instead of launching an agent (default).',
+        description:
+          'Print the prompt to stdout INSTEAD of launching an agent (default). Not --print-prompt.',
+      },
+      {
+        flags: '--print-prompt',
+        description:
+          'ALSO echo the assembled prompt to stderr as it is sent, and still run the agent.',
       },
       {
         flags: '--agent <cmd>',
@@ -447,7 +453,12 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       {
         flags: '--print',
         description:
-          'Print the prompt to stdout instead of launching an agent (default). One work item only.',
+          'Print the prompt to stdout INSTEAD of launching an agent (default). One item; not --print-prompt.',
+      },
+      {
+        flags: '--print-prompt',
+        description:
+          'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
       },
       {
         flags: '--agent <cmd>',
@@ -543,7 +554,13 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--print',
-        description: 'Not supported — an unattended loop has nobody to paste a prompt.',
+        description:
+          'Not supported — an unattended loop has nobody to paste a prompt. --print-prompt IS.',
+      },
+      {
+        flags: '--print-prompt',
+        description:
+          'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
       },
       {
         flags: '--disable-log-bug',
@@ -600,7 +617,13 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--print',
-        description: 'Not supported — a frozen snapshot has nobody to paste a prompt.',
+        description:
+          'Not supported — a frozen snapshot has nobody to paste a prompt. --print-prompt IS.',
+      },
+      {
+        flags: '--print-prompt',
+        description:
+          'Echo each assembled prompt to stderr as it is sent, alongside the run (2> prompts.log).',
       },
       {
         flags: '--disable-log-bug',

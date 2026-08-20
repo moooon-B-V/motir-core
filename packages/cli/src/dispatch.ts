@@ -759,3 +759,38 @@ export function contradictoryReplanFlags(opts: FindingsPolicyOptions): string | 
     're-plan, the other stops the agent from submitting one at all.'
   );
 }
+
+// ── the PROMPT ECHO, at the command line (MOTIR-3052) ───────────────────────
+
+/**
+ * `--print-prompt` — echo each assembled prompt to stderr AS IT IS SENT.
+ *
+ * ⚠️ NOT `--print`, and the one-word gap is the whole hazard. `--print` prints
+ * the prompt INSTEAD of launching an agent (and is refused outright on `auto` /
+ * `batch`, which have nobody to paste it to); this one prints it IN ADDITION to
+ * the run, and is supported everywhere — an unattended loop is exactly where a
+ * transcript is worth having. The two attributes are distinct (`print` vs
+ * `printPrompt`), so the existing refusals cannot catch this flag; the reason
+ * they must not is stated on those guards.
+ */
+export interface PromptEchoOptions {
+  /** `--print-prompt` — echo the assembled prompt to stderr as it is dispatched. */
+  printPrompt?: boolean;
+}
+
+/**
+ * The header that opens one echoed prompt.
+ *
+ * In `auto`, `batch` and a scoped `run` many prompts stream past in a single
+ * invocation, and an unheadered wall of text is not a transcript — so every
+ * block names the work item, and names the SESSION BRANCH as well whenever the
+ * dispatch carries one (`session_lineage`), because on that path the prompt's
+ * git instructions are only interpretable against the branch they name.
+ */
+export function renderPromptEchoHeader(key: string, dispatch: DispatchPrompt): string {
+  const lineage =
+    dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch
+      ? ` · ${dispatch.sessionBranch}`
+      : '';
+  return `──── PROMPT SENT · ${key}${lineage} ────`;
+}

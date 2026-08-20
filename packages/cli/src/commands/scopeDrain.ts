@@ -188,6 +188,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         clock,
         runAgentFn,
         run,
+        opts,
         onIntegrated: (k) => repo?.forEach((s) => s.keys.push(k)),
       });
 

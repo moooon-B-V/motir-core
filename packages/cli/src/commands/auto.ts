@@ -5,6 +5,7 @@ import {
   claimAllowsDispatch,
   ensureInProgress,
   resolveAgent,
+  echoPromptIfAsked,
   resolveOwnerId,
   type DeliveryOptions,
 } from './dispatch.js';
@@ -24,6 +25,7 @@ import {
   resolveDispatchTarget,
   resolveDispatchTargets,
   type DispatchTarget,
+  type PromptEchoOptions,
 } from '../dispatch.js';
 import {
   autoExitCode,
@@ -512,6 +514,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         clock,
         runAgentFn,
         run,
+        opts,
         // The card is integrated in EVERY repository of its lineage, so it is
         // carried by every one of their pull requests (MOTIR-3135).
         onIntegrated: (key) => repo?.forEach((s) => s.keys.push(key)),
@@ -650,6 +653,11 @@ export interface DispatchOneInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** The run's flags — read for `--print-prompt` alone (MOTIR-3052), which has
+   *  to reach the moment the prompt is handed over. Threaded as the whole option
+   *  bag rather than a boolean so the SCOPED drain and `auto` pass the same
+   *  thing they already hold. */
+  opts: PromptEchoOptions;
   onIntegrated: (key: string) => void;
   /** The loop's git runner — the push check (MOTIR-3004) uses it. */
   run: CommandRunner;
@@ -718,6 +726,12 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
       ? `   integrating into ${dispatch.sessionBranch}`
       : '   no session lineage — this item ships as its own pull request',
   );
+
+  // BEFORE the spawn (MOTIR-3052), so the prompt is on the stream even when the
+  // agent then fails, times out or is killed. One block per dispatched item, in
+  // dispatch order — this function is `auto`'s loop AND the scoped drain's, so
+  // both transcripts are produced by the same line.
+  echoPromptIfAsked(input.opts, item.key, dispatch);
 
   const started = clock();
   const result = await runAgentFn({
