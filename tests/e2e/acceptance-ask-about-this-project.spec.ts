@@ -260,8 +260,13 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
 
     // An empty answer is a real answer: an ordinary bubble that says what it
     // could not find, never an invented one and never an error.
+    //
+    // ⚠️ SCOPED TO THE RAIL, and not page-wide. Next renders its own
+    // `__next-route-announcer__` with `role="alert"` on every page, so
+    // `page.getByRole('alert')` matches one element always — an assertion that
+    // would fail here for a reason that has nothing to do with this story.
     await expect(answers(page).last()).toContainText("I can't answer that from this project");
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(rail(page).getByRole('alert')).toHaveCount(0);
     await beat();
   });
 
