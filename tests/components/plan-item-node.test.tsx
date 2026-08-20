@@ -504,24 +504,33 @@ describe('mergePlanLevel', () => {
 // given null. So this locks the CONSUMER side of the contract the review model
 // now satisfies, and the failing-without-the-fix half lives one layer down, in
 // `planReviewService`'s own suite, where the null was produced.
+// MOTIR-3260 threaded the PROPOSED-crumb word through as an argument, because
+// `arrivalLevel` is pure and the word is a translated string the component owns.
+// These cases have no proposed ancestor, so the value is never rendered by them;
+// it is passed for the signature.
+const NEW = 'New';
+
 describe('arrivalLevel', () => {
   it('opens a MODIFY-only plan at its target’s level, not at the root', () => {
-    const arrival = arrivalLevel([
-      item({
-        planItemId: 'pi_1',
-        nodeId: 'wi_target',
-        op: 'modify',
-        identifier: 'MOTIR-3181',
-        title: 'An existing card',
-        parentNodeId: 'wi_story',
-        parentIdentifier: 'MOTIR-3070',
-        parentTitle: 'Plan review',
-        parentTrail: [
-          { id: 'wi_epic', identifier: 'MOTIR-2200', title: 'The agent loop' },
-          { id: 'wi_story', identifier: 'MOTIR-3070', title: 'Plan review' },
-        ],
-      }),
-    ]);
+    const arrival = arrivalLevel(
+      [
+        item({
+          planItemId: 'pi_1',
+          nodeId: 'wi_target',
+          op: 'modify',
+          identifier: 'MOTIR-3181',
+          title: 'An existing card',
+          parentNodeId: 'wi_story',
+          parentIdentifier: 'MOTIR-3070',
+          parentTitle: 'Plan review',
+          parentTrail: [
+            { id: 'wi_epic', identifier: 'MOTIR-2200', title: 'The agent loop' },
+            { id: 'wi_story', identifier: 'MOTIR-3070', title: 'Plan review' },
+          ],
+        }),
+      ],
+      NEW,
+    );
 
     expect(arrival?.id).toBe('wi_story');
     // The whole committed chain, so the breadcrumb names the branch the card
@@ -532,7 +541,137 @@ describe('arrivalLevel', () => {
   it('still opens at the ROOT when the plan genuinely proposes roots', () => {
     // A null parent is now a STATEMENT ("this card is a root"), not the absence
     // of an answer — so the root arrival has to keep working.
-    expect(arrivalLevel([item({ op: 'add', parentNodeId: null })])).toBeNull();
+    expect(arrivalLevel([item({ op: 'add', parentNodeId: null })], NEW)).toBeNull();
+  });
+
+  it('a PROPOSED container counts — the story-and-its-subtasks shape (MOTIR-3260)', () => {
+    // ⚠️ THE DEFECT THIS CARD FIXES. `getPlanReview` nulls `parentIdentifier` for
+    // an intra-plan (`planItem:`) parent — deliberately, because such a parent is
+    // drawn ON the canvas rather than in the breadcrumb — and `arrivalLevel`
+    // skipped any item without one. So a plan proposing a story under a committed
+    // epic PLUS five subtasks under that story scored ONE edge and opened on the
+    // epic, with the five cards it is actually about one undiscoverable drill
+    // away.
+    const story = item({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      op: 'add',
+      title: 'Payout reconciliation',
+      parentNodeId: 'wi_epic',
+      parentIdentifier: 'MOTIR-653',
+      parentTitle: 'Epic 8',
+      parentTrail: [{ id: 'wi_epic', identifier: 'MOTIR-653', title: 'Epic 8' }],
+    });
+    const subs = [0, 1, 2, 3, 4].map((i) =>
+      item({
+        planItemId: `pi_sub_${i}`,
+        nodeId: `pi_sub_${i}`,
+        op: 'add',
+        title: `Subtask ${i}`,
+        parentNodeId: 'pi_story',
+        parentIdentifier: null,
+        parentTitle: null,
+        parentTrail: [],
+      }),
+    );
+
+    const arrival = arrivalLevel([story, ...subs], NEW);
+
+    expect(arrival?.id).toBe('pi_story');
+    // The committed chain, then a crumb for the PROPOSED story — which keeps the
+    // committed `KEY · Title` grammar with the word `New` where the key would go,
+    // because an un-materialized `add` has no key by construction.
+    expect(arrival?.trail.map((c) => c.label)).toEqual([
+      'MOTIR-653 · Epic 8',
+      'New · Payout reconciliation',
+    ]);
+  });
+
+  it('resolves a chain nested MORE than one proposal deep, with no gap', () => {
+    const epic = item({
+      planItemId: 'pi_epic',
+      nodeId: 'pi_epic',
+      op: 'add',
+      title: 'A proposed epic',
+      parentNodeId: null,
+      parentIdentifier: null,
+      parentTrail: [],
+    });
+    const story = item({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      op: 'add',
+      title: 'A proposed story',
+      parentNodeId: 'pi_epic',
+      parentIdentifier: null,
+      parentTrail: [],
+    });
+    const subs = [0, 1].map((i) =>
+      item({
+        planItemId: `pi_sub_${i}`,
+        nodeId: `pi_sub_${i}`,
+        op: 'add',
+        parentNodeId: 'pi_story',
+        parentIdentifier: null,
+        parentTrail: [],
+      }),
+    );
+
+    const arrival = arrivalLevel([epic, story, ...subs], NEW);
+
+    expect(arrival?.id).toBe('pi_story');
+    expect(arrival?.trail.map((c) => c.label)).toEqual([
+      'New · A proposed epic',
+      'New · A proposed story',
+    ]);
+  });
+
+  it('the TIE-BREAK is the deeper level, whatever the item order', () => {
+    const story = item({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      op: 'add',
+      title: 'A story',
+      parentNodeId: 'wi_epic',
+      parentIdentifier: 'MOTIR-653',
+      parentTitle: 'Epic 8',
+      parentTrail: [{ id: 'wi_epic', identifier: 'MOTIR-653', title: 'Epic 8' }],
+    });
+    const sub = item({
+      planItemId: 'pi_sub',
+      nodeId: 'pi_sub',
+      op: 'add',
+      parentNodeId: 'pi_story',
+      parentIdentifier: null,
+      parentTrail: [],
+    });
+
+    // 1–1. The shipped code kept whichever the `Map` yielded first.
+    expect(arrivalLevel([story, sub], NEW)?.id).toBe('pi_story');
+    expect(arrivalLevel([sub, story], NEW)?.id).toBe('pi_story');
+  });
+
+  it('an ARCHIVED ancestor still yields a breadcrumb rather than none', () => {
+    // `parentTrail: []` beside a non-null `parentNodeId` is the degrade. The
+    // single crumb the parent fields still name is what keeps the canvas from
+    // arriving with no breadcrumb at all.
+    const arrival = arrivalLevel(
+      [
+        item({
+          planItemId: 'pi_1',
+          nodeId: 'pi_1',
+          op: 'add',
+          parentNodeId: 'wi_gone',
+          parentIdentifier: 'MOTIR-900',
+          parentTitle: 'An archived parent',
+          parentTrail: [],
+        }),
+      ],
+      NEW,
+    );
+
+    expect(arrival?.id).toBe('wi_gone');
+    expect(arrival?.trail.map((c) => c.label)).toEqual(['MOTIR-900 · An archived parent']);
   });
 
   it('takes the level carrying the MOST proposals when a mixed plan spans two', () => {
@@ -546,11 +685,10 @@ describe('arrivalLevel', () => {
         parentTrail: [{ id: parent, identifier: key, title: 'A parent' }],
       });
 
-    const arrival = arrivalLevel([
-      at('a', 'wi_p1', 'MOTIR-1'),
-      at('b', 'wi_p2', 'MOTIR-2'),
-      at('c', 'wi_p2', 'MOTIR-2'),
-    ]);
+    const arrival = arrivalLevel(
+      [at('a', 'wi_p1', 'MOTIR-1'), at('b', 'wi_p2', 'MOTIR-2'), at('c', 'wi_p2', 'MOTIR-2')],
+      NEW,
+    );
 
     expect(arrival?.id).toBe('wi_p2');
   });

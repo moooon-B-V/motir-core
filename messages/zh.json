@@ -239,6 +239,7 @@
     "listBodyRewritten": "已重写——打开卡片查看",
     "listEmptyTitle": "没有提案",
     "listEmptyBody": "此计划生成结束但没有提出任何内容。批准它不会改变任何东西。",
+    "proposedCrumb": "新",
     "actionError": "出了点问题，请重试。",
     "approvedOutcome": "已将 {n} 个工作项加入待办列表",
     "declinedOutcome": "计划已拒绝 — 你的工作项树未作改动",

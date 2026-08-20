@@ -239,6 +239,7 @@
     "listBodyRewritten": "rewritten — open the card to read it",
     "listEmptyTitle": "No proposals",
     "listEmptyBody": "This plan finished without proposing anything. Nothing will change if you approve it.",
+    "proposedCrumb": "New",
     "actionError": "Something went wrong. Please try again.",
     "approvedOutcome": "Added {n, plural, one {# item} other {# items}} to your backlog",
     "declinedOutcome": "Plan declined — your tree was left untouched",

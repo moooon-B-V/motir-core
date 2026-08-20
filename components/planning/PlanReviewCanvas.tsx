@@ -12,6 +12,7 @@ import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
+import { fullestContainer } from '@/lib/planning/planShape';
 import { ProposalQuickView } from '@/components/planning/ProposalQuickView';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -63,53 +64,119 @@ export interface PlanReviewCanvasProps {
 }
 
 /**
- * Where to OPEN the canvas: the committed parent the plan proposes into, plus the
- * committed ANCESTOR PATH down to it (bug MOTIR-3152).
+ * Where to OPEN the canvas: the container the plan most FILLS, plus the ANCESTOR
+ * PATH down to it (bug MOTIR-3152; MOTIR-3260).
  *
- * A plan whose proposals sit under several committed parents has no single level
- * — that is the drill-down model working, not a gap — so the arrival level is the
- * one carrying the most proposals, and the rail remains the whole-plan list. A
- * plan that proposes only roots (or whose parents were archived, which resolves
- * to no parent at all) opens at the top level, exactly as a genuine root should.
+ * A plan whose proposals sit under several parents has no single level — that is
+ * the drill-down model working, not a gap — so the arrival level is the one
+ * carrying the most proposals, and the rail remains the whole-plan list. A plan
+ * that proposes only roots (or whose parents were archived, which resolves to no
+ * parent at all) opens at the top level, exactly as a genuine root should.
+ *
+ * ⚠️ A PROPOSED CONTAINER COUNTS, and it did not (MOTIR-3260). This function used
+ * to skip any item without a `parentIdentifier` — and `getPlanReview` sets that
+ * field to null for an intra-plan (`planItem:`) parent, deliberately, because
+ * such a parent is drawn ON the canvas rather than in the breadcrumb. So the
+ * count discarded exactly the items the null describes: a plan proposing one
+ * story under a committed epic PLUS five subtasks under that story scored one
+ * edge and opened on the EPIC, with the five cards it is actually about one
+ * undiscoverable drill away. `parentNodeId` IS populated for those items, and the
+ * counting now lives in `planShape.ts`, which `MOTIR-3262`'s derived default
+ * reads too — one implementation of "how is this plan spread", not two.
  *
  * ⚠️ The trail is the WHOLE CHAIN, not one crumb. The design asks for *"the
  * committed ancestor path down to the focused level, exactly as the roadmap draws
  * it"* (`design/ai-planning/design-notes.md` Part V §2 panel E), and a chain has
  * to be CARRIED — `parentTrail` on the review model — rather than synthesised
- * from the immediate parent, which is all this function used to have. An EMPTY
- * trail beside a non-null parent means the chain could not be resolved (an
- * archived ancestor); that degrades to the single crumb the parent fields still
- * name, so the canvas never arrives with no breadcrumb at all.
+ * from the immediate parent. An EMPTY trail beside a non-null parent means the
+ * chain could not be resolved (an archived ancestor); that degrades to the single
+ * crumb the parent fields still name, so the canvas never arrives with no
+ * breadcrumb at all. When the arrival parent is itself a PROPOSAL there is no
+ * committed chain on that item — the trail is its own `parentTrail` plus one
+ * crumb for the proposal, walked up as far as the proposal chain goes.
  */
 export function arrivalLevel(
   items: PlanReviewItemDto[],
+  /**
+   * The word a PROPOSED crumb puts where a key would go — `planReview.proposedCrumb`,
+   * *"New"* in English (Part IX §1.3).
+   *
+   * Passed in rather than looked up, because this function is PURE and is unit-
+   * tested directly. An un-materialized `add` has `identifier: null` **by
+   * construction**, and a placeholder key (`MOTIR-?`, `#new-3`) would assert a
+   * work item that does not exist — on the one surface whose whole promise is
+   * that nothing is real until approve. So the crumb keeps the committed
+   * `KEY · Title` grammar and substitutes the SLOT, which makes the distinction
+   * TEXT rather than colour.
+   */
+  proposedWord: string,
 ): { id: string; trail: CanvasCrumb[] } | null {
-  const counts = new Map<string, { n: number; trail: CanvasCrumb[] }>();
-  for (const item of items) {
-    if (!item.parentNodeId || !item.parentIdentifier) continue;
-    const prev = counts.get(item.parentNodeId);
-    const carried = item.parentTrail.map((c) => ({
-      id: c.id,
-      label: workItemCrumbLabel(c.identifier, c.title),
-    }));
-    counts.set(item.parentNodeId, {
-      n: (prev?.n ?? 0) + 1,
-      trail:
+  const container = fullestContainer(items);
+  if (!container?.parentNodeId) return null;
+  return {
+    id: container.parentNodeId,
+    trail: trailTo(items, container.parentNodeId, proposedWord),
+  };
+}
+
+/**
+ * The breadcrumb down to a container, committed or proposed.
+ *
+ * Walks UP from the container: each PROPOSED ancestor contributes one crumb
+ * labelled `<proposedWord> · <title>`; the first COMMITTED one contributes the
+ * `parentTrail` any item naming it carries, which is the whole committed chain.
+ */
+function trailTo(
+  items: PlanReviewItemDto[],
+  parentNodeId: string,
+  proposedWord: string,
+): CanvasCrumb[] {
+  const byNodeId = new Map(items.map((item) => [item.nodeId, item]));
+  const proposed: CanvasCrumb[] = [];
+  const seen = new Set<string>();
+
+  let cursor: string | null = parentNodeId;
+  while (cursor !== null && !seen.has(cursor)) {
+    seen.add(cursor);
+    const proposal: PlanReviewItemDto | undefined = byNodeId.get(cursor);
+    if (!proposal) {
+      // COMMITTED. Any item under it carries the committed chain down to it; an
+      // EMPTY one is the archived-ancestor degrade, and the single crumb the
+      // parent fields still name is what keeps the breadcrumb from vanishing.
+      const namer = items.find((item) => item.parentNodeId === cursor);
+      const carried =
+        namer?.parentTrail.map((c) => ({
+          id: c.id,
+          label: workItemCrumbLabel(c.identifier, c.title),
+        })) ?? [];
+      const committed =
         carried.length > 0
           ? carried
-          : [
-              {
-                id: item.parentNodeId,
-                label: workItemCrumbLabel(item.parentIdentifier, item.parentTitle ?? ''),
-              },
-            ],
+          : namer?.parentIdentifier
+            ? [
+                {
+                  id: cursor,
+                  label: workItemCrumbLabel(namer.parentIdentifier, namer.parentTitle ?? ''),
+                },
+              ]
+            : [];
+      return [...committed, ...proposed];
+    }
+    proposed.unshift({
+      id: proposal.nodeId,
+      label: workItemCrumbLabel(proposedWord, proposal.title),
     });
+    cursor = proposal.parentNodeId;
   }
-  let best: { id: string; trail: CanvasCrumb[]; n: number } | null = null;
-  for (const [id, { n, trail }] of counts) {
-    if (!best || n > best.n) best = { id, trail, n };
-  }
-  return best ? { id: best.id, trail: best.trail } : null;
+  // The chain ran out inside the plan — every ancestor is a proposal. Whatever
+  // committed trail the topmost one carries goes in front of them.
+  const top = byNodeId.get(parentNodeId);
+  const carried =
+    top?.parentTrail.map((c) => ({
+      id: c.id,
+      label: workItemCrumbLabel(c.identifier, c.title),
+    })) ?? [];
+  return [...carried, ...proposed];
 }
 
 export function PlanReviewCanvas({
@@ -120,7 +187,8 @@ export function PlanReviewCanvas({
   ariaLabel,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
-  const arrival = useMemo(() => arrivalLevel(items), [items]);
+  const tPlan = useTranslations('planReview');
+  const arrival = useMemo(() => arrivalLevel(items, tPlan('proposedCrumb')), [items, tPlan]);
   const initialTrail = useMemo<CanvasCrumb[] | undefined>(
     () => arrival?.trail ?? undefined,
     [arrival],
