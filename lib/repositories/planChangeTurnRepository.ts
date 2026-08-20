@@ -1,4 +1,9 @@
-import { Prisma, type PlanChangeTurn, type PlanChangeTurnRole } from '@/generated/prisma/client';
+import {
+  Prisma,
+  type PlanChangeTurn,
+  type PlanChangeTurnIntent,
+  type PlanChangeTurnRole,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_turn` table (Story 7.30 ·
@@ -28,6 +33,35 @@ export const planChangeTurnRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn | null> {
     return tx.planChangeTurn.findFirst({ where: { sessionId, workspaceId, jobId, role } });
+  },
+
+  /** ONE turn of a session, by id — the read a CORRECTION makes before it re-runs
+   *  a turn under the other intent (MOTIR-1818; ADR §3). Scoped by `sessionId`
+   *  AND `workspaceId`, so a turn id from another thread — or another tenant —
+   *  resolves to null rather than to somebody else's sentence. `tx` is required:
+   *  every caller reads it to guard a following write. */
+  async findByIdInSession(
+    id: string,
+    sessionId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn | null> {
+    return tx.planChangeTurn.findFirst({ where: { id, sessionId, workspaceId } });
+  },
+
+  /** Patch ONE turn in place. The only field a turn is ever updated on is its
+   *  INTENT (plus the flag that records the correction) — a turn's `body`, `seq`
+   *  and `role` are immutable by design, because the thread is a record of who
+   *  said what. Typed to `intent` / `intentCorrected` rather than to the full
+   *  update input so that immutability is a compile-time fact, not a convention.
+   *  Requires `tx` (the write rule) — and it is called under the session's row
+   *  lock, so a concurrent correction cannot interleave with an append. */
+  async updateIntent(
+    id: string,
+    data: { intent: PlanChangeTurnIntent; intentCorrected?: boolean },
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeTurn> {
+    return tx.planChangeTurn.update({ where: { id }, data });
   },
 
   /** The session's FULL thread in `seq` order — the ordering contract every

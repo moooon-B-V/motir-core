@@ -2,6 +2,7 @@ import {
   Prisma,
   type PlanChangeSession,
   type PlanChangeTurn,
+  type PlanChangeTurnIntent,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
 
@@ -10,6 +11,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
@@ -25,6 +27,7 @@ import {
   EmptyPlanChangeTurnError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
+  PlanChangeTurnNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE, PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
 
@@ -116,8 +119,15 @@ async function toDto(
   const ids = turns
     .filter((t) => t.role === 'assistant')
     .flatMap((t) => parseWorkItemTokenIds(t.body));
+  // An ANSWER's citations are stored as IDENTIFIERS, not as `motir:` id tokens
+  // in the body, so they ride the `keys` half of the same ONE resolve
+  // (MOTIR-1818). Two reasons they are not left to the client: the rail must
+  // render a citation through the shipped `WorkItemRefChip` path exactly as the
+  // detail page does, and resolving them here keeps a citation chip's title
+  // subject to the same access checks as everything else on the thread.
+  const citedKeys = turns.flatMap((t) => t.citations);
   const workItemRefs = await resolveWorkItemRefSummaries(
-    { ids: [...new Set(ids)], keys: [] },
+    { ids: [...new Set(ids)], keys: [...new Set(citedKeys)] },
     pctx.projectId,
     { userId: pctx.userId, workspaceId: pctx.workspaceId },
   );
@@ -181,6 +191,38 @@ async function requireSession(
  * lock, not before it: checked outside, two concurrent replays would both see
  * "not there yet" and both insert.
  */
+/**
+ * Keep only the citations that name a work item IN THIS PROJECT, in the order
+ * the answer gave them (MOTIR-1818; ADR §1).
+ *
+ * Three things it drops, and each is a real failure mode of a grounded answer:
+ * a key the model invented, a key that resolves in ANOTHER project (the read is
+ * `projectId`-scoped, so a cross-tenant identifier simply does not come back),
+ * and a duplicate. What survives is a list the rail can render as chips knowing
+ * every one of them opens something.
+ *
+ * BOUND, and deliberately so (MOTIR-2846's shape): `findByIdentifiers` falls
+ * back to the `db` singleton when handed no `tx`, and `work_item` is
+ * workspace-keyed — so an unbound read under `motir_app` matches no row, returns
+ * `[]`, and every citation would be silently dropped as "unresolvable". That
+ * failure has no error and no log; it just looks like an answer that cited
+ * nothing. This runs before `appendLocked` opens its short write lock
+ * (side-effects and reads that need no lock stay outside it), so it opens its
+ * own read-only binding rather than threading a `tx` that does not exist yet.
+ */
+async function resolveCitations(
+  citations: readonly string[],
+  pctx: ProjectContext,
+): Promise<string[]> {
+  const wanted = [...new Set(citations.map((c) => c.trim()).filter(Boolean))];
+  if (wanted.length === 0) return [];
+  const rows = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+    workItemRepository.findByIdentifiers(pctx.projectId, wanted, tx),
+  );
+  const known = new Set(rows.map((r) => r.identifier));
+  return wanted.filter((c) => known.has(c));
+}
+
 async function appendLocked(
   session: PlanChangeSession,
   pctx: ProjectContext,
@@ -191,6 +233,8 @@ async function appendLocked(
     authorId?: string | null;
     question?: string | null;
     isAnswer?: boolean;
+    intent?: PlanChangeTurnIntent | null;
+    citations?: string[];
   },
   patch: Prisma.PlanChangeSessionUncheckedUpdateInput = {},
   skipIf?: (tx: Prisma.TransactionClient) => Promise<boolean>,
@@ -220,6 +264,8 @@ async function appendLocked(
             jobId: turn.jobId ?? null,
             question: turn.question ?? null,
             isAnswer: turn.isAnswer ?? false,
+            intent: turn.intent ?? null,
+            citations: turn.citations ?? [],
             authorId: turn.authorId ?? null,
           },
           tx,
@@ -398,7 +444,7 @@ export const planChangeSessionsService = {
     body: string,
     pctx: ProjectContext,
     scopeKey: string = PROJECT_SCOPE_KEY,
-    opts: { isAnswer?: boolean } = {},
+    opts: { isAnswer?: boolean; intent?: PlanChangeTurnIntent } = {},
   ): Promise<PlanChangeSessionDto> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -408,7 +454,109 @@ export const planChangeSessionsService = {
       body: trimmed,
       authorId: pctx.userId,
       isAnswer: opts.isAnswer === true,
+      // ⚠️ SERVER-RESOLVED (ADR §1). `opts.intent` is what the ASK SERVICE
+      // decided after motir-ai classified the turn — never a value parsed off a
+      // request body. The shipped plan-change append passes nothing and its
+      // turns keep a null intent, exactly as every turn written before the
+      // model existed does; that is why there is no back-fill.
+      intent: opts.intent ?? null,
     });
+  },
+
+  /**
+   * Append the ANSWER an ask produced, as an `assistant` turn carrying its
+   * CITATIONS (MOTIR-1818; ADR §1). The write half of the ask loop —
+   * `recordPlannerTurn` is its plan-change sibling, and the two deliberately
+   * share `appendLocked`'s row-locked allocation rather than growing a second
+   * append path.
+   *
+   * IDEMPOTENT ON `jobId`, the same guarantee and the same mechanism the planner
+   * turn has: the client records the answer when its stream settles, and a
+   * reload, a second tab or a retried settle all replay that call. The skip is
+   * evaluated UNDER the session lock, so two concurrent replays cannot both pass
+   * it.
+   *
+   * CITATIONS ARE VALIDATED BEFORE THEY PERSIST — see {@link resolveCitations}.
+   * A key that names no work item IN THIS PROJECT is dropped rather than stored,
+   * because the rail renders each one as a work-item chip and a chip that
+   * resolves to nothing is worse than a missing citation: it asserts the answer
+   * rested on something it did not.
+   */
+  async appendAnswerTurn(
+    input: { jobId: string; body: string; citations?: readonly string[] },
+    pctx: ProjectContext,
+    scopeKey: string = PROJECT_SCOPE_KEY,
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = input.body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const session = await requireSession(pctx, scopeKey);
+    const citations = await resolveCitations(input.citations ?? [], pctx);
+    return appendLocked(
+      session,
+      pctx,
+      { role: 'assistant', body: trimmed, jobId: input.jobId, citations },
+      {},
+      async (tx) =>
+        (await planChangeTurnRepository.findByJobIdAndRole(
+          session.id,
+          input.jobId,
+          'assistant',
+          pctx.workspaceId,
+          tx,
+        )) !== null,
+    );
+  },
+
+  /**
+   * Record what a `user` turn actually RAN AS (MOTIR-1818; ADR §1/§3).
+   *
+   * Two callers, one write. The REDIRECT: `ask_project` classified the turn as a
+   * plan change, so the effective disposition moves before the plan-change job
+   * is dispatched. The CORRECTION: the person pressed "Propose changes instead"
+   * / "Answer this instead", so the turn is re-run the other way — same turn, no
+   * second `user` row, because the thread is a record of who said what and they
+   * said it once. `corrected` is what separates the two on the record.
+   *
+   * Under the session's row lock, so it cannot interleave with an append. A turn
+   * id that is not on this thread — or is on another tenant's — raises
+   * `PlanChangeTurnNotFoundError` rather than silently patching nothing.
+   */
+  async recordTurnIntent(
+    turnId: string,
+    intent: PlanChangeTurnIntent,
+    pctx: ProjectContext,
+    opts: { corrected?: boolean } = {},
+    scopeKey: string = PROJECT_SCOPE_KEY,
+  ): Promise<PlanChangeSessionDto> {
+    const session = await requireSession(pctx, scopeKey);
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const locked = await planChangeSessionRepository.lockById(session.id, tx);
+        if (!locked) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        const turn = await planChangeTurnRepository.findByIdInSession(
+          turnId,
+          session.id,
+          pctx.workspaceId,
+          tx,
+        );
+        if (!turn) throw new PlanChangeTurnNotFoundError(turnId);
+        await planChangeTurnRepository.updateIntent(
+          turn.id,
+          {
+            intent,
+            // `corrected` LATCHES: a turn re-read a second time stays corrected,
+            // because what the flag records is that Motir once got it wrong, and
+            // that does not stop being true.
+            intentCorrected: opts.corrected === true || turn.intentCorrected,
+          },
+          tx,
+        );
+        const fresh = await planChangeSessionRepository.findById(session.id, pctx.workspaceId, tx);
+        if (!fresh) throw new PlanChangeSessionNotFoundError(pctx.projectId);
+        return toDto(fresh, pctx, tx);
+      },
+    );
   },
 
   /**
