@@ -50,19 +50,31 @@ async function staleCountFor(plan: PlanDto, ctx: ServiceContext): Promise<number
 }
 
 /**
- * The REQUESTERS of a page of plans, as `id → display name` (MOTIR-2991).
+ * The PEOPLE named by a page of plans, as `id → display name` (MOTIR-2991;
+ * widened to the DECIDER by MOTIR-3238).
  *
- * ONE query for the whole page, over the DISTINCT ids — never a lookup per row.
- * The list is paginated and a per-row read would make the plans page's cost grow
- * with the page size for a field that is one join away; `userRepository.findByIds`
- * already exists for exactly this shape.
+ * ONE query for the whole page, over the DISTINCT ids of BOTH parties — never a
+ * lookup per row, and never a second query for the second party. The list is
+ * paginated and a per-row read would make the plans page's cost grow with the
+ * page size for a field that is one join away; `userRepository.findByIds`
+ * already exists for exactly this shape, and the union is what keeps the count
+ * at one however many roles the row grows.
  *
- * A missing id resolves to `null` rather than throwing: `createdById` is
- * `ON DELETE SET NULL`, so the only way to hold an id with no user is a race with
- * a deletion, and an unattributable plan is a correct reading of that.
+ * The two ids also OVERLAP constantly in practice — the person who asked for a
+ * plan is very often the person who approved it — so a set over the union is
+ * cheaper than two reads even before the round trip is counted.
+ *
+ * A missing id resolves to `null` rather than throwing: both `createdById` and
+ * `decidedById` are `ON DELETE SET NULL`, so the only way to hold an id with no
+ * user is a race with a deletion, and an unattributable plan is a correct
+ * reading of that.
  */
-async function requesterNames(plans: PlanDto[]): Promise<Map<string, string>> {
-  const ids = [...new Set(plans.map((plan) => plan.createdById).filter((id) => id != null))];
+async function partyNames(plans: PlanDto[]): Promise<Map<string, string>> {
+  const ids = [
+    ...new Set(
+      plans.flatMap((plan) => [plan.createdById, plan.decidedById]).filter((id) => id != null),
+    ),
+  ];
   if (ids.length === 0) return new Map();
   const users = await userRepository.findByIds(ids);
   return new Map(users.map((user) => [user.id, user.name]));
@@ -76,7 +88,7 @@ export async function buildPlanRowViews(
 
   // Per-plan staleness is independent — fan out (bounded by the page size).
   const staleCounts = await Promise.all(plans.map((plan) => staleCountFor(plan, ctx)));
-  const names = await requesterNames(plans);
+  const names = await partyNames(plans);
 
   return plans.map((plan, i) => {
     const { key, iso } = whenFor(plan);
@@ -93,6 +105,11 @@ export async function buildPlanRowViews(
       // relative time and the staleness count already are.
       origin: plan.origin,
       createdByName: plan.createdById ? (names.get(plan.createdById) ?? null) : null,
+      // WHO DECIDED it (MOTIR-3238). Null on an undecided plan, on a plan
+      // predating the column, and — the case that matters — on an ABANDONED one,
+      // where `decidedById` is deliberately null because nobody decided it
+      // (MOTIR-3189). The row renders that absence rather than a placeholder.
+      decidedByName: plan.decidedById ? (names.get(plan.decidedById) ?? null) : null,
       authorSource: plan.authorSource,
       authorHarness: plan.authorHarness,
     };

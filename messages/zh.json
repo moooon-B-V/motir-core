@@ -5248,7 +5248,9 @@
     "createdAt": "创建于 {when}",
     "plannedAt": "规划于 {when}",
     "approvedAt": "批准于 {when}",
+    "approvedByName": "由 {name} 批准于 {when}",
     "declinedAt": "拒绝于 {when}",
+    "declinedByName": "由 {name} 拒绝于 {when}",
     "status": {
       "generating": "生成中",
       "planned": "已规划",

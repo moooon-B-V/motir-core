@@ -53,19 +53,25 @@ const STATUS_TINT: Record<PlanStatusDto, string> = {
  * absence, not a placeholder, because a placeholder in a scanned list is a value
  * the reader has to learn to ignore.
  *
- * ⚠️ A DECIDED row shows the DECIDER, not the requester (Part III §3). The row
- * already ends `approved yesterday` / `declined 3 days ago`, and while a plan is
- * undecided *who asked* is what you weigh — once it is decided, *who decided* is
- * the operative fact and the requester is history. Dropping it also stops two
- * bare person names landing in one scanned line, where a reader cannot tell
- * which one holds which role.
+ * ⚠️ A DECIDED row NAMES BOTH PEOPLE — and this REVERSES Part III §3, which this
+ * comment used to state as *"a decided row shows the DECIDER, not the
+ * requester"*. That rule named a real hazard: two bare person names in one
+ * scanned line, with nothing saying which holds which role. Its PREMISE is what
+ * failed — the two do not have to share an entry, and half of the collision it
+ * guarded against did not exist, because the decider was drawn in panel A since
+ * 843 and NEVER SHIPPED. So the row named nobody at all.
+ *
+ * Part VII puts them in DIFFERENT entries, and the entry is what says the role:
+ * the DECIDER rides the WHEN entry behind its verb (`approved yesterday by
+ * Mara`, {@link WhenEntry}), the REQUESTER rides this attribution entry behind
+ * its avatar, unchanged. Part III's three-entry cap survives — the requester
+ * goes back INSIDE entry 3 and adds no fourth entry.
  *
  * The glyphs are DECORATIVE (`aria-hidden`, `--el-text-faint`): the words carry
  * the meaning, so neither party is ever conveyed by icon or colour alone.
  */
 function PlanAttribution({ view }: { view: PlanRowView }) {
   const t = useTranslations('aiPlanning');
-  const decided = view.status === 'approved' || view.status === 'declined';
 
   // WHO WROTE it, read off `authorSource` ALONE (MOTIR-2996): `mcp` + a harness
   // is an agent, `native` is Motir. The row used to infer the Motir case from
@@ -78,11 +84,11 @@ function PlanAttribution({ view }: { view: PlanRowView }) {
         ? { Icon: Sparkles, label: t('viaMotir'), truncates: false }
         : null;
 
-  // WHO ASKED — suppressed once decided, and replaced by the cadence marker when
-  // nobody asked at all.
-  const requester = decided
-    ? null
-    : view.origin === 'cadence'
+  // WHO ASKED — rendered in EVERY state now (MOTIR-3238), and replaced by the
+  // cadence marker when nobody asked at all. The `decided ? null :` suppression
+  // that stood here is the Part III §3 rule Part VII reverses; see the doc above.
+  const requester =
+    view.origin === 'cadence'
       ? { kind: 'cadence' as const }
       : view.createdByName
         ? { kind: 'person' as const, name: view.createdByName }
@@ -129,6 +135,39 @@ function PlanAttribution({ view }: { view: PlanRowView }) {
       ) : null}
     </span>
   );
+}
+
+/**
+ * WHEN the plan reached its current state — and, on a decided plan, WHO decided
+ * it (MOTIR-3238, `design/ai-planning/design-notes.md` Part VII §3).
+ *
+ * The decider rides THIS entry rather than the attribution one, behind the verb
+ * that already labels the timestamp: `approved yesterday by Mara`. That is where
+ * panel A has drawn it since 843, and it is what makes the two people on a
+ * decided row unambiguous without new chrome — one name is preceded by
+ * *approved … by*, the other by a face.
+ *
+ * ⚠️ THE DECIDER IS OPTIONAL, AND ITS ABSENCE IS A WHOLE SENTENCE. A plan the
+ * abandoned-plan sweep terminated is `declined` with a NULL `decidedById`,
+ * because nobody decided it (MOTIR-3189) — so the row falls back to the plain
+ * `approved {when}` / `declined {when}` string rather than rendering a
+ * name-shaped hole. That is Part III §3's *absence, never a placeholder* rule,
+ * one axis over: no em-dash, no `Unknown`, no greyed placeholder.
+ *
+ * The two keys are named literally rather than derived from `whenKey` so both
+ * are greppable in the catalogues and the zh-parity gate can see them.
+ */
+function WhenEntry({ view }: { view: PlanRowView }) {
+  const t = useTranslations('aiPlanning');
+  if (view.decidedByName) {
+    if (view.whenKey === 'approvedAt') {
+      return <span>{t('approvedByName', { when: view.whenLabel, name: view.decidedByName })}</span>;
+    }
+    if (view.whenKey === 'declinedAt') {
+      return <span>{t('declinedByName', { when: view.whenLabel, name: view.decidedByName })}</span>;
+    }
+  }
+  return <span>{t(view.whenKey, { when: view.whenLabel })}</span>;
 }
 
 /** The status pill, mapped to the shipped `Pill` tones the design specifies:
@@ -179,7 +218,7 @@ export function PlanRow({ view }: { view: PlanRowView }) {
         <div className="truncate text-sm font-semibold text-(--el-text)">{title}</div>
         <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-(--el-text-secondary)">
           <span>{t('itemCount', { count: view.itemCount })}</span>
-          <span>{t(view.whenKey, { when: view.whenLabel })}</span>
+          <WhenEntry view={view} />
           <PlanAttribution view={view} />
         </div>
       </div>

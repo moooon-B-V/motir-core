@@ -85,6 +85,90 @@ describe('buildPlanRowViews — the row view-model', () => {
     perRow.mockRestore();
   });
 
+  it('resolves the DECIDER in the SAME one query, over the UNION of both parties', async () => {
+    // MOTIR-3238 widened `requesterNames` into `partyNames`. The property is not
+    // "the decider resolves" — it is that adding a second role added no second
+    // read, which is exactly what a screenshot cannot show and what a
+    // well-meaning second `findByIds` would break silently.
+    const fx = await makeWorkItemFixture();
+    const mara = await createTestUser({ email: 'mara@example.com', name: 'Mara' });
+    const jonas = await createTestUser({ email: 'jonas@example.com', name: 'Jonas' });
+
+    // Three decided plans. Two share a decider, and one of them was requested by
+    // the person who decided the others — so the union is SMALLER than the sum,
+    // which is what pins the de-duplication rather than merely the batching.
+    const plans: string[] = [];
+    for (const [requester, decider] of [
+      [mara.id, jonas.id],
+      [jonas.id, jonas.id],
+      [mara.id, null],
+    ] as const) {
+      const plan = await plansService.createPlan(
+        fx.projectId,
+        { title: `plan ${plans.length}`, createdById: requester },
+        fx.ctx,
+      );
+      await adminDb.plan.update({
+        where: { id: plan.id },
+        data: { status: 'approved', decidedAt: new Date(), decidedById: decider },
+      });
+      plans.push(plan.id);
+    }
+
+    // Re-read through the service so the DTOs carry the decided state written
+    // above (`createPlan`'s return predates it).
+    const page = await plansService.listPlans(fx.projectId, fx.ctx);
+    const byId = new Map(page.plans.map((p) => [p.id, p]));
+    const dtos = plans.map((id) => byId.get(id)!);
+
+    const batched = vi.spyOn(userRepository, 'findByIds');
+    const perRow = vi.spyOn(userRepository, 'findById');
+
+    const views = await buildPlanRowViews(dtos, fx.ctx);
+
+    expect(views.map((v) => v.createdByName)).toEqual(['Mara', 'Jonas', 'Mara']);
+    expect(views.map((v) => v.decidedByName)).toEqual(['Jonas', 'Jonas', null]);
+
+    // ONE read for three rows and two roles, over the DEDUPED union — two ids,
+    // not the five id slots the rows occupy.
+    expect(batched).toHaveBeenCalledTimes(1);
+    expect(batched.mock.calls[0]![0]).toHaveLength(2);
+    expect(perRow).not.toHaveBeenCalled();
+    batched.mockRestore();
+    perRow.mockRestore();
+  });
+
+  it('leaves the decider null when NOBODY decided it — the abandoned case', async () => {
+    // `decisionReason: 'abandoned'` with a NULL `decidedById` is what the
+    // abandoned-plan sweep writes (MOTIR-3189 / MOTIR-3236). The view-model must
+    // carry that absence through rather than inventing a decider from the actor
+    // that happened to be in context.
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'a plan nobody came back to', createdById: fx.ownerId },
+      fx.ctx,
+    );
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: {
+        status: 'declined',
+        decidedAt: new Date(),
+        decidedById: null,
+        decisionReason: 'abandoned',
+      },
+    });
+
+    const page = await plansService.listPlans(fx.projectId, fx.ctx);
+    const [view] = await buildPlanRowViews(
+      page.plans.filter((p) => p.id === plan.id),
+      fx.ctx,
+    );
+
+    expect(view!.createdByName).toBe(fx.owner.name);
+    expect(view!.decidedByName).toBeNull();
+  });
+
   it('carries the attribution fields through from the DTO, and derives nothing itself', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(

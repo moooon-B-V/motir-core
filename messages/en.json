@@ -5252,7 +5252,9 @@
     "createdAt": "created {when}",
     "plannedAt": "planned {when}",
     "approvedAt": "approved {when}",
+    "approvedByName": "approved {when} by {name}",
     "declinedAt": "declined {when}",
+    "declinedByName": "declined {when} by {name}",
     "status": {
       "generating": "Generating",
       "planned": "Planned",
