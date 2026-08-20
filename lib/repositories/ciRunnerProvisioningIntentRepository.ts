@@ -132,6 +132,33 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
+  /**
+   * The oldest intent still awaiting a runner FOR ONE PROJECT — the read behind
+   * the admission WAKE (MOTIR-2852).
+   *
+   * Scoped to a project because that is the scope a freed slot has: the
+   * per-project cap is what deferred the intent, so a completion in project A
+   * says nothing about whether project B may now boot. Ordered by `queuedAt`
+   * exactly as {@link listPending} is, and for the same reason — the slot goes to
+   * the job GitHub has been holding longest, not to whichever row was written
+   * last.
+   *
+   * ⚠️ IT DOES NOT CLAIM. The row it returns is still `pending` and may be
+   * claimed by the sweep, by the webhook's hot path, or by another wake before
+   * the boot this feeds ever runs. {@link claimPending}'s compare-and-set is what
+   * decides, and a wake that loses resolves as `already_claimed` with no second
+   * container.
+   */
+  async findNextPendingForProject(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent | null> {
+    return tx.ciRunnerProvisioningIntent.findFirst({
+      where: { projectId, status: CI_RUNNER_INTENT_PENDING },
+      orderBy: { queuedAt: 'asc' },
+    });
+  },
+
   /** One intent by id, whatever its status. */
   async findById(
     id: string,

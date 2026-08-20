@@ -10,15 +10,14 @@ import type { CiRunnerBootData } from '@/lib/jobs/types';
 // `workflow_job.queued` delivery to the job starting, and the minute-granularity
 // `system.ci-runner-provision-sweep` cannot meet it: a cron adds up to 60 s
 // before the admission gate is even consulted. So the webhook dispatches
-// directly, and the sweep stays exactly where it is — as the RECOVERY path for
-// an intent this call dropped, and as the retry loop every gate deferral already
-// depends on.
+// directly, and the sweep stays where it is as the RECOVERY path for an intent
+// this call dropped.
 //
-// TWO SENDERS, ONE PAYLOAD. Both callers build the event through
-// `ciRunnerBootEvent`, so the shape cannot drift between the fast path and the
-// recovery path — the two events race by design and must be the same event.
-// Their ERROR semantics differ deliberately, which is why only one of them gets
-// the swallowing wrapper below:
+// THREE SENDERS, ONE PAYLOAD (MOTIR-2852 added the third). Every caller builds
+// the event through `ciRunnerBootEvent`, so the shape cannot drift between the
+// paths — they race by design and must be the same event. Their ERROR semantics
+// differ deliberately, which is why only two of them get the swallowing wrapper
+// below:
 //
 //   * the SWEEP sends inside a `step.run` under the `idempotent` retry policy —
 //     a transport failure there should propagate, because Inngest retrying the
@@ -28,6 +27,15 @@ import type { CiRunnerBootData } from '@/lib/jobs/types';
 //     only re-run the whole handler for an intent that already exists. So the
 //     failure is logged and swallowed, the delivery is acked, and the sweep
 //     picks the intent up within the minute.
+//   * the ADMISSION WAKE (`ciRunnerBootService.dispatchNextPendingForProject`,
+//     MOTIR-2852) hangs off a TEARDOWN, and a teardown must complete whatever
+//     the transport is doing — a throw there would abandon the very bookkeeping
+//     that just freed the slot. Same swallow, same backstop.
+//
+// ⚠️ AND THE WAKE IS WHY THE SWEEP IS NO LONGER "the retry loop every gate
+// deferral depends on" — that sentence, which this header used to carry, was the
+// justification for the minute cadence. Admission latency now belongs to the
+// wake; see the comment at `CI_RUNNER_PROVISION_SWEEP_CRON`.
 
 /** The canonical `system.ci-runner-boot` event for one provisioning intent.
  *
@@ -56,8 +64,23 @@ export function ciRunnerBootEvent(intentId: string): {
 export type CiRunnerBootDispatchOutcome = 'dispatched' | 'not_configured' | 'send_failed';
 
 /**
- * Dispatch the boot for a freshly recorded intent, from the webhook, in the same
- * request. NEVER THROWS — see the module header.
+ * WHO asked for the boot. Carried only into the failure log — the event itself is
+ * byte-identical whichever path sent it, which is the property `ciRunnerBootEvent`
+ * exists to hold. It matters in the log because the callers have different
+ * recoveries, and an operator reading a `send_failed` line wants to know which
+ * one is now covering it.
+ */
+export type CiRunnerBootDispatchSource = 'hot-path' | 'admission-wake';
+
+const RECOVERY_BY_SOURCE: Record<CiRunnerBootDispatchSource, string> = {
+  'hot-path': 'the delivery is still acked and the provision sweep will pick the intent up',
+  'admission-wake': 'the slot is still free and the provision sweep will pick the intent up',
+};
+
+/**
+ * Dispatch the boot for a recorded intent — from the webhook in the same request,
+ * or from the admission WAKE the moment a slot frees (MOTIR-2852).
+ * NEVER THROWS — see the module header.
  *
  * Gated on `isOrchestratorConfigured()`, which is the SAME condition
  * `ciRunnerBootService.listRunnableIntentIds` applies before the sweep fans
@@ -67,16 +90,18 @@ export type CiRunnerBootDispatchOutcome = 'dispatched' | 'not_configured' | 'sen
  * is still recorded, so nothing is lost — the moment the deployment IS
  * configured, the sweep drains what accumulated.
  */
-export async function dispatchCiRunnerBoot(intentId: string): Promise<CiRunnerBootDispatchOutcome> {
+export async function dispatchCiRunnerBoot(
+  intentId: string,
+  source: CiRunnerBootDispatchSource = 'hot-path',
+): Promise<CiRunnerBootDispatchOutcome> {
   if (!isOrchestratorConfigured()) return 'not_configured';
   try {
     await inngest.send(ciRunnerBootEvent(intentId));
     return 'dispatched';
   } catch (err) {
     console.error(
-      `[ciRunnerBoot] the hot-path boot dispatch for intent ${intentId} failed to enqueue; ` +
-        `the delivery is still acked and the provision sweep will pick the intent up ` +
-        `within the minute:`,
+      `[ciRunnerBoot] the ${source} boot dispatch for intent ${intentId} failed to enqueue; ` +
+        `${RECOVERY_BY_SOURCE[source]} within the minute:`,
       err,
     );
     return 'send_failed';
