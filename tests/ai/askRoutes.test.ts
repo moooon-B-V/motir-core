@@ -88,6 +88,9 @@ const redirected = {
  */
 async function seedPendingQuestion(question: string): Promise<void> {
   submitJobMock.mockResolvedValue({ jobId: 'job-augment-q' });
+  // The thread has to EXIST before a turn can be appended to it — the ask door
+  // opens it itself, but this helper writes through the service directly.
+  await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
   await planChangeSessionsService.appendTurn('add payments', activeCtx.current!);
   await planChangeSessionsService.submit(activeCtx.current!);
   getJobMock.mockResolvedValue({
