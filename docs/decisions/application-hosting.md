@@ -1822,6 +1822,20 @@ MOTIR-2852/2853 and MOTIR-3224 are the cards that close the remaining gap.
 - **Scale-to-zero on the gateway.** Available only behind a transport change
   (§14), which is not on this Story.
 - **A second region.** Q10's, with Q10's trigger.
+- **⚠️ WHETHER AMENDMENT 5's Q9 IS ACTUALLY IN FORCE. It is not, and this
+  amendment does not fix it.** Found 2026-08-20 while measuring for MOTIR-2783:
+  `MOTIR_AI_URL` read from inside a running motir-core machine is
+  **`https://motir-ai.fly.dev`** — the PUBLIC origin — while Amendment 5 states
+  _"Q9's decision STANDS and is now in force — `MOTIR_AI_URL` is
+  `http://motir-ai.internal:8080` in production."_ The deployed value is the
+  rollback that amendment documents. `.internal` itself works (`GET /health` →
+  200 from the same machine), so this is drift, not a workaround.
+  **Filed as MOTIR-3231, which owns both the secret and the correction to
+  Amendment 5.** Named here rather than left silent, because until it is fixed
+  every reader of Amendment 5 will reason from a seam that is not in use — and
+  because _this_ amendment's §14 argument for `motir-gateway`'s floor rests on the
+  ai→gateway leg, which was separately verified and **is** `.internal`. The two
+  legs must not be swept together.
 - **Alerting.** There is none, and this amendment does not invent one. Every "how
   we learn" cell in §16 is honest about that; a spend tripwire is
   `ci-runner-fleet.md` §9.2's shape and belongs with the meter, not here.
