@@ -69,6 +69,7 @@ function session(
 const handlers = {
   onSend: vi.fn(),
   onRetry: vi.fn(),
+  onCorrectTurn: vi.fn(),
   onApprove: vi.fn(),
   onDiscard: vi.fn(),
   onAddTarget: vi.fn(),

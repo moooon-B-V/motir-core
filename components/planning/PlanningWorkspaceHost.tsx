@@ -137,7 +137,7 @@ export function PlanningWorkspaceHost({
     setTreeVersion((v) => v + 1);
     router.refresh();
   }, [router]);
-  const { state, send, retry, approve, discard } = usePlanChangeConversation({
+  const { state, send, retry, correctTurn, approve, discard } = usePlanChangeConversation({
     onApproved,
     anchorId,
   });
@@ -231,11 +231,30 @@ export function PlanningWorkspaceHost({
             />
           </div>
 
-          {/* The gate — visible only while a proposal is pending on the canvas. */}
-          {/* …and only while it is still PENDING (MOTIR-3162). The review now
-              survives the decision so the canvas can keep drawing it, so
-              "there is a review" no longer means "there is a decision to
-              take" — `state.decided` is what does. */}
+          {/* ⭐ THE FOOTER SLOT — one box, two contents (MOTIR-1815 panel 3).
+              ────────────────────────────────────────────────────────────────
+              The gate is still shown only while a proposal is PENDING (MOTIR-3162:
+              a review survives its decision so the canvas can keep drawing it, so
+              "there is a review" does not mean "there is a decision to take" —
+              `state.decided` is what does). What changed is that the predicate now
+              chooses the slot's CONTENT instead of whether the slot exists.
+
+              WHY, and it is not tidiness. The bar used to mount and unmount, and
+              it is a `shrink-0` sibling BELOW the `min-h-0 flex-1` canvas box — so
+              the box grew and shrank by the bar's full height on every change. The
+              canvas anchors three control clusters to the bottom of that box (the
+              engine's zoom + fit at `bottom-4 left-4`, LOCATE at
+              `bottom-4 left-[8.25rem]`, full-screen at `right-3 bottom-4`), and
+              all three slid with it. Harmless when a proposal was a rare event;
+              not harmless now that alternating between a question and a change is
+              the rhythm the surface invites. The nodes never moved (there is no
+              `ResizeObserver` and no fit-on-resize), which is why holding the BOX
+              constant fixes it and costs nothing else.
+
+              The resting state is deliberately quiet — secondary ink, no controls —
+              so it never competes with the gate or reads as something to act on.
+              Its second line is the ask's own promise made visible: an ask writes
+              nothing, said at the one moment somebody might wonder. */}
           {state.review && !state.decided && !index.isEmpty ? (
             <PlanChangeConfirmBar
               index={index}
@@ -243,7 +262,27 @@ export function PlanningWorkspaceHost({
               onApprove={approve}
               onDiscard={discard}
             />
-          ) : null}
+          ) : (
+            <div
+              data-testid="plan-change-canvas-footer"
+              // The SAME box as `PlanChangeConfirmBar`: same border, same
+              // surface, same `px-4 py-2.5`, and a two-line text column of the
+              // same two type sizes. The height therefore MATCHES structurally
+              // rather than by a pinned number — which is the point, because a
+              // magic `min-h` would drift the moment the bar's own content
+              // changed and re-introduce the jump this slot exists to remove.
+              className="flex shrink-0 items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-2.5"
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-semibold text-(--el-text-secondary)">
+                  {t('footerRestingTitle')}
+                </span>
+                <span className="truncate text-xs text-(--el-text-secondary)">
+                  {t('footerRestingBody')}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
       }
       chat={
@@ -257,6 +296,7 @@ export function PlanningWorkspaceHost({
           onRemoveTarget={removeTarget}
           onSend={sendTargeted}
           onRetry={retry}
+          onCorrectTurn={correctTurn}
           onApprove={approve}
           onDiscard={discard}
         />

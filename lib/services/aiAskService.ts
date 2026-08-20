@@ -121,7 +121,11 @@ export const aiAskService = {
    * to its job in a second, locked write, because the job does not exist until
    * after the append.
    */
-  async submitTurn(body: string, ctx: ProjectContext): Promise<AskSubmitResult> {
+  async submitTurn(
+    body: string,
+    ctx: ProjectContext,
+    opts: { isAnswer?: boolean } = {},
+  ): Promise<AskSubmitResult> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
 
@@ -139,8 +143,17 @@ export const aiAskService = {
     // get-or-create is idempotent (the `(project_id, scope_key)` unique makes a
     // lost create-race read the winner's row).
     await planChangeSessionsService.getOrCreateForProject(ctx);
+    // `isAnswer` rides through, because ADR §1's wire table says it does: the
+    // client→server body is `body, targets?, isAnswer?`, unchanged from the
+    // shipped shape. It is NOT an intent and cannot become one — it records
+    // WHICH AFFORDANCE sent the turn (the shipped `isAnswer` precedent), so the
+    // thread can say later whether the planner's question was answered or merely
+    // superseded. Dropping it here would silently cost the rail its
+    // "Answered — planning resumed" marker on every reply that came through this
+    // door, which is now every reply.
     const appended = await planChangeSessionsService.appendTurn(trimmed, ctx, undefined, {
       intent: 'ask',
+      isAnswer: opts.isAnswer === true,
     });
     const turn = appended.turns.at(-1);
     if (!turn) throw new PlanChangeTurnNotFoundError('(the turn just appended)');

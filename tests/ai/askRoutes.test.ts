@@ -176,6 +176,25 @@ describe('POST /api/ai/ask — the ONE door', () => {
     });
   });
 
+  it('carries `isAnswer` through — it is an AFFORDANCE record, not an intent', async () => {
+    // ADR §1's wire table is `body, targets?, isAnswer?`, unchanged from the
+    // shipped shape. Dropping `isAnswer` at this door would silently cost the
+    // rail its "Answered — planning resumed" marker on every reply to a planner
+    // question — which is now every reply, since this is the only door.
+    const res = await ask(askReq({ body: 'money in', isAnswer: true }));
+    const dto = (await res.json()) as { turnId: string };
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    expect(thread.turns.at(-1)).toMatchObject({ id: dto.turnId, isAnswer: true, intent: 'ask' });
+  });
+
+  it('defaults `isAnswer` to false — it is opt-in, and never inferred from words', async () => {
+    await ask(askReq({ body: 'why is it blocked?' }));
+
+    const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
+    expect(thread.turns.at(-1)!.isAnswer).toBe(false);
+  });
+
   it('IGNORES an intent supplied by the client — the mode has no back door', async () => {
     await ask(askReq({ body: 'split the billing epic', intent: 'plan_change' }));
 

@@ -78,7 +78,16 @@ export function aiCalloutActions(context: PlanningLaunchContext): AiCalloutActio
       descriptionKey: 'aiCallout.actions.plan.description',
       href,
     },
-    // MOTIR-1343 — { id: 'ask', icon: 'message-circle-question', … href }
+    {
+      id: 'ask',
+      icon: 'message-circle-question',
+      titleKey: 'aiCallout.actions.ask.title',
+      descriptionKey: 'aiCallout.actions.ask.description',
+      // The SAME `href`, deliberately. A question and a plan change are two
+      // intents of one conversation, and the intent is resolved per TURN by the
+      // server — so this row advertises a capability, it does not choose one.
+      href,
+    },
     // MOTIR-1344 — { id: 'help', icon: 'wrench', … href }
   ];
 }

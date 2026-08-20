@@ -18,7 +18,19 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 //   * `approve` with nothing selected, a non-typed approve failure, and
 //     `dismissError`.
 
-const { open, append, submit, stream, fetchReview, approve, decline } = vi.hoisted(() => ({
+const {
+  open,
+  append,
+  submit,
+  stream,
+  fetchReview,
+  approve,
+  decline,
+  submitAsk,
+  rerunAsk,
+  settleAsk,
+  streamAsk,
+} = vi.hoisted(() => ({
   open: vi.fn(),
   append: vi.fn(),
   submit: vi.fn(),
@@ -26,6 +38,10 @@ const { open, append, submit, stream, fetchReview, approve, decline } = vi.hoist
   fetchReview: vi.fn(),
   approve: vi.fn(),
   decline: vi.fn(),
+  submitAsk: vi.fn(),
+  rerunAsk: vi.fn(),
+  settleAsk: vi.fn(),
+  streamAsk: vi.fn(),
 }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
@@ -37,6 +53,9 @@ vi.mock('@/lib/planning/planChangeClient', () => ({
   resumeContextualSession: vi.fn(),
   submitContextualPlan: vi.fn(),
   resubmitContextualPlan: vi.fn(),
+  submitAskTurn: submitAsk,
+  rerunAskTurn: rerunAsk,
+  settleAskJob: settleAsk,
 }));
 
 vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
@@ -44,6 +63,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
   return {
     ...actual,
     streamAugmentJob: stream,
+    streamAskJob: streamAsk,
   };
 });
 
@@ -168,6 +188,26 @@ beforeEach(() => {
   fetchReview.mockResolvedValue(REVIEW);
   approve.mockResolvedValue(MATERIALIZED);
   decline.mockResolvedValue({ ...MATERIALIZED, status: 'declined', items: [] });
+  // ── the ASK door (MOTIR-1343) — the project thread's only entrance. The
+  // default settle REDIRECTS, so these suites keep exercising the same
+  // plan-change tail they were written against.
+  submitAsk.mockImplementation(async (body: string) => ({
+    jobId: 'ask-1',
+    turnId: 't0',
+    session: session([body]),
+  }));
+  rerunAsk.mockImplementation(async () => ({
+    jobId: 'ask-2',
+    turnId: 't0',
+    session: session(['x']),
+  }));
+  settleAsk.mockResolvedValue({
+    outcome: 'redirected',
+    jobId: 'job-1',
+    planId: 'plan-1',
+    session: session(['x']),
+  });
+  streamAsk.mockImplementation(async () => {});
 });
 
 afterEach(() => {
@@ -186,14 +226,14 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
     // The distinction that matters: the thread is the intent. If the turn never
     // landed, submitting would send the OLD accumulated intent and silently drop
     // what the user just typed — worse than failing.
-    append.mockRejectedValue(new PlanEditsClientError(500, null));
+    submitAsk.mockRejectedValue(new PlanEditsClientError(500, null));
     const { result } = await mounted();
 
     await act(async () => {
       await result.current.send('Add recurring invoices.');
     });
 
-    expect(submit).not.toHaveBeenCalled();
+    expect(streamAsk).not.toHaveBeenCalled();
     expect(result.current.state.phase).toBe('idle');
     expect(result.current.state.errorCode).toBe('FAILED');
   });
@@ -205,7 +245,7 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
     });
     expect(result.current.state.phase).toBe('review');
 
-    append.mockRejectedValue(new PlanEditsClientError(500, null));
+    submitAsk.mockRejectedValue(new PlanEditsClientError(500, null));
     await act(async () => {
       await result.current.send('Actually, make them smaller.');
     });
@@ -217,7 +257,7 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
   it('releases the in-flight latch so the next send can proceed', async () => {
     // A failed append that left `abortRef` set would wedge the rail: every later
     // send would hit the reentrancy guard and silently do nothing.
-    append.mockRejectedValueOnce(new PlanEditsClientError(500, null));
+    submitAsk.mockRejectedValueOnce(new PlanEditsClientError(500, null));
     const { result } = await mounted();
 
     await act(async () => {
@@ -227,7 +267,7 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
       await result.current.send('second');
     });
 
-    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submitAsk).toHaveBeenCalledTimes(2);
     expect(result.current.state.phase).toBe('review');
   });
 });
@@ -235,7 +275,7 @@ describe('usePlanChangeConversation — the APPEND leg fails', () => {
 describe('usePlanChangeConversation — one run at a time', () => {
   it('ignores a second send while a run is in flight', async () => {
     const pending = deferred<PlanChangeSessionDto>();
-    append.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const { result } = await mounted();
 
     let first: Promise<void>;
@@ -244,18 +284,18 @@ describe('usePlanChangeConversation — one run at a time', () => {
       // The double-click: fired before the first append settles.
       await result.current.send('Add recurring invoices.');
     });
-    expect(append).toHaveBeenCalledTimes(1);
+    expect(submitAsk).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       pending.resolve(session(['Add recurring invoices.']));
       await first!;
     });
-    expect(submit).toHaveBeenCalledTimes(1);
+    expect(settleAsk).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a retry while a run is in flight', async () => {
     const pending = deferred<{ jobId: string; planId: string; session: PlanChangeSessionDto }>();
-    submit.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const { result } = await mounted();
 
     let first: Promise<void>;
@@ -263,7 +303,7 @@ describe('usePlanChangeConversation — one run at a time', () => {
       first = result.current.send('Add recurring invoices.');
       await result.current.retry();
     });
-    expect(submit).toHaveBeenCalledTimes(1);
+    expect(submitAsk).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       pending.resolve({
@@ -280,7 +320,7 @@ describe('usePlanChangeConversation — one run at a time', () => {
     await act(async () => {
       await result.current.send('   \n  ');
     });
-    expect(append).not.toHaveBeenCalled();
+    expect(submitAsk).not.toHaveBeenCalled();
     expect(result.current.state.phase).toBe('idle');
   });
 });
@@ -306,7 +346,7 @@ describe('usePlanChangeConversation — an aborted call is not an error', () => 
   });
 
   it('swallows an aborted RUN rather than flagging it as failed', async () => {
-    submit.mockRejectedValue(abortError());
+    submitAsk.mockRejectedValue(abortError());
     const { result } = await mounted();
 
     await act(async () => {
@@ -318,7 +358,7 @@ describe('usePlanChangeConversation — an aborted call is not an error', () => 
   });
 
   it('swallows an aborted APPEND rather than flagging it as failed', async () => {
-    append.mockRejectedValue(abortError());
+    submitAsk.mockRejectedValue(abortError());
     const { result } = await mounted();
 
     await act(async () => {
@@ -326,14 +366,14 @@ describe('usePlanChangeConversation — an aborted call is not an error', () => 
     });
 
     expect(result.current.state.errorCode).toBeNull();
-    expect(submit).not.toHaveBeenCalled();
+    expect(streamAsk).not.toHaveBeenCalled();
   });
 });
 
 describe('usePlanChangeConversation — unmounting mid-flight', () => {
   it('aborts the in-flight run and writes no state after unmount', async () => {
     const pending = deferred<{ jobId: string; planId: string; session: PlanChangeSessionDto }>();
-    submit.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
     let run: Promise<void>;
@@ -378,7 +418,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
 
   it('drops an append failure that arrives after unmount', async () => {
     const pending = deferred<PlanChangeSessionDto>();
-    append.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
     let run: Promise<void>;
@@ -393,7 +433,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     });
 
     expect(hook.result.current.state.errorCode).toBeNull();
-    expect(submit).not.toHaveBeenCalled();
+    expect(streamAsk).not.toHaveBeenCalled();
   });
 
   it('drops a settled plan read that arrives after unmount', async () => {
@@ -419,7 +459,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     let emit: ((event: string, data: unknown) => void) | undefined;
     let fail: ((code: string | null) => void) | undefined;
     const pending = deferred<void>();
-    stream.mockImplementationOnce(
+    streamAsk.mockImplementationOnce(
       async (
         _jobId: string,
         _signal: AbortSignal,
@@ -448,7 +488,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     });
 
     expect(hook.result.current.state.errorCode).toBeNull();
-    expect(hook.result.current.state.progress).toEqual({ kind: 'submitted' });
+    expect(hook.result.current.state.progress).toEqual({ kind: 'reading' });
   });
 
   it('drops an approve result that arrives after unmount', async () => {
@@ -498,7 +538,7 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
 
   it('drops an append SUCCESS that arrives after unmount', async () => {
     const pending = deferred<PlanChangeSessionDto>();
-    append.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
     let run: Promise<void>;
@@ -515,12 +555,12 @@ describe('usePlanChangeConversation — unmounting mid-flight', () => {
     // The turn IS on the server; the dead rail just does not re-render for it,
     // and the run stops there rather than submitting into the void.
     expect(hook.result.current.state.session?.turns).toEqual([]);
-    expect(submit).not.toHaveBeenCalled();
+    expect(streamAsk).not.toHaveBeenCalled();
   });
 
   it('drops a submit failure that arrives after unmount', async () => {
     const pending = deferred<never>();
-    submit.mockReturnValueOnce(pending.promise);
+    submitAsk.mockReturnValueOnce(pending.promise);
     const hook = await mounted();
 
     let run: Promise<void>;
@@ -549,7 +589,7 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
     });
     expect(result.current.state.phase).toBe('review');
 
-    submit.mockRejectedValueOnce(new PlanEditsClientError(500, null));
+    rerunAsk.mockRejectedValueOnce(new PlanEditsClientError(500, null));
     await act(async () => {
       await result.current.retry();
     });
@@ -565,7 +605,7 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
       await result.current.send('Add recurring invoices.');
     });
 
-    submit.mockRejectedValueOnce(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
+    rerunAsk.mockRejectedValueOnce(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
     await act(async () => {
       await result.current.retry();
     });
@@ -688,7 +728,7 @@ describe('usePlanChangeConversation — approve edges', () => {
 
 describe('usePlanChangeConversation — dismissError', () => {
   it('clears both the error and the gated flag without touching the thread', async () => {
-    submit.mockRejectedValue(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
+    submitAsk.mockRejectedValue(new PlanEditsClientError(402, 'MOTIR_AI_OUT_OF_CREDITS'));
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');

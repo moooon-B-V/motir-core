@@ -68,7 +68,14 @@ function leadKey(launch: PlanningLaunch): string {
 /** The three outcome-phrased starter chips (design panel 6, "empty"). They are
  *  hints that PREFILL the composer, not a mode menu — the user still edits and
  *  sends, so nothing is submitted behind their back. */
-const STARTERS = ['addWork', 'resequence', 'drop'] as const;
+/** …and since MOTIR-1343 a QUESTION-shaped one, because the surface answers
+ *  questions too. It is a STARTER and not a row-scoped seed on purpose: the
+ *  callout's "Ask about this project" row shares one href with every other row,
+ *  so a seed that belonged to the row would be a mode arriving through the door
+ *  (`conversation-turn-intent.md` §5). Belonging to the SURFACE, it shows however
+ *  the user got here — which is what "the menu only advertises" means in the one
+ *  place a person actually types. */
+const STARTERS = ['addWork', 'resequence', 'drop', 'blocked'] as const;
 
 export interface PlanChangeRailProps {
   launch: PlanningLaunch;
@@ -83,6 +90,16 @@ export interface PlanChangeRailProps {
   onRemoveTarget: (identifier: string) => void;
   onSend: (text: string) => void;
   onRetry: () => void;
+  /**
+   * RE-RUN the user turn `turnId` under the other intent — the correction
+   * affordance under an assistant bubble (`conversation-turn-intent.md` §3).
+   *
+   * It names the TURN and never the direction: which intent to flip to is
+   * derived server-side from what the turn currently ran as, so the one
+   * affordance where a person explicitly asks for a different reading still
+   * leaves the intent server-resolved.
+   */
+  onCorrectTurn: (turnId: string) => void;
   onApprove: () => void;
   onDiscard: () => void;
 }
@@ -97,6 +114,7 @@ export function PlanChangeRail({
   onRemoveTarget,
   onSend,
   onRetry,
+  onCorrectTurn,
   onApprove,
   onDiscard,
 }: PlanChangeRailProps) {
@@ -111,6 +129,32 @@ export function PlanChangeRail({
   // makes a question survive a reload and still be answerable hours later. The
   // rail, the composer and the markers all read this one derivation.
   const question = pendingQuestion(turns);
+  // THE CORRECTION, derived from the thread rather than held in local state — the
+  // same posture as `question` above, and for the same reason: it must survive a
+  // reload and still be usable, because a person notices a mis-read whenever they
+  // next look at the answer, not only in the seconds after it lands.
+  //
+  // It is offered only on the LATEST assistant turn, and only when that turn came
+  // out of a `user` turn this thread still has. A question the planner is waiting
+  // on is NOT correctable: re-running it would answer a question nobody asked
+  // instead of the one the planner needs answered.
+  const latest = latestAssistantTurn(turns);
+  const origin = latest ? originatingUserTurn(turns, latest) : null;
+  const correctable =
+    latest && origin && latest.question === null
+      ? {
+          turnId: origin.id,
+          // What the flip would PRODUCE, from what the turn last ran as. A turn
+          // with no recorded intent predates the model and reads as `ask`, which
+          // is also the door every turn now goes through.
+          direction: ((origin.intent ?? 'ask') === 'ask' ? 'plan_change' : 'ask') as
+            | 'plan_change'
+            | 'ask',
+          pending: busy,
+          corrected: origin.intentCorrected,
+          onCorrect: onCorrectTurn,
+        }
+      : null;
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
@@ -195,6 +239,9 @@ export function PlanChangeRail({
             workItemRefs={state.session?.workItemRefs ?? {}}
             disposition={dispositionMarkerFor(turns, i)}
             isPending={question?.id === turn.id}
+            // Keyed on the ASSISTANT turn that carries it — `correction.turnId`
+            // names the USER turn the re-run replays, which is a different turn.
+            correction={latest && turn.id === latest.id ? correctable : null}
           />
         ))}
 
@@ -251,6 +298,19 @@ export function PlanChangeRail({
 
         {/* The RUN, narrated: the shipped drafting row + a polite live region fed
             by the job's real progress frames. */}
+        {/* The HAND-OFF (ADR Consequence 3). An ask turn that resolved to a plan
+            change streams twice; naming the re-reading is what keeps the wait
+            from reading as "that failed, it is trying again". The waiting row
+            below never unmounts — only its text changes. */}
+        {state.progress?.kind === 'redirected' ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-handoff"
+          >
+            {tc('handoff')}
+          </p>
+        ) : null}
+
         <div aria-live="polite" data-testid="plan-change-progress">
           {state.progress ? (
             <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
@@ -335,9 +395,44 @@ function errorKey(code: string): string {
       return 'error.discard';
     case 'SESSION_UNAVAILABLE':
       return 'error.session';
+    // The ask job ran and produced nothing at all. NOT the honest "I could not
+    // find that" — that is prose the handler returns, and it lands as an ordinary
+    // answer bubble with no citations. This is the empty case, and core writes
+    // nothing for it rather than inventing a body for the assistant.
+    case 'ASK_SILENT':
+      return 'error.askSilent';
     default:
       return 'error.body';
   }
+}
+
+/**
+ * The `user` turn an ASSISTANT turn came out of — the turn a correction re-runs.
+ *
+ * They are joined by `jobId`, which both carry for the same run: the ask service
+ * binds the user turn to its job at submit, and files the answer against the
+ * same id at settle. Position in the thread is deliberately NOT used: a
+ * correction appends a SECOND assistant turn beside the superseded one, so
+ * "the turn just above" stops being the answer to anything the moment the
+ * affordance is used once.
+ */
+function originatingUserTurn(
+  turns: readonly PlanChangeTurnDto[],
+  assistant: PlanChangeTurnDto,
+): PlanChangeTurnDto | null {
+  if (!assistant.jobId) return null;
+  return turns.find((t) => t.role === 'user' && t.jobId === assistant.jobId) ?? null;
+}
+
+/** The LAST assistant turn on the thread, or null. Only that one carries the
+ *  correction marker — a superseded answer keeps its bubble but loses its
+ *  affordance, so a thread never offers two ways to re-run one user turn. */
+function latestAssistantTurn(turns: readonly PlanChangeTurnDto[]): PlanChangeTurnDto | null {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i];
+    if (turn && turn.role === 'assistant') return turn;
+  }
+  return null;
 }
 
 interface TurnProps {
@@ -354,6 +449,25 @@ interface TurnProps {
   disposition: QuestionDisposition | null;
   /** This turn IS the question the thread is currently waiting on. */
   isPending: boolean;
+  /**
+   * The CORRECTION this assistant turn offers — null on every other turn, and
+   * null on an assistant turn that is not the latest one.
+   *
+   * `direction` is what the flip would produce, and it decides the label alone:
+   * the server derives the real direction from the turn's own recorded intent,
+   * so a stale label can mislabel a button but can never run the wrong thing.
+   */
+  correction: {
+    turnId: string;
+    direction: 'plan_change' | 'ask';
+    /** The re-run is in flight — the marker stays, disabled, rather than
+     *  vanishing and taking the affordance with it mid-wait. */
+    pending: boolean;
+    /** This turn IS the result of a correction — the passive line above it says
+     *  why a second assistant turn exists. */
+    corrected: boolean;
+    onCorrect: (turnId: string) => void;
+  } | null;
 }
 
 /** The one pending question's DOM id — the composer's "See it" jump target.
@@ -393,31 +507,75 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
   // as the planner. A QUESTION is that same bubble with two token values swapped
   // and the existing label slot filled: the distinction never rests on wording,
   // and never on colour alone (a word, a glyph, and the composer's own change).
-  assistant: function AssistantTurn({ turn, workItemRefs, isPending }: TurnProps) {
+  assistant: function AssistantTurn({ turn, workItemRefs, isPending, correction }: TurnProps) {
     const tc = useTranslations('planningWorkspace.conversation');
     const asking = turn.question !== null;
     return (
-      <Bubble
-        role="assistant"
-        tone={asking ? 'asking' : 'default'}
-        testId={asking ? 'plan-change-question' : 'plan-change-report'}
-        // Only the PENDING question is the "See it" target, and it is
-        // programmatically focusable so the jump lands for a keyboard user too.
-        anchorId={isPending ? PENDING_QUESTION_ID : undefined}
-        label={
-          asking ? (
-            <>
-              <MessageCircleQuestionMark className="size-3" aria-hidden="true" />
-              {tc('asking')}
-            </>
-          ) : undefined
-        }
-      >
-        {/* The shipped render path, so a report's `[KEY](motir:<id>)` references
-            become the same live `WorkItemRefChip` they are everywhere else —
-            never a second inline treatment invented for this surface. */}
-        <MarkdownView value={turn.body} workItemRefs={workItemRefs} />
-      </Bubble>
+      <>
+        {/* Why a SECOND assistant turn exists, in the passive marker voice. It
+            sits above the new turn rather than replacing the superseded one:
+            a correction is a second answer, not an erasure. */}
+        {correction?.corrected ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-corrected"
+          >
+            {tc(correction.direction === 'ask' ? 'correctedToPlan' : 'correctedToAsk')}
+          </p>
+        ) : null}
+        <Bubble
+          role="assistant"
+          tone={asking ? 'asking' : 'default'}
+          testId={asking ? 'plan-change-question' : 'plan-change-report'}
+          // Only the PENDING question is the "See it" target, and it is
+          // programmatically focusable so the jump lands for a keyboard user too.
+          anchorId={isPending ? PENDING_QUESTION_ID : undefined}
+          label={
+            asking ? (
+              <>
+                <MessageCircleQuestionMark className="size-3" aria-hidden="true" />
+                {tc('asking')}
+              </>
+            ) : undefined
+          }
+        >
+          {/* The shipped render path, so a report's `[KEY](motir:<id>)` references
+              become the same live `WorkItemRefChip` they are everywhere else —
+              never a second inline treatment invented for this surface. THIS IS
+              ALSO HOW AN ANSWER CITES: a citation is that chip, in the sentence
+              that rests on it, and there is no trailing source list. */}
+          <MarkdownView value={turn.body} workItemRefs={workItemRefs} />
+          {/* The size of the evidence base — a NUMBER, not a second chip list.
+              An answer may rest on items its prose never names, and `citations`
+              is the grounding contract; saying how many keeps that checkable
+              without re-rendering what the body already showed. */}
+          {turn.citations.length > 0 ? (
+            <p
+              className="mt-1.5 border-t border-(--el-border-soft) pt-1.5 text-xs text-(--el-text-secondary)"
+              data-testid="plan-change-citation-count"
+            >
+              {tc('answeredFrom', { count: turn.citations.length })}
+            </p>
+          ) : null}
+        </Bubble>
+        {/* The CORRECTION (ADR §3) — an interactive line in the shipped marker
+            vocabulary, distinguished from the passive markers by ink AND
+            underline rather than by colour alone. */}
+        {correction ? (
+          <button
+            type="button"
+            onClick={() => correction.onCorrect(correction.turnId)}
+            disabled={correction.pending}
+            data-testid="plan-change-correct"
+            data-direction={correction.direction}
+            className="rounded-(--radius-control) text-center text-xs font-semibold text-(--el-link) underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-not-allowed disabled:text-(--el-text-secondary) disabled:no-underline"
+          >
+            {correction.pending
+              ? tc('correcting')
+              : tc(correction.direction === 'plan_change' ? 'correctToPlan' : 'correctToAsk')}
+          </button>
+        ) : null}
+      </>
     );
   },
 
