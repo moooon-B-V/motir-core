@@ -50,10 +50,15 @@ import { normalizeIdentifier } from './workItemRef';
 //     credits. Both descriptions say so, because an agent that assumes an append
 //     submitted will sit polling a job that was never created.
 //  3. A SUBMIT PROPOSES; IT DOES NOT WRITE THE TREE. The job produces a `Plan`
-//     of `PlanItem` PROPOSALS, and `plansService.approvePlan` — a decision made
-//     in Motir, not on this surface — is the only path from a proposal to a work
-//     item. Same gate `expand_item` carries, same wording, for the same reason:
-//     the failure mode is a client reporting work it never created.
+//     of `PlanItem` PROPOSALS, and `plansService.approvePlan` — not this
+//     surface — is the only path from a proposal to a work item. Same gate
+//     `expand_item` carries, same wording, for the same reason: the failure mode
+//     is a client reporting work it never created.
+//
+//     ⚠️ AMENDED 2026-08-19 (MOTIR-3021): this said "a decision made in Motir".
+//     Approve now also has a bounded `/api/v1` entrance for an unattended run
+//     (`docs/decisions/run-findings-protocol.md` Q2) — but still not an MCP one,
+//     so "not on this surface" holds for this tool exactly as before.
 //
 // No business logic lives here. `planChangeSessionsService` owns get-or-create /
 // append / submit (including the row-locked `seq` allocation, the accumulated

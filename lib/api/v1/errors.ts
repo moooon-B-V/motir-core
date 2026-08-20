@@ -320,6 +320,34 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // `assertCanBrowse`, so a plan in another tenant and one that never existed
   // are the same answer (§4's existence-oracle rule).
   PLAN_NOT_FOUND: 404,
+  // MOTIR-3021 / MOTIR-3023 — the automatic-approval BOUND
+  // (`run-findings-protocol.md` Q2, B1). 422, not 403 or 404: the caller's
+  // credential is fine and the card exists — there is simply no plan of this
+  // card's own to approve. 403 would read as "you may not approve", which is
+  // false; 404 would deny the card, which the caller can see.
+  NO_PLAN_FOR_WORK_ITEM: 422,
+  // The one-shot approve guard, reaching the public entrance for the first time
+  // (MOTIR-3021). 409 — the SAME status the in-app approve answers, because it
+  // is the same condition arriving through a second door: the plan already left
+  // `planned`. Mirrored deliberately rather than softened into a no-op; two
+  // entrances answering one condition two ways is what "no second approval
+  // implementation" is meant to prevent.
+  PLAN_NOT_IN_EXPECTED_STATUS: 409,
+  // ⚠️ 422 HERE, where the BROWSER route answers 400 — and the difference is
+  // the published vocabulary, not a disagreement about the condition. v1's
+  // statuses are a closed set (`lib/api/v1/openapi/statuses.ts`, ADR §4's table
+  // in code) and 400 is not in it; every "we refused before writing anything,
+  // and here is what to fix" on this API is a 422. Adding 400 to the vocabulary
+  // would be a contract change of its own, made in the ADR rather than as a side
+  // effect of a new route — so the confirmation gate's two refusals take the
+  // status this API already has a word for.
+  PLAN_GRAMMAR_VIOLATION: 422,
+  INVALID_PLAN_REF_GRAPH: 422,
+  PLAN_TARGET_IMMUTABLE: 409,
+  PLAN_ITEM_UNKNOWN_TARGET_REPO: 422,
+  PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE: 422,
+  UNRESOLVED_PLAN_REF: 422,
+  PLAN_ITEM_TARGET_MISSING: 422,
   // 422, and it means exactly ONE thing here: the target is a LEAF, which
   // cannot be expanded. The service raises this same error for a key naming no
   // item too — which would be a 404, not a 422 — so the route reads the item

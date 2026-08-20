@@ -134,6 +134,14 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     '`mark_integrated` when it has a branch, and the per-item-PR path this serves is the ' +
     'CLI runner’s. It takes `mark_integrated`’s scope (the same actor, the same §3 row) ' +
     'without duplicating its tool.',
+  approveWorkItemPlan:
+    'MOTIR-3021 / MOTIR-3023 · `docs/decisions/run-findings-protocol.md` Q2 — approval is deliberately NOT ' +
+    'an MCP tool, and that absence is the sharpest bound in the design rather than an ' +
+    'oversight. MCP is the AGENT’s surface, and the agent whose card was refused is the one ' +
+    'party that must never approve its own re-plan; the approving party is the OPERATOR’s ' +
+    'loop, which speaks /api/v1. It takes `ai:view_plan` — the key `plansService.approvePlan` ' +
+    'itself asserts and the one this map already records as gating the plan DECISIONS — so ' +
+    'no permission is invented here either.',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,13 +155,14 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     expect(WORK_LOOP_OPERATIONS.map((op) => op.operationId).sort()).toEqual(
       [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
-    // …and the story's own audit named ten, plus MOTIR-2961's keyed claim, plus
-    // the TWO operations that deliberately have no counterpart (MOTIR-3049's
-    // scope claim is the second). A count that drifted from the plan is worth
+    // …and the story's own audit named ten, plus MOTIR-2961's keyed claim,
+    // plus the THREE operations that deliberately have no counterpart
+    // (MOTIR-2421's implementation report, MOTIR-3017's plan approval and
+    // MOTIR-3049's scope claim). A count that drifted from the plan is worth
     // failing on — a later operation joins these numbers deliberately, never
     // silently.
     expect(Object.keys(MIRRORS)).toHaveLength(11);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(13);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(14);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

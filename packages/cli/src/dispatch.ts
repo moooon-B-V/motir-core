@@ -584,3 +584,178 @@ export function renderSessionOutcomes(
   const detail = results.map((r) => `  ${r.key}: ${r.outcome}${r.reason ? ` — ${r.reason}` : ''}`);
   return [head, ...detail].join('\n');
 }
+
+// ── the submitted RE-PLAN (MOTIR-3018) ──────────────────────────────────────
+
+/**
+ * The status a card sits at once its agent has said "this card is wrong"
+ * (MOTIR-2425): the prompt's THE-CARD-IS-WRONG branch tells it to revert,
+ * comment the finding, move the card HERE, submit a detached plan and stop —
+ * then exit 0.
+ *
+ * ⚠️ AN EXIT CODE CANNOT TELL THE TWO OUTCOMES APART. A finished card and a
+ * refused one both leave the agent exiting 0, and every dispatch path used to
+ * read that as success and drive the card onward — into a transition the
+ * workflow does not have (`planning` goes only to In Progress, To Do or
+ * Cancelled), so the close-out did not merely record the wrong thing, it threw.
+ * The card's own reproduction has the verbatim failure per entry point.
+ *
+ * Duplicated as a literal in `commands/dispatch.ts` for `pickWarning`, which
+ * reads it BEFORE dispatch; this one is the after-the-agent read.
+ */
+export const PLANNING_STATUS = 'planning';
+
+/**
+ * Did the agent park this card with a submitted re-plan?
+ *
+ * ⚠️ THE COST IS ONE EXTRA READ PER DISPATCHED ITEM, and it is paid deliberately
+ * rather than avoided. The card asked for the status that a call already in the
+ * path returns — and after the agent exits there is no such call: the only
+ * things between `runAgent` and the close-out are `workReachedRemote` (local
+ * git) and the close-out write itself. `/api/v1` has exactly one work-item read
+ * (`getWorkItem`), so the honest options were this read or inferring the state
+ * from the close-out's own REFUSAL. The refusal was rejected: it means writing
+ * first and asking afterwards, it identifies the state by an error rather than
+ * by data (the 422 carries the ALLOWED targets, never the current status), and
+ * it would leave `markIntegrated`'s branch stamp riding on a call the run
+ * expects to fail. So: one `GET /api/v1/work-items/{key}` per item that exits
+ * 0 — roughly a 20% increase on a per-item budget of four to five requests, and
+ * nothing at all on the failure paths, which return before reaching here.
+ *
+ * A read that FAILS is not a re-plan. The status is the only thing this decides,
+ * and a transport error says nothing about it — so the caller falls through to
+ * today's close-out, which then surfaces its own error rather than swallowing
+ * two.
+ */
+export async function agentSubmittedReplan(
+  client: { getWorkItem(key: string): Promise<{ item: { status: string } }> },
+  key: string,
+): Promise<boolean> {
+  try {
+    const detail = await client.getWorkItem(key);
+    return detail.item.status === PLANNING_STATUS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What the human is told when the agent refused the card.
+ *
+ * ⚠️ THIS IS NOT A FAILURE, and the text has to say so in its first line. An
+ * agent that reads its card, finds the premise false and parks it is the
+ * protocol working — the single most valuable thing an unattended run produces
+ * — and an operator who reads it as an error learns to distrust the one signal
+ * that was supposed to be trustworthy.
+ */
+export function renderReplanSubmitted(key: string): string {
+  return [
+    `${key}: the agent refused the card and submitted a re-plan — this is a correct outcome, not a failure.`,
+    'The card is left in Planning exactly where the agent put it: nothing was recorded as',
+    'implemented, no session branch was claimed, and no status was moved by this run.',
+    'The plan is waiting for a human in Motir. Review it, then re-run the card if it survives.',
+  ].join('\n');
+}
+
+// ── the per-run FINDINGS POLICY, at the command line (MOTIR-3022) ───────────
+
+/**
+ * The two `--disable-*` flags and their hidden `--no-*` aliases, as commander
+ * hands them over.
+ *
+ * ⚠️ TWO ATTRIBUTES PER CAPABILITY, deliberately. `--disable-log-bug` registers
+ * as `disableLogBug`; `--no-log-bug` is a commander NEGATED boolean and
+ * registers as `logBug`, defaulting to `true` when nothing is passed. There is
+ * no way to point two flags at one attribute, so the pair is normalised in ONE
+ * place — {@link findingsPolicyOf} — rather than at four call sites that could
+ * drift.
+ */
+export interface FindingsPolicyOptions {
+  /** `--disable-log-bug` — the primary spelling. */
+  disableLogBug?: boolean;
+  /** `--disable-replan` — the primary spelling. */
+  disableReplan?: boolean;
+  /** `--no-log-bug` — the hidden alias. `false` when it was passed. */
+  logBug?: boolean;
+  /** `--no-replan` — the hidden alias. `false` when it was passed. */
+  replan?: boolean;
+}
+
+/**
+ * The `findingsPolicy` query value to send, or `undefined` for "send nothing".
+ *
+ * ⚠️ ABSENT, NOT `''`, WHEN NOTHING IS DISABLED. An omitted parameter is how the
+ * server is told to render the COMPLETE protocol, and it is the shape every
+ * existing caller already has — so a run with no flags produces a request
+ * byte-identical to the one it produced before this flag existed. Sending an
+ * empty string would mean the same thing and look like a change.
+ *
+ * The token vocabulary is the SERVER's (`log-bug` / `replan`), not the flag's:
+ * the wire names the CAPABILITY, and `--disable-` is one client's ergonomics.
+ */
+export function findingsPolicyOf(opts: FindingsPolicyOptions): string | undefined {
+  const disabled: string[] = [];
+  if (opts.disableLogBug || opts.logBug === false) disabled.push('log-bug');
+  if (opts.disableReplan || opts.replan === false) disabled.push('replan');
+  return disabled.length > 0 ? disabled.join(',') : undefined;
+}
+
+/**
+ * The one line every command's summary carries, so a run that FILED nothing is
+ * distinguishable from a run that was not allowed to.
+ *
+ * Without it the two are identical in the output, and an operator reading a
+ * quiet summary cannot tell whether their agent found nothing or was told not to
+ * look.
+ */
+export function renderFindingsPolicy(opts: FindingsPolicyOptions): string {
+  const policy = findingsPolicyOf(opts);
+  if (policy === undefined) return 'Findings policy: bug filing and re-planning both permitted.';
+  const off = policy
+    .split(',')
+    .map((token) => (token === 'log-bug' ? 'bug filing' : 're-planning'))
+    .join(' and ');
+  return `Findings policy: ${off} DISABLED for this run (the agent comments instead).`;
+}
+
+/**
+ * `--auto-approve-replan` on a command that has no loop to continue into.
+ *
+ * ⚠️ REGISTERED IN ORDER TO BE REFUSED. A flag a module guards but the command
+ * never declares is rejected by commander first, with a bare `unknown option`,
+ * and the guard carrying the real guidance is unreachable — the MOTIR-1828 /
+ * MOTIR-1830 defect, shipped twice in this package. The message says WHY rather
+ * than only WHERE, because "use it on `auto`" invites someone to move the flag
+ * to `batch` next.
+ */
+export function autoOnlyFlagError(command: 'run' | 'next' | 'batch'): {
+  message: string;
+  hint: string;
+} {
+  const why =
+    command === 'batch'
+      ? 'A batch freezes its ready set before the first agent starts and never re-reads it, so ' +
+        'cards a newly-approved plan creates would be approved and then never dispatched.'
+      : `\`motir ${command}\` dispatches ONE item and exits, so there is no continuation for an ` +
+        'approval to feed.';
+  return {
+    message: `--auto-approve-replan is a \`motir auto\` flag. ${why}`,
+    hint: 'Run `motir auto --auto-approve-replan` to approve a submitted re-plan and keep going.',
+  };
+}
+
+/**
+ * `--auto-approve-replan` together with `--disable-replan` (or its alias).
+ *
+ * Refused at parse time rather than resolved by precedence: the two say opposite
+ * things about the same capability, and silently honouring one would leave the
+ * operator believing the other.
+ */
+export function contradictoryReplanFlags(opts: FindingsPolicyOptions): string | null {
+  if (!(opts.disableReplan || opts.replan === false)) return null;
+  const spelling = opts.disableReplan ? '--disable-replan' : '--no-replan';
+  return (
+    `--auto-approve-replan and ${spelling} contradict each other: one approves a submitted ` +
+    're-plan, the other stops the agent from submitting one at all.'
+  );
+}

@@ -4,6 +4,11 @@ import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
 import { presentDispatchPrompt } from '@/lib/api/v1/workLoop/schema';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
+import {
+  FINDINGS_POLICY_TOKENS,
+  parseFindingsPolicy,
+  type FindingsPolicy,
+} from '@/lib/dispatch/promptTemplate';
 
 // GET /api/v1/work-items/{key}/dispatch-prompt (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237) — the first WORK-LOOP operation on the public API, and the one
@@ -63,14 +68,42 @@ function parseSessionBranch(req: Request): string | null {
   return branch;
 }
 
+/**
+ * Read the optional `?findingsPolicy=` — a comma-separated list of the
+ * capabilities this run switches OFF (MOTIR-3020,
+ * `docs/decisions/run-findings-protocol.md` Q1).
+ *
+ * The VOCABULARY and the parse live in `lib/dispatch/promptTemplate.ts`, shared
+ * with the MCP tool, so the two transports cannot drift on what a token means.
+ * What belongs here is only the refusal's HTTP shape.
+ *
+ * ⚠️ AN UNKNOWN TOKEN IS REFUSED, never ignored. Silently rendering the full
+ * protocol for `?findingsPolicy=no-log-bug` would hand the operator a prompt they
+ * believe is narrowed and an agent that was told otherwise — the precise class of
+ * lie the parameter exists to remove.
+ */
+function parsePolicy(req: Request): FindingsPolicy {
+  const raw = new URL(req.url).searchParams.get('findingsPolicy');
+  const parsed = parseFindingsPolicy(raw);
+  if (parsed.policy === null) {
+    throw new InvalidRequestError(
+      'INVALID_FINDINGS_POLICY',
+      `\`${parsed.unknown}\` is not a findings-policy capability. Known: ${FINDINGS_POLICY_TOKENS.join(', ')}.`,
+    );
+  }
+  return parsed.policy;
+}
+
 export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   // Parse BEFORE reading: an unsafe branch name is the caller's to fix, and
   // answering 422 without a database round-trip is both faster and honest.
   const sessionBranch = parseSessionBranch(ctx.req);
+  const findingsPolicy = parsePolicy(ctx.req);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
 
   const dto = await dispatchPromptService.getDispatchPrompt(projectId, identifier, ctx.service, {
     sessionBranch,
+    findingsPolicy,
   });
 
   return NextResponse.json(presentDispatchPrompt(dto));

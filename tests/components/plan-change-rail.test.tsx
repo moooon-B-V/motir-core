@@ -275,10 +275,23 @@ describe('PlanChangeRail — review', () => {
   });
 });
 
+// ── The DECIDED states (bug MOTIR-3206) ─────────────────────────────────────
+//
+// Every case below hands the rail the state the HOOK ACTUALLY PRODUCES after a
+// decision: `review` KEPT, `decided` set, `planId` and `jobId` cleared
+// (`usePlanChangeConversation`'s approve / discard reducers). That is the whole
+// of why this suite stayed green through the defect — the one decided case it
+// had passed `approved` with a NULL `review`, which was the truth until
+// MOTIR-3162 made the review survive its decision and is unreachable now. A
+// fixture no reducer can emit cannot fail for a defect the real state has.
 describe('PlanChangeRail — after approve', () => {
   it('says what landed and KEEPS the conversation open (a plan change is rarely one change)', () => {
     renderRail({
       session: session([turn(0, 'Add recurring invoices.')]),
+      // The post-MOTIR-3162 shape: the review is the RECORD of what was
+      // accepted, and `decided` is what turns it into the accepted treatment.
+      review: REVIEW,
+      decided: 'accepted',
       approved: { created: ['wi_30', 'wi_31'], updated: ['wi_21'], removed: ['wi_24'] },
     });
 
@@ -287,7 +300,60 @@ describe('PlanChangeRail — after approve', () => {
     ).toBeTruthy();
     // The composer is still there, enabled — the thread continues.
     expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('retires the mirrored gate — a decided plan offers no Approve and no Discard', () => {
+    renderRail({
+      session: session([turn(0, 'Add recurring invoices.')]),
+      review: REVIEW,
+      decided: 'accepted',
+      approved: { created: ['wi_30', 'wi_31'], updated: ['wi_21'], removed: ['wi_24'] },
+    });
+
+    // Guarded on ABSENCE: the surviving review must not keep a live decision on
+    // screen for a plan the server has already decided.
     expect(screen.queryByTestId('plan-change-review')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull();
+    // …and the pending copy goes with it: "nothing is saved yet" is false once
+    // the items are in the plan.
+    expect(screen.queryByText(/nothing is saved yet/)).toBeNull();
+  });
+});
+
+describe('PlanChangeRail — after discard', () => {
+  it('retires the gate and claims nothing landed', () => {
+    renderRail({
+      session: session([turn(0, 'Add recurring invoices.')]),
+      // A discard keeps the review too — and never sets `approved`.
+      review: REVIEW,
+      decided: 'declined',
+    });
+
+    expect(screen.queryByTestId('plan-change-review')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    // The outcome line belongs to an ACCEPTED decision; a decline created
+    // nothing, so the rail must not say anything landed.
+    expect(screen.queryByText(/it's in the plan now/)).toBeNull();
+    // The thread stays open for the next turn — that is the point of keeping it.
+    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+  });
+});
+
+describe('PlanChangeRail — a NEW run after a decision', () => {
+  it('drops the previous outcome line once the next proposal opens', () => {
+    // The start reducer clears `decided` (and the decided `review`) but NOT
+    // `approved`, so the outcome line has to key on the decision or it would
+    // hang over the conversation for ever.
+    renderRail({
+      session: session([turn(0, 'Add recurring invoices.')]),
+      phase: 'streaming',
+      review: null,
+      decided: null,
+      approved: { created: ['wi_30', 'wi_31'], updated: ['wi_21'], removed: ['wi_24'] },
+    });
+
+    expect(screen.queryByText(/it's in the plan now/)).toBeNull();
   });
 });
 

@@ -1170,19 +1170,44 @@ export class MotirClient {
    */
   async dispatchPrompt(
     key: string,
-    opts: { sessionBranch?: string | null } = {},
+    opts: { sessionBranch?: string | null; findingsPolicy?: string | undefined } = {},
   ): Promise<DispatchPrompt> {
     // A GET, which is what a pure read should have looked like all along: the
     // MCP tool took a POST-shaped call because that is the only shape MCP has.
     const body = await this.v1.request('getWorkItemDispatchPrompt', {
       path: { key },
-      query: { ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}) },
+      query: {
+        ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}),
+        // OMITTED when nothing is disabled (MOTIR-3022): an absent parameter is
+        // how the server is told to render the COMPLETE protocol, so a run with
+        // no flags sends the request it sent before the flag existed.
+        ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
+      },
     });
     return toDispatchPrompt(body);
   }
 
   /** Record an item's work as integrated on a session branch (7.8.11): moves it
    * to `in_review` AND stamps `session_branch` in one transaction. */
+  /**
+   * APPROVE the plan a refused card produced, and report what was approved
+   * (MOTIR-3023). The entrance `motir auto --auto-approve-replan` drives.
+   *
+   * ⚠️ ADDRESSED BY THE CARD, which is what makes this callable at all. The plan
+   * was submitted by the AGENT with `motir plan --detach <KEY>`, in a sandbox,
+   * and the id came back on its stdout — which this process streams straight to
+   * the terminal and never captures. There is no plan id to send, and the
+   * server does not want one: it derives the plan from the conversation anchored
+   * at this key, so a caller cannot name a plan the card did not produce.
+   *
+   * Returns the plan's id and how many proposals it carried, which is everything
+   * the run's summary needs to say WHAT it changed about the operator's tree.
+   */
+  async approveWorkItemPlan(key: string): Promise<{ planId: string; proposalCount: number }> {
+    const body = await this.v1.request('approveWorkItemPlan', { path: { key } });
+    return { planId: body.id, proposalCount: body.proposals.length };
+  }
+
   async markIntegrated(args: {
     key: string;
     sessionBranch: string;

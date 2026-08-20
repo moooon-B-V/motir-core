@@ -59,7 +59,20 @@ export type AutoOutcome =
    *  when that becomes In Review (MOTIR-3004). */
   | 'implemented'
   /** Agent exited non-zero. The item stays In Progress — nothing was reverted. */
-  | 'failed';
+  | 'failed'
+  /**
+   * The agent REFUSED the card: it found the premise false, reverted, commented
+   * the finding, left the card in `planning` and submitted a re-plan for a human
+   * (MOTIR-3018). Exit 0, and NOT a success — nothing was built and nothing
+   * reached a branch.
+   *
+   * ⚠️ IT IS ALSO NOT A FAILURE, and every consumer has to be told which. It
+   * does not open a pull request, it is not listed among the cards a session
+   * branch carries, it does not set a failing exit code, and it does not consult
+   * `--keep-going` — the run stops because the prompt told the agent to stop,
+   * not because anything went wrong.
+   */
+  | 'replanned';
 
 export interface DispatchRecord {
   key: string;
@@ -127,6 +140,24 @@ export interface PlanningRecord {
   detail?: string;
 }
 
+/**
+ * One plan the run APPROVED on its own (MOTIR-3023) — what
+ * `--auto-approve-replan` actually did to the operator's tree.
+ *
+ * ⚠️ THE SUMMARY OWES THIS MORE THAN ANYTHING ELSE IN THE RUN. Every other
+ * record says what the loop BUILT; this one says what it DECIDED, while nobody
+ * was watching, about a plan someone else owns. The first thing they read in the
+ * morning should be what changed, not a tree that is quietly different.
+ */
+export interface ApprovalRecord {
+  /** The card whose refusal produced the plan. */
+  key: string;
+  /** The plan that was approved — the id to open in Motir. */
+  planId: string;
+  /** How many proposals it carried. */
+  proposalCount: number;
+}
+
 /** One repo the run touched: its session branch and the items carried on it. */
 export interface RepoSession {
   repoName: string | null;
@@ -144,7 +175,18 @@ export type StopReason =
   /** An agent failed and `--keep-going` was not passed. */
   | 'halted'
   /** Ctrl-C. */
-  | 'interrupted';
+  | 'interrupted'
+  /**
+   * An agent submitted a re-plan (MOTIR-3018). The loop stops rather than
+   * picking up other work, which is what the prompt's own THE-CARD-IS-WRONG
+   * branch instructs — and what a human deciding on a plan needs, since the
+   * cards the loop would take next are the ones that plan may be about to
+   * change.
+   *
+   * Distinct from `halted` on purpose: `halted` means something went wrong and
+   * `autoExitCode` reports it; this is a correct outcome and exits 0.
+   */
+  | 'replanned';
 
 export interface PrReport {
   repoName: string | null;
@@ -163,6 +205,9 @@ export interface AutoSummary {
   planning: PlanningRecord[];
   repos: RepoSession[];
   prs: PrReport[];
+  /** The plans `--auto-approve-replan` approved. Empty without the flag, and
+   *  empty with it when no agent refused a card. */
+  approvals: ApprovalRecord[];
   stopReason: StopReason;
 }
 
@@ -191,13 +236,31 @@ const OUTCOME_LABEL: Record<AutoOutcome, string> = {
   integrated: 'integrated',
   implemented: 'implemented',
   failed: 'FAILED',
+  replanned: 're-planned',
 };
+
+/**
+ * Did this dispatch put code somewhere? The partition every consumer needs, and
+ * the reason it is a named predicate rather than `outcome !== 'failed'`.
+ *
+ * ⚠️ `!== 'failed'` WAS TOTAL AND STOPPED BEING SO (MOTIR-3018). With two
+ * outcomes it read as "landed"; with `replanned` added, every site spelling it
+ * that way silently claims a refused card as delivered work — listing it under
+ * *Implemented*, naming it in a pull-request title, and putting it in the body
+ * as a card the branch carries. A predicate that enumerates what it INCLUDES
+ * cannot rot the same way: a future outcome is excluded until someone decides
+ * otherwise, which is the safe direction for a claim about shipped code.
+ */
+export function landedWork(record: Pick<DispatchRecord, 'outcome'>): boolean {
+  return record.outcome === 'integrated' || record.outcome === 'implemented';
+}
 
 const STOP_LABEL: Record<StopReason, string> = {
   drained: 'the ready set is drained',
   max: '--max reached',
   halted: 'halted on the first agent failure (--keep-going continues past one)',
   interrupted: 'interrupted (Ctrl-C)',
+  replanned: 'an agent refused its card and submitted a re-plan — waiting for you in Motir',
 };
 
 const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
@@ -278,7 +341,7 @@ export function renderSessionPrBody(
   records: DispatchRecord[],
   commits: SessionCommit[] = [],
 ): string {
-  const carried = records.filter((r) => r.outcome !== 'failed');
+  const carried = records.filter(landedWork);
   const failed = records.filter((r) => r.outcome === 'failed');
   const lines = [
     `Unattended \`motir auto\` run \`${runId}\`, integrated on \`${branch}\`.`,
@@ -361,7 +424,7 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
 
   blocks.push(...renderPlanningBlocks(summary.planning, titleWidth));
 
-  const landed = summary.records.filter((r) => r.outcome !== 'failed');
+  const landed = summary.records.filter(landedWork);
   if (landed.length > 0) {
     blocks.push(
       [
@@ -381,6 +444,42 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
       [
         `Failed — still In Progress, nothing reverted (${failed.length}):`,
         ...failed.map((r) => `  ${r.key} — re-run it with \`motir run ${r.key}\``),
+      ].join('\n'),
+    );
+  }
+
+  if (summary.approvals.length > 0) {
+    blocks.push(
+      [
+        // Named PLAN BY PLAN, with the card each was approved FOR. A count would
+        // tell an operator that their tree moved without telling them where.
+        `Plans APPROVED by this run — your tree changed while you were away (${summary.approvals.length}):`,
+        ...summary.approvals.map(
+          (a) =>
+            `  ${a.planId} — approved for ${a.key}, ${a.proposalCount} proposal${a.proposalCount === 1 ? '' : 's'} materialized`,
+        ),
+        '  Each card that was re-planned is held out of THIS run; re-run to pick the new work up.',
+      ].join('\n'),
+    );
+  }
+
+  const replanned = summary.records.filter((r) => r.outcome === 'replanned');
+  if (replanned.length > 0) {
+    blocks.push(
+      [
+        // Named as an OUTCOME the run produced, not as a shortfall — and it says
+        // what is now waiting for the operator, because the plan is the thing
+        // they have to act on and it is not in this terminal.
+        `Re-planned — refused by their agent, left in Planning (${replanned.length}):`,
+        ...replanned.map((r) => {
+          // Do not tell the operator to review a plan this run already approved
+          // — the approvals block above says what happened to it.
+          const approved = summary.approvals.some((a) => a.key === r.key);
+          return approved
+            ? `  ${r.key} — its plan was approved by this run (above); the card itself stays in Planning`
+            : `  ${r.key} — review the submitted plan in Motir, then re-run it`;
+        }),
+        '  Nothing was recorded for these: no branch, no pull request, no status moved by this run.',
       ].join('\n'),
     );
   }

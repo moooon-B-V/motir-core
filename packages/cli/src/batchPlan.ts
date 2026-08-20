@@ -84,16 +84,26 @@ export interface SnapshotEntry {
 /**
  * Why an item the run did not implement was left out.
  *
- * The first three are decided at SNAPSHOT time, off the row itself. The fourth,
- * `claim_refused`, can only be decided at DISPATCH time (MOTIR-3048): the
- * snapshot filtered out every row this run could not take when it was frozen,
- * and a card can still be taken by a sibling — or leave the to-do category — in
- * the minutes between that freeze and its turn. It is a SKIP and not a failure
- * because nothing went wrong and no agent ran; the run's exit code is unmoved.
+ * The first three are decided at SNAPSHOT time, off the row itself, by
+ * {@link classifySnapshotItem}. The last TWO can only be decided at DISPATCH
+ * time, and neither can be a {@link SnapshotDisposition}:
+ *
+ * - `claim_refused` (MOTIR-3048) — the snapshot filtered out every row this run
+ *   could not take when it was frozen, and a card can still be taken by a
+ *   sibling, or leave the to-do category, in the minutes before its turn.
+ * - `replan_submitted` (MOTIR-3018) — what the card itself says AFTER its agent
+ *   has run, which nothing can know before the agent exists.
+ *
+ * Both are SKIPS rather than failures: nothing went wrong, and the run
+ * implemented nothing, so a record would owe an outcome, a duration and a repo
+ * for work that was deliberately not done. The exit code is unmoved by either.
  */
-export type SnapshotSkipReason = Exclude<SnapshotDisposition, 'take'> | 'claim_refused';
+export type SnapshotSkipReason =
+  | Exclude<SnapshotDisposition, 'take'>
+  | 'claim_refused'
+  | 'replan_submitted';
 
-/** One item the snapshot left out, with the reason a human needs. */
+/** One item the run left out, with the reason a human needs. */
 export interface SnapshotSkip {
   key: string;
   title: string | null;
@@ -164,6 +174,10 @@ const SKIP_LABEL: Record<SnapshotSkipReason, string> = {
   needs_human: 'needs a human',
   integrated_dep: 'ready only via an integrated dependency (not on main)',
   claim_refused: 'claimed by somebody else, or no longer claimable',
+  // ⚠️ Phrased as an OUTCOME, not as a shortfall. The other four say what the
+  // run could not do; this one says what the agent DID, and reading it as a
+  // failure is what teaches an operator to distrust the signal (MOTIR-3018).
+  replan_submitted: 'refused by its agent — a re-plan is waiting for you in Motir',
 };
 
 /** The reasons in the order the summary groups them. */
@@ -172,6 +186,7 @@ const SKIP_ORDER: SnapshotSkipReason[] = [
   'needs_human',
   'integrated_dep',
   'claim_refused',
+  'replan_submitted',
 ];
 
 // ⚠️ No REPO column. The snapshot freezes WHICH ITEMS the run will take; where
@@ -223,6 +238,11 @@ function renderSkipGroups(skipped: SnapshotSkip[], titleWidth: number): string[]
     ];
     if (reason === 'integrated_dep') {
       lines.push('  Run these with `motir auto`, which carries that lineage on a session branch.');
+    }
+    if (reason === 'replan_submitted') {
+      lines.push(
+        '  Each is in Planning with a plan awaiting approval; nothing was recorded for it.',
+      );
     }
     blocks.push(lines.join('\n'));
   }

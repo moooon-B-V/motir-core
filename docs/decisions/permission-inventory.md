@@ -412,6 +412,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/work-items/[key]/implementation`                | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/integration`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/links`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/plan-approval`                 | —     | `assertCanBrowse`, `ai:view_plan`                  | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/restore`                       | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/work-items/[key]/transitions`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
 | `/api/v1/workspaces`                                     | —     | — none —                                           | —          | token-scoped | R1  |

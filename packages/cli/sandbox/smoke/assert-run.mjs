@@ -107,10 +107,35 @@ const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
  * used to expect `PATCH /work-items/{key}` followed by
  * `POST /work-items/{key}/transitions` — two unlocked writes with a read-to-write
  * gap between them that two simultaneous runs fell into. A loop that made both
- * again would be a regression to the race, so the shape below has four requests
- * per item, not five, and the extra one being back would fail the comparison.
+ * again would be a regression to the race, so the shape below takes the card in
+ * ONE write, and the pair coming back — a `PATCH` plus a `POST …/transitions`
+ * where this single call now stands — would fail the comparison.
+ *
+ * ⚠️ The per-item shape DID later grow a fifth request (the read-back below), so
+ * do not read this bound as a count. It is about the PAIR: what must never
+ * return is an unlocked assign-then-transition, whatever else the sequence
+ * carries.
  */
 const CLAIM = 'POST /api/v1/work-items/{key}/claim';
+/**
+ * The READ-BACK (MOTIR-3018), and it is a real addition to the sequence — one
+ * `GET` per item that exits 0, between the agent finishing and the run recording
+ * anything.
+ *
+ * ⚠️ IT IS HERE BECAUSE EXIT 0 IS NOT AN OUTCOME. A card the agent finished and a
+ * card the agent REFUSED — read it, found the plan wrong, submitted a re-plan and
+ * reverted its worktree — both leave the process with status 0. The loop cannot
+ * tell them apart from the exit code, so it asks the CARD: a card sitting in
+ * `planning` is one whose agent handed work back. Nothing cheaper distinguishes
+ * them, and getting it wrong is expensive in the direction that matters — a
+ * refused card recorded as integrated puts a branch nobody wrote into a pull
+ * request.
+ *
+ * The cost is stated rather than hidden: one extra request per item, on the exit-0
+ * path only. A run that STOPPED making it would be the MOTIR-3018 regression, so
+ * its presence is asserted here in position, not merely tolerated.
+ */
+const READBACK = 'GET /api/v1/work-items/{key}';
 
 // The suite runs `motir ready` against this same stub before the loop starts —
 // it is the cheapest proof that the credential resolved, whichever tier supplied
@@ -151,7 +176,7 @@ const expected = [];
 // anything is the one that lands while the work is happening. It comes AFTER the
 // prompt read on purpose — the prompt is a pure read that carries `targetRepo`,
 // and `auto.ts` resolves the checkout from it before touching anything.
-for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, INTEGRATION);
+for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, READBACK, INTEGRATION);
 expected.push(READY); // the drain probe
 
 check(
@@ -172,7 +197,7 @@ const keyOf = (entry) =>
 
 for (let i = 1; i <= ITEMS; i += 1) {
   const key = `${PROJECT}-${i}`;
-  const base = (i - 1) * 4;
+  const base = (i - 1) * 5;
 
   const dispatch = loop[base + 1];
   const claim = loop[base + 2];
@@ -199,7 +224,15 @@ for (let i = 1; i <= ITEMS; i += 1) {
     `${key}: the dispatch prompt carried no session-branch seed (got ${JSON.stringify(seed)})`,
   );
 
-  const integrated = loop[base + 3];
+  // The read-back is about THIS card. A loop that asked about the wrong one would
+  // read the wrong card's status and could refuse a card its agent finished.
+  const readback = loop[base + 3];
+  check(
+    keyOf(readback) === key,
+    `${key}: the post-agent read-back asked about ${keyOf(readback) ?? '(nothing)'}`,
+  );
+
+  const integrated = loop[base + 4];
   check(
     keyOf(integrated) === key,
     `${key}: the integration was recorded for ${keyOf(integrated) ?? '(nothing)'}`,
