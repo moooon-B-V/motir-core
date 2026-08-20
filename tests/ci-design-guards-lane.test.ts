@@ -117,8 +117,10 @@ const READS_DESIGN_TREE = /(?:join|resolve)\(\s*[^)]*?['"]design(?:\/[^'"]*)?['"
  * that excluding one is a written decision rather than a silent omission.
  *
  * `tests/fly-runtime-config.test.ts` is NOT here because it does not match —
- * it names `design` as a directory the Dockerfile prunes, in a regex over the
- * Dockerfile's own text, and never builds a path into the tree.
+ * it names `design` as a directory the Dockerfile asserts is ABSENT from the
+ * standalone output (it used to PRUNE it; MOTIR-3219 removed the sweep that
+ * made a prune necessary), in a regex over the Dockerfile's own text, and never
+ * builds a path into the tree.
  */
 const DELIBERATELY_OUT: { file: string; why: string }[] = [];
 

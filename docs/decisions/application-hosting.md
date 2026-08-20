@@ -132,6 +132,34 @@ that cost a day if rediscovered:
   longer carries the exclusion; the comment in its place says why re-adding it
   would change nothing.
 
+  **Amended 2026-08-20 (MOTIR-3219) — why the tracer swept at all, and the prune
+  is now an assertion.** Both corrections above are about the REMEDY; neither
+  asked why a single trace referenced 324 design files in the first place, and
+  the answer is not that Turbopack's tracer is coarse. `instrumentation.ts`
+  dynamic-imports the E2E boundary mocks, and each read its fixture from a path
+  supplied by an env var — an argument the tracer cannot resolve, whose
+  documented fallback is to trace the **entire project**. Next said so on every
+  build (`Encountered unexpected file in NFT list … the whole project was traced
+unintentionally`), naming one mock; because it names only the first module it
+  reaches, unwiring that one merely promoted the next, which is how the condition
+  read as ambient rather than fixable.
+
+  Marking those reads `/* turbopackIgnore: true */` behind one module
+  (`lib/test-fixture-file.ts`) took `instrumentation.js.nft.json` from **4510
+  traced files to 168** and `.next/standalone` from **464 MB to 124 MB** — below
+  the 135 MB the prune achieved, with nothing deleted. So **381 MB was the size
+  of the bug, not the cost of a Turbopack standalone build**, and the six-lever
+  table below measured its levers against an artifact three times larger than it
+  had to be.
+
+  The Dockerfile step therefore INVERTS rather than disappears: it now fails if
+  any of those directories is in the output, because a `rm -rf` that removes
+  nothing is the same silent no-op the inert config key was. `pnpm
+assert:nft-trace` (CI's `build` job) asserts the same fact against the
+  `.nft.json` files on every pull request; the Dockerfile is the backstop on the
+  path that ships the bytes, and the only one of the two that runs during
+  `flyctl deploy`, which happens after the merge.
+
 ### Rejected alternatives — every one MEASURED
 
 Six of the eight levers below returned **zero**: the artifact did not shrink and

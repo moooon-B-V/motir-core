@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "assert:nft-trace": "node scripts/assert-nft-trace-scope.mjs",
     "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",

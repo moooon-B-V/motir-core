@@ -11,13 +11,15 @@
 # measurements are `docs/decisions/application-hosting.md` Q1; the spike that
 # produced them is MOTIR-2383.
 #
-#   standalone server   381 MB  →  135 MB after the prune step in the builder
+#   standalone server   124 MB  (was 381→135 MB, pruned in the builder; MOTIR-3219
+#                                removed the sweep that made a prune necessary)
 #   static assets         7 MB
 #   against Vercel    4,240 MB  traced across 490 function bundles
 #
-# The prune is a Dockerfile step and not `next.config.ts`'s
-# `outputFileTracingExcludes` because that key is inert under Turbopack — see the
-# comment on the RUN below, and MOTIR-2403.
+# The builder step below is an ASSERTION now, not a prune, and it is still a
+# Dockerfile step rather than `next.config.ts`'s `outputFileTracingExcludes`
+# because that key is inert under Turbopack — see the comment on the RUN below,
+# MOTIR-2403 for the inert key, and MOTIR-3219 for why nothing needs pruning.
 #
 # ── Multi-stage, and why the builder is fat ─────────────────────────────────
 # The builder needs the FULL dependency set: `postinstall` runs `prisma generate`
@@ -92,41 +94,65 @@ ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm exec next build
 
-# ── prune the standalone output — THE step that actually removes the payload ─
-# Next's tracer sweeps the repo root into `.next/standalone`: 381 MB, of which
-# `design/` is 222 MB, `tests/` 15 MB, `scripts/` 6 MB and `docs/` 5 MB. Nothing
-# serving a request reads any of them (the only runtime file reads in app code
-# are `app/_brand/fonts/*.ttf` and an env-supplied test-only path in
+# ── assert the standalone output stayed small — the prune's successor ────────
+# ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
+# left to prune (MOTIR-3219, 2026-08-20) — and the change of polarity is
+# deliberate, not a deletion.
+#
+# The history matters, because the step's own comment predicted this moment.
+# Next's tracer used to sweep the repo root into `.next/standalone`: 381 MB, of
+# which `design/` was 222 MB, `tests/` 15 MB, `scripts/` 6 MB and `docs/` 5 MB.
+# Nothing serving a request reads any of them (the only runtime file reads in
+# app code are `app/_brand/fonts/*.ttf` and an env-supplied test-only path in
 # `lib/email.ts`), and the release lane gets `prisma/` + its two scripts by
-# explicit COPY in the runner below, never from the trace.
+# explicit COPY in the runner below, never from the trace. So this step deleted
+# them, and it failed loudly if one was missing — *"if a Next upgrade stops
+# sweeping one of these directories in, this build stops and someone edits this
+# step on purpose"* (MOTIR-2403).
 #
-# ⚠️ TWO things about the shape of this step, both load-bearing (MOTIR-2403):
+# It was never a Next upgrade. The sweep was the `instrumentation.ts` E2E
+# boundary mocks: each read a fixture from a path Turbopack could not resolve
+# statically, and its fallback for an unresolvable read is to trace the ENTIRE
+# project. `lib/test-fixture-file.ts` marks those reads `turbopackIgnore`, and
+# `instrumentation.js.nft.json` went from **4510 traced files to 168** —
+# `.next/standalone` from **464 MB to 124 MB**, measured on this Dockerfile's own
+# `next build`. Every directory this step used to delete is now simply never
+# traced in.
 #
-#   1. It runs HERE, in the builder, NOT in the runner. A `RUN rm -rf` after the
-#      runner's `COPY --from=builder … .next/standalone` would delete the files
-#      from the filesystem and shrink the image by NOTHING: the bytes are already
-#      committed in the COPY layer, and a later layer that deletes them only adds
-#      a whiteout on top. Pruning before the COPY is what makes the copied layer
-#      small.
-#   2. It FAILS if a target is missing, rather than removing nothing. `rm -rf` on
-#      an absent path exits 0 in silence — which is precisely the failure mode
-#      this replaces: `next.config.ts` carried an `outputFileTracingExcludes`
-#      that Turbopack never reads, so it pruned nothing while reading as solved.
-#      A prune that can silently become a no-op is the same bug in a new file. If
-#      a Next upgrade stops sweeping one of these directories in, this build
-#      stops with the message below and someone edits the list on purpose.
+# So the step INVERTS rather than disappears. Two properties carry over intact:
+#
+#   1. It still runs HERE, in the builder, NOT in the runner — the reason a
+#      prune had to (a `RUN rm -rf` after the runner's `COPY` frees nothing; the
+#      bytes are committed in the COPY layer and a later layer only adds a
+#      whiteout) is the same reason the CHECK belongs before the copy: it is the
+#      last moment at which the size of what gets copied is still a decision.
+#   2. It still FAILS LOUDLY rather than becoming a silent no-op. That was the
+#      whole point of the `[ ! -d ]` guard — the bug it replaced was an
+#      `outputFileTracingExcludes` that Turbopack never reads, pruning nothing
+#      while reading as solved. Keeping a `rm -rf` here would have re-created
+#      exactly that: a step removing nothing, indistinguishable from a step
+#      doing its job.
+#
+# `pnpm assert:nft-trace` (CI's `build` job) asserts the same fact one level up,
+# against the `.nft.json` files themselves, and catches it on the PULL REQUEST.
+# This one is the backstop on the path that actually ships the bytes — and it is
+# the only one of the two that runs on a `flyctl deploy`, which happens after
+# the merge.
 RUN set -eu; \
     cd .next/standalone; \
-    echo "standalone before prune: $(du -sm . | cut -f1) MB"; \
+    echo "standalone: $(du -sm . | cut -f1) MB"; \
     for d in design tests docs scripts; do \
-      if [ ! -d "$d" ]; then \
-        echo "prune target '$d' is not in the standalone output — the tracing" >&2; \
-        echo "layout changed. Update this step deliberately; do not delete it." >&2; \
+      if [ -d "$d" ]; then \
+        echo "'$d/' is in the standalone output — an entry's output file trace" >&2; \
+        echo "has widened to the whole project again (the MOTIR-3219 condition)." >&2; \
+        echo "Run 'pnpm assert:nft-trace' after a build: it names every entry and" >&2; \
+        echo "what it dragged in. The cause is a filesystem read whose path" >&2; \
+        echo "Turbopack cannot resolve — see lib/test-fixture-file.ts. Fix the" >&2; \
+        echo "read; do not re-add a prune here." >&2; \
         exit 1; \
       fi; \
-      rm -rf "$d"; \
     done; \
-    echo "standalone after prune:  $(du -sm . | cut -f1) MB"
+    echo "no never-served directory reached the standalone output"
 
 # ── the migration toolchain ─────────────────────────────────────────────────
 # `fly.toml`'s release_command runs `prisma migrate deploy` inside THIS image,

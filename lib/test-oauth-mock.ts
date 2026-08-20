@@ -1,7 +1,8 @@
 // Node-only Google OAuth token-endpoint mock for E2E.
 //
-// Pulled out of instrumentation.ts so the imports of node:crypto and
-// node:fs/promises never get analyzed by Next's Edge-runtime bundler.
+// Pulled out of instrumentation.ts so the imports of node:crypto and of the
+// fixture reader (which binds node:fs — see lib/test-fixture-file) never get
+// analyzed by Next's Edge-runtime bundler.
 // instrumentation.ts dynamic-imports this file ONLY when E2E_TEST_OAUTH=1
 // AND NEXT_RUNTIME=nodejs, which keeps the production code path totally
 // dormant.
@@ -30,7 +31,7 @@
 //   undici to v7+, bump this devDep in lockstep.
 
 import type { MockAgent } from 'undici';
-import { readFile } from 'node:fs/promises';
+import { readFixtureFile } from '@/lib/test-fixture-file';
 import { createHmac } from 'node:crypto';
 
 function makeJwt(payload: Record<string, unknown>): string {
@@ -69,7 +70,7 @@ export function installGoogleTokenMock(agent: MockAgent): void {
       async () => {
         let profile: { sub: string; email: string; name: string; emailVerified: boolean };
         try {
-          const raw = await readFile(TEST_USER_PATH, 'utf8');
+          const raw = await readFixtureFile(TEST_USER_PATH);
           profile = JSON.parse(raw) as typeof profile;
         } catch {
           profile = {
