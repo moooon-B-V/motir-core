@@ -1,0 +1,1843 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The plan canvas at arrival, and SHOW CHANGES — MOTIR-3259</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock uses
+         the same VALUES so it renders without the Tailwind build, exactly as the
+         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
+         Nothing here re-defines shape/colour semantics — it re-states them so a
+         plain browser paints the real palette.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        /* tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --danger-surface: #fde0ec;
+        --warning-surface: #ffe8d4;
+        /* work-item type hues */
+        --t-epic: #ff64c8;
+        --t-epic-soft: #ffe3f5;
+        --t-story: #1aae39;
+        --t-story-soft: #d9f3e1;
+        --t-task: #0075de;
+        --t-task-soft: #dcecfa;
+        --t-bug: #e03131;
+        --t-subtask: #2a9d99;
+        --t-subtask-soft: #d6f0ee;
+        /* shape */
+        --r-card: 12px;
+        --r-btn: 10px;
+        --r-control: 8px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 4px 14px #00000014;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 70ch;
+      }
+      .doc-head .refs {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 11px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap span.note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .frame {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--sh-card);
+        overflow: hidden;
+      }
+
+      /* ---- app shell: left nav + main ---- */
+      .app {
+        display: grid;
+        grid-template-columns: 212px 1fr;
+        height: 560px;
+      }
+      .nav a.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .nav a.on svg {
+        color: var(--accent);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      /* ---- plans list ---- */
+      .list {
+        padding: 14px 18px;
+        overflow: auto;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.generating {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .pill.planned {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.approved {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.declined {
+        background: var(--mutedfill);
+        color: var(--muted);
+      }
+      .pill.stale {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      .hdrtop .pill {
+        align-self: flex-start;
+        max-width: 100%;
+      }
+
+      .pill.count {
+        background: var(--hub);
+        color: var(--secondary);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      @keyframes sp {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
+          var(--hub);
+      }
+      .ovl {
+        position: absolute;
+        z-index: 5;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: var(--sh-subtle);
+      }
+      .crumb svg {
+        width: 13px;
+        height: 13px;
+        color: var(--faint);
+      }
+      .crumb .dot {
+        width: 15px;
+        height: 15px;
+        border-radius: 5px;
+        background: var(--accent);
+      }
+      .search {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        font-size: 12.5px;
+        color: var(--muted);
+        box-shadow: var(--sh-subtle);
+        min-width: 190px;
+      }
+      .search svg {
+        width: 14px;
+        height: 14px;
+        color: var(--faint);
+      }
+      .search kbd {
+        margin-left: auto;
+        font: 600 10px var(--mono);
+        color: var(--faint);
+        background: var(--mutedfill);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .node {
+        position: absolute;
+        width: 236px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        box-shadow: var(--sh-subtle);
+        padding: 11px 12px;
+      }
+      .node .top {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .node .tile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--r-control);
+        display: grid;
+        place-items: center;
+      }
+      .node .tile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .node .id {
+        font: 600 11px var(--mono);
+        color: var(--faint);
+      }
+      .node .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--strong);
+        line-height: 1.25;
+        margin-top: 1px;
+      }
+      .node .foot {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .node .who {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .opbadge {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 8px;
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+      .opbadge svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      /* op treatments */
+      .node.add {
+        border: 1.5px dashed var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        box-shadow: 0 0 0 3px #5645d41a;
+      }
+      .opbadge.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .node.modify {
+        border-color: var(--info);
+        box-shadow:
+          0 0 0 1px var(--info) inset,
+          var(--sh-subtle);
+      }
+      .opbadge.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
+         Deliberately NOT red/dashed/hatched — that language is reserved for the
+         cross-story dependency signal (.ghost / .node.flagged below), which is
+         shipped canvas language we compose. Archive is reversible, not an error,
+         so it reads as greyscale + strike-through, like the cancelled status hue. */
+      .node.remove {
+        border: 1px solid var(--border-strong);
+        background: var(--mutedfill);
+        opacity: 0.66;
+        filter: grayscale(0.5);
+      }
+      .node.remove .ttl {
+        text-decoration: line-through;
+        text-decoration-color: var(--faint);
+        color: var(--muted);
+      }
+      .node.remove .id {
+        color: var(--faint);
+      }
+      .opbadge.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+        border: 1px solid var(--border-strong);
+      }
+      .opc.add {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
+         treatment and would read as one. */
+      .note-box {
+        margin: 14px 18px 4px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        border-radius: var(--r-card);
+        padding: 11px 13px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .note-box b {
+        color: var(--strong);
+      }
+      .note-box code {
+        font: 600 11.5px var(--mono);
+        background: var(--hub);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      @keyframes scan {
+        0% {
+          background-position: -40% 0;
+        }
+        100% {
+          background-position: 140% 0;
+        }
+      }
+      .node.streaming {
+        opacity: 0;
+        animation: pop 0.4s ease forwards;
+      }
+      .node.s1 {
+        animation-delay: 0.1s;
+      }
+      .node.s2 {
+        animation-delay: 0.35s;
+      }
+      .node.s3 {
+        animation-delay: 0.6s;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      /* Panel E — the level's nodes keep the real component's FIXED footprint
+         (NODE_W/NODE_H) and clamp the title to two lines, exactly as the shipped
+         PlanItemNode does. Without this a long title reflows the card and the
+         level stops looking like the roadmap. */
+      .lvl {
+        width: 220px;
+        min-height: 76px;
+      }
+      .lvl .ttl {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .lvlcap {
+        position: absolute;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      /* A SELECTED node — the accent ring the shipped canvas already uses for
+         selection (roadmap panel 1). Selection is what reveals View. */
+      .node.selected {
+        box-shadow: 0 0 0 2px var(--accent);
+      }
+
+      /* ==================================================================
+         PART VI (MOTIR-3159 / bug MOTIR-3154) — the DECIDED axis.
+
+         The outcome CROSSES the three op languages rather than joining
+         them: every op can be accepted and every op can be declined, so
+         there are six renderings and a fourth `op` member could only
+         express three. It therefore rides two channels the op treatments
+         never touch — the chip's second SEGMENT (the word, which carries
+         the whole meaning) and a solid leading-edge SPINE (decorative
+         reinforcement for a zoom-out where 10.5px text is gone).
+
+         The spine's two values are the review rail's OWN outcome colours
+         one component down (`--el-success` on "Added N items to your
+         backlog"; the neutral on "Plan declined — your tree was left
+         untouched"), so this introduces no vocabulary. No reserved
+         language is approached: each of those is a border STYLE (dashed
+         pending / dotted skippable / dashed not-in-sprint) or a red CHIP
+         (blocked elsewhere / not in sprint), and this axis is neither.
+      ================================================================== */
+      .node.dec-ok,
+      .node.dec-no {
+        position: absolute;
+        overflow: hidden;
+      }
+      .node.dec-ok::before,
+      .node.dec-no::before {
+        content: '';
+        position: absolute;
+        inset-inline-start: 0;
+        inset-block: 0;
+        width: 3px;
+      }
+      .node.dec-ok::before {
+        background: var(--success);
+      }
+      .node.dec-no::before {
+        background: var(--muted);
+      }
+      /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
+         is about to happen"; on a decided card it either already happened
+         or never will, and the fade would also desaturate the outcome
+         spine — the one signal that settles which. The muted frame, the
+         strike and the strong border all stay. */
+      .node.remove.dec-ok,
+      .node.remove.dec-no {
+        opacity: 1;
+        filter: none;
+      }
+      .decrow .pill {
+        margin-left: auto;
+      }
+      .opchip .seg.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .opchip .seg.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .opchip .seg.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      /* The level caption becomes the plan's outcome, stated once — same
+         primitive and placement as Panel E's "Proposed by this plan". */
+      .lvlcap.decided-ok {
+        color: #0f5e29;
+      }
+      .lvlcap.decided-no {
+        color: var(--secondary);
+      }
+      .cmp-cap.bad {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      .cmp-cap.good {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .mini.add {
+        border-color: var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+      }
+      .mini.modify {
+        border-color: var(--info);
+      }
+      .mini .mchip i.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .mini .mchip i.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      /* ---- Part IX (MOTIR-3259): SHOW CHANGES, and the proposed crumb -------
+         Nothing here is a new visual language. The emphasis is the SHIPPED
+         selected/search-matched treatment from `ProjectRoadmapCanvas`'s node
+         wrapper — `ring-2 ring-(--el-accent) ring-offset-2
+         ring-offset-(--el-surface-soft)` and `opacity-35` — restated in this
+         mock's local tokens and applied to a SET instead of to one node. */
+      .node.emph {
+        box-shadow:
+          0 0 0 2px var(--soft),
+          0 0 0 4px var(--accent);
+      }
+      .node.dim {
+        opacity: 0.35;
+      }
+      /* The toggle, in the canvas's OWN top-right cluster beside search and
+         full-screen — see Part IX §L1 for why it is not in Part VIII's pane
+         header. Same shell as the shipped full-screen button, widened for a
+         label because this control has no icon a reader could guess. */
+      .sc {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 36px;
+        padding: 0 11px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-btn);
+        background: var(--surface);
+        color: var(--secondary);
+        font-size: 12.5px;
+        font-weight: 600;
+        box-shadow: var(--sh-card);
+        white-space: nowrap;
+      }
+      .sc svg {
+        width: 14px;
+        height: 14px;
+      }
+      .sc.on {
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .sc.off-disabled {
+        opacity: 0.5;
+      }
+      .sc .n {
+        font: 600 11px var(--mono);
+        color: var(--muted);
+      }
+      .sc.on .n {
+        color: var(--accent);
+      }
+      /* The breadcrumb crumb for a parent that does not exist yet. It keeps the
+         committed crumb's `KEY · Title` grammar and puts the WORD `New` in the
+         slot a key would occupy — so the distinction is carried by TEXT, with
+         the accent ink and the `+` glyph as second and third channels rather
+         than as the only one. */
+      .crumb.proposed {
+        border-color: var(--accent);
+        border-style: dashed;
+        color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .crumb .newkey {
+        font: 700 11px var(--mono);
+        color: var(--accent);
+      }
+      .capnote {
+        position: absolute;
+        font-size: 11.5px;
+        line-height: 1.6;
+        color: var(--secondary);
+        max-width: 620px;
+      }
+      .tilebox {
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        padding: 12px 13px;
+        display: grid;
+        gap: 9px;
+      }
+      .tilebox .cap {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--secondary);
+      }
+      .tilebox p {
+        margin: 0;
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .beforeafter {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+      }
+      .beforeafter > div:first-child {
+        border-right: 1px solid var(--border);
+      }
+      .bacap {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        padding: 11px 14px 9px;
+        border-bottom: 1px solid var(--hair);
+        font-size: 12.5px;
+        color: var(--secondary);
+      }
+      .bacap b {
+        font: 700 10.5px var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+      .bacap b.bad {
+        background: var(--warning-surface);
+        color: #8a3b00;
+      }
+      .bacap b.good {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>The plan canvas at arrival, and Show changes</h1>
+        <p>
+          The plan-detail canvas&rsquo;s BEHAVIOUR — what it does when it opens, and one control it
+          does not have. Three decisions: the LEVEL it arrives at (a proposed container counts), the
+          breadcrumb crumb for a parent that does not exist yet, and a <b>Show changes</b> toggle
+          that lights every card the plan touches on the level in view and pushes the rest back.
+        </p>
+        <p>
+          <b>This is its own asset, and it draws no new surface.</b> <code>/plans/[id]</code> is
+          reached exactly as Part I §5 draws it — the left-nav <i>Plans</i> entry, then a row — and
+          this Part adds no entrance. It does not amend <code>plans-surface.mock.html</code>, which
+          records the moment MOTIR-843 / 2985 / 3074 / 3082 / 3159 drew; the canvas, its node cards
+          and the three <code>op</code> languages are composed as that asset draws them.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-3259</span>
+          <span class="ref">Part IX</span>
+          <span class="ref muted">story MOTIR-3232</span>
+          <span class="ref muted">composes plans-surface.mock.html panels B + E + G</span>
+          <span class="ref muted">ProjectRoadmapCanvas contract</span>
+          <span class="ref muted">releases Part VIII&rsquo;s reserved slot</span>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 1 — ARRIVAL: the level the plan actually fills            -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>Where the canvas ARRIVES — before and after</h2>
+          <span class="note"
+            >· one plan, one story under a committed epic plus five subtasks under that story · the
+            change is invisible in a single frame, so both are drawn</span
+          >
+        </div>
+        <div class="frame">
+          <div class="beforeafter">
+            <div>
+              <div class="bacap"><b class="bad">today</b> opens on the EPIC</div>
+              <div class="viewport" style="height: 356px">
+                <div class="ovl" style="top: 12px; left: 14px">
+                  <span class="crumb"
+                    ><span class="dot"></span>MOTIR-653 · Epic 8: Launch readiness</span
+                  >
+                </div>
+                <span class="lvlcap" style="left: 30px; top: 58px"
+                  >Children of MOTIR-653 — already in the tree</span
+                >
+                <div class="node lvl" style="left: 30px; top: 82px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path d="M4 4h11l5 5v11H4z" />
+                        <path d="M15 4v5h5" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-3232</div>
+                      <div class="ttl">The Plans surface, refined</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >in progress</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl" style="left: 286px; top: 82px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path d="M4 4h11l5 5v11H4z" />
+                        <path d="M15 4v5h5" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-3264</div>
+                      <div class="ttl">Gateway sync frequency</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >blocked</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl" style="left: 30px; top: 178px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path d="M4 4h11l5 5v11H4z" />
+                        <path d="M15 4v5h5" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-3211</div>
+                      <div class="ttl">The hosting ADR sweep</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >to do</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add" style="left: 286px; top: 178px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path d="M4 4h11l5 5v11H4z" />
+                        <path d="M15 4v5h5" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Payout reconciliation</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="capnote" style="left: 30px; top: 280px; max-width: 470px">
+                  One proposed story among three committed siblings, and
+                  <strong style="color: var(--strong)"
+                    >nothing says the plan is mostly elsewhere</strong
+                  >
+                  — its five subtasks are one drill away, behind a card the reader has no reason to
+                  open.
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="bacap"><b class="good">Part IX</b> opens on the STORY's own level</div>
+              <div class="viewport" style="height: 356px">
+                <div class="ovl" style="top: 12px; left: 14px">
+                  <span class="crumb"
+                    ><span class="dot"></span>MOTIR-653 · Epic 8
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="m9 6 6 6-6 6" /></svg
+                  ></span>
+                  <span class="crumb proposed"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                      <path d="M12 5v14M5 12h14" /></svg
+                    ><span class="newkey">New</span> · Payout reconciliation</span
+                  >
+                </div>
+                <span class="lvlcap" style="left: 30px; top: 58px; color: var(--accent)"
+                  >Proposed by this plan — the level it fills</span
+                >
+                <div class="node lvl add" style="left: 30px; top: 82px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Reconciliation READ</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add" style="left: 286px; top: 82px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Settlement matcher</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add" style="left: 30px; top: 178px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Ledger writer</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add" style="left: 286px; top: 178px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Story vitest gate</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="capnote" style="left: 30px; top: 280px; max-width: 470px">
+                  The five cards the plan is actually about, on the level they land on, with the
+                  proposed story named in the breadcrumb.
+                  <strong style="color: var(--strong)">The epic is one Back away</strong> — the
+                  direction a reader can discover.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="note-box">
+            <b
+              >The rule, in words: the canvas opens on the level the plan most FILLS — counting
+              proposals under PROPOSED containers as well as committed ones.</b
+            >
+            Today <code>arrivalLevel</code> counts an item only when it has a committed parent
+            (<code>if (!item.parentNodeId || !item.parentIdentifier) continue</code>), and
+            <code>getPlanReview</code> sets <code>parentIdentifier</code> to null for an intra-plan
+            <code>planItem:</code> parent — deliberately, and correctly, because such a parent is
+            drawn on the canvas rather than in the breadcrumb.
+            <b>So the count discards exactly the items the null describes</b>, and the plan above
+            scores ONE edge (story → epic) instead of five. <code>parentNodeId</code> is populated
+            for those items; it is the field to count.<br /><br />
+            <b>What this changes, and what it does not.</b> A plan of pure roots still opens at the
+            top level. A plan whose proposals all sit under ONE committed parent still opens there.
+            What moves is the plan that proposes a container AND its contents — which is the shape
+            an agent-authored skeleton produces almost every time.<br /><br />
+            <b>The TIE-BREAK is the DEEPER level, and it is now reachable.</b> One story under an
+            epic plus one subtask under that story is 1–1. The shipped code keeps whichever level
+            the <code>Map</code> yielded first, which is an accident rather than a decision. Prefer
+            the deeper one:
+            <b
+              >a reviewer wants to land where the work is, and the shallower level is one Back away
+              while the deeper one is a drill they must first discover.</b
+            >
+            Depth is the length of the arrival trail, which the same pass already builds.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 2 — the CRUMB for a parent that does not exist yet        -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>The crumb for a PROPOSED parent, the all-proposed level, and the degrade</h2>
+          <span class="note"
+            >· an un-materialized <code>add</code> has no key by construction — inventing one would
+            assert a work item that does not exist</span
+          >
+        </div>
+        <div class="frame">
+          <div class="list" style="display: grid; gap: 16px">
+            <div>
+              <div class="decided-strip" style="padding: 0 0 8px">
+                Committed crumb · proposed crumb — the same grammar
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
+                <span class="crumb"><span class="dot"></span>MOTIR-3232 · The Plans surface</span>
+                <span style="font-size: 11.5px; color: var(--muted)">vs</span>
+                <span class="crumb proposed"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  ><span class="newkey">New</span> · Payout reconciliation</span
+                >
+              </div>
+            </div>
+            <div class="tilebox">
+              <div class="cap">A level that is ENTIRELY proposed</div>
+              <div class="viewport" style="height: 210px; border-radius: var(--r-control)">
+                <div class="ovl" style="top: 12px; left: 14px">
+                  <span class="crumb"
+                    ><span class="dot"></span>MOTIR-653 · Epic 8
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="m9 6 6 6-6 6" /></svg
+                  ></span>
+                  <span class="crumb proposed"
+                    ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                      <path d="M12 5v14M5 12h14" /></svg
+                    ><span class="newkey">New</span> · Payout reconciliation</span
+                  >
+                </div>
+                <span class="lvlcap" style="left: 30px; top: 56px; color: var(--accent)"
+                  >Nothing committed here yet — every card on this level is this plan's</span
+                >
+                <div class="node lvl add" style="left: 30px; top: 80px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Reconciliation READ</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add" style="left: 286px; top: 80px; width: 232px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Settlement matcher</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p>
+                Drilling into a proposed container asks the roadmap for the children of an id no
+                work item has. <code>fetchRoadmapLevel</code> is best-effort and resolves an EMPTY
+                committed level, so the proposals render alone — which is correct, and looks like
+                nothing else on this surface. The level caption says why, in the shipped
+                <code>lvlcap</code> slot, so an empty-looking canvas is not read as a failed load.
+              </p>
+            </div>
+            <div class="tilebox">
+              <div class="cap">The DEGRADE — an archived ancestor, above a proposed parent</div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+                <span class="crumb"
+                  ><span class="dot"></span>Roadmap
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m9 6 6 6-6 6" /></svg
+                ></span>
+                <span class="crumb proposed"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  ><span class="newkey">New</span> · Payout reconciliation</span
+                >
+              </div>
+              <p>
+                An archived or hard-deleted ancestor yields <code>parentTrail: []</code> beside a
+                non-null <code>parentNodeId</code>, and the shipped code already degrades to a
+                single synthesised crumb. When the parent is ITSELF proposed there is no committed
+                chain to synthesise from at all — so the trail is the canvas's own ROOT crumb
+                (<code>roadmap.canvas.breadcrumbRoot</code>, the label bug MOTIR-3152 fixed) plus
+                the proposed crumb. <b>The canvas never arrives with no breadcrumb</b>, and Back
+                always leads somewhere real.
+              </p>
+            </div>
+          </div>
+          <div class="note-box">
+            <b>The crumb keeps the committed grammar and substitutes the SLOT, not the shape.</b> A
+            committed crumb is <code>KEY · Title</code> (<code>workItemCrumbLabel</code>); a
+            proposed one is <code>New · Title</code>, with the word <b>New</b> where the key would
+            be. That is a TEXT distinction first — which is what the rule against carrying meaning
+            in colour alone asks for — with the accent ink, the dashed border and the
+            <code>+</code> glyph as the second and third channels.<br /><br />
+            <b>Why not a key.</b> <code>identifier</code> is null on an un-materialized
+            <code>add</code> by construction, and a placeholder key (<code>MOTIR-?</code>,
+            <code>#new-3</code>) would assert a work item that does not exist — on the one surface
+            whose entire promise is that nothing is real until approve.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 3 — SHOW CHANGES                                          -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>SHOW CHANGES — one control lights every card the plan touches on this level</h2>
+          <span class="note"
+            >· the SHIPPED selected-card ring and the SHIPPED dim, applied to a SET · no second
+            highlight vocabulary</span
+          >
+        </div>
+        <div class="frame">
+          <div class="bacap"><b class="bad">off</b> six cards, three of them the plan's</div>
+          <div class="viewport" style="height: 306px">
+            <div class="ovl" style="top: 14px; left: 16px">
+              <span class="crumb"
+                ><span class="dot"></span>MOTIR-653 · Epic 8
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                MOTIR-3232 · The Plans surface</span
+              >
+            </div>
+            <div
+              class="ovl"
+              style="top: 14px; right: 16px; display: flex; align-items: center; gap: 8px"
+            >
+              <span class="search"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                Search this level</span
+              >
+              <span class="sc"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" /></svg
+                >Show changes</span
+              >
+              <span class="sc" style="width: 36px; justify-content: center; padding: 0"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg
+              ></span>
+            </div>
+
+            <div class="node lvl modify" style="left: 30px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-812</div>
+                  <div class="ttl">Payout ledger</div>
+                </div>
+                <span class="opbadge modify"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                  >change</span
+                >
+              </div>
+            </div>
+            <div class="node lvl" style="left: 282px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-844</div>
+                  <div class="ttl">Settlement webhook retries</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+            <div class="node lvl remove" style="left: 534px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-851</div>
+                  <div class="ttl">Legacy payout CSV export</div>
+                </div>
+                <span class="opbadge remove"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="4" rx="1" />
+                    <path d="M5 8v11h14V8M10 12h4" /></svg
+                  >archive</span
+                >
+              </div>
+            </div>
+            <div class="node lvl" style="left: 30px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-860</div>
+                  <div class="ttl">Payout notifications</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >in review</span
+                >
+              </div>
+            </div>
+            <div class="node lvl add" style="left: 282px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">Reconciliation report</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+            <div class="node lvl" style="left: 534px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-871</div>
+                  <div class="ttl">Marketplace fee ledger</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="bacap" style="border-top: 1px solid var(--border)">
+            <b class="good">on</b> the three light, the rest go back
+          </div>
+          <div class="viewport" style="height: 306px">
+            <div class="ovl" style="top: 14px; left: 16px">
+              <span class="crumb"
+                ><span class="dot"></span>MOTIR-653 · Epic 8
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+                MOTIR-3232 · The Plans surface</span
+              >
+            </div>
+            <div
+              class="ovl"
+              style="top: 14px; right: 16px; display: flex; align-items: center; gap: 8px"
+            >
+              <span class="search"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                Search this level</span
+              >
+              <span class="sc on"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" /></svg
+                >Show changes<span class="n">3 of 11</span></span
+              >
+              <span class="sc" style="width: 36px; justify-content: center; padding: 0"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" /></svg
+              ></span>
+            </div>
+
+            <div class="node lvl modify emph" style="left: 30px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-812</div>
+                  <div class="ttl">Payout ledger</div>
+                </div>
+                <span class="opbadge modify"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                  >change</span
+                >
+              </div>
+            </div>
+            <div class="node lvl dim" style="left: 282px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-844</div>
+                  <div class="ttl">Settlement webhook retries</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+            <div class="node lvl remove emph" style="left: 534px; top: 86px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-851</div>
+                  <div class="ttl">Legacy payout CSV export</div>
+                </div>
+                <span class="opbadge remove"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="4" rx="1" />
+                    <path d="M5 8v11h14V8M10 12h4" /></svg
+                  >archive</span
+                >
+              </div>
+            </div>
+            <div class="node lvl dim" style="left: 30px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-860</div>
+                  <div class="ttl">Payout notifications</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >in review</span
+                >
+              </div>
+            </div>
+            <div class="node lvl add emph" style="left: 282px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">new</div>
+                  <div class="ttl">Reconciliation report</div>
+                </div>
+                <span class="opbadge add"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >add</span
+                >
+              </div>
+            </div>
+            <div class="node lvl dim" style="left: 534px; top: 190px; width: 236px">
+              <div class="top">
+                <span class="tile" style="background: var(--t-task-soft)"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                ></span>
+                <div>
+                  <div class="id">MOTIR-871</div>
+                  <div class="ttl">Marketplace fee ledger</div>
+                </div>
+                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                  >to do</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="note-box">
+            <b>The treatment is not new and must not be.</b> <code>ProjectRoadmapCanvas</code>'s
+            node wrapper already rings a selected or search-matched node (<code
+              >ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)</code
+            >) and already dims everything outside the connected set (<code>opacity-35</code>). Show
+            changes applies <b>that same pair to a SET</b> — one ring value, one dim value, one
+            vocabulary. <br /><br />
+            <b>The set is every proposal on the level in view, whatever its <code>op</code></b> —
+            <code>add</code>, <code>modify</code> and <code>remove</code> alike. A
+            <code>modify</code> or <code>remove</code> shares its node id with the committed card it
+            targets, so the ring lands ON that card rather than beside it.
+            <b
+              >The op languages stay exactly as Part I §3 panel B draws them: they say WHICH change
+              this is, and the emphasis says THAT there is one.</b
+            >
+            They are orthogonal, and neither is an alternative to the other.<br /><br />
+            <b>The dim is the shipped 35%, not lower.</b> A committed sibling is on this canvas for
+            a reason —
+            <i
+              >&ldquo;seeing the company a proposed card will keep is most of what &lsquo;is this
+              the right place for it?&rsquo; means&rdquo;</i
+            >
+            (<code>planLevel.tsx</code>) — so dimming it to invisibility would defeat the level the
+            emphasis exists to read. <br /><br />
+            <b>The count names what is NOT here, and offers no way to reach it.</b> The canvas is
+            per-level; a plan spread over three parents has most of itself off-screen. The control
+            reads <code>3 of 11</code> whenever the level holds fewer than the plan's total, and
+            stops there. <b>The way to the other eight is Part VIII's LIST</b>, which is the whole
+            reason that body exists — a second navigation affordance here would be a worse answer to
+            the same question, in the pane that already has the better one.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL 4 — the states that decide the rest                       -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>The four states that settle the rest</h2>
+          <span class="note"
+            >· a selection while the toggle is on · a level with no proposals · a level that is all
+            proposals · a DECIDED plan</span
+          >
+        </div>
+        <div class="frame">
+          <div class="list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+            <div class="tilebox">
+              <div class="cap">A live SELECTION wins, and the toggle stays pressed</div>
+              <div style="display: flex; justify-content: flex-end">
+                <span class="sc on"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" /></svg
+                  >Show changes<span class="n">3 of 11</span></span
+                >
+              </div>
+              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+                <div class="node lvl modify selected" style="left: 20px; top: 20px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-812</div>
+                      <div class="ttl">Payout ledger</div>
+                    </div>
+                    <span class="opbadge modify"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                      >change</span
+                    >
+                  </div>
+                </div>
+                <div class="node lvl dim" style="left: 230px; top: 20px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-844</div>
+                      <div class="ttl">Settlement webhook</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >to do</span
+                    >
+                  </div>
+                </div>
+                <div class="node lvl add dim" style="left: 20px; top: 126px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Reconciliation report</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p>
+                Selecting a card already dims everything unconnected to it, and both mechanisms
+                write the same <code>connectedIds</code>-shaped state. Layering them gives three
+                opacity tiers and no legible meaning, so
+                <b>the SELECTION wins for as long as it lasts</b> — the proposed card above is
+                dimmed like any other unconnected node. The toggle stays <code>aria-pressed</code>,
+                so clearing the selection restores the emphasis rather than making the reader re-arm
+                it. <b>A selection is a momentary act; the toggle is a mode</b>, and a mode should
+                survive one.
+              </p>
+            </div>
+            <div class="tilebox">
+              <div class="cap">A level with NO proposals — disabled</div>
+              <div style="display: flex; justify-content: flex-end">
+                <span class="sc off-disabled"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" /></svg
+                  >Show changes</span
+                >
+              </div>
+              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+                <div class="node lvl" style="left: 20px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-901</div>
+                      <div class="ttl">Unrelated level</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >to do</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl" style="left: 230px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-902</div>
+                      <div class="ttl">Nothing proposed</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >done</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p>
+                The reviewer drilled somewhere the plan does not reach. The toggle is
+                <b>disabled</b>, with <code>title</code> and accessible description
+                <i>&ldquo;No proposed changes on this level&rdquo;</i>. An ON state here would dim
+                every card on screen and ring none — a screen that says nothing, which is worse than
+                a control that says why it cannot help.
+              </p>
+            </div>
+            <div class="tilebox">
+              <div class="cap">A level that is ENTIRELY the plan's — on, nothing to dim</div>
+              <div style="display: flex; justify-content: flex-end">
+                <span class="sc on"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" /></svg
+                  >Show changes<span class="n">4 of 4</span></span
+                >
+              </div>
+              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+                <div class="node lvl add emph" style="left: 20px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Reconciliation READ</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add emph" style="left: 230px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Settlement matcher</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl add emph" style="left: 20px; top: 126px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M5 12h14M5 7h9M5 17h9" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Ledger writer</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <p>
+                Every card rings and nothing dims. That is correct and harmless — the control is not
+                special-cased for it — and the count reading <code>4 of 4</code> is the honest thing
+                to say about a level that holds the whole plan.
+              </p>
+            </div>
+            <div class="tilebox">
+              <div class="cap">A DECIDED plan — the control survives, in the past tense</div>
+              <div style="display: flex; justify-content: flex-end">
+                <span class="sc on"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" /></svg
+                  >Show what changed<span class="n">3 of 11</span></span
+                >
+              </div>
+              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+                <div class="node lvl modify emph" style="left: 20px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-812</div>
+                      <div class="ttl">Payout ledger</div>
+                    </div>
+                    <span class="opbadge modify">applied</span>
+                  </div>
+                </div>
+
+                <div class="node lvl dim" style="left: 230px; top: 30px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-844</div>
+                      <div class="ttl">Settlement webhook</div>
+                    </div>
+                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                      >to do</span
+                    >
+                  </div>
+                </div>
+
+                <div class="node lvl emph" style="left: 20px; top: 126px; width: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="3" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">MOTIR-903</div>
+                      <div class="ttl">Reconciliation report</div>
+                    </div>
+                    <span class="opbadge add">created</span>
+                  </div>
+                </div>
+              </div>
+              <p>
+                Part VI made this pane a RECORD after the decision, with its own accepted / declined
+                node treatments.
+                <b
+                  >&ldquo;What did this plan change?&rdquo; is a better question after approve than
+                  before</b
+                >
+                — the cards are real now and sit among neighbours that were always there — so the
+                control stays and its label moves to the past tense. On a DECLINED plan it stays
+                too, reading the same, because the record is of what the plan <i>would</i> have
+                changed and the reader is asking the same thing.
+              </p>
+            </div>
+          </div>
+          <div class="note-box">
+            <b>a11y and motion.</b> The toggle is a real button carrying <code>aria-pressed</code>,
+            so its state is announced rather than inferred from its fill; when disabled it carries
+            the reason as its accessible description. <b>The emphasis is never colour alone</b> — a
+            ringed node also carries its own <code>op</code> badge, which is TEXT (<code>add</code>
+            / <code>change</code> / <code>archive</code>), and the dim is a second non-hue channel.
+            And because turning this on changes the opacity of most of the screen at once, the
+            transition is dropped entirely under <code>prefers-reduced-motion: reduce</code>: the
+            state changes instantly rather than fading.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
