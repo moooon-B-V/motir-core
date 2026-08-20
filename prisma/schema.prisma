@@ -4579,6 +4579,22 @@ model GithubCheckRun {
   /// a legacy commit-status `context`) — distinguishes concurrent checks on one
   /// commit so each keeps its own feedback.
   checkName         String   @map("check_name")
+  /// The CI RUN this check belongs to — GitHub's `check_suite.id` (one suite per
+  /// workflow run), GitLab's pipeline id. Part of the idempotency key since
+  /// MOTIR-3209: `cancel-in-progress` makes TWO runs at one commit ordinary, and
+  /// a key that could not tell them apart merged them by NAME — so a matrix job
+  /// cancelled before expansion (`Vitest (${{ matrix.shard }}/…)`) recorded a
+  /// failure no later run could ever overwrite.
+  ///
+  /// ⚠️ NOT NULL with an EMPTY-STRING sentinel for "no run identity", not a
+  /// nullable column: Postgres treats NULLs in a unique index as distinct, and
+  /// Prisma's compound-unique input cannot carry one, so a nullable member would
+  /// insert a fresh row per delivery instead of converging. Every row written
+  /// before this column existed carries `''`, as does every provider that
+  /// reports no run identity (a legacy commit-`status` event) — one degraded
+  /// group that supersedes nothing and is superseded by nothing, i.e. exactly
+  /// the behaviour those rows had before.
+  checkSuiteId      String   @default("") @map("check_suite_id")
   /// Normalized `CiConclusion`: "success" | "failure" | "pending" | "neutral".
   conclusion        String
   /// The feedback `Comment` posted for this check, updated in place on a re-run.
@@ -4590,7 +4606,7 @@ model GithubCheckRun {
   pullRequest     GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
   feedbackComment Comment?          @relation(fields: [feedbackCommentId], references: [id], onDelete: SetNull)
 
-  @@unique([pullRequestId, commitSha, checkName])
+  @@unique([pullRequestId, commitSha, checkName, checkSuiteId])
   @@index([pullRequestId])
   @@map("github_check_run")
 }

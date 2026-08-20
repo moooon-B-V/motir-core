@@ -115,6 +115,15 @@ export interface NormalizedStatusEvent {
   context: string;
   prNumbers: number[];
   headBranch: string | null;
+  /** The CI RUN this check belongs to — GitHub's `check_suite.id` (GitHub
+   *  creates ONE check suite per workflow run, which is why `ci.yml` and
+   *  `codeql.yml` sit in different suites at one commit), GitLab's pipeline id.
+   *  Part of the ingestion key since MOTIR-3209: two runs at one commit is
+   *  ordinary under `cancel-in-progress`, and a key that cannot tell them apart
+   *  merges them by check NAME — which is how a cancelled run's phantom rows
+   *  outlived the run that replaced it. `null` where the provider reports no
+   *  run identity at all (a legacy commit-`status` event). */
+  suiteId: string | null;
 }
 
 /** A push to a repository branch, normalized across providers — consumed by the

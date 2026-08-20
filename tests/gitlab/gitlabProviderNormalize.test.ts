@@ -105,6 +105,10 @@ describe('gitlab.parseCiStatusEvent', () => {
       context: 'pipeline',
       prNumbers: [7],
       headBranch: 'feat/x',
+      // The PIPELINE is GitLab's run identity (MOTIR-3209) — the analogue of a
+      // GitHub check suite, and what makes a retry at one sha supersede the run
+      // it replaced instead of merging into it by job name.
+      suiteId: '100',
     });
   });
 

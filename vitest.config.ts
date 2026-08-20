@@ -1295,6 +1295,16 @@ export default defineConfig({
         'lib/workflows/defaultWorkflow.ts',
         'lib/workflows/statusColor.ts',
         'components/issues/StatusPill.tsx',
+        // Bug MOTIR-3209 — the ONE place that decides which of a commit's
+        // workflow runs still gets a vote. It is the whole of that card's
+        // decision and it is read by BOTH derivations, so an untested branch
+        // here is a wrong CI verdict on a card, silently.
+        //
+        // ⚠️ `changeRequestCiFeedback.ts`, `prCiState.ts` and the two providers
+        // the card also touched are deliberately NOT added: they are pre-existing
+        // files this fix widened, and gating them here would gate the fix on code
+        // no card wrote — the trap the `aiBoundaryService.ts` note above names.
+        'lib/github/checkSuites.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2456,6 +2466,18 @@ export default defineConfig({
         'lib/workflows/defaultWorkflow.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workflows/statusColor.ts': { branches: 90, functions: 90, lines: 90 },
         'components/issues/StatusPill.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Bug MOTIR-3209 — supersede by RUN, not by name. MEASURED on this
+        // branch first, with `tests/github/prCiState` and
+        // `tests/github/cancelledSuiteSupersession`:
+        //
+        //   lib/github/checkSuites.ts   97.56 stmts · 92.85 branch · 100 fn · 100 lines
+        //
+        // The two uncovered branches are the non-numeric suite-id tier — a
+        // deterministic fallback for an id shape neither host mints today, kept
+        // so the ordering stays total rather than because anything reaches it.
+        // Pinned at the 90 floor rather than at the measured number, so a later
+        // refactor has room without anyone loosening a gate to make a build pass.
+        'lib/github/checkSuites.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

@@ -9,10 +9,19 @@
 // its newest-created check row. `createdAt` (not `updatedAt`) orders shas by
 // first sighting: a re-run on an OLD sha refreshes that row's `updatedAt` but
 // never outranks a newer push's rows.
+//
+// ⚠️ AND WITHIN THAT SHA, ONLY THE RUNS THAT HAVE NOT BEEN REPLACED
+// (MOTIR-3209). Two workflow runs at one commit is ordinary — `cancel-in-progress`
+// makes it so — and the cancelled one's rows must not decide anything. That rule
+// is `liveCheckRows`, and it is SHARED with the feedback comment's own
+// derivation deliberately: two opinions about one commit is what MOTIR-2946
+// removed.
+
+import { liveCheckRows, type SuiteScopedCheckRow } from './checkSuites';
 
 export type PrCiState = 'passing' | 'failing' | 'running' | null;
 
-export interface PrCheckRunSlice {
+export interface PrCheckRunSlice extends SuiteScopedCheckRow {
   commitSha: string;
   conclusion: string;
   createdAt: Date;
@@ -27,7 +36,7 @@ export interface PrCheckRunSlice {
 export function derivePrCiState(checkRuns: PrCheckRunSlice[]): PrCiState {
   if (checkRuns.length === 0) return null;
   const newest = checkRuns.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
-  const atHead = checkRuns.filter((r) => r.commitSha === newest.commitSha);
+  const atHead = liveCheckRows(checkRuns.filter((r) => r.commitSha === newest.commitSha));
   if (atHead.some((r) => r.conclusion === 'failure')) return 'failing';
   if (atHead.some((r) => r.conclusion === 'pending')) return 'running';
   if (atHead.some((r) => r.conclusion === 'success')) return 'passing';
