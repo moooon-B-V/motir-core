@@ -30,6 +30,7 @@ export interface ValidateFunction {
 export declare const operation_appendPlanTurn: ValidateFunction;
 export declare const operation_approveWorkItemPlan: ValidateFunction;
 export declare const operation_archiveWorkItem: ValidateFunction;
+export declare const operation_claimScope: ValidateFunction;
 export declare const operation_claimWorkItem: ValidateFunction;
 export declare const operation_completeSession: ValidateFunction;
 export declare const operation_completeSprint: ValidateFunction;

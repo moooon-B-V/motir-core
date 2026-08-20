@@ -4885,7 +4885,6 @@
     "chat": {
       "railLabel": "Chat",
       "assistantName": "Motir",
-      "assistantInitial": "M",
       "composerPlaceholder": "Reply, or ask a question…",
       "send": "Send",
       "working": "Motir is thinking…",

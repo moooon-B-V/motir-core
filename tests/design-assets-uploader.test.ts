@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  attributeChangedPaths,
   authHeadersFor,
   buildPublishSet,
   classifyDesignPath,
@@ -12,9 +13,13 @@ import {
   contentTypeFor,
   extractChangedNoteSections,
   main,
+  NotAChildError,
   NotALeafError,
+  parseCommitCardKey,
   parseHunkRanges,
   parseWorkItemKey,
+  partitionAssetsByCard,
+  projectPrefixOf,
   publishDesignResult,
   resolveDiffBase,
   resolveTargetKey,
@@ -845,6 +850,9 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     deleted: [],
   };
 
+  /** No commit on the branch claims any path — the MOTIR-3009 decline. */
+  const emptyAttribution = { byPath: new Map<string, string>(), coTouched: new Map() };
+
   it('a PR that changed no design artifact publishes nothing', async () => {
     const log = logger();
     const publish = vi.fn();
@@ -874,13 +882,17 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     expect(said).toContain('mock:design/a/x.mock.html');
   });
 
-  it('a CONTAINER target publishes nothing and stays GREEN — the parent-run pull request', async () => {
+  it('a CONTAINER whose branch NO commit explains publishes nothing and stays GREEN', async () => {
     // MOTIR-3009. A parent run opens ONE pull request per repository, on
     // `parent/MOTIR-<story>-…`, and it carries the design child's asset
     // amendments alongside the code they document. The service refuses a design
     // result addressed to a story, correctly — a result attaches to the leaf
     // that produced it — and before this the refusal red-lit the whole run,
     // whose only remedy would have been deleting a correct amendment.
+    //
+    // MOTIR-3177 kept this exit for exactly the case it was written for and no
+    // wider: the assets reach no card only when NO commit on the branch claims
+    // them. A container with producing children takes the test below.
     const log = logger();
     const publish = vi.fn(async () => {
       throw new NotALeafError('MOTIR-2999', '{"code":"DESIGN_EVIDENCE_NOT_A_LEAF"}');
@@ -892,7 +904,12 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
         MOTIR_UPLOAD_TOKEN: 'pat',
       },
       log as never,
-      { collect: () => oneMock, publish, resolveBase: TRUSTED_BASE },
+      {
+        collect: () => oneMock,
+        publish,
+        attribute: () => emptyAttribution,
+        resolveBase: TRUSTED_BASE,
+      },
     );
 
     expect(code).toBe(0);
@@ -901,6 +918,176 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     expect(said).toContain('CONTAINER');
     // Same courtesy as the unresolvable-target exit: say what was skipped.
     expect(said).toContain('mock:design/a/x.mock.html');
+  });
+
+  it('a CONTAINER whose CHILDREN produced the assets publishes to each child, never the container', async () => {
+    // MOTIR-3177, the whole card. A parent run lands one commit per child on the
+    // container's branch and opens no per-child pull request, so "the design
+    // child's own pull request publishes them" describes a pull request that
+    // does not exist — and 235 assets belonging to six design cards reached no
+    // card at all. The branch names the container; the COMMITS name the cards.
+    const log = logger();
+    const publish = vi.fn(async (args: Record<string, unknown>) =>
+      args.targetKey === 'MOTIR-2999'
+        ? Promise.reject(new NotALeafError('MOTIR-2999', 'DESIGN_EVIDENCE_NOT_A_LEAF'))
+        : { id: `ev-${String(args.targetKey).slice(-2)}` },
+    );
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: 'base',
+        DESIGN_PR_REF: 'parent/MOTIR-2999-faint-ink',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      {
+        collect: () => ({
+          assets: [
+            { kind: 'mock', sourcePath: 'design/a/x.mock.html' },
+            { kind: 'image', sourcePath: 'design/a/x.png' },
+            { kind: 'mock', sourcePath: 'design/b/y.mock.html' },
+          ],
+          notes: [],
+          ignored: [],
+          deleted: [],
+        }),
+        publish,
+        resolveBase: TRUSTED_BASE,
+        attribute: () => ({
+          byPath: new Map([
+            ['design/a/x.mock.html', 'MOTIR-11'],
+            ['design/a/x.png', 'MOTIR-11'],
+            ['design/b/y.mock.html', 'MOTIR-12'],
+          ]),
+          coTouched: new Map(),
+        }),
+      },
+    );
+
+    expect(code).toBe(0);
+    // One container attempt (refused), then one publish per producing child.
+    expect(publish).toHaveBeenCalledTimes(3);
+    const targets = publish.mock.calls.map((c) => (c[0] as Record<string, unknown>).targetKey);
+    expect(targets).toEqual(['MOTIR-2999', 'MOTIR-11', 'MOTIR-12']);
+    // The container is declared on each child publish so the tenant can refuse a
+    // key a commit subject mistyped — the one thing git cannot check.
+    for (const call of publish.mock.calls.slice(1)) {
+      expect((call[0] as Record<string, unknown>).withinParentKey).toBe('MOTIR-2999');
+      expect((call[0] as Record<string, unknown>).producedByKey).toEqual(
+        (call[0] as Record<string, unknown>).targetKey,
+      );
+    }
+    const said = log.lines.join(' ');
+    // AC5: the per-card count is what `CLAUDE.md`'s "confirm the result arrived"
+    // check reads, and on a parent run there is one line per card to read.
+    expect(said).toContain('Published 2 design artifact(s) to MOTIR-11');
+    expect(said).toContain('Published 1 design artifact(s) to MOTIR-12');
+  });
+
+  it("splits each card's OWN note sections, and reports a path no commit claims", async () => {
+    const log = logger();
+    const publish = vi.fn(async (args: Record<string, unknown>) =>
+      args.targetKey === 'CONT-1'
+        ? Promise.reject(new NotALeafError('CONT-1', 'DESIGN_EVIDENCE_NOT_A_LEAF'))
+        : { id: 'ev-1' },
+    );
+    await main(
+      { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'parent/CONT-1-x', MOTIR_UPLOAD_TOKEN: 'pat' },
+      log as never,
+      {
+        collect: () => ({
+          assets: [
+            { kind: 'mock', sourcePath: 'design/a/x.mock.html' },
+            { kind: 'mock', sourcePath: 'design/orphan/z.mock.html' },
+          ],
+          notes: ['design/a/design-notes.md'],
+          ignored: [],
+          deleted: [],
+        }),
+        extractNote: () => ({ noteMd: '## A\nbody', reason: 'ok', sections: 1 }),
+        publish,
+        resolveBase: TRUSTED_BASE,
+        attribute: () => ({
+          byPath: new Map([
+            ['design/a/x.mock.html', 'CONT-9'],
+            ['design/a/design-notes.md', 'CONT-9'],
+          ]),
+          coTouched: new Map([['design/a/x.mock.html', ['CONT-8']]]),
+        }),
+      },
+    );
+
+    const child = publish.mock.calls[1]![0] as Record<string, unknown>;
+    // The card's inline note is ITS note_file's own text, not the run-wide
+    // concatenation `buildPublishSet` hands the single-card path.
+    expect(child.noteMd).toBe('## A\nbody');
+    expect((child.assets as Array<{ sourcePath: string }>).map((a) => a.sourcePath)).toEqual([
+      'design/a/x.mock.html',
+      'design/a/design-notes.md',
+    ]);
+    const said = log.lines.join(' ');
+    // AC2: never silently dropped.
+    expect(said).toContain('design/orphan/z.mock.html');
+    expect(said).toContain('reach NO card');
+    // A shared path is stated, not duplicated and not hidden.
+    expect(said).toContain('also touched by CONT-8');
+  });
+
+  it('a mistyped commit key is REFUSED by the tenant, named, and leaves the run green', async () => {
+    // The real fixture: a commit on `parent/MOTIR-3068-…` subject-tagged
+    // `(MOTIR-3147)` — a manual billing task in another epic. It is a leaf, so
+    // nothing local can tell it apart from a real child; only the tree can.
+    const log = logger();
+    const publish = vi.fn(async (args: Record<string, unknown>) =>
+      args.targetKey === 'MOTIR-3068'
+        ? Promise.reject(new NotALeafError('MOTIR-3068', 'DESIGN_EVIDENCE_NOT_A_LEAF'))
+        : Promise.reject(
+            new NotAChildError('MOTIR-3147', 'MOTIR-3068', 'DESIGN_EVIDENCE_NOT_A_CHILD'),
+          ),
+    );
+    const code = await main(
+      {
+        DESIGN_BASE_SHA: 'base',
+        DESIGN_PR_REF: 'parent/MOTIR-3068-ink',
+        MOTIR_UPLOAD_TOKEN: 'pat',
+      },
+      log as never,
+      {
+        collect: () => oneMock,
+        publish,
+        resolveBase: TRUSTED_BASE,
+        attribute: () => ({
+          byPath: new Map([['design/a/x.mock.html', 'MOTIR-3147']]),
+          coTouched: new Map(),
+        }),
+      },
+    );
+
+    expect(code).toBe(0);
+    const said = log.lines.join(' ');
+    expect(said).toContain('MOTIR-3147 is not a child of MOTIR-3068');
+    expect(said).toContain('design/a/x.mock.html');
+  });
+
+  it('history the checkout never fetched is REPORTED, not read as "nothing to publish"', async () => {
+    const log = logger();
+    const publish = vi.fn(async () => {
+      throw new NotALeafError('MOTIR-2999', 'DESIGN_EVIDENCE_NOT_A_LEAF');
+    });
+    const code = await main(
+      { DESIGN_BASE_SHA: 'base', DESIGN_PR_REF: 'parent/MOTIR-2999-x', MOTIR_UPLOAD_TOKEN: 'pat' },
+      log as never,
+      {
+        collect: () => oneMock,
+        publish,
+        resolveBase: TRUSTED_BASE,
+        attribute: () => {
+          throw new Error("fatal: bad revision 'base..HEAD'");
+        },
+      },
+    );
+
+    expect(code).toBe(0);
+    expect(log.lines.join(' ')).toContain('Could not read base..HEAD');
   });
 
   it('ANY OTHER publish failure is still RED — the no-op is scoped to the one refusal', async () => {
@@ -1058,5 +1245,108 @@ describe('main — the ways it exits 0 WITHOUT publishing', () => {
     expect(log.lines.join(' ')).toContain('no surface described');
     // PAT fallback, since there is no OIDC identity here.
     expect(call.headers).toEqual({ authorization: 'Bearer pat' });
+  });
+});
+
+describe('attributeChangedPaths / partitionAssetsByCard (MOTIR-3177)', () => {
+  // `git log --no-merges --name-only --format=%x00%H %s` output: a NUL-led
+  // record per commit, newest first, header then the paths it touched.
+  const record = (sha: string, subject: string, paths: string[]) =>
+    `\0${sha} ${subject}\n\n${paths.join('\n')}\n`;
+
+  it('gives each path to the newest commit that NAMES a card', () => {
+    const git = vi.fn(
+      (_args: string[]) =>
+        record('c3', 'fix(design): sweep the AI surfaces (MOTIR-3118)', ['design/ai/a.mock.html']) +
+        record('c2', 'fix(design): re-export the merged mock', ['design/plans/p.png']) +
+        record('c1', 'fix(design): sweep the planning surfaces (MOTIR-3115)', [
+          'design/plans/p.png',
+          'design/plans/p.mock.html',
+        ]),
+    );
+    const { byPath, coTouched } = attributeChangedPaths({
+      base: 'base',
+      containerKey: 'MOTIR-3068',
+      git: git as never,
+    });
+
+    expect(byPath.get('design/ai/a.mock.html')).toBe('MOTIR-3118');
+    // The unkeyed re-export commit explains nothing, so the path falls through
+    // to the sweep that produced it rather than becoming unattributable.
+    expect(byPath.get('design/plans/p.png')).toBe('MOTIR-3115');
+    expect(byPath.get('design/plans/p.mock.html')).toBe('MOTIR-3115');
+    expect([...coTouched.keys()]).toEqual([]);
+    // Merges are excluded: `git merge origin/main` on a resuming parent run
+    // carries ANOTHER card's design changes, and attributing those here is
+    // exactly the "published onto the wrong card" outcome.
+    expect(git.mock.calls[0]![0]).toContain('--no-merges');
+  });
+
+  it('reports a CO-TOUCH rather than duplicating or hiding it', () => {
+    const git = () =>
+      record('c2', 'docs(design): reconcile the notes (MOTIR-3142)', ['design/a/design-notes.md']) +
+      record('c1', 'fix(design): sweep design/a (MOTIR-3113)', ['design/a/design-notes.md']);
+    const { byPath, coTouched } = attributeChangedPaths({
+      base: 'base',
+      containerKey: 'MOTIR-3068',
+      git: git as never,
+    });
+
+    // HEAD's bytes are the newest commit's, so that is the card the published
+    // asset is a true statement about.
+    expect(byPath.get('design/a/design-notes.md')).toBe('MOTIR-3142');
+    expect(coTouched.get('design/a/design-notes.md')).toEqual(['MOTIR-3113']);
+  });
+
+  it('ignores a commit naming the CONTAINER itself, and one naming nothing', () => {
+    const git = () =>
+      record('c2', 'chore: tidy up', ['design/a/x.png']) +
+      record('c1', 'docs: the container itself (MOTIR-3068)', ['design/a/x.png']);
+    const { byPath } = attributeChangedPaths({
+      base: 'base',
+      containerKey: 'motir-3068',
+      git: git as never,
+    });
+
+    expect(byPath.size).toBe(0);
+  });
+
+  it('reads the key only within the CONTAINER’s own project prefix', () => {
+    expect(projectPrefixOf('MOTIR-3068')).toBe('MOTIR');
+    expect(parseCommitCardKey('fix(design): sweep (MOTIR-3113)', 'MOTIR')).toBe('MOTIR-3113');
+    // `parseWorkItemKey` is prefix-agnostic because a branch ref is written for
+    // it; a commit subject is prose, and prose contains things like this.
+    expect(parseWorkItemKey('refactor(auth): drop the UTF-8 fallback')).toBe('UTF-8');
+    expect(parseCommitCardKey('refactor(auth): drop the UTF-8 fallback', 'MOTIR')).toBeNull();
+    expect(parseCommitCardKey('fix(x): ACME-4 elsewhere', 'MOTIR')).toBeNull();
+  });
+
+  it('gives each card ONLY its own note text, and names what nothing claims', () => {
+    const { byCard, unattributed } = partitionAssetsByCard({
+      assets: [
+        { kind: 'mock', sourcePath: 'design/a/x.mock.html' },
+        { kind: 'note_file', sourcePath: 'design/a/design-notes.md', text: '## A' },
+        { kind: 'note_file', sourcePath: 'design/b/design-notes.md', text: '## B' },
+        { kind: 'image', sourcePath: 'design/c/orphan.png' },
+      ],
+      byPath: new Map([
+        ['design/a/x.mock.html', 'MOTIR-11'],
+        ['design/a/design-notes.md', 'MOTIR-11'],
+        ['design/b/design-notes.md', 'MOTIR-12'],
+      ]),
+    });
+
+    expect(byCard.map((c) => c.key)).toEqual(['MOTIR-11', 'MOTIR-12']);
+    expect(byCard[0]!.noteMd).toBe('## A');
+    expect(byCard[1]!.noteMd).toBe('## B');
+    expect(unattributed).toEqual(['design/c/orphan.png']);
+  });
+
+  it('a card with no note at all carries a null noteMd, not an empty string', () => {
+    const { byCard } = partitionAssetsByCard({
+      assets: [{ kind: 'mock', sourcePath: 'design/a/x.mock.html' }],
+      byPath: new Map([['design/a/x.mock.html', 'MOTIR-11']]),
+    });
+    expect(byCard[0]!.noteMd).toBeNull();
   });
 });

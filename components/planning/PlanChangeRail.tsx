@@ -21,6 +21,7 @@ import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConve
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import { BrandMark } from '@/components/brand/BrandMark';
 
 // The planning workspace's CHAT RAIL on an established project (Subtask
 // MOTIR-1730; design `plan-change-conversation.mock.html` panels 3 + 6). Changing
@@ -529,7 +530,7 @@ function Bubble({
             : 'bg-(--el-accent) text-(--el-accent-text)'
         }`}
       >
-        {isUser ? '·' : 'M'}
+        {isUser ? '·' : <BrandMark variant="mark" tone="inverted" size={13} />}
       </span>
       <div
         className={

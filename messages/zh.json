@@ -4881,7 +4881,6 @@
     "chat": {
       "railLabel": "对话",
       "assistantName": "Motir",
-      "assistantInitial": "M",
       "composerPlaceholder": "回复，或提个问题……",
       "send": "发送",
       "working": "Motir 正在思考……",

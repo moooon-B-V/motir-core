@@ -1,4 +1,4 @@
-// The shell reserves clearance under the floating "M" orb (bug MOTIR-2763).
+// The shell reserves clearance under the floating Motir orb (bug MOTIR-2763).
 //
 // The orb (`components/planning/PlanWithAIFab.tsx`) is a `position: fixed`
 // 56×56 button inset 20px from the bottom-right at `z-40`, so it owns the

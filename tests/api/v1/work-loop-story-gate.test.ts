@@ -120,6 +120,14 @@ const WORK_LOOP_MIRRORS = {
  * `TOOL_PERMISSIONS` all the same.
  */
 const WORK_LOOP_UNMIRRORED: Record<string, string> = {
+  claimScope:
+    'MOTIR-3049 — the SCOPE claim serves `motir run <story-id>` / `motir run sprint`, and ' +
+    '`packages/cli` retired its MCP transport in 11.5.6, so a mirrored tool would be a second ' +
+    'implementation with no caller. The card that specifies it scopes the deliverable to the v1 ' +
+    'route, its service, its repository reads and the generated spec — nothing asks for an agent ' +
+    'surface, and inventing one here would mean shipping a tool nobody had argued for. It takes ' +
+    '`claim_work_item`’s permission (`work_item:edit`) rather than a scope of its own: it assigns ' +
+    'and flips status, exactly as the keyed claim does, over more rows.',
   reportWorkItemImplementation:
     'MOTIR-2421 · Amendment 18 — recording provenance without asserting integration is a ' +
     'CLIENT need, not an agent one: an agent already reports its harness and model through ' +
@@ -148,12 +156,13 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
       [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
     // …and the story's own audit named ten, plus MOTIR-2961's keyed claim,
-    // plus the TWO operations that deliberately have no counterpart
-    // (MOTIR-2421's implementation report and MOTIR-3017's plan approval). A
-    // count that drifted from the plan is worth failing on — a later operation
-    // joins these numbers deliberately, never silently.
+    // plus the THREE operations that deliberately have no counterpart
+    // (MOTIR-2421's implementation report, MOTIR-3017's plan approval and
+    // MOTIR-3049's scope claim). A count that drifted from the plan is worth
+    // failing on — a later operation joins these numbers deliberately, never
+    // silently.
     expect(Object.keys(MIRRORS)).toHaveLength(11);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(13);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(14);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {
