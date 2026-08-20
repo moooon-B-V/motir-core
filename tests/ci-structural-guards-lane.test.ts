@@ -93,6 +93,7 @@ const SELF_WALKING_MEMBERS = [
   'tests/rateLimit/storeDeadline.test.ts',
   'tests/theme/inkContrastLint.test.ts',
   'tests/theme/inkContrastScan.test.ts',
+  'tests/theme/shellViewportUnits.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

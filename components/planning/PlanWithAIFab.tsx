@@ -8,6 +8,7 @@ import { AI_CALLOUT_NAME_KEY } from '@/lib/planning/aiCallout';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import { AiCalloutMenu } from './AiCalloutMenu';
 import { BrandMark } from '@/components/brand/BrandMark';
+import { useDraggableOrb } from '@/lib/hooks/useDraggableOrb';
 
 /**
  * PlanWithAIFab — the floating Motir orb, the universal AI callout's TRIGGER
@@ -36,6 +37,22 @@ import { BrandMark } from '@/components/brand/BrandMark';
  *
  * Gating is the MOUNT's job (rendered only where AI planning is configured +
  * there's a project to plan into), like the header pill.
+ *
+ * ── DRAGGABLE, AND THROWABLE (MOTIR-3208) ───────────────────────────────────
+ * The orb can be dragged anywhere on screen, and a hard flick throws it: it
+ * carries its release velocity, bounces off the viewport edges and settles. The
+ * physics is `lib/planning/orbPhysics.ts` (pure) and the wiring is
+ * `lib/hooks/useDraggableOrb.ts`; this component only supplies the element.
+ *
+ * Three behaviours worth knowing before editing:
+ *   * A press that does not MOVE still opens the callout — the drag threshold is
+ *     4 px, and past it the click that the browser fires on release is swallowed
+ *     in the capture phase so a throw does not also open the panel.
+ *   * The position is NOT persisted. A new tab puts the orb back in its default
+ *     corner; it survives client-side navigation only because this component is
+ *     mounted by the layout and never unmounts.
+ *   * `prefers-reduced-motion` skips the THROW, not the drag: the orb still goes
+ *     wherever it is put, it just does not fly there.
  */
 export interface PlanWithAIFabProps {
   /** The originating context — defaults to the global project entrance. */
@@ -59,6 +76,9 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
   const t = useTranslations('shell');
   const [open, setOpen] = useState(false);
   const label = t(AI_CALLOUT_NAME_KEY);
+  // Drag + throw (MOTIR-3208). The hook owns pointer capture and the frame loop;
+  // `lib/planning/orbPhysics.ts` owns every decision about where the orb goes.
+  const { attach, onPointerDown, onClickCapture, dragging } = useDraggableOrb();
 
   return (
     // Non-modal, like the user menu: the page behind stays scrollable and
@@ -66,14 +86,26 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
     <Popover open={open} onOpenChange={setOpen} modal={false}>
       <Popover.Trigger asChild>
         <button
+          ref={attach}
           type="button"
           aria-label={label}
           title={label}
           style={ORB_STYLE}
+          onPointerDown={onPointerDown}
+          onClickCapture={onClickCapture}
           className={cn(
             'fixed right-5 bottom-5 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full',
             'text-(--el-accent-text) select-none',
-            'transition-transform hover:scale-105 active:scale-95',
+            // `touch-none` so a drag on a touch screen moves the orb instead of
+            // scrolling the page under it — without it the gesture is stolen by
+            // the scroller before `pointermove` ever fires.
+            'touch-none',
+            // The hover/active scale is a TRANSITION on the same property the drag
+            // writes, so it is dropped mid-gesture: easing toward the finger reads
+            // as lag. `cursor-grabbing` is the other half of that feedback.
+            dragging
+              ? 'cursor-grabbing'
+              : 'cursor-grab transition-transform hover:scale-105 active:scale-95',
             'focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
             className,
           )}
