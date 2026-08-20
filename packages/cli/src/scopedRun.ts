@@ -262,6 +262,88 @@ export function renderClaimedScope(
   return blocks.join('\n\n');
 }
 
+// ── ORDERING the claimed set ────────────────────────────────────────────────
+//
+// ⚠️ THE ORDER CANNOT COME FROM THE READY SET, and that is the whole reason
+// this section exists rather than a `.sort()` at the call site.
+//
+// A scope claim takes every member in the TO-DO CATEGORY, and `blocked` is in
+// that category — so the claimed set includes cards that were not ready when it
+// was claimed. Meanwhile a READY row's `blockedBy` is empty by construction
+// (`lib/api/v1/ready/schema.ts` says so in its header: it is empty *because*
+// the row is ready). So the ready set can say WHICH cards can start now, and it
+// can never say what to do second.
+//
+// The order therefore comes from the intra-scope dependency EDGES, computed
+// ONCE from data the run already holds, and the ready set is never consulted
+// again. That last clause is the invariant: a mid-flight ready query would
+// silently reintroduce exactly the interleaving the up-front claim exists to
+// prevent.
+
+/** `key → the keys it is blocked by`, for the members of one scope. */
+export type ScopeEdges = Record<string, string[]>;
+
+/**
+ * The claimed leaves in dependency order — a stable topological sort.
+ *
+ * ⚠️ STABLE, and ties break by INPUT ORDER, which is the server's dispatch
+ * rank. Two cards with no edge between them are genuinely unordered by the
+ * graph, and the rank is the answer the rest of the product already gives to
+ * "which of these first". Sorting by anything else here would be a second
+ * opinion about dispatch priority living in a client.
+ *
+ * ⚠️ AND IT IS TOTAL. A cycle, or an edge naming a card outside this scope,
+ * cannot remove a card from the result: whatever is still unplaced when no
+ * candidate's blockers are all placed is appended in input order. A run that
+ * silently dropped a card it had CLAIMED would leave it In Progress forever
+ * with nobody working it — strictly worse than working it in a debatable order.
+ * The caller still refuses to dispatch a card whose blockers are unsatisfied,
+ * so a genuine cycle is reported rather than built.
+ */
+export function orderClaimedSet(keys: readonly string[], edges: ScopeEdges): string[] {
+  const inScope = new Set(keys);
+  const placed = new Set<string>();
+  const out: string[] = [];
+  let remaining = [...keys];
+
+  while (remaining.length > 0) {
+    const ready = remaining.filter((key) =>
+      (edges[key] ?? []).every((dep) => !inScope.has(dep) || placed.has(dep)),
+    );
+    // Nothing can be placed: a cycle, or edges we cannot satisfy. Append the
+    // rest in input order rather than losing them.
+    const batch = ready.length > 0 ? ready : remaining;
+    for (const key of batch) {
+      out.push(key);
+      placed.add(key);
+    }
+    const done = new Set(batch);
+    remaining = remaining.filter((key) => !done.has(key));
+  }
+  return out;
+}
+
+/**
+ * The IN-SCOPE blockers of `key` that are not yet satisfied.
+ *
+ * ⚠️ IN-SCOPE ONLY. An out-of-scope blocker was already settled by the claim:
+ * `not_finishable` is precisely the verdict "work outside this scope gates work
+ * inside it", and a scope that got past it has none. Re-checking them here would
+ * mean either a second read or a guess, and both would second-guess a validator
+ * that already ran inside the claiming transaction.
+ *
+ * A non-empty answer is a card to SKIP and NAME — never to force. The run owns
+ * the card, which is not the same as being allowed to build it out of order.
+ */
+export function unsatisfiedBlockers(
+  key: string,
+  edges: ScopeEdges,
+  satisfied: ReadonlySet<string>,
+  inScope: ReadonlySet<string>,
+): string[] {
+  return (edges[key] ?? []).filter((dep) => inScope.has(dep) && !satisfied.has(dep));
+}
+
 /**
  * What a scope with nothing to do is told.
  *

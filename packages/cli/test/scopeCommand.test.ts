@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CliError } from '../src/errors.js';
-import type { DispatchItem, ScopeClaim, WorkItemDetail } from '../src/client.js';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
+import type { CommandRunner } from '../src/git.js';
+import type { DispatchItem, DispatchPrompt, ScopeClaim, WorkItemDetail } from '../src/client.js';
 
 // `motir run <scope>` — the FRONT HALF, driven through the real `runCommand`
 // against a scripted client (Story MOTIR-3001 · MOTIR-3198).
@@ -58,16 +60,12 @@ function detail(
     },
     ancestors: [],
     children: children.map((key) => ({
-      key,
+      identifier: key,
       kind: 'subtask',
       title: `Item ${key}`,
       status: 'todo',
-      priority: 'medium',
-      assigneeId: null,
-      estimateMinutes: null,
-      storyPoints: null,
       dependencies: { blockedBy: [], blocks: [] },
-    })) as WorkItemDetail['children'],
+    })),
     blockedBy: [],
     blocks: [],
     relatesTo: [],
@@ -155,13 +153,52 @@ function setup(
       calls.push({ tool: 'claim_scope', args });
       return opts.claim ?? scopeClaim();
     },
-    claimWorkItem: async (args: unknown) => {
+    // ⚠️ THE PER-CARD CALL IS A RE-ASSERT, NOT AN ACQUISITION. The scoped drain
+    // runs each card through the SAME `dispatchOne` pipeline `motir auto` uses,
+    // and that pipeline claims before it spawns. On a scoped run the card is
+    // already this run's, so the server answers `mine` — which is what makes
+    // reuse correct rather than a second claim. The property that matters is
+    // that ACQUISITION happened once, over the whole set, before any of this:
+    // `claim_scope` is asserted at exactly one call.
+    claimWorkItem: async (args: { key: string }) => {
       calls.push({ tool: 'claim', args });
-      throw new Error('a scoped run must never claim card-by-card');
+      const { claim } = resolveFakeClaim(
+        { key: args.key, title: `Item ${args.key}`, status: 'in_progress', assigneeId: OWNER },
+        { id: OWNER, name: 'Me' },
+      );
+      return claim;
     },
-    dispatchPrompt: async (key: string) => {
+    searchWorkItems: async (args: unknown) => {
+      calls.push({ tool: 'search_work_items', args });
+      return {
+        items: ready.map((r) => ({
+          identifier: r.key,
+          kind: r.kind,
+          title: r.title,
+          status: 'todo',
+          dependencies: { blockedBy: [], blocks: [] },
+        })),
+        nextCursor: null,
+      };
+    },
+    dispatchPrompt: async (key: string): Promise<DispatchPrompt> => {
       calls.push({ tool: 'dispatch_prompt', args: key });
-      throw new Error('this card launches no agent');
+      // ⚠️ The CONTAINER's key reaching here is the failure a whole test below
+      // is about, so it throws rather than answering — a regression fails by
+      // exception, which is louder than an assertion.
+      if (key === 'PROD-1') throw new Error('a story is a scope, not work');
+      return {
+        key,
+        prompt: `PROMPT ${key}`,
+        parentKey: 'PROD-1',
+        targetRepo: 'motir-core',
+        workflowMode: 'session_lineage',
+        sessionBranch: 'motir/auto-x',
+      };
+    },
+    markIntegrated: async (args: unknown) => {
+      calls.push({ tool: 'mark_integrated', args });
+      return {};
     },
     submitPlanSession: async (args: unknown) => {
       calls.push({ tool: 'submit_plan', args });
@@ -198,10 +235,33 @@ function setup(
 const toolNames = () => harness.calls.map((c) => c.tool);
 const callsTo = (tool: string) => harness.calls.filter((c) => c.tool === tool);
 
+/**
+ * The options + deps a SCOPED run needs to get past the agent gate.
+ *
+ * A scope has no single prompt to paste, so `--print` is refused and an agent is
+ * REQUIRED — unlike the leaf path, whose default is to print. Every scoped test
+ * below therefore names one, and the spawn and git are scripted so nothing here
+ * touches a real remote.
+ */
+const SCOPE_OPTS = { agent: 'fake-agent' } as const;
+const okResult = (stdout: string) => ({ exitCode: 0, stdout, stderr: '' });
+/** git answers "the branch is on origin and carries a commit". */
+const GIT: CommandRunner = (_bin, args) => {
+  if (args[0] === 'ls-remote') return okResult('abc123\trefs/heads/motir/auto-x');
+  if (args[0] === 'log' || args[0] === 'rev-list') return okResult('abc123');
+  return okResult('');
+};
+const SCOPE_DEPS = {
+  run: GIT,
+  clock: () => 0,
+  now: () => new Date(0),
+};
+
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'motir-scope-cfg-'));
   process.env['MOTIR_CONFIG_HOME'] = home;
   runAgentMock.mockReset();
+  runAgentMock.mockImplementation(async () => ({ exitCode: 0, signal: null, model: null }));
   process.exitCode = undefined;
 });
 
@@ -217,14 +277,20 @@ describe('motir run <container> — the happy path', () => {
   it('resolves through the ANCESTOR facet, claims the whole set in ONE call, and prints it', async () => {
     setup();
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
-    expect(toolNames()).toEqual([
+    expect(toolNames().slice(0, 5)).toEqual([
       'get_work_item', // the shape read `runCommand` already made
       'whoami',
       'list_ready',
       'claim_scope',
+      'get_work_item', // the EDGES, read once, before the first agent
     ]);
+    // ⚠️ AND NO READY READ AFTER THE CLAIM. The order comes from edges the run
+    // already holds; a mid-drain ready query would silently reintroduce the
+    // interleaving the up-front claim exists to prevent.
+    const afterClaim = toolNames().slice(toolNames().indexOf('claim_scope'));
+    expect(afterClaim).not.toContain('list_ready');
     // The scope is resolved through the facet its sibling published — not by
     // reading the children and filtering client-side, which would re-derive the
     // parent-ready cascade in the wrong place.
@@ -248,20 +314,28 @@ describe('motir run <container> — the happy path', () => {
     // by assertion — which is the stronger form.
     setup();
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
-    expect(toolNames()).not.toContain('dispatch_prompt');
-    expect(runAgentMock).not.toHaveBeenCalled();
+    const dispatched = callsTo('dispatch_prompt').map((c) => c.args);
+    expect(dispatched).not.toContain('PROD-1');
+    expect(dispatched).toContain('PROD-2');
   });
 
   it('`sprint` claims the ACTIVE sprint, with no work-item read at all', async () => {
     setup({ ready: [readyRow('PROD-2'), readyRow('PROD-3')] });
 
-    await runCommand('sprint', {});
+    await runCommand('sprint', SCOPE_OPTS, SCOPE_DEPS);
 
     // No `get_work_item`: the reserved word is not a key, so there is nothing
-    // to resolve before asking for the sprint's ready set.
-    expect(toolNames()).toEqual(['whoami', 'list_ready', 'claim_scope']);
+    // to resolve before asking for the sprint's ready set. And the EDGES come
+    // from the work-item collection filtered to the sprint, because a sprint
+    // spans several parents at mixed depths and has no one container to read.
+    expect(toolNames().slice(0, 4)).toEqual([
+      'whoami',
+      'list_ready',
+      'claim_scope',
+      'search_work_items',
+    ]);
     expect(callsTo('list_ready')[0]?.args).toMatchObject({ sprintId: 'active' });
     expect(callsTo('claim_scope')[0]?.args).toEqual({ kind: 'sprint', projectKey: 'PROD' });
   });
@@ -269,7 +343,7 @@ describe('motir run <container> — the happy path', () => {
   it('a `mine` claim RESUMES rather than refusing', async () => {
     setup({ claim: scopeClaim({ outcome: 'mine', claimed: false }) });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('Claimed PROD-1');
     expect(harness.stderr).not.toContain('NOT claimed');
@@ -294,7 +368,7 @@ describe('motir run <container> — the refusals', () => {
       }),
     });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('already held by Rival Runner');
     expect(harness.stderr).toContain('PROD-2');
@@ -317,7 +391,7 @@ describe('motir run <container> — the refusals', () => {
       }),
     });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('PROD-2 is blocked by PROD-99');
     expect(toolNames()).not.toContain('submit_plan');
@@ -337,7 +411,7 @@ describe('motir run <container> — a WRONG SHAPE submits a re-plan, once', () =
   it('prints the offending child and submits a DETACHED re-plan of the story', async () => {
     setup({ claim: wrongShape() });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('PROD-5 — A task of its own is itself a container');
     expect(callsTo('submit_plan')).toHaveLength(1);
@@ -353,7 +427,7 @@ describe('motir run <container> — a WRONG SHAPE submits a re-plan, once', () =
     // per-card path.
     setup({ claim: wrongShape() });
 
-    await runCommand('PROD-1', { disableReplan: true });
+    await runCommand('PROD-1', { ...SCOPE_OPTS, disableReplan: true }, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('PROD-5 — A task of its own is itself a container');
     expect(toolNames()).not.toContain('submit_plan');
@@ -363,7 +437,7 @@ describe('motir run <container> — a WRONG SHAPE submits a re-plan, once', () =
   it('a failed submit reports and does not become the run’s problem', async () => {
     setup({ claim: wrongShape(), planError: new CliError('the planner is unavailable') });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('the planner is unavailable');
     // The shape finding is the valuable thing here, and it still stands.
@@ -376,21 +450,25 @@ describe('motir run <container> — the shapes that are not scopes', () => {
   it('an EPIC is refused by kind, before anything is read or claimed', async () => {
     setup({ detail: detail({ kind: 'epic', identifier: 'PROD-9' }, ['PROD-2']) });
 
-    await expect(runCommand('PROD-9', {})).rejects.toThrow(/never a run target/);
+    await expect(runCommand('PROD-9', SCOPE_OPTS, SCOPE_DEPS)).rejects.toThrow(
+      /never a run target/,
+    );
     expect(toolNames()).toEqual(['get_work_item']);
   });
 
   it('a CHILDLESS story is refused as a planning item', async () => {
     setup({ detail: detail({ kind: 'story', identifier: 'PROD-3' }, []) });
 
-    await expect(runCommand('PROD-3', {})).rejects.toThrow(/planning item, not work/);
+    await expect(runCommand('PROD-3', SCOPE_OPTS, SCOPE_DEPS)).rejects.toThrow(
+      /planning item, not work/,
+    );
     expect(toolNames()).not.toContain('claim_scope');
   });
 
   it('--include-planning turns that refusal into ONE expansion, and never waits', async () => {
     setup({ detail: detail({ kind: 'story', identifier: 'PROD-3' }, []) });
 
-    await runCommand('PROD-3', { includePlanning: true });
+    await runCommand('PROD-3', { ...SCOPE_OPTS, includePlanning: true }, SCOPE_DEPS);
 
     expect(callsTo('expand_item')).toHaveLength(1);
     expect(callsTo('expand_item')[0]?.args).toBe('PROD-3');
@@ -402,7 +480,7 @@ describe('motir run <container> — the shapes that are not scopes', () => {
   it('an EMPTY scope reports a plan state, claims nothing, and exits 0', async () => {
     setup({ ready: [] });
 
-    await runCommand('PROD-1', {});
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
 
     expect(harness.stderr).toContain('nothing is ready to start');
     expect(harness.stderr).toContain('Nothing was claimed and nothing was changed.');
@@ -422,7 +500,9 @@ describe('motir run <scope> — the leaf-only flags', () => {
   ])('refuses %s with a REASON rather than `unknown option`', async (_flag, opts, expected) => {
     setup();
 
-    await expect(runCommand('PROD-1', opts)).rejects.toThrow(expected);
+    await expect(runCommand('PROD-1', { ...SCOPE_OPTS, ...opts }, SCOPE_DEPS)).rejects.toThrow(
+      expected,
+    );
   });
 
   it('leaves the LEAF path untouched — those flags still work on one card', async () => {
@@ -430,11 +510,12 @@ describe('motir run <scope> — the leaf-only flags', () => {
     // card is, nothing about this command changed.
     setup({ detail: detail({ kind: 'subtask', identifier: 'PROD-2' }, []) });
 
-    // It reaches the leaf path (and then the harness's `claimWorkItem`, which
-    // throws) rather than being refused by the scope guard.
-    await expect(runCommand('PROD-2', { print: true })).rejects.toThrow(
-      /must never claim card-by-card/,
-    );
+    // `--print` on a LEAF is the default behaviour, not a refusal: it reaches
+    // the single-card path, claims that one card and prints its prompt.
+    await runCommand('PROD-2', { print: true });
+
     expect(toolNames()).toContain('claim');
+    expect(toolNames()).not.toContain('claim_scope');
+    expect(callsTo('dispatch_prompt').map((c) => c.args)).toEqual(['PROD-2']);
   });
 });

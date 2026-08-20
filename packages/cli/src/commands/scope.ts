@@ -12,6 +12,8 @@ import {
   unexpandedRefusal,
   type ScopeTarget,
 } from '../scopedRun.js';
+import { readScopeEdges } from './scopeDrain.js';
+import type { ScopeEdges } from '../scopedRun.js';
 import type { DispatchItem, MotirClient, ScopeClaim, WorkItemDetail } from '../client.js';
 import type { ProjectSession } from '../session.js';
 
@@ -80,6 +82,14 @@ export interface ClaimedScope {
   claim: ScopeClaim;
   /** The ready leaves, in the server's dispatch rank — what the run works. */
   ready: DispatchItem[];
+  /**
+   * `key → the keys it is blocked by`, read ONCE, before the first agent.
+   *
+   * ⚠️ READ HERE AND NOT IN THE DRAIN, so the whole drain provably makes no
+   * query that could re-derive an order. It is the same `get_work_item` the
+   * shape check already made for a container scope.
+   */
+  edges: ScopeEdges;
 }
 
 /**
@@ -141,8 +151,17 @@ export async function claimScopeForRun(
     return null;
   }
 
+  // 3 ── the ORDER, from edges rather than from readiness, read ONCE.
+  const edges = await readScopeEdges(
+    client,
+    target.kind === 'work_item'
+      ? { kind: 'work_item', key: target.key }
+      : { kind: 'sprint', sprintId: claim.scope.sprintId ?? '' },
+    projectKey,
+  );
+
   info(renderClaimedScope(claim, ready));
-  return { claim, ready };
+  return { claim, ready, edges };
 }
 
 /**
