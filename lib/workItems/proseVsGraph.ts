@@ -695,8 +695,20 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
 // So this is the same promotion `likely-ordering-violation` and
 // `likely-repo-straddle` each got — a check a person keeps rationalising past,
 // moved into the channel a machine reads — and it is the cheapest member the
-// family will ever have: two integer columns and an enum, no prose parsing, no
-// judgement, and no false-positive class needing a `reason` discriminator.
+// family will ever have: two integer columns and an enum, no prose parsing and
+// no judgement.
+//
+// ⚠️ CORRECTED BY MOTIR-3271. This paragraph used to end "…and no false-positive
+// class needing a `reason` discriminator". That was true of the POINTS arm and
+// false of the MINUTES one, and the half that was right is what lent the other
+// half its confidence. `13+` is the gate's own literal split signal, read off
+// the card's own points column. The minutes arm reads `estimateMinutes`, which
+// the same pack DEFINES as agent run time PLUS CI time, against a ceiling the
+// gate places on the agent run ALONE ("EXCLUDING CI … NOT the PR's CI pipeline
+// (which you don't control)"). One of the two integers is not the integer the
+// rule is about, so the minutes arm is a PROXY with a real false-positive class
+// — a short run behind a heavy CI leg. Cheapness was never in doubt; what was
+// wrong was reading cheap inputs as an exact reading.
 
 /**
  * The estimation gate's SPLIT signal: a `coding_agent` leaf at or above this
@@ -708,15 +720,70 @@ export function isSubsumptionCheckExempt(md: string | null | undefined): boolean
 export const ESTIMATION_GATE_STORY_POINTS = 13;
 
 /**
- * The estimation gate's run ceiling, in minutes — a `coding_agent` leaf's
- * agent-time-plus-CI-time estimate must be ≤ 60.
+ * The estimation gate's minutes threshold — the value `estimateMinutes` must
+ * EXCEED before this check fires. It is a **PROXY FOR the gate's ceiling, not
+ * the ceiling itself**, and that distinction is the whole reason this comment is
+ * long (MOTIR-3271).
  *
- * STRICTLY above, unlike the points threshold: 60 is the ceiling and a card
- * sitting exactly on it is inside the gate.
+ * **What the gate ceilings.** `plan-rules/kind-leaf-deepen.md`: *"THE RUN-TIME
+ * CEILING — coding-agent run time (EXCLUDING CI) must be ≤ 1h … The ceiling is
+ * on the agent-run component alone — the model's authoring/iteration wall-clock,
+ * NOT the PR's CI pipeline (which you don't control)."*
+ *
+ * **What this column holds.** The same pack, four lines above: *"`estimate`
+ * (`estimateMinutes`) = coding-agent run time + CI-pipeline time summed into one
+ * minutes number"*, with CI *"~15–30 min"* and *"typically the LARGER half of
+ * the total for a right-sized card."*
+ *
+ * So the ceiling is on ONE ADDEND and this column is the SUM. No threshold on
+ * the sum can decide the addend, and nothing in the column separates them —
+ * which is why every value here trades false positives against false negatives
+ * rather than being correct.
+ *
+ * **Why 70, and what it was.** This was `60`: the ceiling's own number applied
+ * to the wrong quantity, so it fired on the whole upper half of a band the
+ * gate's own calibration table endorses.
+ *
+ * ```text
+ * pts | agent run        | + CI  | total
+ * ----+------------------+-------+--------
+ *   3 | ~10–15 min       | 20–30 | ~30–45
+ *   5 | ~18–30 min       | 25–40 | ~50–70
+ *   8 | ~35–50 → SPLIT   |   —   |   —
+ * ```
+ *
+ * `70` is the top of the largest band that table endorses, so the threshold now
+ * reads *"a total larger than the largest total the gate's own calibration says
+ * a right-sized card can have"*. Two cards measured on 2026-08-20 bracket it and
+ * are why it is not higher: **MOTIR-3239** at 5 SP / **65** min fired and was a
+ * FALSE positive (inside the 50–70 band), and **MOTIR-3229** at 5 SP / **90**
+ * min fired and was a TRUE one — its actual run was written back at ~1h05, over
+ * the hour. The arithmetic first proposed for this fix (an at-ceiling 60-minute
+ * run plus 15–40 of CI, so ~100) would have silenced the true one.
+ *
+ * **The residual error classes, named rather than denied.** A FALSE POSITIVE
+ * survives: a short run behind a heavy CI leg (20 + 60 = 80) fires. A FALSE
+ * NEGATIVE survives too: a run over the hour with a trivial CI leg can total
+ * ≤ 70. Both are irreducible while one column carries two times; the schema
+ * change that would end it — storing agent minutes apart from CI minutes — is
+ * deliberately out of scope here and named so it is refused on the record. It is
+ * because they survive that every surface RENDERING a `threshold:
+ * 'estimate_minutes'` finding says the number is a proxy.
+ *
+ * STRICTLY above, unlike the points threshold: a card sitting exactly on 70 is
+ * inside the gate. ({@link ESTIMATION_GATE_STORY_POINTS} is at-or-above because
+ * `13` IS the signal; this number is not the gate's own, so it cannot be one.)
  */
-export const ESTIMATION_GATE_ESTIMATE_MINUTES = 60;
+export const ESTIMATION_GATE_ESTIMATE_MINUTES = 70;
 
-/** WHICH of the two ceilings a card crossed — one advisory says both. */
+/**
+ * WHICH of the two ceilings a card crossed — one advisory says both.
+ *
+ * The two arms do NOT carry the same authority, and a renderer must not present
+ * them as if they did (MOTIR-3271). `story_points` IS the rule: `13+` is the
+ * gate's literal split signal. `estimate_minutes` is a PROXY for it — see
+ * {@link ESTIMATION_GATE_ESTIMATE_MINUTES}.
+ */
 export type OverGateThreshold = 'story_points' | 'estimate_minutes' | 'both';
 
 /** The SIZING finding: which ceiling(s), and the values that crossed them. */
@@ -724,7 +791,11 @@ export interface OverGateSizing {
   threshold: OverGateThreshold;
   /** The card's own `storyPoints`, as observed — `null` when unestimated. */
   storyPoints: number | null;
-  /** The card's own `estimateMinutes`, as observed — `null` when unestimated. */
+  /**
+   * The card's own `estimateMinutes`, as observed — `null` when unestimated.
+   * The SUM of agent run time and CI time, which is why the minutes arm reading
+   * it is a proxy (MOTIR-3271).
+   */
   estimateMinutes: number | null;
 }
 

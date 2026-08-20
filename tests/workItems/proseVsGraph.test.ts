@@ -708,13 +708,68 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
   it('reports the MINUTES ceiling on its own, ABOVE it and not on it', () => {
     expect(
       overGateSizing({ ...rightSized, estimateMinutes: ESTIMATION_GATE_ESTIMATE_MINUTES + 1 }),
-    ).toEqual({ threshold: 'estimate_minutes', storyPoints: 3, estimateMinutes: 61 });
-    // 60 is the CEILING — "must be ≤ 60 minutes" — so a card sitting exactly on
-    // it is inside the gate. The two thresholds are deliberately not the same
-    // comparison, and this pins which is which.
+    ).toEqual({ threshold: 'estimate_minutes', storyPoints: 3, estimateMinutes: 71 });
+    // A card sitting exactly ON the threshold is inside it. The two thresholds
+    // are deliberately not the same comparison, and this pins which is which:
+    // `13` IS the gate's split signal so the points arm is `>=`, while the
+    // minutes threshold is a PROXY the gate never states, so it cannot be a
+    // signal in itself (MOTIR-3271).
     expect(
       overGateSizing({ ...rightSized, estimateMinutes: ESTIMATION_GATE_ESTIMATE_MINUTES }),
     ).toBeNull();
+  });
+
+  // ── THE MINUTES ARM IS A PROXY (MOTIR-3271) ──────────────────────────────
+  // Three NAMED fixtures, each a card measured on 2026-08-20, kept as SHAPES
+  // rather than as pointers at the live cards: a live card's columns can be
+  // re-planned, and a fixture that moves is not a fixture. Each cites the row of
+  // `plan-rules/kind-leaf-deepen.md`'s calibration table it sits in.
+
+  it('MOTIR-3239 SHAPE — 5 points / 65 minutes is SILENT: the calibration table endorses it', () => {
+    // The table's 5-point row: agent run ~18-30 min, CI 25-40, **total ~50-70**.
+    // 65 sits inside that band, so a card there is exactly the size the rules
+    // ask for. Under the old `60` it fired — observed live on MOTIR-3239 — and
+    // that is the false positive this fixture exists to keep out.
+    expect(overGateSizing({ ...rightSized, storyPoints: 5, estimateMinutes: 65 })).toBeNull();
+  });
+
+  it('MOTIR-3229 SHAPE — 5 points / 90 minutes still FIRES: the true positive a higher threshold would lose', () => {
+    // The same day, 25 minutes apart, a different run hit this clause from the
+    // other side: MOTIR-3229 was 5 SP / 90 min and its run was written back at
+    // ~1h05 — genuinely over the hour the gate ceilings. The `100` first
+    // proposed for this card would have silenced it, which is why the threshold
+    // is the TOP OF THE ENDORSED BAND and not ceiling-plus-CI arithmetic.
+    expect(overGateSizing({ ...rightSized, storyPoints: 5, estimateMinutes: 90 })).toEqual({
+      threshold: 'estimate_minutes',
+      storyPoints: 5,
+      estimateMinutes: 90,
+    });
+  });
+
+  it('MOTIR-3154 SHAPE — 8 points / 240 minutes FIRES on the minutes arm: the human-estimate tell', () => {
+    // The case the arm exists for, and the reason it is moved rather than
+    // deleted: the gate names a human half-day as the tell that *"you estimated
+    // the human, not the agent"* (~5x too high). The points column is 8, below
+    // the 13 split signal, so ONLY the minutes arm can catch it.
+    expect(overGateSizing({ ...rightSized, storyPoints: 8, estimateMinutes: 240 })).toEqual({
+      threshold: 'estimate_minutes',
+      storyPoints: 8,
+      estimateMinutes: 240,
+    });
+  });
+
+  it('leaves the POINTS arm exactly where it was — 13 at-or-above, whatever the minutes say', () => {
+    // The half that was right stays right. `13+` is the gate's own literal
+    // signal, read off the card's own column, so it fires on the same cards it
+    // fired on before MOTIR-3271 — including one whose minutes are now well
+    // inside the threshold, which is the case a minutes-only change could have
+    // silently altered.
+    expect(overGateSizing({ ...rightSized, storyPoints: 13, estimateMinutes: 20 })).toEqual({
+      threshold: 'story_points',
+      storyPoints: 13,
+      estimateMinutes: 20,
+    });
+    expect(overGateSizing({ ...rightSized, storyPoints: 12, estimateMinutes: 20 })).toBeNull();
   });
 
   it('a card over BOTH is ONE finding that names both — MOTIR-3068, verbatim', () => {
@@ -769,12 +824,19 @@ describe('overGateSizing — THE ESTIMATION GATE, as two integers and an enum', 
   });
 
   it('pins the two thresholds against the gate the planner writes down', () => {
-    // A drift guard in the same spirit as POST_MERGE_CRITERION_PHRASES' — these
-    // two numbers are quoted from `plan-rules/kind-leaf-deepen.md` (the `13+`
-    // split signal, the ≤ 60-minute run ceiling), so a silent edit here is a red
-    // test rather than a check that quietly stops matching the rule.
+    // A drift guard in the same spirit as POST_MERGE_CRITERION_PHRASES', so a
+    // silent edit is a red test rather than a check that quietly stops matching
+    // the rule. The two numbers are pinned to DIFFERENT things, which is the
+    // MOTIR-3271 correction:
+    //
+    //   13 is QUOTED from `plan-rules/kind-leaf-deepen.md` — the literal `13+`
+    //      split signal, read off the same column the rule names.
+    //   70 is DERIVED from the same pack's calibration table — the top of its
+    //      largest endorsed band (5 points, ~50–70 total). It is NOT the gate's
+    //      60-minute ceiling, because that ceiling is on agent run time
+    //      EXCLUDING CI while `estimateMinutes` sums the two.
     expect(ESTIMATION_GATE_STORY_POINTS).toBe(13);
-    expect(ESTIMATION_GATE_ESTIMATE_MINUTES).toBe(60);
+    expect(ESTIMATION_GATE_ESTIMATE_MINUTES).toBe(70);
   });
 });
 

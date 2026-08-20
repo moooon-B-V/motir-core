@@ -492,9 +492,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // that never touches it. A future member should expect to bump the hash and
     // change nothing else; a member that DID make this line wrong would be one
     // that started gating, which the family's contract forbids.
+    //
+    // Re-pinned again for MOTIR-3271, and this one is NOT a new severity: the
+    // `likely-over-gate-sizing` line was corrected in place — its minutes
+    // threshold moved 60 → 70 and the text now says that arm is a PROXY, since
+    // `estimateMinutes` sums agent time and CI time while the gate ceilings the
+    // agent run alone. Summary UNCHANGED for the reason above, which the
+    // paragraph anticipated: the drift is on the advisory channel, and the
+    // summary describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '2989ea0e1745',
+    descriptionFingerprint: '5e25f8f8a9fb',
   },
   validate_plan: {
     summary:
