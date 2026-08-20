@@ -14,6 +14,7 @@ import {
   E2E_REPO_SECOND,
 } from './_helpers/github-const';
 import { signUp } from './_helpers/shell-session';
+import { resetDatabase } from './_helpers/db-reset';
 import { adminDb } from '../helpers/adminDb';
 import { test, expect } from './_helpers/acceptance-video';
 import type { Page } from '@playwright/test';
@@ -213,6 +214,18 @@ test('a repository is a link you can follow, and a rename does not break the car
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-2732');
+  // ISOLATION (Bug MOTIR-3248). Pull-request numbers are a namespace SHARED
+  // across the whole lane: `github_pull_request` is @@unique([repoId, number])
+  // and every spec's `seedGithubInstallation` upserts the SAME mirrored repo
+  // row, so a spec that does not reset inherits its predecessors' deliveries —
+  // and WHICH specs precede it is a shard partition that moves whenever any
+  // file is added to the lane. This spec used to rely on landing in a friendly
+  // partition; it no longer does. The cascade that makes the reset reach those
+  // rows is measured in `tests/db-reset-cascade.test.ts`, and the thousand-block
+  // this file owns is enforced by `tests/e2e-pull-request-number-blocks.test.ts`.
+  // Both layers on purpose: the reset makes this spec independent of what ran
+  // before it, the block makes it independent of anyone else remembering to.
+  await resetDatabase();
 
   await signUp(page, EMAIL);
   const { projectId, ctx } = await seedActiveProject(page, 'RREF');
