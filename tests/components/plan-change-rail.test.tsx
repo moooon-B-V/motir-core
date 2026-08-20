@@ -31,6 +31,9 @@ function turn(
     jobId: role === 'user' ? null : 'job-1',
     question: null,
     isAnswer: false,
+    intent: null,
+    intentCorrected: false,
+    citations: [],
     authorId: role === 'user' ? 'u1' : null,
     createdAt: '2026-07-27T10:00:00.000Z',
     ...extra,
@@ -98,6 +101,7 @@ const BASE: PlanChangeConversationState = {
 const handlers = {
   onSend: vi.fn(),
   onRetry: vi.fn(),
+  onCorrectTurn: vi.fn(),
   onApprove: vi.fn(),
   onDiscard: vi.fn(),
   onAddTarget: vi.fn(),
@@ -142,7 +146,10 @@ describe('PlanChangeRail — empty', () => {
 
     expect(screen.getByTestId('planning-mode-chip').textContent).toBe('plan change');
     expect(screen.getByText("Opened to change PayFlow's existing plan.")).toBeTruthy();
-    expect(screen.getByText('What should change?')).toBeTruthy();
+    // The opener names BOTH capabilities since MOTIR-1343. The shipped copy said
+    // only "What should change?", which is now half the truth and quietly
+    // discourages the half this story adds.
+    expect(screen.getByText('What should change — or what would you like to know?')).toBeTruthy();
   });
 
   it('offers the starter chips, which PREFILL the composer rather than sending', () => {

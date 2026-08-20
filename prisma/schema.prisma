@@ -5018,8 +5018,12 @@ model PlanChangeTurn {
   /// The producing motir-ai job token — set on a `system` submission marker (the
   /// job that submission produced) AND on an `assistant` turn (the job whose
   /// result carried the utterance, MOTIR-2226; it is also the idempotency key
-  /// that keeps a re-read job from appending the same turn twice). Null on
-  /// `user` turns.
+  /// that keeps a re-read job from appending the same turn twice). Also set on a
+  /// `user` turn submitted through the ASK door (MOTIR-1819) — that turn IS its
+  /// own submission, so the turn is the natural key for the job it produced, and
+  /// the settle is then a single keyed, replayable lookup rather than "the most
+  /// recent user turn". Null on a `user` turn of the shipped plan-change path,
+  /// whose submission is a separate gesture writing a `system` marker.
   jobId       String?            @map("job_id")
   /// The ONE Gate-2 question an `assistant` turn asked (MOTIR-2222's
   /// `PlanningTurn.question`), or null when the turn only reported its findings.
@@ -5032,6 +5036,36 @@ model PlanChangeTurn {
   /// dispositions render different markers (design state C vs E), and neither may
   /// rest on reading the words — so which affordance sent it is recorded here.
   isAnswer    Boolean            @default(false) @map("is_answer")
+  /// What this turn ASKED FOR — `ask` (answer my question, change nothing) or
+  /// `plan_change` (propose a plan delta), MOTIR-1816 /
+  /// `docs/decisions/conversation-turn-intent.md`. Set on `user` turns only
+  /// (null on `system` / `assistant`, the `authorId` precedent).
+  ///
+  /// ⚠️ SERVER-RESOLVED, never client-supplied (ADR §1). The client posts the
+  /// text and nothing else; the intent is decided by motir-ai as the first step
+  /// of the `ask_project` job and written here. It records the EFFECTIVE
+  /// disposition — what actually ran for this turn — not a stored guess, which
+  /// is why a re-run under the other intent MOVES it rather than adding a second
+  /// row (the `isAnswer` posture: the thread records what Motir DID).
+  intent      PlanChangeTurnIntent? @map("intent")
+  /// Whether this turn was RE-RUN under the other intent after Motir read it
+  /// wrong (ADR §3). `intent` alone cannot say so — it holds what finally ran —
+  /// and the transcript is a record, so the correction has to survive as a fact
+  /// rather than as the absence of the first reading. Also the one number that
+  /// says whether ADR §4's default ever needs revisiting.
+  intentCorrected Boolean         @default(false) @map("intent_corrected")
+  /// The work items an `assistant` ANSWER rests on, as work-item IDENTIFIERS
+  /// ("MOTIR-812"), in the order the answer cites them. Empty on every other
+  /// role and on an answer the graphs could not support.
+  ///
+  /// IDENTIFIERS, NOT FKs — deliberately, and the same call `PlanChangeSession.
+  /// targetKeys` makes for the same reason: a deleted work item must not cascade
+  /// away the answer that once cited it, and a citation is a record of what was
+  /// read, not a live relationship. Validated against the project's own items at
+  /// WRITE time (`workItemRepository.findByIdentifiers`), so a cross-project or
+  /// unresolvable key is dropped rather than persisted as a chip that renders
+  /// broken. Queryable without a join (`citations @> ARRAY['MOTIR-812']`).
+  citations   String[]           @default([])
   /// The author of a `user` turn (null for `system` / `assistant` turns, and
   /// cleared if the author is deleted — SetNull, the session's `createdBy`
   /// semantics).
@@ -5068,6 +5102,22 @@ enum PlanChangeTurnRole {
   assistant
 
   @@map("plan_change_turn_role")
+}
+
+/// What a `user` turn on the project conversation ASKED FOR (MOTIR-1816 ·
+/// `docs/decisions/conversation-turn-intent.md`). ONE thread carries both, and a
+/// thread may alternate freely turn by turn — the previous turn's intent places
+/// no constraint on the next, which is why this sits on the TURN and never on
+/// the session. There is deliberately no third "unknown" value: every turn that
+/// ran, ran as one of these two, and a turn that never ran carries null.
+enum PlanChangeTurnIntent {
+  /// Propose a plan delta — the shipped path, unchanged.
+  plan_change
+  /// Answer a question about the project from its plan tree and code graph,
+  /// with citations. Writes nothing.
+  ask
+
+  @@map("plan_change_turn_intent")
 }
 
 /// ONE work item held EXCLUSIVELY by ONE planning session (Story MOTIR-2786 ·

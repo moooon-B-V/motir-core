@@ -104,7 +104,29 @@ async function stubPlanChangeSubmit(
   runs: readonly { jobId: string; planId: string }[],
 ): Promise<void> {
   let call = 0;
+  // ⚠️ THE ASK DOOR, not `…/session/submit` (MOTIR-1343). Every project turn now
+  // goes through `POST /api/ai/ask`, and a turn that is a plan change is
+  // REDIRECTED — the door answers with `{ outcome: 'redirected', jobId, planId }`
+  // and the rail runs the shipped plan-edit tail from there. So the stub answers
+  // in that shape: what it fakes is the classification and the run, exactly as
+  // before; the thread underneath is still written by the real route.
+  // ⚠️ BOTH DOORS, and the second is not vestigial. A NEW turn goes through
+  // `/api/ai/ask`; a RETRY of a redirected turn has no ask turn to name — the
+  // door answered with a redirect, not a turn id — so it falls back to the
+  // shipped `…/session/submit`, re-sending the accumulated intent. That is the
+  // product's own behaviour, so the spec has to stub the path it really takes.
   await page.route('**/api/ai/plan-change/session/submit', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const run = runs[Math.min(call, runs.length - 1)]!;
+    const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
+    const live = await route.fetch({ url: sessionUrl });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ jobId: run.jobId, planId: run.planId, session: await live.json() }),
+    });
+  });
+  await page.route('**/api/ai/ask', async (route) => {
     if (route.request().method() !== 'POST') {
       await route.continue();
       return;
@@ -115,12 +137,30 @@ async function stubPlanChangeSubmit(
     // confirm — which is exactly the shape of the bug MOTIR-1746 fixed.
     const run = runs[Math.min(call, runs.length - 1)]!;
     call += 1;
-    const sessionUrl = new URL('/api/ai/plan-change/session', route.request().url()).toString();
-    const live = await route.fetch({ url: sessionUrl });
+    // Append the turn for real first, so the thread the rail reads back is the
+    // persisted one — the door's own job, and the half this stub must not fake.
+    const turnsUrl = new URL('/api/ai/plan-change/session/turns', route.request().url()).toString();
+    let body: unknown = {};
+    try {
+      body = JSON.parse(route.request().postData() ?? '{}');
+    } catch {
+      body = {};
+    }
+    const appended = await route.fetch({
+      url: turnsUrl,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      postData: JSON.stringify({ body: (body as { body?: string }).body ?? '' }),
+    });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId: run.jobId, planId: run.planId, session: await live.json() }),
+      body: JSON.stringify({
+        outcome: 'redirected',
+        jobId: run.jobId,
+        planId: run.planId,
+        session: await appended.json(),
+      }),
     });
   });
 }
@@ -172,11 +212,17 @@ const composer = (page: Page) => page.getByRole('textbox', { name: /Reply, or re
 const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
 const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
 
-/** Type a turn and send it, waiting on the APPEND's 200 — the turn is a persisted
- *  row, so its write response is the authoritative "the thread advanced" signal. */
+/** Type a turn and send it, waiting on the DOOR's 200 — the turn is a persisted
+ *  row written by that call, so its write response is the authoritative "the
+ *  thread advanced" signal.
+ *
+ *  ⚠️ THE DOOR MOVED (MOTIR-1343). The project thread used to append through
+ *  `…/session/turns` and submit separately; it now posts to `/api/ai/ask`, which
+ *  appends AND runs. Matched EXACTLY, because `/api/ai/ask/settle` shares the
+ *  prefix and would resolve on the previous turn's filing. */
 async function sendTurn(page: Page, text: string): Promise<void> {
   const appended = page.waitForResponse(
-    (r) => r.url().includes('/api/ai/plan-change/session/turns') && r.request().method() === 'POST',
+    (r) => new URL(r.url()).pathname === '/api/ai/ask' && r.request().method() === 'POST',
   );
   await composer(page).fill(text);
   await page.getByRole('button', { name: 'Send' }).click();
@@ -248,7 +294,12 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // default: once the canvas is up the page has rendered.
     await expect(canvas(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
     await expect(rail(page)).toBeVisible();
-    await expect(rail(page).getByText('What should change?')).toBeVisible();
+    // The opener names BOTH capabilities since MOTIR-1343 — the surface answers
+    // questions as well as changing plans, and saying only the second half
+    // quietly discourages the first.
+    await expect(
+      rail(page).getByText('What should change — or what would you like to know?'),
+    ).toBeVisible();
     await expect(rail(page).getByRole('button', { name: 'Add work to an epic' })).toBeVisible();
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(page.getByTestId('plan-change-diff-node')).toHaveCount(0);

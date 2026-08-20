@@ -54,6 +54,10 @@ const CANONICAL_JOB_KINDS = [
   // documented while its motir-core consumer was unbuilt — which is exactly the
   // drift this guard exists to surface.
   'plan_sprint',
+  // `ask_project` (Story MOTIR-1343 — MOTIR-1817 handler / MOTIR-1819 consumer);
+  // already in motir-ai's canonical set. Adding it HERE closes the drift that
+  // card's envelope documented while this consumer was unbuilt.
+  'ask_project',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

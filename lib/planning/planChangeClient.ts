@@ -77,6 +77,16 @@ export async function openPlanChangeSession(signal?: AbortSignal): Promise<PlanC
  *  `isAnswer` (MOTIR-2226) says the turn was sent from the answer bar, in reply
  *  to the planner's pending question — which is what lets the transcript later
  *  distinguish a question that was ANSWERED from one that was superseded. */
+/**
+ * ⚠️ NO LONGER THE COMPOSER'S PATH (MOTIR-1343). Since the ask door landed, a
+ * turn on the PROJECT thread is appended by the server inside
+ * `POST /api/ai/ask` — one door, one place the intent is resolved. Appending
+ * here and submitting separately would write a turn the classifier never saw,
+ * which is the mode returning as a code path rather than as a control.
+ *
+ * Kept because the route it wraps is shipped and still serves replays; do not
+ * wire it back into the composer.
+ */
 export async function appendPlanChangeTurn(
   body: string,
   signal?: AbortSignal,
@@ -109,6 +119,96 @@ export async function recordPlannerTurn(
  *  just the newest one. Returns the shipped `augment` job to stream + approve. */
 export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChangeSubmitResponse> {
   return post<PlanChangeSubmitResponse>('/api/ai/plan-change/session/submit', undefined, signal);
+}
+
+// ─── The ASK door — one entrance for every turn on the PROJECT thread ─────────
+//
+// `POST /api/ai/ask` is not an "ask-only" endpoint the client picks when it
+// already knows (MOTIR-1819 · `docs/decisions/conversation-turn-intent.md` §2).
+// The person types into one composer with no mode to flip, so these helpers send
+// the TEXT and never an intent — what the turn turns out to be comes BACK, and a
+// plan-change request is handed off to the shipped submit by the server.
+//
+// ⚠️ NOTHING HERE MAY GROW AN `intent` ARGUMENT. A hint on the wire is the mode
+// the design deliberately does not have, re-entering through the back door (ADR
+// §5), and `tests/ai/askRoutes.test.ts` asserts the server ignores one.
+
+/** What the ask door returns for a submitted or re-run turn: the job to stream,
+ *  the turn the settle keys on, and the thread as the server now has it. */
+export interface AskSubmitResponse {
+  jobId: string;
+  turnId: string;
+  session: PlanChangeSessionDto;
+}
+
+/** What a settled ask job produced — exactly one of three, rendered differently.
+ *  `redirected` is the two-stream hand-off: the turn was a plan change, and
+ *  `jobId` / `planId` name the plan-edit job now running (ADR Consequence 3). */
+export type AskSettleResponse =
+  | { outcome: 'answered'; session: PlanChangeSessionDto }
+  | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
+  | { outcome: 'silent'; session: PlanChangeSessionDto };
+
+/**
+ * A turn that opened NO ask job — it went straight to the shipped plan-change
+ * submit, and `jobId` / `planId` name the plan-edit job now running.
+ *
+ * It arrives from either entrance, and the caller must handle it from both:
+ * a NEW turn that answers the planner's pending question (the affordance already
+ * settled the disposition, so there is nothing to classify), and a RE-RUN the
+ * handler hands back.
+ */
+export interface AskRedirectResponse {
+  outcome: 'redirected';
+  jobId: string;
+  planId: string;
+  session: PlanChangeSessionDto;
+}
+
+/** Send a NEW user turn through the one door. The body carries the text alone. */
+export async function submitAskTurn(
+  body: string,
+  signal?: AbortSignal,
+  /** Whether the composer's ANSWER affordance sent this turn — ADR §1's wire
+   *  field. It is not an intent: it records which affordance sent the turn, so
+   *  the thread can say later whether the planner's question was answered or
+   *  merely superseded, AND — when the thread really is waiting on a question —
+   *  it is what sends the turn straight to the plan-change submit instead of
+   *  through a classifier that has nothing useful to decide. */
+  isAnswer = false,
+): Promise<AskSubmitResponse | AskRedirectResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse>('/api/ai/ask', { body, isAnswer }, signal);
+}
+
+/**
+ * RE-RUN a turn that is already on the thread — no second user turn is appended,
+ * because the person said one thing once (ADR §3).
+ *
+ * `flip` distinguishes the two callers: absent is the retry after a failed run,
+ * `true` is the correction affordance. The DIRECTION of a flip is derived
+ * server-side from what the turn ran as, so this names the turn and never the
+ * intent.
+ */
+export async function rerunAskTurn(
+  turnId: string,
+  options: { flip?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<AskSubmitResponse | AskRedirectResponse> {
+  return post<AskSubmitResponse | AskRedirectResponse>(
+    '/api/ai/ask',
+    options.flip ? { turnId, flip: true } : { turnId },
+    signal,
+  );
+}
+
+/** File what a finished `ask_project` job produced. Replayable by construction
+ *  (the server keys the append on the job id), so a reload or a second tab
+ *  calling it again returns the same thread rather than a duplicate bubble. */
+export async function settleAskJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<AskSettleResponse> {
+  return post<AskSettleResponse>('/api/ai/ask/settle', { jobId }, signal);
 }
 
 // ─── The ITEM-ANCHORED half — the MOTIR-909 contextual-planning endpoints ─────
