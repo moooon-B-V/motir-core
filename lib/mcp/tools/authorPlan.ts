@@ -10,6 +10,7 @@ import type {
   ProposalInput,
   UpdateProposalInput,
 } from '@/lib/dto/plans';
+import { InvalidProposalError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -318,18 +319,45 @@ const proposalSchema = z.object({
     .describe('`modify` / `remove` only: the target revision the change was computed against.'),
 });
 
+/**
+ * ⚠️ `proposals` MAY BE EMPTY, and only when `final: true` (MOTIR-3193).
+ *
+ * It used to be `.min(1)`, which made the two-phase authoring path
+ * `update_plan_item` shipped (MOTIR-3088) impossible to finish: the SKELETON
+ * batches carry the structure, the DEEPEN turns write the cards, and the CLOSE
+ * then has NOTHING left to append — while `final` is a flag on an append and the
+ * only way to say "I am done". The two outs were both bad (hold one card back
+ * out of the deepen phase, or invent a proposal a reviewer never meant), and
+ * doing neither leaves the plan `generating`, where nothing can decide it
+ * (MOTIR-3189).
+ *
+ * The internal producer seam has always accepted this shape —
+ * `aiGenerationService.appendProposals` skips the append when the batch is empty
+ * and calls `markPlanned` regardless — so this is the MCP door catching up with
+ * the contract Motir's own generator already uses, not a new one.
+ *
+ * The EMPTY-and-not-final pair stays refused, in {@link runAddPlanItems}: a
+ * cross-field rule cannot live in a `ZodRawShape` (which is what `registerTool`
+ * takes), and it must not be answered with a silent success — an empty batch
+ * with no `final` is a forgotten flag or a batch built from an empty list, and
+ * both are worth telling the caller about.
+ */
 const addPlanItemsInputSchema = {
   planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
   proposals: z
     .array(proposalSchema)
-    .min(1)
-    .describe('The batch to append, in the order you want their ids back.'),
+    .describe(
+      'The batch to append, in the order you want their ids back. MAY be empty — but ONLY ' +
+        'together with `final: true`, which is how a titles-first pass CLOSES a plan it has ' +
+        'finished writing.',
+    ),
   final: z
     .boolean()
     .optional()
     .describe(
       'Set true on the LAST batch to close the plan (`generating` → `planned`), which is what ' +
-        'puts it in front of a person for review. Appending after that is refused.',
+        'puts it in front of a person for review. Appending after that is refused. Send it with ' +
+        'an EMPTY `proposals` array to close a plan you have nothing left to append to.',
     ),
 };
 
@@ -483,6 +511,27 @@ function summarizeCreate(plan: PlanDto, projectKey: string): string {
     .join('\n');
 }
 
+/**
+ * The CLOSE-ONLY summary (MOTIR-3193): a final batch that appended nothing.
+ *
+ * {@link summarizeAppend} would answer it with "Appended 0 proposal(s)" and an
+ * empty id list — a description of the CALL, when the thing that happened to the
+ * PLAN is that it closed. The text block is the half a human watching the
+ * session reads, so it says what changed.
+ */
+function summarizeClose(plan: PlanWithItemsDto): string {
+  return [
+    `Closed plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s) in total. ` +
+      'Nothing was appended by this call.',
+    '',
+    'It is in the review queue now and accepts no further proposals: `add_plan_items` and ' +
+      `\`${UPDATE_PLAN_ITEM_TOOL_NAME}\` are both refused from here. Read it back with ` +
+      `\`${GET_PLAN_TOOL_NAME}\`.`,
+    '',
+    PROPOSAL_GATE,
+  ].join('\n');
+}
+
 function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[]): string {
   return [
     `Appended ${planItemIds.length} proposal(s) to plan ${plan.id} — ${plan.status}, ` +
@@ -610,6 +659,20 @@ export async function runAddPlanItems(
   args: AddPlanItemsArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
+  // The cross-field half of the argument grammar (MOTIR-3193). An EMPTY batch is
+  // legal ONLY as a CLOSE; empty with no `final` would do nothing at all, and a
+  // call that does nothing is a mistake the caller wants to hear about — a
+  // forgotten flag, or a batch mapped from a list that turned out to be empty.
+  // It lives here rather than in the zod shape because `registerTool` takes a
+  // `ZodRawShape`, which has no place to hang a refinement across two keys.
+  if (args.proposals.length === 0 && !args.final) {
+    throw new InvalidProposalError(
+      '`proposals` is empty and `final` is not set, so this call would append nothing and ' +
+        'leave the plan `generating`. Send `final: true` with an empty batch to CLOSE the plan ' +
+        '(`generating` → `planned`, the review queue), or send at least one proposal to append.',
+    );
+  }
+
   // Read the plan FIRST — its authorship is what each proposal is stamped with,
   // and the read applies the same browse gate every plan path applies (a
   // cross-tenant id 404s rather than 403s).
@@ -628,6 +691,9 @@ export async function runAddPlanItems(
     baseRevision: p.baseRevision ?? null,
   }));
 
+  // An EMPTY batch still goes through `addProposals`: it creates nothing, and it
+  // is what re-reads the plan under its row lock and refuses a plan that has
+  // already left `generating` — the same refusal a non-empty close would get.
   const appended = await plansService.addProposals(args.planId, proposals, ctx);
   const planItemIds = appended.items
     .slice(appended.items.length - proposals.length)
@@ -641,7 +707,7 @@ export async function runAddPlanItems(
     : appended;
 
   return toolOk(
-    summarizeAppend(plan, planItemIds),
+    args.proposals.length === 0 ? summarizeClose(plan) : summarizeAppend(plan, planItemIds),
     derived(planAppendPayload, presentMcpPlanAppend(plan, planItemIds)),
   );
 }
@@ -749,6 +815,10 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'work item. So send a tree LAYER BY LAYER, parents before children, and set ' +
         '`final: true` on the last batch — that closes the plan (`generating` → `planned`) ' +
         'and puts it in the review queue. Appending to an already-closed plan is refused. ' +
+        'A TITLES-FIRST pass — append the shape, then fill each card in with ' +
+        `\`${UPDATE_PLAN_ITEM_TOOL_NAME}\` — has nothing left to append when it is done, so ` +
+        'CLOSE it by calling this with `proposals: []` and `final: true`. An empty batch is ' +
+        'legal only that way: without `final` it would do nothing, and is refused. ' +
         'IMPORTANT: this creates NO work item. Approving the plan in Motir is the only path ' +
         'from a proposal to a work item, and approval does not happen on this surface — do ' +
         'not report proposed work as created. Costs nothing and starts no job.',

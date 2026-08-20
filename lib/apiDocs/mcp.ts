@@ -523,8 +523,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   add_plan_items: {
     summary:
-      'Append proposals to a plan; returns their ids in order, so the next batch can hang children off them.',
-    descriptionFingerprint: '3b22fa8a946b',
+      'Append proposals to a plan — or close it with an empty final batch; ids come back in order, so the next batch can hang children off them.',
+    descriptionFingerprint: '0c4685fc9814',
   },
   update_plan_item: {
     summary:
