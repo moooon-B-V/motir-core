@@ -72,9 +72,22 @@ export class PlanNotGeneratingError extends Error {
  */
 export class PlanNotInExpectedStatusError extends Error {
   readonly code = 'PLAN_NOT_IN_EXPECTED_STATUS' as const;
+  /**
+   * The status the plan is ACTUALLY in, carried as DATA (MOTIR-3025).
+   *
+   * ⚠️ A CALLER HAS TO TELL TWO OF THESE APART and cannot do it from the
+   * sentence. `generating` means *not yet — the planner is still writing*, and
+   * `approved` / `declined` mean *someone already decided*. An unattended loop
+   * should wait for the first and stop on the second, and parsing a message to
+   * learn which is exactly what `public-api-conventions.md` §8 forbids. So it
+   * rides the field, the same way `POST …/transitions` carries its allowed
+   * targets rather than folding them into prose.
+   */
+  readonly actual: string;
   constructor(planId: string, actual: string, expected: string) {
     super(`Plan ${planId} is ${actual}; this action requires it to be ${expected}.`);
     this.name = 'PlanNotInExpectedStatusError';
+    this.actual = actual;
   }
 }
 

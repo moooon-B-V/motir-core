@@ -565,6 +565,93 @@ describe('motir auto --auto-approve-replan', () => {
     expect(process.exitCode ?? 0).toBe(0);
   });
 
+  it('WAITS while the planner is still writing, then approves and CONTINUES', async () => {
+    // ⚠️ THE CASE THAT IS NORMAL IN PRODUCTION. The agent submits with
+    // `--detach` and exits within milliseconds, so the loop reaches the approval
+    // while motir-ai is still writing the plan. The server answers 409 carrying
+    // `planStatus: 'generating'` — "not yet", as data rather than as a sentence
+    // — and the loop waits rather than treating it as a refusal. Getting this
+    // wrong would make `--auto-approve-replan` fail in exactly its ordinary
+    // case, which is how the story-level suite found it.
+    const t = twoCardTenant({ approvable: true });
+    const succeed = t.v1['POST /api/v1/work-items/{key}/plan-approval'] as (
+      req: V1Request,
+    ) => V1Reply;
+    let attempts = 0;
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = (req) => {
+      attempts += 1;
+      // Still generating on the first ask; written by the second.
+      if (attempts === 1) {
+        return {
+          status: 409,
+          body: {
+            code: 'PLAN_NOT_IN_EXPECTED_STATUS',
+            error: 'Plan plan_1 is generating; this action requires it to be planned.',
+            planStatus: 'generating',
+          },
+        };
+      }
+      return succeed(req);
+    };
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const waits: number[] = [];
+
+    await autoCommand(
+      { ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true },
+      {
+        run,
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    // It asked twice, waited between, and then carried on into the second card.
+    expect(attempts).toBe(2);
+    expect(waits).toHaveLength(1);
+    expect(t.statuses.get('PROD-8')).toBe('implemented');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('STOPS on a plan somebody ALREADY DECIDED, rather than waiting for it', async () => {
+    // The other side of the same field, and why it has to be data: `approved`
+    // and `generating` are one word apart in the sentence, and a loop that
+    // retried a decided plan would spin against an answer that will never
+    // change.
+    const t = twoCardTenant({ approvable: true });
+    let attempts = 0;
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = () => {
+      attempts += 1;
+      return {
+        status: 409,
+        body: {
+          code: 'PLAN_NOT_IN_EXPECTED_STATUS',
+          error: 'Plan plan_1 is approved; this action requires it to be planned.',
+          planStatus: 'approved',
+        },
+      };
+    };
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const waits: number[] = [];
+
+    await autoCommand(
+      { ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true },
+      {
+        run,
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(attempts).toBe(1);
+    expect(waits).toEqual([]);
+    // The run stopped: the second card was never dispatched.
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+  });
+
   it('--max still bounds the run when an approved plan enlarges the ready set', async () => {
     const t = twoCardTenant({ approvable: true });
     server.scriptV1(t.v1);

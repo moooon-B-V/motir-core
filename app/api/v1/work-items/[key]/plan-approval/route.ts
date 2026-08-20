@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
 import { planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
+import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -56,7 +57,27 @@ import { workItemsService } from '@/lib/services/workItemsService';
 export const POST = withV1Route<{ key: string }>({ permission: 'ai:view_plan' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
 
-  const plan = await plansService.approvePlanForWorkItem(projectId, identifier, ctx.service);
+  let plan;
+  try {
+    plan = await plansService.approvePlanForWorkItem(projectId, identifier, ctx.service);
+  } catch (err) {
+    // ⚠️ THE REFUSAL TEACHES, and this one has to (MOTIR-3025). An agent submits
+    // its re-plan with `--detach` and exits within milliseconds, so a loop that
+    // approves immediately meets a plan that is still `generating` — the planner
+    // has not finished writing it. That is *not yet*, and it is the one 409 a
+    // caller should WAIT on; `approved` / `declined` mean somebody already
+    // decided and it must stop. The two are one status apart and
+    // indistinguishable in the sentence, so the status rides the envelope as
+    // DATA — the same shape `POST …/transitions` uses for its allowed targets,
+    // and for the same reason: §8 forbids parsing prose.
+    if (err instanceof PlanNotInExpectedStatusError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, planStatus: err.actual },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   // The same presentation `GET /api/v1/plans/{planId}` returns, resolved the
   // same bounded way — so a client that read a plan before approving it does

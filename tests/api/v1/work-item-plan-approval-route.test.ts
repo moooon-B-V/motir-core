@@ -88,7 +88,7 @@ function sessionReq(caller: V1ProjectCaller, suffix: string, body: unknown): Req
  */
 async function refusedCardWithPlan(
   caller: V1ProjectCaller,
-  opts: { jobId?: string; anchored?: boolean } = {},
+  opts: { jobId?: string; anchored?: boolean; close?: boolean } = {},
 ): Promise<{ key: string; planId: string }> {
   const item = await makeItem(caller, 'the card the agent refused');
   const jobId = opts.jobId ?? `job_${item.identifier}`;
@@ -113,7 +113,9 @@ async function refusedCardWithPlan(
     [{ op: 'add', proposedFields: { title: 'the corrected card', kind: 'task' } }],
     caller.ctx,
   );
-  await plansService.markPlanned(planId, caller.ctx);
+  // `close: false` leaves the plan `generating` — the state a run actually meets,
+  // because the agent submits with `--detach` and the planner is still writing.
+  if (opts.close !== false) await plansService.markPlanned(planId, caller.ctx);
   return { key: item.identifier, planId };
 }
 
@@ -212,6 +214,33 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
 
     expect(second.status).toBe(409);
     expect(((await second.json()) as { code: string }).code).toBe('PLAN_NOT_IN_EXPECTED_STATUS');
+  });
+
+  it('carries the plan STATUS on the 409 — the field a loop branches on', async () => {
+    // ⚠️ THE REFUSAL TEACHES. An agent submits with `--detach` and exits within
+    // milliseconds, so an unattended run routinely arrives while the planner is
+    // still WRITING the plan. `generating` means wait; `approved` / `declined`
+    // mean somebody already decided and the run must stop. They are one word
+    // apart in the sentence, and a client must not be parsing sentences
+    // (`public-api-conventions.md` §8) — so the status is DATA, and this is the
+    // test that keeps it there.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller, { close: false });
+
+    const generating = await approve(caller, key);
+
+    expect(generating.status).toBe(409);
+    expect(await generating.json()).toMatchObject({
+      code: 'PLAN_NOT_IN_EXPECTED_STATUS',
+      planStatus: 'generating',
+    });
+
+    // …and the OTHER side of the same field, so the two are provably distinct.
+    await plansService.markPlanned(planId, caller.ctx);
+    expect((await approve(caller, key)).status).toBe(200);
+    const decided = await approve(caller, key);
+    expect(decided.status).toBe(409);
+    expect(await decided.json()).toMatchObject({ planStatus: 'approved' });
   });
 
   it('answers 409 for a DECLINED plan, without changing it', async () => {

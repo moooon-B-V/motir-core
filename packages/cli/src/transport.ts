@@ -11,6 +11,7 @@ import { normalizeServerUrl } from './config/userConfig.js';
 import {
   AuthError,
   CliError,
+  PlanNotDecidableError,
   IncompatibleServerError,
   NotFoundError,
   RateLimitError,
@@ -129,6 +130,13 @@ function readEnvelope(body: unknown): V1ErrorEnvelope | undefined {
  * Labels, not keys: it lands inside a sentence the server wrote for a person,
  * so "To Do, In Review" belongs there rather than `todo, in_review`.
  */
+/** The `planStatus` a plan-approval refusal carries (MOTIR-3025). */
+function readPlanStatus(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const raw = (body as { planStatus?: unknown }).planStatus;
+  return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
+}
+
 function readAllowedTransitions(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
   const raw = (body as { allowedTransitions?: unknown }).allowedTransitions;
@@ -417,6 +425,17 @@ export class V1Transport {
     // ADR §8 forbids — keeps "the error text names the allowed targets" true
     // for every caller, exactly as it was under MCP.
     if (envelope) {
+      // ⚠️ THE SECOND ENRICHED REFUSAL, and the same rule as the first: read the
+      // FIELD, never the sentence. `POST …/work-items/{key}/plan-approval`
+      // answers a 409 with `planStatus`, because a loop has to tell "the planner
+      // has not finished" (`generating` — wait) from "somebody already decided"
+      // (`approved` / `declined` — stop), and those differ by one word in the
+      // message. Typed rather than folded into the text so the caller branches
+      // on data (MOTIR-3025).
+      const planStatus = readPlanStatus(parsed);
+      if (envelope.code === 'PLAN_NOT_IN_EXPECTED_STATUS' && planStatus) {
+        return new PlanNotDecidableError(envelope.error, planStatus);
+      }
       const allowed = readAllowedTransitions(parsed);
       return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);
     }

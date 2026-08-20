@@ -1,4 +1,4 @@
-import { CliError } from '../errors.js';
+import { CliError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
 import {
@@ -115,6 +115,10 @@ export interface AutoDeps {
   /** The agent launcher. Injected by the tests so the loop can be driven with a
    *  scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
+  /** The wait between approval retries while a planner is still writing
+   *  (MOTIR-3025). Injected so a test can prove the RETRY without spending a
+   *  real minute on it; never overridden in production. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** A resolved agent — `motir auto` refuses to start without one, so every
@@ -305,6 +309,7 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       clock,
       runAgentFn: deps.runAgentFn ?? runAgent,
       ownerId,
+      ...(deps.sleep ? { sleep: deps.sleep } : {}),
     });
     closeOutRepos(summary, run);
     info('');
@@ -328,6 +333,8 @@ export interface LoopInput {
   /** The token owner — every card this run takes is CLAIMED for them, and rows
    *  claimed by anyone else are not taken at all (MOTIR-2427). */
   ownerId: string;
+  /** The approval-retry wait (MOTIR-3025), injected by the tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** The WHILE loop itself. Exported so it can be driven end-to-end against a
@@ -536,7 +543,9 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         addExclude(serverUrl, projectKey, { key: item.key });
         excludedKeys.add(item.key.toUpperCase());
 
-        const approved = await approveSubmittedPlan(client, item.key);
+        const approved = await approveSubmittedPlan(client, item.key, {
+          ...(input.sleep ? { sleep: input.sleep } : {}),
+        });
         if (!approved.ok) {
           // ⚠️ A REFUSED APPROVAL STOPS THE RUN, with the SERVER's own message.
           // Continuing would dispatch against a tree the operator has not agreed
@@ -637,6 +646,20 @@ interface DispatchOneInput {
   /** The loop's git runner — the push check (MOTIR-3004) uses it. */
   run: CommandRunner;
 }
+
+/**
+ * How long the loop will wait for a planner to finish writing a submitted plan
+ * before giving up on approving it (MOTIR-3025).
+ *
+ * ⚠️ BOUNDED, and the bound is the decision. An unattended run must not block on
+ * a planner indefinitely — that is the reason the agent submits with `--detach`
+ * in the first place — but it must not give up in the first hundred
+ * milliseconds either, because that is where the plan almost always is when the
+ * agent exits. Roughly a minute of patience, then the run reports precisely what
+ * it was waiting for and stops.
+ */
+const APPROVE_ATTEMPTS = Number(process.env['MOTIR_APPROVE_ATTEMPTS'] ?? '') || 12;
+const APPROVE_WAIT_MS = Number(process.env['MOTIR_APPROVE_WAIT_MS'] ?? '') || 5_000;
 
 /** Run ONE item through the single-dispatch pipeline and record how it ended. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
@@ -848,14 +871,42 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
 async function approveSubmittedPlan(
   client: MotirClient,
   key: string,
+  opts: { attempts?: number; waitMs?: number; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<
   { ok: true; plan: { planId: string; proposalCount: number } } | { ok: false; message: string }
 > {
-  try {
-    return { ok: true, plan: await client.approveWorkItemPlan(key) };
-  } catch (err) {
-    // The SERVER's own sentence, verbatim. A message this loop composed would
-    // describe the refusal it guessed at rather than the one it received.
-    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  const attempts = opts.attempts ?? APPROVE_ATTEMPTS;
+  const waitMs = opts.waitMs ?? APPROVE_WAIT_MS;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return { ok: true, plan: await client.approveWorkItemPlan(key) };
+    } catch (err) {
+      // ⚠️ `generating` IS "NOT YET", AND WAITING IS THE POINT. The agent
+      // submitted with `--detach` — it must not sit on a planner — and exited
+      // within milliseconds, so the loop routinely arrives while motir-ai is
+      // still writing the plan. Treating that as a refusal would make the flag
+      // useless in exactly its normal case; treating a DECIDED plan the same way
+      // would keep retrying something a person already answered. The server
+      // tells the two apart as data, which is why this branches on the field.
+      const notYet = err instanceof PlanNotDecidableError && err.planStatus === 'generating';
+      if (notYet && attempt < attempts) {
+        if (attempt === 1) {
+          info(`${key}: its plan is still being written — waiting for the planner.`);
+        }
+        await sleep(waitMs);
+        continue;
+      }
+      // The SERVER's own sentence, verbatim. A message this loop composed would
+      // describe the refusal it guessed at rather than the one it received.
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        message: notYet
+          ? `${message} (still generating after ${attempts} attempts — approve it in Motir once the planner finishes)`
+          : message,
+      };
+    }
   }
 }
