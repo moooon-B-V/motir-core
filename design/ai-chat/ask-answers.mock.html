@@ -1,0 +1,2724 @@
+<!doctype html>
+<!--
+  design/ai-chat/ask-answers.mock.html — MOTIR-1815
+
+  "Ask about this project": the cited ANSWER turn in the one conversation, the
+  correction marker, and — the drawing this asset exists for — how the canvas
+  chrome follows the LATEST TURN rather than a mode.
+
+  ⚠️ THIS ASSET COMPOSES; IT DOES NOT REDRAW. The two-pane workspace frame, the
+  rail shell (head · turn list · composer) and the roadmap canvas are owned by
+  `design/ai-chat/planning-workspace.mock.html` (MOTIR-1193) and
+  `design/ai-chat/plan-change-conversation.mock.html` (MOTIR-1727), both shipped
+  and `done`. Nothing here re-specifies them. What this asset owns is the TURN
+  FORM (an answer, its citations, its states), the correction marker, the
+  callout ROW's copy, and the canvas footer's behaviour across the two turn
+  kinds.
+
+  ⚠️ AND IT DOES NOT OWN THE AVATAR'S GLYPH. The Motir mark inside the 28 px
+  assistant circle is the element of the sibling glyph design (MOTIR-3183,
+  design-notes.md § "The identity glyph wherever Motir speaks"); its path lives
+  in `components/brand/waveBand.ts` and reaches every surface through
+  `components/brand/BrandMark.tsx`. This asset draws that specimen at the size
+  that design specifies (13 px in the 28 px circle) and re-decides nothing about
+  it. No letter `M` appears anywhere below.
+
+  ⚠️ THERE IS NO ASK MODE, AND NOTHING BELOW MAY DEPICT ONE. Fixed above this
+  asset at two rungs — design-notes.md § "EVERY ROW OPENS THE SAME SURFACE"
+  (every row shares ONE href; a row is a LABEL, not a route) and
+  `docs/decisions/conversation-turn-intent.md` §1/§5 (intent is server-resolved,
+  per-TURN, and the client sends none). So: no ask/act switch in the composer,
+  no `?mode=ask`, no chrome a thread is locked into.
+
+  TOKENS ARE GENERATED, NOT TYPED. The `:root` / `[data-theme='dark']` /
+  `:root,[data-appearance-scope]` blocks below are extracted verbatim from
+  `packages/design-system/theme.css`, exactly as the sibling assets in this
+  directory extract them. Do not hand-edit a token value here; change it at the
+  source and re-extract.
+
+  Export: `node scripts/render-design-mock.mjs design/ai-chat/ask-answers.mock.html`
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ask about this project — the cited answer turn and the chrome that follows it</title>
+    <style>
+      /* ── Tier 0 (light) — generated verbatim from packages/design-system/theme.css @theme ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── Tier 0 (dark) — theme.css [data-theme='dark'] ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      /* ── Tier 3 (--el-*) — theme.css :root,[data-appearance-scope] ── */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 28px 24px 56px;
+        background: var(--el-canvas);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+
+      /* ── board chrome ─────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 30px 26px 44px;
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1140px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .boardhead h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: -0.01em;
+        color: var(--el-text-strong);
+      }
+      .boardhead p {
+        margin: 0;
+        max-width: 92ch;
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .boardhead p + p {
+        margin-top: 8px;
+      }
+      .panel {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .panel-label .n {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+        align-self: center;
+      }
+      .panel-label h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .panel-label .cap {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .panel-body {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .note + .note {
+        margin-top: 8px;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note.lead {
+        font-size: 12.5px;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .cols {
+        display: grid;
+        gap: 18px;
+      }
+      .cols > * {
+        min-width: 0;
+      }
+      .c2 {
+        grid-template-columns: 1fr 1fr;
+      }
+      .c3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .sub {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 9px;
+      }
+      .stage {
+        background: var(--el-canvas);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 16px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 10.5px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .tag.now {
+        background: var(--el-tint-mint);
+      }
+      .tag.next {
+        background: var(--el-tint-lavender);
+      }
+      .tag.keep {
+        background: var(--el-tint-sky);
+      }
+      .tag.gone {
+        background: var(--el-tint-rose);
+      }
+      .tag.warn {
+        background: var(--el-tint-peach);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        vertical-align: top;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        line-height: 1.55;
+      }
+      table.spec th {
+        font-size: 10.5px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+      }
+      table.spec td b {
+        color: var(--el-text-strong);
+      }
+      .callouty {
+        border-left: 3px solid var(--el-accent);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callouty .sub {
+        margin-bottom: 6px;
+      }
+
+      /* ── the SHIPPED workspace, reproduced from its real markup ──────
+         `PlanningWorkspaceHost` (two panes) + `PlanChangeRail` (the right
+         rail). Every value below is read off the shipped component, not
+         invented: the rail is `border-l --el-border`, `bg --el-surface`; its
+         head is `px-4 py-3` with a 8 px success dot and a mono uppercase
+         label; the turn list is `gap-3 px-4 py-4`. */
+      .ws {
+        display: grid;
+        grid-template-columns: 1fr 332px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        height: 430px;
+      }
+      .ws.tall {
+        height: 486px;
+      }
+      .ws-canvas {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--el-canvas);
+      }
+      /* The canvas box the roadmap draws in — `min-h-0 flex-1 overflow-hidden`
+         in `PlanningWorkspaceHost`. Its bottom-anchored controls are positioned
+         against THIS box, which is the whole point of panel 3. */
+      .canvas-box {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        background-image: radial-gradient(var(--el-border-soft) 1px, transparent 1px);
+        background-size: 18px 18px;
+      }
+      .canvas-crumb {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      /* The three bottom-anchored control clusters the shipped canvas owns —
+         `bottom-4 left-4` (engine zoom + fit), `bottom-4 left-[8.25rem]`
+         (LOCATE), `right-3 bottom-4`. Drawn because panel 3's finding is about
+         where they land, not about the bar. */
+      .canvas-ctl {
+        position: absolute;
+        bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 9px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .canvas-ctl.zoom {
+        left: 14px;
+      }
+      .canvas-ctl.locate {
+        left: 132px;
+      }
+      .canvas-ctl.full {
+        right: 12px;
+      }
+      .node {
+        position: absolute;
+        width: 128px;
+        padding: 8px 9px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        font-size: 11px;
+        line-height: 1.35;
+        color: var(--el-text);
+      }
+      .node .k {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .node.added {
+        border-color: var(--el-success);
+        background: var(--el-diff-added);
+      }
+      .node.changed {
+        border-color: var(--el-info);
+        background: var(--el-diff-moved);
+      }
+
+      /* ── ⭐ THE CANVAS FOOTER SLOT — this asset's own element ─────────
+         ONE slot, constant height, two contents. `PlanChangeConfirmBar` is
+         composed unchanged as its proposal state; the resting state is new
+         here and deliberately shares the bar's exact box (border-top, surface,
+         px-4 py-2.5, a two-line text column) so the swap changes CONTENT and
+         never LAYOUT. */
+      .footerslot {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 57px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      .footerslot .col {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+      }
+      .footerslot .t1 {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .footerslot .t2 {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .footerslot .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+        flex: none;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .btn.ghost {
+        color: var(--el-text-secondary);
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .footerslot.resting .t1 {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+
+      /* ── the rail ───────────────────────────────────────────────────── */
+      .rail {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        border-left: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      .railhead {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-success);
+      }
+      .railhead .lbl {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .railhead .pill {
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .turns {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 12px;
+        overflow: hidden;
+        padding: 16px;
+      }
+      .turns.scroll-cut {
+        justify-content: flex-end;
+      }
+
+      /* A TURN — `Bubble` in `PlanChangeRail`, reproduced exactly. */
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.u {
+        flex-direction: row-reverse;
+      }
+      .av {
+        display: inline-flex;
+        flex: none;
+        width: 28px;
+        height: 28px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .av.user {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .glyph {
+        display: block;
+      }
+      .bub {
+        border-radius: var(--radius-card);
+        padding: 8px 12px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        background: var(--el-chat-bubble-ai);
+        color: var(--el-text);
+      }
+      .turn.u .bub {
+        background: var(--el-chat-bubble-user);
+        color: var(--el-accent-text);
+      }
+      .bub .lbl {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 2px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        opacity: 0.8;
+      }
+      .bub.asking {
+        background: var(--el-warning-surface);
+        color: var(--el-warning-text);
+      }
+      /* The MARKER vocabulary — a centred, quiet line, never a bubble. The
+         shipped `system` turn and the two disposition markers both render as
+         this, and the correction marker joins them. */
+      .marker {
+        margin: 0;
+        text-align: center;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .marker.act {
+        font-weight: 600;
+        color: var(--el-link);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      /* The citation COUNT — inside the answer bubble, under a hairline. Not a
+         second chip treatment: a number, so the reader knows the size of the
+         evidence base including what the prose did not name. */
+      .sources {
+        margin-top: 7px;
+        padding-top: 6px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── the CITATION chip = the shipped `WorkItemRefChip` ────────────
+         Recipe copied verbatim from `components/ui/markdown-editor.css`'s
+         `.motir-prose .wi-chip` block, because a citation is not a new chip —
+         it is the same live work-item reference the rest of the product
+         renders, arriving through the same `MarkdownView` render path. */
+      .wi-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        vertical-align: baseline;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 0.92em;
+        line-height: 1.35;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .wi-chip .wi-key {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .wi-chip .wi-title {
+        color: var(--el-text);
+      }
+      .wi-chip .wi-dot {
+        width: 6px;
+        height: 6px;
+        flex: none;
+        border-radius: 9999px;
+      }
+      .wi-chip .wi-dot.s-todo {
+        background: var(--el-text-faint);
+      }
+      .wi-chip .wi-dot.s-inprogress {
+        background: var(--el-info);
+      }
+      .wi-chip .wi-dot.s-done {
+        background: var(--el-success);
+      }
+      .wi-chip .wi-type-icon {
+        width: 9px;
+        height: 9px;
+        flex: none;
+        border-radius: 2px;
+      }
+      .wi-chip .wi-type-icon.k-story {
+        background: var(--el-type-story);
+      }
+      .wi-chip .wi-type-icon.k-task {
+        background: var(--el-type-task);
+      }
+      .wi-chip .wi-type-icon.k-bug {
+        background: var(--el-type-bug);
+      }
+      .wi-chip .wi-type-icon.k-epic {
+        background: var(--el-type-epic);
+      }
+      .wi-chip .wi-type-icon.k-subtask {
+        background: var(--el-type-subtask);
+      }
+      .wi-chip.is-hover {
+        background: var(--el-surface);
+        border-color: var(--el-border-strong);
+      }
+      .wi-chip.is-hover .wi-title {
+        text-decoration: underline;
+      }
+      .wi-chip.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+
+      /* ── the composer — `PlanChangeComposer`, composed unchanged ────── */
+      .composer {
+        flex: none;
+        border-top: 1px solid var(--el-border-soft);
+        padding: 12px 16px;
+      }
+      .field {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .field .ph {
+        color: var(--el-text-secondary);
+      }
+      .field .send {
+        margin-left: auto;
+        display: inline-grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 12px;
+      }
+      .starters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-left: 36px;
+      }
+      .starter {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .starter.ask {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── the callout menu row — `AiCalloutMenu`, composed unchanged ─── */
+      .menu {
+        width: 268px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .menu-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background-image: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--el-accent) 10%, var(--el-page-bg)),
+          color-mix(in srgb, var(--el-highlight) 10%, var(--el-page-bg))
+        );
+      }
+      .menu-head .miniorb {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 9999px;
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+      }
+      .menu-head .nm {
+        font-size: 12.5px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+      }
+      .menu-rows {
+        padding: 4px;
+      }
+      .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .row.hot {
+        background: var(--el-surface);
+      }
+      .row .tile {
+        display: inline-grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+        color: var(--el-accent-on-surface);
+      }
+      .row.primary .tile {
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+      }
+      .row .rt {
+        display: block;
+        font-size: 13px;
+        font-weight: 650;
+        line-height: 1.3;
+        color: var(--el-text);
+      }
+      .row .rd {
+        display: block;
+        margin-top: 1px;
+        font-size: 11.5px;
+        line-height: 1.3;
+        color: var(--el-text-secondary);
+      }
+      .ic {
+        display: block;
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ── dark half of the board ─────────────────────────────────────── */
+      .ws-canvas.pane {
+        height: 268px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .darkwrap {
+        border-radius: var(--radius-card);
+        padding: 16px;
+        background: var(--el-surface-soft);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <header class="boardhead">
+        <h1>Ask about this project — the cited answer turn, and the chrome that follows it</h1>
+        <p>
+          <b>MOTIR-1815.</b> A turn in the one conversation can now be a <b>question</b> instead of
+          a plan change. Nothing about the surface changes: the same workspace, the same rail, the
+          same composer, the same single door. What changes is that a turn has an <b>intent</b>,
+          that intent is resolved by the server and comes back on the turn, and the canvas chrome
+          follows the <b>latest turn</b> rather than a mode nobody ever chose.
+        </p>
+        <p>
+          <b>This asset composes; it does not redraw.</b> The two-pane frame is
+          <code>planning-workspace.mock.html</code> (MOTIR-1193); the rail shell, its bubbles, its
+          markers, its composer and the confirm bar are
+          <code>plan-change-conversation.mock.html</code> (MOTIR-1727) and
+          <code>plan-change-planner-speaks.mock.html</code> (MOTIR-2225). None of those are
+          re-specified here. This asset owns four things and nothing else:
+          <b>the answer turn's form</b> (panel 2),
+          <b>the canvas footer across the two turn kinds</b> (panel 3),
+          <b>the correction marker and the redirect hand-off</b> (panels 5–6), and
+          <b>the callout row's copy</b> (panel 1).
+        </p>
+        <p>
+          <b
+            >Two things above this asset fix what it may draw, and both are cited rather than
+            re-opened.</b
+          >
+          <code>design-notes.md</code> § “EVERY ROW OPENS THE SAME SURFACE” — every row shares ONE
+          href, a row is a LABEL and not a route — and
+          <code>docs/decisions/conversation-turn-intent.md</code> (MOTIR-1816) §1/§5 — intent is
+          <b>server-resolved</b>, the client sends none, and it belongs to the <b>turn</b>, never to
+          the session. So there is no ask/act switch below, no <code>?mode=ask</code>, and no chrome
+          a thread is locked into. The assistant avatar's glyph is the sibling glyph design's
+          element (MOTIR-3183), drawn here at the 13 px it specifies inside the 28 px circle and
+          re-decided nowhere.
+        </p>
+      </header>
+
+      <!-- ═══════════════ 1 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>The door — one more row, one more starter, and nothing else</h2>
+          <span class="cap">access path</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2" style="align-items: start">
+            <div>
+              <p class="sub">The callout, with the row this story adds</p>
+              <div class="stage" style="display: flex; justify-content: center">
+                <div class="menu">
+                  <div class="menu-head">
+                    <span class="miniorb"
+                      ><svg
+                        class="glyph"
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
+                    <span class="nm">Motir AI</span>
+                  </div>
+                  <div class="menu-rows">
+                    <div class="row primary">
+                      <span class="tile">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"
+                          />
+                          <path d="M18.5 16.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+                        </svg>
+                      </span>
+                      <span style="min-width: 0">
+                        <span class="rt">Plan with AI</span>
+                        <span class="rd">Generate, expand or re-plan the project</span>
+                      </span>
+                    </div>
+                    <div class="row hot">
+                      <span class="tile">
+                        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 20.5l1.5-5.2A8.5 8.5 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5z"
+                          />
+                          <path d="M10.1 9.4a2 2 0 0 1 3.9.6c0 1.3-2 2-2 2" />
+                          <path d="M12 15.5h.01" />
+                        </svg>
+                      </span>
+                      <span style="min-width: 0">
+                        <span class="rt">Ask about this project</span>
+                        <span class="rd">Answer questions about the plan, docs and work items</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 10px">
+                <b>Row anatomy is the callout design's</b> (MOTIR-1811, panel 4): a 26 px tile, a 13
+                px semibold title, an 11.5 px <code>--el-text-secondary</code> one-liner. This asset
+                supplies only the <b>copy</b> and confirms the <b>icon</b> —
+                <code>message-circle-question</code>, which the shipped registry already reserves in
+                its own comment (<code>lib/planning/aiCallout.ts</code>). The row is a
+                <b>single entry</b> in <code>aiCalloutActions()</code>; nothing in
+                <code>AiCalloutMenu</code> or on the orb changes.
+              </p>
+              <p class="note">
+                It carries the <b>same href</b> as “Plan with AI” — the one
+                <code>planningWorkspaceHref(context)</code>. It is the SECOND row because the
+                primary tile marks position 1, and “Help with a task” (MOTIR-1344) will take
+                position 3 the same way.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">What it opens — the empty thread</p>
+              <div class="ws" style="height: 300px; grid-template-columns: 1fr">
+                <div class="rail" style="border-left: 0">
+                  <div class="railhead">
+                    <span class="dot"></span><span class="lbl">Motir AI</span>
+                    <span class="pill">Project</span>
+                  </div>
+                  <div class="turns">
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg
+                          class="glyph"
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        Planning <b>Motir</b>. What should change — or what would you like to know?
+                      </div>
+                    </div>
+                    <div class="starters">
+                      <span class="starter">✦ Add work to an epic</span>
+                      <span class="starter">✦ Re-sequence what's left</span>
+                      <span class="starter">✦ Drop something we don't need</span>
+                      <span class="starter ask">✦ What's blocked, and why?</span>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span><span class="send">↑</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                The <b>rail</b> alone. The canvas pane beside it is panel 3's subject, and the door
+                changes nothing about it.
+              </p>
+              <p class="note">
+                <b>⭐ The row seeds NOTHING into the composer. The STARTER SET grows by one.</b> The
+                shipped spec permits a row to “seed the composer's starter phrasing”, and the rail
+                already has the mechanism for exactly that: <code>STARTERS</code> — chips that
+                <b>prefill</b> the composer on click and never send. So the seed is one more chip,
+                <span class="tag next">What's blocked, and why?</span>, and it belongs to the
+                <b>surface</b>, not to the row: it shows however the user arrived.
+              </p>
+              <p class="note">
+                <b>Why not a pre-filled value.</b> Filled text is in the way of anyone who wanted to
+                ask something else, and — the load-bearing half — a stub sent unedited becomes a
+                <b>real turn that costs a real job</b>. A starter chip cannot be sent by accident,
+                and being surface-scoped it provably carries no intent through the door (§5: a seed
+                is TEXT, and a hint on the wire is the mode re-entering through the back door).
+              </p>
+              <p class="note">
+                <b>The opener widens.</b> Shipped copy is <i>“What should change?”</i>, which is now
+                half the truth and quietly discourages the other half. It becomes
+                <i>“What should change — or what would you like to know?”</i>. One sentence, both
+                capabilities, still one thread.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 2 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>The cited ANSWER turn — citations are INLINE, in the prose that rests on them</h2>
+          <span class="cap">the new turn form</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2" style="align-items: start">
+            <div>
+              <div class="stage">
+                <div style="max-width: 300px">
+                  <div class="turn u">
+                    <span class="av user" aria-hidden="true">·</span>
+                    <div class="bub">
+                      <span class="lbl">turn 1</span>which stories are blocked, and why?
+                    </div>
+                  </div>
+                  <p class="marker" style="margin: 12px 0">Sent to Motir AI</p>
+                  <div class="turn">
+                    <span class="av" aria-hidden="true"
+                      ><svg
+                        class="glyph"
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        /></svg
+                    ></span>
+                    <div class="bub">
+                      Two are.
+                      <span class="wi-chip"
+                        ><span class="wi-type-icon k-story"></span
+                        ><span class="wi-key">MOTIR-1343</span
+                        ><span class="wi-title">Ask about this project</span
+                        ><span class="wi-dot s-inprogress"></span
+                      ></span>
+                      is waiting on its design subtask — the decision it depends on landed, the
+                      design has not.
+                      <span class="wi-chip"
+                        ><span class="wi-type-icon k-story"></span
+                        ><span class="wi-key">MOTIR-1344</span
+                        ><span class="wi-title">Help with a task</span
+                        ><span class="wi-dot s-todo"></span
+                      ></span>
+                      is waiting on
+                      <span class="wi-chip"
+                        ><span class="wi-type-icon k-story"></span
+                        ><span class="wi-key">MOTIR-1343</span
+                        ><span class="wi-title">Ask about this project</span
+                        ><span class="wi-dot s-inprogress"></span
+                      ></span>
+                      itself, because it inherits the per-turn intent model that story lands.
+                      <div class="sources">Answered from 6 work items</div>
+                    </div>
+                  </div>
+                  <p class="marker act" style="margin-top: 8px">Propose changes instead</p>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 10px">
+                An answer is an <b>ordinary assistant bubble</b> — same fill, ink, avatar and width
+                as the opener and the planner's findings report. It needs no new treatment to read
+                as Motir speaking, which is the finding MOTIR-2225 already made and this asset
+                inherits rather than re-litigates.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">The decision: inline, not a trailing source list</p>
+              <p class="note">
+                <b>Inline wins on three grounds, and the first is decisive.</b>
+              </p>
+              <p class="note">
+                <b>1 · The rail already cites inline.</b> An assistant findings report renders its
+                <code>[KEY](motir:&lt;id&gt;)</code> tokens through <code>MarkdownView</code> →
+                <code>WorkItemRefChip</code> — the shipped component comments say so in the
+                imperative: <i>“never a second inline treatment invented for this surface.”</i> A
+                trailing source list would be a
+                <b>second citation treatment on the same bubble in the same rail</b>. There is no
+                reading of the shipped code where that is the smaller change.
+              </p>
+              <p class="note">
+                <b>2 · The mirror links inline.</b> Rovo and Linear both render references in the
+                sentence. The numbered-footnote model belongs to a full-page answer surface; in a
+                332 px rail a bibliography routinely out-lengths the answer it follows.
+              </p>
+              <p class="note">
+                <b>3 · Checkability.</b> A citation next to the <b>claim</b> tells you which
+                sentence rests on what. A trailing list tells you only what was read — which is the
+                weaker guarantee, on a surface whose entire promise is that you can check it rather
+                than trust it.
+              </p>
+              <p class="note">
+                <b>The count line is not a second list.</b> <code>citations</code> — the string[]
+                the envelope carries — is the grounding CONTRACT, and the answer may rest on items
+                the prose never names. One quiet line inside the bubble,
+                <i>“Answered from 6 work items”</i>, states the size of the evidence base without
+                re-rendering it. It is a <b>number</b>, and the two treatments cannot be confused.
+              </p>
+              <table class="spec" style="margin-top: 12px">
+                <tr>
+                  <th>Element</th>
+                  <th>Shipped owner</th>
+                  <th>Ink / fill</th>
+                </tr>
+                <tr>
+                  <td><b>answer bubble</b></td>
+                  <td><code>Bubble role="assistant"</code>, tone <code>default</code></td>
+                  <td><code>--el-chat-bubble-ai</code> · <code>--el-text</code></td>
+                </tr>
+                <tr>
+                  <td><b>citation chip</b></td>
+                  <td><code>WorkItemRefChip</code> via <code>MarkdownView</code></td>
+                  <td><code>--el-surface-soft</code> · key <code>--el-link</code></td>
+                </tr>
+                <tr>
+                  <td>chip hover</td>
+                  <td>shipped <code>.wi-chip:hover</code></td>
+                  <td>
+                    <code>--el-surface</code> + <code>--el-border-strong</code>, title underlined
+                  </td>
+                </tr>
+                <tr>
+                  <td>chip focus</td>
+                  <td>shipped <code>.wi-chip:focus-visible</code></td>
+                  <td><code>--focus-ring-color</code>, offset 1 px</td>
+                </tr>
+                <tr>
+                  <td><b>count line</b></td>
+                  <td>NEW — this asset</td>
+                  <td>
+                    <code>--el-text-secondary</code> on <code>--el-surface-soft</code> · 6.51:1
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>correction marker</b></td>
+                  <td>the shipped marker line, ADR §3</td>
+                  <td><code>--el-link</code>, centred, underlined</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 10px">
+                <b>Chip states, drawn:</b>
+                <span style="display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 4px">
+                  <span class="wi-chip"
+                    ><span class="wi-type-icon k-story"></span><span class="wi-key">MOTIR-1343</span
+                    ><span class="wi-title">Ask about this project</span
+                    ><span class="wi-dot s-inprogress"></span
+                  ></span>
+                  <span class="wi-chip is-hover"
+                    ><span class="wi-type-icon k-story"></span><span class="wi-key">MOTIR-1343</span
+                    ><span class="wi-title">Ask about this project</span
+                    ><span class="wi-dot s-inprogress"></span
+                  ></span>
+                  <span class="wi-chip is-focus"
+                    ><span class="wi-type-icon k-story"></span><span class="wi-key">MOTIR-1343</span
+                    ><span class="wi-title">Ask about this project</span
+                    ><span class="wi-dot s-inprogress"></span
+                  ></span>
+                </span>
+              </p>
+              <p class="note">
+                A citation click is the shipped chip's own behaviour — a
+                <b>peek</b> (<code>?peek=&lt;id&gt;</code>), not a navigation away from the
+                conversation. That is what makes “click a citation, then keep talking” true without
+                this asset designing anything.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 3 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>⭐ The chrome follows the LATEST TURN — one footer slot, two contents</h2>
+          <span class="cap">the drawing this asset exists for</span>
+        </div>
+        <div class="panel-body">
+          <div class="callouty" style="margin-bottom: 16px">
+            <p class="sub">The finding — measured in the shipped component, not assumed</p>
+            <p class="note">
+              <code>PlanningWorkspaceHost</code> mounts the confirm bar as a
+              <b><code>shrink-0</code> flex SIBLING below</b> a <code>min-h-0 flex-1</code> canvas
+              box, conditionally:
+              <code
+                >{state.review &amp;&amp; !state.decided &amp;&amp; !index.isEmpty ?
+                &lt;PlanChangeConfirmBar/&gt; : null}</code
+              >. So today the bar <b>mounts and unmounts</b>, and the canvas box grows and shrinks
+              by its full height every time.
+            </p>
+            <p class="note">
+              That would be nearly harmless if the canvas were a static page. It is not.
+              <code>ProjectRoadmapCanvas</code> anchors
+              <b>three control clusters to the BOTTOM of that box</b> — the engine's zoom + fit
+              cluster at <code>bottom-4 left-4</code>, the LOCATE control at
+              <code>bottom-4 left-[8.25rem]</code>, and the full-screen control at
+              <code>right-3 bottom-4</code>. Unmounting the bar slides <b>all three</b> down by the
+              bar's height; mounting it slides them back up. Alternating between a question and a
+              change — the exact rhythm this story invites — would make the canvas's own furniture
+              hop on every turn.
+            </p>
+            <p class="note">
+              The nodes themselves do <b>not</b> move: there is no <code>ResizeObserver</code> and
+              no fit-on-resize in the canvas, so pan and zoom survive. The jump is entirely in the
+              bottom-anchored chrome — which is why the fix belongs to the <b>box</b>, and costs
+              nothing else.
+            </p>
+          </div>
+
+          <p class="sub">The three moments</p>
+          <div class="cols c3">
+            <div>
+              <div class="ws-canvas pane">
+                <div class="canvas-box">
+                  <span class="canvas-crumb">Motir · Epic 9</span>
+                  <div class="node" style="left: 20px; top: 56px">
+                    <span class="k">MOTIR-1343</span>Ask about this project
+                  </div>
+                  <div class="node" style="left: 20px; top: 112px">
+                    <span class="k">MOTIR-1344</span>Help with a task
+                  </div>
+                  <span class="canvas-ctl zoom">− 100% +</span>
+                  <span class="canvas-ctl locate">◎ Ready</span>
+                  <span class="canvas-ctl full">⤢</span>
+                </div>
+                <div class="footerslot resting">
+                  <span class="col">
+                    <span class="t1">Roadmap — as saved</span>
+                    <span class="t2">Nothing proposed. The conversation has changed nothing.</span>
+                  </span>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 9px">
+                <b>A · after an ANSWER.</b> There is nothing to confirm, so there are no buttons.
+                The slot stays, and says what the canvas is: the <b>saved</b> plan. That second line
+                is the ask's own promise made visible — <b>an ask writes nothing</b> — at the one
+                moment a person might wonder whether their question moved something.
+              </p>
+            </div>
+
+            <div>
+              <div class="ws-canvas pane">
+                <div class="canvas-box">
+                  <span class="canvas-crumb">Motir · Epic 9</span>
+                  <div class="node changed" style="left: 20px; top: 56px">
+                    <span class="k">MOTIR-1343</span>Ask about this project
+                  </div>
+                  <div class="node added" style="left: 20px; top: 112px">
+                    <span class="k">new</span>Cited-answer rail
+                  </div>
+                  <span class="canvas-ctl zoom">− 100% +</span>
+                  <span class="canvas-ctl locate">◎ Ready</span>
+                  <span class="canvas-ctl full">⤢</span>
+                </div>
+                <div class="footerslot">
+                  <span class="col">
+                    <span class="t1">1 added · 1 changed</span>
+                    <span class="t2">Nothing is saved yet.</span>
+                  </span>
+                  <span class="acts">
+                    <span class="btn ghost">Discard</span>
+                    <span class="btn primary">✓ Approve</span>
+                  </span>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 9px">
+                <b>B · after a PLAN-CHANGE turn.</b> The shipped <code>PlanChangeConfirmBar</code> —
+                counts, “Nothing is saved yet”, Discard, Approve — <b>composed unchanged</b>. Same
+                box, same border, same padding, same height. The canvas box did not resize, so the
+                three bottom-anchored controls did not move.
+              </p>
+            </div>
+
+            <div>
+              <div
+                class="stage"
+                style="
+                  height: 268px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 10px;
+                  justify-content: center;
+                "
+              >
+                <div
+                  class="footerslot resting"
+                  style="
+                    border-radius: var(--radius-card);
+                    border-top: 0;
+                    border: 1px solid var(--el-border);
+                  "
+                >
+                  <span class="col">
+                    <span class="t1">Roadmap — as saved</span>
+                    <span class="t2">Nothing proposed.</span>
+                  </span>
+                </div>
+                <p class="note" style="text-align: center; margin: 0">
+                  ↓ <b>120 ms cross-fade of the CONTENTS</b><br />the box does not move, resize,
+                  slide or unmount
+                </p>
+                <div
+                  class="footerslot"
+                  style="
+                    border-radius: var(--radius-card);
+                    border-top: 0;
+                    border: 1px solid var(--el-border);
+                  "
+                >
+                  <span class="col">
+                    <span class="t1">1 added · 1 changed</span>
+                    <span class="t2">Nothing is saved yet.</span>
+                  </span>
+                  <span class="acts">
+                    <span class="btn ghost">Discard</span>
+                    <span class="btn primary">✓ Approve</span>
+                  </span>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 9px">
+                <b>C · the TRANSITION.</b> The bar does <b>not</b> animate out, because it never
+                leaves: the slot is always mounted and always the same height, and only its contents
+                change. A 120 ms opacity cross-fade, no transform, no height animation — so there is
+                nothing for <code>prefers-reduced-motion</code> to disable beyond the fade itself.
+              </p>
+            </div>
+          </div>
+
+          <table class="spec" style="margin-top: 16px">
+            <tr>
+              <th style="width: 20%">The slot</th>
+              <th>Resting (post-answer, and every state with no pending proposal)</th>
+              <th>Proposal pending</th>
+            </tr>
+            <tr>
+              <td><b>box</b></td>
+              <td colspan="2">
+                identical — <code>border-t --el-border</code>, <code>bg --el-surface</code>,
+                <code>px-4 py-2.5</code>, a two-line text column, min-height fixed to the bar's own
+                measured height. <b>One element, always mounted.</b>
+              </td>
+            </tr>
+            <tr>
+              <td><b>line 1</b></td>
+              <td>“Roadmap — as saved” · <code>--el-text-secondary</code>, 600</td>
+              <td>“1 added · 1 changed” · <code>--el-text</code>, 650 (shipped)</td>
+            </tr>
+            <tr>
+              <td><b>line 2</b></td>
+              <td>“Nothing proposed. The conversation has changed nothing.”</td>
+              <td>“Nothing is saved yet.” (shipped)</td>
+            </tr>
+            <tr>
+              <td><b>actions</b></td>
+              <td>none — the slot carries no control when there is nothing to decide</td>
+              <td>Discard (ghost) · Approve (primary, <code>Check</code>) — shipped</td>
+            </tr>
+            <tr>
+              <td><b>weight</b></td>
+              <td>
+                deliberately quieter than the bar: secondary ink and no buttons, so the resting
+                state never competes for the eye or reads as a thing to act on
+              </td>
+              <td>the shipped emphasis, unchanged — it IS the gate</td>
+            </tr>
+          </table>
+
+          <p class="note" style="margin-top: 12px">
+            <b>What this costs the shipped code:</b> the conditional mount becomes a conditional
+            <b>content</b>. <code>PlanChangeConfirmBar</code> itself is untouched; the host renders
+            the slot unconditionally and puts the bar inside it when
+            <code>state.review &amp;&amp; !state.decided &amp;&amp; !index.isEmpty</code>. That is
+            the same predicate, moved one level in — which is why “chrome follows the turn” is a
+            composition here and not a redesign.
+          </p>
+          <p class="note">
+            <b>And what it does NOT do:</b> the resting slot is not a status bar that accumulates
+            things to say. It has exactly the two lines above, in every non-proposal state — after
+            an answer, before the first turn, while streaming, and after Approve or Discard. A slot
+            with a growing vocabulary would be a new surface; this one is a
+            <b>constant-height frame around the shipped gate</b>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 4 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>One thread, both orders — and how the two turn kinds read apart</h2>
+          <span class="cap">mixed intent</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c3" style="align-items: start">
+            <div>
+              <p class="sub">ask → change</p>
+              <div class="stage" style="padding: 12px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">turn 1</span>which stories are blocked?</div>
+                </div>
+                <div class="turn" style="margin-top: 10px">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Two are —
+                    <span class="wi-chip"
+                      ><span class="wi-type-icon k-story"></span
+                      ><span class="wi-key">MOTIR-1343</span
+                      ><span class="wi-title">Ask about this project</span
+                      ><span class="wi-dot s-inprogress"></span
+                    ></span>
+                    and
+                    <span class="wi-chip"
+                      ><span class="wi-type-icon k-story"></span
+                      ><span class="wi-key">MOTIR-1344</span
+                      ><span class="wi-title">Help with a task</span
+                      ><span class="wi-dot s-todo"></span></span
+                    >.
+                    <div class="sources">Answered from 6 work items</div>
+                  </div>
+                </div>
+                <div class="turn u" style="margin-top: 10px">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">refine 2</span>then split the blocked one</div>
+                </div>
+                <p class="marker" style="margin: 10px 0">Sent to Motir AI</p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Proposed 3 subtasks under
+                    <span class="wi-chip"
+                      ><span class="wi-type-icon k-story"></span
+                      ><span class="wi-key">MOTIR-1343</span
+                      ><span class="wi-title">Ask about this project</span
+                      ><span class="wi-dot s-inprogress"></span></span
+                    >. They're on the canvas — nothing is saved yet.
+                  </div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 9px">
+                The chrome catches up on the <b>last</b> turn: the footer was resting through turns
+                1–2 and carries the gate from turn 3. No mode changed, and the user pressed nothing
+                but Send.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">change → ask</p>
+              <div class="stage" style="padding: 12px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">turn 1</span>add a payments epic</div>
+                </div>
+                <p class="marker" style="margin: 10px 0">Sent to Motir AI</p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Proposed 1 epic and 4 stories. They're on the canvas — nothing is saved yet.
+                  </div>
+                </div>
+                <div class="turn u" style="margin-top: 10px">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub">
+                    <span class="lbl">refine 2</span>wait — what does MOTIR-806 already cover?
+                  </div>
+                </div>
+                <div class="turn" style="margin-top: 10px">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    <span class="wi-chip"
+                      ><span class="wi-type-icon k-story"></span
+                      ><span class="wi-key">MOTIR-806</span
+                      ><span class="wi-title">Shared-context retrieval</span
+                      ><span class="wi-dot s-done"></span
+                    ></span>
+                    ships the two-graph retrieval — plan tree and code graph — and it's <b>done</b>.
+                    <div class="sources">Answered from 3 work items</div>
+                  </div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 9px">
+                <b>A user turn is PLAIN TEXT.</b> The shipped rail renders
+                <code>{turn.body}</code> for a user bubble and
+                <code>&lt;MarkdownView&gt;</code> only for an assistant one — so a key the person
+                typed stays a key, and a chip only ever appears where Motir cited something. That
+                asymmetry is shipped, and this asset keeps it.
+              </p>
+              <p class="note">
+                <b>⚠️ The pending proposal is NOT discarded by a question.</b> The canvas keeps
+                drawing it and the gate stays in the slot, because <code>state.review</code> is what
+                the footer reads and an ask writes nothing to it. Asking mid-review is a
+                <b>lookup</b>, not an abandonment — which is precisely why somebody would ask.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">How they read apart</p>
+              <table class="spec">
+                <tr>
+                  <th>Cue</th>
+                  <th>Answer turn</th>
+                  <th>Plan-change turn</th>
+                </tr>
+                <tr>
+                  <td><b>bubble</b></td>
+                  <td colspan="2"><b>identical</b> — same fill, ink, avatar, width</td>
+                </tr>
+                <tr>
+                  <td><b>citations</b></td>
+                  <td>inline chips + a count line</td>
+                  <td>none (a proposal names items on the CANVAS)</td>
+                </tr>
+                <tr>
+                  <td><b>preceding marker</b></td>
+                  <td>none</td>
+                  <td>“Sent to Motir AI” — the shipped <code>system</code> turn</td>
+                </tr>
+                <tr>
+                  <td><b>the canvas</b></td>
+                  <td>as saved</td>
+                  <td>diff rings + the gate in the slot</td>
+                </tr>
+                <tr>
+                  <td><b>correction marker</b></td>
+                  <td>“Propose changes instead”</td>
+                  <td>“Answer this instead”</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 10px">
+                <b>⭐ The bubble is deliberately NOT differentiated.</b> Tinting answers would say
+                “these are two conversations”, which is the one thing this story is built to deny.
+                What separates them is <b>what each turn carries</b> — citations, a submission
+                marker, a canvas state — every one of which is already meaningful on its own. No
+                distinction rests on colour alone.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 5 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>A mis-read is corrected by RE-RUNNING the turn — never by re-typing it</h2>
+          <span class="cap">ADR §3</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2" style="align-items: start">
+            <div>
+              <div class="stage" style="padding: 14px">
+                <p class="sub">Before — Motir answered a request to change</p>
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub">
+                    <span class="lbl">turn 1</span>the payments epic should come before onboarding
+                  </div>
+                </div>
+                <div class="turn" style="margin-top: 10px">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Payments currently sits after onboarding on the roadmap.
+                    <div class="sources">Answered from 2 work items</div>
+                  </div>
+                </div>
+                <p class="marker act" style="margin-top: 8px">Propose changes instead</p>
+
+                <p class="sub" style="margin: 20px 0 9px">After — one click, no re-typing</p>
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub">
+                    <span class="lbl">turn 1</span>the payments epic should come before onboarding
+                  </div>
+                </div>
+                <div class="turn" style="margin-top: 10px">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Payments currently sits after onboarding on the roadmap.
+                    <div class="sources">Answered from 2 work items</div>
+                  </div>
+                </div>
+                <p class="marker" style="margin: 8px 0">Re-read as a plan change</p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Proposed: payments moves ahead of onboarding, and 2 dependencies follow it.
+                    Nothing is saved yet.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="note lead">
+                <b>The marker sits under the ASSISTANT turn</b> — the moment the user discovers the
+                mis-read — as a single centred line in the vocabulary
+                <code>plan-change-planner-speaks.mock.html</code> already established for turn
+                markers. Two labels, one per direction, each naming the <b>act</b> and never a mode:
+              </p>
+              <p class="note">
+                · under an answer → <b>“Propose changes instead”</b><br />
+                · under a proposal → <b>“Answer this instead”</b>
+              </p>
+              <table class="spec" style="margin-top: 12px">
+                <tr>
+                  <th>What it does</th>
+                  <th>Why</th>
+                </tr>
+                <tr>
+                  <td>
+                    <b>Re-runs the ORIGINAL user turn</b> under the other intent. No second user
+                    turn is appended.
+                  </td>
+                  <td>
+                    The person said one thing, once. The transcript is a record of who said what —
+                    the posture MOTIR-2226 set.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>Appends a NEW assistant turn.</b> The superseded one stays, undimmed and
+                    unstruck.
+                  </td>
+                  <td>
+                    A correction is a second answer, not an erasure. The reader has to be able to
+                    see later that Motir read it wrong.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Sets the user turn's <code>intent</code> to what ran and
+                    <code>intentCorrected</code> to true.
+                  </td>
+                  <td>
+                    The thread records what Motir DID — the <code>isAnswer</code> precedent, not a
+                    re-derivation.
+                  </td>
+                </tr>
+                <tr>
+                  <td><b>Is not a mode.</b> The next turn is classified from scratch.</td>
+                  <td>§5. Nothing in this thread is now “in” anything.</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 10px">
+                <b>One marker at a time.</b> Only the LATEST assistant turn carries it — a
+                superseded answer's marker is removed when its correction lands, so a thread never
+                offers two ways to re-run the same user turn.
+              </p>
+              <p class="note">
+                <b>Presentation.</b> Centred, 11 px, <code>--el-link</code>, underlined at
+                <code>text-underline-offset: 2px</code> — an interactive marker, distinguished from
+                the passive ones (<code>--el-text-secondary</code>, no underline) by ink AND
+                underline, never by colour alone. It is a real <code>&lt;button&gt;</code>: in the
+                tab order, <code>--focus-ring-color</code> on focus-visible, and while the re-run
+                streams it becomes the disabled marker <i>“Re-reading…”</i> rather than
+                disappearing.
+              </p>
+              <p class="note">
+                <b>And a line replaces it once it fires:</b> <i>“Re-read as a plan change”</i> /
+                <i>“Re-read as a question”</i>, in the passive marker style, above the new turn — so
+                the transcript says why a second assistant turn exists.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 6 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">6</span>
+          <h2>The redirect — one turn, two streams, and no gap between them</h2>
+          <span class="cap">ADR Consequence 3</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2" style="align-items: start">
+            <div>
+              <p class="note lead">
+                <b>Every turn goes through <code>POST /api/ai/ask</code>.</b> When the handler's
+                first pass decides the turn was a plan change, it returns <b>no answer</b> and
+                <code>intent: 'plan_change'</code>; core then dispatches the shipped plan-change
+                submit. So a plan-change turn <b>streams twice</b>. Without a drawn state for the
+                hand-off, the rail would show a spinner, stop, and start a different spinner — which
+                reads as a failure and a retry.
+              </p>
+              <p class="note">
+                <b>The rail draws ONE continuous waiting state across both jobs</b>, and names the
+                hand-off in the marker line rather than in the bubble:
+              </p>
+              <div class="stage" style="margin-top: 12px; padding: 14px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub">
+                    <span class="lbl">turn 1</span>split the blocked story into three
+                  </div>
+                </div>
+                <p class="marker" style="margin: 10px 0">Sent to Motir AI</p>
+                <p class="note" style="text-align: center; margin: 0 0 4px">
+                  <span class="tag keep">stream 1 — reading</span>
+                </p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub"><span style="opacity: 0.75">Reading your request…</span></div>
+                </div>
+                <p class="marker" style="margin: 10px 0">
+                  Reading it as a plan change — working on the proposal
+                </p>
+                <p class="note" style="text-align: center; margin: 0 0 4px">
+                  <span class="tag keep">stream 2 — planning · the SAME bubble, text swapped</span>
+                </p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    <span style="opacity: 0.75">Working through the plan…</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <table class="spec">
+                <tr>
+                  <th>Rule</th>
+                  <th>Why</th>
+                </tr>
+                <tr>
+                  <td>
+                    <b>The waiting bubble never unmounts between the two jobs.</b> Its text is
+                    swapped in place, exactly as the footer slot's is.
+                  </td>
+                  <td>
+                    A bubble that disappears and returns reads as “that failed, it's trying again.”
+                    Nothing failed.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>The hand-off is a marker, not a bubble.</b>
+                    <i>“Reading it as a plan change — working on the proposal”</i>.
+                  </td>
+                  <td>
+                    It is provenance, not conversation — the same reason the shipped submission
+                    marker is a marker.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>The footer slot stays RESTING until the proposal exists.</b> It changes when
+                    the review lands, not when the redirect is announced.
+                  </td>
+                  <td>
+                    The slot's contract is “is there something to decide right now” — and during
+                    stream 2 there is not, yet.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>A failure in EITHER stream lands in the shipped error state.</b> Motir does
+                    not fall through to the other intent.
+                  </td>
+                  <td>
+                    ADR §4 — spending a plan generation on a turn whose reading failed is the
+                    expensive half of the asymmetry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>An ask turn shows only stream 1.</b> There is no announced hand-off, so a
+                    question's waiting state is exactly what shipped.
+                  </td>
+                  <td>The common path pays nothing for the redirect's existence.</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 12px">
+                <b>What the user is told, and what they are not.</b> They are told the reading
+                changed, because it explains the wait and it is the fact the correction marker in
+                panel 5 acts on. They are <b>not</b> told about two jobs, two models or two prices —
+                that is the boundary's business (ADR Consequence 6 bills it honestly; nothing in the
+                rail itemises it).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 7 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">7</span>
+          <h2>Six states — including the honest one</h2>
+          <span class="cap">states</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c3" style="gap: 16px">
+            <div>
+              <p class="sub">a · empty</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Planning <b>Motir</b>. What should change — or what would you like to know?
+                  </div>
+                </div>
+                <div class="starters" style="margin-top: 10px; padding-left: 0">
+                  <span class="starter">✦ Add work to an epic</span>
+                  <span class="starter ask">✦ What's blocked, and why?</span>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                The canvas already shows the plan, so “empty” is never a blank screen — only the
+                conversation is empty. Footer: <b>resting</b>.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">b · thinking / streaming</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">turn 1</span>which stories are blocked?</div>
+                </div>
+                <p class="marker" style="margin: 10px 0">Sent to Motir AI</p>
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub"><span style="opacity: 0.75">Reading your request…</span></div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                The shipped streaming treatment, unchanged. Composer disabled, Send is a spinner.
+                Footer: <b>resting</b>.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">c · answered</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    Two are.
+                    <span class="wi-chip"
+                      ><span class="wi-type-icon k-story"></span
+                      ><span class="wi-key">MOTIR-1343</span
+                      ><span class="wi-title">Ask about this project</span
+                      ><span class="wi-dot s-inprogress"></span
+                    ></span>
+                    is waiting on its design subtask.
+                    <div class="sources">Answered from 6 work items</div>
+                  </div>
+                </div>
+                <p class="marker act" style="margin-top: 8px">Propose changes instead</p>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                Panel 2's form. Footer: <b>resting</b> — an ask changed nothing, and the slot says
+                so.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">d · ⭐ no confident answer</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub">
+                    <span class="lbl">turn 1</span>what did we decide about SSO pricing?
+                  </div>
+                </div>
+                <div class="turn" style="margin-top: 10px">
+                  <span class="av" aria-hidden="true"
+                    ><svg
+                      class="glyph"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                        fill="currentColor"
+                      /></svg
+                  ></span>
+                  <div class="bub">
+                    I can't answer that from this project. Nothing in the plan, the decisions or the
+                    code graph covers SSO pricing.
+                    <div class="sources">Searched 214 work items and 3 decision records</div>
+                  </div>
+                </div>
+                <p class="marker act" style="margin-top: 8px">Propose changes instead</p>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                <b>An empty answer is still a CITED answer.</b> It says what it searched, so “I
+                don't know” is checkable rather than a shrug — and it is an ordinary bubble, not an
+                error: nothing went wrong.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">e · error</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">turn 1</span>which stories are blocked?</div>
+                </div>
+                <div
+                  style="
+                    margin-top: 10px;
+                    border: 1px solid var(--el-danger);
+                    border-radius: var(--radius-card);
+                    background: var(--el-tint-rose);
+                    padding: 9px 11px;
+                    font-size: 12px;
+                    color: var(--el-text-strong);
+                  "
+                >
+                  That didn't go through. Your conversation is saved — try again, or rephrase.
+                  <span
+                    class="btn ghost"
+                    style="margin-top: 6px; display: inline-flex; color: var(--el-link)"
+                    >Try again</span
+                  >
+                </div>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                The <b>shipped</b> error state, composed unchanged: recoverable in place, the thread
+                and any pending proposal survive, and <code>retry</code> re-sends without appending
+                a second turn.
+              </p>
+            </div>
+
+            <div>
+              <p class="sub">f · out of credits</p>
+              <div class="stage" style="padding: 12px; min-height: 148px">
+                <div class="turn u">
+                  <span class="av user" aria-hidden="true">·</span>
+                  <div class="bub"><span class="lbl">turn 1</span>which stories are blocked?</div>
+                </div>
+                <div
+                  style="
+                    margin-top: 10px;
+                    border: 1px solid var(--el-warning);
+                    border-radius: var(--radius-card);
+                    background: var(--el-warning-surface);
+                    padding: 9px 11px;
+                    font-size: 12px;
+                    color: var(--el-warning-text);
+                  "
+                >
+                  You're out of AI credits. Your conversation is saved.
+                  <span
+                    class="btn ghost"
+                    style="margin-top: 6px; display: inline-flex; color: var(--el-link)"
+                    >Top up</span
+                  >
+                </div>
+              </div>
+              <p class="note" style="margin-top: 8px">
+                The shipped gateway gate (MOTIR-803), rendered in the rail's own error slot. This
+                asset adds no new treatment — it records that an <b>ask</b> reaches it too, which is
+                the only thing that was not already true.
+              </p>
+            </div>
+          </div>
+
+          <p class="note" style="margin-top: 14px">
+            <b>The footer slot is RESTING in every one of a–f</b> unless a proposal is pending from
+            an earlier turn — in which case it keeps the gate, in all six. That is the whole rule,
+            and it is why the six states needed no per-state chrome design.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 8 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">8</span>
+          <h2>Dark, and the ink every new element carries</h2>
+          <span class="cap">tokens · AA</span>
+        </div>
+        <div class="panel-body">
+          <div class="cols c2" style="align-items: start">
+            <div class="darkwrap" data-theme="dark" data-appearance-scope>
+              <div class="ws" style="height: 384px; grid-template-columns: 1fr 300px">
+                <div class="ws-canvas">
+                  <div class="canvas-box">
+                    <span class="canvas-crumb">Motir · Epic 9</span>
+                    <div class="node" style="left: 18px; top: 54px">
+                      <span class="k">MOTIR-1343</span>Ask about this project
+                    </div>
+                    <span class="canvas-ctl zoom">− 100% +</span>
+                    <span class="canvas-ctl locate">◎ Ready</span>
+                    <span class="canvas-ctl full">⤢</span>
+                  </div>
+                  <div class="footerslot resting">
+                    <span class="col">
+                      <span class="t1">Roadmap — as saved</span>
+                      <span class="t2">Nothing proposed.</span>
+                    </span>
+                  </div>
+                </div>
+                <div class="rail">
+                  <div class="railhead">
+                    <span class="dot"></span><span class="lbl">Motir AI</span>
+                    <span class="pill">Project</span>
+                  </div>
+                  <div class="turns">
+                    <div class="turn u">
+                      <span class="av user" aria-hidden="true">·</span>
+                      <div class="bub">
+                        <span class="lbl">turn 1</span>which stories are blocked?
+                      </div>
+                    </div>
+                    <div class="turn">
+                      <span class="av" aria-hidden="true"
+                        ><svg
+                          class="glyph"
+                          viewBox="0 0 24 24"
+                          width="13"
+                          height="13"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                            fill="currentColor"
+                          /></svg
+                      ></span>
+                      <div class="bub">
+                        Two are —
+                        <span class="wi-chip"
+                          ><span class="wi-type-icon k-story"></span
+                          ><span class="wi-key">MOTIR-1343</span
+                          ><span class="wi-title">Ask about this project</span
+                          ><span class="wi-dot s-inprogress"></span
+                        ></span>
+                        is waiting on its design subtask.
+                        <div class="sources">Answered from 6 work items</div>
+                      </div>
+                    </div>
+                    <p class="marker act">Propose changes instead</p>
+                  </div>
+                  <div class="composer">
+                    <div class="field">
+                      <span class="ph">Reply, or refine further…</span><span class="send">↑</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 10px; color: var(--el-text-secondary)">
+                The real token flip — no dark-only rule anywhere in this asset. The mark inverts to
+                <code>--el-accent-text</code> on the accent circle in both themes, which is the
+                glyph design's own <code>tone="inverted"</code> and not a decision taken here.
+              </p>
+            </div>
+
+            <div>
+              <table class="spec">
+                <tr>
+                  <th>New element</th>
+                  <th>Ink on fill</th>
+                  <th>Light / dark</th>
+                </tr>
+                <tr>
+                  <td><b>count line</b> (in the answer bubble)</td>
+                  <td><code>--el-text-secondary</code> on <code>--el-surface-soft</code></td>
+                  <td>6.51 / ≥6 ✓</td>
+                </tr>
+                <tr>
+                  <td><b>correction marker</b></td>
+                  <td><code>--el-link</code> on <code>--el-surface</code></td>
+                  <td>AA ✓ — and underlined, so it does not rest on hue</td>
+                </tr>
+                <tr>
+                  <td><b>hand-off marker</b></td>
+                  <td><code>--el-text-secondary</code> on <code>--el-surface</code></td>
+                  <td>6.24 / ≥6 ✓</td>
+                </tr>
+                <tr>
+                  <td><b>footer slot · resting line 1</b></td>
+                  <td><code>--el-text-secondary</code> on <code>--el-surface</code></td>
+                  <td>6.24 / ≥6 ✓</td>
+                </tr>
+                <tr>
+                  <td><b>footer slot · resting line 2</b></td>
+                  <td><code>--el-text-secondary</code> on <code>--el-surface</code></td>
+                  <td>6.24 / ≥6 ✓</td>
+                </tr>
+                <tr>
+                  <td><b>ask starter chip</b></td>
+                  <td><code>--el-text-strong</code> on <code>--el-tint-lavender</code></td>
+                  <td>the tint-background recipe (finding #35) ✓</td>
+                </tr>
+                <tr>
+                  <td><b>callout row description</b></td>
+                  <td><code>--el-text-secondary</code> — shipped</td>
+                  <td>as shipped</td>
+                </tr>
+              </table>
+              <p class="note" style="margin-top: 12px">
+                <b
+                  >⚠️ Neither <code>--el-text-muted</code> nor <code>--el-text-faint</code> carries
+                  TEXT anywhere in this asset.</b
+                >
+                Muted clears AA only on the white page (4.54, with 0.04 of headroom) and every
+                surface here is <code>--el-surface</code> or <code>--el-surface-soft</code>, where
+                it measures 4.17–4.34 and fails. Faint clears AA on nothing at all; its one
+                appearance below is the shipped chip's 6 px status <b>dot</b> — a
+                <code>background</code>, not an ink, carrying no text and pairing its hue with a
+                position, exactly as it does everywhere else in the product.
+              </p>
+              <p class="note">
+                <b>Shape.</b> Every box below is an element-semantic token —
+                <code>--radius-card</code> (bubble, footer slot, node),
+                <code>--radius-control</code> (chip, starter, menu row),
+                <code>--radius-btn</code> (buttons, canvas controls),
+                <code>--radius-badge</code> (pill), <code>--radius-input</code> (composer),
+                <code>--spacing-control-*</code>, <code>--spacing-chip-*</code>,
+                <code>--spacing-kbd-*</code>, <code>--height-btn-sm</code>,
+                <code>--height-input</code>. No <code>rounded-md</code>, no <code>p-2</code>, no
+                <code>h-9</code>, and no raw hue anywhere — the two
+                <code>color-mix()</code> gradients are the shipped callout's own, over
+                <code>--el-*</code> inputs only.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ 9 ═══════════════ -->
+      <section class="panel">
+        <div class="panel-label">
+          <span class="n">9</span>
+          <h2>What this asset composes — and the four things it actually owns</h2>
+          <span class="cap">ownership</span>
+        </div>
+        <div class="panel-body">
+          <table class="spec">
+            <tr>
+              <th style="width: 26%">Element</th>
+              <th style="width: 37%">Owner</th>
+              <th>This asset</th>
+            </tr>
+            <tr>
+              <td>two-pane workspace frame</td>
+              <td>
+                <code>planning-workspace.mock.html</code> · <code>PlanningWorkspaceHost</code>
+              </td>
+              <td><span class="tag keep">composed</span> not re-specified</td>
+            </tr>
+            <tr>
+              <td>rail shell · head · turn list · composer</td>
+              <td><code>plan-change-conversation.mock.html</code> · <code>PlanChangeRail</code></td>
+              <td><span class="tag keep">composed</span> not re-specified</td>
+            </tr>
+            <tr>
+              <td>bubble · marker vocabulary · asking variant</td>
+              <td><code>plan-change-planner-speaks.mock.html</code> (MOTIR-2225)</td>
+              <td><span class="tag keep">composed</span> the correction marker joins it</td>
+            </tr>
+            <tr>
+              <td>roadmap canvas · diff rings · its three bottom controls</td>
+              <td><code>design/roadmap/</code> · <code>ProjectRoadmapCanvas</code></td>
+              <td><span class="tag keep">composed</span> measured, never redrawn</td>
+            </tr>
+            <tr>
+              <td>confirm bar (counts · Discard · Approve)</td>
+              <td><code>PlanChangeConfirmBar</code></td>
+              <td><span class="tag keep">composed unchanged</span> it moves INTO the slot</td>
+            </tr>
+            <tr>
+              <td>callout panel · row anatomy · keyboard model</td>
+              <td><code>ai-callout-menu.mock.html</code> (MOTIR-1811)</td>
+              <td><span class="tag keep">composed</span> this supplies one row's copy</td>
+            </tr>
+            <tr>
+              <td><b>the assistant avatar's MARK</b></td>
+              <td>
+                the glyph design (MOTIR-3183) · <code>BrandMark</code> · <code>waveBand.ts</code>
+              </td>
+              <td><span class="tag keep">composed</span> <b>not this asset's element</b></td>
+            </tr>
+            <tr>
+              <td>citation chip</td>
+              <td><code>WorkItemRefChip</code> · <code>markdown-editor.css</code></td>
+              <td>
+                <span class="tag keep">composed</span> reached through <code>MarkdownView</code>
+              </td>
+            </tr>
+            <tr>
+              <td>error · out-of-credits states</td>
+              <td>the shipped rail error slot · the gateway gate (MOTIR-803)</td>
+              <td><span class="tag keep">composed</span> ask reaches them too</td>
+            </tr>
+            <tr>
+              <td><b>the answer turn's form</b> — citations inline, the count line</td>
+              <td>—</td>
+              <td><span class="tag now">OWNED</span> panel 2</td>
+            </tr>
+            <tr>
+              <td><b>the canvas footer SLOT</b> — one box, two contents</td>
+              <td>—</td>
+              <td><span class="tag now">OWNED</span> panel 3</td>
+            </tr>
+            <tr>
+              <td><b>the correction marker + the redirect hand-off</b></td>
+              <td>drawn from <code>conversation-turn-intent.md</code> §3 / Consequence 3</td>
+              <td><span class="tag now">OWNED</span> panels 5–6</td>
+            </tr>
+            <tr>
+              <td><b>the ask row's copy, the fourth starter, the widened opener</b></td>
+              <td>—</td>
+              <td><span class="tag now">OWNED</span> panel 1</td>
+            </tr>
+          </table>
+
+          <div class="callouty" style="margin-top: 16px">
+            <p class="sub">What is NOT here, and must not arrive later</p>
+            <p class="note">
+              <b>No ask/act switch</b> in the composer (§1 — the client sends no intent).
+              <b>No <code>?mode=ask</code></b> and no second href (§5 — every row shares one).
+              <b>No per-feature chat panel</b> (the forbidden shape, § “EVERY ROW OPENS THE SAME
+              SURFACE”). <b>No session-scoped state</b> a thread can be stuck in: every state drawn
+              above is reachable from every other by typing the next sentence.
+              <b>No stand-in letter</b> in place of the mark, anywhere in this asset. And
+              <b>no bespoke citation treatment</b> — a citation is the same work-item chip the whole
+              product renders.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
