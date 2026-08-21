@@ -1,4 +1,4 @@
-import { verifyJobToken } from './jobToken';
+import { inspectJobToken } from './jobToken';
 import { verifyServiceBearer } from './serviceBearer';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -68,10 +68,40 @@ export function authenticateJobRequest(req: Request): JobRequestAuth {
   if (!token) {
     throw new JobAuthError('token_invalid', 'The X-Motir-Job-Token header is required.');
   }
-  const claims = verifyJobToken(token);
-  if (!claims) {
-    throw new JobAuthError('token_invalid', 'The job token is invalid or expired.');
+  const verdict = inspectJobToken(token);
+  if (!verdict.ok) {
+    // ⚠️ NAME THE CLOCK when the clock is the problem (MOTIR-3288). This used to
+    // be one message — "The job token is invalid or expired." — for two
+    // completely different faults, and the ambiguity was expensive: an EXPIRED
+    // token reads as a configuration or credential error, so a debugger goes
+    // looking at secrets. The actual cause is that the job outlived its
+    // credential, and the caller can only act on that if we say it.
+    //
+    // Worse, motir-ai renders a failed read-back in the caller's own terms —
+    // "none of the target work items could be read for this user" — which
+    // accuses the DATA. That message was produced by a perfectly readable card
+    // whose job had simply been queued for fifteen minutes.
+    //
+    // The CODE stays `token_invalid`: it is part of the frozen error contract
+    // (`tests/ai/contract.test.ts`) and the access decision genuinely is the
+    // same. Only the human-facing detail differs.
+    if (verdict.reason === 'expired') {
+      const expiredAtIso = new Date(verdict.expiredAt * 1000).toISOString();
+      throw new JobAuthError(
+        'token_invalid',
+        `The job token EXPIRED at ${expiredAtIso} — the job outlived its credential ` +
+          `rather than being denied one. A long-running or long-queued job must RENEW ` +
+          `its token (POST /api/internal/ai/job-token/refresh) while it works; see MOTIR-3288.`,
+      );
+    }
+    throw new JobAuthError(
+      'token_invalid',
+      verdict.reason === 'bad_signature'
+        ? 'The job token signature does not verify.'
+        : 'The job token is malformed.',
+    );
   }
+  const { claims } = verdict;
 
   return {
     ctx: { userId: claims.sub, workspaceId: claims.workspaceId },
