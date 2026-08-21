@@ -174,11 +174,20 @@ beforeEach(async () => {
   stubMotirAi();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  // ⚠️ AND AFTER, NOT ONLY BEFORE. `fleet_in_flight_slot` is FLEET-WIDE — nullable
+  // `workspace_id`, no foreign key, by design, so a slot outlives whatever it
+  // pointed at — which means no `TRUNCATE "workspace" CASCADE` reaches it and the
+  // NEXT FILE IN THIS WORKER does not clean up after this one. A slot this file
+  // leaves behind is counted by `fleetCeilingService.census`, which unions EVERY
+  // workload, so it defers an unrelated file's CI-runner admission with no visible
+  // cause. Clearing it before our own tests protects us; clearing it after protects
+  // everyone else.
+  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 afterAll(async () => {
