@@ -1097,3 +1097,92 @@ it just erased is a data-deletion failure, not a latency one.
   correct and bounded. If the worker does not ship, that is what Motir keeps — which is
   substantially better than the ~30-minute runs MOTIR-3245 measured, and is why none of the above
   is urgent enough to justify shipping it without §16.5's missing card.
+
+## §17 — Decision 12 is WITHDRAWN — the warm worker was measured and dropped (MOTIR-3357)
+
+**Appended 2026-08-21, hours after §16.** §16 decided the shape of a warm per-org sync worker. It
+was never built, and it should not be: the cost it removes was measured on the fleet's own hardware
+and is worth a few seconds of a 148-second run. **§16 stands as a record of a decision that was
+correctly reasoned from numbers that did not yet exist, and is superseded here rather than edited —
+its isolation, retention and admission analysis remains the right analysis IF a worker is ever
+wanted again, and the numbers below are why it is not.**
+
+Cards MOTIR-3256 (the worker), MOTIR-3290 (its runtime), MOTIR-3291 (the port operation) and
+MOTIR-3292 (its offboarding obligation) are cancelled. The §14 deletion order is therefore
+UNCHANGED and still complete: three homes for tenant source, all reachable from a database row.
+
+### §17.1 — The measurement
+
+One machine of the fleet's own class — `performance-2x / 8192 MB`, `iad`, booted from the
+production image `registry.fly.io/motir-index-runners:indexer-0.3.0`, destroyed afterwards — running
+the identical script used on a 14-core dev box, over the same generated 3 500-file corpus:
+
+|                                | dev box (14 cores) | **fleet (2 vCPU)** | ratio |
+| ------------------------------ | ------------------ | ------------------ | ----- |
+| full build                     | 7.58 s             | **208.59 s**       | 27.5× |
+| no-op sync                     | 1.57 s             | **3.99 s**         | 2.5×  |
+| sync again, SAME process       | 1.64 s             | **4.41 s**         | —     |
+| sync with 60× the source bytes | —                  | **7.54 s**         | —     |
+
+### §17.2 — What each row eliminates
+
+- **Process warmth buys NOTHING.** The second sync in a process is _slower_ than the first, on both
+  machines, in both rounds (1.05×, 1.10×). There is no grammar, JIT or page-cache effect for a
+  resident process to keep. **This removes the mechanism §16 was built on**, and it is the single
+  finding that ends the worker.
+- **The 2-vCPU machine is not slow at syncing.** It is 27.5× slower at a _full build_ — which is
+  real, is CPU-bound, and is exactly why the pre-MOTIR-3251 rebuilds took ~30 minutes — but it
+  syncs 3 500 files in **4 seconds**.
+- **Byte volume is weak.** Sixty times the source costs 1.9× the sync. The work is per-FILE.
+- **File count matches production.** Production reports `filesChecked: 3570`; the corpus is 3 500.
+
+Production's sync build phase is **124.4 s**. That is **16×** the heaviest reproduction available on
+identical hardware at the same file count — so it is not the machine, not the boot, and not the
+cache. It is work the sync performs on the real corpus, and it is performed on every run, warm or
+cold, on any machine.
+
+### §17.3 — What the worker would actually have saved
+
+Read off MOTIR-3250's production phase table for motir-core:
+
+| phase                             | ms          | would a warm worker avoid it?                                                                                                                                                         |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fetch + extract                   | 14 075      | **No** — the tarball is fetched unconditionally and is how the container learns the new commit; MOTIR-3249 declined changed-path plumbing, so there is no incremental source transfer |
+| snapshot GET + restore            | 3 083       | Yes                                                                                                                                                                                   |
+| **build (the sync)**              | **124 364** | **No** — measured identical warm and cold                                                                                                                                             |
+| compress + upload + control plane | 6 847       | No                                                                                                                                                                                    |
+
+**≈3 s of 148 s, for a resident runtime in motir-ai, a fourth port operation, tenant source living
+on a machine indefinitely, a new §14 obligation, an idle-billing policy and per-repo attribution.**
+
+### §17.4 — Where the time actually is, and the lever that reaches it
+
+The sync walks the WHOLE TREE to discover what a push already names. Measured on the real motir-core
+tree — 3 570 files, a 202 MB graph — with the two-file change production actually sees:
+
+| operation                              | wall       | touched                           |
+| -------------------------------------- | ---------- | --------------------------------- |
+| full build                             | 36.95 s    | everything                        |
+| whole-tree `sync()` — what ships today | **4.29 s** | checked **3 571** files to find 3 |
+| `indexFiles([2 paths])`                | **0.59 s** | **2**                             |
+
+**7.3× cheaper, and the same 27 nodes either way.** That is the next factor, it is larger than
+anything the worker would have recovered, and it is **MOTIR-3357**.
+
+⚠️ **This does NOT re-open MOTIR-3249's decision 1 on its own terms.** That decision refused a
+GitHub _compare_ call — a network round trip and a credential the container is defined by not
+holding — and that refusal still stands. What changed is the observation that **the changed paths
+arrive free with the push event that triggers the refresh**: `githubWebhookService` reads that
+payload today and discards the file lists. No compare, no credential, no new grant.
+
+### §17.5 — What §16 leaves behind that is still true
+
+- **§16.0's measurement** — the phase table, and that the build phase is 84 % of a refresh.
+- **§16.3's finding on `accruedSeconds`**: it is `ceil(observedAt − startedAt)`, wall clock rather
+  than running time, so Motir's COGS meter would keep accruing through any suspension. That is a
+  property of the meter and outlives the worker.
+- **MOTIR-3255's attribution model shipped and is unaffected.** Per-sync slices under one handle,
+  idle derived and owned by the org: no workload emits slices today, every current row is written
+  exactly as before, and the record is ready if a multi-repo handle ever exists.
+- **The one-container-per-sync shape is CONFIRMED, not merely retained.** Boot, fetch, ship and die,
+  with the sync in the middle — §5's shape, now with a number under it.
