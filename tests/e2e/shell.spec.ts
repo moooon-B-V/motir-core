@@ -8,6 +8,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'shell-spec-pass-123';
 const USER_EMAIL = 'e2e-shell@example.com';
@@ -24,6 +25,7 @@ test.afterAll(async () => {
 // Mirrors projects-flow.spec's resilient sign-up (the shared dev server
 // applies E2E_DISABLE_RATE_LIMIT, but keep the retry as belt + suspenders).
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

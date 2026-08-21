@@ -1,3 +1,5 @@
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
+
 // The Home tab axis (Story MOTIR-2649 · Subtask MOTIR-2653) — a leaf module so
 // the page, the tab strip and the tests share ONE definition of what a tab is
 // and how it is spelled in a URL.
@@ -26,5 +28,5 @@ export function homeTabHref(tab: HomeTab, cursor?: string | null): string {
   if (tab === 'watching') params.set('tab', 'watching');
   if (cursor) params.set('cursor', cursor);
   const query = params.toString();
-  return query ? `/home?${query}` : '/home';
+  return query ? `${AUTHED_LANDING_PATH}?${query}` : AUTHED_LANDING_PATH;
 }

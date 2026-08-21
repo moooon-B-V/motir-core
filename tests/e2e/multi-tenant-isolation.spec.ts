@@ -24,6 +24,7 @@
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'multi-tenant-pass-123';
 const USER_A_EMAIL = 'e2e-tenant-a@example.com';
@@ -43,6 +44,7 @@ test.afterAll(async () => {
 // /dashboard with a session cookie set. The rate limiter is gated OFF for
 // the E2E dev server (see file header), so a single click is enough.
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

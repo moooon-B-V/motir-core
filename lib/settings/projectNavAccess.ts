@@ -1,4 +1,5 @@
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // THE PROJECT-NAV GATING MAP (Story MOTIR-2258 · Subtask MOTIR-2471).
 //
@@ -62,7 +63,7 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     // silently drops the row from the rail, which is the failure mode this file's
     // own header warns about. The totality guard in
     // `tests/settings/projectNavAccess.test.ts` is what makes that unmissable.
-    href: '/home',
+    href: AUTHED_LANDING_PATH,
     requires: 'browse-only',
     evidence:
       'app/(authed)/home/page.tsx resolves the session + workspace context and calls homeService, which filters to the browsable-project set itself. No permission is asserted, and none could be: the surface spans projects rather than sitting in one.',

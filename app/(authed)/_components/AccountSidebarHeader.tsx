@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils/cn';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The account-settings-area rail header (Story 7.8 · Subtask 7.8.12). When the
 // rail is in the account-settings area it REPLACES the SidebarHeader/ProjectSwitcher
@@ -24,7 +25,9 @@ import { cn } from '@/lib/utils/cn';
 // (`docs/decisions/home-scope.md` §2.2). `tests/components/rail-head-back-link.test.tsx`
 // is the guard on the rendered `href`, in both rail variants.
 
-const BACK_HREF = '/home';
+// The constant is IMPORTED, not retyped (MOTIR-3373) — this file is one of
+// the three that carried the stale `/dashboard` this comment is about.
+const BACK_HREF = AUTHED_LANDING_PATH;
 
 export interface AccountSidebarHeaderProps {
   user: { name: string; email: string };

@@ -48,6 +48,7 @@
 
 import { expect, test, type BrowserContext, type Page, type Request } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'project-isolation-pass-123';
 const USER_A_EMAIL = 'e2e-project-tenant-a@example.com';
@@ -72,6 +73,7 @@ test.afterAll(async () => {
 // enough because E2E_DISABLE_RATE_LIMIT gates the IP-keyed limiter off
 // for the E2E dev server.
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

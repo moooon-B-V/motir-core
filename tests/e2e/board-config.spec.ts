@@ -20,7 +20,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signUp, SHELL_PASSWORD } from './_helpers/shell-session';
+import { signUp, startSignedOut, SHELL_PASSWORD } from './_helpers/shell-session';
 import { getBoard, columnByStatus } from './_helpers/board';
 import { createItem } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
@@ -302,7 +302,11 @@ test.describe('board-config @smoke', () => {
       });
     }
 
-    // Sign in as the member (two-step credentials flow).
+    // Sign in as the member (two-step credentials flow). The OWNER's session is
+    // still on this page, and since MOTIR-3372 `/sign-in` redirects a reader who
+    // already has one — so the switch starts by leaving the first account, which
+    // is what it means in the browser too.
+    await startSignedOut(page);
     await page.goto('/sign-in');
     await page.getByPlaceholder('Email address').fill(memberEmail);
     await page.getByRole('button', { name: 'Continue', exact: true }).click();

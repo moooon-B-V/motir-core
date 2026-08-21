@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The motir-core root (Subtask 7.22.1 / MOTIR-1457 — the 8.3 entry rework;
 // two-branch contract added by MOTIR-3367).
@@ -45,5 +46,5 @@ import { getSession } from '@/lib/auth';
 // the root. Nothing here imports `motir-ai` (the open-core invariant).
 export default async function RootPage() {
   const session = await getSession();
-  redirect(session ? '/home' : '/sign-in');
+  redirect(session ? AUTHED_LANDING_PATH : '/sign-in');
 }

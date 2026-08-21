@@ -26,6 +26,7 @@ import {
   shouldShowDesignStep,
   willRefreshKinds,
 } from '@/lib/onboarding/discoveryLoop';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The onboarding SHELL (Subtask 7.3.11 / MOTIR-840) — the client island that
 // composes the finalized two-pane onboarding into one frame with two modes: the
@@ -57,7 +58,7 @@ import {
 // navigating to it (`app/(authed)/dashboard/page.tsx` carries the same
 // warning). `tests/components/OnboardingExit.test.tsx` is the guard on the
 // rendered affordance's destination, down both exit paths.
-const ONBOARDING_EXIT_PATH = '/home';
+const ONBOARDING_EXIT_PATH = AUTHED_LANDING_PATH;
 
 export interface DiscoveryOnboardingProps {
   /** The idea preserved across the auth redirect (the 7.3.14 cookie), seeded as

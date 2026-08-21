@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { cn } from '@/lib/utils/cn';
 import type { HomeTab } from '@/lib/home/tab';
 import type { HomeTabCountsDto } from '@/lib/dto/home';
+import { homeTabHref } from '@/lib/home/tab';
 
 // The Home tab strip (Story MOTIR-2649 · Subtask MOTIR-2653, per
 // design/home/design-notes.md §"The tab strip") — My work · Watching.
@@ -31,14 +32,14 @@ export async function HomeTabs({ active, counts }: { active: HomeTab; counts: Ho
   const tabs = [
     {
       key: 'work' as const,
-      href: '/home',
+      href: homeTabHref('work'),
       label: t('tabs.myWork'),
       icon: <CircleDot className="h-3.5 w-3.5" />,
       count: counts.myWork,
     },
     {
       key: 'watching' as const,
-      href: '/home?tab=watching',
+      href: homeTabHref('watching'),
       label: t('tabs.watching'),
       icon: <Star className="h-3.5 w-3.5" />,
       count: counts.watching,
