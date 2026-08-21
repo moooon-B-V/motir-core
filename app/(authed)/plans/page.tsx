@@ -10,10 +10,15 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { plansService } from '@/lib/services/plansService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
+// ⚠️ The parser comes from the PURE module, never from `PlanStatusTabs` — that
+// one is `'use client'`, and importing even a pure function through a client
+// boundary hands this Server Component a client reference that throws on call
+// (MOTIR-3243). See the note in `lib/planning/planStatusFilter.ts`.
+import { planStatusFromParam } from '@/lib/planning/planStatusFilter';
 
 import { buildPlanRowViews } from './planRowView';
 import { PlansList } from './_components/PlansList';
-import { PlanStatusTabs, planStatusFromParam } from './_components/PlanStatusTabs';
+import { PlanStatusTabs } from './_components/PlanStatusTabs';
 
 // The Plans surface (Story 7.21 · Subtask 7.21.1 / MOTIR-1338) — the index of
 // every AI plan (a generation proposal bundle) for the project. The ACCESS PATH

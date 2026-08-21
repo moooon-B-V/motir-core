@@ -1334,6 +1334,12 @@ export default defineConfig({
         // is the trade the block above already refuses once.
         'lib/planning/planShape.ts',
         'lib/planning/planView.ts',
+        // MOTIR-3243 — the tab's URL vocabulary, moved OUT of the `'use client'`
+        // component it was declared in (a Server Component cannot call an export
+        // it reached through a client boundary; `/plans` 500'd). It is covered by
+        // the same `tests/components/PlanStatusTabs` suite, which now imports it
+        // from here.
+        'lib/planning/planStatusFilter.ts',
         'components/planning/PlanProposalList.tsx',
         'app/**/plans/_components/PlanStatusTabs.tsx',
         'app/**/plans/_components/PlansList.tsx',
@@ -2538,6 +2544,9 @@ export default defineConfig({
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/planning/planShape.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planView.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3243's extraction, measured the same way after the move:
+        //   lib/planning/planStatusFilter.ts             100 stmts ·  100 branch · 100 fn · 100 lines
+        'lib/planning/planStatusFilter.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanProposalList.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanStatusTabs.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlansList.tsx': { branches: 90, functions: 90, lines: 90 },

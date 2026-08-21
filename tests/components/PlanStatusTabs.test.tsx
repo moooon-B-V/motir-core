@@ -10,11 +10,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import {
-  PLAN_STATUS_PARAM,
-  PlanStatusTabs,
-  planStatusFromParam,
-} from '@/app/(authed)/plans/_components/PlanStatusTabs';
+import { PlanStatusTabs } from '@/app/(authed)/plans/_components/PlanStatusTabs';
+import { PLAN_STATUS_PARAM, planStatusFromParam } from '@/lib/planning/planStatusFilter';
 
 // MOTIR-3241 / MOTIR-3242 — the Plans list's STATUS TAB STRIP, built to
 // `design/ai-planning/design-notes.md` Part VII §4.
@@ -141,6 +138,12 @@ describe('the URL is the single source of truth (MOTIR-3241)', () => {
   });
 });
 
+// ⚠️ IMPORTED FROM `lib/planning/planStatusFilter`, NOT from the component
+// (MOTIR-3243). They were declared in the `'use client'` component until the
+// story's E2E found `/plans` 500ing on every request — a Server Component cannot
+// CALL an export it reached through a client boundary, however pure the function
+// is. Keeping the test's import pointed at the pure module is what makes a
+// regression to the old shape a compile error here rather than a 500 in a browser.
 describe('planStatusFromParam', () => {
   it('takes each member and falls back to `planned` for anything else', () => {
     for (const value of ['generating', 'planned', 'approved', 'declined'] as const) {

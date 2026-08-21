@@ -54,10 +54,8 @@ vi.mock('@/app/(authed)/plans/planRowView', () => ({
 
 import PlansPage from '@/app/(authed)/plans/page';
 import { PlansList } from '@/app/(authed)/plans/_components/PlansList';
-import {
-  PlanStatusTabs,
-  planStatusFromParam,
-} from '@/app/(authed)/plans/_components/PlanStatusTabs';
+import { PlanStatusTabs } from '@/app/(authed)/plans/_components/PlanStatusTabs';
+import { planStatusFromParam } from '@/lib/planning/planStatusFilter';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 

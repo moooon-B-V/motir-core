@@ -9,6 +9,7 @@ import {
   type PlanStatusCountsDto,
   type PlanStatusDto,
 } from '@/lib/dto/plans';
+import { PLAN_STATUS_PARAM } from '@/lib/planning/planStatusFilter';
 
 // The Plans list's STATUS TAB STRIP (MOTIR-3241, built to
 // `design/ai-planning/design-notes.md` Part VII §4 and
@@ -34,16 +35,15 @@ import {
 // the grammar the board group-by and the Children List/Graph switcher already
 // use (Part VII §4).
 
-/** The query parameter that carries the chosen status. */
-export const PLAN_STATUS_PARAM = 'status';
-
-/** The tab a URL selects. Unknown / absent / malformed → the default, never an
- *  error: the value comes from a URL a person can type. */
-export function planStatusFromParam(raw: string | null | undefined): PlanStatusDto {
-  return (PLAN_STATUS_DTO_VALUES as readonly string[]).includes(raw ?? '')
-    ? (raw as PlanStatusDto)
-    : 'planned';
-}
+// ⚠️ `PLAN_STATUS_PARAM` AND `planStatusFromParam` LIVE IN
+// `lib/planning/planStatusFilter.ts`, and they are NOT re-exported from here
+// (MOTIR-3243). They used to be declared in this file, which is a `'use client'`
+// module — so the page, a Server Component, imported a CLIENT REFERENCE and
+// `/plans` 500'd on every request with *"Attempted to call
+// planStatusFromParam() from the server"*. A re-export would restore exactly
+// that: the boundary is a property of the module an export is REACHED THROUGH,
+// not of where the code was written. Import from the pure module on both sides.
+// `lib/planning/planView.ts` is the same shape for the plan detail's `?view=`.
 
 export interface PlanStatusTabsProps {
   /** The tab currently in view, already resolved from the URL by the page. */
