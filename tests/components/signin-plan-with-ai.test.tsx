@@ -7,6 +7,10 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // surface. A logged-out visitor enters the start-fresh AI planning flow from
 // here (the front-door role the relocated marketing hero used to hold). We
 // assert the control exists on /sign-in and routes to /onboarding.
+//
+// It renders the CARD rather than the route: MOTIR-3372 made `page.tsx` an async
+// server shell that resolves the session first, and the door this test is about
+// lives in the client island the shell renders.
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
@@ -17,7 +21,7 @@ vi.mock('next/navigation', () => ({
 // component renders in a plain jsdom-less env without real auth wiring.
 vi.mock('@/lib/auth/client', () => ({ signIn: { email: vi.fn() } }));
 
-import SignInPage from '@/app/(auth)/sign-in/page';
+import { SignInCard } from '@/app/(auth)/sign-in/_components/SignInCard';
 
 afterEach(() => {
   cleanup();
@@ -25,7 +29,7 @@ afterEach(() => {
 
 describe('sign-in "Plan with AI" door (7.22.1)', () => {
   it('renders a "Plan with AI" control that links to /onboarding', () => {
-    renderWithIntl(<SignInPage />);
+    renderWithIntl(<SignInCard />);
 
     const link = screen.getByRole('link', { name: /plan with ai/i });
     expect(link.getAttribute('href')).toBe('/onboarding');
