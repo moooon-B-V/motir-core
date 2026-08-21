@@ -1,12 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { sanitizeNextPath } from '@/lib/navigation/nextDestination';
+import { resolvePostAuthDestination } from '@/lib/navigation/landing';
 import { SignUpCard } from './_components/SignUpCard';
-
-// The signed-in landing (MOTIR-2654 · MOTIR-2921 moved sign-up onto it ·
-// `docs/decisions/home-scope.md` §2.3). Duplicated from the client card for now;
-// MOTIR-3373 gives the concept one owner and retires both copies together.
-const POST_AUTH_LANDING = '/home';
 
 /**
  * `/sign-up` — a SERVER SHELL over the client card (MOTIR-3372), the same shape
@@ -32,7 +27,7 @@ export default async function SignUpPage({
   const session = await getSession();
 
   if (session) {
-    redirect(sanitizeNextPath(params.next) ?? POST_AUTH_LANDING);
+    redirect(resolvePostAuthDestination({ next: params.next }));
   }
 
   return <SignUpCard />;

@@ -45,6 +45,7 @@ import {
 } from '@/lib/settings/accountSettingsNav';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
 import { AccountSidebarHeader } from './AccountSidebarHeader';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with the
 // route-aware nav sections — and, in the settings and account AREAS, that
@@ -230,8 +231,8 @@ export function SidebarNav({
         // below; both are gone.
         icon: <House />,
         label: t('nav.home'),
-        href: '/home',
-        active: isActive(pathname, '/home'),
+        href: AUTHED_LANDING_PATH,
+        active: isActive(pathname, AUTHED_LANDING_PATH),
       },
       {
         icon: <LayoutDashboard />,

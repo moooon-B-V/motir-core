@@ -131,6 +131,44 @@ contract) and `home/page.tsx:84-86`. MOTIR-2921 is `blocked_by` MOTIR-2761, beca
 moving sign-up to a `/home` that is still workspace-scoped would regress the project-less
 first screen relative to today's `/dashboard`.
 
+#### 2.4 The landing has ONE owner — `lib/navigation/landing.ts` (MOTIR-3373, 2026-08-21)
+
+Everything above decides WHAT the landing is. This subsection records WHERE that
+decision now lives, because the answer being right and the answer being in one place
+turned out to be different problems.
+
+Six defects under Epic 8 were about this route, in two shapes. Three were **stale**:
+a destination that was correct when written and still said `/dashboard` after §2.3
+moved it (MOTIR-2921, MOTIR-3171, MOTIR-3173) — each under a comment asserting the
+pre-2654 world as fact, and each repair enumerating the population by hand, one of
+them missing a site because it searched `app/` while the constant lived under
+`components/`. Two were **silent**: a route that never asked which visitor it was
+serving at all (MOTIR-3367 the product's own root, MOTIR-3372 the credential
+surfaces), which no sweep for the OLD literal could ever have found.
+
+The enabling condition was structural: **no module owned the answer.** It was stored
+as ten string literals in ten files, each free to be independently right, stale, or
+absent.
+
+So it is now:
+
+- **`lib/navigation/landing.ts`** — `AUTHED_LANDING_PATH`, `ONBOARDING_ENTRY_PATH`,
+  and `resolvePostAuthDestination` (the `?next=` → `?draft=` → landing precedence
+  both credential flows apply, with the same-origin check that keeps a server-side
+  `?next=` from being an open redirect). A PLAIN module — no `server-only` — because
+  half its consumers are `'use client'`, exactly like `afterContextSwitch.ts` beside
+  it.
+- **`tests/navigation/landing-owner-guard.test.ts`** — fails on a `/home` literal
+  anywhere under `app/`, `components/` or `lib/` outside that module, and on a
+  `/dashboard` literal sitting under a comment that CLAIMS to be the home or the
+  landing (negations excepted: `dashboard/page.tsx` correctly says it is no longer
+  one). The second half is MOTIR-3173's own diagnosis turned into an assertion.
+
+**What this means for a future change to §2.3.** Moving the landing is now editing
+one constant and reading one guard's failures — not re-deriving a population. And a
+new surface that answers _"where does this reader go next"_ has an owner to import
+from, which is the half that no sweep could have supplied.
+
 ### 3. Cross-project "my work" is RETAINED — at the workspace tier, as MOTIR-2920
 
 The capability MOTIR-2761 removes is genuinely unreplaced, and the check was made rather

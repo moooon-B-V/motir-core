@@ -1,12 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { sanitizeNextPath } from '@/lib/navigation/nextDestination';
+import { resolvePostAuthDestination } from '@/lib/navigation/landing';
 import { SignInCard } from './_components/SignInCard';
-
-// The signed-in landing (MOTIR-2654 · `docs/decisions/home-scope.md` §2.3). The
-// literal is duplicated from the client card on purpose for now — MOTIR-3373
-// gives the concept one owner and retires both copies together.
-const POST_AUTH_LANDING = '/home';
 
 /**
  * `/sign-in` — a SERVER SHELL over the client card (MOTIR-3372).
@@ -37,9 +32,13 @@ const POST_AUTH_LANDING = '/home';
  *   1. `?next=` when it is a safe same-origin path — this is what makes the CLI
  *      hand-off free (`/sign-in?next=%2Fdevice%3Fuser_code%3D…` lands a
  *      signed-in reader straight on the approval screen, code intact) and what
- *      every bounced deep link relies on. `sanitizeNextPath` is what keeps it
- *      from being an open redirect.
+ *      every bounced deep link relies on. `sanitizeNextPath`, inside the
+ *      resolver, is what keeps it from being an open redirect.
  *   2. `/home` otherwise.
+ *
+ * Both come from `resolvePostAuthDestination` — the ONE owner of "where does a
+ * reader go next" (MOTIR-3373). The card below computes its `callbackURL` from
+ * the same call, so the shell and the form cannot disagree.
  *
  * ⚠️ ONE ARRIVAL STILL RENDERS FOR A SIGNED-IN READER: `?draft=`. The
  * cross-origin idea hand-off (MOTIR-1458) is claimed by a client POST whose
@@ -59,7 +58,7 @@ export default async function SignInPage({
     typeof (Array.isArray(params.draft) ? params.draft[0] : params.draft) === 'string';
 
   if (session && !hasDraft) {
-    redirect(sanitizeNextPath(params.next) ?? POST_AUTH_LANDING);
+    redirect(resolvePostAuthDestination({ next: params.next }));
   }
 
   return <SignInCard sessionActive={Boolean(session)} />;

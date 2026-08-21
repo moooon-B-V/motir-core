@@ -5,6 +5,7 @@
 // through the actual sign-up + create-project UI.
 
 import { expect, type Page } from '@playwright/test';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 
@@ -21,7 +22,12 @@ export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 //
 // `tests/e2e/auth-post-auth-landing.spec.ts` pins BOTH flows against this
 // constant — that is what stops them diverging again unnoticed.
-export const POST_AUTH_LANDING = '/home';
+//
+// Since MOTIR-3373 it is the APP's constant, re-exported rather than retyped:
+// the specs then assert against the value the product actually ships, so a
+// destination change is a red spec instead of two constants that agree by
+// coincidence until they do not.
+export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
 
 /**
  * ── Why the URL reading right did not mean sign-in had FINISHED ──

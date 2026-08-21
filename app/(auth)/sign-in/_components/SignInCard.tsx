@@ -17,13 +17,14 @@ import {
   IdeaCarried,
 } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
+import { ONBOARDING_ENTRY_PATH, resolvePostAuthDestination } from '@/lib/navigation/landing';
 
-// Where a visitor who arrived from the marketing hero lands after auth: the
-// authed discovery chat, which reads the `motir_pending_idea` cookie (planted by
-// the draft claim below) to seed its first turn. Kept as a literal here because
-// the canonical constant lives in a `server-only` module (lib/onboarding/
-// pendingIdea.ts) that a client component must not import.
-const ONBOARDING_ENTRY_PATH = '/onboarding';
+// ⚠️ THE DESTINATIONS ARE IMPORTED NOW (MOTIR-3373). This file used to carry
+// its own `ONBOARDING_ENTRY_PATH` constant and a hardcoded home default, under a
+// comment explaining that the canonical constant lived in a `server-only` module
+// a client component must not import. That was a good reason not to import THAT
+// module and no reason to retype the value: `lib/navigation/landing.ts` is a
+// plain module precisely so both halves of the app can share one answer.
 
 /**
  * Two-step sign-in (Clay pattern):
@@ -88,7 +89,7 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
   //
   // An explicit `?next=` still WINS (the CLI-connect hand-off and every
   // deep-link rely on it), and the `?draft=` → onboarding branch is untouched.
-  const callbackURL = searchParams.get('next') ?? (draftId ? ONBOARDING_ENTRY_PATH : '/home');
+  const callbackURL = resolvePostAuthDestination({ next: searchParams.get('next'), draftId });
   const [carriedIdea, setCarriedIdea] = useState<string | null>(null);
   // The CLI-connect hand-off (Story MOTIR-1863 · Subtask MOTIR-1867): `/device`
   // sends a signed-out visitor here with `?next=/device?user_code=…`, and this

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { signUp } from '@/lib/auth/client';
 import { AuthShell, OrDivider, FormAlert } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
+import { resolvePostAuthDestination } from '@/lib/navigation/landing';
 
 /**
  * Sign-up. Two-step, following mockup 03 + the Clay pattern.
@@ -82,7 +83,7 @@ function SignUpForm() {
   // unconditionally, naming this line's split as the defect to close.
   //
   // An explicit `?next=` still WINS, exactly as on sign-in.
-  const callbackURL = searchParams.get('next') ?? '/home';
+  const callbackURL = resolvePostAuthDestination({ next: searchParams.get('next') });
 
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [email, setEmail] = useState('');
