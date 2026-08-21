@@ -144,7 +144,13 @@ describe('gitlab.parsePushEvent', () => {
         after: SHA,
         project: { id: 42 },
       }),
-    ).toEqual({ providerRepoId: '42', branch: 'main', headSha: SHA });
+      // ⚠️ `changedPaths: null` is NOT an oversight (MOTIR-3358). GitLab's push
+      // payload does carry per-commit `added`/`modified`/`removed`, but nobody has
+      // a real one to test the parse against, so this provider declines to claim a
+      // list — and null means "unknown", which makes a refresh sync the whole tree
+      // exactly as it does today. An empty ARRAY here would claim nothing changed,
+      // and a refresh would then index nothing at all.
+    ).toEqual({ providerRepoId: '42', branch: 'main', headSha: SHA, changedPaths: null });
   });
 
   it('keeps a slashed branch name intact', () => {
