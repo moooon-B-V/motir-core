@@ -99,6 +99,18 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * pass (measured locally at ~95 s). Re-measure it here only if the flag ever
  * becomes the lane default; until then a real number would be a lie about what
  * the bin-packer is scheduling.
+ *
+ * ⚠️ `auth-signed-in-bounce.spec.ts` (MOTIR-3372) carries the LOCAL provenance
+ * too, and it is here because the guard caught it: a spec with no entry is
+ * assigned to no leg, so its first CI run executed it ZERO times while every
+ * check went green about it. Measured on 2026-08-21 against a production build
+ * on a private cluster, twice: **3.6 s** wall for the file on the first run, and
+ * **1.51 s** of test BODIES (1.155 + 0.351) on a warm second run. The gap is the
+ * two `resetDatabase()` hooks the reporter attributes separately — ≈1.05 s each,
+ * which agrees with the ≈1.03 s/hook figure `shell-viewport-floor` derived above.
+ * Recorded as **4.5**: the higher reading, rounded UP, because under-estimating
+ * is the direction that unbalances the bin-packer and a local number runs at or
+ * below the CI cost. Re-measure from the first green run that includes it.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
@@ -113,6 +125,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'auth-credentials.spec.ts': 3.6,
   'auth-google.spec.ts': 3.5,
   'auth-post-auth-landing.spec.ts': 12.0,
+  'auth-signed-in-bounce.spec.ts': 4.5,
   'automation.spec.ts': 12.1,
   'backlog-filter.spec.ts': 3.1,
   'backlog.spec.ts': 16.9,
