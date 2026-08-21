@@ -47,6 +47,23 @@
 //    check DOES fail and reproduces the reported picture (a ~290 px empty band
 //    below a shell whose bottom edge sits that far above the viewport bottom).
 //    A guard whose failing branch was never observed is a tautology.
+// 4. THE CONTAINING-BLOCK LEAK (MOTIR-3286) — the SECOND cause of the same
+//    picture, and the one the report was actually about.
+//
+//    Tests 1–3 all rest on "nothing inside the shell can produce a document
+//    scrollbar, because the root clips". `overflow` clips a descendant only when
+//    that descendant's CONTAINING BLOCK is inside the clipping box, so an
+//    `absolute` element with no positioned ancestor escaped the shell and its
+//    static position — far down `<main>`'s flow — lengthened the DOCUMENT to
+//    reach it. Measured on the live app: `scrollHeight` 1364 against a
+//    `clientHeight` of 371, from one 1px `sr-only` span, on a browser where
+//    `100vh === 100dvh` and test 2's mechanism cannot fire at all.
+//
+//    Test 1 passes on the broken source because the seeded fixture happens to
+//    ship no unanchored `absolute` — so this test INJECTS one rather than
+//    waiting for a component to. It asserts the invariant against the general
+//    defect, not against today's offending span, and it carries its own teeth:
+//    it strips the anchor and watches the same probe lengthen the document.
 //
 // Setup is auth (`shell-session` signUp) + the `_test` work-item harness, so this
 // has no ordering dependency on any other spec.
@@ -260,5 +277,112 @@ test.describe('the shell owns the only scroller', () => {
     const restored = await documentGeometry(page);
     expect(restored.scrollHeight).toBe(restored.clientHeight);
     expect(restored.mainBottom).toBe(restored.innerHeight);
+  });
+
+  test('an `absolute` descendant with no offsets cannot lengthen the document (MOTIR-3286)', async ({
+    page,
+  }) => {
+    const key = await seedSignedInItem(page);
+    await page.setViewportSize(SHORT_VIEWPORT);
+    await page.goto(`/items/${key}`);
+    await expect(page.locator('main#main')).toBeVisible();
+
+    const clean = await documentGeometry(page);
+    expect(clean.scrollHeight, 'the page starts with no document overflow').toBe(
+      clean.clientHeight,
+    );
+
+    // INJECT the defect: a filler that pushes `<main>`'s flow well past the
+    // fold, then a 1px `absolute` element with NO offsets — the exact shape of a
+    // Tailwind `sr-only` span, which is what the live report turned out to be.
+    // The filler is an ordinary in-flow block, so it can only lengthen `<main>`;
+    // only the probe can reach the document, and only if it escapes the clip.
+    const probe = await page.evaluate((fillerPx) => {
+      const main = document.getElementById('main')!;
+      const filler = document.createElement('div');
+      filler.dataset.floorProbe = 'filler';
+      filler.style.height = `${fillerPx}px`;
+      const span = document.createElement('span');
+      span.dataset.floorProbe = 'span';
+      // Tailwind's `sr-only`, verbatim apart from the clip path.
+      span.style.cssText =
+        'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;white-space:nowrap';
+      main.append(filler, span);
+      return {
+        // Proof the probe really is below the fold — an injection that landed
+        // inside the viewport would make this test pass for the wrong reason.
+        staticOffsetTop: filler.offsetTop + fillerPx,
+        mainScrollHeight: main.scrollHeight,
+      };
+    }, 3000);
+
+    expect(
+      probe.mainScrollHeight,
+      "the filler made `<main>`'s own content taller than the viewport",
+    ).toBeGreaterThan(clean.clientHeight);
+    expect(
+      probe.staticOffsetTop,
+      "the probe's static position sits below the fold, where an escapee does damage",
+    ).toBeGreaterThan(clean.clientHeight);
+
+    const injected = await documentGeometry(page);
+    expect(
+      injected.scrollHeight,
+      '`<main>` is a containing block as well as a clipping box, so an `absolute` ' +
+        'descendant that sets no offsets is clipped by it and the DOCUMENT is ' +
+        'untouched. Without that, the element anchors to the INITIAL containing ' +
+        'block, escapes the shell, and drags the whole shell up over an empty ' +
+        'band of body canvas.',
+    ).toBe(injected.clientHeight);
+    expect(injected.mainBottom, 'the shell still reaches the viewport bottom').toBe(
+      injected.innerHeight,
+    );
+
+    // TEETH, in the same browser and on the same probe: strip the anchors and
+    // the document grows by the escape. This is what makes the assertion above
+    // evidence rather than a restatement of something the page does anyway.
+    //
+    // BOTH anchors come off, and that they must is itself the finding: with the
+    // root still `relative` the probe merely re-anchors one level up and is
+    // clipped there, so the document never grows and this branch reads green on
+    // a `<main>` that lost its own anchor. The two classes are deliberately
+    // redundant for the DOCUMENT invariant — the root is what stops the page
+    // scrolling, `<main>` is what keeps an escapee scrolling with the content it
+    // was written beside — so a teeth test that removes one proves nothing.
+    const unanchored = await page.evaluate(() => {
+      const main = document.getElementById('main')!;
+      // The clipping root: the nearest ancestor that clips its overflow. Found
+      // by walking rather than by class name, so the probe measures the box that
+      // actually does the clipping.
+      let clipper: HTMLElement | null = main.parentElement;
+      while (clipper && getComputedStyle(clipper).overflowY !== 'hidden') {
+        clipper = clipper.parentElement;
+      }
+      const before = { main: main.style.position, clipper: clipper?.style.position ?? '' };
+      main.style.position = 'static';
+      if (clipper) clipper.style.position = 'static';
+      const root = document.documentElement;
+      const geometry = {
+        scrollHeight: root.scrollHeight,
+        clientHeight: root.clientHeight,
+        foundClipper: Boolean(clipper),
+      };
+      main.style.position = before.main;
+      if (clipper) clipper.style.position = before.clipper;
+      return geometry;
+    });
+    expect(unanchored.foundClipper, 'the walk found the shell\u2019s clipping root').toBe(true);
+    expect(
+      unanchored.scrollHeight,
+      'with both anchors removed the SAME probe lengthens the document — the ' +
+        'assertion above is measuring the fix, not a property the page has anyway',
+    ).toBeGreaterThan(unanchored.clientHeight);
+
+    // And it recovers once the injection is gone.
+    await page.evaluate(() => {
+      document.querySelectorAll('[data-floor-probe]').forEach((el) => el.remove());
+    });
+    const cleaned = await documentGeometry(page);
+    expect(cleaned.scrollHeight).toBe(cleaned.clientHeight);
   });
 });

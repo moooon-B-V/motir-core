@@ -52,8 +52,31 @@ export function AppLayout({ topNav, sidebar, children, className }: AppLayoutPro
   // wires Mod+K / ? against the same hook + module).
   useShortcut(SHORTCUTS.toggleSidebar.combo, toggleCollapsed);
 
+  /*
+    `relative` on the root below is what makes its `overflow-hidden` MEAN
+    anything (MOTIR-3286).
+
+    `overflow` clips a descendant only when that descendant's CONTAINING BLOCK is
+    inside the clipping box. An absolutely positioned element with no positioned
+    ancestor resolves its containing block to the INITIAL one, so it is not
+    clipped by this root at all — and its static position, the place it would
+    have taken in `<main>`'s flow, extends the DOCUMENT's scrollable overflow to
+    reach it. One 1px `sr-only` span deep inside a long page was enough: measured
+    on the live app, `documentElement.scrollHeight` 1364 against a `clientHeight`
+    of 371. The whole shell then scrolls up as a block and leaves an empty band
+    of body canvas below its bottom edge — reported twice, and not what
+    MOTIR-3208's `vh`/`dvh` correction was fixing.
+
+    So both clipping boxes on the shell path — this root and `<main>` — are
+    positioned. That is the only place the containing block can be settled for
+    every descendant that will ever exist; anchoring the one span that escaped
+    would leave the invariant resting on each future author remembering not to
+    write a bare `absolute`.
+  */
   return (
-    <div className={cn('flex h-dvh flex-col overflow-hidden bg-(--el-page-bg)', className)}>
+    <div
+      className={cn('relative flex h-dvh flex-col overflow-hidden bg-(--el-page-bg)', className)}
+    >
       <a
         href="#main"
         className={cn(
@@ -89,11 +112,19 @@ export function AppLayout({ topNav, sidebar, children, className }: AppLayoutPro
           wider than the column (a wide table, a code block, a board) must stay
           REACHABLE, and clipping it would make it permanently unreachable in a
           shell whose document cannot scroll to reveal it.
+
+          `relative` for the reason stated above the root (MOTIR-3286): it is a
+          clipping box, so it must also be a containing block, or what it clips
+          is only the descendants that happen to have a positioned ancestor.
+          Anchoring HERE rather than only at the root is what keeps an escapee
+          scrolling WITH the content it was written beside, instead of pinned to
+          the shell — the root alone would stop the document growing and leave
+          the element in the wrong place.
         */}
         <main
           id="main"
           tabIndex={-1}
-          className="min-h-0 overflow-y-auto overflow-x-auto focus:outline-none"
+          className="relative min-h-0 overflow-y-auto overflow-x-auto focus:outline-none"
         >
           {children}
         </main>
