@@ -54,13 +54,50 @@ describe('authenticateJobRequest', () => {
     }
   });
 
-  it('rejects an expired job token', () => {
+  it('rejects an expired job token, and the message NAMES THE CLOCK (MOTIR-3288)', () => {
+    // This used to assert /invalid or expired/ — one message for two unrelated
+    // faults. That ambiguity is the defect: an expired token reads as a
+    // credential misconfiguration, so a debugger goes looking at secrets, when
+    // the actual cause is that the job outlived its credential. Three real jobs
+    // died this way and the first diagnosis attempt went to auth.
     const token = mintJobToken({ ...claims, ttlSeconds: -1 });
-    expect(() =>
+    try {
       authenticateJobRequest(
         req({ authorization: `Bearer ${SECRET}`, 'x-motir-job-token': token }),
-      ),
-    ).toThrowError(/invalid or expired/);
+      );
+      expect.unreachable();
+    } catch (err) {
+      const e = err as JobAuthError;
+      // The access decision is unchanged, and the code stays in the frozen
+      // contract (tests/ai/contract.test.ts).
+      expect(e.code).toBe('token_invalid');
+      // The message must say the credential LAPSED, and when.
+      expect(e.message).toMatch(/EXPIRED at \d{4}-\d{2}-\d{2}T/);
+      // And it must point at the remedy, so the reader does not conclude the
+      // token was wrong rather than old.
+      expect(e.message).toMatch(/RENEW/);
+    }
+  });
+
+  it('distinguishes a FORGED token from an expired one in the message (MOTIR-3288)', () => {
+    const token = mintJobToken(claims);
+    const [, sig] = token.split('.');
+    const forged = Buffer.from(JSON.stringify({ ...claims, sub: 'attacker' })).toString(
+      'base64url',
+    );
+    try {
+      authenticateJobRequest(
+        req({ authorization: `Bearer ${SECRET}`, 'x-motir-job-token': `${forged}.${sig}` }),
+      );
+      expect.unreachable();
+    } catch (err) {
+      const e = err as JobAuthError;
+      expect(e.code).toBe('token_invalid');
+      expect(e.message).toMatch(/signature/);
+      // The clock is NOT the story here, and saying so would send the next
+      // reader after a timeout that never happened.
+      expect(e.message).not.toMatch(/EXPIRED/);
+    }
   });
 
   it('fails closed when CORE_CALLBACK_SECRET is unset', () => {
