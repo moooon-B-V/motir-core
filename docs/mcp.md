@@ -263,6 +263,25 @@ tuned, and nothing in the guard constrains it.
 > rides beside it as **`numericKey`**, so nothing is lost. Readers of
 > `identifier` are unaffected.
 
+**An unknown argument is REFUSED, never dropped (bug MOTIR-3342).** Every tool's
+published JSON Schema carries `"additionalProperties": false`, and the server now
+enforces it: a call carrying a key the tool does not declare comes back as an
+`isError` result whose text is the SDK's `MCP error -32602: Input validation
+error: …`, naming the offending key, the nearest valid field where there is a
+plausible one, and the full accepted set. So `descriptionMd` sent as
+`description` is an error you can read, not a body that silently vanishes.
+Two consequences worth stating:
+
+- **`update_work_item` refuses a patch that changes nothing.** A call carrying
+  only `key` returns `NO_FIELDS_TO_PATCH` rather than a success reading
+  `Patched: nothing`. An update that patches no field is never what a caller
+  meant.
+- **`add_plan_items`' `modify` patch is the deliberate exception.** That object
+  is declared `.passthrough()` so a field the service already understands can
+  never be turned away by this schema; unknown keys inside a `patch` still reach
+  the service unchanged. Everything else — including `proposedFields` — is
+  strict.
+
 Shared input conventions:
 
 - A **work item** is addressed by its `<KEY>-<n>` **identifier** (case-insensitive),

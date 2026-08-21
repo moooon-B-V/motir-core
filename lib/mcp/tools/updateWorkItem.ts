@@ -12,7 +12,7 @@ import type {
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
-import { toToolError, toolOk } from '../toolResult';
+import { toToolError, toolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
@@ -168,12 +168,31 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
 
 /** Compact human-readable summary of the patched fields. */
 function summarize(dto: WorkItemDto, patchedKeys: string[]): string {
-  const fields = patchedKeys.length > 0 ? patchedKeys.join(', ') : 'nothing';
   return [
     `Updated ${dto.identifier} [${dto.kind}${dto.type ? `/${dto.type}` : ''}] ${dto.title}`,
-    `Patched: ${fields}`,
+    `Patched: ${patchedKeys.join(', ')}`,
   ].join('\n');
 }
+
+/**
+ * The stable code carried by the empty-patch refusal.
+ *
+ * ⚠️ A PATCH THAT CHANGES NOTHING IS NOT A SUCCESS (bug MOTIR-3342). This
+ * summary used to render `Patched: nothing` and return `toolOk` — a successful
+ * call that changed nothing, styled exactly like the line that reports a real
+ * edit. It was the one line that could have caught the unknown-key strip this
+ * bug is really about, and instead it hid it: `update_work_item({ key,
+ * description: '<2 000 words>' })` answered `Updated MOTIR-3334 … Patched:
+ * nothing` and lost the body.
+ *
+ * The unknown-key half is closed at the registration seam
+ * (`lib/mcp/strictInput.ts`), which refuses the typo with a `-32602` before this
+ * runner is reached. This is the SECOND half, and it stands on its own: an
+ * update that patches no field is never what a caller meant — it is either a
+ * key the caller could not spell or a caller with nothing to say, and neither
+ * deserves a success.
+ */
+export const NO_FIELDS_TO_PATCH_CODE = 'NO_FIELDS_TO_PATCH' as const;
 
 /** The adapter: resolve the project + item by key, then apply the patch. */
 export async function runUpdateWorkItem(
@@ -181,10 +200,21 @@ export async function runUpdateWorkItem(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
+    const patch = toPatch(args);
+    const patchedKeys = Object.keys(patch);
+    if (patchedKeys.length === 0) {
+      return toolError(
+        NO_FIELDS_TO_PATCH_CODE,
+        'update_work_item was called with no field to change — only "key" was supplied. ' +
+          'Name at least one of: title, descriptionMd, explanationMd, priority, type, ' +
+          'executor, estimateMinutes, storyPoints, targetRepo, targetRepos, ' +
+          'targetRepositories, assigneeId, dueDate. (Use transition_status for the ' +
+          'workflow status.)',
+      );
+    }
     const identifier = normalizeIdentifier(args.key);
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
     const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
-    const patch = toPatch(args);
     const dto = await workItemsService.updateWorkItem(item.id, patch, ctx);
     return toolOk(
       summarize(dto, Object.keys(patch)),
