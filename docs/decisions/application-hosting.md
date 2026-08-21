@@ -65,10 +65,12 @@ per-pull-request preview environments, and to the order of the pipeline.
 | **Q7** | Is static-asset egress fronted by a CDN? | **No**, for now — the app serves its own static output at $0.02/GB, accepted explicitly with a trigger                     |
 | **Q8** | What does the move NOT change?           | The database engine, migrations, Inngest, the E2E suite, the 4-layer convention, ~~motir-ai, motir-gateway~~ (Amendment 7) |
 
-> **The amendments add Q9–Q19 and this table does not repeat them**, by the
+> **The amendments add Q9–Q20 and this table does not repeat them**, by the
 > convention Amendments 1 and 6 already set. Q9 (the core→ai transport) is
 > Amendment 1, corrected by 5; Q10 (region, as residency) is Amendment 6;
-> **Q11–Q19 (the scaling posture for all three services) are Amendment 7.**
+> **Q11–Q19 (the scaling posture for all three services) are Amendment 7**;
+> **Q20 (the transport for every service seam, per leg) is Amendment 8**, which
+> also settles the floor consequence Amendment 7 §15 deferred onto it.
 
 ---
 
@@ -2015,3 +2017,183 @@ is a re-plan of this card, not a judgement call there.
 | Neon's five-minute SETTING floor is not lowerable on Launch | Neon API probe, 2026-08-13, recorded on MOTIR-2780 — this is the minimum `suspend_timeout_seconds`, NOT the observed delay                                                                   |
 | Neon's observed suspend DELAY is ~9 min, not five           | Neon control-plane sampling every 30 s with no database connection, 2026-08-20 — three samples (9m43s / 8m20s / 9m31s), recorded on MOTIR-3224 (motir-ai#256) and carried here by MOTIR-3257 |
 | motir-ai runs no in-process poll                            | `src/jobs/worker.ts` on `origin/main` after MOTIR-3224 — an idle tick sets its delay to `null` and schedules nothing                                                                         |
+
+---
+
+## Amendment 8 (2026-08-21) — Q20: the transport is decided PER LEG. Flycast is the answer for both service seams, and it is BLOCKED TODAY by `force_https` — measured, not predicted
+
+> **Written by Story [MOTIR-3277](motir:cmt24s41g002di3n8agfu87hc) · Subtask
+> [MOTIR-3280](motir:cmt24ub7o003di3n87p9rb8fz).** Amendment 7 §15 states that
+> _"the floor and the transport are ONE decision, not two"_, decides the floor,
+> and explicitly defers the transport to _"whoever next revisits the seam"_. This
+> is that revisit.
+>
+> **Numbered 8.** Amendment 7 was the highest heading on `origin/main`, and every
+> remote branch carrying this file was checked for an eighth before the number
+> was taken.
+
+**Amends:** it ADDS **Q20** — which address each service seam uses — and settles
+the floor consequence Amendment 7 §14–§15 left hanging on it. Amendments 1–7 are
+otherwise untouched.
+
+⚠️ **This amendment does NOT correct Amendment 5's "in force" sentence.** That
+paragraph is wrong as deployed and is owned by
+[MOTIR-3231](motir:cmt1l327r009wi3phchsbix05) AC5. Two cards editing one sentence
+is how a record acquires two accounts of the same event.
+
+### §23 — Q20: which address does each leg use?
+
+**Four legs. Two change, two do not, and the two that do not are stated here on
+purpose** — a reader must not be able to take the private-networking argument
+below and carry it to a leg where it is wrong. Amendment 1 names that as the
+specific mistake it exists to prevent.
+
+| leg                                                      | today                                          | DECIDED                                      | why                                                                                                                                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **core → ai** (`MOTIR_AI_URL`)                           | `https://motir-ai.fly.dev` — drift, MOTIR-3231 | **Flycast** — `http://motir-ai.flycast:8080` | private, and proxy-routed so it load-balances across machines and fails over on a health check. `.internal` is DNS round-robin with no health awareness                                                                               |
+| **ai → gateway** (`LLM_GATEWAY_BASE_URL`, `_SEARCH_URL`) | `http://motir-gateway.internal:3000/v1`        | **Flycast**                                  | same, plus this is the leg where the proxy unpins a floor (§25)                                                                                                                                                                       |
+| **ai → core callback** (`MOTIR_CORE_URL`)                | `https://app.motir.co`                         | **public, permanently**                      | it is not a service address. Those origins are printed into password-reset mail, invite links and OAuth callbacks. Also unavailable over 6PN regardless: motir-core sets `HOSTNAME=0.0.0.0` and does not listen on IPv6 (Amendment 5) |
+| **browser → core** (`MOTIR_BASE_URL`)                    | `https://app.motir.co`                         | **public, permanently**                      | it is the front door                                                                                                                                                                                                                  |
+
+**Why Flycast rather than `.internal`, when both are private.** The argument for
+`.internal` was never _"we want machine-to-machine"_ — it was _"we do not want
+this endpoint on the internet"_. Flycast satisfies that sentence completely: a
+private IPv6 anycast address, unreachable from outside the org, that is routed
+**through Fly Proxy**. What that buys back is everything forfeiting the proxy
+cost us — load balancing, health-checked failover, and autostart of a stopped
+machine. It is allocated with `fly ips allocate-v6 --private` and costs **$0/mo**
+(§26).
+
+**Why not the public origin, which the proxy also serves.** Both seams
+authenticate with one long-lived shared bearer, and the gateway's spends real
+provider money — on a public origin that token is a complete credential for
+anyone on the internet. The payloads are customer code graphs, plan bodies and
+LLM prompts, and "internal service traffic never leaves the private network" is a
+materially shorter answer for a Dutch controller than the alternative (Amendment
+6 made region a residency question; this is the same axis one layer down).
+
+### §24 — what the wake measurement permits, now that it exists
+
+[MOTIR-3279](motir:cmt24ts8c002ni4ph4oe2oyon) took the reading Amendment 7 and
+`motir-ai/fly.toml` had both been reasoning without. Three samples per app,
+`fly machine stop` → one request forced at that machine via `fly-force-instance-id`:
+
+| app · path                           | request → first 200 | machine | app-ready |
+| ------------------------------------ | ------------------- | ------- | --------- |
+| `motir-gateway` · `suspend` → resume | **0.58 – 0.73 s**   | ~0.42 s | ~0.24 s   |
+| `motir-core` · `stop` → autostart    | 10.7 – 11.0 s       | ~1.0 s  | ~9.8 s    |
+| `motir-ai` · `stop` → autostart      | 12.8 – 13.3 s       | ~1.4 s  | ~11.5 s   |
+
+Plus a Neon resume of **~0.7 s** (1278 ms cold vs 603 ms warm, after 13 min of
+verified idleness), which rides on top of any of them.
+
+**What it permits, stated against the real deadlines rather than as "fast
+enough":**
+
+- **The gateway leg has three orders of magnitude of headroom.** `motir-ai`'s
+  gateway client is `new OpenAI({ baseURL, apiKey })` with no `timeout`, so
+  `OpenAI.DEFAULT_TIMEOUT` — **600 s** — governs. A 0.6 s resume against a 600 s
+  deadline is not a latency question at all.
+- **The core→ai leg fits, with ~2.3× to spare.** `MOTIR_AI_REQUEST_TIMEOUT_MS`
+  is 30 s and a cold motir-ai answers in ~13 s. Real headroom, not generous.
+- **And nine tenths of that 13 s is our own boot, not Fly.** Any future attempt
+  to make a cold path cheaper should start at the app, or switch that app to
+  `suspend` — which is precisely why the gateway is 18× faster.
+
+### §25 — the floor each transport permits, and the floor we choose
+
+**The pairing Amendment 7 §15 named. It resolves differently per service, and
+only one of the three floors was ever transport-gated.**
+
+| service         | floor permitted by the decided transport | floor CHOSEN                    | what actually binds                                                                                                                                                                                       |
+| --------------- | ---------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motir-core`    | n/a — it is the front door, not a callee | **2**                           | availability: two machines RUNNING is the only shape that survives losing one (§14). Unchanged                                                                                                            |
+| `motir-ai`      | 0                                        | **2**                           | **not transport.** The floor here is the JOB-CONCURRENCY ceiling — one machine runs one job — so 13 s would be affordable and ONE WORKER would not be. Flycast does not unpin this and was never going to |
+| `motir-gateway` | **0**                                    | **1 today, 0 once §22 answers** | transport, and nothing else                                                                                                                                                                               |
+
+⚠️ **A correction to the reasoning, not to a number.** It is tempting to say a
+floor of 0 makes §16's hazards (the doubled per-process rate limit, the 600 s
+`MEMORY_CACHE_ENABLED` divergence) more reachable. **It does not.** Both hazards
+need TWO machines _running_, and at floor 0 exactly as at floor 1 the second
+machine starts only when load crosses `soft_limit`. The floor changes who pays
+the first request after idle; it does not change when a second process appears.
+§16 gates the CEILING, not the floor, and conflating them would block a floor
+change on work that has nothing to do with it.
+
+So the gateway's floor of 0 has exactly two remaining conditions: the transport
+(this amendment), and **§22's open question of whether a `suspended` machine
+bills** — which the next invoice answers. Note the Neon saving does not depend on
+that answer: it comes from the machine actually sleeping and its two 600 s sync
+goroutines stopping.
+
+### §26 — ⚠️ FLYCAST IS BLOCKED TODAY BY `force_https`, and this is measured
+
+Amendment 5 records that `.internal` never traverses the proxy and therefore
+never sees `force_https` — _"200, no `location` header"_. **That finding is a
+property of having no proxy in the path, and Flycast puts the proxy back.**
+Measured 2026-08-21 from inside motir-core machine `83d1300b7460e8`, against the
+Flycast address allocated on `motir-ai` (`fdaa:ab:2cdf:0:1::2`):
+
+```
+GET http://motir-ai.flycast/health    → 301, location: https://motir-ai.flycast/health   (64 ms)
+GET https://motir-ai.flycast/health   → ECONNRESET — TLS never establishes
+```
+
+**Both ends fail.** `force_https = true` redirects the plain call, and the scheme
+it redirects to has no certificate for a `.flycast` name, so a client that
+follows the redirect hits a reset. **A seam pointed at Flycast today would be
+broken in both directions**, and a caller that does not follow redirects would
+silently receive a 301 body instead of an answer.
+
+**The remedy, and the ordering it forces:**
+
+1. **`force_https = false` on the app's `http_service`.** It is one setting for
+   the whole service, so it cannot be true for public ingress and false for
+   Flycast.
+2. **Which is only safe once nothing reaches that app over the public origin** —
+   otherwise the public listener starts accepting plain HTTP. For `motir-ai`
+   that means the core→ai leg moves FIRST.
+3. **The end state is stronger and should be taken: release the app's PUBLIC IPs
+   entirely.** `motir-ai` and `motir-gateway` serve no browsers; with no public
+   ingress there is no `force_https` question, and the blast-radius argument in
+   §23 stops being an argument and becomes a property. Owned by
+   [MOTIR-3281](motir:cmt24usrq0030i4phr6ujdcg0).
+
+**Consequence for [MOTIR-3231](motir:cmt1l327r009wi3phchsbix05), which is
+blocked on this card:** it should apply **`.internal`**, not Flycast. That fixes
+the live drift immediately with no deploy and no `force_https` change, and leaves
+the Flycast move to 3281 where the config change belongs. The interim is Q9 as
+written, which is the state the record already claims.
+
+### §27 — cost
+
+| item                                  | figure                                                                                                            |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| A Flycast address                     | **$0/mo.** Fly bills dedicated IPv4 only ($2/mo); _"IPv6 addresses and shared IPv4 Anycast addresses are free"_   |
+| Same-region transfer between machines | **$0.** All three apps are `iad`-only; cross-region private transfer would be $0.006/GB                           |
+| Gateway floor 1 → 0                   | ~**$3.3/mo** of `shared-cpu-1x`/512 MB, plus the ~**$9.75/mo** of Neon compute §15 attributes to keeping it awake |
+| Whether `suspended` bills             | **STILL OPEN** — §22's trigger (the next invoice) is unchanged by this amendment                                  |
+
+### §28 — what this amendment does NOT decide
+
+- **Amendment 5's "in force" sentence.** [MOTIR-3231](motir:cmt1l327r009wi3phchsbix05) AC5 owns it.
+- **`MOTIR_BASE_URL` / `MOTIR_CORE_URL`.** Public, permanently — §23.
+- **motir-core's posture.** Public origin, floor **2**, and **scale-to-zero is
+  rejected**: it serves interactive page loads, plus Stripe and GitHub webhooks
+  and OAuth callbacks that carry their own deadlines and, in the OAuth case, no
+  retry. A ~11 s cold boot in front of a human is not a trade worth ~$23.66/mo,
+  and the app cannot be reached over 6PN anyway. Recorded so the next reader does
+  not re-open it as an oversight.
+- **Authentication.** `MOTIR_AI_SERVICE_TOKEN` and the gateway virtual key still
+  gate every request. A private address removes reachability; it does not confer
+  trust. Amendment 1's last row is not filler and is not superseded.
+
+### Sources — additions
+
+| Claim                                                           | Source                                                                                                                                             |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flycast is private and proxy-routed, and can autostart machines | <https://fly.io/docs/networking/flycast/>                                                                                                          |
+| IPv6 and shared IPv4 are free; dedicated IPv4 is $2/mo          | <https://fly.io/docs/networking/services/> · <https://fly.io/docs/about/pricing/>                                                                  |
+| `force_https` 301s a Flycast call, and the https form resets    | `fly ssh console -a motir-core --machine 83d1300b7460e8`, `fetch()` with `redirect: manual`, 2026-08-21                                            |
+| The wake path, three samples per app, decomposed                | [MOTIR-3279](motir:cmt24ts8c002ni4ph4oe2oyon) — `fly machine stop` + `fly-force-instance-id`, timings from the Machines API `events[]`, 2026-08-21 |
+| The gateway client sets no timeout, so 600 s applies            | `motir-ai/src/llm/gatewayClient.ts` on `origin/main`; `OpenAI.DEFAULT_TIMEOUT = 600000`, openai 6.42.0                                             |
