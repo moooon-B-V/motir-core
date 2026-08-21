@@ -528,6 +528,155 @@ describe('planReviewService.getPlanReview', () => {
     expect(add.parentNodeId).not.toBe(modify.parentNodeId);
   });
 
+  // ── bug MOTIR-3366 — a proposed EDGE reaches the canvas whichever CARRIER it
+  // travels on ────────────────────────────────────────────────────────────────
+  //
+  // A plan's `blocked_by` edges have TWO carriers: an `add` names its blockers in
+  // its own `blockedByRefs`, and a `modify` names them in `patch.blockedByAdd` —
+  // the only way to propose an edge ONTO a card that already exists, and so the
+  // shape every mid-run correction takes (`add` the prerequisite, `modify` the
+  // in-flight card to be blocked by it, one approval for both).
+  //
+  // `blockedByNodeIds` was built from the first carrier alone, so the second
+  // reached the review model as an EMPTY array: `mergePlanLevel` had nothing to
+  // draw, and the added card rendered beside the card it blocks with no line
+  // between them. Ten such proposals were approved in the dogfooding tenant and
+  // not one drew its arrow — while the same patch was already being read eleven
+  // lines away to produce the `links` diff row. Present as a counted word,
+  // absent as a shape.
+  //
+  // These assert the EDGE SET the canvas consumes, which is the only place the
+  // two carriers are supposed to become one thing.
+
+  it('resolves a MODIFY’s `patch.blockedByAdd` into `blockedByNodeIds` (MOTIR-3366)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'Warm sync worker');
+    const inFlight = await seedChild(fx, 'task', 'The worker lifecycle', story.id);
+
+    // The correction shape: propose the prerequisite, and block the in-flight
+    // card on it, so one approval lands both halves.
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Split the runtime out' },
+      fx.ctx,
+    );
+    const afterAdd = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: story.id,
+          proposedFields: { title: 'The RESIDENT worker runtime' },
+        },
+      ],
+      fx.ctx,
+    );
+    const addId = afterAdd.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'modify',
+          workItemId: inFlight.id,
+          // The duplicate is deliberate: the same blocker named twice must not
+          // become two edges between the same pair of nodes.
+          patch: { blockedByAdd: [`planItem:${addId}`, `planItem:${addId}`] },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const add = review.items.find((i) => i.op === 'add')!;
+    const modify = review.items.find((i) => i.op === 'modify')!;
+
+    // THE assertion: the edge the plan proposes, as the canvas reads it —
+    // blocker → blocked, resolved to NODE ids, de-duplicated.
+    expect(modify.blockedByNodeIds).toEqual([add.nodeId]);
+    // …and both ends sit on the same level, so `mergePlanLevel` can draw it.
+    expect(add.parentNodeId).toBe(story.id);
+    expect(modify.parentNodeId).toBe(story.id);
+    // The `links` diff row is UNCHANGED — this is a SECOND reader of the patch,
+    // not a move of the first. It counts the patch's REFS, so the deliberate
+    // duplicate above reads `+2` there while the edge set holds one: the diff
+    // row says what the plan WROTE, the edge set says what will be DRAWN, and
+    // only the second one can be double-counted into two arrows.
+    expect(modify.changes).toContainEqual({ field: 'links', from: null, to: '+2 blockers' });
+  });
+
+  it('follows the node id an approved `add` BECAME — the edge survives materialize (MOTIR-3366)', async () => {
+    // The intra-plan temp-ref resolves to the referenced item's NODE id, which
+    // moves from the plan-item id to the created work item's at approve
+    // (MOTIR-3160). An edge that resolved to the pre-approval id would point at
+    // a node that is no longer on the canvas.
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'Offboarding');
+    const inFlight = await seedChild(fx, 'task', 'Reach the live worker', story.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Approve me' }, fx.ctx);
+    const afterAdd = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: story.id, proposedFields: { title: 'The orchestrator port' } }],
+      fx.ctx,
+    );
+    const addId = afterAdd.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: inFlight.id, patch: { blockedByAdd: [`planItem:${addId}`] } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    const approved = await plansService.approvePlan(plan.id, fx.ctx);
+    const createdId = approved.items.find((i) => i.op === 'add')!.workItemId;
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const add = review.items.find((i) => i.op === 'add')!;
+    const modify = review.items.find((i) => i.op === 'modify')!;
+
+    expect(createdId).not.toBeNull();
+    expect(add.nodeId).toBe(createdId);
+    expect(add.nodeId).not.toBe(add.planItemId);
+    expect(modify.blockedByNodeIds).toEqual([createdId]);
+  });
+
+  it('still resolves an ADD’s OWN `blockedByRefs` — the carrier that always worked (MOTIR-3366)', async () => {
+    // The control. A committed blocker stays as-is, an intra-plan one resolves
+    // to that proposal's node id, and the two carriers do not interfere.
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'Incremental indexing');
+    const committed = await seedChild(fx, 'task', 'The decision', story.id);
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Two blockers' }, fx.ctx);
+    const afterFirst = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: story.id, proposedFields: { title: 'The measurement' } }],
+      fx.ctx,
+    );
+    const firstId = afterFirst.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          parentRef: story.id,
+          blockedByRefs: [committed.id, `planItem:${firstId}`],
+          proposedFields: { title: 'The worker' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const first = review.items.find((i) => i.planItemId === firstId)!;
+    const second = review.items.find((i) => i.planItemId !== firstId)!;
+
+    expect(second.blockedByNodeIds).toEqual([committed.id, first.nodeId]);
+    // Nothing was added to the proposal that carries no edges at all.
+    expect(first.blockedByNodeIds).toEqual([]);
+  });
+
   it('renders a description change as a DIFF of the live and proposed bodies, previewed (MOTIR-3191)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'Card whose body moved');

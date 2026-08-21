@@ -317,6 +317,37 @@ export const planReviewService = {
         : resolved;
     };
     /**
+     * Every blocker this proposal declares, as canvas NODE ids — from BOTH
+     * carriers (bug MOTIR-3366).
+     *
+     * A plan states a `blocked_by` edge in two places, and which one it uses is
+     * decided by the OP, not by the author: an `add` names its blockers in its
+     * own `blockedByRefs`, while a `modify` names them in `patch.blockedByAdd` —
+     * the only way to propose an edge ONTO a card that already exists, and
+     * therefore the shape of every mid-run correction (`add` the prerequisite,
+     * `modify` the in-flight card to be blocked by it, one approval for both).
+     *
+     * This read took the first carrier alone, so a `modify`'s edges reached the
+     * canvas as an empty array: `mergePlanLevel` draws one arrow per entry, had
+     * none, and the proposed card rendered beside the card it blocks with no
+     * line between them. The patch was already being read eleven lines up to
+     * produce the `links` diff row, so the edge was present as a counted word
+     * and absent as a shape — which is why nothing looked broken.
+     *
+     * `blockedByRemove` is deliberately NOT here: an edge the plan would DELETE
+     * is not a blocker this proposal declares, and drawing it as one would say
+     * the opposite of what the plan proposes. Marking it as going away needs a
+     * treatment the canvas does not have (`firm` / `pending` / `cross`, and
+     * nothing for *removed*), which is a design decision and its own card.
+     *
+     * `planProjectionService` unions the same two carriers for the projected
+     * reads — one rule, two consumers.
+     */
+    const blockedByNodeIdsOf = (item: PlanItemDto): string[] => {
+      const refs = [...item.blockedByRefs, ...(item.patch?.blockedByAdd ?? [])];
+      return [...new Set(refs.map(resolveNodeRef))];
+    };
+    /**
      * Where this proposal SITS — one rule for all three ops (bug MOTIR-3191).
      *
      * An `add` says so itself, in `parentRef`. A `modify` / `remove` cannot: it
@@ -375,7 +406,7 @@ export const planReviewService = {
         parentKind: committedParent?.kind ?? null,
         // MOTIR-3152's committed ancestor trail — unchanged by this merge.
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
-        blockedByNodeIds: item.blockedByRefs.map(resolveNodeRef),
+        blockedByNodeIds: blockedByNodeIdsOf(item),
         // The target's key, for EVERY op that has a target (MOTIR-3160). An
         // un-materialized `add` still reports null — it has no key and inventing
         // one would be the surface asserting a work item that does not exist —

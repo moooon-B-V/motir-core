@@ -107,3 +107,47 @@ describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
     expect(proposed.has('harness')).toBe(false);
   });
 });
+
+// ── The EDGE-CARRIER guard (bug MOTIR-3366) ──────────────────────────────────
+//
+// The parity test above holds the review model against what an `add` PROPOSES.
+// A plan's `blocked_by` edges have a second carrier that lives nowhere near
+// `PlanItemProposedFields`: a `modify` states them in `patch.blockedByAdd`,
+// because a proposal about a card that already exists has no proposed-fields bag
+// to put them in. `planReviewService` resolved the `add`'s carrier alone, so
+// every edge proposed onto an existing card reached the canvas as an empty
+// array — the added card drew with no line to the card it blocks, while the same
+// patch was already being read to render the "+1 blocker" diff row.
+//
+// Adding the second read fixes today's instance; this is the half that survives
+// a THIRD carrier. `PlanItemPatch` is where a new one would be declared, and the
+// review model is the consumer that must then decide what it means.
+describe('PlanItemPatch edge carriers ⟷ planReviewService', () => {
+  const patchKeys = interfaceKeys('lib/dto/plans.ts', 'PlanItemPatch');
+  const carriers = [...patchKeys].filter((k) => k.startsWith('blockedBy'));
+  const service = readFileSync(resolve(ROOT, 'lib/services/planReviewService.ts'), 'utf8');
+
+  it('names EVERY edge carrier the patch declares', () => {
+    // A carrier the review model never mentions is one whose edges cannot reach
+    // the canvas — and the failure is silent, because an unread carrier renders
+    // as a level with one fewer arrow rather than as an error.
+    const unread = carriers.filter((k) => !service.includes(k));
+    expect({ unread }).toEqual({ unread: [] });
+  });
+
+  it('parses the patch — a guard that read nothing would pass vacuously', () => {
+    expect(patchKeys.size).toBeGreaterThan(5);
+    expect(carriers.sort()).toEqual(['blockedByAdd', 'blockedByRemove']);
+  });
+
+  it('resolves the ADD carrier into node ids, and states why REMOVE is excluded', () => {
+    // `blockedByAdd` is a blocker the proposal DECLARES, so it becomes an edge.
+    // `blockedByRemove` is an edge the plan would DELETE — drawing it as a
+    // blocker would say the opposite of what the plan proposes — so it is named
+    // in the service, deliberately, and not resolved. Both facts are asserted
+    // here so a later reader cannot mistake the exclusion for an oversight.
+    expect(service).toContain('item.patch?.blockedByAdd');
+    expect(service).not.toContain('item.patch?.blockedByRemove');
+    expect(service).toMatch(/`blockedByRemove` is deliberately NOT here/);
+  });
+});

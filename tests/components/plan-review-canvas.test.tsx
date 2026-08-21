@@ -481,3 +481,106 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
     await waitFor(() => expect(screen.queryByText('MOTIR-7')).toBeNull());
   });
 });
+
+// ── bug MOTIR-3366 — a PROPOSED dependency edge is drawn, not only counted ────
+//
+// A plan states a `blocked_by` edge in one of two carriers, chosen by the op: an
+// `add` in its own `blockedByRefs`, a `modify` in `patch.blockedByAdd`. The
+// review model resolved only the first, so the correction shape every mid-run
+// re-plan produces — `add` the prerequisite, `modify` the in-flight card to be
+// blocked by it — reached this canvas with an empty edge set. The added card
+// drew beside the card it blocks with no line between them, while the list view
+// showed the same edge as the words "+1 blocker".
+//
+// `planReviewService` is where the fix lives and where the service test asserts
+// it; this asserts the OTHER end — that a resolved edge becomes an actual arrow
+// on the level both ends share. It is written as a DELTA against the identical
+// level with no proposed edge, because a raw path count is also satisfied by the
+// committed edge that was always there.
+describe('PlanReviewCanvas — a proposed dependency edge (bug MOTIR-3366)', () => {
+  beforeEach(() => {
+    stubRoadmap();
+  });
+
+  /**
+   * The plan the guard contract produces: an `add` at the level, plus a `modify`
+   * on a committed sibling that the add now blocks. A `modify` keys by its
+   * TARGET's node id (MOTIR-3160), which is what lands the arrow ON the real
+   * card instead of beside it.
+   */
+  function correction(blockedByNodeIds: string[]): PlanReviewItemDto[] {
+    return [
+      proposal(),
+      proposal({
+        planItemId: 'pi_2',
+        nodeId: STORY_ID,
+        op: 'modify',
+        identifier: 'MOTIR-7',
+        title: 'AI planning layer',
+        blockedByNodeIds,
+        changes: [{ field: 'links', from: null, to: '+1 blocker' }],
+      }),
+    ];
+  }
+
+  function drawnEdges() {
+    return [...screen.getByTestId('canvas-edges').querySelectorAll('path')];
+  }
+
+  /** The dashed, not-yet-firm edges — the `pending` language, on this level. */
+  function pendingEdges() {
+    return drawnEdges().filter((p) => p.getAttribute('stroke-dasharray') !== null);
+  }
+
+  it('DRAWS the arrow from the added card to the card it will block', async () => {
+    mount(correction([]));
+    await screen.findByText('A proposed subtask');
+    // The level's own committed edge (MOTIR-9 blocks MOTIR-7) and nothing else —
+    // this is exactly what the surface showed before the fix. That edge is itself
+    // DASHED, because MOTIR-9 is not done: `pending` is the shipped language for
+    // any not-yet-firm dependency, committed or proposed, which is why the
+    // assertion below is a DELTA rather than a search for a dashed path.
+    expect(drawnEdges()).toHaveLength(1);
+    expect(pendingEdges()).toHaveLength(1);
+
+    cleanup();
+    mount(correction(['pi_1']));
+    await screen.findByText('A proposed subtask');
+
+    // …and with the proposal's edge resolved, one MORE path: the delta is the
+    // arrow, not the level. It arrives in the same pending language — nothing new
+    // is introduced (`design/ai-planning/design-notes.md` Part V: *"same-level
+    // `blocked_by` edges, in the shipped edge language, unchanged"*).
+    expect(drawnEdges()).toHaveLength(2);
+    expect(pendingEdges()).toHaveLength(2);
+    for (const path of pendingEdges()) {
+      expect(path.getAttribute('class')).toContain('stroke-(--el-canvas-edge-pending)');
+    }
+
+    // The legend appears for either edge, so it is not what proves the arrow —
+    // asserted so a future change that drops the proposed edge cannot pass by
+    // leaving the legend behind.
+    expect(screen.getByTestId('edge-legend')).toBeTruthy();
+  });
+
+  it('does not double-draw an edge the committed level already has', async () => {
+    // A plan may propose an edge that is already wired. `mergePlanLevel` keeps
+    // the committed edge and adds nothing — one dependency, one arrow.
+    mount(correction([SUB_ID]));
+    await screen.findByText('A proposed subtask');
+
+    expect(drawnEdges()).toHaveLength(1);
+  });
+
+  it('draws nothing when only ONE end of the proposed edge is on the level', async () => {
+    // The unchanged rule, asserted as a control: an off-level blocker has no node
+    // here, so its edge is dropped rather than drawn to nowhere. (Surfacing it as
+    // a ghost anchor the way a committed off-level blocker is surfaced is its own
+    // card — the roadmap read that produces those stubs knows only committed
+    // edges.)
+    mount(correction(['wi_somewhere_else']));
+    await screen.findByText('A proposed subtask');
+
+    expect(drawnEdges()).toHaveLength(1);
+  });
+});
