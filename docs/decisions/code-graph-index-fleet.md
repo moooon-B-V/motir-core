@@ -839,8 +839,8 @@ Both of those are §4/§5 decisions and neither is being relaxed. Instead **moti
 grant**, returned alongside the run credential motir-core already fetches at dispatch
 (`POST /v1/code-graph/run-credential`) and forwarded into the spec as `MOTIR_INDEX_SNAPSHOT_URL`.
 
-So the boot contract is four variables, or five. Everything §10 and §5 list as ABSENT is still
-absent: no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
+So the boot contract is four variables, or five — and, since §18, at most six. Everything §10 and
+§5 list as ABSENT is still absent: no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
 no service token, no Fly token.
 
 **Why it is worth the fifth variable.** Measured on a dev box, ten changed files in motir-core sync
@@ -1186,3 +1186,92 @@ payload today and discards the file lists. No compare, no credential, no new gra
   exactly as before, and the record is ready if a multi-repo handle ever exists.
 - **The one-container-per-sync shape is CONFIRMED, not merely retained.** Boot, fetch, ship and die,
   with the sync in the middle — §5's shape, now with a number under it.
+
+## §18 — Decision 13 — the container may be told WHICH PATHS changed (MOTIR-3358)
+
+**Appended 2026-08-21, after §17.** §17 withdrew the warm worker because the sync's cost is not
+process warmth. §18 is what the same measurements pointed at instead — and like §15, it is an
+INSTANCE of §4's rule rather than an exception: the container is handed a list of file paths from a
+repository it is already being handed in full. No new credential, no new grant, no widening.
+
+**What the number is.** On the real motir-core tree (3 570 files, a 202 MB graph, the two-file push
+production actually sees, measured 2026-08-21):
+
+| operation                             | wall       | files touched                   |
+| ------------------------------------- | ---------- | ------------------------------- |
+| full build                            | 36.95 s    | everything                      |
+| whole-tree `sync()` — today's refresh | **4.29 s** | checked **3 571** to find **3** |
+| `indexFiles([the 2 changed paths])`   | **0.59 s** | **2**                           |
+
+**7.3× cheaper, and the same 27 nodes either way.** In production the walk IS the run: 124 s of a
+148 s refresh, because a 2-vCPU fleet machine is I/O-bound against a 202 MB graph (§17.1: 7.7× the
+graph costs 5.67× the sync there, against 1.27× on a dev box).
+
+**Where the list comes from, and why it is free.** Every refresh is triggered by a push webhook, and
+GitHub's push payload names each commit's `added` / `modified` / `removed`. `githubWebhookService`
+reads that payload today and throws the file lists away. So this is not a new input — it is one
+Motir already receives and discards.
+
+**⚠️ This does NOT re-open MOTIR-3249's decision 1.** That refused a GitHub _compare_ API call: a
+network round trip on the dispatch path and a credential the container is defined by not holding.
+The refusal stands, and nothing in §18 calls GitHub.
+
+### §18.1 — The list cannot ride the event, and that is structural
+
+The obvious design puts the file list on the `system.code-graph-refresh` event. It cannot work.
+`codeGraphRefresh` debounces two minutes per `(installation, owner, repo)`, and **a debounce
+delivers exactly ONE event — the LAST one** (`tests/jobs/debounce-burst.test.ts`). A run standing
+for four pushes would carry one push's paths, index those, and leave the other three pushes' files
+stale — in a graph no reader can tell is stale, feeding every planner answer built on it. And
+coalescing is the NORMAL case, not the edge: the window is two minutes.
+
+So each push **appends a row** to `code_graph_pending_change` and the run **drains every row for its
+repo**; the union is the delta it may index.
+
+### §18.2 — The drain is a CLAIM, and the failure direction is the whole design
+
+A run that took these rows and then failed must not consume them: their files would stay stale
+forever, invisibly. So the shape is **claim → index → delete-on-success / release-on-anything-else**
+— the same posture `fleet_in_flight_slot` takes, and for the same reason: what is being protected is
+not the row, it is the work the row stands for. Claims older than an hour are reclaimable, so a
+crashed supervisor cannot strand a repo; reclaiming early costs one whole-tree sync, which is what
+happens today anyway.
+
+**⚠️ The claim is held under the TRIGGER's event id, never `ctx.runId`.** `ctx.runId` is re-derived
+on every Inngest pass, and the claim is taken before the first container while the settle runs many
+passes later — so a claim held under it can never be settled. This is the same cross-pass identity
+the admission slot uses (§9), and the two are now computed once at the top of the handler and shared
+so a later edit cannot drift one of them back.
+
+### §18.3 — Every ambiguous case declines the list
+
+The asymmetry that governs this whole decision: **an incomplete list produces a graph that is
+quietly wrong and that nothing downstream can detect, while NO list costs a whole-tree sync — which
+is exactly what ships today.** The fast path is the optional one. So the run carries no list when:
+
+- any push in the window arrived without a file list (a force-push, or a payload GitHub truncated at
+  its 20-commit cap) — recorded as an EMPTY row, deliberately, so it poisons the union it belongs to
+  rather than leaving the other rows looking complete;
+- there is no head sha to pin the tree to;
+- the union exceeds 500 paths — the crossover MOTIR-3249 measured at the other end, where a
+  2 481-file diff synced SLOWER than a rebuild.
+
+### §18.4 — The paths and the commit travel together
+
+A path list describes a TREE. An unpinned tarball is whatever the branch points at when the
+CONTAINER fetches it — later than the dispatch, and possibly a commit those paths do not describe —
+so indexing "exactly these paths" against it would leave whatever landed in between stale. **When
+the dispatch carries a list it resolves `/tarball/{headSha}`; when it does not, it resolves the
+branch, exactly as before.** The pairing is the correctness argument, not a refinement of it.
+
+### §18.5 — The boot contract is now four variables, and at most six
+
+§15's fifth (`MOTIR_INDEX_SNAPSHOT_URL`) is joined by a sixth, `MOTIR_INDEX_CHANGED_PATHS`. It is
+neither a credential nor a secret, and it is an OPTIMISATION: **a container that ignored it entirely
+would produce exactly the same graph, more slowly.** Everything §10 and §5 list as ABSENT is still
+absent — no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
+no service token, no Fly token.
+
+The container's side is MOTIR-3357 (`motir-ai`): given the list, the run calls the engine's
+`indexFiles()` against the restored snapshot instead of `sync()`. Until that ships, the variable is
+set and ignored — which is precisely the degradation this section is built around.

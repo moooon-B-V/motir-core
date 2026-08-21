@@ -94,10 +94,26 @@ beforeEach(async () => {
   resetTarballBodyTrap();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  // ⚠️ AND AFTER, NOT ONLY BEFORE (MOTIR-3358). The `beforeEach` above clears these
+  // for this file's own sake; this clears them for whatever file runs NEXT IN THIS
+  // WORKER, which is a different problem with the same cause. `fleet_in_flight_slot`
+  // is FLEET-WIDE — its `workspace_id` is nullable and is not a foreign key, by
+  // design, because a slot must outlive whatever it pointed at — so no
+  // `TRUNCATE "workspace" CASCADE` reaches it and the next file's `truncateAuthTables`
+  // does NOT clean up after this one.
+  //
+  // And this file leaves slots behind on purpose: a run whose CONTAINER DIES keeps
+  // its slot until the TTL expires it, which is right in production and never
+  // happens here, because these tests freeze the clock. The census that reads this
+  // table unions EVERY workload (`lib/ciFleet/workloads.ts`), so a leaked
+  // `code_graph_index` slot is counted against the CI-runner fleet ceiling too —
+  // and the symptom lands in `tests/ciFleet/ciRunnerAdmissionService.test.ts`, an
+  // unrelated file, as an admission that defers for no visible reason.
+  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 afterAll(async () => {
@@ -977,6 +993,116 @@ describe('the job definition carries NO concurrency number', () => {
 // that its per-repo debounce survived the move, and that the first-index path
 // did not change — not one of which is safe to read off the diff.
 // ─────────────────────────────────────────────────────────────────────────────
+
+describe('a refresh carries the CHANGED PATHS its pushes already named (MOTIR-3358)', () => {
+  // The round trip neither unit suite can see: `codeGraphChangedPaths.test.ts`
+  // proves the claim/settle against Postgres and `codeGraphIndexDispatch.test.ts`
+  // proves the spec, but only here do the two meet — a real push's rows reaching
+  // a real container spec, and being consumed only because the run SUCCEEDED.
+
+  const HEAD = 'feed'.padEnd(40, '0');
+
+  async function pend(
+    installationId: string,
+    workspaceId: string,
+    paths: string[],
+    headSha: string | null = HEAD,
+  ) {
+    await jobServices.codeGraphChangedPaths.recordPush({
+      installationId,
+      repoOwner: 'moooon',
+      repoName: 'motir-core',
+      workspaceId,
+      headSha,
+      paths,
+    });
+  }
+
+  /** The ref GitHub's `/tarball/{ref}` was asked for — the pin, observed at the
+   *  only place it is decidable. */
+  function tarballRefRequested(): string | undefined {
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    for (const [input] of calls) {
+      const url = String(input);
+      const at = url.indexOf('/tarball/');
+      if (at !== -1) return url.slice(at + '/tarball/'.length);
+    }
+    return undefined;
+  }
+
+  it('hands the union to the container, PINNED to the head, and consumes it on success', async () => {
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-paths', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    await pend(installationId, workspaceId, ['lib/a.ts']);
+    await pend(installationId, workspaceId, ['lib/b.ts', 'lib/a.ts']);
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
+    });
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+
+    // The union of BOTH pushes, deduped — not the last one's, which is all the
+    // debounced event could ever have carried.
+    const spec = fakeOrchestrator.specs[0]!;
+    expect(JSON.parse(spec.env['MOTIR_INDEX_CHANGED_PATHS'] as string)).toEqual([
+      'lib/a.ts',
+      'lib/b.ts',
+    ]);
+    // …against the tree those paths describe, not whatever `main` points at now.
+    expect(tarballRefRequested()).toBe(HEAD);
+
+    // Consumed, because the container actually indexed them.
+    expect(await adminDb.codeGraphPendingChange.count({ where: { workspaceId } })).toBe(0);
+  }, 30_000);
+
+  it('a FAILED run releases the rows instead of consuming them', async () => {
+    // The property the table exists for. Rows consumed by a run that then failed
+    // would leave their files stale in the graph forever, and nothing downstream
+    // could tell — the refresh would report success on the next push and index a
+    // delta that never included them.
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-paths-x', 1);
+    stubIndexFleet();
+    containerExitsWith(1);
+    await pend(installationId, workspaceId, ['lib/a.ts']);
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { error } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
+    });
+    expect(error).toBeDefined();
+
+    const rows = await adminDb.codeGraphPendingChange.findMany({ where: { workspaceId } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.claimedByRef).toBeNull();
+  }, 30_000);
+
+  it('sends NOTHING, and still indexes, when a push did not name its paths', async () => {
+    // The safe default is the shipped one: no list means the container performs
+    // exactly the whole-tree sync it performs today, against the BRANCH.
+    const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-paths-u', 1);
+    stubIndexFleet();
+    containerExitsWith(0);
+    await pend(installationId, workspaceId, ['lib/a.ts']);
+    await pend(installationId, workspaceId, []); // a force-push: paths unknown
+
+    const engine = new InngestTestEngine({ function: codeGraphRefresh });
+    const { result } = await engine.execute({
+      events: [refreshEventFor({ installationId, workspaceId })],
+      steps: sleepSteps(projectIds),
+    });
+    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+
+    expect(fakeOrchestrator.specs[0]!.env['MOTIR_INDEX_CHANGED_PATHS']).toBeUndefined();
+    expect(tarballRefRequested()).toBe('main');
+    // Declining is not consuming: the run indexed the whole tree, so the rows
+    // have in fact been absorbed and are deleted.
+    expect(await adminDb.codeGraphPendingChange.count({ where: { workspaceId } })).toBe(0);
+  }, 30_000);
+});
 
 describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
   it('drives boot → poll → settle per project, and NEVER fetches bytes in-process', async () => {

@@ -296,6 +296,40 @@ describe('buildIndexSpec — the container gets the image its boot contract name
     expect(spec.env['MOTIR_INDEX_SNAPSHOT_URL']).toBe(SNAPSHOT_URL);
   });
 
+  // ── The SIXTH variable, and the pinned tarball beside it (MOTIR-3358) ──────
+
+  it('adds MOTIR_INDEX_CHANGED_PATHS when the run knows what changed', () => {
+    // Six keys now, and the sixth is neither a credential nor secret: it is a list
+    // of paths from a repository the container is already being handed in full. A
+    // container that ignored it would produce the same graph, more slowly.
+    const spec = codeGraphIndexDispatchService.buildIndexSpec({
+      ...SPEC_ARGS,
+      previousSnapshotUrl: SNAPSHOT_URL,
+      changedPaths: ['lib/a.ts', 'lib/b.ts'],
+    });
+
+    expect(Object.keys(spec.env).sort()).toEqual([
+      'MOTIR_AI_BASE_URL',
+      'MOTIR_INDEX_CHANGED_PATHS',
+      'MOTIR_INDEX_REPO_REF',
+      'MOTIR_INDEX_RUN_CREDENTIAL',
+      'MOTIR_INDEX_SNAPSHOT_URL',
+      'MOTIR_INDEX_TARBALL_URL',
+    ]);
+    expect(JSON.parse(spec.env['MOTIR_INDEX_CHANGED_PATHS'] as string)).toEqual([
+      'lib/a.ts',
+      'lib/b.ts',
+    ]);
+  });
+
+  it('omits it for an EMPTY list — which would say "nothing changed", not "unknown"', () => {
+    // An empty list is a positive claim, and the wrong one: it would tell the
+    // container to index nothing. Absence is what means "sync the whole tree".
+    const spec = codeGraphIndexDispatchService.buildIndexSpec({ ...SPEC_ARGS, changedPaths: [] });
+    expect(spec.env['MOTIR_INDEX_CHANGED_PATHS']).toBeUndefined();
+    expect(Object.keys(spec.env)).toHaveLength(4);
+  });
+
   it('OMITS the variable entirely when there is none — never an empty string', () => {
     // An empty value would boot a container that believes it was handed a
     // snapshot and then fails to fetch it — trading a fast path for a slow path
@@ -338,6 +372,49 @@ describe('buildIndexSpec — the container gets the image its boot contract name
     vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'a-different-token');
     vi.stubEnv('MOTIR_INDEXER_IMAGE', 'motir/indexer@sha256:something-else');
     expect(codeGraphIndexDispatchService.buildIndexSpec(SPEC_ARGS)).toEqual(first);
+  });
+});
+
+describe('the tarball is PINNED to the commit the changed paths describe (MOTIR-3358)', () => {
+  // The correctness pairing of this feature, and the one that is invisible in a
+  // unit test of either half alone. A changed-path list describes a TREE. An
+  // unpinned tarball is whatever the branch points at when the CONTAINER fetches
+  // it — later than this dispatch, and possibly a commit those paths do not
+  // describe — so indexing "exactly these paths" against it would leave whatever
+  // landed in between stale in the graph, invisibly.
+
+  const PINNED = 'c0ffee'.padEnd(40, '0');
+
+  it('resolves the tarball for the SHA when a list is carried, and the branch when not', async () => {
+    await codeGraphIndexDispatchService.bootIndexContainer(
+      { ...INPUT, changedPaths: { paths: ['lib/a.ts'], headSha: PINNED } },
+      ADMISSION,
+      FAST,
+    );
+    const pinnedRef = calls.find((c) => new URL(c.url).pathname.includes('/tarball/'));
+    expect(pinnedRef?.url).toContain(`/tarball/${PINNED}`);
+    expect(pinnedRef?.url).not.toContain('/tarball/main');
+
+    calls.length = 0;
+    fakeOrchestrator.reset();
+    await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    const branchRef = calls.find((c) => new URL(c.url).pathname.includes('/tarball/'));
+    expect(branchRef?.url).toContain('/tarball/main');
+  });
+
+  it('carries the paths and the pin TOGETHER into the spec', async () => {
+    await codeGraphIndexDispatchService.bootIndexContainer(
+      { ...INPUT, changedPaths: { paths: ['lib/a.ts', 'lib/b.ts'], headSha: PINNED } },
+      ADMISSION,
+      FAST,
+    );
+    const spec = fakeOrchestrator.specs[0]!;
+    expect(JSON.parse(spec.env['MOTIR_INDEX_CHANGED_PATHS'] as string)).toEqual([
+      'lib/a.ts',
+      'lib/b.ts',
+    ]);
+    // Same spec, and the URL it was resolved from named the same commit.
+    expect(calls.find((c) => new URL(c.url).pathname.includes('/tarball/'))?.url).toContain(PINNED);
   });
 });
 

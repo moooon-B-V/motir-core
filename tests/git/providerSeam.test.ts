@@ -225,7 +225,72 @@ describe('github.parsePushEvent (MOTIR-893)', () => {
         after: SHA,
         repository: { id: 555 },
       }),
-    ).toEqual({ providerRepoId: '555', branch: 'main', headSha: SHA });
+    ).toEqual({ providerRepoId: '555', branch: 'main', headSha: SHA, changedPaths: null });
+  });
+
+  // ── The CHANGED PATHS a push already names (MOTIR-3358) ──────────────────
+  //
+  // A refresh spends 124 s of a 148 s production run rediscovering this by hashing
+  // the whole tree. What matters here is not that the union is computed — it is
+  // that every case where the union might be INCOMPLETE returns null, because the
+  // consumer indexes exactly what it is given and a partial list produces a graph
+  // that is quietly wrong.
+
+  it('unions added, modified and removed across the commits', () => {
+    expect(
+      github.parsePushEvent({
+        ref: 'refs/heads/main',
+        after: SHA,
+        repository: { id: 555 },
+        commits: [
+          { added: ['a.ts'], modified: ['b.ts'], removed: [] },
+          { added: [], modified: ['b.ts', 'c.ts'], removed: ['d.ts'] },
+        ],
+      })?.changedPaths,
+    ).toEqual(['a.ts', 'b.ts', 'c.ts', 'd.ts']);
+  });
+
+  it('returns NULL — never a partial list — for every payload it cannot vouch for', () => {
+    const base = { ref: 'refs/heads/main', after: SHA, repository: { id: 555 } };
+    // A FORCE-PUSH rewrites history; the commit array does not describe the delta.
+    expect(
+      github.parsePushEvent({
+        ...base,
+        forced: true,
+        commits: [{ added: ['a.ts'], modified: [], removed: [] }],
+      })?.changedPaths,
+    ).toBeNull();
+    // GitHub caps a push payload at 20 commits and does not say when it truncated,
+    // so AT the cap this declines rather than guessing.
+    expect(
+      github.parsePushEvent({
+        ...base,
+        commits: Array.from({ length: 20 }, () => ({ added: ['a.ts'], modified: [], removed: [] })),
+      })?.changedPaths,
+    ).toBeNull();
+    // No commits at all, and a commit missing one of the three lists.
+    expect(github.parsePushEvent({ ...base, commits: [] })?.changedPaths).toBeNull();
+    expect(github.parsePushEvent(base)?.changedPaths).toBeNull();
+    expect(
+      github.parsePushEvent({ ...base, commits: [{ added: ['a.ts'], modified: [] }] })
+        ?.changedPaths,
+    ).toBeNull();
+    expect(
+      github.parsePushEvent({ ...base, commits: [{ added: [7], modified: [], removed: [] }] })
+        ?.changedPaths,
+    ).toBeNull();
+  });
+
+  it('still parses the push when the paths are unknown — the refresh is not skipped', () => {
+    // The list is an optimisation. A payload we cannot read must still refresh the
+    // repo, by the whole-tree route it has always used.
+    const push = github.parsePushEvent({
+      ref: 'refs/heads/main',
+      after: SHA,
+      repository: { id: 555 },
+      forced: true,
+    });
+    expect(push).toMatchObject({ branch: 'main', headSha: SHA, changedPaths: null });
   });
 
   it('keeps a slashed branch name intact', () => {
@@ -259,6 +324,9 @@ describe('github.parsePushEvent (MOTIR-893)', () => {
       providerRepoId: '555',
       branch: 'main',
       headSha: null,
+      // MOTIR-3358: a payload with no commits cannot name its paths, and null is
+      // what makes the refresh sync the whole tree rather than index nothing.
+      changedPaths: null,
     });
   });
 });

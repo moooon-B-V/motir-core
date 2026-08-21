@@ -15,6 +15,7 @@ import { billingService } from '@/lib/services/billingService';
 import { aiBugTelemetryService } from '@/lib/services/aiBugTelemetryService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { codeGraphChangedPathsService } from '@/lib/services/codeGraphChangedPathsService';
 import { codeGraphOffboardSweepService } from '@/lib/services/codeGraphOffboardSweepService';
 import { firstAuditTriggerService } from '@/lib/services/firstAuditTriggerService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
@@ -59,6 +60,7 @@ export const jobServices = {
   aiBugTelemetry: aiBugTelemetryService,
   codeGraph: codeGraphIndexService,
   codeGraphIndexDispatch: codeGraphIndexDispatchService,
+  codeGraphChangedPaths: codeGraphChangedPathsService,
   codeGraphOffboardSweep: codeGraphOffboardSweepService,
   firstAuditTrigger: firstAuditTriggerService,
   autoPlanCadence: autoPlanCadenceService,
