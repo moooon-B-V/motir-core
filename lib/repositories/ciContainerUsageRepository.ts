@@ -31,7 +31,17 @@ export interface CiContainerUsageCreateInput {
   organizationId: string;
   projectId: string | null;
   workload: CiContainerWorkload;
-  repoFullName: string;
+  /**
+   * `owner/name`, or NULL for a handle that served an ORG rather than a repo
+   * (MOTIR-3255 — the warm sync worker, `code-graph-index-fleet.md` §16).
+   *
+   * ⚠️ THE COLUMN IS PERMISSIVE; THE WRITER IS NOT. Every one-container-one-repo
+   * workload still names its repo, and a null from one of those would be a bug
+   * rather than a shape. What the null buys is that a multi-repo handle does not
+   * have to name the last repo it happened to serve — which would read as a fact.
+   * Which repos it served is in `ci_container_usage_slice`.
+   */
+  repoFullName: string | null;
   /** NULL for any workload that is not `ci` — only a CI container has a GitHub
    *  job. Required in practice when `workload === 'ci'`. */
   workflowJobId: string | null;

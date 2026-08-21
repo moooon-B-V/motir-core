@@ -2,6 +2,7 @@ import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { planReviewUrl } from '../autoLoop.js';
 import {
+  childrenBelowClaimBar,
   classifyScopeTarget,
   dispositionOf,
   epicRefusal,
@@ -162,6 +163,40 @@ export async function claimScopeForRun(
 
   info(renderClaimedScope(claim, ready));
   return { claim, ready, edges };
+}
+
+/**
+ * Re-read the container's CURRENT children, immediately before the close-out
+ * opens its pull request (Bug MOTIR-3268).
+ *
+ * ⚠️ THIS IS NOT A READY QUERY, AND THE DISTINCTION IS THE WHOLE INVARIANT. The
+ * drain never asks what is ready after the claim, because a mid-flight ready read
+ * would reintroduce the interleaving the up-front claim exists to prevent. This
+ * asks something the claim never promised and never could: whether the CONTAINER
+ * still has the children it had at t=0. `motir run` can file a bug under exactly
+ * this container while the drain is running (MOTIR-3017), so the t=0 snapshot is
+ * a statement about the past by the time the pull request is opened.
+ *
+ * ⚠️ ONE CALL, AFTER THE DRAIN. `get_work_item` returns every child row with its
+ * status, so the whole answer costs one round-trip at a moment the run is already
+ * talking to the server — and it happens where no agent is running, so it cannot
+ * perturb the order the drain computed.
+ *
+ * A SPRINT scope has no container to re-read: it spans several parents at mixed
+ * depths, and its pull request claims nothing about any one of them. It answers
+ * `null` — "there is no container here", which is a different statement from "the
+ * container has no open children" and must not be collapsed into it.
+ */
+export async function readOpenChildren(
+  client: MotirClient,
+  target: ScopeTarget,
+): Promise<{ containerKey: string; openChildren: string[] } | null> {
+  if (target.kind !== 'work_item') return null;
+  const detail = await client.getWorkItem(target.key);
+  return {
+    containerKey: detail.item.identifier,
+    openChildren: childrenBelowClaimBar(detail.children),
+  };
 }
 
 /**

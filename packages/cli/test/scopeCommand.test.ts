@@ -37,6 +37,18 @@ const { runCommand } = await import('../src/commands/dispatch.js');
 const SERVER = 'https://app.motir.co';
 const OWNER = 'user_me';
 
+/** A child row: a bare key is `todo`, or `KEY@status` pins one. */
+function childRow(spec: string): WorkItemDetail['children'][number] {
+  const [key = spec, status = 'todo'] = spec.split('@');
+  return {
+    identifier: key,
+    kind: 'subtask',
+    title: `Item ${key}`,
+    status,
+    dependencies: { blockedBy: [], blocks: [] },
+  };
+}
+
 function detail(
   over: Partial<WorkItemDetail['item']> = {},
   children: string[] = [],
@@ -59,13 +71,7 @@ function detail(
       ...over,
     },
     ancestors: [],
-    children: children.map((key) => ({
-      identifier: key,
-      kind: 'subtask',
-      title: `Item ${key}`,
-      status: 'todo',
-      dependencies: { blockedBy: [], blocks: [] },
-    })),
+    children: children.map(childRow),
     blockedBy: [],
     blocks: [],
     relatesTo: [],
@@ -124,7 +130,10 @@ let home: string;
 
 function setup(
   opts: {
-    detail?: WorkItemDetail;
+    /** One detail for every read, or a function of the read's 0-based INDEX and
+     *  the KEY it asked for — which is how a test makes the container's child
+     *  set GROW mid-run. */
+    detail?: WorkItemDetail | ((readIndex: number, key: string) => WorkItemDetail);
     ready?: DispatchItem[];
     claim?: ScopeClaim;
     planError?: Error;
@@ -142,8 +151,10 @@ function setup(
       return { user: { id: OWNER, name: 'Me', email: 'me@motir.test' }, workspace: null };
     },
     getWorkItem: async (key: string) => {
+      const readIndex = calls.filter((c) => c.tool === 'get_work_item').length;
       calls.push({ tool: 'get_work_item', args: key });
-      return opts.detail ?? detail({}, ['PROD-2']);
+      const scripted = opts.detail ?? detail({}, ['PROD-2']);
+      return typeof scripted === 'function' ? scripted(readIndex, key) : scripted;
     },
     listReadyForDispatch: async (args: unknown) => {
       calls.push({ tool: 'list_ready', args });
@@ -256,6 +267,29 @@ const SCOPE_DEPS = {
   clock: () => 0,
   now: () => new Date(0),
 };
+
+/**
+ * A git/gh runner that RECORDS what it was asked to do — the only way to assert
+ * an ABSENCE of `gh pr create`, which is what Bug MOTIR-3268 is about.
+ *
+ * ⚠️ It answers `rev-list --count` with a NUMBER, which the shared `GIT` above
+ * does not. `sessionBranchHasCommits` parses that count, so a runner that
+ * answers a sha reports every branch as EMPTY and the close-out returns before
+ * `gh` is ever reached — a fixture in which the assertion "no pull request was
+ * opened" would pass for the wrong reason.
+ */
+function recordingGit(): { run: CommandRunner; commands: string[] } {
+  const commands: string[] = [];
+  const run: CommandRunner = (bin, args) => {
+    commands.push([bin, ...args.slice(0, 2)].join(' '));
+    if (bin === 'git' && args[0] === 'rev-list' && args[1] === '--count') return okResult('1');
+    if (bin === 'gh' && args[1] === 'create') {
+      return okResult('https://github.com/moooon/motir-core/pull/1');
+    }
+    return GIT(bin, args, '');
+  };
+  return { run, commands };
+}
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'motir-scope-cfg-'));
@@ -541,5 +575,113 @@ describe('motir run <scope> — the leaf-only flags', () => {
     expect(toolNames()).toContain('claim');
     expect(toolNames()).not.toContain('claim_scope');
     expect(callsTo('dispatch_prompt').map((c) => c.args)).toEqual(['PROD-2']);
+  });
+});
+
+describe('motir run <container> — the close-out RE-READS the child set (MOTIR-3268)', () => {
+  // ⚠️ THE CLAIM IS TAKEN AT t=0 AND THE PULL REQUEST IS OPENED AT t=END.
+  // `motir run` may file a bug mid-drain (MOTIR-3017) and it parents that bug
+  // under the in-flight card's parent — the very container this run is about to
+  // open a pull request for. MOTIR-3229 made the container's own move into
+  // `implemented` refusable, which stops the false CLAIM and not the pull
+  // request: the run opens it FIRST and transitions after, so the 422 lands on a
+  // pull request that already exists. These tests pin the read that prevents it.
+
+  /**
+   * A container that acquires two children WHILE the drain is running.
+   *
+   * Counted per CONTAINER read rather than per read, because the drain also
+   * reads each dispatched CARD (its replan check) and pinning an absolute index
+   * would make this fixture break on any unrelated read the loop grows. The
+   * container is read three times before the close-out: the shape read, the
+   * dependency edges, and then the re-read this card adds.
+   */
+  function growsMidDrain(): (readIndex: number, key: string) => WorkItemDetail {
+    let containerReads = 0;
+    return (_readIndex, key) => {
+      if (key !== 'PROD-1') return detail({ identifier: key, kind: 'subtask' }, []);
+      containerReads += 1;
+      return containerReads >= 3
+        ? detail({}, ['PROD-2@implemented', 'PROD-9', 'PROD-10'])
+        : detail({}, ['PROD-2']);
+    };
+  }
+
+  const containerReads = () => callsTo('get_work_item').filter((c) => c.args === 'PROD-1');
+
+  it('a child filed DURING the drain holds the pull request — none is opened', async () => {
+    setup({ detail: growsMidDrain() });
+    const git = recordingGit();
+
+    await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
+
+    // The shape read, the edges, and the CLOSE-OUT re-read this card adds.
+    expect(containerReads()).toHaveLength(3);
+    // ⚠️ THE ASSERTION IS AN ABSENCE, and it is the acceptance criterion: no
+    // pull request exists for the transition to be refused on later.
+    expect(git.commands).not.toContain('gh pr create');
+    // The work is not stranded — the branch was pushed either way, because a
+    // hold is a statement about the pull REQUEST and not about the commits.
+    expect(git.commands).toContain('git push origin');
+  });
+
+  it('reports the stop by KEY, with all three dispositions named', async () => {
+    setup({ detail: growsMidDrain() });
+    const git = recordingGit();
+
+    await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
+
+    expect(harness.stderr).toContain('PROD-9 — not implemented');
+    expect(harness.stderr).toContain('PROD-10 — not implemented');
+    // The implemented child is NOT named: the stop is about what is open.
+    expect(harness.stderr).not.toContain('PROD-2 — not implemented');
+    // The three dispositions, each a decision about SCOPE that an unattended run
+    // has no standing to make on the operator's behalf.
+    expect(harness.stderr).toContain('LAND them');
+    expect(harness.stderr).toContain('RE-PARENT them out of PROD-1');
+    expect(harness.stderr).toContain('move PROD-1 to Done');
+    // Named in the pull-request block as HELD — not as a failure, which would
+    // send the reader looking for something that went wrong.
+    expect(harness.stderr).toContain('HELD — no pull request opened');
+    expect(harness.stderr).not.toContain('NOT opened.');
+  });
+
+  it('the CONTROL still holds: every child implemented opens exactly ONE pull request', async () => {
+    setup({ detail: (_i, key) => detail({}, key === 'PROD-1' ? ['PROD-2@implemented'] : []) });
+    const git = recordingGit();
+
+    await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
+
+    expect(git.commands.filter((c) => c === 'gh pr create')).toHaveLength(1);
+    expect(harness.stderr).not.toContain('HELD');
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('`done` / `cancelled` / `in_review` children all clear the bar', async () => {
+    // The bar is `implemented`-or-better, restated by KEY on this side because
+    // the child rows v1 publishes carry no category (`CHILD_CLAIM_BAR_KEYS`).
+    setup({
+      detail: (_i, key) =>
+        detail({}, key === 'PROD-1' ? ['PROD-2@done', 'PROD-3@cancelled', 'PROD-4@in_review'] : []),
+    });
+    const git = recordingGit();
+
+    await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
+
+    expect(git.commands).toContain('gh pr create');
+  });
+
+  it('a SPRINT scope has no container to re-read, and opens its pull request', async () => {
+    // A sprint spans several parents at mixed depths; its pull request claims
+    // nothing about any one of them, so there is nothing for this gate to read.
+    setup({ ready: [readyRow('PROD-2')] });
+    const git = recordingGit();
+
+    await runCommand('sprint', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
+
+    // The ONE read is the drain's own replan check on the dispatched card — the
+    // close-out added none.
+    expect(callsTo('get_work_item').map((c) => c.args)).toEqual(['PROD-2']);
+    expect(git.commands).toContain('gh pr create');
   });
 });

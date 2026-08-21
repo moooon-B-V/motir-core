@@ -9,7 +9,7 @@ import {
   resolveOwnerId,
   type DeliveryOptions,
 } from './dispatch.js';
-import { parseMax } from './auto.js';
+import { parseMax, transitionToImplemented } from './auto.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { deriveAgentHarness } from '../agentProfiles.js';
@@ -582,7 +582,18 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   // WORKFLOW, whose last step is opening the pull request — so Implemented is the
   // truthful status (built, pushed, waiting on CI), and the per-item close-out is
   // `motir done <key>` after the human merges it.
-  await client.transitionStatus({ key: entry.key, status: 'implemented' });
+  // ⚠️ THE CONTAINER GATE'S REFUSAL IS AN OUTCOME, NOT A CRASH (Bug MOTIR-3268).
+  // `motir batch` takes an explicit LIST of keys, so a container is genuinely
+  // reachable here — and an unhandled throw would end the whole batch on one
+  // card's status, abandoning the close-out of everything already built.
+  const refusal = await transitionToImplemented(client, entry.key);
+  if (refusal) {
+    info(`${entry.key}: ${refusal}`);
+    return {
+      kind: 'record',
+      record: { ...base, outcome: 'failed', detail: 'container has open children' },
+    };
+  }
   // What BUILT it, recorded as its own fact (MOTIR-2421). Two calls rather than
   // one because they assert different things: the transition says where the item
   // is, this says what ran. `motir auto` gets both from `mark_integrated`, which

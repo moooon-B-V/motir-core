@@ -195,7 +195,14 @@ export interface PrReport {
   repoName: string | null;
   branch: string;
   url: string | null;
-  outcome: 'opened' | 'existing' | 'failed' | 'empty';
+  /**
+   * `held` (Bug MOTIR-3268) is the one outcome the RUN chose rather than
+   * observed: the close-out re-read the container's children, found one that had
+   * not reached `implemented`, and did not open a pull request that would have
+   * claimed otherwise. Distinct from `failed`, which means the attempt was made
+   * and `gh` refused it — the operator's next action is different in each case.
+   */
+  outcome: 'opened' | 'existing' | 'failed' | 'empty' | 'held';
   message?: string;
 }
 
@@ -557,6 +564,14 @@ function prLine(pr: PrReport): string {
         `  ${repo}: NOT opened. ${pr.message ?? ''}\n` +
         `    The work IS pushed to ${pr.branch} — open the pull request by hand, then ` +
         `\`motir done --session ${pr.branch}\`.`
+      );
+    case 'held':
+      // ⚠️ It says HELD, not failed, and names the branch for the same reason
+      // the `failed` arm does: the work is pushed either way, and the operator's
+      // recovery starts from knowing where it is.
+      return (
+        `  ${repo}: HELD — no pull request opened. ${pr.message ?? ''}\n` +
+        `    The work IS pushed to ${pr.branch} — the block above says what to do next.`
       );
   }
 }

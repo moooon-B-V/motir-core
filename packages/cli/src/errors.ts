@@ -162,3 +162,32 @@ export class PlanNotDecidableError extends CliError {
     this.planStatus = planStatus;
   }
 }
+
+/**
+ * 422 `CONTAINER_HAS_OPEN_CHILDREN` — a container was moved to a status that
+ * CLAIMS its own work is built while a child of its own is not (Bug MOTIR-3229,
+ * server side; this is Bug MOTIR-3268's client half).
+ *
+ * ⚠️ IT EXISTS SO A RUN CAN NAME THE REFUSAL INSTEAD OF DYING ON IT. The
+ * transition happens deep inside the loop — after the agent has exited and its
+ * work is on the remote — and an unhandled throw there escapes before the
+ * close-out, abandoning every other repository's finished work (the shape
+ * `autoCommand.test.ts` already pins for a different throw). The run's own
+ * close-out gate narrows the window this arrives in; it cannot close it, because
+ * a child can be filed between the re-read and the transition.
+ *
+ * ⚠️ IT CARRIES THE SERVER'S SENTENCE AND NOT A PARSED CHILD LIST. The message
+ * NAMES the open children and the wire envelope does not publish them as a field
+ * — and `public-api-conventions.md` §8 is explicit that a client reads fields,
+ * never sentences. So the run quotes the server verbatim, which is also the only
+ * way the two surfaces cannot disagree about what is open.
+ */
+export class ContainerHasOpenChildrenError extends CliError {
+  constructor(message: string) {
+    super(message, {
+      exitCode: 1,
+      hint: 'Land the open children, re-parent them out of the container, or move it to Done.',
+    });
+    this.name = 'ContainerHasOpenChildrenError';
+  }
+}

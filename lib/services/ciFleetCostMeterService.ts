@@ -6,6 +6,10 @@ import {
   type CiContainerWorkload,
 } from '@/lib/repositories/ciContainerUsageRepository';
 import {
+  ciContainerUsageSliceRepository,
+  IDLE_SLICE_REF,
+} from '@/lib/repositories/ciContainerUsageSliceRepository';
+import {
   ciContainerPeriodCostRepository,
   type MetaSplitContainerCost,
   type OrgPeriodContainerCost,
@@ -15,7 +19,11 @@ import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageReposit
 import { containerWorkloadFor } from '@/lib/ciFleet/workloads';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { periodStartFor } from '@/lib/ciMetering/period';
-import type { ContainerAccrual, ContainerUsage } from '@/lib/orchestrator/types';
+import type {
+  ContainerAccrual,
+  ContainerUsage,
+  ContainerWorkSlice,
+} from '@/lib/orchestrator/types';
 
 // The FLEET COST METER (Story MOTIR-1916 · MOTIR-1924) — the SECOND meter, and
 // the first thing in Motir that measures what Motir's own compute costs.
@@ -104,6 +112,15 @@ export type RecordContainerUsageOutcome =
        * outcome should be able to see which happened.
        */
       accruedSecondsDelta: number;
+      /**
+       * MOTIR-3255 — how this handle's figure DIVIDES, when it served more than
+       * one repo. `attributedSeconds` is Σ work slices as now stored;
+       * `idleSeconds` is the derived remainder the ORG owns. Both 0 for a
+       * one-container-one-repo handle, which the row's own columns already
+       * attribute exactly.
+       */
+      attributedSeconds: number;
+      idleSeconds: number;
     };
 
 /** What one CHECKPOINT on a still-running container did (MOTIR-1995). Shaped like
@@ -127,6 +144,15 @@ export type RecordContainerAccrualOutcome =
       billableSeconds: number;
       costUsd: string;
       accruedSecondsDelta: number;
+      /**
+       * MOTIR-3255 — how this handle's figure DIVIDES, when it served more than
+       * one repo. `attributedSeconds` is Σ work slices as now stored;
+       * `idleSeconds` is the derived remainder the ORG owns. Both 0 for a
+       * one-container-one-repo handle, which the row's own columns already
+       * attribute exactly.
+       */
+      attributedSeconds: number;
+      idleSeconds: number;
     };
 
 /** What one org's CI cost Motir in a period, beside what it was metered for —
@@ -195,6 +221,7 @@ export const ciFleetCostMeterService = {
       },
       row: rowInputFor(usage),
       startedAt: usage.startedAt,
+      slices: usage.slices,
     });
 
     if (written.outcome === 'already_settled') {
@@ -216,6 +243,8 @@ export const ciFleetCostMeterService = {
       billableSeconds: usage.billableSeconds,
       costUsd: usage.costUsd,
       accruedSecondsDelta: written.accruedSecondsDelta,
+      attributedSeconds: written.attributedSeconds,
+      idleSeconds: written.idleSeconds,
     };
   },
 
@@ -250,6 +279,7 @@ export const ciFleetCostMeterService = {
       settle: null,
       row: rowInputFor(accrual),
       startedAt: accrual.startedAt,
+      slices: accrual.slices,
     });
 
     if (written.outcome === 'already_settled') {
@@ -273,6 +303,8 @@ export const ciFleetCostMeterService = {
       billableSeconds: accrual.accruedSeconds,
       costUsd: accrual.costUsd,
       accruedSecondsDelta: written.accruedSecondsDelta,
+      attributedSeconds: written.attributedSeconds,
+      idleSeconds: written.idleSeconds,
     };
   },
 
@@ -429,9 +461,21 @@ async function writeContainerFigure(input: {
   settle: { stoppedAt: Date; terminalState: string; teardownReason: string } | null;
   row: ContainerRowIdentity;
   startedAt: Date | null;
+  /** MOTIR-3255 — what a MULTI-REPO handle's seconds were spent on. Absent for
+   *  every one-container-one-repo workload, which is all of them today. */
+  slices: readonly ContainerWorkSlice[] | undefined;
 }): Promise<
   | { outcome: 'already_settled' }
-  | { outcome: 'written'; periodStart: Date; accruedSecondsDelta: number }
+  | {
+      outcome: 'written';
+      periodStart: Date;
+      accruedSecondsDelta: number;
+      /** Σ seconds this handle attributed to WORK, and the idle remainder that
+       *  belongs to the org. Both 0 for a single-repo handle, which attributes
+       *  its whole figure by the row's own columns. */
+      attributedSeconds: number;
+      idleSeconds: number;
+    }
 > {
   const { periodStartIfNew, workload, billableSeconds, costUsd, settle, row } = input;
 
@@ -539,8 +583,127 @@ async function writeContainerFigure(input: {
       );
     }
 
-    return { outcome: 'written' as const, periodStart, accruedSecondsDelta };
+    // 4 · ATTRIBUTION, for a handle that served more than one repo (MOTIR-3255).
+    //
+    // Runs inside the SAME transaction and AFTER the figure, deliberately: the
+    // idle slice is the complement of the figure, so deriving it before the row
+    // held its new total would attribute the difference to a lifetime that had
+    // not been written yet.
+    const attribution = await writeSlices({
+      slices: input.slices,
+      row,
+      periodStart,
+      lifetimeSeconds: billableSeconds,
+      tx,
+    });
+
+    return {
+      outcome: 'written' as const,
+      periodStart,
+      accruedSecondsDelta,
+      attributedSeconds: attribution.attributedSeconds,
+      idleSeconds: attribution.idleSeconds,
+    };
   });
+}
+
+/**
+ * Divide a handle's lifetime among the projects it served, and give the remainder
+ * to the org (MOTIR-3255).
+ *
+ * ⚠️ THE CALLER REPORTS **WORK**; THIS DERIVES **IDLE**. That asymmetry is the
+ * whole reason the reconciliation holds: `Σ slices = the handle's billable
+ * seconds` is arithmetic performed here, not a property a container is trusted to
+ * maintain. A worker that under-reports its work does not break the sum — it
+ * moves seconds into idle, where they are visibly nobody's.
+ *
+ * ⚠️ AND IDLE'S OWNER IS THE ORG, WHICH IS A DECISION AND NOT A DEFAULT
+ * (`code-graph-index-fleet.md` §16.2). A machine waiting for work is costing
+ * money on nobody's behalf in particular; the alternatives were to spread it
+ * across the projects it happened to serve (inventing an attribution nobody
+ * measured) or to leave it unattributed (making the slices sum short of the
+ * handle, which is the hole this card exists to close). A row with a null project
+ * on the org's own line says exactly what happened.
+ *
+ * Absent `slices` writes NOTHING — not an empty set, not a whole-lifetime idle
+ * slice. Every one-container-one-repo workload is already exactly attributed by
+ * the handle row's own columns, and a slice table that also held those rows would
+ * be a second place to read the same fact.
+ */
+async function writeSlices(input: {
+  slices: readonly ContainerWorkSlice[] | undefined;
+  row: ContainerRowIdentity;
+  periodStart: Date;
+  lifetimeSeconds: number;
+  tx: Prisma.TransactionClient;
+}): Promise<{ attributedSeconds: number; idleSeconds: number }> {
+  const { slices, row, periodStart, lifetimeSeconds, tx } = input;
+  if (!slices) return { attributedSeconds: 0, idleSeconds: 0 };
+
+  const rate = new Prisma.Decimal(row.usdPerSecond);
+  for (const slice of slices) {
+    await ciContainerUsageSliceRepository.upsert(
+      {
+        containerProvider: row.containerProvider,
+        handleId: row.handleId,
+        sliceRef: slice.sliceRef,
+        kind: 'work',
+        workspaceId: row.workspaceId,
+        organizationId: row.organizationId,
+        projectId: slice.projectId,
+        repoFullName: slice.repoFullName,
+        seconds: slice.seconds,
+        usdPerSecond: row.usdPerSecond,
+        costUsd: rate.mul(slice.seconds).toFixed(),
+        periodStart,
+      },
+      tx,
+    );
+  }
+
+  // Read the sum back from the TABLE rather than from the argument: a checkpoint
+  // reports the slices it knows about, and a handle's earlier work may have been
+  // attributed by an earlier checkpoint that this one does not repeat.
+  const attributedSeconds = await ciContainerUsageSliceRepository.sumWorkSecondsForHandle(
+    row.containerProvider,
+    row.handleId,
+    tx,
+  );
+
+  const idleSeconds = Math.max(0, lifetimeSeconds - attributedSeconds);
+  if (attributedSeconds > lifetimeSeconds) {
+    // Not clamped silently. A handle claiming more work than it has lived is a
+    // reporting bug, and the floor above keeps the idle row from going negative —
+    // but the discrepancy is the interesting fact, so it is SAID. The slices are
+    // still written: what was reported is evidence, and dropping it would leave
+    // the bug invisible in exactly the record that could show it.
+    console.warn(
+      `[fleet-cost-meter] ${row.containerProvider}/${row.handleId}: slices attribute ` +
+        `${attributedSeconds}s of work against a ${lifetimeSeconds}s lifetime — the handle ` +
+        'reported more work than it lived, so idle is floored at 0 and Σ slices exceeds the ' +
+        'figure. Reconciliation will not balance for this handle.',
+    );
+  }
+
+  await ciContainerUsageSliceRepository.upsert(
+    {
+      containerProvider: row.containerProvider,
+      handleId: row.handleId,
+      sliceRef: IDLE_SLICE_REF,
+      kind: 'idle',
+      workspaceId: row.workspaceId,
+      organizationId: row.organizationId,
+      projectId: null,
+      repoFullName: null,
+      seconds: idleSeconds,
+      usdPerSecond: row.usdPerSecond,
+      costUsd: rate.mul(idleSeconds).toFixed(),
+      periodStart,
+    },
+    tx,
+  );
+
+  return { attributedSeconds, idleSeconds };
 }
 
 /**

@@ -11,6 +11,7 @@ import { normalizeServerUrl } from './config/userConfig.js';
 import {
   AuthError,
   CliError,
+  ContainerHasOpenChildrenError,
   PlanNotDecidableError,
   IncompatibleServerError,
   NotFoundError,
@@ -435,6 +436,16 @@ export class V1Transport {
       const planStatus = readPlanStatus(parsed);
       if (envelope.code === 'PLAN_NOT_IN_EXPECTED_STATUS' && planStatus) {
         return new PlanNotDecidableError(envelope.error, planStatus);
+      }
+      // ⚠️ THE THIRD TYPED REFUSAL, and it branches on the CODE alone — there is
+      // no enrichment to read. `POST …/transitions` answers a container whose
+      // children are not built with `CONTAINER_HAS_OPEN_CHILDREN`, and the open
+      // children live in the SENTENCE rather than in a field. A loop still has to
+      // tell this refusal from every other 422, because this one is a state it
+      // reports and continues from rather than a failure it dies on (MOTIR-3268)
+      // — and the code is data, which is exactly what §8 asks a client to read.
+      if (envelope.code === 'CONTAINER_HAS_OPEN_CHILDREN') {
+        return new ContainerHasOpenChildrenError(envelope.error);
       }
       const allowed = readAllowedTransitions(parsed);
       return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);

@@ -437,12 +437,59 @@ none of them takes a key, so none of them can be handed a scope.
   deeper-than-one-layer refuses. Reconciling the two texts is MOTIR-3203's work;
   this ADR is the side they reconcile to.
 
+## AMENDMENT (Bug MOTIR-3268, 2026-08-20) — the CLAIM is not the only stop; the CLOSE-OUT has one too
+
+The outcome map above is total over the **claim**, and it was read as total over
+the run. It is not, and the gap is a shape this ADR could not have seen when it
+was written: the claim is taken at t=0 and the pull request is opened at t=end,
+and **MOTIR-3017 shipped the ability for a run to file a bug in between** — under
+the in-flight card's PARENT, which on a scoped run is the container this run is
+about to open a pull request for.
+
+So the drain can finish having built every card it claimed, and the container can
+still have a child that is not built. A pull request opened over that claims the
+story is implemented when it is not. MOTIR-3229 made the container's own move
+into `implemented` / `in_review` refusable server-side
+(`CONTAINER_HAS_OPEN_CHILDREN`, 422) — which stops the false CLAIM and not the
+pull request, because the run opens it FIRST and transitions after, so the
+refusal lands on a pull request that already exists.
+
+**The decision: the close-out RE-READS the container's current children — one
+`get_work_item`, after the drain, before `gh pr create` — and opens nothing while
+any child is below `implemented`.** Three things follow, each chosen rather than
+incidental:
+
+- **The branches are still PUSHED.** A hold is a statement about the pull
+  REQUEST, not about the commits; finished work must not be left in a local
+  checkout for a human to find. The summary reports the repository as `held`,
+  names the branch, and is distinct from `failed` (an attempt `gh` refused).
+- **The run names all THREE dispositions and picks none** — land the open
+  children, re-parent them out of the container, or move the container to Done,
+  which completes its children deliberately. Each is a decision about SCOPE, and
+  an unattended run has no standing to make one on the operator's behalf.
+- **Exit 0, like every other stop in the map above.** The run did what it was
+  asked and stopped on a state it reported; a non-zero code would say something
+  went wrong, and nothing did.
+
+**It narrows the window; it does not close it.** A child can arrive between the
+re-read and the transition, so the 422 remains reachable — and is therefore
+rendered as a named outcome rather than allowed to escape as an unhandled throw,
+which would take the run's close-out down with it and abandon work that has
+nothing to do with the container.
+
+**A SPRINT scope has no container to re-read** and is unaffected: it spans
+several parents at mixed depths, and its pull request claims nothing about any
+one of them.
+
 ## Context refs
 
 - `packages/cli/src/commands/dispatch.ts` — `runCommand`, `pickWarning`,
   `ensureInProgress`, `claimAllowsDispatch`, `renderClaimRefusal`,
   `notReadyError`, `refuseAutoOnlyFlag`
 - `packages/cli/src/commandCatalog.ts` — the record this ADR edits
+- `packages/cli/src/scopedRun.ts` — `childrenBelowClaimBar`, `renderOpenChildrenHold`,
+  `openChildrenHoldReason` (the AMENDMENT's close-out gate)
+- `lib/workItems/statusLadder.ts` — the server's bar the CLI restates by key
 - `packages/cli/src/program.ts` — `register()`, which builds from it
 - `packages/cli/test/commandCatalog.test.ts` — the both-directions, in-order audit
 - `packages/cli/src/autoLoop.ts` — `classifyReadyItem`, `SkipRecord`,
