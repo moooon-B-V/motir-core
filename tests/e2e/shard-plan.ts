@@ -167,7 +167,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'notifications.spec.ts': 13.8,
   'onboarding-discovery.spec.ts': 2.5,
   'onboarding-entrance.spec.ts': 5.8,
-  'onboarding-entry.spec.ts': 1.2,
+  'onboarding-entry.spec.ts': 3.5,
   'onboarding-fresh.spec.ts': 8.6,
   'onboarding-migrate.spec.ts': 43.5,
   'onboarding-ran-gate.spec.ts': 11.9,
