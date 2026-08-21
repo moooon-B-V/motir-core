@@ -135,18 +135,6 @@ export interface NormalizedPushEvent {
   providerRepoId: string;
   branch: string;
   headSha: string | null;
-  /**
-   * Every path this push touched — `added` ∪ `modified` ∪ `removed`, repo-relative
-   * (MOTIR-3358). A refresh may index exactly these instead of walking the whole
-   * tree, which is 124 s of a 148 s production run.
-   *
-   * ⚠️ NULL IS NOT AN EMPTY LIST. Null means the paths are UNKNOWN — a payload
-   * without commits, or one GitHub truncated at its commit cap — and it makes the
-   * refresh fall back to today's whole-tree sync. An EMPTY ARRAY would claim that
-   * nothing changed, which is a different and much more dangerous statement: a
-   * partial list is the one input that can produce a silently wrong graph.
-   */
-  changedPaths: string[] | null;
 }
 
 /** A completed CI workflow run, normalized across providers — consumed by the
