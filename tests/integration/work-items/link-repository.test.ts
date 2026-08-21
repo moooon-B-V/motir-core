@@ -463,6 +463,245 @@ describe('workItemLinkRepository.createIfAbsent — idempotent insert (5.8.3)', 
   });
 });
 
+// The BATCH form (MOTIR-3396). `createIfAbsent` was an array API called with an
+// array of one, so `plansService.materialize` wired a plan's whole `blocked_by`
+// graph one round trip per edge — 27 sequential Fly→Neon waits inside an
+// interactive transaction on Prisma's default 5 s budget, which is what made
+// approving a 15-item plan return P2028.
+//
+// The wall-clock failure is a LATENCY phenomenon and a local Postgres cannot
+// reproduce it, so what is asserted here is the property that removes it: N rows
+// go out in ONE statement, and batching costs none of the per-row structural
+// enforcement the sequential form had.
+describe('workItemLinkRepository.createManyIfAbsent — one statement for N links (MOTIR-3396)', () => {
+  it('issues exactly ONE createManyAndReturn for N rows, with skipDuplicates', async () => {
+    // A hand-rolled `tx` double rather than a real one: the claim under test is
+    // "one round trip, not N", and the only place that is directly observable is
+    // the call the repository makes into Prisma. The real-Postgres behaviour of
+    // the same call is covered by the sibling cases below.
+    const calls: Array<{ data: unknown; skipDuplicates: unknown }> = [];
+    const fakeTx = {
+      workItemLink: {
+        createManyAndReturn: async (args: { data: unknown[]; skipDuplicates: boolean }) => {
+          calls.push({ data: args.data, skipDuplicates: args.skipDuplicates });
+          return args.data;
+        },
+      },
+    } as unknown as Parameters<typeof workItemLinkRepository.createManyIfAbsent>[1];
+
+    const rows = Array.from({ length: 27 }, (_, i) => ({
+      workspaceId: 'ws',
+      fromId: `from-${i}`,
+      toId: `to-${i}`,
+      kind: 'is_blocked_by' as const,
+      createdById: 'user',
+    }));
+    const returned = await workItemLinkRepository.createManyIfAbsent(rows, fakeTx);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.data).toHaveLength(27);
+    expect(calls[0]!.skipDuplicates).toBe(true);
+    expect(returned).toHaveLength(27);
+  });
+
+  it('an EMPTY batch issues no query at all', async () => {
+    let called = false;
+    const fakeTx = {
+      workItemLink: {
+        createManyAndReturn: async () => {
+          called = true;
+          return [];
+        },
+      },
+    } as unknown as Parameters<typeof workItemLinkRepository.createManyIfAbsent>[1];
+
+    await expect(workItemLinkRepository.createManyIfAbsent([], fakeTx)).resolves.toEqual([]);
+    expect(called).toBe(false);
+  });
+
+  it('inserts every row and skips a duplicate already present, against real Postgres', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
+    const base = { workspaceId: fx.workspace.id, createdById: fx.owner.id };
+
+    // Pre-existing edge, so the batch below carries one duplicate.
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.createIfAbsent(
+        { ...base, fromId: a.id, toId: b.id, kind: 'is_blocked_by' },
+        tx,
+      ),
+    );
+
+    const inserted = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.createManyIfAbsent(
+        [
+          { ...base, fromId: a.id, toId: b.id, kind: 'is_blocked_by' }, // duplicate
+          { ...base, fromId: a.id, toId: c.id, kind: 'is_blocked_by' },
+          { ...base, fromId: b.id, toId: c.id, kind: 'is_blocked_by' },
+        ],
+        tx,
+      ),
+    );
+
+    // The duplicate is SKIPPED, not raised — so a plan proposing the same edge
+    // twice is idempotent rather than an aborted approve.
+    expect(inserted).toHaveLength(2);
+    const all = await adminDb.workItemLink.findMany({ where: { kind: 'is_blocked_by' } });
+    expect(all).toHaveLength(3);
+  });
+
+  it('still rejects a cycle formed BETWEEN two rows of the SAME batch — the BEFORE-ROW trigger sees earlier rows of its own statement', async () => {
+    // The correctness claim batching could plausibly have broken, so it is
+    // asserted rather than reasoned about: `enforce_work_item_link_no_cycle`
+    // walks `work_item_link`, and if rows inserted earlier in the same statement
+    // were invisible to it, A↔B inside one batch would slip past a check two
+    // separate inserts enforce.
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const base = { workspaceId: fx.workspace.id, createdById: fx.owner.id };
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.createManyIfAbsent(
+          [
+            { ...base, fromId: a.id, toId: b.id, kind: 'is_blocked_by' },
+            { ...base, fromId: b.id, toId: a.id, kind: 'is_blocked_by' },
+          ],
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(WorkItemLinkCycleError);
+
+    // Rolled back whole — the statement aborts, so neither edge survives.
+    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(0);
+  });
+
+  it('attributes the rejection to the OFFENDING row of the batch, not the first', async () => {
+    // What a batch loses is which row failed; the trigger message interpolates
+    // the ids, so it is recovered rather than guessed. Asserted because the
+    // attribution is what keeps the typed error's diagnostics honest.
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
+    const base = { workspaceId: fx.workspace.id, createdById: fx.owner.id };
+
+    // A is_blocked_by B first, so the LAST row of the next batch closes the loop.
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.createIfAbsent(
+        { ...base, fromId: a.id, toId: b.id, kind: 'is_blocked_by' },
+        tx,
+      ),
+    );
+
+    const err = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository
+        .createManyIfAbsent(
+          [
+            { ...base, fromId: a.id, toId: c.id, kind: 'is_blocked_by' }, // fine
+            { ...base, fromId: b.id, toId: a.id, kind: 'is_blocked_by' }, // the cycle
+          ],
+          tx,
+        )
+        .then(
+          () => null,
+          (e: unknown) => e,
+        ),
+    );
+
+    expect(err).toBeInstanceOf(WorkItemLinkCycleError);
+    expect((err as WorkItemLinkCycleError).attempted).toEqual({
+      fromId: b.id,
+      toId: a.id,
+      kind: 'is_blocked_by',
+    });
+  });
+
+  it('createIfAbsent now TRANSLATES a trigger rejection, since it delegates to the batch form', async () => {
+    // A behaviour CHANGE worth pinning: before delegating, `createIfAbsent`
+    // caught nothing, so a trigger rejection escaped as a raw SQLSTATE-23514
+    // Prisma error. Its one caller (auto-relate-on-mention) writes a shape no
+    // trigger rejects, so nothing depended on the raw form — and a typed error
+    // is what every other write path in this repository already produces.
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.createIfAbsent(
+          {
+            workspaceId: fx.workspace.id,
+            fromId: a.id,
+            toId: a.id,
+            kind: 'relates_to',
+            createdById: fx.owner.id,
+          },
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(SelfLinkError);
+  });
+
+  it('falls back to the FIRST row when the rejection names no row — a workspace mismatch reports workspace ids, not link ids', async () => {
+    // The attribution is best-effort by construction: `WI_LINK_WORKSPACE_MISMATCH`
+    // interpolates the two WORKSPACE ids, so there is nothing in the message to
+    // match a row on. The fallback keeps the typed error intact — which is the
+    // property that matters, since this class carries no `attempted` payload and
+    // the diagnostic is the only thing degraded.
+    const fxA = await makeFixture({ name: 'Batch A', identifier: 'BTA' });
+    const fxB = await makeFixture({ name: 'Batch B', identifier: 'BTB' });
+    const a = await createWorkItem(fxA, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fxA, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fxA, { kind: 'task', title: 'C' });
+
+    await expect(
+      adminDb.$transaction((tx) =>
+        workItemLinkRepository.createManyIfAbsent(
+          [
+            {
+              workspaceId: fxA.workspace.id,
+              fromId: a.id,
+              toId: b.id,
+              kind: 'relates_to',
+              createdById: fxA.owner.id,
+            },
+            {
+              workspaceId: fxB.workspace.id, // the wrong workspace
+              fromId: a.id,
+              toId: c.id,
+              kind: 'relates_to',
+              createdById: fxA.owner.id,
+            },
+          ],
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(WorkspaceMismatchLinkError);
+  });
+
+  it('a batched SELF-link is rejected exactly as a single one is', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const base = { workspaceId: fx.workspace.id, createdById: fx.owner.id };
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) =>
+        workItemLinkRepository.createManyIfAbsent(
+          [
+            { ...base, fromId: a.id, toId: b.id, kind: 'relates_to' },
+            { ...base, fromId: a.id, toId: a.id, kind: 'relates_to' },
+          ],
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(SelfLinkError);
+  });
+});
+
 // THE INHERITED-LINEAGE READ (MOTIR-2400) — "is this item ready from `main`, or
 // on top of unmerged work?", for a whole page in one query.
 //

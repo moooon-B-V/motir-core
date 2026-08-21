@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
 import {
+  PlanApproveTimedOutError,
   PlanGrammarError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
@@ -98,6 +99,20 @@ export async function POST(
       return NextResponse.json(
         { code: err.code, error: err.message },
         { status: err.kind === 'browse' ? 404 : 403 },
+      );
+    }
+    // The transaction budget was exhausted (Prisma P2028) — MOTIR-3396. 503, not
+    // 500: the transaction rolled back, so the tree is byte-identical, the plan
+    // is still `planned`, and a retry is a legitimate next move. Without this arm
+    // it fell through to the rethrow below and the caller got a bare 500 with an
+    // empty body — which reads as "something is broken" and led to Approve being
+    // pressed three more times on the plan that produced this bug. `itemCount`
+    // rides on the payload because "too large for one transaction" is only
+    // actionable if the response says how large.
+    if (err instanceof PlanApproveTimedOutError) {
+      return NextResponse.json(
+        { code: err.code, planId: err.planId, itemCount: err.itemCount, error: err.message },
+        { status: 503 },
       );
     }
     throw err;

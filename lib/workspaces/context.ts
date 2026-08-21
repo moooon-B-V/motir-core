@@ -82,20 +82,40 @@ export interface WorkspaceContext {
  * policies read, and invokes `fn` with the transaction client. Every
  * query issued through `tx` inside `fn` sees the GUCs and is RLS-scoped
  * to the workspace; once the transaction ends the GUCs are discarded.
+ *
+ * `options` raises Prisma's interactive-transaction budget — see
+ * {@link TransactionBudget}, and note that its "raising it is a visible, argued
+ * decision at the call site" is the whole contract: OMIT it and the Prisma
+ * defaults (5 000 ms / 2 000 ms) apply, which is what all but one caller wants.
+ *
+ * ⚠️ IT TAKES ONE BECAUSE THE ABSENCE WAS NOT A DECISION (MOTIR-3396). This is
+ * the context every tenant-scoped WRITE opens, and it was the only one of the
+ * four in this file that could not be given a budget — `withWorkspaceServiceContext`
+ * has accepted one since MOTIR-1972. So the one path with a genuinely large
+ * transaction (`plansService.approvePlan`, which materializes a whole proposed
+ * subtree) had no way to say so, and a 15-item plan died mid-body on P2028 with
+ * the route reporting a bare 500. Adding the parameter does not make long
+ * transactions cheap: the caller that reaches for it owes the argument, and
+ * approve's own fix was to remove ~26 round trips FIRST and raise the budget
+ * second.
  */
 export async function withWorkspaceContext<T>(
   ctx: WorkspaceContext,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-    await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-    // Always bind app.project_id (empty string when no project is active) so
-    // the work_item project-narrowing policy's `coalesce(...) = ''` branch
-    // fires cleanly — no ambiguity between "unset" and "deliberately empty".
-    await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
-    return fn(tx);
-  });
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+      // Always bind app.project_id (empty string when no project is active) so
+      // the work_item project-narrowing policy's `coalesce(...) = ''` branch
+      // fires cleanly — no ambiguity between "unset" and "deliberately empty".
+      await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
+      return fn(tx);
+    },
+    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  );
 }
 
 /**
@@ -299,10 +319,20 @@ export async function withBootstrapSlugContext<T>(
  * two loose numbers so that raising it is a visible, argued decision at the call
  * site instead of a magic literal.
  *
- * The one shipped caller is the per-project runner-group sync (MOTIR-1972),
- * which must hold the project's row lock ACROSS its GitHub calls because the
- * access list it writes is read-derived — see that service's header for why the
- * lock cannot be released first.
+ * The shipped callers are TWO, and they are raised for opposite reasons — which
+ * is why the type asks for an argument rather than a number:
+ *
+ *   * the per-project runner-group sync (MOTIR-1972), which must hold the
+ *     project's row lock ACROSS its GitHub calls because the access list it
+ *     writes is read-derived — see that service's header for why the lock
+ *     cannot be released first. Its budget covers time spent WAITING on a third
+ *     party.
+ *   * `plansService.approvePlan` (MOTIR-3396), whose transaction is large
+ *     because the WORK is large — materializing a whole proposed subtree. Its
+ *     budget covers time spent doing our own round trips, so the argument at
+ *     that call site has to explain why the work could not be made smaller
+ *     first. It was: batching the `blocked_by` pass took a 15-item / 27-edge
+ *     plan from ~42 statements of edge-writing to 1.
  */
 export interface TransactionBudget {
   /** Max wall-clock ms the transaction body may run before Prisma rolls back. */
