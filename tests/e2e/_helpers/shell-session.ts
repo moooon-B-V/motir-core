@@ -90,7 +90,39 @@ async function settleOnHome(page: Page): Promise<void> {
 // the second submit on the now-existing account clears the just-set session
 // and the next protected nav bounces to /sign-in (observed flake, Subtask
 // 1.5.5). One click + a generous wait is both correct and reliable.
+// The Better-Auth session cookies (the library prefixes every one of them), as
+// opposed to the per-device tier cookies `workspace_id` / `motir.org`, which are
+// deliberately KEPT below.
+const SESSION_COOKIE_MARKER = 'better-auth';
+
+/**
+ * Drop the SESSION, keep everything else — the state a person is in when they
+ * arrive at a credential form.
+ *
+ * ⚠️ Required since MOTIR-3372: `/sign-in` and `/sign-up` are server shells that
+ * REDIRECT a reader who is already signed in (to `?next=`, else `/home`), so a
+ * spec that authenticates as a second identity mid-test no longer reaches the
+ * form at all — `getByPlaceholder('Email address').fill(…)` times out on a page
+ * that has already navigated to `/home`. That is the product behaving correctly:
+ * a credential form is for somebody who needs credentials, and switching
+ * accounts means leaving the first one, exactly as it does in the browser.
+ *
+ * It drops ONLY the session so the switch stays behaviour-identical to what
+ * these specs did before: Better-Auth already replaced the session cookie on the
+ * second sign-up, while the per-device `workspace_id` / `motir.org` cookies
+ * survived. Clearing everything would change what those specs exercise.
+ * (`shell-flows.spec.ts` does the mirror-image trick for the same reason.)
+ */
+export async function startSignedOut(page: Page): Promise<void> {
+  const cookies = await page.context().cookies();
+  if (!cookies.some((c) => c.name.includes(SESSION_COOKIE_MARKER))) return;
+  const keep = cookies.filter((c) => !c.name.includes(SESSION_COOKIE_MARKER));
+  await page.context().clearCookies();
+  if (keep.length) await page.context().addCookies(keep);
+}
+
 export async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
@@ -108,6 +140,7 @@ export async function signUp(page: Page, email: string): Promise<void> {
 // need a different surface `goto` it afterwards, which is safe because sign-in
 // performs exactly ONE navigation (MOTIR-2645).
 export async function signIn(page: Page, email: string, password: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-in');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

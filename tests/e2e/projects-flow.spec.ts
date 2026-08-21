@@ -8,6 +8,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
@@ -22,6 +23,7 @@ test.afterAll(async () => {
 });
 
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
