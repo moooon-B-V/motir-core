@@ -25,8 +25,23 @@ on:
 # MOTIR-3078's schema migration sat merged and unapplied on production, along
 # with eleven other merges.
 #
-# The deploy job's own `fly-deploy` group protects a release already IN FLIGHT;
-# nothing there can protect a run that never arrives.
+# ⚠️ AND DO NOT REACH FOR THE JOB-LEVEL GROUP INSTEAD — this line used to say
+# the deploy job's own `fly-deploy` group "protects a release already IN FLIGHT",
+# and that half was FALSE. **A job-level concurrency group governs QUEUEING
+# between jobs in that group; it does NOT exempt the job from a workflow-level
+# cancellation of its own run.** Measured on motir-ai (MOTIR-3284), which carried
+# the identical `fly-deploy` group with `cancel-in-progress: false` and had three
+# deploys cancelled in twenty-four hours anyway — two of them mid-release, one
+# leaving the app on two different releases for nine minutes.
+#
+# So what protects a running deploy here is THIS expression, and only this
+# expression: not cancelling the run on `main`. The `fly-deploy` group is still
+# correct for what it actually does — serialising two releases so they cannot
+# overlap — and it stays. It is simply not a second line of defence, and reading
+# it as one is how motir-ai kept a broken guard that everybody had already read.
+#
+# The rest of the original sentence stands: nothing at the job level can protect
+# a run that never arrives, which is the starvation this block exists to stop.
 #
 # Newest-wins is KEPT wherever it costs nothing, so this does not queue merges
 # up without bound. GitHub holds at most ONE pending run per group and cancels
