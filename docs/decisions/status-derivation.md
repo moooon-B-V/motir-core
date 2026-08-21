@@ -82,6 +82,21 @@
   `workflow_transition` row**, and `done` is deliberately left ungated — completing a
   parent is a decision that completes its children, which is what §4 IS.
 
+- **Amended:** 2026-08-21 (Yue · Bug MOTIR-3334) — **§4's defect-report exemption is
+  DELETED and replaced by a DATED CLAIM.** The kind carve-out contradicted §3's _"no work
+  item is exempt"_ and left a merged parent stranded at rung 4 with nothing able to
+  complete the children the recompute counted (MOTIR-3232 / motir-core#2237). The
+  measurement MOTIR-3229 filed stands; its conclusion moves layers. MOTIR-3229's card left
+  open _why_ the cascade fired at 13:44:35 and warned against inferring it: the answer,
+  read from `job_run` plus the event's ULID, is that the run was the **late execution of
+  the merge's own 13:27:15 event — 17 min 18.7 s of queue delay, attempt 0** — so the two
+  children it swept did not exist when the parent was declared done. §4's effect clause and
+  its exemption block are **replaced**; the cascade now leaves a child whose `createdAt` is
+  later than the transition's own `changedAt`, and reports `postDatedIds` /
+  `post_dated_only` where it used to report `exemptIds` / `exempt_only`. §3b's
+  cross-reference is updated. **NO new toggle, NO new `workflow_transition` row, and no
+  per-kind rule anywhere in either direction.**
+
 > Structured **Status → Context → Decision → Consequences**, with the load-bearing facts
 > pinned in explicit tables so every downstream subtask implements against one
 > authoritative source (the convention `work-item-type-taxonomy.md` set).
@@ -434,7 +449,8 @@ about everything under the item, and **the pull request is opened on that claim*
 if it can be made with open children, the review gate rests on nothing. `done` is
 deliberately left ungated: completing a parent is a DECISION that completes its
 children, and §4 is the shipped expression of it. Gating `done` would break the feature
-rather than the defect; §4's own exemption is where that case is answered instead.
+rather than the defect; §4's own DATED CLAIM is where that case is answered instead
+(MOTIR-3334 — a done-entry completes the children that existed when it happened).
 
 **ONE bar for both claim rungs — `implemented`-or-better — rather than the target's own
 rank.** Reading In Review's rank as the bar would also refuse a parent whose children
@@ -470,42 +486,93 @@ upward rollup, or by the change-request webhook when its PR merges. **Read off t
 TRANSITION** (`toStatusKey` in a done category, `fromStatusKey` not), never off the item's
 current status — see the 2026-08-17 / MOTIR-2957 amendment above for the failure the row
 read produced once rung 4 could move that row underneath it. **Effect:** every
-**not-done DIRECT child** (non-archived, non-triaged, **and not a `bug`** — see the
-exemption below) is set to the project's `done` status. Grandchildren are reached by re-emission, never by a subtree walk.
+**not-done DIRECT child** (non-archived, non-triaged, **and not created after that
+transition** — see the dated claim below) is set to the project's `done` status.
+Grandchildren are reached by re-emission, never by a subtree walk.
 
-**⚠️ ONE EXEMPTION, BY CHILD KIND: a `bug` is NOT completed** _(added 2026-08-20,
-MOTIR-3229)_. The promise above — _"the parent is done, so its children are done"_ — is
-honest for every kind that DECOMPOSES its parent: a `subtask` or a `task` under a story
-is part of the story's scope, so completing the story really does complete it. A **`bug`
-is not a decomposition** — it is a defect RECORD, parented where it was FOUND rather than
-where its work belongs (`run-findings-protocol.md` Q3, which this amendment deliberately
-leaves standing). Sweeping one destroys the finding, and the loop that files defects while
-shipping is the loop that produces them.
+**⚠️ THE CLAIM IS DATED: a child created AFTER the done-entry is NOT completed**
+_(replaced 2026-08-21, MOTIR-3334; was **ONE EXEMPTION, BY CHILD KIND: a `bug` is NOT
+completed**, added 2026-08-20, MOTIR-3229)_. The kind carve-out is **deleted**. The
+paragraphs it stood on are kept below, because its evidence was measured and is still
+true — what changed is the layer the conclusion belongs at.
 
-Measured, not predicted. From the Inngest REST API for MOTIR-1343's `in_review → done`:
+**What MOTIR-3229 measured, which stands.** From the Inngest REST API for MOTIR-1343's
+`in_review → done`:
 
 ```json
 "cascade": { "outcome": "cascaded", "itemId": "<MOTIR-1343>",
              "childIds": ["<MOTIR-3218>", "<MOTIR-3219>"], "toStatus": "done" }
 ```
 
-Both of those were bug reports that story's own run had filed while shipping it, and both
-were closed by the merge of that story's own pull request — while a session was three
-minutes into investigating them. **A story closing itself silently closed the defects
-found while shipping it.**
+Both were bug reports that story's own run had filed while shipping it, and both were
+closed by the merge of that story's own pull request — while a session was three minutes
+into investigating them. **A story closing itself silently closed the defects found while
+shipping it.** That loss was real and is the reason this clause exists at all.
 
-_Why kind and not "a child created DURING the run", which MOTIR-3229's card also offers:_
-the cascade has no notion of a run and no instant to date one from, and the nearest proxy
-(the child's `createdAt` against the parent's status history) would exempt an ordinary
-subtask added late while sweeping a bug filed early — i.e. answer a different question
-badly. _The cost, stated rather than hidden:_ a bug that genuinely WAS fixed by the
-parent's pull request now stays open and is closed by hand. That is the recoverable
-direction; a swept defect report leaves no trace at all.
+**Why `kind` was the wrong reading of it.** The same job log says so: **both children were
+`in_progress` when they were swept.** `filterNotDone` keeps every child not in a
+done-category status, so an `in_progress` SUBTASK in the same position would have been
+swept identically, with no exemption to save it — the carve-out protected one kind-shaped
+slice of a kind-agnostic hole. It also put §4 in direct contradiction with §3, which
+exempts nothing: a parent whose only open children were exempt bugs was completed by its
+merge and then pulled BACK to `implemented` by the recompute, with nothing able to
+complete the children the recompute was counting. Measured on MOTIR-3232 /
+motir-core#2237 (2026-08-21): eleven subtasks completed at 10:02:34–36, two bugs skipped,
+the story `done → implemented` at 10:03:30 — **stable, and self-repairing never.** It sat
+there until both bugs were closed by hand.
 
-_Reported, not silent:_ the pass returns `exemptIds` alongside `cascaded`, and
-`exempt_only` when every open child was exempt — distinct from `no_open_children`, because
-a log that cannot tell _nothing to do_ from _declined to do it_ cannot answer why a done
-parent still has open children.
+**What actually made MOTIR-1343's children vulnerable** _(measured 2026-08-21 from
+`job_run` plus the event's ULID; MOTIR-3229's card left this open and warned against
+inferring it)_:
+
+|                                              |                                           |
+| -------------------------------------------- | ----------------------------------------- |
+| event `01M0FNNFQVY6Y3Q8QEG159905T` emitted   | `2026-08-20T13:27:15.963Z` — the merge    |
+| MOTIR-3218 / MOTIR-3219 created + claimed    | `13:41:45` / `13:41:56`                   |
+| `status-derivation/transitioned` run STARTED | `13:44:34.642Z`, **attempt 0**, succeeded |
+
+There is no unexplained parent transition at 13:44. The cascade that ran then was the
+**late execution — 17 min 18.7 s of queue delay, first attempt, not a retry — of the
+merge's own event.** The two children did not exist when the story was declared done.
+They were completed by a claim made before they were filed.
+
+**The rule.** §4's promise is a claim over the child set **as it stood when the parent
+entered done**. So a child whose `createdAt` is later than the transition's own instant is
+left alone. The instant is the `changedAt` of the **revision row the event names** — the
+same preference §5 states for the rollup, read from a row rather than carried on an event,
+so a redelivered stale event still dates itself correctly. **An unresolvable instant is not
+evidence:** no `revisionId`, or one that resolves to no row, leaves every open child in
+scope exactly as this shipped. The guard can only ever SUPPRESS.
+
+**This is an ORDERING rule, and the third in the same family** — MOTIR-2957 fixed which
+STATUS the cascade reads, MOTIR-2965 fixed which WRITE the rollup's backward arm may
+overwrite, and this fixes which CHILDREN a done-entry speaks for. It asks nothing about
+what a child IS, which is what separates it from the carve-out it replaces and from the
+`createdAt`-against-status-history proxy MOTIR-3229 rejected: that proxy tried to date a
+RUN, which the cascade has no notion of; this dates the cascade's OWN trigger, which it
+already carries.
+
+**And it does not replace the upstream containment — it is the residue that containment
+cannot reach.** §3b's gate already refuses a container's move to `implemented` or
+`in_review` while a live child is below the bar, and `packages/cli`'s close-out re-reads
+the child set before opening a scoped run's pull request (MOTIR-3268). Both are
+kind-agnostic and both sit upstream. Neither can cover a child FILED AFTER the parent
+finished — and refusing that filing is not available, because §5 settles that _"a `done`
+parent given a fresh `todo` child returns to `todo`. A `done` parent is not permanently
+done."_ Rung 4 brings the parent back; this clause stops the already-emitted done-entry
+from closing the child that brought it back.
+
+_The cost, stated rather than hidden:_ a child filed under a finished parent and genuinely
+finished by a LATER pull request is completed by that pull request's own cascade, not by
+the parent's — which is correct, and means a parent can sit at rung 4 until it is. The
+recoverable direction is the same one MOTIR-3229 chose: an open card is visible and one
+click from closed, whereas a swept defect report leaves no trace at all.
+
+_Reported, not silent:_ the pass returns `postDatedIds` alongside `cascaded`, and
+`post_dated_only` when every open child post-dates the entry — distinct from
+`no_open_children`, because a log that cannot tell _nothing to do_ from _declined to do
+it_ cannot answer why a done parent still has open children. (These replace `exemptIds` /
+`exempt_only`, which named the deleted carve-out's `bug` children.)
 
 **Mechanism — the privileged SYSTEM set, reusing the shipped `opts.system` bypass.**
 Forcing an unstarted `todo` / `blocked` child straight to `done` is **not a legal user

@@ -74,6 +74,11 @@ export const statusDerivationOnTransitioned = defineJob(
       services.childStatusCascade.cascadeToChildren(payload.workItemId, payload.workspaceId, {
         fromStatusKey: payload.fromStatusKey,
         toStatusKey: payload.toStatusKey,
+        // …and by the transition's own INSTANT, read off the immutable revision
+        // row the event names (MOTIR-3334). A done-entry speaks for the children
+        // that existed when it happened; MOTIR-1343's ran 17 minutes late and
+        // completed two filed in between.
+        revisionId: payload.revisionId,
       }),
     );
 

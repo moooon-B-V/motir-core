@@ -37,6 +37,31 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * WHEN one specific revision was written — the `changedAt` of the row the
+   * caller already holds the id of (Bug MOTIR-3334;
+   * `docs/decisions/status-derivation.md` §5).
+   *
+   * The DOWNWARD cascade reads it to date the transition that woke it. Every
+   * `work-item/transitioned` event carries the `revisionId` of the move it
+   * announces, and that row is IMMUTABLE — so this is the one instant a cascade
+   * can read that is stable under redelivery and unaffected by anything written
+   * since. {@link findLatestStatusChangeAt} is deliberately NOT that instant: it
+   * answers "where does this row stand now", which for a late-running cascade is
+   * a different, younger transition.
+   *
+   * Scoped by nothing beyond the id: the caller is already inside a workspace
+   * context, so RLS answers the tenant question.
+   */
+  async findChangedAtById(revisionId: string, tx?: Prisma.TransactionClient): Promise<Date | null> {
+    const client = tx ?? db;
+    const row = await client.workItemRevision.findUnique({
+      where: { id: revisionId },
+      select: { changedAt: true },
+    });
+    return row?.changedAt ?? null;
+  },
+
+  /**
    * WHEN this work item's status was last changed — the `changedAt` of its most
    * recent revision carrying a `status` diff, or `null` if it has never moved
    * (Bug MOTIR-2965; `docs/decisions/status-derivation.md` §5).

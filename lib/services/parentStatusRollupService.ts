@@ -29,6 +29,18 @@ import {
 // changed nothing, and dropping the filter without it would have had nowhere to
 // land. No work item is exempt: there is no per-item or per-kind carve-out.
 //
+// ⚠️ AND THAT CLAIM IS NOW CONSISTENT WITH THE DOWNWARD HALF (Bug MOTIR-3334,
+// 2026-08-21) — it was not, for eleven days, and the disagreement was stable
+// rather than transient. `childStatusCascadeService` carried a `bug`-kind
+// exemption (MOTIR-3229) while this header exempted nothing, so a parent whose
+// only open children were exempt bugs was completed by its merge, then counted
+// by THIS service and pulled back to `implemented` — with nothing able to
+// complete the children the count was waiting on. Measured on MOTIR-3232 /
+// motir-core#2237: `done` at 10:00:42, `implemented` at 10:03:30, still there
+// until both bugs were closed by hand. The carve-out is deleted; the sentence
+// above now describes both directions, which is the only reading under which it
+// was ever safe.
+//
 // ⚠️ AND THE LADDER GAINED AN `implemented` RUNG (Bug MOTIR-3229). `implemented`
 // (MOTIR-3003) sits in the `in_progress` CATEGORY, so a parent whose children
 // were ALL implemented derived to `in_progress`: the ladder could not express

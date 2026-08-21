@@ -161,9 +161,16 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     // was discarded with nothing left to re-fire it. This assertion is the seam
     // where the transition is either carried across or dropped, so it pins the
     // VALUES off the event and not merely the arity.
+    //
+    // ⚠️ AND SINCE MOTIR-3334 THE `revisionId` RIDES ALONG, for the same class of
+    // reason one tier along: the transition says the parent entered done, and the
+    // REVISION says WHEN — which is the child set that entry speaks for. A handler
+    // that dropped it would run a cascade that completes children filed after the
+    // merge, which is what MOTIR-1343's 17-minutes-late run did.
     expect(cascade).toHaveBeenCalledWith('wi-1', 'ws-1', {
       fromStatusKey: 'in_progress',
       toStatusKey: 'done',
+      revisionId: 'rev-1',
     });
     // The payload carries no parentId, so each service resolves its own
     // neighbours WITHIN that workspace — the handler passes the item id, the

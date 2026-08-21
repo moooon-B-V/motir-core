@@ -1,6 +1,7 @@
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
@@ -41,12 +42,69 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 // Downward performs a system completion no legal user path allows, which is the
 // honest shape of "the parent is done, so its children are done".
 //
-// ⚠️ AND IT IS HONEST FOR EVERY CHILD KIND EXCEPT ONE (Bug MOTIR-3229). A `bug`
-// under a story is not a decomposition of that story — it is a defect RECORD,
-// parented where it was FOUND. Completing the story says nothing true about it,
-// and sweeping it destroys the finding: MOTIR-1343's merge closed the two bug
-// reports its own run had filed, mid-investigation. `isCascadeExempt` at the foot
-// of this file carries the rule, its measurement, and the cost of the exemption.
+// ⚠️ AND IT IS HONEST FOR EVERY CHILD KIND — INCLUDING `bug` (Bug MOTIR-3334,
+// 2026-08-21). This block used to read *"honest for every child kind EXCEPT
+// ONE"* and a private `isCascadeExempt(kind) => kind === 'bug'` implemented it
+// (Bug MOTIR-3229). The exemption is DELETED. The correction is recorded here
+// rather than quietly applied, because MOTIR-3229's evidence was measured, is
+// still true, and is what makes the new reading legible.
+//
+// WHAT MOTIR-3229 MEASURED, WHICH STANDS. Pulled from the Inngest REST API for
+// MOTIR-1343's `in_review → done` event:
+//
+//   "cascade": { "outcome": "cascaded", "itemId": "<MOTIR-1343>",
+//                "childIds": ["<MOTIR-3218>", "<MOTIR-3219>"], "toStatus": "done" }
+//
+// Both were defect reports the run itself had filed under the story while
+// shipping it, and both were closed by that story's own merge while a session
+// was three minutes into investigating them. That loss was real.
+//
+// WHY THE CONCLUSION DRAWN FROM IT MOVED LAYERS. `kind` is not what made those
+// two vulnerable, and the same job log says so: **both were `in_progress` when
+// they were swept**, and `filterNotDone` keeps every child not in a done-category
+// status. An `in_progress` SUBTASK in the same position would have been swept
+// identically, with no exemption to save it — so the exemption protected one
+// kind-shaped slice of a kind-agnostic hole. It also cost the other direction:
+// `parentStatusRollupService` exempts nothing, so a story whose only open
+// children were exempt bugs was pulled BACK out of `done` and stayed there
+// (MOTIR-3232 / motir-core#2237, 2026-08-21 — eleven subtasks completed, two bugs
+// skipped, the story `done → implemented` 54 s later, stable and self-repairing
+// never). With the exemption gone the two halves have nothing left to disagree
+// about.
+//
+// ⚠️ WHAT ACTUALLY MADE MOTIR-1343'S CHILDREN VULNERABLE — MEASURED, not inferred
+// (MOTIR-3334, `job_run` + the event ULID, production). MOTIR-3229's card left
+// this open and warned against inferring it:
+//
+//   event   01M0FNNFQVY6Y3Q8QEG159905T  emitted   2026-08-20T13:27:15.963Z  ← the merge
+//   run     status-derivation/transitioned  started 2026-08-20T13:44:34.642Z  attempt 0
+//   MOTIR-3218 / MOTIR-3219 created + claimed     2026-08-20T13:41:45 / 13:41:56
+//
+// There is no unexplained parent transition at 13:44: the cascade that ran then
+// was the LATE execution — 17 min 18.7 s of queue delay, first attempt, not a
+// retry — of the merge's OWN event. The two children did not exist when the story
+// was declared done. They were completed by a claim made before they were filed.
+//
+// ⚠️ SO THE CASCADE'S CLAIM IS DATED, AND THAT IS THE GUARD (`triggerAt`, below).
+// §4's promise is *"the parent is done, so its children are done"* — a claim over
+// the child set AS IT STOOD when the parent entered done. A child created AFTER
+// that instant was never part of it. This is an ORDERING rule, the third in the
+// same family and deliberately in the same idiom: MOTIR-2957 fixed which STATUS
+// the cascade reads (the transition, not the row), MOTIR-2965 fixed which WRITE
+// the rollup's backward arm may overwrite (`stale_backward`), and this fixes
+// which CHILDREN a done-entry speaks for. It asks nothing about what a child IS.
+//
+// AND IT IS NOT A REPLACEMENT FOR THE UPSTREAM CONTAINMENT — it is the residue
+// the upstream containment cannot reach. The container-completeness gate
+// (`lib/workItems/statusLadder.ts` · MOTIR-3229) already refuses a container's
+// move to `implemented` OR `in_review` while a live child is below the bar, and
+// the scoped run re-reads its child set before opening the pull request
+// (MOTIR-3268). Both are kind-agnostic and both are upstream. Neither can cover a
+// child FILED AFTER the parent finished, and refusing that filing is not
+// available either: §5 settles that *"a `done` parent given a fresh `todo` child
+// returns to `todo`. A `done` parent is not permanently done."* Rung 4 brings the
+// parent back — this is what stops the already-emitted done-entry from closing
+// the child that brought it back.
 
 /**
  * The TRANSITION that woke the cascade — the `fromStatusKey` / `toStatusKey` the
@@ -69,33 +127,50 @@ export interface CascadeTrigger {
   readonly fromStatusKey: string;
   /** The status the item reached. Its category is what makes this an entry into done. */
   readonly toStatusKey: string;
+  /**
+   * The revision row recording that transition (Bug MOTIR-3334). Its immutable
+   * `changedAt` is WHEN the parent was declared done, and therefore which child
+   * set the claim covers — see the module header. Read from the row rather than
+   * carried on the event, the same preference §5 states for the rollup: the row
+   * cannot be rewritten, so redelivery of a stale event still dates it correctly.
+   *
+   * OPTIONAL, and an unresolvable one is not evidence. A caller with no revision,
+   * or an id that resolves to no row (a fixture, a direct write, a revision since
+   * pruned), leaves the cascade behaving exactly as it shipped — the guard can
+   * only ever SUPPRESS, never invent a completion.
+   */
+  readonly revisionId?: string;
 }
 
 /** What a cascade pass did, for the caller's log. Like the rollup, every outcome
  *  is a NORMAL result: this runs behind a status change the user already made
  *  successfully and must not turn that into a failed job. */
 export type CascadeOutcome =
-  /** `exemptIds` names the open children the cascade DECLINED to complete — the
-   *  bugs (see `isCascadeExempt`). Present only when there were any, so an
-   *  ordinary cascade's shape is unchanged; when it IS present, the run log can
-   *  answer "what did this merge leave open?", which is the question MOTIR-3229
-   *  had to reconstruct from the Inngest REST API after the fact. */
+  /** `postDatedIds` names the open children the cascade DECLINED to complete —
+   *  the ones created AFTER the transition that woke it, which its claim
+   *  therefore never spoke for (MOTIR-3334). Present only when there were any,
+   *  so an ordinary cascade's shape is unchanged; when it IS present, the run log
+   *  can answer "what did this merge leave open?", which is the question
+   *  MOTIR-3229 had to reconstruct from the Inngest REST API after the fact.
+   *  (This field replaces `exemptIds`, which named the `bug` children of the
+   *  deleted kind carve-out.) */
   | {
       outcome: 'cascaded';
       itemId: string;
       childIds: string[];
       toStatus: string;
-      exemptIds?: string[];
+      postDatedIds?: string[];
     }
   | { outcome: 'not_done' }
   | { outcome: 'toggle_off'; itemId: string }
   | { outcome: 'no_open_children'; itemId: string }
-  /** Every open child was EXEMPT — the parent completed and its only remaining
-   *  children are defect reports, which stay open (MOTIR-3229). Its own variant
-   *  rather than `no_open_children`, for the reason `rolled_back` is one on the
-   *  upward side: a log that cannot distinguish "nothing to do" from "declined
-   *  to do it" cannot answer why a done parent still has open children. */
-  | { outcome: 'exempt_only'; itemId: string; exemptIds: string[] }
+  /** Every open child POST-DATES the done-entry — the parent's children as of
+   *  that instant are all settled, and everything still open was filed after it
+   *  (MOTIR-3334). Its own variant rather than `no_open_children`, for the reason
+   *  `rolled_back` is one on the upward side: a log that cannot distinguish
+   *  "nothing to do" from "declined to do it" cannot answer why a done parent
+   *  still has open children. (Replaces `exempt_only`.) */
+  | { outcome: 'post_dated_only'; itemId: string; postDatedIds: string[] }
   | { outcome: 'no_matching_status'; itemId: string }
   | { outcome: 'access_denied'; itemId: string }
   | { outcome: 'unresolvable' };
@@ -135,6 +210,12 @@ export const childStatusCascadeService = {
       const settings = await projectRepository.findStatusAutomation(item.projectId, tx);
       const owner = await workspaceMembershipRepository.findOwnerByWorkspace(item.workspaceId, tx);
       const children = await workItemRepository.findChildren(itemId, tx);
+      // WHEN the parent was declared done — the immutable `changedAt` of the
+      // revision the event names (MOTIR-3334). Read in the same pass as the
+      // children so the two instants being compared come from one snapshot.
+      const triggerAt = trigger.revisionId
+        ? await workItemRevisionRepository.findChangedAtById(trigger.revisionId, tx)
+        : null;
       return {
         projectId: item.projectId,
         // The item's CURRENT status is deliberately NOT read here any more — the
@@ -143,7 +224,8 @@ export const childStatusCascadeService = {
         // answers `unresolvable` when it does not.
         enabled: settings?.autoCompleteChildrenOnParentDone ?? false,
         ownerUserId: owner?.userId ?? null,
-        children: children.map((c) => ({ id: c.id, status: c.status, kind: c.kind })),
+        triggerAt,
+        children: children.map((c) => ({ id: c.id, status: c.status, createdAt: c.createdAt })),
       };
     });
 
@@ -187,10 +269,16 @@ export const childStatusCascadeService = {
     const notDone = await filterNotDone(projectId, workspaceId, resolved.children);
     if (notDone.length === 0) return { outcome: 'no_open_children', itemId };
 
-    // ⚠️ THE DEFECT-REPORT EXEMPTION (Bug MOTIR-3229) — see `isCascadeExempt`.
-    const openChildren = notDone.filter((c) => !isCascadeExempt(c.kind));
-    const exemptIds = notDone.filter((c) => isCascadeExempt(c.kind)).map((c) => c.id);
-    if (openChildren.length === 0) return { outcome: 'exempt_only', itemId, exemptIds };
+    // ⚠️ THE DATED CLAIM (Bug MOTIR-3334) — see the module header. The done-entry
+    // speaks for the children that existed when it happened; one filed after it
+    // was never covered. No instant to compare against ⇒ every open child is in
+    // scope, exactly as this shipped: the guard can only suppress.
+    const triggerAt = resolved.triggerAt;
+    const openChildren =
+      triggerAt === null ? notDone : notDone.filter((c) => c.createdAt <= triggerAt);
+    const postDatedIds =
+      triggerAt === null ? [] : notDone.filter((c) => c.createdAt > triggerAt).map((c) => c.id);
+    if (openChildren.length === 0) return { outcome: 'post_dated_only', itemId, postDatedIds };
 
     const ctx = { userId: ownerUserId, workspaceId };
     const applied: Array<{
@@ -239,8 +327,8 @@ export const childStatusCascadeService = {
     }
 
     if (applied.length === 0) {
-      return exemptIds.length > 0
-        ? { outcome: 'exempt_only', itemId, exemptIds }
+      return postDatedIds.length > 0
+        ? { outcome: 'post_dated_only', itemId, postDatedIds }
         : { outcome: 'no_open_children', itemId };
     }
     return {
@@ -248,51 +336,10 @@ export const childStatusCascadeService = {
       itemId,
       childIds: applied.map((a) => a.childId),
       toStatus: doneKey,
-      ...(exemptIds.length > 0 ? { exemptIds } : {}),
+      ...(postDatedIds.length > 0 ? { postDatedIds } : {}),
     };
   },
 };
-
-/**
- * Is this child kind EXEMPT from the downward cascade?
- *
- * ⚠️ A `bug` IS — and this is the highest-value clause on MOTIR-3229, because it
- * was MEASURED rather than predicted. Pulled from the Inngest REST API for
- * MOTIR-1343's `in_review → done` event:
- *
- *   "cascade": { "outcome": "cascaded", "itemId": "<MOTIR-1343>",
- *                "childIds": ["<MOTIR-3218>", "<MOTIR-3219>"], "toStatus": "done" }
- *
- * Both of those were defect reports the run itself had filed under the story
- * while shipping it, and both were closed by the merge of that story's own pull
- * request — while a session was three minutes into investigating them.
- *
- * WHY KIND IS THE RIGHT DISCRIMINATOR. §4's promise is *"the parent is done, so
- * its children are done"*, and it is honest for every kind that DECOMPOSES its
- * parent: a `subtask` or a `task` under a story is part of the story's scope, so
- * completing the story really does complete it. A `bug` is not a decomposition —
- * it is a defect RECORD, parented where it was FOUND rather than where its work
- * belongs (`docs/decisions/run-findings-protocol.md` Q3, which this card
- * deliberately leaves standing). Sweeping it destroys the finding, and the loop
- * that files defects while shipping is the loop that produces them: a story
- * closing itself silently closes the defects found while shipping it.
- *
- * AND WHY NOT "a child created DURING the run", which the card also offers. The
- * cascade has no notion of a run and no instant to date one from; the nearest
- * proxy — the child's `createdAt` against the parent's status history — would
- * exempt an ordinary subtask added late and sweep a bug filed early, i.e. answer
- * a different question badly. Kind is a stable, readable property that is right
- * on both sides.
- *
- * THE COST, stated rather than hidden: a bug that genuinely WAS fixed by the
- * parent's pull request now stays open and is closed by hand. That is the
- * recoverable direction — an open card is visible and one click from closed,
- * whereas a swept defect report leaves no trace at all, which is exactly how
- * MOTIR-3218 and MOTIR-3219 had to be reconstructed from a job log.
- */
-function isCascadeExempt(kind: string): boolean {
-  return kind === 'bug';
-}
 
 /**
  * Keep only the children NOT already in a done-category status. Resolved through
