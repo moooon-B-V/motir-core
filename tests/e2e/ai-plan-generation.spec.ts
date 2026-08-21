@@ -232,8 +232,15 @@ test('generation streams proposed PlanItems live into a planned Plan; the propos
   // ── Complete generation → a `planned` Plan; the entry hands off to /plans/:id ──
   await plansService.markPlanned(seed.planId, seed.ctx);
   await page.waitForURL(`**/plans/${seed.planId}`);
-  // The review surface renders the bundled, planned proposal forest (a cold-compiled
-  // /plans route on first hit — allow headroom).
+  // ⚠️ THE CANVAS IS ASKED FOR (MOTIR-3262, Story MOTIR-3232). The plan detail's
+  // default body is DERIVED from the plan's shape now — the LIST when its
+  // proposals sit under more than one distinct container, because no single
+  // canvas level can show such a plan — and this generated forest is exactly
+  // that. `plan-item-node` is a CANVAS node, so the spec names the body it came
+  // to see rather than leaning on a default that depends on the fixture's shape.
+  // The claim below is unchanged: the review surface renders the bundled,
+  // planned proposal forest.
+  await page.goto(`/plans/${seed.planId}?view=canvas`);
   await expect(page.getByTestId('plan-item-node').first()).toBeVisible({ timeout: POLL_REVEAL });
 
   // ── The proposals are REAL PlanItem rows, parented per the grammar with a

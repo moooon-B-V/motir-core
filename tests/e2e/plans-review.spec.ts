@@ -69,10 +69,17 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(staleRow).toContainText('Planned');
   await expect(staleRow).toContainText('2 may be out of date');
 
+  // ⚠️ THE APPROVED PLAN IS IN ITS OWN TAB (MOTIR-3241). `/plans` is no longer one
+  // reverse-chronological stream of every plan: it is a tab per lifecycle state,
+  // `Planned` — the plans awaiting a decision — selected by default and writing a
+  // CLEAN url. So a decided plan is one press away rather than three rows down.
+  // The assertion is unchanged in meaning; only where it is made moved.
+  await page.goto('/plans?status=approved');
   const approvedRow = page.locator(`a[href="/plans/${seed.approvedPlan.id}"]`);
   await expect(approvedRow).toContainText('Approved');
 
   // ── 2. Enter the stale plan → the detail ──────────────────────────────────
+  await page.goto('/plans');
   await staleRow.click();
   await page.waitForURL(`**/plans/${seed.stalePlan.id}`);
 
@@ -81,6 +88,16 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByText('Generation started')).toBeVisible();
   await expect(page.getByText('Plan ready')).toBeVisible();
   await expect(page.getByText('Awaiting your review')).toBeVisible();
+
+  // ⚠️ THE CANVAS IS ASKED FOR, NOT ASSUMED (MOTIR-3262). The detail's default
+  // body is DERIVED from the plan's shape: the LIST when its proposals sit under
+  // more than one distinct container, because no single canvas level can show
+  // such a plan. THIS plan is exactly that — its two adds hang under two
+  // different committed parents — so it now opens on the list, and every canvas
+  // assertion below is about the canvas, so the spec navigates to it. The URL is
+  // the single source of truth for which body is showing, which is what makes
+  // that a one-parameter change rather than a click.
+  await page.goto(`/plans/${seed.stalePlan.id}?view=canvas`);
 
   // The proposed items render on the canvas (with a stale badge on the drifted
   // ones) — the canvas MOUNTS the proposed PlanItems, it doesn't redraw a tree.
@@ -155,7 +172,13 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   ).toBeVisible();
 
   // ── 4. Decline branch on the clean plan ───────────────────────────────────
-  await page.goto(`/plans/${seed.declinePlan.id}`);
+  //
+  // `?view=canvas` is written even though this plan's proposals sit under ONE
+  // container and the canvas is therefore already its default (MOTIR-3262): the
+  // assertions below are about the canvas, and a spec that relies on a DERIVED
+  // default is a spec that silently changes subject when the fixture changes
+  // shape by one proposal.
+  await page.goto(`/plans/${seed.declinePlan.id}?view=canvas`);
   await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
 
   const declineResponse = page.waitForResponse(
@@ -190,7 +213,7 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
 
   // The list also reflects the declined status on its pill — and its REAL item
   // count, which read `0 items` for as long as the rows were deleted.
-  await page.goto('/plans');
+  await page.goto('/plans?status=declined');
   const declinedRow = page.locator(`a[href="/plans/${seed.declinePlan.id}"]`);
   await expect(declinedRow).toContainText('Declined');
   await expect(declinedRow).toContainText('1 item');
