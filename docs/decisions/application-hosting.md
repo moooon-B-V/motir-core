@@ -1927,11 +1927,31 @@ awake essentially continuously, driven by timers rather than by users.
 **`motir-ai`'s driver is gone as of 2026-08-20**
 ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)); that reading is now historical for
 that service and has not been re-taken.
-[MOTIR-2852](motir:cmss0vww500l9i5phpl0lngzi) and
-[MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo) own the remaining gap, both on
-`motir-core`. Read their status in Motir rather than here — a record that asserts
-what is still open is a record with a short half-life, which is the failure this
-amendment is correcting one paragraph up.
+
+**⚠️ `motir-core` RE-MEASURED 2026-08-21 AFTER the admission wake shipped, and the
+number did not move: still 100%** ([MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo)).
+Sampled from the control plane every 5 minutes for **6 h 12 m** against release
+**v96**, with no database connection of the run's own: **76 samples,
+`current_state: "active"` in every one**, `active_time_seconds` accruing at
+**100.8%** of wall-clock over the cleanest 3 h 16 m sub-window (one containing no
+deploy and no merge; the >100% is refresh-boundary jitter on a counter that batches
+every ~90–105 min). The compute did not suspend once.
+
+**[MOTIR-2852](motir:cmss0vww500l9i5phpl0lngzi) was not the cause, and no single
+cadence is.** Delete `CI_RUNNER_PROVISION_SWEEP_CRON` outright and the remaining
+`system.*` schedules still wake the compute at minutes
+{0,7,10,17,20,22,27,30,37,40,47,50,52,57} — a longest quiet gap of **7 minutes**,
+under the ~9 min delay measured above. Every one of those ticks is a guaranteed
+database WRITE rather than a possible read: `lib/jobs/defineJob.ts` records a
+`job_run` row _before_ the handler body runs and flips it after, so no early return
+in any job avoids it. **The cost is the schedule's SHAPE — its fourteen distinct
+offsets — not the frequency of its loudest member**, which is the opposite of what
+the reaper's own "offset so it never lines up" rationale assumed. Clustering the
+schedules is the fix, and it is a coordinated change across every `system.*` job
+rather than a constant to tune; it has its own work item.
+
+**So the `motir-core` row above stands, and its $19.50/mo is a standing bill that
+is now measured rather than inferred.**
 
 ### §22 — What this amendment does NOT decide
 
