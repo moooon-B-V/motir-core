@@ -1022,6 +1022,74 @@ record precisely because they were not there.
 > and no sibling worktree carries a higher one, and the repository has no open pull
 > requests. All clock times below are the platform's own, in UTC.
 
+> ---
+>
+> ## ⚠️ CORRECTION (2026-08-21, [MOTIR-3231](motir:cmt1l327r009wi3phchsbix05)) — the sentence above was TRUE WHEN WRITTEN and FALSE IN PRODUCTION for at least eleven days
+>
+> **"Q9's decision STANDS and is now in force" did not describe the deployment.**
+> Read from inside motir-core machine `83d1300b7460e8` on 2026-08-20 22:34Z:
+>
+> ```
+> $ printenv MOTIR_AI_URL
+> https://motir-ai.fly.dev
+> ```
+>
+> The PUBLIC origin — and an explicitly set Fly secret, not an unset variable
+> falling back to a default. **The deployed value was the rollback this very
+> amendment documents below as "executed and reversed".**
+>
+> **WHEN it reverted is NOT KNOWN, and this record will not guess.** A Fly secret
+> carries a digest and a `Deployed` marker, not a history, so nothing available
+> distinguishes "the reversal never took" from "a later change re-applied the
+> rollback". The window is bounded only at its ends: correct when this amendment
+> was written on 2026-08-10, wrong when it was read on 2026-08-20.
+>
+> **HOW it was re-applied** — 2026-08-21, after checking the 6PN allocation on
+> both sides first (`/48 = fdaa:ab:2cdf` on all four machines, and
+> `motir-ai.internal` resolving from inside motir-core to both motir-ai
+> machines):
+>
+> ```
+> fly secrets set -a motir-core MOTIR_AI_URL=http://motir-ai.internal:8080
+> ```
+>
+> read back from inside **every** running motir-core machine rather than from the
+> command's exit code — one machine is not the deployment (the lesson
+> [MOTIR-3281](motir:cmt24usrq0030i4phr6ujdcg0) paid for, where a `secrets set`
+> half-applied and the machine one would naturally sample was the one that looked
+> right).
+>
+> **What this does NOT change in the amendment below.** Its correction of Q9's
+> premise — that one ORG is not one 6PN — stands and was never in question. Its
+> `force_https` finding stands _for `.internal`_, and Amendment 8 §26 records why
+> it does not transfer to a proxy-routed private address. Its **NEW CONSTRAINT**
+> (that motir-ai cannot scale to zero because `.internal` cannot wake a stopped
+> machine) is still true of the transport — but it has not been the binding reason
+> for that app's floor since Amendment 7 §14: the floor there is the
+> job-concurrency ceiling, and Amendment 8 §25 confirms the transport does not
+> unpin it.
+>
+> **And `.internal` is the INTERIM here, not the destination.** Amendment 8 §23
+> decides **Flycast** for this leg; §26 records why it cannot be applied until
+> motir-ai's `force_https` is off, which needs this seam off the public origin
+> first. This correction is that first step.
+>
+> **SCOPE — this correction touches ONE secret.** It changes `MOTIR_AI_URL` and
+> nothing else. The **ai→gateway** leg is not in its scope and was not altered by
+> it: that leg moved from `motir-gateway.internal:3000` to
+> **`motir-gateway.flycast`** separately and deliberately, under Amendment 8 §23
+> and [MOTIR-3281](motir:cmt24usrq0030i4phr6ujdcg0) — with its own measurement,
+> its own `force_https` change and the release of that app's public addresses.
+> Neither card is licence for the other, and the ai→core callback
+> (`MOTIR_CORE_URL`) stays public permanently under §23 regardless.
+>
+> **The general lesson, since this record is where a reader will look for it:** an
+> amendment that says a decision is _in force_ is asserting something about the
+> DEPLOYMENT, and only a reading of the deployment can support it. A `secrets set`
+> that exited 0 cannot.
+>
+> ---
+
 **Amends:** Amendment 1's _"The facts this rests on"_ table and the sentence that
 generalises it. It adds no Q and withdraws no decision. §1's Q1, Q3 and Q7 are
 untouched, as are Amendments 2, 3 and 4.
