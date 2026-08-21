@@ -18,7 +18,19 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // part; the contract card for 7.1.5 specifies exactly "user + project + a short
 // TTL".
 
-const DEFAULT_TTL_SECONDS = 15 * 60; // expires with the job (contract §4b)
+// ⚠️ THIS IS A LIFETIME FOR ONE STRETCH OF WORK, NOT FOR A WHOLE JOB
+// (MOTIR-3288). The comment here used to read "expires with the job", and that
+// assumption was false in both directions: a planning turn can legitimately run
+// longer than this (one measured at 19 minutes), and a job can sit QUEUED for
+// longer than this before it starts, burning the whole window on somebody
+// else's work. Either way the job did its LLM work, was billed for it, and then
+// failed at the write-back with `token_invalid`.
+//
+// The number is deliberately NOT raised — a short blast radius for a leaked
+// token is what it is for. Instead the holder RENEWS it while the work runs,
+// the same answer MOTIR-3221 reached for the job's lease, via
+// {@link refreshJobToken} and `POST /api/internal/ai/job-token/refresh`.
+const DEFAULT_TTL_SECONDS = 15 * 60;
 
 export interface JobTokenClaims {
   sub: string; // the requesting user id
@@ -60,27 +72,76 @@ export function mintJobToken(input: MintJobTokenInput): string {
   return `${payloadB64}.${sign(payloadB64)}`;
 }
 
-// Verify signature + expiry. Returns the claims, or null when the token is
-// malformed, the signature doesn't match (constant-time), or it has expired.
-// (Consumed by the 7.1.6 read-back route; lives here so mint+verify stay one
-// module.)
-export function verifyJobToken(token: string): JobTokenClaims | null {
+/**
+ * Why a token was refused, so the caller can SAY so (MOTIR-3288).
+ *
+ * `verifyJobToken` collapses every failure to `null`, which is right for an
+ * access decision and wrong for the message that follows it: an EXPIRED token
+ * and a FORGED one are the same answer to "may this proceed?" and completely
+ * different answers to "what went wrong?". Conflating them is what put
+ * `token_invalid` — which reads as a configuration fault — in front of an
+ * operator whose actual problem was that a job ran for nineteen minutes.
+ */
+export type JobTokenVerdict =
+  | { ok: true; claims: JobTokenClaims }
+  | { ok: false; reason: 'malformed' | 'bad_signature' }
+  | { ok: false; reason: 'expired'; claims: JobTokenClaims; expiredAt: number };
+
+/** Verify signature + expiry, and say WHICH failed. */
+export function inspectJobToken(token: string): JobTokenVerdict {
   const dot = token.lastIndexOf('.');
-  if (dot <= 0) return null;
+  if (dot <= 0) return { ok: false, reason: 'malformed' };
   const payloadB64 = token.slice(0, dot);
   const provided = token.slice(dot + 1);
 
   const expected = sign(payloadB64);
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (a.length !== b.length || !timingSafeEqual(a, b))
+    return { ok: false, reason: 'bad_signature' };
 
   let claims: JobTokenClaims;
   try {
     claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as JobTokenClaims;
   } catch {
-    return null;
+    return { ok: false, reason: 'malformed' };
   }
-  if (typeof claims.exp !== 'number' || claims.exp < Math.floor(Date.now() / 1000)) return null;
-  return claims;
+  if (typeof claims.exp !== 'number') return { ok: false, reason: 'malformed' };
+  // ⚠️ The expiry check happens AFTER the signature check, and must stay there:
+  // `expiredAt` is only meaningful once the payload is known to be ours.
+  if (claims.exp < Math.floor(Date.now() / 1000)) {
+    return { ok: false, reason: 'expired', claims, expiredAt: claims.exp };
+  }
+  return { ok: true, claims };
+}
+
+/**
+ * Mint a fresh token carrying the SAME identity for another full window.
+ *
+ * The renewal half of MOTIR-3288, mirroring the lease renewal MOTIR-3221 built:
+ * the credential's lifetime tracks the work instead of the wall clock at
+ * submit. It re-derives every claim from the presented token, so a refresh can
+ * never widen scope — same user, same workspace, same project, new window.
+ *
+ * ⚠️ The CALLER must have verified the token first. This function does not
+ * check expiry, deliberately: it is the route's job to refuse an expired
+ * token, and hiding that decision in here would make it impossible to see that
+ * an expired token cannot be revived.
+ */
+export function refreshJobToken(claims: JobTokenClaims, ttlSeconds?: number): string {
+  return mintJobToken({
+    userId: claims.sub,
+    workspaceId: claims.workspaceId,
+    projectId: claims.projectId,
+    ...(ttlSeconds !== undefined ? { ttlSeconds } : {}),
+  });
+}
+
+// Verify signature + expiry. Returns the claims, or null when the token is
+// malformed, the signature doesn't match (constant-time), or it has expired.
+// Thin wrapper over {@link inspectJobToken} — kept because an access decision
+// wants a boolean-ish answer and should not have to destructure a verdict.
+export function verifyJobToken(token: string): JobTokenClaims | null {
+  const verdict = inspectJobToken(token);
+  return verdict.ok ? verdict.claims : null;
 }

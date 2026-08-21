@@ -502,36 +502,37 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `infra`
 
-| Operation                                    | Verbs                 | Gate today                                            | Permission | Decision | Why |
-| -------------------------------------------- | --------------------- | ----------------------------------------------------- | ---------- | -------- | --- |
-| `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                | —          | no-gate  | R53 |
-| `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                    | —          | finding  | R8  |
-| `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                    | —          | finding  | R8  |
-| `/api/auth/[...all]`                         | —                     | — none —                                              | —          | no-gate  | R12 |
-| `/api/github/webhook`                        | POST                  | — none —                                              | —          | no-gate  | R6  |
-| `/api/gitlab/webhook`                        | POST                  | — none —                                              | —          | no-gate  | R6  |
-| `/api/inngest`                               | —                     | — none —                                              | —          | no-gate  | R13 |
-| `/api/internal/ai/code-scanning/analyses`    | GET                   | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/code-scanning/sarif`       | GET                   | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/dev/noop`                  | GET/POST              | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/get-item`                  | GET                   | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/get-subtree`               | GET                   | `aiBoundaryService.getSubtree` (transitive)           | —          | no-gate  | R29 |
-| `/api/internal/ai/live-projects`             | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/org-context`               | GET                   | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-proposals`            | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-proposals/[itemId]`   | PATCH                 | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-tree`                 | GET                   | `aiBoundaryService.readPlanTree` (transitive)         | —          | no-gate  | R29 |
-| `/api/internal/ai/search-work-items`         | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/similar-work-items`        | POST                  | `aiBoundaryService.findSimilarWorkItems` (transitive) | —          | no-gate  | R29 |
-| `/api/internal/ai/skeleton`                  | GET                   | `aiBoundaryService.readPlanTree` (transitive)         | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan`             | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan-forest`      | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan-sprint`      | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/walk-blocking`             | GET                   | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/ai/work-items`                | POST                  | `aiWorkItemsService.fileBug` (transitive)             | —          | no-gate  | R29 |
-| `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                           | —          | no-gate  | R29 |
-| `/api/openapi/v1.json`                       | GET                   | — none —                                              | —          | no-gate  | R32 |
+| Operation                                    | Verbs                 | Gate today                                                        | Permission | Decision | Why |
+| -------------------------------------------- | --------------------- | ----------------------------------------------------------------- | ---------- | -------- | --- |
+| `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                            | —          | no-gate  | R53 |
+| `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
+| `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
+| `/api/auth/[...all]`                         | —                     | — none —                                                          | —          | no-gate  | R12 |
+| `/api/github/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
+| `/api/gitlab/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
+| `/api/inngest`                               | —                     | — none —                                                          | —          | no-gate  | R13 |
+| `/api/internal/ai/code-scanning/analyses`    | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/code-scanning/sarif`       | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/dev/noop`                  | GET/POST              | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/get-item`                  | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/get-subtree`               | GET                   | `aiBoundaryService.getSubtree` (transitive)                       | —          | no-gate  | R29 |
+| `/api/internal/ai/job-token/refresh`         | POST                  | serviceAuth + a LIVE job token (`authenticateAndLimitJobRequest`) | —          | no-gate  | R29 |
+| `/api/internal/ai/live-projects`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/org-context`               | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-proposals`            | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-proposals/[itemId]`   | PATCH                 | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-tree`                 | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |
+| `/api/internal/ai/search-work-items`         | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/similar-work-items`        | POST                  | `aiBoundaryService.findSimilarWorkItems` (transitive)             | —          | no-gate  | R29 |
+| `/api/internal/ai/skeleton`                  | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan-forest`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan-sprint`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/walk-blocking`             | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/ai/work-items`                | POST                  | `aiWorkItemsService.fileBug` (transitive)                         | —          | no-gate  | R29 |
+| `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/openapi/v1.json`                       | GET                   | — none —                                                          | —          | no-gate  | R32 |
 
 ### `integration`
 
