@@ -247,3 +247,79 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
     ]);
   });
 });
+
+// ── THE ANCHOR ON THE WIRE (MOTIR-3285) ─────────────────────────────────────
+//
+// motir-ai derives a planning job's CONCURRENCY UNIT from the anchor this submit
+// puts on the envelope (`concurrencyKey.ts`). Two jobs with the same unit never
+// run at once, so an `expand_item` that names no anchor lands on the PROJECT-WIDE
+// key and serializes against every other expansion in the project — which is what
+// shipped for four months, silently, and is what MOTIR-3285 fixed.
+//
+// ⚠️ The anchor is `rootItemKey`, and it must NOT be `targetKeys`. A non-empty
+// `context.targetKeys` is the marker that makes a submit a CONTEXTUAL TURN
+// (`motir-ai/src/jobs/contextualScope.ts`: *"a submit that carries only
+// `rootItemKey` stays on the shipped single-anchor path with no extra
+// read-back"*). Adding it here to "send the anchor" — which MOTIR-3285's own
+// description prescribed — would route every expand and replan through
+// `withContextualScope`: an extra read-back to core, intent re-classification
+// that can re-route the kind, and a union-neighborhood grounding instead of the
+// bounded expand one. That is a change to how the product PLANS.
+//
+// So this pins the producer contract from BOTH directions, because each half is
+// a different regression: the anchor is present (or the unit collapses), and the
+// contextual marker is absent (or the planner changes behaviour).
+describe('the concurrency anchor each plan-edit submit puts on the wire (MOTIR-3285)', () => {
+  /** The `context` bag handed to motir-ai — `submitJob(kind, tenant, context, …)`. */
+  function sentContext(): Record<string, unknown> {
+    const call = vi.mocked(submitJob).mock.calls[0];
+    expect(call, 'submitJob was never called').toBeDefined();
+    return call![2] as Record<string, unknown>;
+  }
+
+  it.each([
+    [
+      'submitExpand',
+      (fx: WorkItemFixture, k: string) => aiPlanEditsService.submitExpand(k, projectCtx(fx)),
+    ],
+    [
+      'submitReplan',
+      (fx: WorkItemFixture, k: string) => aiPlanEditsService.submitReplan(k, projectCtx(fx)),
+    ],
+  ])('%s names its item in `rootItemKey`, and does NOT set `targetKeys`', async (_name, submit) => {
+    const fx = await makeFixture();
+    const storyKey = await seedStory(fx);
+    vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_anchor' });
+
+    await submit(fx, storyKey);
+
+    const context = sentContext();
+    // Present: motir-ai keys on this, so two expands of two items get two units.
+    expect(context['rootItemKey']).toBe(storyKey);
+    // Absent: this field's PRESENCE would make the submit a contextual turn.
+    expect(context['targetKeys']).toBeUndefined();
+  });
+
+  it('submitContextual — and only it — carries `targetKeys`, the contextual marker', async () => {
+    const fx = await makeFixture();
+    const storyKey = await seedStory(fx);
+    vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_anchor_ctx' });
+
+    await aiPlanEditsService.submitContextual('split this story', [storyKey], projectCtx(fx));
+
+    expect(sentContext()['targetKeys']).toEqual([storyKey]);
+  });
+
+  it('submitAugment carries NEITHER — the project-wide thread, which must stay reachable', async () => {
+    // The empty scope segment is a real conversation with one row, not an
+    // absence (MOTIR-3285 AC3). An anchorless augment is the submit that means it.
+    const fx = await makeFixture();
+    vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_anchor_aug' });
+
+    await aiPlanEditsService.submitAugment('add a login flow', projectCtx(fx));
+
+    const context = sentContext();
+    expect(context['rootItemKey']).toBeUndefined();
+    expect(context['targetKeys']).toBeUndefined();
+  });
+});
