@@ -27,6 +27,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'jobs-flow-spec-pass-123';
 
@@ -53,6 +54,7 @@ test.afterAll(async () => {
 // submit — the E2E dev server runs with E2E_DISABLE_RATE_LIMIT=1, so there's no
 // 429 to retry around (see shell-session.ts for the rationale).
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

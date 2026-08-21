@@ -26,6 +26,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail, extractInviteUrl } from './_helpers/email-capture';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'org-admin-flow-pass-123';
 
@@ -43,6 +44,7 @@ test.afterAll(async () => {
 // org + default workspace, landing on /dashboard with a session cookie set. The
 // rate limiter is gated OFF for the E2E dev server, so a single click is enough.
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();

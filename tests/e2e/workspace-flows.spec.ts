@@ -14,6 +14,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail, extractInviteUrl } from './_helpers/email-capture';
+import { startSignedOut } from './_helpers/shell-session';
 
 const PASSWORD = 'workspace-flow-pass-123';
 const OWNER_EMAIL = 'e2e-ws-owner@example.com';
@@ -40,6 +41,7 @@ test.afterAll(async () => {
 // re-poison the bucket. One click, then if throttled wait > window, then
 // one more click.
 async function signUp(page: Page, email: string): Promise<void> {
+  await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
