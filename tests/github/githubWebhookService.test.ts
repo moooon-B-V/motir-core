@@ -788,25 +788,15 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
       repoId?: number;
       installationId?: string;
       deleted?: boolean;
-      commits?: unknown[];
-      forced?: boolean;
     } = {},
   ) {
     return {
       ref: opts.ref ?? 'refs/heads/main',
       after: 'a'.repeat(40),
       ...(opts.deleted !== undefined ? { deleted: opts.deleted } : {}),
-      ...(opts.commits !== undefined ? { commits: opts.commits } : {}),
-      ...(opts.forced !== undefined ? { forced: opts.forced } : {}),
       repository: { id: opts.repoId ?? Number(REPO_PROVIDER_ID) },
       installation: { id: opts.installationId ?? INSTALLATION_ID },
     };
-  }
-
-  /** One GitHub push commit. Absent lists are absent, not empty — the shapes
-   *  differ, and only one of them is a payload we recognise. */
-  function commit(added: string[] = [], modified: string[] = [], removed: string[] = []) {
-    return { added, modified, removed };
   }
 
   // `vi.spyOn` returns the SAME mock (with its accumulated history) when the
@@ -846,55 +836,6 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
       repoName: 'acme',
       defaultBranch: 'main',
     });
-  });
-
-  // ⚠️ THE SEAM, AND IT FAILS SILENTLY (MOTIR-3358). The webhook writes these rows
-  // and `runIndexFleetSteps` drains them by (installation, owner, repo). If the two
-  // ever key them differently the drain simply finds nothing: every refresh falls
-  // back to the whole-tree sync it does today — correct, and permanently slow, with
-  // no error anywhere. So the key is asserted here, verbatim, against the SAME
-  // three values the enqueue above is asserted to carry.
-  it('records what the push touched, under the key the refresh drains by', async () => {
-    const { workspace } = await makeScenario('push-paths@example.com');
-    spySend();
-
-    await githubWebhookService.handleEvent(
-      'push',
-      pushPayload({
-        commits: [commit(['lib/a.ts'], ['lib/b.ts']), commit([], ['lib/b.ts'], ['lib/c.ts'])],
-      }),
-    );
-
-    const rows = await adminDb.codeGraphPendingChange.findMany({
-      where: { workspaceId: workspace.id },
-    });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      installationId: INSTALLATION_ID,
-      repoOwner: 'moooon',
-      repoName: 'acme',
-      headSha: 'a'.repeat(40),
-    });
-    // Deduped across the push's commits, in first-seen order.
-    expect(rows[0]!.paths).toEqual(['lib/a.ts', 'lib/b.ts', 'lib/c.ts']);
-  });
-
-  it('records a FORCE-PUSH as unknown — an empty row, not a skipped one', async () => {
-    // A skipped row would leave the other pushes in the window looking complete;
-    // an empty one poisons the union on purpose, and the run syncs the whole tree.
-    const { workspace } = await makeScenario('push-forced@example.com');
-    spySend();
-
-    await githubWebhookService.handleEvent(
-      'push',
-      pushPayload({ forced: true, commits: [commit(['lib/a.ts'])] }),
-    );
-
-    const rows = await adminDb.codeGraphPendingChange.findMany({
-      where: { workspaceId: workspace.id },
-    });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.paths).toEqual([]);
   });
 
   it('a push to a NON-default branch is ignored — no refresh enqueued', async () => {

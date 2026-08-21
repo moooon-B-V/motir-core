@@ -83,52 +83,6 @@ function mapConclusion(raw: string): CiConclusion {
   }
 }
 
-/**
- * Every path a push touched, or NULL when we cannot say (MOTIR-3358).
- *
- * GitHub gives each commit `added` / `modified` / `removed`, and the union across
- * the push's commits is exactly the delta a refresh would otherwise rediscover by
- * hashing the whole tree.
- *
- * ⚠️ THE NULL CASES ARE THE POINT, because the consumer indexes what it is given.
- * GitHub caps a push payload at **20 commits** and sets `forced` on a rewrite; in
- * both cases the commit array does not describe the delta, so this returns null
- * rather than a list that looks complete. A `distinct: false` commit (one already
- * delivered on another ref) still contributes its files: the tree contains them
- * either way, and over-including a path costs one extra file to index while
- * under-including one leaves the graph quietly wrong.
- */
-function changedPathsOf(payload: Record<string, unknown>): string[] | null {
-  if (payload['forced'] === true) return null;
-  const commits = payload['commits'];
-  if (!Array.isArray(commits) || commits.length === 0) return null;
-  // GitHub's own cap. A payload AT the cap may have been truncated, and there is
-  // no field that says which — so at the cap we decline rather than guess.
-  if (commits.length >= 20) return null;
-
-  // A SET, in first-seen order: three commits touching one file is one path, and
-  // the order makes two runs' lists diff as a diff rather than as a reshuffle.
-  // (The service de-duplicates again ACROSS pushes, which is a different join.)
-  const seen = new Set<string>();
-  const paths: string[] = [];
-  for (const raw of commits) {
-    const commit = asRecord(raw);
-    if (!commit) return null;
-    for (const field of ['added', 'modified', 'removed'] as const) {
-      const list = commit[field];
-      // A commit missing one of the three lists is a payload we do not recognise.
-      if (!Array.isArray(list)) return null;
-      for (const entry of list) {
-        if (typeof entry !== 'string' || entry.length === 0) return null;
-        if (seen.has(entry)) continue;
-        seen.add(entry);
-        paths.push(entry);
-      }
-    }
-  }
-  return paths;
-}
-
 export const githubProvider: GitProvider = {
   id: 'github',
 
@@ -371,7 +325,6 @@ export const githubProvider: GitProvider = {
       providerRepoId,
       branch,
       headSha: typeof after === 'string' && after.length > 0 ? after : null,
-      changedPaths: changedPathsOf(payload),
     };
   },
 

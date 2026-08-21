@@ -839,8 +839,8 @@ Both of those are §4/§5 decisions and neither is being relaxed. Instead **moti
 grant**, returned alongside the run credential motir-core already fetches at dispatch
 (`POST /v1/code-graph/run-credential`) and forwarded into the spec as `MOTIR_INDEX_SNAPSHOT_URL`.
 
-So the boot contract is four variables, or five — and, since §18, at most six. Everything §10 and
-§5 list as ABSENT is still absent: no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
+So the boot contract is four variables, or five. (§18 briefly made it six; §19 withdrew that and
+the sixth variable is gone.) Everything §10 and §5 list as ABSENT is still absent: no GitHub App key, no installation token, no `DATABASE_URL`, no object-storage credential,
 no service token, no Fly token.
 
 **Why it is worth the fifth variable.** Measured on a dev box, ten changed files in motir-core sync
@@ -1275,3 +1275,67 @@ no service token, no Fly token.
 The container's side is MOTIR-3357 (`motir-ai`): given the list, the run calls the engine's
 `indexFiles()` against the restored snapshot instead of `sync()`. Until that ships, the variable is
 set and ignored — which is precisely the degradation this section is built around.
+
+## §19 — Decision 13 is WITHDRAWN — the changed-path list was measured and dropped (MOTIR-3380)
+
+**Appended 2026-08-22, a day after §18.** §18 decided that a run should be told WHICH PATHS changed
+so it could index exactly those instead of walking the tree. The producer shipped (MOTIR-3358); the
+consumer never did. **Measured on the fleet's own hardware, the saving does not exist**, and §18 is
+superseded here rather than edited — its reasoning was correct from the numbers available at the
+time, and the numbers below are why it is not being built.
+
+Cards MOTIR-3357 (the motir-ai consumer) and MOTIR-3358's machinery are cancelled and removed.
+**§4's credential scope and §5's retention invariant are unaffected** — nothing persistent was ever
+added — and the boot contract returns to §15's four variables, or five.
+
+### §19.1 — The measurement
+
+Real motir-core tree (3 570 indexed files, **232 MB graph**), engine 1.5.0, one machine of the
+fleet's own class — `performance-2x / 8192 MB`, `iad`, destroyed afterwards. **The run order was
+alternated**, because page-cache warmth had already flattered an earlier comparison:
+
+| run                                       | wall       | filesChecked |
+| ----------------------------------------- | ---------- | ------------ |
+| whole-tree `sync()` _(whole-first)_       | **7.79 s** | 3 571        |
+| scoped `sync({ paths })` _(whole-first)_  | **7.70 s** | **2**        |
+| scoped `sync({ paths })` _(scoped-first)_ | **7.92 s** | **2**        |
+| whole-tree `sync()` _(scoped-first)_      | **7.77 s** | 3 571        |
+
+**Checking 2 files instead of 3 571 saves nothing, and is slower in one direction.** Both are inside
+the noise; the alternation is what makes that a result rather than an artifact.
+
+### §19.2 — Why, and what it means for the next person who has this idea
+
+The tree walk was never the cost at production scale. The ~7.8 s is spent **opening, resolving
+against and writing back a 232 MB graph** — work that happens whether the run names two paths or
+every path. A changed-path list has nothing left to remove.
+
+⚠️ **This is a different failure from §17's.** §17 dropped the warm worker because process warmth was
+not the lever. §18 fell to the same class of mistake one level down: an optimisation aimed at a cost
+that is not the dominant one. **The dominant cost of a refresh is the graph, not the tree.**
+
+### §19.3 — Three measurements, each true, none of production
+
+Worth recording, because each was a real number that pointed the wrong way:
+
+1. **7.3×** — the figure §18 was written on. It compared **nodes only**; edges were never checked,
+   and the engine call it used (`indexFiles`) silently drops the re-indexed file's `calls` /
+   `imports` / `instantiates` edges. Wrong API, and a graph that was worse rather than cheaper.
+2. **1.75×** — the right API (`sync({ paths })`, engine 1.5.0+), edge-for-edge correct, measured on
+   a 14-core dev box.
+3. **1.0×** — the same comparison at production scale.
+
+The dev box's advantage came from a **17 MB** graph. §17 had already concluded that graph SIZE drives
+fleet cost, and every measurement before the last used a corpus too small to test it. **Measure the
+real tree on fleet hardware, or the number is about something else.**
+
+### §19.4 — What survives
+
+- **The engine upgrade is the win instead (MOTIR-3376).** codegraph 1.1.6 → 1.5.0 takes the
+  production refresh's dominant phase from **~124 s to ~7.8 s (~16×)** with no changed-path plumbing
+  at all, because 1.5.0 sizes its worker pools from the container's allowance rather than the host's.
+- **MOTIR-3249 decision 1 is vindicated twice.** It refused a GitHub `compare` call to obtain changed
+  paths. Not only was the credential and round trip unnecessary — the paths themselves were worthless.
+- **motir-ai keeps `tests/codegraphChangedPaths.test.ts`**, the executable record that `indexFiles`
+  drops resolved edges on both 1.1.6 and 1.5.0. Unused code, deliberately kept: it is the cheapest
+  way for the next person to learn this without re-deriving it.

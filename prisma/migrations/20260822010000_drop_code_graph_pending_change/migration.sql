@@ -1,0 +1,19 @@
+-- MOTIR-3380 — drop the changed-path accumulator MOTIR-3358 added.
+--
+-- Its only consumer was MOTIR-3357, which was CANCELLED on a measurement: at
+-- production scale, indexing the exact paths a push named saves nothing. On the
+-- real motir-core tree (232 MB graph) on a `performance-2x` fleet machine, a
+-- whole-tree sync of a two-file change took 7.79 s and a sync scoped to those two
+-- files took 7.70 s — and 7.92 s vs 7.77 s with the run order reversed. Checking
+-- 2 files instead of 3 571 is inside the noise. The cost was never the tree walk;
+-- it is opening, resolving against and writing back the graph, which happens
+-- either way.
+--
+-- So this table was written on every push, claimed and deleted by every refresh,
+-- and read by nothing. The rows are worthless by construction — each one is a
+-- delta that either has already been indexed by the whole-tree sync that ran, or
+-- will be by the next one — so there is nothing to migrate out.
+--
+-- The decision and the measurement are recorded in
+-- `docs/decisions/code-graph-index-fleet.md` §19, which withdraws §18.
+DROP TABLE IF EXISTS "code_graph_pending_change";
