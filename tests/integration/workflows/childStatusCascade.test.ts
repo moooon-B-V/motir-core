@@ -64,7 +64,7 @@ const ENTERED_DONE = { fromStatusKey: 'in_progress', toStatusKey: 'done' } as co
 async function cascade(
   itemId: string,
   workspaceId: string,
-  trigger: { fromStatusKey: string; toStatusKey: string } = ENTERED_DONE,
+  trigger: { fromStatusKey: string; toStatusKey: string; revisionId?: string } = ENTERED_DONE,
 ) {
   return childStatusCascadeService.cascadeToChildren(itemId, workspaceId, trigger);
 }
@@ -199,15 +199,25 @@ describe('the cascade — a done parent completes its children', () => {
 // concurrent derivation has moved the row in between, which is the one case rung 4
 // made common. Every test below therefore states its own trigger where the trigger
 // is the subject.
-// ── The DEFECT-REPORT exemption (Bug MOTIR-3229) ──────────────────────────
+// ── The kind carve-out is GONE, and the claim is DATED (Bug MOTIR-3334) ────
 //
-// MOTIR-1343's merge cascaded `done` onto MOTIR-3218 and MOTIR-3219 — two bug
-// reports the run itself had filed under that story while shipping it — three
-// minutes into a session's investigation of them. Measured from the Inngest REST
-// API, not predicted: `"cascade": { "outcome": "cascaded", "childIds":
-// ["<MOTIR-3218>", "<MOTIR-3219>"] }`. A story closing itself must not silently
-// close the defects found while shipping it.
-describe('a `bug` child is EXEMPT — a defect report is not a decomposition', () => {
+// This block replaced `a \`bug\` child is EXEMPT`, which pinned
+// `isCascadeExempt(kind) => kind === 'bug'` (Bug MOTIR-3229). Its own fixture is
+// kept as the FIRST test here, inverted: MOTIR-1343's children were `in_progress`
+// when they were swept, and `filterNotDone` keeps every not-done child, so the
+// carve-out protected one kind-shaped slice of a kind-agnostic hole while putting
+// §4 in direct contradiction with §3's "no work item is exempt".
+//
+// What made those two vulnerable is dated, not typed — measured 2026-08-21 from
+// production `job_run` plus the event's ULID:
+//
+//   event 01M0FNNFQVY6Y3Q8QEG159905T emitted  2026-08-20T13:27:15.963Z (the merge)
+//   MOTIR-3218 / MOTIR-3219 created + claimed 13:41:45 / 13:41:56
+//   the derivation run STARTED                13:44:34.642Z, attempt 0
+//
+// A 17-minute-late first attempt of the merge's own event, completing two children
+// that did not exist when the parent was declared done.
+describe('a `bug` child is completed like any other — the kind carve-out is gone', () => {
   /** A done story over children of mixed KIND. */
   async function doneStoryWith(fx: WorkItemFixture, spec: Array<[kind: string, status: string]>) {
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
@@ -225,7 +235,31 @@ describe('a `bug` child is EXEMPT — a defect report is not a decomposition', (
     return { story, children };
   }
 
-  it('leaves an open bug open while completing the subtasks beside it', async () => {
+  it('⚠️ the MOTIR-3232 shape: eleven subtasks AND two bugs all complete (fails on the old code)', async () => {
+    // motir-core#2237, 2026-08-21. The exemption completed the eleven subtasks and
+    // skipped the two bugs — both of which the run had BUILT, their fixes commits
+    // `6d1c3340` and `c3e2b5c4` inside the very pull request whose merge woke this
+    // cascade. Against the carve-out this test fails on `childIds` (eleven, not
+    // thirteen) and on both bug statuses.
+    const fx = await makeWorkItemFixture();
+    const spec: Array<[string, string]> = Array.from({ length: 11 }, () => [
+      'subtask',
+      'implemented',
+    ]);
+    spec.push(['bug', 'implemented'], ['bug', 'implemented']);
+    const { story, children } = await doneStoryWith(fx, spec);
+
+    const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', toStatus: 'done' });
+    expect((res as { childIds: string[] }).childIds.sort()).toEqual(
+      children.map((c) => c.id).sort(),
+    );
+    expect(res).not.toHaveProperty('postDatedIds');
+    for (const c of children) expect(await statusOf(c.id)).toBe('done');
+  });
+
+  it('an open `bug` beside a subtask is completed, not left behind', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWith(fx, [
       ['subtask', 'todo'],
@@ -234,17 +268,17 @@ describe('a `bug` child is EXEMPT — a defect report is not a decomposition', (
 
     const res = await cascade(story.id, fx.workspaceId);
 
-    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
-    expect(res).toMatchObject({ exemptIds: [children[1]!.id] });
-    expect(await statusOf(children[0]!.id)).toBe('done'); // the subtask completed
-    expect(await statusOf(children[1]!.id)).toBe('todo'); // ⭐ the defect report survived
+    expect((res as { childIds: string[] }).childIds.sort()).toEqual(
+      [children[0]!.id, children[1]!.id].sort(),
+    );
+    expect(await statusOf(children[0]!.id)).toBe('done');
+    expect(await statusOf(children[1]!.id)).toBe('done');
   });
 
-  it('reports `exempt_only` when EVERY open child is a bug — distinct from nothing to do', async () => {
-    // MOTIR-1343's exact shape: the scope children already done, and the only
-    // remaining open children the two bugs the run filed. A log that could not
-    // tell this from `no_open_children` could not answer why a done parent still
-    // has open children.
+  it('a story whose ONLY open children are bugs no longer reports a declined pass', async () => {
+    // The old `exempt_only` outcome. With nothing exempt there is nothing to
+    // decline, so this is an ordinary cascade — which is exactly what stops the
+    // rollup counting a child the cascade may not complete.
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWith(fx, [
       ['subtask', 'done'],
@@ -254,16 +288,13 @@ describe('a `bug` child is EXEMPT — a defect report is not a decomposition', (
 
     const res = await cascade(story.id, fx.workspaceId);
 
-    expect(res).toMatchObject({ outcome: 'exempt_only', itemId: story.id });
-    expect((res as { exemptIds: string[] }).exemptIds.sort()).toEqual(
-      [children[1]!.id, children[2]!.id].sort(),
-    );
-    expect(await statusOf(children[1]!.id)).toBe('todo');
-    expect(await statusOf(children[2]!.id)).toBe('in_progress');
-    expect(sent).toHaveLength(0); // nothing moved ⇒ nothing to notify
+    expect(res).toMatchObject({ outcome: 'cascaded' });
+    expect(await statusOf(children[1]!.id)).toBe('done');
+    expect(await statusOf(children[2]!.id)).toBe('done');
+    expect(sent).toHaveLength(2);
   });
 
-  it('a bug that is ALREADY done is not reported as exempt — it was never open', async () => {
+  it('an already-done bug is still never re-touched — forward-only is untouched', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWith(fx, [
       ['subtask', 'todo'],
@@ -273,17 +304,156 @@ describe('a `bug` child is EXEMPT — a defect report is not a decomposition', (
     const res = await cascade(story.id, fx.workspaceId);
 
     expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
-    expect(res).not.toHaveProperty('exemptIds');
+    expect(sent).toHaveLength(1);
   });
 
-  it('a `task` child is NOT exempt — only a defect record is', async () => {
-    // The exemption is about what a kind MEANS under its parent, not about
-    // "anything that is not a subtask". A task decomposes its parent exactly as a
-    // subtask does, so completing the parent really does complete it.
+  it('a `task` child completes as it always did — nothing about kinds is read at all', async () => {
     const fx = await makeWorkItemFixture();
     const { story, children } = await doneStoryWith(fx, [['task', 'todo']]);
 
     const res = await cascade(story.id, fx.workspaceId);
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
+    expect(await statusOf(children[0]!.id)).toBe('done');
+  });
+});
+
+// ── The DATED CLAIM — a child filed AFTER the done-entry (Bug MOTIR-3334) ──
+//
+// §4's promise is a claim over the child set AS IT STOOD when the parent entered
+// done. The instant comes from the revision row the event names, which is
+// immutable — so a redelivered or 17-minutes-late event still dates itself
+// correctly. This is the MOTIR-1343 shape, and it is the reason the kind carve-out
+// above can be deleted without re-opening the loss that produced it.
+describe('the done-entry speaks only for the children that existed when it happened', () => {
+  // The three instants are MOTIR-1343's own, and they are set explicitly on both
+  // sides rather than left to wall-clock ordering: a child's `createdAt` is a DB
+  // default and a revision's `changedAt` is written by the caller, so a test that
+  // relied on "these two statements ran in this order" would be comparing two
+  // clocks a millisecond apart. Fixing both makes the comparison the subject.
+  const BEFORE_MERGE = new Date('2026-08-20T13:20:00.000Z');
+  const MERGE = new Date('2026-08-20T13:27:15.963Z');
+  const AFTER_MERGE = new Date('2026-08-20T13:41:45.000Z');
+
+  /** A revision row standing in for the parent's `→ done` transition, dated. */
+  async function doneRevision(fx: WorkItemFixture, itemId: string, changedAt: Date) {
+    const rev = await adminDb.workItemRevision.create({
+      data: {
+        workItemId: itemId,
+        changedById: fx.ownerId,
+        changedAt,
+        changeKind: 'updated',
+        diff: { status: { from: 'in_review', to: 'done' } },
+      },
+    });
+    return rev.id;
+  }
+
+  /** Pin a child's `createdAt` to one side of the merge. */
+  async function dateItem(id: string, createdAt: Date) {
+    await adminDb.workItem.update({ where: { id }, data: { createdAt } });
+  }
+
+  const enteredDoneAt = (revisionId: string) => ({ ...ENTERED_DONE, revisionId });
+
+  it('⚠️ MOTIR-1343: a child filed 14 minutes after the merge is NOT swept', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
+    await setStatus(story.id, 'done');
+
+    // The scope child, in the set when the story was declared done…
+    const scope = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'in the set at merge time',
+      parentId: story.id,
+    });
+    await setStatus(scope.id, 'implemented');
+    await dateItem(scope.id, BEFORE_MERGE);
+
+    // …the merge, dated after it and before the defect reports…
+    const revisionId = await doneRevision(fx, story.id, MERGE);
+
+    // …and the two defect reports the run filed fourteen minutes later, claimed
+    // and being investigated when the late cascade finally ran.
+    const filedAfter = [];
+    for (const title of ['found while shipping A', 'found while shipping B']) {
+      const c = await createTestWorkItem(fx, { kind: 'bug', title, parentId: story.id });
+      await setStatus(c.id, 'in_progress');
+      await dateItem(c.id, AFTER_MERGE);
+      filedAfter.push(c);
+    }
+
+    const res = await cascade(story.id, fx.workspaceId, enteredDoneAt(revisionId));
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [scope.id] });
+    expect((res as { postDatedIds: string[] }).postDatedIds.sort()).toEqual(
+      filedAfter.map((c) => c.id).sort(),
+    );
+    expect(await statusOf(scope.id)).toBe('done'); // the claim covered it
+    for (const c of filedAfter) expect(await statusOf(c.id)).toBe('in_progress'); // ⭐ survived
+    expect(sent).toHaveLength(1); // one event, for the one child that moved
+  });
+
+  it('and the SAME child is swept when it predates the entry — the guard is the DATE, not the kind', async () => {
+    // The control the carve-out could not express: identical kind, identical
+    // status, opposite answer, decided only by which side of the entry it was
+    // created on.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
+    await setStatus(story.id, 'done');
+    const bug = await createTestWorkItem(fx, {
+      kind: 'bug',
+      title: 'filed before the merge',
+      parentId: story.id,
+    });
+    await setStatus(bug.id, 'in_progress');
+    await dateItem(bug.id, BEFORE_MERGE);
+    const revisionId = await doneRevision(fx, story.id, MERGE);
+
+    const res = await cascade(story.id, fx.workspaceId, enteredDoneAt(revisionId));
+
+    expect(res).toMatchObject({ outcome: 'cascaded', childIds: [bug.id] });
+    expect(await statusOf(bug.id)).toBe('done');
+  });
+
+  it('every open child post-dating the entry ⇒ `post_dated_only`, distinct from nothing to do', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Parent' });
+    await setStatus(story.id, 'done');
+    const settled = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'already done at merge time',
+      parentId: story.id,
+    });
+    await setStatus(settled.id, 'done');
+    await dateItem(settled.id, BEFORE_MERGE);
+    const revisionId = await doneRevision(fx, story.id, MERGE);
+    const late = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'added afterwards',
+      parentId: story.id,
+    });
+    await setStatus(late.id, 'todo');
+    await dateItem(late.id, AFTER_MERGE);
+
+    const res = await cascade(story.id, fx.workspaceId, enteredDoneAt(revisionId));
+
+    expect(res).toMatchObject({ outcome: 'post_dated_only', postDatedIds: [late.id] });
+    expect(await statusOf(late.id)).toBe('todo');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('an UNRESOLVABLE instant suppresses nothing — missing evidence is not evidence', async () => {
+    // The guard can only ever SUPPRESS. A caller with no `revisionId`, or one
+    // naming a row that no longer exists (a fixture, a direct write, a pruned
+    // revision), leaves the cascade behaving exactly as it shipped.
+    const fx = await makeWorkItemFixture();
+    const { story, children } = await doneStoryWithChildren(fx, ['todo']);
+
+    const res = await cascade(story.id, fx.workspaceId, {
+      ...ENTERED_DONE,
+      revisionId: 'cmxxxxxxxxxxxxxxxxxxxxxxx',
+    });
 
     expect(res).toMatchObject({ outcome: 'cascaded', childIds: [children[0]!.id] });
     expect(await statusOf(children[0]!.id)).toBe('done');

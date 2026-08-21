@@ -117,6 +117,23 @@ export function rankOfStatus(
  * completes its children, and §4's downward cascade is the shipped expression of
  * it — a gate there would break the feature rather than the defect.
  *
+ * ⚠️ THIS IS THE KIND-AGNOSTIC CONTAINMENT, AND IT HAS COVERED `in_review` SINCE
+ * IT SHIPPED (Bug MOTIR-3334, 2026-08-21). MOTIR-3334 asked, conditionally, why
+ * the gate covered `implemented` and not `in_review` — *"if that guard already
+ * exists for `implemented` … this card says why it did not cover `in_review`"*.
+ * It did cover it: the set below has held BOTH keys since MOTIR-3229, and
+ * `workItemsService.applyStatusTransition` tests membership in it for every
+ * non-`system` move. The premise was false, and it is recorded here rather than
+ * left for the next reader to re-derive from the same conditional.
+ *
+ * What is true is the OTHER half of that card's containment — a container may not
+ * be moved here while a child is unimplemented, and it also may not have its pull
+ * request opened by a scoped run in that state, which is `packages/cli`'s
+ * close-out re-read (MOTIR-3268). Both are kind-agnostic. Neither reaches a child
+ * FILED AFTER the parent finished, which is why the downward cascade dates its
+ * own claim (`childStatusCascadeService`, same card) — a residue, not a
+ * duplicate.
+ *
  * ⚠️ BY KEY, NOT BY CATEGORY, AND NOT THROUGH `resolveStatusKey`. Both statuses
  * live in the `in_progress` category, so the prefer-key-then-category resolver
  * falls back to the FIRST `in_progress` status — `in_progress` itself — and the

@@ -46,6 +46,7 @@ interface Emitted {
     workspaceId: string;
     fromStatusKey?: string;
     toStatusKey?: string;
+    revisionId?: string;
     parentIds?: string[];
     parentId?: string;
   };
@@ -108,6 +109,11 @@ async function drain(): Promise<number> {
         {
           fromStatusKey: event.data.fromStatusKey ?? '',
           toStatusKey: event.data.toStatusKey ?? '',
+          // …and the revision that transition wrote, which is how the cascade
+          // DATES its claim (MOTIR-3334). Handed over exactly as the job step
+          // hands it over: a pump that dropped it would drive a cascade that
+          // speaks for children the real one never would.
+          revisionId: event.data.revisionId,
         },
       );
     } else if (event.name === 'work-item/created') {
@@ -1301,5 +1307,159 @@ describe('the IMPORT interleaving — the pin carries its own trigger (MOTIR-290
 
     await drain();
     expect(await statusOf(parent.id)).toBe('in_progress');
+  });
+});
+
+// ── Bug MOTIR-3334 — the two halves, assembled ──────────────────────────────
+//
+// The per-service suite pins each half alone. What only this file reaches is the
+// pair, and the pair is the whole point of this card: the downward carve-out and
+// the upward "no work item is exempt" disagreed, and the end state was stable
+// rather than transient. A test that stops after the cascade would have passed on
+// the shipped code; MOTIR-3232 passed its cascade and failed 54 seconds later.
+describe('the kind carve-out is gone, and the parent STAYS done (MOTIR-3334)', () => {
+  it('⚠️ MOTIR-3232: a merged story with `bug` children settles at done and STAYS there', async () => {
+    // motir-core#2237, 2026-08-21. Eleven subtasks completed at 10:02:34–36, the
+    // two bugs skipped by the exemption, and the story pulled back `done →
+    // implemented` at 10:03:30 by the recompute — which counts what the cascade
+    // was forbidden to complete. The drain below plays BOTH directions to their
+    // fixed point, so it fails against the carve-out on the final assertion even
+    // though the cascade itself "succeeded".
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The Plans surface' });
+    await setStatus(story.id, 'in_review');
+
+    const subtasks = [];
+    for (let i = 0; i < 11; i += 1) {
+      const c = await createTestWorkItem(fx, {
+        kind: 'subtask',
+        title: `subtask ${i}`,
+        parentId: story.id,
+      });
+      await setStatus(c.id, 'implemented');
+      subtasks.push(c);
+    }
+    const bugs = [];
+    for (const title of ['abandoned-plan sweep', 'discard a generating plan']) {
+      const c = await createTestWorkItem(fx, { kind: 'bug', title, parentId: story.id });
+      await setStatus(c.id, 'implemented');
+      bugs.push(c);
+    }
+
+    await transitionAndDrain(fx, story.id, 'done');
+
+    for (const c of [...subtasks, ...bugs]) expect(await statusOf(c.id)).toBe('done');
+    // ⭐ AFTER the recompute has run, not merely after the cascade.
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('⚠️ MOTIR-1343: a bug filed AFTER the merge is not swept, and the parent comes back for it', async () => {
+    // The loss the carve-out was written for, reproduced from its own evidence —
+    // and now contained by the DATE rather than by the kind. Production timing
+    // (job_run + the event ULID, 2026-08-21): the merge emitted at 13:27:15.963Z,
+    // the two defect reports were filed and claimed at 13:41:45 / 13:41:56, and
+    // the derivation run did not start until 13:44:34.642Z — attempt 0, a
+    // 17-minute queue delay, not a retry. The transition is REAL here and the
+    // drain is deferred, which is that interleaving exactly.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The AI assistant' });
+    await setStatus(story.id, 'in_review');
+    const scope = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'in the set at merge time',
+      parentId: story.id,
+    });
+    await setStatus(scope.id, 'implemented');
+
+    // …the merge. The event is emitted and left QUEUED — nothing drains yet.
+    await workItemsService.updateStatus(story.id, 'done', fx.ctx);
+
+    // …fourteen minutes later, the run files two defect reports under the story
+    // it is shipping and starts investigating them. Through the REAL create path,
+    // so the `work-item/created` recompute those filings produce is in the queue
+    // too — the interleaving is two jobs in flight, not one.
+    const storyKey = (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+      .identifier;
+    const filedAfter = [];
+    for (const title of [
+      'design-assets-uploader reaches real git',
+      'E2E mocks trace the project',
+    ]) {
+      await runCreateWorkItem(
+        { projectKey: fx.projectIdentifier, parentKey: storyKey, kind: 'bug', title },
+        fx.ctx,
+      );
+      const c = await adminDb.workItem.findFirstOrThrow({ where: { parentId: story.id, title } });
+      await setStatus(c.id, 'in_progress');
+      filedAfter.push(c);
+    }
+
+    // …and only NOW does the merge's own derivation run.
+    await drain();
+
+    // ⭐ The claim covered the child that existed when it was made, and nothing else.
+    expect(await statusOf(scope.id)).toBe('done');
+    for (const c of filedAfter) expect(await statusOf(c.id)).toBe('in_progress');
+    // And the parent is honestly not finished: rung 4 counts the open children,
+    // so the recompute brings it back rather than leaving a done story over live
+    // work. `in_progress` is the rung two `in_progress` children derive.
+    expect(await statusOf(story.id)).toBe('in_progress');
+  });
+
+  it('the same two bugs filed BEFORE the merge ARE completed by it — the date decides, not the kind', async () => {
+    // The control the carve-out could not express: identical kinds, identical
+    // statuses, opposite answer. This is the shape MOTIR-3232 actually had, and
+    // the one the exemption got wrong.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The AI assistant' });
+    await setStatus(story.id, 'in_review');
+    const bugs = [];
+    for (const title of ['filed while shipping A', 'filed while shipping B']) {
+      const c = await createTestWorkItem(fx, { kind: 'bug', title, parentId: story.id });
+      await setStatus(c.id, 'implemented');
+      bugs.push(c);
+    }
+
+    await transitionAndDrain(fx, story.id, 'done');
+
+    for (const c of bugs) expect(await statusOf(c.id)).toBe('done');
+    expect(await statusOf(story.id)).toBe('done');
+  });
+
+  it('a child created under an ALREADY-done parent does not inherit its doneness', async () => {
+    // The other form of MOTIR-1343's hole, stated on its own: the parent is
+    // already settled at `done` — its merge drained long ago — and a new child
+    // arrives. Rung 4 brings the parent back (ADR §5: "a `done` parent is not
+    // permanently done"), and no downward wave starts, because the cascade fires
+    // only on ENTRY into a done-category status and a create transitions nothing.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Shipped story' });
+    await setStatus(story.id, 'in_review');
+    const shipped = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'shipped',
+      parentId: story.id,
+    });
+    await setStatus(shipped.id, 'implemented');
+    await transitionAndDrain(fx, story.id, 'done');
+    expect(await statusOf(story.id)).toBe('done');
+
+    await runCreateWorkItem(
+      {
+        projectKey: fx.projectIdentifier,
+        parentKey: (await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } }))
+          .identifier,
+        kind: 'bug',
+        title: 'found afterwards',
+      },
+      fx.ctx,
+    );
+    await drain();
+
+    const late = await adminDb.workItem.findFirstOrThrow({
+      where: { parentId: story.id, title: 'found afterwards' },
+    });
+    expect(late.status).toBe('todo'); // ⭐ not swept
+    expect(await statusOf(story.id)).toBe('todo'); // and the parent is honest about it
   });
 });
