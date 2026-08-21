@@ -58,20 +58,54 @@ import {
  * now purely a BACKSTOP** — the cover for a dispatch that was dropped in transit
  * — and the module header above is the older framing, corrected in place.
  *
- * ⚠️ AND IT IS DELIBERATELY UNCHANGED IN THIS CARD. Whether a backstop still
- * needs to run every minute is a question about the compute bill, and the honest
- * answer needs measurement taken AFTER the wake ships — which is MOTIR-2853, not
- * a number to guess here. What a shorter cadence costs is not the query: a
- * managed database that suspends on idle is held permanently awake by any
- * sub-five-minute read, so this line is worth ~$19/month whatever it finds.
+ * ⚠️ AND IT IS UNCHANGED — NOW ON A MEASUREMENT RATHER THAN PENDING ONE
+ * (MOTIR-2853, 2026-08-21). The paragraph that stood here deferred the cadence
+ * question to a measurement taken after the wake shipped. That measurement is
+ * done, and it says **this line is not the lever**.
+ *
+ * The Neon compute was sampled from the control plane every 5 minutes for 6 h 12 m
+ * against release v96 — 76 samples, `current_state: "active"` in every one, duty
+ * cycle **100%** (100.8% over the cleanest 3 h 16 m sub-window, which contains no
+ * deploy and no merge; the >100% is refresh-boundary jitter on a counter that
+ * batches every ~90–105 min). The database never suspended once.
+ *
+ * **And lengthening this cron could not have changed that, even set to never.**
+ * Delete this schedule outright and the remaining `system.*` crons still wake the
+ * compute at minutes {0,7,10,17,20,22,27,30,37,40,47,50,52,57} — a longest quiet
+ * gap of **7 minutes**, under the ~9 min suspend delay measured on 2026-08-20
+ * (`docs/decisions/application-hosting.md` §21). Every one of those ticks is a
+ * guaranteed database WRITE, not a possible read: `defineJob` records a `job_run`
+ * row before the handler body runs and flips it after, so no early return in any
+ * job can avoid it.
+ *
+ * So the cost is the SHAPE of the schedule, not the frequency of its loudest
+ * member — see the reaper's cron below, where that is now argued out.
  */
 export const CI_RUNNER_PROVISION_SWEEP_CRON = '* * * * *';
 
-/** Every 10 minutes, offset off the hour so it never lines up with the other
- *  `system.*` schedules. The reaper only ever finds something when a supervisor
- *  died, so it is almost always a single provider list call that returns nothing
+/** Every 10 minutes. The reaper only ever finds something when a supervisor died,
+ *  so it is almost always a single provider list call that returns nothing
  *  actionable — cheap enough to run often, and running often is the point: the
- *  window between an orphan appearing and being destroyed is billed. */
+ *  window between an orphan appearing and being destroyed is billed.
+ *
+ *  ⚠️ THE OFFSET RATIONALE IS SUPERSEDED, AND DELIBERATELY LEFT AS A CORRECTION
+ *  RATHER THAN DELETED (MOTIR-2853, 2026-08-21). This comment used to read
+ *  "offset off the hour so it never lines up with the other `system.*` schedules".
+ *  That is textbook load-spreading and it is correct on a machine that is always
+ *  on. On a compute that SUSPENDS WHEN IDLE it is exactly inverted: the only
+ *  quantity billed is how often the thing wakes, and every distinct offset is
+ *  another wake. Ten jobs on ten offsets wake it ten times; the same ten aligned
+ *  onto shared minutes wake it once.
+ *
+ *  Measured (MOTIR-2853): the schedule's fourteen distinct wake-minutes leave a
+ *  longest gap of 7 minutes, under the ~9 min suspend delay, so the compute never
+ *  sleeps — 100% duty cycle over 6 h 12 m. The spreading is what costs the money.
+ *
+ *  **This cron is NOT changed here.** Re-timing the schedule is a coordinated
+ *  change across every `system.*` job and belongs to its own work item, with the
+ *  contention argument this comment used to make weighed against the wake count
+ *  rather than assumed away. What is fixed here is the REASON, so the next reader
+ *  does not re-derive the tension from scratch and reach the old answer. */
 export const CI_RUNNER_REAP_CRON = '7,17,27,37,47,57 * * * *';
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
