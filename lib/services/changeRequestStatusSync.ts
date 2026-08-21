@@ -30,9 +30,11 @@ import type { CompleteSessionItemResultDto } from '@/lib/dto/workItems';
 import {
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
+  MissingArtifactEvidenceError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { NO_ARTIFACT_MARKER } from '@/lib/workItems/artifactEvidence';
 
 // The provider-agnostic change-request → work-item status-sync state machine
 // (Story 7.10 · MOTIR-892, generalized for GitLab in Story 7.23 · MOTIR-1475).
@@ -71,6 +73,15 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 // All three HOLD the item at In Review rather than transitioning, and all three
 // report a distinct outcome — never a silent no-op, because invisibility was the
 // whole cost of MOTIR-1873's incident.
+//
+// ⚠️ A FOURTH HOLD IS DECIDED ELSEWHERE, and forgetting that cost a production
+// incident (MOTIR-3364). MOTIR-2709's artifact-evidence gate lives inside
+// `applyStatusTransition`, not up here, so it reaches this module only as a thrown
+// error — and `classifyTransitionError` had no arm for it, so it RETHREW: a 500 on
+// a successful merge delivery, and a `deploy` card parked at In Review with nothing
+// on it to say why. The rule the three gates above state is not "these three are
+// visible"; it is that EVERY hold is. `STATUS_TRANSITION_REFUSALS` is now the one
+// list of what that authority can refuse, and both merge-driven consumers read it.
 
 /** The concrete workflow target a canonical change-request lifecycle maps to.
  *  `key` is the CANONICAL status key we prefer; `category` is the fallback bucket
@@ -105,6 +116,7 @@ export type ChangeRequestSyncResult = {
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
     | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
     | 'deferred_incomplete_repo_set' // a repository the item CARRIES has no merge on its default branch — item stays In Review (MOTIR-2729)
+    | 'missing_artifact_evidence' // a `deploy` item whose comments record no published artifact — item stays where it is (MOTIR-2709 / MOTIR-3364)
     | 'no_work_item'
     | 'no_matching_status'
     | 'illegal_transition'
@@ -533,6 +545,17 @@ export async function syncChangeRequestStatus(
       toStatus: targetKey,
     };
 
+  // The narrowed slice `reportTransitionRefusal` needs, hoisted once: the guards
+  // above proved `workItemId` and `actorUserId` non-null, and that narrowing is
+  // per-property — it does not survive passing `resolved` itself.
+  const refusalContext = {
+    workItemId: resolved.workItemId,
+    workspaceId: resolved.workspaceId,
+    actorUserId: resolved.actorUserId,
+    provider: resolved.provider,
+    mergeAlreadyRecorded: resolved.mergeAlreadyRecorded,
+  };
+
   try {
     await applyTransition(resolved.workItemId, targetKey, {
       userId: resolved.actorUserId,
@@ -553,7 +576,7 @@ export async function syncChangeRequestStatus(
           workspaceId: resolved.workspaceId,
         });
       } catch (retryErr) {
-        return classifyTransitionError(retryErr, resolved.workItemId, targetKey);
+        return reportTransitionRefusal(retryErr, cr, refusalContext, targetKey);
       }
       return {
         event: 'pull_request',
@@ -562,7 +585,7 @@ export async function syncChangeRequestStatus(
         toStatus: targetKey,
       };
     }
-    return classifyTransitionError(err, resolved.workItemId, targetKey);
+    return reportTransitionRefusal(err, cr, refusalContext, targetKey);
   }
 
   return {
@@ -571,6 +594,99 @@ export async function syncChangeRequestStatus(
     workItemId: resolved.workItemId,
     toStatus: targetKey,
   };
+}
+
+/**
+ * Classify a refused transition AND — for the refusals that leave no other trace
+ * — say so ON THE CARD (MOTIR-3364).
+ *
+ * ⚠️ WHY THIS SITS BETWEEN THE CATCH AND `classifyTransitionError`. The two holds
+ * decided BEFORE the transition (`deferred_non_default_base`,
+ * `deferred_incomplete_repo_set`) each post their own note inline, because the
+ * facts they report — a base ref, a repository list — are in hand there. The
+ * artifact-evidence gate is decided INSIDE `applyStatusTransition`, so its refusal
+ * only ever surfaces here, as an exception. Before this function it surfaced as a
+ * rethrow: a 500 on a successful merge delivery, and a card silently parked at In
+ * Review. The hold was right; only its shape was wrong.
+ *
+ * The note is posted under the SAME two conditions the other two use: once per
+ * merge (`mergeAlreadyRecorded` — the host redelivers events freely), and
+ * best-effort, because a failed comment must never turn a correct hold back into
+ * the 500 this card exists to remove.
+ */
+async function reportTransitionRefusal(
+  err: unknown,
+  cr: NormalizedChangeRequest,
+  resolved: {
+    workItemId: string;
+    workspaceId: string;
+    actorUserId: string;
+    provider: GitProviderId;
+    mergeAlreadyRecorded: boolean;
+  },
+  targetKey: string,
+): Promise<ChangeRequestSyncResult> {
+  const result = classifyTransitionError(err, resolved.workItemId, targetKey);
+  if (result.outcome === 'missing_artifact_evidence' && !resolved.mergeAlreadyRecorded) {
+    try {
+      await commentsService.addComment(
+        resolved.workItemId,
+        {
+          bodyMd: missingArtifactEvidenceCommentBody({
+            noun: changeRequestNoun(resolved.provider),
+            number: cr.number,
+          }),
+        },
+        { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+      );
+    } catch (noteErr) {
+      console.error('[changeRequestStatusSync] artifact-evidence note failed; item still held', {
+        workItemId: resolved.workItemId,
+        number: cr.number,
+        error: noteErr instanceof Error ? noteErr.message : 'unknown',
+      });
+    }
+  }
+  return result;
+}
+
+/** The missing-artifact-evidence note (MOTIR-2709's gate, MOTIR-3364's note) —
+ *  posted on the linked item when a merge cannot complete a `deploy` card because
+ *  no comment on it records what was published.
+ *
+ *  It carries the same two obligations as its two siblings below: name the fact
+ *  that turns *"why isn't this Done?"* into a one-minute answer, and state the
+ *  condition that WILL complete the item, so the hold never reads as a stuck
+ *  integration.
+ *
+ *  ⚠️ **THE NOTE MUST NOT SATISFY THE GATE IT EXPLAINS, and that is a live trap
+ *  rather than a theoretical one.** The check is a string SCAN over every comment
+ *  body on the card (`assessArtifactEvidence`), and this note is a comment on that
+ *  card — so an illustrative `1.4.0` in the text is indistinguishable, to the
+ *  scanner, from a version somebody recorded. Drafted that way it turned the
+ *  second delivery of the same merge into a `done`: the hold posted its own way
+ *  out, and a redelivery — which the host does freely — closed the card the gate
+ *  had just refused. The examples here are therefore deliberately shaped to match
+ *  NOTHING: the two prefixes carry no digest body (the matchers need 12+ hex / 20+
+ *  base64 characters after them), and the version is named rather than shown.
+ *  `NO_ARTIFACT_MARKER` is safe to quote inline because its own matcher is
+ *  line-anchored for exactly this reason. `tests/github/changeRequestArtifactEvidenceGate.test.ts`
+ *  asserts the rendered body scans as `missing`.
+ *
+ *  Like the others it describes what did NOT happen rather than asserting a
+ *  status: the sync leaves the item exactly where it was. */
+function missingArtifactEvidenceCommentBody(args: { noun: string; number: number }): string {
+  return (
+    `⚠️ **Merged, but this release recorded nothing** — ${args.noun} #${args.number} merged, ` +
+    `and this is a \`deploy\` item whose deliverable lives outside the repository, so the merge ` +
+    `is not proof it shipped. No comment here records an artifact, so the item's status is left ` +
+    `unchanged.\n\n` +
+    `It completes once a comment on this item carries the identifier a consumer would install — ` +
+    `the published version number, a registry digest (\`sha256:\` followed by the digest) or an ` +
+    `integrity hash (\`sha512-\` followed by the hash). If this deliverable genuinely has no ` +
+    `identifier (a DNS cutover, a console toggle), say so in a comment beginning ` +
+    `\`${NO_ARTIFACT_MARKER}\` followed by the reason.`
+  );
 }
 
 /** The incomplete-repository-set note (MOTIR-2729) — posted on the linked item
@@ -773,8 +889,18 @@ async function applyTransition(
 
 /** Map a transition failure to a logged no-op outcome — the webhook never crashes
  *  on a workflow that can't legally take the move. A truly unexpected error
- *  re-throws (a 500 the host retries). */
-function classifyTransitionError(
+ *  re-throws (a 500 the host retries).
+ *
+ *  ⚠️ EVERY member of `STATUS_TRANSITION_REFUSALS` must have an arm here, and
+ *  `tests/workItems/statusTransitionRefusals.test.ts` asserts it — the arms below
+ *  are deliberately one-per-error rather than a single `isStatusTransitionRefusal`
+ *  branch, because each refusal earns a DISTINCT outcome a log line can be read
+ *  off. The predicate is what `completeSession` uses, where the reported shape is
+ *  the same for all of them.
+ *
+ *  EXPORTED for that test, which needs to drive it with a constructed instance of
+ *  each refusal; nothing else calls it from outside this module. */
+export function classifyTransitionError(
   err: unknown,
   workItemId: string,
   toStatus: string,
@@ -794,6 +920,14 @@ function classifyTransitionError(
   // Review while two children sat at `todo`.
   if (err instanceof ContainerHasOpenChildrenError)
     return { event: 'pull_request', outcome: 'open_children', workItemId, toStatus };
+  // The close-out artifact-evidence gate (MOTIR-2709). A `deploy` card whose
+  // comments record no published artifact is a legitimate REFUSAL, like the two
+  // above it: the merge happened, the release is unattested, and only a person can
+  // clear that by recording what shipped. It reached this function as a RETHROW
+  // until MOTIR-3364 — a 500 on a successful merge delivery, and a card left at In
+  // Review with nothing on it to say why. `reportTransitionRefusal` posts that note.
+  if (err instanceof MissingArtifactEvidenceError)
+    return { event: 'pull_request', outcome: 'missing_artifact_evidence', workItemId, toStatus };
   throw err;
 }
 

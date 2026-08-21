@@ -34,6 +34,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { assessArtifactEvidence, requiresArtifactEvidence } from '@/lib/workItems/artifactEvidence';
+import { isStatusTransitionRefusal } from '@/lib/workItems/statusTransitionRefusals';
 import { CONTAINER_CLAIM_STATUS_KEYS, childrenBelowClaimBar } from '@/lib/workItems/statusLadder';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -85,7 +86,7 @@ import {
 } from '@/lib/workItems/errors';
 import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -2805,14 +2806,20 @@ export const workItemsService = {
             );
           }
         } catch (err) {
-          // A per-item rejection (illegal transition / unknown done status /
-          // access denial) is surfaced, not fatal — these all throw BEFORE the
-          // write, so the transaction stays healthy for the remaining items.
-          if (
-            err instanceof IllegalTransitionError ||
-            err instanceof UnknownStatusError ||
-            err instanceof ProjectAccessDeniedError
-          ) {
+          // A per-item REFUSAL is surfaced, not fatal — every member of the
+          // refusal set throws BEFORE the write, so the transaction stays healthy
+          // for the remaining items.
+          //
+          // ⚠️ THE PREDICATE, not a hand-written `instanceof` ladder (MOTIR-3364).
+          // This was such a ladder, listing three of the six, and the omission was
+          // invisible until it fired: one evidence-less `deploy` card on a session
+          // branch rethrew from inside this `withWorkspaceContext` transaction, so
+          // the throw did not merely fail that item — it ROLLED BACK every sibling
+          // the loop had already closed, and `motir done --session` reported
+          // nothing at all. One card blocked N. `isStatusTransitionRefusal` is
+          // shared with the merge-driven sync so both consumers inherit the next
+          // gate without an edit.
+          if (isStatusTransitionRefusal(err)) {
             results.push({ key: item.identifier, outcome: 'failed', reason: err.message });
           } else {
             throw err;
