@@ -214,11 +214,50 @@ interface SendGap {
  * mechanism, and this check sees both because it watches the SENDS rather than
  * the runs.
  *
- * PURE and exported so its two directions are asserted directly, with synthetic
+ * ⚠️ AND OUR OWN CLOCK CANNOT ANSWER THE QUESTION AT ALL, WHICH IS WHY THE
+ * SCHEDULER'S IS PASSED IN (MOTIR-3371). `spanMs` is measured from our own
+ * send-ACKS. The window opens when the SCHEDULER receives event 1 and closes
+ * `PERIOD` later on ITS clock, so a slow ack on the FIRST send alone moves our
+ * start marker forward and hides the overrun: the 5th occurrence of this file's
+ * `expected 5 to be 6` arrived with both terms below `PERIOD_MS` and the
+ * diagnosis silent (PR #2247's `Vitest (2/3)`, run `32494861262`, 2026-08-21).
+ * A span under `PERIOD_MS` on our clock does not prove the burst fit.
+ *
+ * `schedulerSpanMs` closes that: the dev server stamps each event with its OWN
+ * `received_at` (`GET /v1/events/{id}`), so the span across the burst is
+ * measured end to end on ONE clock, with our request latency out of it. Measured
+ * on this box, a 4-event burst read **610 ms** from our acks and **754 ms** from
+ * the scheduler's records — the two disagree by a quarter of the span, in the
+ * direction that hides a miss. (The sibling field `ts` is NOT a substitute: it
+ * is client-supplied and echoes back whatever the sender put there — an event
+ * sent with `ts` an hour in the past returns it verbatim, while `received_at`
+ * stays in sequence.)
+ *
+ * It is `null` when the scheduler's records could not be read, and then this
+ * behaves exactly as it did before — a degradation, not a silent pass: the real
+ * case below asserts the signal IS obtainable, so a CLI upgrade that withdraws
+ * `received_at` goes red here instead of quietly reverting the check.
+ *
+ * ⚠️ AND A WINDOW MISS IS NOT THE ONLY PRODUCER OF `expected N to be 6` — do not
+ * read a silent diagnosis as "so the burst was fine". Running this file ten
+ * times with the scheduler's span recorded caught the SAME failure twice at
+ * `schedulerSpanMs: 0` and `1`: six events inside one millisecond, one run, and
+ * it carried event 5 (then 4). That is the scheduler coalescing correctly and
+ * not keeping the last event, which the payload assertions above ask it to —
+ * MOTIR-3398 owns that, and it is why this term's silence is informative rather
+ * than exculpatory.
+ *
+ * PURE and exported so its directions are asserted directly, with synthetic
  * gaps, rather than by stalling a real runner for three seconds per case.
  */
-export function stallDiagnosis(fn: string, worst: SendGap | null, spanMs = 0): string | null {
-  // TWO ways the precondition fails, and only one of them is a stall (MOTIR-3276).
+export function stallDiagnosis(
+  fn: string,
+  worst: SendGap | null,
+  spanMs = 0,
+  schedulerSpanMs: number | null = null,
+): string | null {
+  // THREE ways the precondition fails, and only one of them is a stall
+  // (MOTIR-3276, MOTIR-3371).
   //
   // ⚠️ THE WINDOW OPENS AT THE FIRST EVENT AND IS NOT RE-ARMED BY LATER ONES, so
   // what the burst needs is *every event inside ONE window* — a property of its
@@ -233,12 +272,21 @@ export function stallDiagnosis(fn: string, worst: SendGap | null, spanMs = 0): s
   // nothing and the failure arrived as the bare `expected 5 to be 6` this
   // function exists to prevent.
   const stalled = worst !== null && worst.ms >= PERIOD_MS;
+  const missed = schedulerSpanMs !== null && schedulerSpanMs >= PERIOD_MS;
   const overran = spanMs >= PERIOD_MS;
-  if (!stalled && !overran) return null;
+  if (!stalled && !missed && !overran) return null;
 
+  // Precedence is by how sharply each term names the CAUSE, not by how bad it
+  // looks. A single stalled send explains everything downstream of it, so it
+  // wins; between the two spans the SCHEDULER's is the authoritative one and
+  // ours is the proxy, so it is reported with ours beside it rather than
+  // instead of it.
   const cause = stalled
     ? `the runner stalled ${worst.ms} ms between events ${worst.from} and ${worst.to}`
-    : `the burst took ${spanMs} ms end to end (worst single gap ${worst?.ms ?? 0} ms)`;
+    : missed
+      ? `the SCHEDULER's own records span ${schedulerSpanMs} ms from the first event to the ` +
+        `last (our send loop measured ${spanMs} ms)`
+      : `the burst took ${spanMs} ms end to end (worst single gap ${worst?.ms ?? 0} ms)`;
 
   return (
     `${cause} of the \`${fn}\` burst, which meets or exceeds the ${PERIOD_MS} ms debounce ` +
@@ -251,10 +299,63 @@ export function stallDiagnosis(fn: string, worst: SendGap | null, spanMs = 0): s
 }
 
 /**
+ * When the SCHEDULER says it received an event, in ms — read off the dev
+ * server's own `received_at`, or `null` when it cannot be read.
+ *
+ * The event is indexed a beat AFTER the send is acked (28–241 ms, measured), so
+ * a read straight after the send loop can 404. Retrying is what keeps the signal
+ * rather than losing it to a race with the server's own writer — and losing it
+ * is not free: a `null` here silently returns the whole diagnosis to the local
+ * proxy MOTIR-3371 filed as insufficient, so the budget is generous.
+ *
+ * ⚠️ AND THE STAMP IS THE WRITER'S, NOT THE HANDLER'S — it is FLUSHED, so it
+ * carries a few hundred ms of granularity. Measured on this box: nine events
+ * whose acks spanned 12 ms were stamped 0 ms and 251 ms, in two batches. That is
+ * why this term is compared against `PERIOD_MS` (3 000 ms) and never used to
+ * decide anything finer — at THAT scale the writer's lag is noise, and the
+ * quantity being measured is real.
+ */
+async function receivedAt(id: string): Promise<number | null> {
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      const res = await fetch(`${devUrl}/v1/events/${id}`);
+      if (res.ok) {
+        const body = (await res.json()) as { data?: { received_at?: string } };
+        // RFC 3339 with NANOSECOND precision — `Date.parse` truncates it to ms.
+        const ms = Date.parse(body.data?.received_at ?? '');
+        if (Number.isFinite(ms)) return ms;
+      }
+    } catch {
+      /* dev server not answering — treat as unavailable, below */
+    }
+    if (Date.now() > deadline) return null;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/**
+ * The span of a burst on the SCHEDULER's clock — `max - min` over its own
+ * `received_at` for every event sent — or `null` when any one of them could not
+ * be read (MOTIR-3371).
+ *
+ * ALL or nothing, deliberately: a span computed over a SUBSET is shorter than
+ * the burst's, which is the very understatement this term exists to remove.
+ */
+async function schedulerReceivedSpan(ids: string[]): Promise<number | null> {
+  if (ids.length < 2) return null;
+  const times = await Promise.all(ids.map(receivedAt));
+  if (times.some((t) => t === null)) return null;
+  const known = times as number[];
+  return Math.max(...known) - Math.min(...known);
+}
+
+/**
  * Send a burst, wait for it to settle, and return the runs it produced.
  *
- * REFUSES rather than measures when its own send loop stalled past the window —
- * see {@link stallDiagnosis}. `injectStallMs` exists only for the self-test
+ * REFUSES rather than measures when its own send loop stalled past the window,
+ * or when the SCHEDULER's own records say the burst did not fit one — see
+ * {@link stallDiagnosis}. `injectStallMs` exists only for the self-test
  * below, which proves the diagnosis is WIRED into this loop and not merely
  * defined beside it; nothing else passes it.
  */
@@ -264,6 +365,7 @@ async function burst(
   injectStallMs = 0,
 ): Promise<{ key: string; n: number }[]> {
   const before = runs.length;
+  const ids: string[] = [];
   let previousAt = 0;
   // The window opens when the FIRST event lands, so the span is measured from
   // there — not from the loop's start, which would charge the burst for work
@@ -275,7 +377,8 @@ async function burst(
     if (injectStallMs > 0 && index === 1) {
       await new Promise((r) => setTimeout(r, injectStallMs));
     }
-    await client.send({ name: `debounce-probe/${fn}`, data });
+    const sent = await client.send({ name: `debounce-probe/${fn}`, data });
+    ids.push(...sent.ids);
     const sentAt = Date.now();
     if (index === 0) firstSentAt = sentAt;
     lastSentAt = sentAt;
@@ -285,7 +388,10 @@ async function burst(
     }
     previousAt = sentAt;
   }
-  const stalled = stallDiagnosis(fn, worst, lastSentAt - firstSentAt);
+  // Read the scheduler's own view of the same burst BEFORE deciding anything:
+  // our send-acks cannot see a window that opened before the first one returned.
+  const schedulerSpanMs = await schedulerReceivedSpan(ids);
+  const stalled = stallDiagnosis(fn, worst, lastSentAt - firstSentAt, schedulerSpanMs);
   if (stalled) throw new Error(stalled);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
   return runs.slice(before).filter((r) => r.fn === fn);
@@ -361,6 +467,35 @@ describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)
         PERIOD_MS + 500,
       ),
     ).rejects.toThrow(/stalled \d+ ms between events 1 and 2 of the `stall-probe` burst/);
+  }, 60_000);
+
+  it('measures the burst on the SCHEDULER’s clock, not only on ours (MOTIR-3371)', async () => {
+    // ⚠️ A GUARD ON THE SIGNAL'S ABSENCE, and that is the whole point of it.
+    // `schedulerReceivedSpan` returns `null` when the dev server's records
+    // cannot be read, and `stallDiagnosis` then falls back to the local span —
+    // the exact proxy MOTIR-3371 filed as insufficient. That fallback is silent
+    // by construction, so a CLI upgrade that renames or withdraws `received_at`
+    // would retire this file's sharpest check while every case here stayed
+    // green. This case is what turns that into a red one.
+    //
+    // A dedicated event name, so no probe function above is triggered and no
+    // run count moves: what is under test is the READ, not the scheduler.
+    const ids: string[] = [];
+    for (let n = 1; n <= 3; n++) {
+      const sent = await client.send({
+        name: 'debounce-probe/clock',
+        data: { key: 'acme/clock', n },
+      });
+      ids.push(...sent.ids);
+    }
+
+    const span = await schedulerReceivedSpan(ids);
+    expect(span).not.toBeNull();
+    expect(Number.isFinite(span)).toBe(true);
+    // Monotonic: three serially-awaited sends cannot arrive out of order, so the
+    // span is non-negative. No upper bound is asserted — a magnitude here would
+    // be an assertion about how loaded the runner is.
+    expect(span).toBeGreaterThanOrEqual(0);
   }, 60_000);
 
   it('the shipped `code-graph-refresh` key names only fields its payload REQUIRES', () => {
@@ -470,5 +605,75 @@ describe('stallDiagnosis — the precondition every case above carries silently'
     // did, and a caller that has not been taught to measure the span cannot be
     // made to refuse by accident.
     expect(stallDiagnosis('coalesce', { ms: 10, from: 1, to: 2 })).toBeNull();
+  });
+
+  // ── The SCHEDULER's span, which OUR clock cannot see (MOTIR-3371) ─────────
+
+  it('REFUSES a burst the SCHEDULER saw overrun while OUR span looked comfortable', () => {
+    // The BLIND SPOT this case is written for: every gap small AND our span
+    // small, so both terms above stay silent while the burst did not fit. A slow
+    // ACK on the FIRST send moves our start marker forward after the scheduler's
+    // window has already opened, so 1 300 ms of measured span sits inside
+    // 3 200 ms of real one.
+    //
+    // ⚠️ It is written as the blind spot rather than as an explanation of the
+    // 2026-08-21 occurrence (PR #2247's `Vitest (2/3)`, run `32494861262`),
+    // because that occurrence's mechanism is NOT established. `toHaveLength(1)`
+    // passing is equally consistent with one window that kept a middle event —
+    // measured twice at `schedulerSpanMs` 0 and 1 (MOTIR-3398). Both produce the
+    // identical CI line, and only this term tells them apart.
+    const message = stallDiagnosis('coalesce', { ms: 400, from: 2, to: 3 }, 1_300, 3_200);
+    expect(message).toContain("the SCHEDULER's own records span 3200 ms");
+    // Our own number is reported beside it, not instead of it — a reader who
+    // greps the log for the span they expected has to see BOTH to understand
+    // why the old check was silent.
+    expect(message).toContain('our send loop measured 1300 ms');
+    expect(message).toContain('`coalesce` burst');
+    expect(message).toContain('ENVIRONMENTAL');
+    expect(message).toContain('re-run it');
+    expect(message).toContain('Do not widen PERIOD');
+  });
+
+  it('is SILENT when the scheduler’s span fits, and REFUSES at the boundary', () => {
+    expect(stallDiagnosis('coalesce', { ms: 100, from: 1, to: 2 }, 100, PERIOD_MS - 1)).toBeNull();
+    // Same boundary reasoning as the other two terms: a burst the scheduler
+    // recorded as exactly the window is not one whose coalescing can be trusted.
+    expect(stallDiagnosis('coalesce', { ms: 100, from: 1, to: 2 }, 100, PERIOD_MS)).toContain(
+      "the SCHEDULER's own records span 3000 ms",
+    );
+  });
+
+  it('names the STALL ahead of the scheduler’s span — the sharper cause again', () => {
+    // A single stalled send explains every span downstream of it, so it keeps
+    // the message exactly as it does against our own span.
+    const message = stallDiagnosis(
+      'per-key',
+      { ms: PERIOD_MS + 200, from: 2, to: 3 },
+      4_000,
+      9_000,
+    );
+    expect(message).toContain('stalled 3200 ms between events 2 and 3');
+    expect(message).not.toContain('SCHEDULER');
+  });
+
+  it('names the SCHEDULER’s span ahead of ours when both overran', () => {
+    // Between two spans the scheduler's is the measurement and ours is the
+    // proxy, so ours never wins the message when the real one is available.
+    const message = stallDiagnosis('coalesce', { ms: 600, from: 3, to: 4 }, 3_600, 3_900);
+    expect(message).toContain("the SCHEDULER's own records span 3900 ms");
+    expect(message).not.toContain('end to end');
+  });
+
+  it('defaults the scheduler span to NULL, so an unreadable server keeps the old behaviour', () => {
+    // The degradation path, pinned. `schedulerReceivedSpan` returns null when
+    // any event's record is unreadable, and a null must not be read as a zero
+    // that silently passes — nor as a miss that spuriously refuses.
+    expect(stallDiagnosis('coalesce', { ms: 10, from: 1, to: 2 }, 10)).toBeNull();
+    expect(stallDiagnosis('coalesce', { ms: 10, from: 1, to: 2 }, 10, null)).toBeNull();
+    // And with the local span alone over the line it still refuses, exactly as
+    // it did before this parameter existed.
+    expect(stallDiagnosis('coalesce', { ms: 10, from: 1, to: 2 }, PERIOD_MS, null)).toContain(
+      'end to end',
+    );
   });
 });
