@@ -423,6 +423,13 @@ export default defineConfig({
         'lib/mcp/toolPermissions.ts',
         'lib/mcp/permissionGate.ts',
         'lib/mcp/scopes.ts',
+        // Bug MOTIR-3342 — the UNKNOWN-ARGUMENT gate at the same registration
+        // seam as `permissionGate.ts` above, and gated on the same terms. It
+        // decides whether an argument a caller mis-spelled is refused or
+        // silently deleted, which is exactly the kind of decision that must not
+        // ship un-measured: the defect it fixes lost three cards' whole bodies
+        // under a success line. MEASURED on this branch before pinning.
+        'lib/mcp/strictInput.ts',
         'app/**/settings/account/_components/permissionMeta.tsx',
         'app/**/settings/account/_components/CreateTokenModal.tsx',
         'app/**/settings/account/_components/apiTokensClient.ts',
@@ -2014,6 +2021,8 @@ export default defineConfig({
         'lib/mcp/toolPermissions.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/permissionGate.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/scopes.ts': { branches: 90, functions: 90, lines: 90 },
+        // Bug MOTIR-3342 — the unknown-argument gate (see the `include` note).
+        'lib/mcp/strictInput.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/settings/account/_components/permissionMeta.tsx': {
           branches: 90,
           functions: 90,

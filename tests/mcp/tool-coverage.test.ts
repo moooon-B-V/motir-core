@@ -183,9 +183,17 @@ describe('MCP tool branch coverage', () => {
     });
     expect(full.isError).toBeFalsy();
 
-    // No patchable field supplied → summary reads "Patched: nothing".
+    // ⚠️ No patchable field supplied → REFUSED, not "Patched: nothing" (bug
+    // MOTIR-3342). This used to assert the summary's `nothing` arm, and that
+    // arm was the defect: a successful call that changed nothing, styled exactly
+    // like the line that reports a real edit — which is how an
+    // `update_work_item({ key, description: '<2 000 words>' })` reported success
+    // while losing the body. An update that patches no field is never what a
+    // caller meant, so it now carries a code the caller cannot mistake for an
+    // edit.
     const none = await call(client, 'update_work_item', { key: item.identifier });
-    expect(JSON.stringify(none.content)).toContain('nothing');
+    expect(none.isError).toBe(true);
+    expect(JSON.stringify(none.content)).toContain('NO_FIELDS_TO_PATCH');
     await client.close();
   });
 

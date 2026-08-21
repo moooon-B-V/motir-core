@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpContextResolver, McpGrantResolver } from './context';
 import { permissionGatedServer } from './permissionGate';
 import { rateLimitedServer } from './rateLimitGate';
+import { strictInputServer } from './strictInput';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import {
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
@@ -168,11 +169,18 @@ export function registerMcpTools(
   resolveGrant?: McpGrantResolver,
   meterBillableTools = false,
 ): void {
+  // The UNKNOWN-ARGUMENT gate (bug MOTIR-3342) — unconditional, and INNERMOST
+  // so it is the last thing between a tool's declared shape and the SDK. It
+  // touches the schema, not the callback, so it composes with the two policy
+  // wrappers below without ordering against them. It is not optional the way
+  // they are: a tool that publishes `additionalProperties: false` and then
+  // silently strips is wrong on every deployment, tests included.
+  const strict = strictInputServer(server);
   // Two wrappers, and the ORDER is the policy: the permission gate runs first,
   // so a call the token was never granted is refused BEFORE it can consume any
   // of the request budget MOTIR-2610 added. Metering a refused call would let an
   // unauthorised caller exhaust the owner's allowance.
-  const granted = resolveGrant ? permissionGatedServer(server, resolveGrant) : server;
+  const granted = resolveGrant ? permissionGatedServer(strict, resolveGrant) : strict;
   const target = meterBillableTools ? rateLimitedServer(granted, resolveContext) : granted;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);

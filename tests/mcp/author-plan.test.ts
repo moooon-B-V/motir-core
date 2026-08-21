@@ -536,10 +536,18 @@ describe('add_plan_items — authorship and the proposal gate', () => {
     const planId = await openPlan(client, fx);
 
     // The zod schema for `proposedFields` has no `planningProvenance` member, so
-    // a caller sending one is not merely ignored downstream — the argument never
-    // reaches the service. Asserted through the stored row rather than through
-    // the schema, because what matters is what got written.
-    const result = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    // a caller sending one cannot reach the service.
+    //
+    // ⚠️ HOW it cannot reach it changed with bug MOTIR-3342. This used to assert
+    // the STORED ROW — the argument was silently STRIPPED, the proposal landed,
+    // and the stamped triple was read back to prove the forgery had no effect.
+    // Silently stripping an unknown key is the defect that bug is about (it also
+    // lost three cards' whole bodies), so the same forgery is now REFUSED at the
+    // seam, by name. The property under test is unchanged and now holds more
+    // strongly: there is no way for a caller to set the provenance itself, and
+    // trying is an error rather than a no-op. The stamped triple on a clean
+    // `add` is the sibling test directly above.
+    const refused = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       proposals: [
         {
@@ -552,13 +560,10 @@ describe('add_plan_items — authorship and the proposal gate', () => {
       ],
     });
 
-    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: ids(result)[0]! } });
-    const fields = row.proposedFields as { planningProvenance?: Record<string, unknown> };
-    expect(fields.planningProvenance).toEqual({
-      source: 'mcp',
-      harness: 'Claude Code',
-      model: 'claude-opus-5',
-    });
+    expect(refused.isError).toBe(true);
+    expect(JSON.stringify(refused.content)).toContain('planningProvenance');
+    // And nothing was appended to the plan by the refused call.
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
     await client.close();
   });
 

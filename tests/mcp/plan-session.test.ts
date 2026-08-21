@@ -574,12 +574,24 @@ describe('plan-session tools — grant narrowing', () => {
       GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan'),
     );
 
+    // ⚠️ Each tool is called with ITS OWN valid arguments, not one shared bag.
+    // `body` belongs to `append_plan_turn` alone, and since bug MOTIR-3342 an
+    // unknown argument is REFUSED at input validation — which the SDK runs
+    // BEFORE the tool callback the permission gate wraps. Sending `body` to
+    // `open_plan_session` therefore fails on the schema and never reaches the
+    // gate this test is about, which is a strictly less interesting failure
+    // than the one it is asserting.
+    const argsFor: Record<string, Record<string, unknown>> = {
+      [OPEN_PLAN_SESSION_TOOL_NAME]: { projectKey: 'PROD' },
+      [APPEND_PLAN_TURN_TOOL_NAME]: { projectKey: 'PROD', body: 'sneaky' },
+      [SUBMIT_PLAN_SESSION_TOOL_NAME]: { projectKey: 'PROD' },
+    };
     for (const name of [
       OPEN_PLAN_SESSION_TOOL_NAME,
       APPEND_PLAN_TURN_TOOL_NAME,
       SUBMIT_PLAN_SESSION_TOOL_NAME,
     ]) {
-      const denied = await call(noPlanning, name, { projectKey: 'PROD', body: 'sneaky' });
+      const denied = await call(noPlanning, name, argsFor[name]!);
       expect(denied.isError, `${name} must be permission-denied`).toBe(true);
       expect(text(denied)).toContain(PERMISSION_NOT_GRANTED_CODE);
       expect(text(denied)).toContain('ai:plan');
