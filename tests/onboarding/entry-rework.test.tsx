@@ -4,8 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 //
 // Two server-side routing contracts, tested without a DOM (we inspect the
 // returned React element / the redirect call, not rendered markup):
-//   1. The root `app/page.tsx` unconditionally redirects to /sign-in — the
-//      marketing hero relocated out, so the root is now just the login door.
+//   1. The root `app/page.tsx` branches on the SESSION — `/home` when there is
+//      one, `/sign-in` when there is not (MOTIR-3367). It used to redirect
+//      UNCONDITIONALLY to /sign-in, and this test asserted exactly that, which is
+//      why a signed-in reader met the login form for months with a green suite:
+//      the assertion was true of the one visitor state 7.22.1 was written for.
+//      Both states are asserted below.
 //   2. The onboarding group layout shows the deferred Connect-Motir-AI gate ONLY
 //      when the self-host opt-in flag (MOTIR_SELFHOST_CONNECT_GATE) is set AND AI
 //      planning isn't configured; otherwise it falls through to the session gate
@@ -40,17 +44,28 @@ function ConnectAiGateStub() {
 }
 vi.mock('@/app/_components/ConnectAiGate', () => ({ ConnectAiGate: ConnectAiGateStub }));
 
-import HomePage from '@/app/page';
+import RootPage from '@/app/page';
 import OnboardingGroupLayout from '@/app/(onboarding)/layout';
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('root page (7.22.1)', () => {
-  it('redirects to /sign-in — no marketing hero at root', () => {
-    expect(() => HomePage()).toThrow(RedirectError);
+describe('root page (7.22.1 · MOTIR-3367)', () => {
+  it('sends a SIGNED-IN reader to /home — the landing home-scope.md §2.3 decides', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue', email: 'yue@example.com' } });
+
+    await expect(RootPage()).rejects.toThrow(RedirectError);
+    expect(redirect).toHaveBeenCalledWith('/home');
+    expect(redirect).not.toHaveBeenCalledWith('/sign-in');
+  });
+
+  it('sends a reader with NO session to /sign-in — no marketing hero at root', async () => {
+    getSession.mockResolvedValue(null);
+
+    await expect(RootPage()).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/sign-in');
+    expect(redirect).not.toHaveBeenCalledWith('/home');
   });
 });
 
