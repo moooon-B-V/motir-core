@@ -68,10 +68,12 @@ import type {
   PlanItemPatch,
   PlanItemProposedFields,
   PlanListPageDto,
+  PlanStatusCountsDto,
   PlanWithItemsDto,
   ProposalInput,
   UpdateProposalInput,
 } from '@/lib/dto/plans';
+import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { buildScope } from '@/lib/planChange/scope';
@@ -106,7 +108,12 @@ import { planTargetLockService } from '@/lib/services/planTargetLockService';
 // (the resolve-then-check in `materialize` handles that).
 const BLOCKED_STATUS_KEY = 'blocked';
 
-const DEFAULT_PAGE_LIMIT = 20;
+// Ten rows a page (MOTIR-3235, down from 20). The Plans list streams — a first
+// page, then a bottom sentinel that loads the next — and ten is the number the
+// tabbed surface is drawn to. `listPlans` has exactly two callers, both on that
+// surface, so the CONSTANT moves rather than each caller passing a literal.
+// `MAX_PAGE_LIMIT` is untouched: a caller may still ask for more.
+const DEFAULT_PAGE_LIMIT = 10;
 const MAX_PAGE_LIMIT = 100;
 
 function clampLimit(limit: number | undefined): number {
@@ -1760,7 +1767,15 @@ export const plansService = {
     return toPlanDto(row, count);
   },
 
-  /** A project's plans, newest first, cursor-paginated (the list view). */
+  /**
+   * A project's plans, newest first, cursor-paginated (the list view).
+   *
+   * `opts.status` narrows the page to ONE lifecycle status — the tabbed list's
+   * read (MOTIR-3235). Omitted, the page is the whole project exactly as it was
+   * before the option existed; the predicate is applied in the repository's
+   * `where`, so a narrowed page is a full page rather than a filtered remnant
+   * of one.
+   */
   async listPlans(
     projectId: string,
     ctx: ServiceContext,
@@ -1769,7 +1784,14 @@ export const plansService = {
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const limit = clampLimit(opts.limit);
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      planRepository.listByProject(projectId, ctx.workspaceId, limit + 1, opts.cursor ?? null, tx),
+      planRepository.listByProject(
+        projectId,
+        ctx.workspaceId,
+        limit + 1,
+        opts.cursor ?? null,
+        tx,
+        opts.status ?? null,
+      ),
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -1783,6 +1805,32 @@ export const plansService = {
       plans: page.map((p) => toPlanDto(p, counts.get(p.id) ?? 0)),
       nextCursor: hasMore ? page[page.length - 1]!.id : null,
     };
+  },
+
+  /**
+   * How many plans this project holds in EACH lifecycle status (MOTIR-3235) —
+   * the numbers the tab strip renders beside its four labels.
+   *
+   * ONE `groupBy` for the whole strip, zero-filled here so the result is TOTAL
+   * over `PlanStatusDto`: a status the project has no rows in reads `0`, never
+   * an absent key. A caller rendering `{counts[tab]}` can therefore never print
+   * `undefined`, and a status added to the vocabulary later appears as a zero
+   * rather than as a hole, because the fill iterates `PLAN_STATUS_DTO_VALUES`
+   * (which the type is derived from).
+   *
+   * Read-only, gated on `canBrowse` and run in the workspace context like every
+   * other plan read.
+   */
+  async countPlansByStatus(projectId: string, ctx: ServiceContext): Promise<PlanStatusCountsDto> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.countByStatus(projectId, ctx.workspaceId, tx),
+    );
+    const counts = Object.fromEntries(
+      PLAN_STATUS_DTO_VALUES.map((status) => [status, 0]),
+    ) as PlanStatusCountsDto;
+    for (const row of rows) counts[row.status] = row.count;
+    return counts;
   },
 
   /**

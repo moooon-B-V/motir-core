@@ -27,6 +27,10 @@ function view(overrides: Partial<PlanRowView> = {}): PlanRowView {
     // keeps asserting the row without one, and each attribution state opts in.
     origin: 'user',
     createdByName: null,
+    // WHO DECIDED it (MOTIR-3238). Default null — the undecided states and the
+    // ABANDONED one both read it that way, so a case that wants a decider opts
+    // in rather than every pre-existing case carrying one.
+    decidedByName: null,
     authorSource: null,
     authorHarness: null,
     ...overrides,
@@ -136,11 +140,18 @@ describe('PlanRow — who asked and who wrote', () => {
     expect(screen.queryByText(/via /)).toBeNull();
   });
 
-  it('DROPS the requester once the plan is decided, and keeps the agent', () => {
-    // The rule from Part III §3: the row already ends "approved yesterday", and
-    // while a plan is undecided *who asked* is what you weigh — once decided,
-    // *who decided* is the operative fact. Dropping the requester is also what
-    // stops two bare person names landing in one scanned line.
+  it('KEEPS the requester once the plan is decided, and names the decider too', () => {
+    // ⚠️ THIS TEST WAS REVERSED BY MOTIR-3238, and the old assertion is quoted
+    // rather than deleted. It read *"DROPS the requester once the plan is
+    // decided, and keeps the agent"*, and asserted `queryByText('Mara')` was
+    // null — Part III §3's rule that a decided row shows the decider, not the
+    // requester.
+    //
+    // That rule named a real hazard (two bare names in one scanned line) and
+    // rested on a premise that was false: the decider it deferred to was drawn
+    // in panel A since 843 and NEVER SHIPPED, so the row named NOBODY. Part VII
+    // reverses it by putting the two in DIFFERENT entries — the decider behind
+    // the timestamp's verb, the requester behind its avatar.
     for (const status of ['approved', 'declined'] as const) {
       cleanup();
       renderWithIntl(
@@ -149,13 +160,84 @@ describe('PlanRow — who asked and who wrote', () => {
             status,
             whenKey: status === 'approved' ? 'approvedAt' : 'declinedAt',
             createdByName: 'Mara',
+            decidedByName: 'Jonas',
             authorSource: 'native',
           })}
         />,
       );
-      expect(screen.queryByText('Mara')).toBeNull();
+      // The requester, in the attribution entry, exactly as on an undecided row.
+      expect(screen.getByText('Mara')).toBeTruthy();
+      // The decider, INSIDE the when-entry, behind the verb that says the role.
+      const verb = status === 'approved' ? 'approved' : 'declined';
+      expect(screen.getByText(`${verb} 2 hours ago by Jonas`)).toBeTruthy();
       expect(screen.getByText('via Motir AI')).toBeTruthy();
     }
+  });
+
+  it('a decided plan with NO decider renders the plain timestamp — no placeholder', () => {
+    // The abandoned-plan case (MOTIR-3189): `declined` with `decidedById` NULL,
+    // because nobody decided it. Part III §3's *absence, never a placeholder*
+    // rule, one axis over — the fallback is a whole sentence, not a name-shaped
+    // hole in one.
+    renderWithIntl(
+      <PlanRow
+        view={view({
+          status: 'declined',
+          whenKey: 'declinedAt',
+          createdByName: 'Mara',
+          decidedByName: null,
+          authorSource: 'mcp',
+          authorHarness: 'Claude Code',
+        })}
+      />,
+    );
+    expect(screen.getByText('declined 2 hours ago')).toBeTruthy();
+    expect(screen.queryByText(/ by /)).toBeNull();
+    // The requester and the agent are both still there — only the decider is
+    // absent, and only because there is not one.
+    expect(screen.getByText('Mara')).toBeTruthy();
+    expect(screen.getByText('via Claude Code')).toBeTruthy();
+  });
+
+  it('an UNDECIDED row is untouched by the reversal', () => {
+    // The rule Part VII reverses applied only to a decided row. A `planned` one
+    // rendered the requester before and renders it now, with no decider in
+    // sight — asserted so the reversal cannot leak into the state it never
+    // governed.
+    renderWithIntl(
+      <PlanRow
+        view={view({
+          status: 'planned',
+          whenKey: 'plannedAt',
+          createdByName: 'Mara',
+          decidedByName: 'Jonas',
+          authorSource: 'mcp',
+          authorHarness: 'Claude Code',
+        })}
+      />,
+    );
+    // Even with a decider in the view-model — which cannot happen in practice —
+    // a `planned` row shows the plain timestamp: the keys are chosen off
+    // `whenKey`, so only the two decided verbs can carry a name.
+    expect(screen.getByText('planned 2 hours ago')).toBeTruthy();
+    expect(screen.getByText('Mara')).toBeTruthy();
+  });
+
+  it('the cadence row is unchanged — nobody asked, so no requester is invented', () => {
+    renderWithIntl(
+      <PlanRow
+        view={view({
+          status: 'approved',
+          whenKey: 'approvedAt',
+          origin: 'cadence',
+          createdByName: null,
+          decidedByName: 'Jonas',
+          authorSource: 'native',
+        })}
+      />,
+    );
+    expect(screen.getByText('auto-planned')).toBeTruthy();
+    expect(screen.getByText('approved 2 hours ago by Jonas')).toBeTruthy();
   });
 
   it('truncates a long harness without touching the title', () => {

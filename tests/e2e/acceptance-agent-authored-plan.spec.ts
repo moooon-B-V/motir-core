@@ -123,6 +123,24 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await planRow(page, authored.planId).click();
     await page.waitForURL(`**/plans/${authored.planId}`);
 
+    // ⚠️ THE CANVAS IS NOW ASKED FOR (MOTIR-3262, Story MOTIR-3232). The plan
+    // detail's default body is DERIVED from the plan's shape: the LIST when its
+    // proposals sit under more than one distinct container, because no single
+    // canvas level can show such a plan. An agent-authored plan is exactly that —
+    // a story under a committed parent, its children hung off the story by
+    // temp-ref — so it opens on the list now.
+    //
+    // The URL is the single source of truth for which body is showing, so the
+    // spec says which one it came to see instead of relying on a default that now
+    // depends on the fixture's shape. That much is an ADDRESS change and nothing
+    // more — the claim it guards is unchanged.
+    //
+    // ⚠️ THE NEXT TWO CHAPTERS ARE NOT PURELY THAT, and the difference is worth
+    // reading before trusting this comment: MOTIR-3260 changed WHERE the canvas
+    // arrives, so one assertion here genuinely moved with the product. It is
+    // marked at the line it affects.
+    await page.goto(`/plans/${authored.planId}?view=canvas`);
+
     await expect(page.getByTestId('plan-status-pill')).toContainText('Ready to review');
     // The header spells the roles out, and adds the model the row omits.
     await expect(page.getByText(`Requested by ${seed.reviewerName}`)).toBeVisible();
@@ -131,24 +149,40 @@ test('an agent authors a plan over the MCP; a person reviews it and approves', a
     await beat();
 
     // The tree the agent proposed, rendered from the PlanItems. The canvas shows
-    // ONE LEVEL AT A TIME (`ProjectRoadmapCanvas` — never a whole-tree dump), so
-    // the root proposal is what greets the reviewer.
+    // ONE LEVEL AT A TIME (`ProjectRoadmapCanvas` — never a whole-tree dump), and
+    // the level it opens on is the one THE PLAN FILLS (MOTIR-3260, Story
+    // MOTIR-3232): for this plan that is INSIDE the proposed story, so the
+    // reviewer is greeted by the story's own crumb rather than by its card.
     await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
-    await expect(page.getByText(authored.storyTitle)).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', {
+        name: `New · ${authored.storyTitle}`,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
     await beat();
   });
 
-  await chapter('Drill in — the children the agent hung off it', async () => {
+  await chapter('The children the agent hung off it are already here', async () => {
     // This is the payoff of the append-order/temp-ref contract, shown rather
     // than asserted off-screen: the second `add_plan_items` batch named ids the
     // FIRST call returned, and here are its proposals, nested under that parent.
-    await page.locator('[data-node-id]').filter({ hasText: authored.storyTitle }).first().click();
-    const drill = page.getByTestId('drill-button');
-    await expect(drill).toBeVisible();
-    await drill.click();
-
+    //
+    // ⚠️ THE CLAIM IS UNCHANGED; THE GESTURE IS GONE, and that is a product
+    // change rather than a test convenience (MOTIR-3260, Story MOTIR-3232). This
+    // chapter used to click the story's card and press Drill to reach them,
+    // because the canvas opened at the top of the tree however deep the plan sat
+    // — the reviewer had to go and find their own plan. It now ARRIVES on the
+    // level the plan fills, so the children are on screen already and there is
+    // no card to click, which is why the click was removed rather than
+    // re-targeted.
+    //
+    // What replaces it is STRONGER about the nesting, not weaker: the leaves are
+    // asserted as NODES on this level (`data-node-id`, not merely text that a
+    // breadcrumb could satisfy), and the crumb asserted above says the level they
+    // are on IS the proposed story. Together those state "these leaves hang off
+    // that parent" more exactly than a drill gesture did.
     for (const title of authored.leafTitles) {
-      await expect(page.getByText(title)).toBeVisible();
+      await expect(page.locator('[data-node-id]').filter({ hasText: title })).toHaveCount(1);
     }
     await beat();
   });

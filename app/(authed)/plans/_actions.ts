@@ -4,6 +4,8 @@ import { getActiveProject } from '@/lib/projects';
 import { plansService } from '@/lib/services/plansService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 
+import type { PlanStatusDto } from '@/lib/dto/plans';
+
 import { buildPlanRowViews } from './planRowView';
 import type { PlanRowView } from './_components/types';
 
@@ -21,6 +23,7 @@ import type { PlanRowView } from './_components/types';
 // the service layer directly.
 export async function loadMorePlansAction(
   cursor: string,
+  status: PlanStatusDto,
 ): Promise<{ views: PlanRowView[]; nextCursor: string | null }> {
   const ctx = await getActiveProject();
   // Signed out mid-scroll, or the project vanished → nothing more to stream.
@@ -30,7 +33,11 @@ export async function loadMorePlansAction(
   const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
   if (!caps.canBrowse) return { views: [], nextCursor: null };
 
-  const page = await plansService.listPlans(ctx.projectId, wsCtx, { cursor });
+  // The STATUS travels with the cursor (MOTIR-3241). A cursor is only meaningful
+  // within the predicate that produced it, so a streamed page must come from the
+  // same tab that asked for it — passing the cursor alone would page the whole
+  // project from a position computed inside one status.
+  const page = await plansService.listPlans(ctx.projectId, wsCtx, { cursor, status });
   const views = await buildPlanRowViews(page.plans, wsCtx);
   return { views, nextCursor: page.nextCursor };
 }

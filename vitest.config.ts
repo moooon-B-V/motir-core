@@ -1318,6 +1318,32 @@ export default defineConfig({
         'app/**/plans/planRowView.ts',
         'app/**/plans/_components/PlanRow.tsx',
 
+        // Story MOTIR-3232 · Subtask MOTIR-3242 — the Plans surface, refined. Every
+        // file the story ADDED that carries decision logic; the two it changed
+        // that were already gated (`planRowView.ts`, `PlanRow.tsx`) are directly
+        // above and stay there.
+        //
+        // ⚠️ Written `app/**/plans/…` for the reason this section's header gives:
+        // a literal `app/(authed)/plans/…` matches no reported file and would
+        // gate nothing.
+        //
+        // What is deliberately NOT here: `PlanDetail.tsx`, `PlanReviewRail.tsx`,
+        // `PlanReviewCanvas.tsx` and `ProjectRoadmapCanvas.tsx`. This story
+        // CHANGED all four, and each carries far more logic than the story owns —
+        // gating them here would gate THIS story on OTHER stories' coverage, which
+        // is the trade the block above already refuses once.
+        'lib/planning/planShape.ts',
+        'lib/planning/planView.ts',
+        // MOTIR-3243 — the tab's URL vocabulary, moved OUT of the `'use client'`
+        // component it was declared in (a Server Component cannot call an export
+        // it reached through a client boundary; `/plans` 500'd). It is covered by
+        // the same `tests/components/PlanStatusTabs` suite, which now imports it
+        // from here.
+        'lib/planning/planStatusFilter.ts',
+        'components/planning/PlanProposalList.tsx',
+        'app/**/plans/_components/PlanStatusTabs.tsx',
+        'app/**/plans/_components/PlansList.tsx',
+
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
         // (`changeRequestWorkItems`), what a green build promotes (`ciPromotion`),
@@ -2501,6 +2527,29 @@ export default defineConfig({
         'lib/mcp/tools/authorPlan.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/planRowView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanRow.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3232 · Subtask MOTIR-3242 — the Plans surface, refined.
+        // MEASURED on this branch before pinning (the sequence this block
+        // prescribes throughout), with `tests/planning/planShape`,
+        // `tests/planning/planView`, `tests/components/PlanProposalList`,
+        // `tests/components/PlanStatusTabs` and
+        // `tests/components/PlansList-streaming`:
+        //
+        //   lib/planning/planShape.ts                    100 stmts · 95.2 branch · 100 fn · 100 lines
+        //   lib/planning/planView.ts                     100 stmts ·  100 branch · 100 fn · 100 lines
+        //   components/planning/PlanProposalList.tsx    97.4 stmts · 97.9 branch · 100 fn · 100 lines
+        //   app/**/plans/_components/PlanStatusTabs.tsx  100 stmts ·  100 branch · 100 fn · 100 lines
+        //   app/**/plans/_components/PlansList.tsx       100 stmts ·  100 branch · 100 fn · 100 lines
+        //
+        // Pinned at the 90 floor rather than at the measured number, so a later
+        // refactor has room without anyone loosening a gate to make a build pass.
+        'lib/planning/planShape.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/planView.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3243's extraction, measured the same way after the move:
+        //   lib/planning/planStatusFilter.ts             100 stmts ·  100 branch · 100 fn · 100 lines
+        'lib/planning/planStatusFilter.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/PlanProposalList.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/_components/PlanStatusTabs.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/plans/_components/PlansList.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch

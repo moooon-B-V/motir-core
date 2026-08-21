@@ -90,6 +90,35 @@ export interface ProjectRoadmapCanvasProps {
    *  with wrap). The work-item roadmap opts in (its nodes carry `here` / `ready`);
    *  onboarding does not. */
   locatable?: boolean;
+  /**
+   * SHOW CHANGES — an OPT-IN emphasis mode (MOTIR-3261,
+   * `design/ai-planning/design-notes.md` Part IX §L).
+   *
+   * A plan proposing several cards onto one busy committed level draws them
+   * correctly and gives the reader nothing to pick them out with. One control
+   * fixes it: pressed, every id in `ids` takes the canvas's SHIPPED
+   * selected/search-matched ring and every other node takes the SHIPPED
+   * `opacity-35` dim. It is the same pair the wrapper already applies to ONE
+   * node, applied to a SET — no second highlight vocabulary, no second dim value.
+   *
+   * ⚠️ OPT-IN, and absent by default, exactly as `searchable` / `fullScreenable`
+   * / `locatable` are — an onboarding canvas that grew a Show-changes toggle
+   * would be a regression. The consumer supplies BOTH the ids and the COPY,
+   * because the foundation has no idea it is showing a plan and cannot name what
+   * "the plan's changes" are.
+   *
+   * `total` is the plan's whole size, so the control can say `3 of 11` when the
+   * level holds fewer than all of them (Part IX §L5). It offers no way to reach
+   * the rest, deliberately: that is the list view's job.
+   */
+  emphasis?: {
+    ids: string[];
+    total: number;
+    label: string;
+    /** Shown as `title` + accessible description when there is nothing to
+     *  emphasise on this level. */
+    emptyLabel: string;
+  };
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
@@ -182,6 +211,7 @@ export function ProjectRoadmapCanvas({
   onView,
   searchable = false,
   fullScreenable = false,
+  emphasis,
   locatable = false,
   rootLabel,
   ariaLabel,
@@ -214,6 +244,10 @@ export function ProjectRoadmapCanvas({
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // SHOW CHANGES (MOTIR-3261) — a MODE, opt-in and off by default. It RESETS on
+  // every level change alongside `selectedId` / `highlightId`, so a stale
+  // emphasis never survives a drill or a Back.
+  const [showChanges, setShowChanges] = useState(false);
   const [focusNonce, setFocusNonce] = useState(0);
   // The ZOOM the next focus pan should land at: `undefined` preserves the current
   // scale (the search-locate's pan-only behaviour); `LOCATE_ZOOM` resets to a readable
@@ -340,6 +374,7 @@ export function ProjectRoadmapCanvas({
     setSelectedId(null);
     setFocusId(node.id);
     setHighlightId(null);
+    setShowChanges(false);
   }, []);
 
   // Fetch the current level. The PRIOR level stays visible during a refetch (no
@@ -394,6 +429,16 @@ export function ProjectRoadmapCanvas({
   const deps = useMemo(() => level?.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
+
+  // The emphasised ids that are actually ON this level. The consumer hands over
+  // the whole plan's ids; the canvas is per-level, so the intersection is what it
+  // can light — and its SIZE against `emphasis.total` is what the control says.
+  const emphasisedIds = useMemo(() => {
+    if (!emphasis) return new Set<string>();
+    const onLevel = new Set(nodes.map((n) => n.id));
+    return new Set(emphasis.ids.filter((id) => onLevel.has(id)));
+  }, [emphasis, nodes]);
+
   // The selected node + everything it is connected to (its dependencies/blockers) —
   // these stay lit while the rest of the level dims, so the selection reads clearly.
   const connectedIds = useMemo(() => {
@@ -530,6 +575,7 @@ export function ProjectRoadmapCanvas({
     setLocalPositions({});
     setHighlightId(null);
     setSelectedId(null);
+    setShowChanges(false);
     if (crumbId === null) {
       setCrumbs([]);
       setFocusId(null);
@@ -616,14 +662,26 @@ export function ProjectRoadmapCanvas({
     if (!node) return null;
     const matched = highlightId === cn.id || matchIds.has(cn.id);
     const selected = cn.id === selectedId;
-    const dimmed = connectedIds !== null && !connectedIds.has(cn.id);
+    // ⚠️ A LIVE SELECTION WINS while it lasts (Part IX §L4). Both mechanisms
+    // write the same `connectedIds`-shaped state, and layering them gives three
+    // opacity tiers and no legible meaning. The toggle stays pressed, so clearing
+    // the selection restores the emphasis rather than making the reader re-arm
+    // it: a selection is a momentary act, the toggle is a mode.
+    const emphasised = showChanges && connectedIds === null && emphasisedIds.has(cn.id);
+    const dimmed =
+      connectedIds !== null
+        ? !connectedIds.has(cn.id)
+        : showChanges && emphasisedIds.size > 0 && !emphasisedIds.has(cn.id);
     return (
       <div
         data-highlighted={matched || undefined}
         data-selected={selected || undefined}
+        data-emphasised={emphasised || undefined}
         className={[
-          'relative rounded-(--radius-card) transition-opacity',
-          selected || matched
+          // `motion-reduce:transition-none` — turning the emphasis on changes the
+          // opacity of most of the screen at once (Part IX §L8).
+          'relative rounded-(--radius-card) transition-opacity motion-reduce:transition-none',
+          selected || matched || emphasised
             ? 'ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)'
             : '',
           dimmed ? 'opacity-35' : '',
@@ -723,9 +781,17 @@ export function ProjectRoadmapCanvas({
         </nav>
       )}
 
-      {/* TOP-RIGHT cluster: search-to-locate (within the current level) + the
-          EXPAND-to-full-screen control, side by side (MOTIR-1420). */}
-      {(searchable || fullScreenable) && (
+      {/* TOP-RIGHT cluster: search-to-locate (within the current level), the
+          SHOW-CHANGES toggle (MOTIR-3261) and the EXPAND-to-full-screen control,
+          side by side (MOTIR-1420).
+
+          ⚠️ Show changes lives HERE and not in the plan detail's own pane header,
+          which Part VIII had reserved for it. Part IX §L1 released that slot: the
+          control acts on the canvas's NODES and belongs adjacent to what it
+          changes; it must not exist in the list view, which this cluster gets for
+          free; and the emphasis state lives in this component, so a control in
+          another one would have to lift it out. */}
+      {(searchable || fullScreenable || emphasis) && (
         <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
           {searchable && (
             <form
@@ -746,6 +812,42 @@ export function ProjectRoadmapCanvas({
                 addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
               />
             </form>
+          )}
+          {emphasis && (
+            <button
+              type="button"
+              data-testid="show-changes-toggle"
+              aria-pressed={showChanges}
+              // A level the plan does not reach: DISABLED with its reason, rather
+              // than an ON state that dims every card and rings none — a screen
+              // that says nothing is worse than a control that says why it cannot
+              // help (Part IX §L6).
+              disabled={emphasisedIds.size === 0}
+              title={emphasisedIds.size === 0 ? emphasis.emptyLabel : undefined}
+              aria-description={emphasisedIds.size === 0 ? emphasis.emptyLabel : undefined}
+              onClick={() => setShowChanges((on) => !on)}
+              className={[
+                'inline-flex h-(--height-control) shrink-0 items-center gap-1.5 rounded-(--radius-btn)',
+                'border px-(--spacing-control-x) text-xs font-semibold shadow-(--shadow-card)',
+                'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+                showChanges
+                  ? 'border-(--el-accent) bg-(--el-accent-soft) text-(--el-accent-on-surface)'
+                  : 'border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)',
+              ].join(' ')}
+            >
+              <Eye className="size-4" aria-hidden="true" />
+              {emphasis.label}
+              {/* `n of m` only when the level holds fewer than the whole plan —
+                  the canvas is per-level and most of a spread plan is off-screen.
+                  It offers no way to reach the rest, deliberately: that is the
+                  list view's job (Part IX §L5). */}
+              {emphasisedIds.size < emphasis.total ? (
+                <span className="font-mono text-[11px] font-semibold tabular-nums">
+                  {emphasisedIds.size}/{emphasis.total}
+                </span>
+              ) : null}
+            </button>
           )}
           {fullScreenable && (
             <button

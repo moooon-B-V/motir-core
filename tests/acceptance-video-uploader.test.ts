@@ -22,6 +22,7 @@ import {
   resolveOwnedSpecs,
   resolveStoryKey,
   uploadAcceptanceVideo,
+  putSignedArtifact,
 } from '../scripts/upload-acceptance-video.mjs';
 import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
 
@@ -435,6 +436,187 @@ describe('resolveMaxArtifactBytes (MOTIR-1911)', () => {
         DEFAULT_MAX_ARTIFACT_BYTES,
       );
     }
+  });
+});
+
+// MOTIR-3313 — a RETRYABLE refusal must not cost a story its receipt.
+//
+// The incident: on motir-core PR #2237 the store answered one artifact's PUT with
+// `503 <Code>SlowDown</Code>` — twice, deterministically, on the same recording.
+// Every test in the lane had passed; the publish went red, and Story MOTIR-3232
+// was left holding ONE of its two receipts while `CI complete` stayed green.
+//
+// ⚠️ THESE TESTS DO NOT ASSERT A CAUSE, because none is established: the refused
+// trace was 37.0 MB and a 65.8 MB trace published seconds later in the same job,
+// so it is neither size nor the MOTIR-1911 cap, and the same recording's video
+// had just uploaded fine. What they pin is the narrower thing that is defensible
+// without a mechanism — one transient refusal is not the end of the upload — and,
+// just as importantly, that a refusal the store means PERMANENTLY still fails at
+// once, so a signature bug cannot hide behind four attempts.
+describe('putSignedArtifact — a retryable refusal is retried (MOTIR-3313)', () => {
+  /** Injected in place of the backoff, so the retry is asserted without
+   *  wall-clock. The delays it is handed are asserted too — a retry that does not
+   *  actually back off is a burst with extra steps. */
+  function recordingSleep() {
+    const slept: number[] = [];
+    return { slept, sleep: async (ms: number) => void slept.push(ms) };
+  }
+
+  function target() {
+    return {
+      token: signedPutUrl('acceptance/w/s/uuid-trace.zip'),
+      contentType: 'application/zip',
+      pathname: 'acceptance/w/s/uuid-trace.zip',
+    };
+  }
+
+  function traceFile(): string {
+    const file = path.join(tmpDir(), 't.zip');
+    fs.writeFileSync(file, 'trace-bytes');
+    return file;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a 503 that clears on the next attempt PUBLISHES, and backs off in between', async () => {
+    let calls = 0;
+    const fetchMock = vi.fn(async () => {
+      calls += 1;
+      return calls === 1
+        ? { ok: false, status: 503, text: async () => '<Code>SlowDown</Code>' }
+        : { ok: true, status: 200, text: async () => '' };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { slept, sleep } = recordingSleep();
+
+    await expect(
+      putSignedArtifact('trace', traceFile(), target(), { baseDelayMs: 100, sleep }),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // One wait, and it is at least the base step (the jitter only ever adds).
+    expect(slept).toHaveLength(1);
+    expect(slept[0]).toBeGreaterThanOrEqual(100);
+  });
+
+  it('sends the SAME bytes on the retry — the file is read once, not per attempt', async () => {
+    const bodies: unknown[] = [];
+    let calls = 0;
+    const fetchMock = vi.fn(async (_url: string, init: { body: unknown }) => {
+      bodies.push(init.body);
+      calls += 1;
+      return calls === 1
+        ? { ok: false, status: 429, text: async () => 'slow down' }
+        : { ok: true, status: 200, text: async () => '' };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { sleep } = recordingSleep();
+
+    await putSignedArtifact('trace', traceFile(), target(), { baseDelayMs: 1, sleep });
+
+    expect(bodies).toHaveLength(2);
+    expect(Buffer.from(bodies[1] as Uint8Array).toString()).toBe('trace-bytes');
+    // The identical Buffer instance, not a second read of the same path.
+    expect(bodies[1]).toBe(bodies[0]);
+  });
+
+  it('gives up after the last attempt, and the error names the store’s own reason', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => '<Code>SlowDown</Code><Message>Please reduce your request rate.</Message>',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { slept, sleep } = recordingSleep();
+
+    await expect(
+      putSignedArtifact('trace', traceFile(), target(), { attempts: 3, baseDelayMs: 1, sleep }),
+    ).rejects.toThrow(/Acceptance trace upload failed: 503 .*SlowDown/);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Three attempts, TWO waits — it never sleeps after the last one.
+    expect(slept).toHaveLength(2);
+  });
+
+  it('does NOT retry a refusal the store means permanently', async () => {
+    // ⚠️ THE HALF THAT KEEPS THE RETRY HONEST. A presigned PUT's 403 is a
+    // SIGNATURE failure (`content-type` unbound or mismatched — see the header on
+    // `putSignedArtifact`), and MOTIR-2499's lesson is that a wire-contract break
+    // must fail LOUDLY and immediately. Retrying it would send the same doomed
+    // bytes four times and delay the one message that names the real problem.
+    for (const status of [400, 403, 404]) {
+      const fetchMock = vi.fn(async () => ({ ok: false, status, text: async () => 'nope' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const { slept, sleep } = recordingSleep();
+
+      await expect(
+        putSignedArtifact('video', traceFile(), target(), { baseDelayMs: 1, sleep }),
+      ).rejects.toThrow(new RegExp(`Acceptance video upload failed: ${status}`));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(slept).toHaveLength(0);
+    }
+  });
+
+  it('the whole publish survives a 503 on the TRACE — the incident, end to end', async () => {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    const trace = path.join(dir, 't.zip');
+    fs.writeFileSync(video, 'video-bytes');
+    fs.writeFileSync(trace, 'trace-bytes');
+
+    let tracePuts = 0;
+    const fetchMock = vi.fn(async (url: string, init: { method?: string }) => {
+      if (url.endsWith('/upload-token')) {
+        return {
+          ok: true,
+          json: async () => ({
+            video: {
+              pathname: 'acceptance/w/s/v.webm',
+              token: signedPutUrl('acceptance/w/s/v.webm'),
+              contentType: 'video/webm',
+            },
+            trace: {
+              pathname: 'acceptance/w/s/t.zip',
+              token: signedPutUrl('acceptance/w/s/t.zip'),
+              contentType: 'application/zip',
+            },
+          }),
+        };
+      }
+      if (init?.method === 'PUT') {
+        if (!url.includes('t.zip')) return { ok: true, status: 200, text: async () => '' };
+        tracePuts += 1;
+        // Refused once, exactly as PR #2237 saw it — then it goes through.
+        return tracePuts === 1
+          ? { ok: false, status: 503, text: async () => '<Code>SlowDown</Code>' }
+          : { ok: true, status: 200, text: async () => '' };
+      }
+      return { ok: true, json: async () => ({ evidence: { id: 'ev-retry' } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      uploadAcceptanceVideo({
+        baseUrl: 'https://app.motir.co',
+        token: 'motir_pat_abc',
+        storyKey: 'MOTIR-3232',
+        artifacts: { video, trace, chapters: null },
+        retry: { baseDelayMs: 1, sleep: async () => {} },
+      }),
+    ).resolves.toEqual({ evidence: { id: 'ev-retry' } });
+
+    // Two PUTs to the trace URL — the refusal and the one that landed.
+    expect(tracePuts).toBe(2);
+
+    // …and the receipt is REGISTERED WITH ITS TRACE, which is the thing the
+    // incident actually lost. `/upload-token` is a POST too, so the register call
+    // is found by its own address, not by its method.
+    const register = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/acceptance-evidence'),
+    );
+    expect(register).toBeTruthy();
+    const body = JSON.parse((register![1] as { body: string }).body) as {
+      tracePathname: string | null;
+    };
+    expect(body.tracePathname).toBe('acceptance/w/s/t.zip');
   });
 });
 

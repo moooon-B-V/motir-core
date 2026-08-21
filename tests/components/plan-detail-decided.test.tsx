@@ -47,8 +47,13 @@ vi.mock('@/components/planning/repositories/RepositorySetStep', () => ({
 
 // The island reads the router to refresh the page's SERVER read on approve
 // (MOTIR-1947); a unit render has no app-router context to invariant against.
+// `PlanDetail` reads the URL for its view (MOTIR-3239), so the navigation stub
+// covers the three hooks it uses. An empty `useSearchParams` is the default-view
+// path, which is the canvas — what these tests were written against.
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/plans/plan_1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import { PlanDetail } from '@/components/planning/PlanDetail';

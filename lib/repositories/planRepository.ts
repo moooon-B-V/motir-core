@@ -1,16 +1,21 @@
-import { Prisma, type Plan } from '@/generated/prisma/client';
+import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
-/** A plan the abandoned-plan sweep may act on — a `Plan` whose `sourceJobId` the
- *  selecting predicate has already proved non-null, carrying the proposal COUNT
- *  read in the same statement.
+/** A plan the abandoned-plan sweep may act on — every `generating` plan past the
+ *  grace, carrying the proposal COUNT read in the same statement.
  *
  *  The count is what the sweep's write re-reads against (MOTIR-3189). It used to
  *  be able to assert `0` from the predicate alone; now that a PARTIAL plan is a
  *  candidate, "did the row move under us?" is a comparison rather than a
- *  presence test, and the number has to travel with the candidate to make it. */
+ *  presence test, and the number has to travel with the candidate to make it.
+ *
+ *  ⚠️ `sourceJobId` IS NULLABLE HERE, and that is the point (MOTIR-3236). This
+ *  type used to narrow it to `string`, restating the predicate's
+ *  `sourceJobId: { not: null }` in the type system. The predicate is gone, so
+ *  the narrowing is REMOVED rather than weakened: the compiler is what forces
+ *  the caller to decide what a plan with no producer means, instead of letting a
+ *  `null` reach `resolveJobState` as a job id. */
 export type AbandonedPlanCandidate = Plan & {
-  sourceJobId: string;
   _count: { items: number };
 };
 
@@ -193,23 +198,28 @@ export const planRepository = {
     limit: number,
     tx: Prisma.TransactionClient,
   ): Promise<AbandonedPlanCandidate[]> {
-    // The cast is the WHERE clause's `sourceJobId: { not: null }` stated in the
-    // type system: the caller needs a `string` to ask motir-ai with, and a
-    // runtime re-check would be a branch no query result can take. Narrowing it
-    // HERE keeps the proof next to the predicate that establishes it. The
-    // `_count` half comes from the `include` and needs no narrowing; one cast
-    // covers both, because Prisma widens `sourceJobId` back to nullable on the
-    // way out whatever the predicate said.
+    // ⚠️ NO `sourceJobId` PREDICATE (MOTIR-3236). This clause used to read
+    // `sourceJobId: { not: null }`, and the cast that followed stated that
+    // narrowing in the type system. Both are gone, and the reason is a shape
+    // rather than one more case: the predicate had become a WHITELIST of the
+    // plan shapes the sweep knew how to judge, so each newly-recognised shape
+    // cost a schema-adjacent query edit (MOTIR-3051, MOTIR-3064, MOTIR-3189, and
+    // then the job-less plan this one is about — four defects, one shape).
+    //
+    // So SELECTION is now the cheap, total question — is it `generating` and
+    // past the grace? — and the JUDGEMENT is `classifyAbandonedCandidate`, a
+    // pure decision table with a unit test per arm. `sourceJobId` is an INPUT to
+    // that table now, not a condition of being seen by it; the next unrecognised
+    // shape is a new arm, not a new migration-adjacent predicate.
     return tx.plan.findMany({
       where: {
         status: 'generating',
-        sourceJobId: { not: null },
         createdAt: { lte: olderThan },
       },
       include: { _count: { select: { items: true } } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: limit,
-    }) as Promise<AbandonedPlanCandidate[]>;
+    });
   },
 
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
@@ -245,6 +255,17 @@ export const planRepository = {
    * the last plan on the previous page (omitted for the first page); `limit`
    * rows are returned. Ordered (createdAt desc, id desc) so the cursor is
    * stable even when two plans share a `createdAt`.
+   *
+   * `status` NARROWS the page to one lifecycle status (MOTIR-3235, for the
+   * tabbed list) and is applied HERE, in the `where` — not by the caller after
+   * the read. A caller-side filter would take the `limit + 1` cursor page and
+   * then shrink it, so a `planned` page would come back short while
+   * `nextCursor` still claimed there was more. `null` / omitted ⇒ the whole
+   * project, exactly as before this argument existed.
+   *
+   * Served by `@@index([projectId, status, createdAt])`: the narrowed set is
+   * already in `createdAt` order under the index, so the keyset walk never
+   * sorts a status in the heap.
    */
   async listByProject(
     projectId: string,
@@ -252,13 +273,40 @@ export const planRepository = {
     limit: number,
     cursorId: string | null,
     tx?: Prisma.TransactionClient,
+    status?: PlanStatus | null,
   ): Promise<Plan[]> {
     const client = tx ?? db;
     return client.plan.findMany({
-      where: { projectId, workspaceId },
+      where: { projectId, workspaceId, ...(status ? { status } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     });
+  },
+
+  /**
+   * How many plans this project holds per lifecycle status, in ONE `groupBy`
+   * (MOTIR-3235) — the numbers the tab strip renders beside its labels.
+   *
+   * Returns only the statuses that HAVE rows; zero-filling over the enum is the
+   * service's job, because the enum the surface must be total over is the DTO
+   * vocabulary and this layer does not map DTOs.
+   *
+   * One query for the whole strip rather than four counts: four round-trips to
+   * render four numbers on one page is the shape `countByWorkItemIds` already
+   * rejected one surface over.
+   */
+  async countByStatus(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ status: PlanStatus; count: number }>> {
+    const client = tx ?? db;
+    const rows = await client.plan.groupBy({
+      by: ['status'],
+      where: { projectId, workspaceId },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ status: row.status, count: row._count._all }));
   },
 };

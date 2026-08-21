@@ -2,14 +2,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, List, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+import { PlanProposalList } from '@/components/planning/PlanProposalList';
+import { Segmented } from '@/components/ui/Segmented';
+import {
+  PLAN_VIEW_PARAM,
+  defaultPlanView,
+  planViewFromParam,
+  type PlanViewDto,
+} from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { PlanReviewRail, type PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import { RepositorySetStep } from '@/components/planning/repositories/RepositorySetStep';
@@ -88,6 +96,8 @@ export function PlanDetail({
 }: PlanDetailProps) {
   const t = useTranslations('planReview');
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
   // The one line the rail's approved outcome carries about the project's code.
   // DERIVED from the server read so a page load is already correct, then taken
@@ -106,6 +116,7 @@ export function PlanDetail({
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const planId = initialReview.id;
 
@@ -151,17 +162,32 @@ export function PlanDetail({
         // a wasted round-trip, and on the wrong surface it is a bug.
         if (refreshServerSurfaces) router.refresh();
       } catch (err) {
-        setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
-        // A 409 means a concurrent reviewer already decided — refetch to show it.
-        // The decision was still an approval, so the server surface it reveals is
-        // just as due as on our own success.
+        // A 409 is NOT an error on this surface (MOTIR-3240). It means the plan
+        // moved between render and click — a concurrent reviewer decided it, or
+        // the producer finished and it left `generating` — and the refetch below
+        // shows the reader exactly that. The decision was still made, so a server
+        // surface it reveals is just as due as on our own success.
+        //
+        // ⚠️ This used to set `errorCode` FIRST and then refetch, so the rail
+        // rendered "that didn't work" above a plan whose real state was right
+        // there beside it. That was wrong for the approve path too, and it is
+        // corrected for both rather than special-cased for the discard — the two
+        // are the same event and there is no reading on which one of them is a
+        // failure and the other is not.
         if (err instanceof PlanRequestError && err.status === 409) {
           await refetch().catch(() => {});
           if (refreshServerSurfaces) router.refresh();
+        } else {
+          setErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
         }
       } finally {
         setBusy(false);
+        // Both confirms close on the way out, success or 409 alike: the action
+        // has resolved and the refetch has already shown the plan's real state,
+        // so leaving either dialog open would ask the reader to confirm a
+        // decision that has already been made.
         setConfirmOpen(false);
+        setDiscardOpen(false);
       }
     },
     [planId, refetch, router],
@@ -182,7 +208,20 @@ export function PlanDetail({
     void approve();
   }, [review.stale, approve]);
 
-  const onDecline = useCallback(() => void runAction(declinePlanRequest), [runAction]);
+  // DECLINE, and its one confirming arm (MOTIR-3240). Ending a plan that is still
+  // being written is irreversible from this surface and the plan is still moving,
+  // so it confirms — the same shape the stale-approve confirm already uses, and
+  // for the sharper reason. A `planned` plan has been read and declining it is
+  // the ordinary decision; that path is unchanged.
+  const onDecline = useCallback(() => {
+    if (review.status === 'generating') {
+      setDiscardOpen(true);
+      return;
+    }
+    void runAction(declinePlanRequest);
+  }, [review.status, runAction]);
+
+  const discard = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
@@ -197,6 +236,37 @@ export function PlanDetail({
   // to state, and the discovery hand-off is the wrong thing to say about it.
   const decided = review.status === 'approved' || review.status === 'declined';
   // The plan's decision, drawn on every node the plan contributes (MOTIR-3161).
+  // WHICH BODY the pane shows. THE URL IS THE SINGLE SOURCE OF TRUTH (MOTIR-3239),
+  // derived on every render exactly as `ChildPanel` derives `?children=` — so a
+  // deep link, a reload and browser Back/forward all agree, and no local state
+  // can disagree with the address bar.
+  //
+  // ⚠️ THE DEFAULT IS PINNED AT MOUNT (MOTIR-3262). It is DERIVED from the plan's
+  // shape — the list when the proposals straddle more than one container — and a
+  // `generating` plan's item set grows under the 2.5s poll below, so a plan can
+  // cross that threshold while a reviewer is reading it. The default is a SEED
+  // for the arriving reader, not a controlled value: recomputing it per render
+  // would yank somebody between views on a poll tick. `useState`'s initializer
+  // runs once, which is exactly the semantics wanted here.
+  const [pinnedDefaultView] = useState<PlanViewDto>(() => defaultPlanView(initialReview));
+  const view: PlanViewDto = planViewFromParam(searchParams.get(PLAN_VIEW_PARAM), pinnedDefaultView);
+
+  const onViewChange = useCallback(
+    (next: PlanViewDto) => {
+      const params = new URLSearchParams(searchParams.toString());
+      // THE DEFAULT WRITES A CLEAN URL, whatever the default is — so every
+      // existing `/plans/[id]` link stays byte-identical, and the property
+      // survives MOTIR-3262 making the default conditional.
+      if (next === pinnedDefaultView) params.delete(PLAN_VIEW_PARAM);
+      else params.set(PLAN_VIEW_PARAM, next);
+      const query = params.toString();
+      // `scroll: false` — switching a body must never yank the reader to the top
+      // of a pane they were already reading (`ChildPanel`'s own decision).
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, pinnedDefaultView, router, searchParams],
+  );
+
   const outcome: PlanItemOutcome | null =
     review.status === 'approved' ? 'accepted' : review.status === 'declined' ? 'declined' : null;
   const isEmpty = review.items.length === 0 && review.status !== 'generating' && !decided;
@@ -231,6 +301,31 @@ export function PlanDetail({
           // canvas has effectively the whole pane — no extra rule needed, because
           // the step's own design already shrinks.
           <div className="flex h-full min-h-0 w-full flex-col">
+            {/* The PANE HEADER (Part VIII §2). The pane had none —
+                `PlanningWorkspace`'s `canvas` slot is filled edge to edge — so
+                one is decided here rather than found. It sits at the TOP of the
+                pane, ABOVE the establish band, because the bar governs the BODY
+                and the band is not part of the body: Part VI decided the step
+                STACKS above the canvas, and a switcher under the band would make
+                the band read as chrome belonging to one of the two views.
+                (Part VIII reserved this bar's right end for Part IX's
+                Show-changes control; Part IX RELEASED it and put that control in
+                the canvas's own cluster, so the bar holds the switcher alone.) */}
+            <div className="flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
+              <Segmented<PlanViewDto>
+                label={t('viewSwitchAria')}
+                value={view}
+                onChange={onViewChange}
+                options={[
+                  { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
+                  {
+                    value: 'canvas',
+                    label: t('viewCanvas'),
+                    icon: <Workflow className="size-3.5" />,
+                  },
+                ]}
+              />
+            </div>
             {repositorySet ? (
               <div
                 data-testid="plan-detail-establish-band"
@@ -246,13 +341,20 @@ export function PlanDetail({
               </div>
             ) : null}
             <div className="min-h-0 flex-1">
-              <PlanReviewCanvas
-                items={review.items}
-                projectKey={projectKey}
-                version={version}
-                outcome={outcome}
-                ariaLabel={ariaLabel ?? t('canvasAria')}
-              />
+              {/* A SECOND BODY in the same pane, never a re-drawing of the first.
+                  The canvas answers where a proposal LANDS; the list answers what
+                  exactly is being approved, which is a question about a SET. */}
+              {view === 'list' ? (
+                <PlanProposalList items={review.items} decided={decided} />
+              ) : (
+                <PlanReviewCanvas
+                  items={review.items}
+                  projectKey={projectKey}
+                  version={version}
+                  outcome={outcome}
+                  ariaLabel={ariaLabel ?? t('canvasAria')}
+                />
+              )}
             </div>
           </div>
         }
@@ -267,6 +369,27 @@ export function PlanDetail({
           />
         }
       />
+
+      <Modal
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        title={t('discardConfirmTitle')}
+        // The confirm NAMES the proposals already appended: the count is the one
+        // fact that tells the reader what they are throwing away, and the second
+        // half is the reassurance the whole substrate rests on — nothing was ever
+        // created, so nothing is lost from the tree.
+        description={t('discardConfirmBody', { n: review.itemCount })}
+        size="sm"
+      >
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDiscardOpen(false)} disabled={busy}>
+            {t('discardConfirmCancel')}
+          </Button>
+          <Button variant="primary" onClick={() => void discard()} loading={busy} disabled={busy}>
+            {t('discardConfirmCta')}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={confirmOpen}

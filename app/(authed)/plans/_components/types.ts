@@ -26,6 +26,12 @@ export interface PlanRowView {
    *  a harness is an agent, `native` is Motir. Null is the *unattributed* state —
    *  a plan predating the column, which now means exactly that rather than
    *  doubling as *Motir generated it*. */
+  /** WHO DECIDED it — resolved to a display NAME server-side in the SAME batched
+   *  lookup as `createdByName` (MOTIR-3238). Null while the plan is undecided,
+   *  on a plan predating the column, and on an ABANDONED one, whose
+   *  `decidedById` is deliberately null because nobody decided it (MOTIR-3189) —
+   *  the row draws that absence rather than a placeholder. */
+  decidedByName: string | null;
   authorSource: PlanAuthorSourceDto | null;
   authorHarness: string | null;
   /** The resolved display title — the plan's summary/idea, falling back to its
