@@ -338,6 +338,18 @@ export interface IndexDispatchInput {
    * (`event.id ?? ctx.runId`), and the one MOTIR-2002 chose for the same problem.
    */
   readonly dispatchId: string;
+  /**
+   * MOTIR-3358 — the paths this refresh's pushes touched, when they are known and
+   * complete, together with the commit they describe.
+   *
+   * ⚠️ THE SHA IS NOT OPTIONAL WHEN THE PATHS ARE PRESENT, and that pairing is the
+   * correctness argument. An unpinned tarball is whatever the branch points at
+   * when the CONTAINER fetches — later than this dispatch, and possibly a commit
+   * these paths do not describe. Pinning the fetch to the commit the paths came
+   * from is what makes "index exactly these" a true statement about the tree that
+   * actually gets indexed.
+   */
+  readonly changedPaths?: { paths: readonly string[]; headSha: string };
 }
 
 /**
@@ -834,7 +846,12 @@ export const codeGraphIndexDispatchService = {
         input.installationId,
         input.repoOwner,
         input.repoName,
-        input.defaultBranch,
+        // ⚠️ PINNED TO A COMMIT when this run carries a changed-path list, and to
+        // the branch otherwise (MOTIR-3358). The resolver takes a REF and a sha is
+        // a ref, so this is a one-word difference that changes what the run means:
+        // with a list, the container must index the exact tree those paths
+        // describe — not whatever the branch has moved to by the time it fetches.
+        input.changedPaths?.headSha ?? input.defaultBranch,
       );
     } catch (err) {
       // The three loud failures still throw — the ledger must never record a
@@ -850,6 +867,9 @@ export const codeGraphIndexDispatchService = {
       aiBaseUrl,
       tarballUrl,
       runCredential: credential.credential,
+      // MOTIR-3358 — present only when the claim produced a COMPLETE union with a
+      // commit to pin to; the tarball above was resolved for that same commit.
+      ...(input.changedPaths ? { changedPaths: input.changedPaths.paths } : {}),
       // MOTIR-3252 — present only when motir-ai decided this run may sync
       // (a snapshot exists AND its engine version matches the container's).
       // Forwarded, never inspected: this side cannot tell a good grant from a
@@ -1152,7 +1172,11 @@ export const codeGraphIndexDispatchService = {
    * it is what keeps the four variables the image's boot contract names
    * (`motir-ai/infra/indexer/README.md`) the only four that can be in it.
    *
-   * ⚠️ FOUR VARIABLES, OR FIVE (MOTIR-3252). The fifth —
+   * ⚠️ FOUR VARIABLES, AND AT MOST SIX (MOTIR-3252, MOTIR-3358). The sixth —
+   * `MOTIR_INDEX_CHANGED_PATHS` — is the paths this refresh's pushes touched, and
+   * it is neither a credential nor secret: the container is being handed the whole
+   * repository anyway. It is an optimisation, and a container that ignored it
+   * would produce the same graph more slowly. The fifth —
    * `MOTIR_INDEX_SNAPSHOT_URL` — appears only when motir-ai offered this run its
    * previous snapshot, and it is a third pre-signed URL rather than a widening:
    * one object, one method, minutes. Everything in the list below is still absent.
@@ -1187,6 +1211,13 @@ export const codeGraphIndexDispatchService = {
      * behaviour this container had unconditionally before it existed.
      */
     previousSnapshotUrl?: string;
+    /**
+     * OPTIONAL (MOTIR-3358) — the exact paths to index. Absent ⇒ the container
+     * syncs the whole tree, which is what it does today. Present ⇒ the tarball
+     * above is pinned to the commit these paths describe, and the two must move
+     * together.
+     */
+    changedPaths?: readonly string[];
     timeoutSeconds: number;
   }): ContainerSpec {
     const { target, fleet, aiBaseUrl, tarballUrl, runCredential, timeoutSeconds } = args;
@@ -1214,6 +1245,13 @@ export const codeGraphIndexDispatchService = {
         // still no GitHub key, no `DATABASE_URL`, no object-storage credential, no
         // service token, no Fly token.
         ...(args.previousSnapshotUrl ? { MOTIR_INDEX_SNAPSHOT_URL: args.previousSnapshotUrl } : {}),
+        // A SIXTH variable, and only sometimes (MOTIR-3358). Not a credential and
+        // not secret — it is a list of paths from a repository the container is
+        // already being handed in full. It is an OPTIMISATION: a container that
+        // ignored it would produce exactly the same graph, more slowly.
+        ...(args.changedPaths && args.changedPaths.length > 0
+          ? { MOTIR_INDEX_CHANGED_PATHS: JSON.stringify(args.changedPaths) }
+          : {}),
       },
     };
   },

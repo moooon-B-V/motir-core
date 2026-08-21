@@ -240,6 +240,13 @@ export const gitlabProvider: GitProvider = {
       providerRepoId,
       branch,
       headSha: typeof after === 'string' && after.length > 0 ? after : null,
+      // MOTIR-3358 — NOT IMPLEMENTED FOR GITLAB, and null is the honest answer
+      // rather than an omission. GitLab's push payload does carry per-commit
+      // `added`/`modified`/`removed`, so this is a small addition when a GitLab
+      // tenant needs it; until someone has a payload to test against, a null
+      // means the refresh syncs the whole tree exactly as it does today. An empty
+      // array here would claim nothing changed and quietly skip indexing it.
+      changedPaths: null,
     };
   },
 };

@@ -838,6 +838,14 @@ export default defineConfig({
         // single image.
         'lib/services/codeGraphIndexDispatchService.ts',
         'lib/services/codeGraphIndexAdmissionService.ts',
+        // MOTIR-3358 — the changed-path fast path. Gated with the fleet rather
+        // than beside its layer siblings because what it decides is a FLEET
+        // decision: every branch in the service is the choice between handing a
+        // container a delta and letting it walk the whole tree, and the branch
+        // that must never be wrong (an incomplete union) produces a graph that
+        // is silently stale rather than a failure anything reports.
+        'lib/services/codeGraphChangedPathsService.ts',
+        'lib/repositories/codeGraphPendingChangeRepository.ts',
         'lib/jobs/indexFleetSteps.ts',
         'lib/jobs/definitions/codeGraphIndex.ts',
         'lib/orchestrator/adapters/fly/indexImage.ts',
@@ -1801,6 +1809,16 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/codeGraphIndexAdmissionService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/codeGraphChangedPathsService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/codeGraphPendingChangeRepository.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

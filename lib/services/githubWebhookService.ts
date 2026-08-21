@@ -13,6 +13,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { codeGraphChangedPathsService } from '@/lib/services/codeGraphChangedPathsService';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
@@ -323,6 +324,27 @@ export const githubWebhookService = {
     // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
     // the default branch's CURRENT head at run time, so debounced/coalesced
     // pushes index the newest state once.
+    // MOTIR-3358 — record what this push touched BEFORE enqueuing, so the paths
+    // are durable by the time any run can drain them. Best-effort on both sides:
+    // a dropped record costs a whole-tree sync, never a wrong graph, and neither
+    // call may fail the ack.
+    //
+    // ⚠️ It cannot ride the event. `codeGraphRefresh` debounces 2 minutes per repo
+    // and a debounce delivers exactly ONE event — the LAST — so a run standing for
+    // four pushes would carry one push's paths and leave three pushes' files stale
+    // (`tests/jobs/debounce-burst.test.ts`). The rows accumulate instead.
+    await codeGraphChangedPathsService.recordPush({
+      installationId,
+      workspaceId: resolved.workspaceId,
+      repoOwner: resolved.repoOwner,
+      repoName: resolved.repoName,
+      headSha: push.headSha,
+      // NULL means "we cannot say", and it is recorded as an empty row on purpose:
+      // it poisons the union it belongs to, so the run falls back rather than
+      // indexing a list that only looks complete.
+      paths: push.changedPaths ?? [],
+    });
+
     await enqueueCodeGraphRefresh({
       installationId,
       workspaceId: resolved.workspaceId,

@@ -13,6 +13,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import type { IndexAdmissionVerdict } from '@/lib/services/codeGraphIndexAdmissionService';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
+import type { ClaimedChangedPaths } from '@/lib/services/codeGraphChangedPathsService';
 import type {
   IndexRepoInput,
   IndexRepoResult,
@@ -151,6 +152,25 @@ export async function runIndexFleetSteps(
   // have indexed anything anyway, so the config gate cannot come first.
   if (!target.indexed) return target;
 
+  // ⚠️ THE IDENTITY THIS RUN HOLDS THINGS UNDER, ACROSS PASSES — the triggering
+  // event's id, exactly the expression `defineJob` derives its ledger `eventId`
+  // from, so a deferred run and the run it is waiting on are findable by the same
+  // key.
+  //
+  // NOT `ctx.runId`, and the difference is the point: everything below stamps this
+  // in one pass and matches it again in a LATER one (the admission slot is taken
+  // in `index-admit` and checked again in `index-settle` many passes later; the
+  // changed-path claim is taken before the first container and settled after the
+  // last), whereas `ctx.runId` is re-read at the top of the handler on every one
+  // of those passes. The event's id is a property of the TRIGGER, so it survives
+  // the round trips both of them depend on. The `??` mirrors `defineJob`'s own
+  // fallback for a trigger that carries no id.
+  //
+  // Computed ONCE here rather than per use, so the admission slot and the
+  // changed-path claim are held under literally the same value and cannot drift
+  // apart in a later edit.
+  const dispatchId = ctx.event.id ?? ctx.runId;
+
   // ⚠️ THE CONFIG GATE, AND IT FAILS LOUDLY. `indexFleetConfig()` names EVERY
   // missing variable at once and throws. A path that quietly returned "nothing
   // to do" when unconfigured would still let this job record a `succeeded`
@@ -163,6 +183,71 @@ export async function runIndexFleetSteps(
     return { configured: true };
   });
 
+  // ⚠️ CLAIM THE CHANGED PATHS BEFORE THE FIRST CONTAINER (MOTIR-3358), and hold
+  // them until every project has indexed them. A claim rather than a read: if this
+  // run fails, these rows must go back so the NEXT run indexes their files — a
+  // consumed-then-failed row leaves its files stale in the graph forever, and
+  // nothing downstream can tell.
+  //
+  // Its own step, so a replay reuses the same claim instead of draining rows a
+  // previous pass already took.
+  //
+  // ⚠️ AND IT IS HELD UNDER `dispatchId`, NOT `ctx.runId` — the identity computed
+  // once at the top of this handler and passed down (see its definition for the
+  // full argument). Same distinction, same reason: this value is stamped in one
+  // pass and matched again in a LATER one, since the settle is many steps
+  // downstream, while `ctx.runId` is re-derived on EVERY pass. Hold the rows under
+  // that and the settle matches nothing — they stay claimed by an id no later pass
+  // can name, and the repo gets no changed paths until the stale window expires.
+  // (Caught by `code-graph-index.test.ts`, which drives the real multi-pass shape;
+  // every single-pass unit test of the claim passed with the bug in place.)
+  const changed = (await ctx.step.run('changed-paths-claim', () =>
+    services.codeGraphChangedPaths.claim(
+      {
+        installationId: input.installationId,
+        repoOwner: input.repoOwner,
+        repoName: input.repoName,
+      },
+      dispatchId,
+    ),
+  )) as ClaimedChangedPaths;
+
+  try {
+    await indexEveryProject(ctx, services, input, target, changed, dispatchId);
+  } catch (err) {
+    // RELEASE on every failure path. The rows describe work the graph has not
+    // absorbed, and the next run is the one that must absorb it.
+    await ctx.step.run('changed-paths-release', () =>
+      services.codeGraphChangedPaths.settle(dispatchId, false),
+    );
+    throw err;
+  }
+
+  // Consumed only now: every project's container exited 0, so these files are in
+  // every graph that was waiting for them.
+  await ctx.step.run('changed-paths-settle', () =>
+    services.codeGraphChangedPaths.settle(dispatchId, true),
+  );
+
+  return await finishIndexRun(ctx, services, input, target);
+}
+
+/**
+ * Dispatch one container per project for this repo, and supervise each to its end.
+ *
+ * Split out of {@link runIndexFleetSteps} by MOTIR-3358 so the changed-path claim
+ * can wrap it in a `try` — the release has to reach every failure path, and there
+ * are several throws inside this loop.
+ */
+async function indexEveryProject(
+  ctx: JobContext,
+  services: JobServices,
+  input: IndexRepoInput,
+  target: Extract<IndexTarget, { indexed: true }>,
+  changed: ClaimedChangedPaths,
+  /** See its definition in {@link runIndexFleetSteps} — the cross-pass identity. */
+  dispatchId: string,
+): Promise<void> {
   for (const projectId of target.projectIds) {
     const dispatchInput = {
       installationId: input.installationId,
@@ -179,18 +264,17 @@ export async function runIndexFleetSteps(
       // INSIDE a memoized step, so a replay pass (which Inngest re-invokes
       // with the same run) never re-mints against a different identity.
       runId: ctx.runId,
-      // ⚠️ AND THE DISPATCH'S IDENTITY, WHICH OWNS THE ADMISSION SLOT
-      // (MOTIR-2160) — the triggering event's id, exactly the expression
-      // `defineJob` derives its ledger `eventId` from, so a deferred run and the
-      // run it is waiting on are findable by the same key.
-      //
-      // NOT `ctx.runId`, and the difference is the point: this value is compared
-      // ACROSS passes (taken in `index-admit`, checked again in `index-settle`
-      // many passes later), whereas `runId` is re-read at the top of the handler
-      // on every one of them. The event's id is a property of the trigger, so it
-      // survives the round trip the ownership check depends on. The `??` mirrors
-      // `defineJob`'s own fallback for a trigger that carries no id.
-      dispatchId: ctx.event.id ?? ctx.runId,
+      // The dispatch's identity, which owns the ADMISSION SLOT (MOTIR-2160).
+      // Computed once at the top of the handler — see it there for why it is the
+      // event's id and not `ctx.runId`.
+      dispatchId,
+      // MOTIR-3358 — present only when the claim produced a COMPLETE union with a
+      // commit to pin to. Every other case (no pending rows, a push that did not
+      // name its paths, too many paths) sends nothing, and the container performs
+      // exactly the whole-tree sync it performs today.
+      ...(changed.usable
+        ? { changedPaths: { paths: changed.paths, headSha: changed.headSha } }
+        : {}),
     };
 
     // ⚠️ THE CAP, BEFORE ANY CONTAINER IS BOOTED. Nothing below can run without
@@ -268,7 +352,19 @@ export async function runIndexFleetSteps(
       throw dispatchFailure(target.repoRef, projectId, outcome);
     }
   }
+}
 
+/**
+ * The tail of a successful run — split out with {@link indexEveryProject} by
+ * MOTIR-3358, and unchanged in behaviour.
+ */
+async function finishIndexRun(
+  ctx: JobContext,
+  services: JobServices,
+  input: IndexRepoInput,
+  target: Extract<IndexTarget, { indexed: true }>,
+): Promise<IndexRepoResult> {
+  void services;
   // CANCEL any pending code-graph offboarding for this repo (MOTIR-2166 ·
   // `docs/decisions/code-graph-index-fleet.md` §14.3 — "a repo reconnected, or
   // RE-INDEXED, before its due date clears the queue row").
