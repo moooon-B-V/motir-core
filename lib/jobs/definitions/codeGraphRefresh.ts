@@ -83,10 +83,25 @@ import type { CodeGraphRefreshData } from '../types';
 // reason, MOTIR-1990 removed from the index job. All three of that job's
 // arguments now apply here verbatim, because this one supervises containers too:
 //
-//   1. IT WOULD MAKE THE CONFIGURED CAP A LIE. A stepped supervision loop holds
-//      its Inngest concurrency slot for the CONTAINER'S WHOLE LIFE, where the
-//      old shape held it for one fetch-and-upload. `2` beside a configured cap
-//      of six would mean two, always, whatever an operator set.
+//   1. IT WOULD MAKE THE CONFIGURED CAP A LIE. A stepped supervision loop stays
+//      RESIDENT for the CONTAINER'S WHOLE LIFE, where the old shape ran for one
+//      fetch-and-upload. `2` beside a configured cap of six would mean two,
+//      always, whatever an operator set.
+//
+//      ⚠️ CORRECTED (MOTIR-3245) — this used to say the loop holds its INNGEST
+//      CONCURRENCY SLOT for the container's whole life, and MOTIR-3245 was filed
+//      on that sentence. It is false. Inngest's concurrency documentation is
+//      explicit: *"A function run that is sleeping, waiting for an event, or
+//      paused between steps does not count against your concurrency limit. Only
+//      steps that are actively executing code count toward the limit"*, and
+//      *"calling `step.sleep`, `step.sleepUntil`, `step.waitForEvent`, or
+//      `step.invoke` does not count towards capacity limits."*
+//
+//      This loop waits with `ctx.step.sleep` (`indexFleetSteps.ts`,
+//      `index-wait:<pid>:<n>`), so between polls it holds NOTHING. A
+//      `concurrency: N` here would bound N concurrent POLLS, not N live
+//      containers — so the conclusion below is unchanged and its reason is now
+//      the true one rather than a plausible one.
 //   2. AN UNKEYED LIMIT IS THE STARVATION IT WAS MEANT TO PREVENT — and THIS job
 //      is where that was measured: one repo's retries ahead of every other
 //      repo's refresh is the production failure MOTIR-2057 fixed. A per-tenant
