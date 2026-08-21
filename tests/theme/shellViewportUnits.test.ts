@@ -59,6 +59,28 @@ import { describe, expect, it } from 'vitest';
 //    computes `overflow-x` from `visible` to `auto`, so the shell's only scroller
 //    silently acquires a horizontal bar nobody chose.
 //
+// 5. THE CLIPPING BOXES ARE CONTAINING BLOCKS (MOTIR-3286). Every shell root
+//    that states `h-dvh` + `overflow-hidden`, and the `<main>` scroller inside
+//    it, must also state `relative`.
+//
+//    Points 1–4 all assume the shell's clip is total: "nothing inside it can
+//    produce a document scrollbar, because the root clips". It isn't, and it
+//    didn't. `overflow` clips a descendant only when that descendant's
+//    CONTAINING BLOCK is inside the clipping box, and an absolutely positioned
+//    element with no positioned ancestor resolves its containing block to the
+//    INITIAL one — so it escapes the shell entirely and its static position, far
+//    down `<main>`'s flow on a long page, extends the DOCUMENT's scrollable
+//    overflow to reach it. Measured on the live app: `scrollHeight` 1364 against
+//    a `clientHeight` of 371, from ONE 1px `sr-only` span; `position: relative`
+//    on `<main>` alone returned it to 371.
+//
+//    This is the SAME reported symptom MOTIR-3208 was filed for — a shell one
+//    viewport tall above an empty band of body canvas — reached by a different
+//    mechanism, on a browser where `100vh === 100dvh` and 3208's mechanism
+//    cannot fire at all. Two causes, one picture. The shell files are DERIVED
+//    here rather than listed, so a third shell added later is covered without
+//    anyone remembering to extend a constant.
+
 // The WIDTH axis (`w-screen`, `100vw`, `max-w-[100vw]`) is untouched: a browser's
 // retractable UI moves the viewport's HEIGHT, and `vw`'s own quirk (it includes
 // the classic scrollbar) is a different problem with a different fix.
@@ -204,6 +226,54 @@ describe('the shell viewport-unit guard (MOTIR-3208)', () => {
       ARBITRARY_VH_HEIGHT.test(readFileSync(join(ROOT, f), 'utf8')),
     );
     expect(counted.length, 'the unruled arbitrary-`vh` population is non-empty').toBeGreaterThan(0);
+  });
+
+  it('makes every shell CLIPPING BOX a containing block (MOTIR-3286)', () => {
+    // DERIVED, not listed: a file is a shell if a single class string in it
+    // states both `h-dvh` and `overflow-hidden`. Comments are stripped first —
+    // `AppLayout`'s own prose names both tokens while describing the invariant,
+    // and a guard that reads a comment as code proves nothing.
+    const shells = SOURCE_FILES.map((file) => ({
+      file,
+      src: readFileSync(join(ROOT, file), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, ''),
+    })).flatMap(({ file, src }) => {
+      const clipping = [...src.matchAll(/['"`]([^'"`]*)['"`]/g)]
+        .map((m) => m[1]!)
+        .filter((literal) => /\bh-dvh\b/.test(literal) && /\boverflow-hidden\b/.test(literal));
+      return clipping.length ? [{ file, src, clipping }] : [];
+    });
+
+    // Non-vacuous, and it really reaches BOTH shells — the signed-in one and the
+    // platform-admin one. A third would join this set on its own.
+    expect(shells.map((s) => s.file).sort(), 'the derived shell set').toEqual([
+      'app/(admin)/_components/AdminShell.tsx',
+      'components/ui/AppLayout.tsx',
+    ]);
+
+    const offenders: string[] = [];
+    for (const { file, clipping, src } of shells) {
+      for (const literal of clipping) {
+        if (!/\brelative\b/.test(literal)) offenders.push(`${file} — root: ${literal}`);
+      }
+      // ...and the `<main>` scroller inside that shell. Anchoring only the root
+      // stops the document growing but leaves an escapee pinned to the shell
+      // instead of scrolling with the content it was written beside.
+      for (const tag of src.match(/<main\b[\s\S]*?>/g) ?? []) {
+        if (!/\brelative\b/.test(tag))
+          offenders.push(`${file} — <main>: ${tag.replace(/\s+/g, ' ')}`);
+      }
+    }
+
+    expect(
+      offenders,
+      '`overflow: hidden` clips a descendant only when that descendant\u2019s ' +
+        'CONTAINING BLOCK is inside the clipping box. Without `relative`, an ' +
+        '`absolute` element with no positioned ancestor anchors to the INITIAL ' +
+        'containing block, escapes the shell, and lengthens the DOCUMENT \u2014 ' +
+        'the shell then scrolls up as a block over an empty band of body canvas.',
+    ).toEqual([]);
   });
 
   it("states `<main>`'s HORIZONTAL overflow rather than inheriting it", () => {

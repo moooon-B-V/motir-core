@@ -76,13 +76,20 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * **9.3 s**. So a local reading is in the same units and runs at or below the CI
  * cost — never above it. Re-measure from the first green run that includes it.
  *
- * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208) carries a FOURTH provenance: it
- * had never run in this lane, so it was measured LOCALLY against a production
- * build on 2026-08-20. Playwright's JSON reporter put its three test BODIES at
+ * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208, re-measured for MOTIR-3286)
+ * carries a FOURTH provenance: it had never run in this lane, so it was measured
+ * LOCALLY against a production build on 2026-08-20 — three test BODIES at
  * 2.6 / 1.2 / 1.1 s (4.9 s total, sign-up and seeding included, since this spec
- * seeds inside the test rather than in a hook); 8.0 rounds that up to cover the
- * three `resetDatabase()` hooks the reporter attributes separately. Re-measure
- * it from the first green CI run that includes it.
+ * seeds inside the test rather than in a hook), rounded to 8.0 to cover the
+ * three `resetDatabase()` hooks the reporter attributes separately.
+ *
+ * MOTIR-3286 added a FOURTH test (the containing-block leak) and re-measured the
+ * same way on 2026-08-21: bodies at 2.3 / 1.1 / 0.7 / 0.7 s = **4.8 s**. The
+ * bodies did not grow — the new test is one of the cheap ones and the run was
+ * warmer — but there is now a fourth hook, and the 8.0 entry priced hooks at
+ * (8.0 − 4.9) / 3 ≈ 1.03 s each. 4.8 + 4 × 1.03 ≈ 8.9, recorded as **9.5**:
+ * rounding UP is the safe direction, because under-estimating is what unbalances
+ * a bin-packer. Re-measure it from the first green CI run that includes it.
  *
  * ⚠️ `app-role-surfaces.spec.ts` (MOTIR-2816) carries a THIRD provenance and a
  * cost of ~0 that is honest for THIS lane and misleading anywhere else. Every
@@ -210,7 +217,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'shell-empty-projects.spec.ts': 2.5,
   'shell-flows.spec.ts': 38.2,
   'shell-keyboard.spec.ts': 0,
-  'shell-viewport-floor.spec.ts': 8.0,
+  'shell-viewport-floor.spec.ts': 9.5,
   'shell.spec.ts': 2.7,
   'sprint-delete.spec.ts': 6.7,
   'sprint-edit-dates.spec.ts': 5.8,

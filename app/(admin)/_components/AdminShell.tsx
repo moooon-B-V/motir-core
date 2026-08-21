@@ -128,7 +128,11 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
   ];
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-(--el-page-bg)">
+    // `relative` for the reason in `components/ui/AppLayout.tsx` (MOTIR-3286):
+    // a clipping box that is not a containing block does not clip an `absolute`
+    // descendant that anchors to the INITIAL containing block, and such a
+    // descendant lengthens the DOCUMENT instead. Same shell shape, same gap.
+    <div className="relative flex h-dvh overflow-hidden bg-(--el-page-bg)">
       <a
         href="#admin-main"
         className="sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated) focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)"
@@ -162,7 +166,7 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
         <main
           id="admin-main"
           tabIndex={-1}
-          className="min-h-0 flex-1 overflow-y-auto focus:outline-none"
+          className="relative min-h-0 flex-1 overflow-y-auto focus:outline-none"
         >
           {children}
         </main>
