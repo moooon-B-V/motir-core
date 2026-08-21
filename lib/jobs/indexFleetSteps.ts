@@ -48,7 +48,10 @@ import type {
 // killed: the intent stuck, the container's cost unrecorded, and the run
 // dead-lettered while the job had actually succeeded. A STEP, NOT A RUN, IS THE
 // UNIT THE PLATFORM'S TIMEOUT APPLIES TO (`docs/jobs.md` rule 1), so the WAITING
-// is `ctx.step.sleep` — which holds no invocation at all — and every `step.run`
+// is `ctx.step.sleep` — which holds no invocation AND no concurrency slot, per
+// Inngest's documented semantics (MOTIR-3245 settled this: *"a function run that
+// is sleeping … does not count against your concurrency limit"*) — and every
+// `step.run`
 // does one small thing. `codeGraphIndexDispatchService` is built for exactly
 // this: its three operations are individually bounded and its poll NEVER THROWS,
 // because in a stepped world teardown cannot be reached from a `catch`
