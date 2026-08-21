@@ -534,7 +534,25 @@ function assertPresignedTarget(label, target, baseUrl) {
 }
 
 /**
- * PUT one artifact to the presigned URL the mint returned (MOTIR-2389).
+ * The statuses a PUT is RETRIED on (MOTIR-3313).
+ *
+ * Each one is the store saying *"not now"* rather than *"not ever"*: 408 and 429
+ * are explicit back-pressure, and 5xx is the server declining to answer. A
+ * signature failure (403), a bad request (400) and a missing grant (404) are
+ * NOT here on purpose — retrying those just sends the same doomed bytes again.
+ */
+const RETRYABLE_PUT_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+/** Attempts, and the first backoff step. 4 attempts at 500ms doubling spends at
+ *  most 3.5s of a run that already costs six minutes of browser time. */
+const PUT_ATTEMPTS = 4;
+const PUT_BASE_DELAY_MS = 500;
+
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * PUT one artifact to the presigned URL the mint returned (MOTIR-2389), RETRYING
+ * a retryable status (MOTIR-3313).
  *
  * ⚠️ `content-type` MUST be sent, and MUST equal the type the server bound at
  * signing time. The grant is an S3 presigned PUT with `content-type` inside
@@ -545,21 +563,66 @@ function assertPresignedTarget(label, target, baseUrl) {
  * or missing header is a SIGNATURE failure — hence sending exactly
  * `target.contentType`, never a guess from the filename.
  *
+ * ⚠️ WHY THE RETRY EXISTS, and what it is NOT a theory about (MOTIR-3313). This
+ * used to be a single PUT whose first non-2xx was fatal, and on motir-core
+ * PR #2237 the store answered one artifact's PUT with
+ * `503 <Code>SlowDown</Code>` — twice, deterministically, on the same recording.
+ * The tests had all passed; the lane went red in the publish, and Story
+ * MOTIR-3232 was left holding ONE of its two receipts.
+ *
+ * The store's reason is NOT established, and this retry deliberately does not
+ * claim to know it. What was MEASURED is that the usual suspects are not it: the
+ * refused trace was 37.0 MB while a 65.8 MB trace published seconds later in the
+ * same job, so it is neither size nor the MOTIR-1911 per-file cap; the publish
+ * loop is sequential and the refused recording's own VIDEO had just uploaded
+ * fine, so it is not a cold first write. What is defensible without a mechanism
+ * is narrower and enough: **503 is by definition retryable, and sending a 37 MB
+ * body over the public internet exactly once is not a reliable operation.**
+ *
+ * A retry cannot fix a store that refuses every attempt — and it should not. The
+ * publish stays red and `Published N of M` still tells the truth; this only stops
+ * a single transient refusal from costing a story its receipt.
+ *
  * @param {'video' | 'trace'} label
  * @param {string} filePath
  * @param {{ token: string, contentType: string, pathname: string }} target
+ * @param {{ attempts?: number, baseDelayMs?: number, sleep?: (ms: number) => Promise<void> }} [retry]
+ *   The knobs exist so the retry is TESTABLE without wall-clock — a test injects
+ *   `sleep`. Nothing in the shipped path passes them.
  */
-async function putSignedArtifact(label, filePath, target) {
-  const res = await fetch(target.token, {
-    method: 'PUT',
-    headers: { 'content-type': target.contentType },
-    body: fs.readFileSync(filePath),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Acceptance ${label} upload failed: ${res.status} ${await res.text().catch(() => '')}`.trim(),
+export async function putSignedArtifact(label, filePath, target, retry = {}) {
+  const attempts = retry.attempts ?? PUT_ATTEMPTS;
+  const baseDelayMs = retry.baseDelayMs ?? PUT_BASE_DELAY_MS;
+  const sleep = retry.sleep ?? realSleep;
+  // Read ONCE, outside the loop: a retry must send the same bytes, and re-reading
+  // a large file per attempt would triple the memory this already spends.
+  const body = fs.readFileSync(filePath);
+
+  let last = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const res = await fetch(target.token, {
+      method: 'PUT',
+      headers: { 'content-type': target.contentType },
+      body,
+    });
+    if (res.ok) return;
+
+    const detail = await res.text().catch(() => '');
+    last = `Acceptance ${label} upload failed: ${res.status} ${detail}`.trim();
+    if (!RETRYABLE_PUT_STATUSES.has(res.status) || attempt === attempts) break;
+
+    // Exponential, with jitter so two artifacts in one job never line their
+    // retries up. Announced, because a silent retry turns a store that is
+    // struggling into a run that is merely slow — and the next person reading
+    // this log should see how hard it was to get the bytes in.
+    const delay = baseDelayMs * 2 ** (attempt - 1);
+    console.warn(
+      `Acceptance ${label} upload got ${res.status}; retrying in ${delay}ms ` +
+        `(attempt ${attempt} of ${attempts}) — MOTIR-3313.`,
     );
+    await sleep(delay + Math.floor(Math.random() * baseDelayMs));
   }
+  throw new Error(last ?? `Acceptance ${label} upload failed`);
 }
 
 /**
@@ -579,6 +642,9 @@ async function putSignedArtifact(label, filePath, target) {
  * @param {string} opts.storyKey
  * @param {{ video: string, trace: string | null, chapters: string | null }} opts.artifacts
  * @param {{ commitSha?: string | null, ciRunUrl?: string | null, producedByKey?: string | null }} [opts.provenance]
+ * @param {{ attempts?: number, baseDelayMs?: number, sleep?: (ms: number) => Promise<void> }} [opts.retry]
+ *   Forwarded to every artifact PUT. Exists so the retry is testable without
+ *   wall-clock; the shipped path passes nothing and takes the defaults.
  */
 export async function uploadAcceptanceVideo({
   baseUrl,
@@ -587,6 +653,7 @@ export async function uploadAcceptanceVideo({
   storyKey,
   artifacts,
   provenance = {},
+  retry = {},
 }) {
   const base = baseUrl.replace(/\/$/, '');
   const headers = authHeadersFor(oidcToken, token);
@@ -627,10 +694,11 @@ export async function uploadAcceptanceVideo({
     assertWithinMintedCap('trace', artifacts.trace, targets.trace);
   }
 
-  // 2. Upload the artifacts DIRECTLY to the private bucket with the grants.
-  await putSignedArtifact('video', artifacts.video, targets.video);
+  // 2. Upload the artifacts DIRECTLY to the private bucket with the grants,
+  //    retrying a retryable refusal (MOTIR-3313 — see `putSignedArtifact`).
+  await putSignedArtifact('video', artifacts.video, targets.video, retry);
   if (artifacts.trace && targets.trace) {
-    await putSignedArtifact('trace', artifacts.trace, targets.trace);
+    await putSignedArtifact('trace', artifacts.trace, targets.trace, retry);
   }
 
   // 3. Register the pathnames (small JSON — the bytes are already in Blob).
