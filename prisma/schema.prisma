@@ -836,8 +836,6 @@ model Workspace {
   // in both directions, so it is tenant data with a system-admin escape for the
   // orchestrator, never an untenanted operator table.
   ciContainerUsages           CiContainerUsage[]
-  /// MOTIR-3358 — pushes whose changed paths a refresh has not yet indexed.
-  codeGraphPendingChanges     CodeGraphPendingChange[]
   /// MOTIR-3255 — what a multi-repo handle's seconds were spent on.
   ciContainerUsageSlices      CiContainerUsageSlice[]
   ciContainerPeriodCosts      CiContainerPeriodCost[]
@@ -6157,80 +6155,6 @@ model CiContainerUsage {
   @@map("ci_container_usage")
 }
 
-/// ONE PUSH'S CHANGED PATHS, held until the refresh that indexes them succeeds
-/// (Story MOTIR-3249 · Subtask MOTIR-3358).
-///
-/// ⚠️ WHY A TABLE RATHER THAN A FIELD ON THE EVENT. The obvious design is to put
-/// the file list on the `system.code-graph-refresh` event. It cannot work:
-/// `codeGraphRefresh` debounces on `(installationId, repoOwner, repoName)` and a
-/// debounce delivers exactly ONE event — the LAST one
-/// (`tests/jobs/debounce-burst.test.ts`: *"coalesces a same-key burst into exactly
-/// ONE run, carrying the LAST event"*). A run standing for four pushes would carry
-/// one push's paths, index those, and leave the other three pushes' files stale in
-/// a graph nothing downstream can tell is wrong. Coalescing is the NORMAL case: the
-/// window is two minutes.
-///
-/// So each push APPENDS a row here and the run DRAINS every row for its repo. The
-/// union is the delta the container may index instead of walking the whole tree.
-///
-/// ⚠️ AND THE DRAIN IS A CLAIM, NOT A DELETE. A run that claims these rows and then
-/// FAILS must not consume them — the next run needs them, or their files stay stale
-/// forever. So a claim stamps `claimedByRef`, a successful index deletes the
-/// claimed rows, and any other outcome releases them back. That is the same
-/// claim/ack shape `fleet_in_flight_slot` uses, and for the same reason: the thing
-/// being protected is not the row, it is the work the row stands for.
-model CodeGraphPendingChange {
-  id String @id @default(cuid())
-
-  /// The debounce key, verbatim — this is what a run drains by, so it is stored in
-  /// exactly the three parts the job's `debounce.key` expression names.
-  installationId String @map("installation_id")
-  repoOwner      String @map("repo_owner")
-  repoName       String @map("repo_name")
-
-  /// Tenant scope, for RLS and for the same denormalized-attribution reason the
-  /// fleet tables carry it: a row must be readable without a join.
-  workspaceId String @map("workspace_id")
-
-  /// The head this push landed. The run pins its tarball to the NEWEST claimed
-  /// sha, which is what makes the path list exactly describe the tree that gets
-  /// indexed — see the service.
-  headSha String? @map("head_sha")
-
-  /// `added` ∪ `modified` ∪ `removed`, repo-relative, from the push payload.
-  ///
-  /// ⚠️ EMPTY IS NOT "NOTHING CHANGED" — it is "this push's paths are UNKNOWN",
-  /// and it poisons the whole union deliberately. A force-push, a payload GitHub
-  /// truncated at its commit cap, or anything else that leaves us unsure produces
-  /// a row with no paths, and the service then declines to offer a list at all so
-  /// the container does exactly what it does today. A partial list is the one input
-  /// that could produce a silently wrong graph.
-  paths String[]
-
-  /// Which run is holding these rows, and since when. NULL means unclaimed and
-  /// drainable. A claim that outlives its run is reclaimable after a stale window
-  /// rather than stuck — the same posture as the fleet's in-flight slots.
-  ///
-  /// ⚠️ A `Ref`, NOT A RUN ID, and the name is load-bearing. The value is the
-  /// TRIGGERING EVENT's id (`event.id ?? ctx.runId`), because `ctx.runId` is
-  /// re-derived on every Inngest pass while this is stamped in one pass and matched
-  /// in a much later one — a claim held under `runId` can never be settled. Same
-  /// value and same reason as `fleet_in_flight_slot.owner_ref`, and named the same
-  /// way so the field itself stops inviting the wrong one.
-  claimedByRef   String?   @map("claimed_by_ref")
-  claimedAt      DateTime? @map("claimed_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  /// The drain read: everything pending for one repo.
-  @@index([installationId, repoOwner, repoName])
-  /// The settle read: everything one run is holding.
-  @@index([claimedByRef])
-  @@index([workspaceId])
-  @@map("code_graph_pending_change")
-}
 
 /// WHAT ONE HANDLE'S SECONDS WERE SPENT ON, when the handle served more than one
 /// repo (Story MOTIR-3249 · Subtask MOTIR-3255).
