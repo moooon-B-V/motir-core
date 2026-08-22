@@ -414,3 +414,38 @@ export class NoPlanForWorkItemError extends Error {
     this.name = 'NoPlanForWorkItemError';
   }
 }
+
+/**
+ * The approve transaction ran out of its wall-clock budget (Prisma P2028), so
+ * nothing was materialized and the plan is untouched (MOTIR-3396). → 503
+ *
+ * ⚠️ IT IS TYPED BECAUSE THE BARE 500 TAUGHT THE WRONG LESSON. The approve route
+ * maps every typed plan error to a 4xx and re-throws the rest; P2028 was not one
+ * of them, so a plan too large for the budget answered with a 500 and an empty
+ * body. The only thing a person can do with that is press the button again —
+ * which is exactly what happened, three times, none of which could have worked.
+ *
+ * 503 rather than 409: nothing about the plan is wrong and nothing about it
+ * conflicts. The write was refused for a CAPACITY reason, it is safe to retry,
+ * and a smaller plan will succeed — which is the sentence the status code and
+ * the message are between them supposed to say.
+ *
+ * The ITEM COUNT rides the message deliberately. A timeout with no size in it
+ * reads as an outage; the same timeout naming fifteen proposals reads as a plan
+ * to split, and that is the actionable half.
+ */
+export class PlanApproveTimedOutError extends Error {
+  readonly code = 'PLAN_APPROVE_TIMED_OUT' as const;
+  constructor(
+    readonly planId: string,
+    /** How many proposals the approve was carrying when it ran out of budget. */
+    readonly itemCount: number,
+  ) {
+    super(
+      `Approving plan ${planId} exceeded the transaction budget while materializing ` +
+        `${itemCount} proposal${itemCount === 1 ? '' : 's'}. Nothing was created and the plan is ` +
+        `unchanged. Retrying will not help at this size — split the plan into smaller batches.`,
+    );
+    this.name = 'PlanApproveTimedOutError';
+  }
+}

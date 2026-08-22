@@ -82,20 +82,40 @@ export interface WorkspaceContext {
  * policies read, and invokes `fn` with the transaction client. Every
  * query issued through `tx` inside `fn` sees the GUCs and is RLS-scoped
  * to the workspace; once the transaction ends the GUCs are discarded.
+ *
+ * `options` raises Prisma's interactive-transaction budget for a caller that
+ * needs it — see {@link TransactionBudget}. Omit it and Prisma's defaults apply
+ * (5 000 ms body, 2 000 ms wait), which is what every caller but one wants.
+ *
+ * ⚠️ IT TAKES A BUDGET BECAUSE IT IS THE CONTEXT EVERY TENANT-SCOPED WRITE USES
+ * (MOTIR-3396). Its sibling `withWorkspaceServiceContext` has accepted one since
+ * MOTIR-1972, and this one hardcoded `db.$transaction(fn)` with no options
+ * parameter at all — so the ONE helper that almost every write flows through was
+ * the one that could not raise its budget, and a write big enough to need more
+ * than five seconds had no expressible way to ask. Approving a fifteen-item plan
+ * was that write. The asymmetry was not a decision; it was the narrower helper
+ * getting the feature first and nobody bringing it back.
+ *
+ * Raising it stays a VISIBLE, ARGUED decision at the call site — the same bar
+ * {@link TransactionBudget} sets — not a default anybody inherits.
  */
 export async function withWorkspaceContext<T>(
   ctx: WorkspaceContext,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: TransactionBudget,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
-    await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-    // Always bind app.project_id (empty string when no project is active) so
-    // the work_item project-narrowing policy's `coalesce(...) = ''` branch
-    // fires cleanly — no ambiguity between "unset" and "deliberately empty".
-    await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
-    return fn(tx);
-  });
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
+      // Always bind app.project_id (empty string when no project is active) so
+      // the work_item project-narrowing policy's `coalesce(...) = ''` branch
+      // fires cleanly — no ambiguity between "unset" and "deliberately empty".
+      await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId ?? ''}, true)`;
+      return fn(tx);
+    },
+    options ? { timeout: options.timeoutMs, maxWait: options.maxWaitMs } : undefined,
+  );
 }
 
 /**

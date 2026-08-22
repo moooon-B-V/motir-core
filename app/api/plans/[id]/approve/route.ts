@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
 import {
+  PlanApproveTimedOutError,
   PlanGrammarError,
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
@@ -93,6 +94,18 @@ export async function POST(
     // archived between the gate and the write). The transaction rolled back.
     if (err instanceof UnresolvedPlanRefError || err instanceof PlanItemTargetMissingError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // The transaction budget ran out mid-materialize (MOTIR-3396). Nothing was
+    // written, so this is a CAPACITY answer rather than a fault in the proposals
+    // — 503, retryable in principle, with the item count in the body so the
+    // reviewer can see that the actionable move is to split the plan rather than
+    // press Approve again. Before this arm it was a bare 500 with an empty body,
+    // which is why it WAS pressed again, three times.
+    if (err instanceof PlanApproveTimedOutError) {
+      return NextResponse.json(
+        { code: err.code, planId: err.planId, itemCount: err.itemCount, error: err.message },
+        { status: 503 },
+      );
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(

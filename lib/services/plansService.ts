@@ -48,6 +48,7 @@ import {
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanApproveTimedOutError,
   PlanNotFoundError,
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
@@ -392,6 +393,31 @@ function topoOrderAdds(adds: PlanItem[]): PlanItem[] {
 
 // ── The confirmation gate at PERSIST (Subtask 7.12.5 · MOTIR-911) ─────────────
 //
+/**
+ * The raised transaction budget for an approve (MOTIR-3396).
+ *
+ * ARGUING THE NUMBERS, because {@link TransactionBudget} says a raise must be a
+ * visible decision rather than an inherited default:
+ *
+ * Approve is the only call in the product that can create a whole SUBTREE in one
+ * transaction — N work items, each with a key allocation, a create, a status
+ * derivation, a body write, an auto-relate pass and a revision row, plus the
+ * edge pass and the plan's own update. Prisma's default 5 000 ms was not chosen
+ * for that shape; it is the default for a single-row write, and a fifteen-item
+ * plan exhausted it every time. The default `maxWait` of 2 000 ms failed too, on
+ * the FIRST attempt, waiting for a free connection under load.
+ *
+ * 30 000 / 10 000 matches the one shipped precedent (the per-project runner-group
+ * sync) and is bounded for the same reason that one is: it is comfortably past
+ * the worst plan a reviewer will realistically approve, while still releasing the
+ * plan's row lock in half a minute rather than holding it until the connection
+ * dies. It is NOT sized to make an unbounded plan work — batching the edge pass
+ * is what made the budget adequate, and this is the insurance behind it. A plan
+ * large enough to exhaust THIS budget is a plan to split, and it now says so
+ * (see {@link PlanApproveTimedOutError}) instead of returning a bare 500.
+ */
+const APPROVE_TX_BUDGET = { timeoutMs: 30_000, maxWaitMs: 10_000 } as const;
+
 // `approvePlan` is the ONLY path from a proposal to a row, and it re-validates
 // the proposal set INDEPENDENTLY before it writes anything — the grammar
 // (`lib/issues/parentRules.ts`) and done-work immutability. The verdict itself
@@ -956,21 +982,35 @@ async function materialize(
   }
 
   // Pass 2 — blocked-by edges for the adds (all add targets now exist).
-  for (const item of adds) {
+  //
+  // ⚠️ ONE INSERT FOR THE WHOLE PASS, NOT ONE PER EDGE (MOTIR-3396). This used to
+  // `await` a single-row `create` per edge, inside an interactive transaction with
+  // a wall-clock budget — so a plan's edge count was a count of sequential network
+  // round trips. Approving fifteen items with twenty-seven edges died here on
+  // Prisma's default 5 000 ms, every time, and the fix Prisma's own error text
+  // names first is "doing less work in the transaction". Twenty-seven round trips
+  // become one; the raised budget at the call site is insurance behind it, not the
+  // remedy.
+  //
+  // `skipDuplicates` (rather than the plain `create`'s raise) is DEFENSIVE here,
+  // not load-bearing, and saying which it is matters: every `fromId` in this pass
+  // belongs to an `add` created moments ago in Pass 1, so no edge from it can
+  // already exist, and a repeated ref within one proposal is rejected by
+  // `validatePlanProposals` before materialize is reached at all. It is the right
+  // default for the batch anyway — inside an interactive transaction a thrown
+  // P2002 aborts the WHOLE approve rather than one insert — but no caller relies
+  // on it, and a later change that made it load-bearing would owe its own test.
+  const blockedByEdges = adds.flatMap((item) => {
     const fromId = planItemToWorkItem.get(item.id)!;
-    for (const ref of item.blockedByRefs) {
-      await workItemLinkRepository.create(
-        {
-          workspaceId: ctx.workspaceId,
-          fromId,
-          toId: resolveRef(ref),
-          kind: 'is_blocked_by',
-          createdById: ctx.userId,
-        },
-        tx,
-      );
-    }
-  }
+    return item.blockedByRefs.map((ref) => ({
+      workspaceId: ctx.workspaceId,
+      fromId,
+      toId: resolveRef(ref),
+      kind: 'is_blocked_by' as const,
+      createdById: ctx.userId,
+    }));
+  });
+  await workItemLinkRepository.createManyIfAbsent(blockedByEdges, tx);
 
   // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
   // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
@@ -2143,6 +2183,11 @@ export const plansService = {
     // reference a materialized card stores.
     const repoRefs = await resolveProposalRepoRefs(plan.projectId, ctx);
 
+    // P2028 — the transaction budget above ran out. Nothing was written (the
+    // transaction rolled back), so this is a CAPACITY answer about the plan's
+    // size, not a fault in its proposals: it is typed here rather than left to
+    // surface as a bare 500 that tells a reviewer only to press the button again
+    // (MOTIR-3396). `preItems` is the count the reviewer needs to act on.
     const { row, items, firstOnboarding, projectKey, touchedWorkItemIds } =
       await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -2220,7 +2265,13 @@ export const plansService = {
             touchedWorkItemIds,
           };
         },
-      );
+        APPROVE_TX_BUDGET,
+      ).catch((err: unknown) => {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2028') {
+          throw new PlanApproveTimedOutError(planId, preItems.length);
+        }
+        throw err;
+      });
 
     // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
     // ADR §6.3.1). AFTER the commit, for the same two reasons the create path

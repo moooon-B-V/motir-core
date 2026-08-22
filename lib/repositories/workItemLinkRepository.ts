@@ -145,6 +145,60 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The BATCH form of {@link createIfAbsent}: N links in ONE round trip, via a
+   * single `createManyAndReturn` + `skipDuplicates`. Returns the rows actually
+   * inserted (a duplicate contributes nothing), so the caller can count what it
+   * added. An empty `data` writes nothing and returns `[]`. Required `tx`.
+   *
+   * ⚠️ WHY IT EXISTS (MOTIR-3396). `createIfAbsent` calls an ARRAY api with an
+   * array of ONE, which was right when its only caller had exactly one link to
+   * write. `plansService.materialize` does not: approving a plan wires every
+   * proposed `blocked_by` edge, and doing that one link at a time is one network
+   * round trip PER EDGE inside an interactive transaction with a wall-clock
+   * budget. A fifteen-item plan with twenty-seven edges spent twenty-seven
+   * sequential awaits there and exhausted the budget — and Prisma's own error
+   * text names the better fix first: "consider increasing the interactive
+   * transaction timeout OR DOING LESS WORK IN THE TRANSACTION". This is the
+   * second one; the budget raise beside it is insurance, not the fix.
+   *
+   * ⚠️ THE TRADE, STATED RATHER THAN DISCOVERED. A DB-layer trigger rejection
+   * (cycle / self-link / cross-workspace) aborts the whole STATEMENT, so a batch
+   * cannot say WHICH row it was. `create` can, because it inserts one row and
+   * knows it. So this method translates a marker precisely only when the batch
+   * holds exactly one row; for a larger batch it raises the same typed class with
+   * the whole CANDIDATE SET on `attempted.batch`, and the caller reports the
+   * plan rather than the edge. That is the honest cost of the round-trip saving,
+   * and it is bounded: a cycle among proposed edges is a plan-authoring error
+   * that `validate_work_item` over the plan already reports BEFORE approve, with
+   * the pair named.
+   */
+  async createManyIfAbsent(
+    data: Prisma.WorkItemLinkUncheckedCreateInput[],
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    if (data.length === 0) return [];
+    try {
+      return await tx.workItemLink.createManyAndReturn({ data, skipDuplicates: true });
+    } catch (err) {
+      const first = data[0]!;
+      throw translateWriteError(err, {
+        fromId: first.fromId,
+        toId: first.toId,
+        kind: first.kind as string,
+        ...(data.length > 1
+          ? {
+              batch: data.map((d) => ({
+                fromId: d.fromId,
+                toId: d.toId,
+                kind: d.kind as string,
+              })),
+            }
+          : {}),
+      });
+    }
+  },
+
+  /**
    * The `(status, projectId)` of every `is_blocked_by` blocker of `workItemId`
    * — the raw input the service's `isReady` reduces to a readiness verdict
    * (Subtask 2.2.6, resolving finding #21). ONE query, no fetch-then-filter
@@ -491,7 +545,20 @@ export const workItemLinkRepository = {
  */
 function translateWriteError(
   err: unknown,
-  attempted: { fromId: string; toId: string; kind: string },
+  attempted: {
+    fromId: string;
+    toId: string;
+    kind: string;
+    /**
+     * Present only on the BATCH path ({@link workItemLinkRepository.createManyIfAbsent},
+     * MOTIR-3396) and only when the batch held more than one row. A statement-level
+     * trigger rejection cannot say which row it was, so the candidate set rides
+     * along and `fromId`/`toId`/`kind` name the batch's FIRST row rather than a
+     * row proved to be at fault. A single-row batch omits it and is exactly as
+     * precise as `create`.
+     */
+    batch?: Array<{ fromId: string; toId: string; kind: string }>;
+  },
 ): never {
   const message = extractMessage(err);
   const sqlState = extractSqlState(err);
