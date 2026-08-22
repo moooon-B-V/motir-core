@@ -135,13 +135,60 @@ export const workItemLinkRepository = {
    * structural triggers still fire on the insert; for the only caller's shape
    * (same-workspace, non-self `relates_to`, which is cycle-exempt) none of them
    * reject, so no marker translation is needed here. Required `tx`.
+   *
+   * ⚠️ IT DELEGATES TO {@link createManyIfAbsent} NOW (MOTIR-3396), which is a
+   * behaviour change in exactly one respect: a trigger rejection that used to
+   * escape as a raw SQLSTATE-23514 Prisma error is now TRANSLATED to the typed
+   * class, like every other write in this file. Nothing depended on the raw form
+   * — the sentence above is why — and the batch form is where the array API this
+   * method was already calling is actually used with more than one row.
    */
   async createIfAbsent(
     data: Prisma.WorkItemLinkUncheckedCreateInput,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemLink | null> {
-    const rows = await tx.workItemLink.createManyAndReturn({ data: [data], skipDuplicates: true });
+    const rows = await workItemLinkRepository.createManyIfAbsent([data], tx);
     return rows[0] ?? null;
+  },
+
+  /**
+   * The BATCH form of {@link createIfAbsent}: insert N links in ONE
+   * `createManyAndReturn` + `skipDuplicates`, returning only the rows actually
+   * inserted (a duplicate is skipped, never raised — same `ON CONFLICT DO
+   * NOTHING` semantics as the single form, which now delegates here). An empty
+   * input issues no query at all. Required `tx`.
+   *
+   * ⚠️ THIS EXISTS BECAUSE THE SINGLE FORM WAS AN ARRAY API CALLED WITH AN ARRAY
+   * OF ONE (MOTIR-3396). `createManyAndReturn` has always taken N rows;
+   * `createIfAbsent` wrapped it at N=1 because its first caller
+   * (auto-relate-on-mention) had exactly one link to write. `plansService`'s
+   * materialize then wired a whole plan's `blocked_by` graph one await at a
+   * time, so a 15-item plan with 27 edges spent 27 sequential Fly→Neon round
+   * trips inside an interactive transaction on Prisma's default 5 s budget, and
+   * approving it returned P2028. One statement for the same 27 rows is the fix
+   * Prisma's own error text names first ("or doing less work in the
+   * transaction").
+   *
+   * **The structural triggers still fire per ROW**, so a batch is not a way to
+   * smuggle a cycle or a self-link past them: `enforce_work_item_link_no_cycle`
+   * is a BEFORE-ROW trigger and its recursive walk sees rows inserted earlier in
+   * the SAME statement, so an intra-batch A↔B cycle is rejected exactly as two
+   * separate inserts would reject it (asserted in
+   * `tests/integration/work-items/link-repository.test.ts`). What a batch loses
+   * is only WHICH row failed — Postgres aborts the statement without saying —
+   * so the rejection is attributed by matching the trigger message's ids back to
+   * the batch, and the typed error the callers already catch is preserved.
+   */
+  async createManyIfAbsent(
+    data: Prisma.WorkItemLinkUncheckedCreateInput[],
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    if (data.length === 0) return [];
+    try {
+      return await tx.workItemLink.createManyAndReturn({ data, skipDuplicates: true });
+    } catch (err) {
+      throw translateWriteError(err, attributeBatchRow(err, data));
+    }
   },
 
   /**
@@ -476,6 +523,36 @@ export const workItemLinkRepository = {
 };
 
 // --- Prisma/Postgres error → typed error translation (repository edge) ------
+
+/**
+ * Which row of a BATCH insert the trigger rejected (MOTIR-3396). Postgres aborts
+ * the whole statement and names no ordinal, but the WI_LINK_* rejections that
+ * can carry a row identity INTERPOLATE the ids into their message
+ * (`prisma/sql/work_item_link_triggers.sql`: `linking % is_blocked_by %`,
+ * `fromId = toId = %`), so the offending row is recoverable by matching those
+ * ids back to the batch.
+ *
+ * Falls back to the FIRST row when nothing matches — which is the honest answer
+ * for the two rejections that name WORKSPACES rather than links
+ * (`WI_LINK_CROSS_WORKSPACE`, `WI_LINK_WORKSPACE_MISMATCH`). Degrading there
+ * costs nothing that matters: only {@link WorkItemLinkCycleError} carries the
+ * attempted triple at all, the rest are constants, and it is a DIAGNOSTIC in
+ * every case — never a control-flow input, so a wrong guess degrades a message
+ * rather than a verdict.
+ */
+function attributeBatchRow(
+  err: unknown,
+  data: Prisma.WorkItemLinkUncheckedCreateInput[],
+): { fromId: string; toId: string; kind: string } {
+  const message = extractMessage(err);
+  const named = data.find((d) => message.includes(d.fromId) && message.includes(d.toId));
+  // `?? data[0]` also covers the single-row case exactly — a one-element batch
+  // resolves to that element whether or not the message names it — so there is
+  // deliberately no `length === 1` fast path here: it would be a branch that
+  // cannot change an answer, and one no test could distinguish.
+  const attributed = named ?? data[0]!;
+  return { fromId: attributed.fromId, toId: attributed.toId, kind: attributed.kind as string };
+}
 
 /**
  * Translate a write-path error into a typed work-item-link error. Trigger

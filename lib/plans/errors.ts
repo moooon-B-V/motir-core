@@ -414,3 +414,34 @@ export class NoPlanForWorkItemError extends Error {
     this.name = 'NoPlanForWorkItemError';
   }
 }
+
+/**
+ * `approvePlan`'s transaction exhausted its budget before committing — Prisma
+ * P2028, either half (`maxWait`, no free connection; or `timeout`, mid-body).
+ * The transaction rolled back, so the tree is byte-identical and the plan is
+ * still `planned`: this is a RETRYABLE failure, and saying so is the entire
+ * point of the class. → 503
+ *
+ * ⚠️ IT CARRIES THE ITEM COUNT, AND THAT IS THE ACTIONABLE PART (MOTIR-3396).
+ * Before this existed, P2028 fell through the route's error map to a bare 500
+ * with an empty body — so the only move a person had was to press Approve
+ * again, which is what happened three times on the plan that produced this bug.
+ * A 500 says "something broke"; a 503 naming the plan and how many proposals it
+ * carries says "this plan is too large for one transaction", which is a sentence
+ * someone can act on (approve a smaller plan, or file the ceiling).
+ *
+ * The count is the proposal count, not the edge count, because the proposal
+ * count is what the person clicking Approve can see on the review surface.
+ */
+export class PlanApproveTimedOutError extends Error {
+  readonly code = 'PLAN_APPROVE_TIMED_OUT' as const;
+  constructor(
+    readonly planId: string,
+    readonly itemCount: number,
+  ) {
+    super(
+      `Approving plan ${planId} (${itemCount} proposal${itemCount === 1 ? '' : 's'}) exceeded the transaction budget and was rolled back. Nothing was created and the plan is still awaiting a decision — retry, and if it keeps timing out the plan is too large to materialize in one transaction.`,
+    );
+    this.name = 'PlanApproveTimedOutError';
+  }
+}

@@ -51,6 +51,7 @@ import {
   PlanNotFoundError,
   PlanNotGeneratingError,
   NoPlanForWorkItemError,
+  PlanApproveTimedOutError,
   PlanNotInExpectedStatusError,
   PlanPersistenceError,
   type PlanTargetOp,
@@ -956,21 +957,32 @@ async function materialize(
   }
 
   // Pass 2 — blocked-by edges for the adds (all add targets now exist).
-  for (const item of adds) {
+  //
+  // ⚠️ ONE STATEMENT FOR THE WHOLE GRAPH, NOT ONE PER EDGE (MOTIR-3396). This
+  // pass used to `await workItemLinkRepository.create(...)` inside a nested
+  // loop, so a plan's edge count was its round-trip count: 27 edges meant 27
+  // sequential Fly→Neon waits, at the END of an interactive transaction that had
+  // already spent itself creating 15 work items. That is what exhausted Prisma's
+  // default 5 000 ms budget and made approve return P2028 — and the raised
+  // budget this path now passes is the SECOND fix, deliberately: the first is
+  // simply not doing the work.
+  //
+  // `resolveRef` still runs in the collection loop, so an unresolvable temp-ref
+  // is still an `UnresolvedPlanRefError` raised before any edge is written. The
+  // per-row structural triggers are unaffected by batching (see
+  // `createManyIfAbsent`), and `skipDuplicates` makes a plan that proposes the
+  // same edge twice idempotent instead of aborting the approve.
+  const blockedByRows = adds.flatMap((item) => {
     const fromId = planItemToWorkItem.get(item.id)!;
-    for (const ref of item.blockedByRefs) {
-      await workItemLinkRepository.create(
-        {
-          workspaceId: ctx.workspaceId,
-          fromId,
-          toId: resolveRef(ref),
-          kind: 'is_blocked_by',
-          createdById: ctx.userId,
-        },
-        tx,
-      );
-    }
-  }
+    return item.blockedByRefs.map((ref) => ({
+      workspaceId: ctx.workspaceId,
+      fromId,
+      toId: resolveRef(ref),
+      kind: 'is_blocked_by' as const,
+      createdById: ctx.userId,
+    }));
+  });
+  await workItemLinkRepository.createManyIfAbsent(blockedByRows, tx);
 
   // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
   // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
@@ -1571,6 +1583,55 @@ async function releasePlanTargetLocks(
       err,
     );
   }
+}
+
+/**
+ * The raised transaction budget for `approvePlan` (MOTIR-3396) — the ONE plan
+ * path that gets one, and {@link TransactionBudget} asks for the argument here
+ * rather than a number, so here it is.
+ *
+ * **Why it needs one at all.** Approve is the only path from a proposal to a
+ * row, and it is a whole SUBTREE per click: for each add, allocate the project's
+ * next number, insert the row, derive its birth status, rewrite its body's
+ * intra-plan refs, auto-relate its mentions and record a revision — then the
+ * edges, then every modify and remove. The work is proportional to the plan, and
+ * a plan worth reviewing is not small. It must all be ONE transaction: a partial
+ * materialize would leave a half-built tree that the plan can no longer be
+ * re-approved to finish.
+ *
+ * **Why the numbers.** 30 s / 10 s, matching `projectRunnerGroupService`'s
+ * `SYNC_TX_BUDGET` — deliberately the same shape, because the useful property is
+ * "bounded well past the worst realistic case", not a tuned figure. The failing
+ * fixture was 15 adds + 27 edges at ~5.03 s against Neon from Fly `iad`; with
+ * the edge pass batched (one statement, not 27) the same plan's statement count
+ * falls by ~26, so 30 s leaves room for a plan several times larger before
+ * anybody has to think about this again. `maxWait` at 10 s covers a pool under
+ * load rather than a slow body — the first of the four observed failures was
+ * `maxWait` (2 000 ms), never reaching the body at all.
+ *
+ * **What raising it does NOT buy, and why the ordering matters.** A bigger
+ * budget makes a slow transaction legal, not fast; it holds a Neon pool slot and
+ * the plan's row lock for as long as it runs. So the round trips were removed
+ * FIRST (`workItemLinkRepository.createManyIfAbsent`) and this is the margin
+ * around the result. If a plan ever exhausts 30 s, the answer is again to do
+ * less work in the transaction — not to raise this.
+ */
+const APPROVE_TX_BUDGET = { timeoutMs: 30_000, maxWaitMs: 10_000 } as const;
+
+/**
+ * Translate Prisma's P2028 into {@link PlanApproveTimedOutError} (MOTIR-3396).
+ * Both halves of the interactive-transaction budget raise P2028 — `maxWait`
+ * ("Unable to start a transaction in the given time") and `timeout` ("A query
+ * cannot be executed on an expired transaction") — and both mean the same thing
+ * to a caller: nothing was written, the plan still awaits a decision, retrying
+ * is legitimate. Anything else is rethrown untouched, so a typed plan error
+ * still reaches the route's own map.
+ */
+function translateApproveTimeout(err: unknown, planId: string, itemCount: number): never {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2028') {
+    throw new PlanApproveTimedOutError(planId, itemCount);
+  }
+  throw err;
 }
 
 export const plansService = {
@@ -2220,7 +2281,11 @@ export const plansService = {
             touchedWorkItemIds,
           };
         },
-      );
+        // The raised budget, argued at {@link APPROVE_TX_BUDGET}. Second of the
+        // two fixes, not the first: the edge pass above was batched before this
+        // number was touched (MOTIR-3396).
+        APPROVE_TX_BUDGET,
+      ).catch((err: unknown) => translateApproveTimeout(err, planId, preItems.length));
 
     // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
     // ADR §6.3.1). AFTER the commit, for the same two reasons the create path
