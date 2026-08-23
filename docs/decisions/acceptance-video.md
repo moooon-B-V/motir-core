@@ -652,6 +652,186 @@ a fabricated lane of 0 / 1 / 2 / 3 / 4 / 9 / 26 specs, reading back what it writ
 wrong one for arithmetic: a regex that agrees with the derivation agrees just as
 happily with an off-by-one, and the floor and the cap are exactly where one would sit.
 
+#### Amendment 2026-08-23 (MOTIR-3408) — a REFUSED artifact takes the same per-artifact rule as an OVER-CAP one; recovery needs no new CI surface
+
+MOTIR-1911's amendment above settled what happens when an artifact is **too
+big**: the video is the receipt so an over-cap video fails the step, and the
+trace is a debugging aid so an over-cap trace is _dropped_ and the video
+publishes without it. That rule was written on the SIZE axis and stops there.
+**On the REFUSAL axis the code does the opposite**, and MOTIR-3313 is what that
+costs.
+
+##### What the refusal path actually does
+
+In `scripts/upload-acceptance-video.mjs`, `uploadAcceptanceVideo` runs
+`putSignedArtifact('video', …)`, then `putSignedArtifact('trace', …)`, and only
+then POSTs the register call that writes the evidence row. `putSignedArtifact`
+throws once its bounded retry is exhausted, so a refused **trace** propagates out
+**before the register POST** — no evidence row is written at all, and the video's
+bytes, which uploaded successfully seconds earlier, sit orphaned in the store.
+
+So one artifact, two failure modes, opposite outcomes:
+
+| the trace is…             | today                                                            | MOTIR-1911's stated reason                                                      |
+| ------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **over the per-file cap** | dropped; the **video publishes**; warning; step green            | "the trace is a debugging aid"                                                  |
+| **refused by the store**  | the **whole recording is lost**; step red; the video is orphaned | — none; the ordering was never decided, it is where the `throw` happens to land |
+
+The observed incident is exactly the second row: every test passed, the store
+answered one trace PUT with `503 SlowDown`, and MOTIR-3232 was left holding one
+of its two receipts.
+
+##### Decision — D: extend the per-artifact rule to the refusal axis
+
+**A trace that is still refused after `putSignedArtifact`'s retries is DROPPED,
+exactly as an over-cap trace is: the video's receipt is registered without it,
+the drop is reported as a `warning` annotation and in the job summary, and the
+step stays green.** A refused **video** is unchanged — it fails the step, because
+there is nothing to fall back to.
+
+This is not a new policy. It is MOTIR-1911's rule applied on the axis it was
+never written for, and its own sentence is the argument: _"Costing a story its
+evidence to save an attachment nobody accepts a story on is the bug, not the
+fix."_ That is as true of a refusal as of a byte count.
+
+##### Why this does NOT "make a partial publish green"
+
+MOTIR-3313 is emphatic that `Published N of M owned acceptance recording(s)` and
+the red check must both survive, because they are what made anyone look. They do,
+and the distinction is exact: **that count counts RECORDINGS, not files.** Under
+this amendment no recording is lost, so the honest count is `2 of 2` and there is
+nothing for a red check to report — while a lost _recording_ still reddens the
+step exactly as before, on either artifact.
+
+The counter-argument is worth recording rather than waving past: a `warning`
+annotation is a weaker signal than a failed job, and this incident was found
+_because_ someone looked at red. Two things answer it. The ADR already accepted
+that trade on the size axis and has lived with it since 2026-08-04. And the
+alternative it is weighed against is not "a louder signal" but "a lost receipt" —
+reddening the lane did not save MOTIR-3232's clip, it only announced the loss.
+
+##### The recovery question — measured, and it needs no new CI surface
+
+MOTIR-3313 also asked whether a partial publish should be recoverable _without
+re-running six minutes of browser tests to move two files_. It is, and the bytes
+were already there the whole time.
+
+**Read from the incident's own artifact** — `playwright-report-acceptance-video-shard-2`
+of run `32435341259` (artifact id `9430776431`, 210,446,383 B, still unexpired at
+the time of writing):
+
+```
+gh api repos/moooon-B-V/motir-core/actions/artifacts/9430776431/zip > shard2.zip
+unzip -l shard2.zip     # 43 files
+```
+
+- The layout is **flat and content-addressed**: `data/<sha1>.<ext>`, plus
+  `index.html` and the `trace/` viewer bundle. No directory per test, and no
+  original filenames.
+- **Every input the publish needs is present.** Per recording: `video` (`.webm`),
+  `trace` (`.zip`), and the three sidecars `acceptance-story`, `chapters` and
+  `recording-meta`, each registered as a Playwright attachment by
+  `tests/e2e/_helpers/acceptance-video.ts` and carried through by the HTML
+  reporter.
+- **The recording → attachment mapping is recoverable**, from the report's own
+  manifest: `index.html` carries `<meta id="playwrightReportBase64">` holding a
+  `data:application/zip;base64,…` payload whose per-test JSON entries each carry
+  an `attachments` array of `{name, contentType, path}`, where `path` is the
+  `data/<sha1>.<ext>` key.
+- **The manifest is not optional.** Content addressing DEDUPLICATES identical
+  files, and both MOTIR-3232 recordings declare the same story, so
+  `{"storyKey":"MOTIR-3232"}` is stored **once** for **two** recordings. A naive
+  scan of `data/` therefore cannot reconstruct the recording set, and would
+  mis-attribute it if it tried.
+
+Reconstructed from that manifest, the run held:
+
+| story          | spec                                       |  video |   trace |
+| -------------- | ------------------------------------------ | -----: | ------: |
+| **MOTIR-2999** | `acceptance-implemented-lifecycle.spec.ts` | 2.6 MB | 45.6 MB |
+| **MOTIR-3232** | `acceptance-plan-shapes.spec.ts` (REFUSED) | 2.1 MB | 45.9 MB |
+| **MOTIR-3232** | `acceptance-plans-surface.spec.ts`         | 4.3 MB | 89.3 MB |
+
+##### ⚠️ Correcting MOTIR-3313's figures — its conclusion holds, its numbers were local
+
+The card reports the refused trace at **37.0 MB** and the one that succeeded
+seconds later at **65.8 MB**. Those came from regenerating both recordings
+locally; the numbers above are the bytes CI actually uploaded, and they are
+larger — **45.9 MB refused, 89.3 MB accepted**. Recorded here rather than
+silently replaced, because the discrepancy has a mundane cause (a local run is
+not the CI run) and could otherwise be re-derived as drift.
+
+**The card's conclusion survives the correction and is strengthened by it: the
+REFUSED artifact is still much smaller than one the same job accepted moments
+later, on the real bytes rather than on a local proxy.** Worth noting in passing
+that 89.3 MB is within 11% of the 100 MB per-file cap — not a factor in this
+incident, which the store refused rather than the cap rejected, but the margin is
+thinner than the ADR's envelope suggests.
+
+##### Not chosen, and why
+
+- **C · Upload `out/playwright-output-acceptance` as its own artifact.**
+  **Rejected on measurement.** The report artifact already carries every byte —
+  all three videos and all three traces, 210 MB for this shard. A second upload
+  would duplicate ~180 MB per shard per run to obtain files that are already
+  retained for the same seven days.
+- **B · A `workflow_dispatch` re-publish job over the retained artifact.**
+  **Rejected for now, and this reverses the recommendation MOTIR-3408 was
+  authored with** — on evidence that card did not have, since the artifact had
+  not been opened when it was written. With D in place the observed failure class
+  loses nothing, so B's remaining scenario is a refused **video**: four
+  consecutive retry failures on a 2–4 MB body, against traces that are twenty
+  times larger. Building a dispatch entry point plus a manifest reader to save six
+  minutes on that is machinery ahead of its need.
+  **What reopens it, stated so the next reader does not re-argue it: any refused
+  VIDEO, or a second lost recording of any kind.** Either is evidence the rate is
+  not what this assumed.
+- **A · Re-run the lane** remains the fallback for that residual case, at the cost
+  of one build plus one shard's browser run.
+
+##### The manual recovery path, which exists today
+
+Because the bytes and the mapping are both in the retained artifact, a lost
+receipt can be republished **with no code change and no browser run**. This was
+not reasoned — it was **performed**, against the incident's own artifact:
+
+1. Reconstruct one directory per recording from the manifest, naming each file so
+   the suffix match in `findRecordings` sees it — `*.webm`, `*trace.zip`,
+   `*chapters.json`, `*recording-meta.json`, `*acceptance-story.json`.
+2. Run the SHIPPED library over it. `findRecordings` returned all three
+   recordings intact, and `resolveOwnedSpecs` / `isOwnedRecording` selected
+   exactly the one whose trace was refused:
+
+   ```
+   findRecordings -> 3 recordings
+     storyKey=MOTIR-2999 | spec=acceptance-implemented-lifecycle.spec.ts | owned=false | video=yes trace=yes chapters=yes
+     storyKey=MOTIR-3232 | spec=acceptance-plan-shapes.spec.ts           | owned=true  | video=yes trace=yes chapters=yes
+     storyKey=MOTIR-3232 | spec=acceptance-plans-surface.spec.ts         | owned=false | video=yes trace=yes chapters=yes
+   ```
+
+   (`owned` computed with `ACCEPTANCE_CHANGED_SPECS=tests/e2e/acceptance-plan-shapes.spec.ts`.)
+
+3. Publish: `node scripts/upload-acceptance-video.mjs` with
+   `ACCEPTANCE_OUTPUT_DIR` pointing at the reconstruction and
+   `ACCEPTANCE_CHANGED_SPECS` naming the spec(s) — it **fails closed** on an empty
+   value, so that must be set. Auth is the `MOTIR_UPLOAD_TOKEN` `integration` PAT,
+   since keyless OIDC is only available inside CI.
+
+Step 3 was deliberately NOT executed here: MOTIR-3232 already holds both receipts
+(a fresh run republished them on 2026-08-21), and publishing is
+supersede-on-create — re-running it would retire a good receipt to prove a point.
+Steps 1–2 are what the feasibility turned on, and they are what was run.
+
+##### What this amendment does NOT settle
+
+**Why the store refused that write is still unknown**, and nothing above depends
+on it. Three explanations were falsified by measurement on MOTIR-3313 and the
+readings here falsify none of them further; the question is being put to the
+provider out of band (MOTIR-3407), because Tigris exposes no request-log API and
+`fly storage` has no logs command. **Every decision in this amendment is owed
+whatever that answer turns out to be** — a body of tens of megabytes over the
+public internet is not a reliable single-shot operation under any explanation.
+
 ---
 
 ## Consequences
