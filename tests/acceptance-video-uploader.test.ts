@@ -447,9 +447,11 @@ describe('resolveMaxArtifactBytes (MOTIR-1911)', () => {
 // was left holding ONE of its two receipts while `CI complete` stayed green.
 //
 // ⚠️ THESE TESTS DO NOT ASSERT A CAUSE, because none is established: the refused
-// trace was 37.0 MB and a 65.8 MB trace published seconds later in the same job,
+// trace was 45.9 MB and an 89.3 MB trace published seconds later in the same job,
 // so it is neither size nor the MOTIR-1911 cap, and the same recording's video
-// had just uploaded fine. What they pin is the narrower thing that is defensible
+// had just uploaded fine. (Those two figures were 37.0 / 65.8 MB here until
+// MOTIR-3408 read them off the incident's own retained CI artifact rather than a
+// local regeneration; the conclusion is unchanged and the gap is wider.) What they pin is the narrower thing that is defensible
 // without a mechanism — one transient refusal is not the end of the upload — and,
 // just as importantly, that a refusal the store means PERMANENTLY still fails at
 // once, so a signature bug cannot hide behind four attempts.
@@ -617,6 +619,127 @@ describe('putSignedArtifact — a retryable refusal is retried (MOTIR-3313)', ()
       tracePathname: string | null;
     };
     expect(body.tracePathname).toBe('acceptance/w/s/t.zip');
+  });
+});
+
+// MOTIR-3409 — when the retry is EXHAUSTED, which artifact was it?
+//
+// The block above pins that a transient refusal is retried. This one pins what
+// happens when retrying does not work, and the answer differs by artifact —
+// which is MOTIR-1911's rule, applied to the axis it was never written for
+// (`docs/decisions/acceptance-video.md` § Amendment 2026-08-23):
+//
+//   trace refused terminally → DROPPED; the receipt still lands; a warning
+//   video refused terminally → FATAL; there is nothing to fall back to
+//
+// The point of the first is MOTIR-3313's actual cost: the throw used to escape
+// past the register POST, so a video that had already uploaded was orphaned and
+// the story lost a receipt to a debugging aid.
+describe('an EXHAUSTED refusal — the trace drops, the video is fatal (MOTIR-3409)', () => {
+  function fixture() {
+    const dir = tmpDir();
+    const video = path.join(dir, 'v.webm');
+    const trace = path.join(dir, 't.zip');
+    fs.writeFileSync(video, 'video-bytes');
+    fs.writeFileSync(trace, 'trace-bytes');
+    return { video, trace };
+  }
+
+  /** Mints both targets, then defers every PUT to `onPut` and answers the
+   *  register call with a fixed evidence id. */
+  function stubStore(onPut: (url: string) => { ok: boolean; status?: number }) {
+    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+      if (String(url).endsWith('/upload-token')) {
+        return {
+          ok: true,
+          json: async () => ({
+            video: {
+              pathname: 'acceptance/w/s/v.webm',
+              token: signedPutUrl('acceptance/w/s/v.webm'),
+              contentType: 'video/webm',
+            },
+            trace: {
+              pathname: 'acceptance/w/s/t.zip',
+              token: signedPutUrl('acceptance/w/s/t.zip'),
+              contentType: 'application/zip',
+            },
+          }),
+        };
+      }
+      if (init?.method === 'PUT') {
+        const verdict = onPut(String(url));
+        return verdict.ok
+          ? { ok: true, status: 200, text: async () => '' }
+          : {
+              ok: false,
+              status: verdict.status ?? 503,
+              text: async () => '<Code>SlowDown</Code>',
+            };
+      }
+      return { ok: true, json: async () => ({ evidence: { id: 'ev-dropped' } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('a TRACE refused on every attempt is DROPPED — the receipt is registered without it', async () => {
+    const { video, trace } = fixture();
+    let tracePuts = 0;
+    const fetchMock = stubStore((url) => {
+      if (!url.includes('t.zip')) return { ok: true };
+      tracePuts += 1;
+      return { ok: false, status: 503 };
+    });
+
+    const result = await uploadAcceptanceVideo({
+      baseUrl: 'https://app.motir.co',
+      token: 'motir_pat_abc',
+      storyKey: 'MOTIR-3232',
+      artifacts: { video, trace, chapters: null },
+      retry: { baseDelayMs: 1, sleep: async () => {} },
+    });
+
+    // It did not give up early: every attempt was spent before dropping.
+    expect(tracePuts).toBe(4);
+
+    // THE THING THE INCIDENT LOST — the evidence row exists, and it names the
+    // video. Before this card the throw escaped before this call was ever made.
+    const register = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/acceptance-evidence'),
+    );
+    expect(register).toBeTruthy();
+    const body = JSON.parse((register![1] as { body: string }).body) as {
+      videoPathname: string | null;
+      tracePathname: string | null;
+    };
+    expect(body.videoPathname).toBe('acceptance/w/s/v.webm');
+    // NOT the pathname of a blob that was never written — the row must not point
+    // at nothing (the same invariant the over-cap drop keeps).
+    expect(body.tracePathname).toBeNull();
+
+    // And the caller is TOLD, so it can warn rather than publish in silence.
+    expect(result).toMatchObject({ evidence: { id: 'ev-dropped' } });
+    expect((result as { traceDropped?: string }).traceDropped).toContain('503');
+  });
+
+  it('a VIDEO refused on every attempt still THROWS — the receipt has no fallback', async () => {
+    const { video, trace } = fixture();
+    const fetchMock = stubStore((url) => (url.includes('v.webm') ? { ok: false } : { ok: true }));
+
+    await expect(
+      uploadAcceptanceVideo({
+        baseUrl: 'https://app.motir.co',
+        token: 'motir_pat_abc',
+        storyKey: 'MOTIR-3232',
+        artifacts: { video, trace, chapters: null },
+        retry: { baseDelayMs: 1, sleep: async () => {} },
+      }),
+    ).rejects.toThrow(/Acceptance video upload failed/);
+
+    // Nothing was registered — a story with no clip has no receipt to write.
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/acceptance-evidence')),
+    ).toHaveLength(0);
   });
 });
 
@@ -1543,6 +1666,71 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('1 publish failure(s) and 0 unpublishable owned recording(s)'),
       );
+    });
+
+    // MOTIR-3409 — the drop must reach the EXIT VERDICT, not just the register
+    // call. A refusal-drop loses no RECORDING, so the tally it must not touch is
+    // `failed`, and the line MOTIR-3313 insists on keeping must read M of M.
+    //
+    // A 400 is used rather than a 503 so `putSignedArtifact` breaks on the first
+    // attempt: `main` takes the shipped retry defaults (real 500 ms backoff, no
+    // injection point), and the behaviour under test is the DROP, which every
+    // terminal refusal reaches by the same path.
+    it('a trace the store REFUSES does not redden the step — exit 0, and M of M', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['GITHUB_ACTIONS'] = 'true'; // so ciAnnotate actually emits
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const fetchMock = vi.fn(async (url: string, init?: { body?: string; method?: string }) => {
+        if (init?.method === 'PUT') {
+          return String(url).includes('t.zip')
+            ? { ok: false, status: 400, text: async () => 'refused' }
+            : { ok: true, status: 200, text: async () => '' };
+        }
+        if (String(url).endsWith('/upload-token')) {
+          return {
+            ok: true,
+            json: async () => ({
+              video: {
+                pathname: 'acceptance/v.webm',
+                token: signedPutUrl('acceptance/v.webm'),
+                contentType: 'video/webm',
+              },
+              trace: {
+                pathname: 'acceptance/t.zip',
+                token: signedPutUrl('acceptance/t.zip'),
+                contentType: 'application/zip',
+              },
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({ evidence: { id: 'ev-2258' } }) };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await main();
+
+      // The whole point: a debugging aid the store refused is not a failed run.
+      expect(exit).not.toHaveBeenCalled();
+      expect(console.error).not.toHaveBeenCalled();
+
+      const out = logSpy.mock.calls.flat().join('\n');
+      // The line MOTIR-3313 requires to survive — counting RECORDINGS, and none
+      // was lost, so it is honest at 1 of 1.
+      expect(out).toContain('Published 1 of 1 owned acceptance recording(s)');
+      // Loud enough to find, on the channel `continue-on-error` cannot swallow.
+      expect(out).toContain('::warning::');
+      expect(out).toContain('Acceptance trace refused for MOTIR-2258');
+      // Distinguishable in the log from the over-cap drop, which names a size.
+      expect(warnSpy.mock.calls.flat().join('\n')).toContain('the store REFUSED it');
+
+      // The receipt landed, without a pathname for a blob that was never written.
+      expect(registeredBody(fetchMock)['videoPathname']).toBe('acceptance/v.webm');
+      expect(registeredBody(fetchMock)['tracePathname']).toBeNull();
     });
 
     it('…and the SAME run exits ZERO when every owned recording publishes', async () => {

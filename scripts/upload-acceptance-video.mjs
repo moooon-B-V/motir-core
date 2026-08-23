@@ -579,9 +579,12 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * is narrower and enough: **503 is by definition retryable, and sending a 37 MB
  * body over the public internet exactly once is not a reliable operation.**
  *
- * A retry cannot fix a store that refuses every attempt — and it should not. The
- * publish stays red and `Published N of M` still tells the truth; this only stops
- * a single transient refusal from costing a story its receipt.
+ * A retry cannot fix a store that refuses every attempt — and it should not. What
+ * happens then depends on WHICH artifact, and is the caller's decision rather than
+ * this function's: it throws either way, and `uploadAcceptanceVideo` catches the
+ * TRACE (dropping it, so the receipt still lands — MOTIR-3409) while letting the
+ * VIDEO propagate. `Published N of M` counts RECORDINGS and still tells the truth
+ * under both.
  *
  * @param {'video' | 'trace'} label
  * @param {string} filePath
@@ -696,10 +699,35 @@ export async function uploadAcceptanceVideo({
 
   // 2. Upload the artifacts DIRECTLY to the private bucket with the grants,
   //    retrying a retryable refusal (MOTIR-3313 — see `putSignedArtifact`).
+  //
+  // The VIDEO is unconditional: it IS the receipt, so a refusal that survives the
+  // retry throws and the recording fails. There is nothing to fall back to.
   await putSignedArtifact('video', artifacts.video, targets.video, retry);
+
+  // ⚠️ THE TRACE IS DROPPED ON A TERMINAL REFUSAL, NOT FATAL (MOTIR-3409).
+  //
+  // MOTIR-1911 already decided this for a trace that is too BIG: it is dropped,
+  // the video publishes without it, and the drop is a warning. That rule was
+  // written on the SIZE axis and stopped there — on the REFUSAL axis the throw
+  // from `putSignedArtifact` propagated past the register POST below, so no
+  // evidence row was written at all and a video that had uploaded seconds
+  // earlier was orphaned in the store. One artifact, two failure modes, opposite
+  // outcomes; MOTIR-3313 is what that cost (a story left holding one of its two
+  // receipts). This is the same rule on the axis it was never applied to, per
+  // `docs/decisions/acceptance-video.md` § Amendment 2026-08-23.
+  //
+  // What is NOT softened: a lost RECORDING still fails the step, and the
+  // `Published N of M` line still counts RECORDINGS. Under this branch nothing
+  // is lost — the receipt lands — so there is nothing for it to report short.
+  let traceDropped = null;
   if (artifacts.trace && targets.trace) {
-    await putSignedArtifact('trace', artifacts.trace, targets.trace, retry);
+    try {
+      await putSignedArtifact('trace', artifacts.trace, targets.trace, retry);
+    } catch (err) {
+      traceDropped = err?.message ?? String(err);
+    }
   }
+  const tracePublished = Boolean(artifacts.trace && targets.trace) && traceDropped === null;
 
   // 3. Register the pathnames (small JSON — the bytes are already in Blob).
   const res = await fetch(evidenceUrl, {
@@ -709,10 +737,11 @@ export async function uploadAcceptanceVideo({
       videoPathname: targets.video.pathname,
       // Register the trace pathname only when a trace was actually UPLOADED to
       // it. A pathname registered for a blob that was never put would make the
-      // evidence row point at nothing — and `artifacts.trace` is null whenever
-      // the caller dropped an over-cap trace (MOTIR-1911), so the two conditions
-      // are exactly the `put` above's.
-      tracePathname: artifacts.trace && targets.trace ? targets.trace.pathname : null,
+      // evidence row point at nothing — `artifacts.trace` is null whenever the
+      // caller dropped an over-cap trace (MOTIR-1911), and `traceDropped` covers
+      // the one the store refused (MOTIR-3409). `tracePublished` is exactly the
+      // condition under which the `put` above actually succeeded.
+      tracePathname: tracePublished ? targets.trace.pathname : null,
       chapters: readChapters(artifacts.chapters),
       commitSha: provenance.commitSha ?? null,
       ciRunUrl: provenance.ciRunUrl ?? null,
@@ -743,7 +772,12 @@ export async function uploadAcceptanceVideo({
     }
     throw new Error(`Acceptance-video publish failed: ${res.status} ${body}`);
   }
-  return res.json();
+  const payload = await res.json();
+  // Surface the drop to the caller so `main` can report it through the same
+  // warning channels the over-cap drop uses. Returned rather than logged here:
+  // this function does not know the story key, and reporting lives where the
+  // per-recording context is (MOTIR-3409).
+  return traceDropped === null ? payload : { ...payload, traceDropped };
 }
 
 /** The typed refusal this client recognises — pinned to
@@ -1090,11 +1124,25 @@ export async function main() {
         );
         continue;
       }
+      // A trace the STORE refused, dropped so the receipt could land (MOTIR-3409).
+      // Reported through the same channels as the over-cap drop above, and
+      // deliberately worded so the two are distinguishable in a log: that one
+      // names a size, this one names the store's answer. NOT counted in `failed`
+      // — no recording was lost, which is the thing that tally means.
+      if (result?.traceDropped) {
+        const dropped =
+          `Acceptance TRACE for ${storyKey} (${path.basename(recording.dir)}) was DROPPED — ` +
+          `the store REFUSED it: ${result.traceDropped}. The video — the receipt itself — is ` +
+          'published without it. The upload was already retried; this is the store still saying no.';
+        console.warn(dropped);
+        ciAnnotate('warning', `Acceptance trace refused for ${storyKey}: ${result.traceDropped}`);
+      }
       console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
       ciSummary(
         `- ✅ **${storyKey}** — published (${verdict.totalSeconds?.toFixed(1) ?? '?'}s clip, ` +
           `video ${formatBytes(sizes.videoBytes)}` +
           (sizes.dropTrace ? `; trace DROPPED — ${sizes.dropReason}` : '') +
+          (result?.traceDropped ? `; trace DROPPED — the store refused it` : '') +
           ').',
       );
     } catch (err) {
@@ -1125,8 +1173,9 @@ export async function main() {
   // for — a failed upload, or a clip of its OWN that was unwatchable or too big
   // to publish; both mean a story this PR owns has no receipt (MOTIR-1905 /
   // MOTIR-1911 / MOTIR-2499). Two things are deliberately NOT in here: a DROPPED
-  // TRACE (the receipt published, so the run is not broken — a warning), and an
-  // unpublishable REHEARSED recording (another PR's defect; counted separately
+  // TRACE (the receipt published, so the run is not broken — a warning; this now
+  // covers a trace the STORE REFUSED as well as an over-cap one, MOTIR-3409), and
+  // an unpublishable REHEARSED recording (another PR's defect; counted separately
   // just above, so it is visible without being inherited).
   //
   // ⚠️ THIS EXIT CODE IS NOW THE SIGNAL. The workflow step no longer runs under
