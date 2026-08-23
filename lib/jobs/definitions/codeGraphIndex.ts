@@ -36,10 +36,27 @@ import type { CodeGraphIndexData } from '../types';
 // `ceil(global / 2)` — and DO NOT ADD ONE BACK. Three reasons, in order of how
 // badly each bites:
 //
-//   1. IT WOULD MAKE THE CONFIGURED CAP A LIE. A stepped supervision loop holds
-//      its Inngest concurrency slot for the CONTAINER'S WHOLE LIFE, where the old
-//      shape held it for one fetch-and-upload. `concurrency: 2` beside a
-//      configured cap of six would mean two, always, whatever an operator set.
+//   1. IT WOULD MAKE THE CONFIGURED CAP A LIE. A stepped supervision loop stays
+//      RESIDENT for the CONTAINER'S WHOLE LIFE, where the old shape ran for one
+//      fetch-and-upload. `concurrency: 2` beside a configured cap of six would
+//      mean two, always, whatever an operator set.
+//
+//      ⚠️ CORRECTED (MOTIR-3246) — this used to say the loop holds its INNGEST
+//      CONCURRENCY SLOT for the container's whole life. It does not, and this
+//      file is where that sentence was FIRST written (MOTIR-1990); the sibling
+//      supervisor's copy of it was corrected by MOTIR-3245 while this one was
+//      missed, which is how it would have been re-derived from its origin.
+//      A run inside `ctx.step.sleep` occupies NOTHING: measured on the shipped
+//      scheduler at `concurrency: { limit: 1 }`, three sleeping runs all entered
+//      within 294 ms and all finished within 8.6 s, where the same three holding
+//      the slot in a `step.run` serialized 8 s apart and finished at 24 s
+//      (`scripts/experiments/inngest-sleep-concurrency.mjs`; two trials each).
+//      So the loop holds a slot for ~128 sub-second `step.run`s spread over a
+//      30-minute index and releases it between every one — not for 30 minutes.
+//      `docs/decisions/job-lane-occupancy.md` §1–§2 carries the method and the
+//      arithmetic. The CONCLUSION below is unchanged: a cap here would bound
+//      concurrent POLLS, a quantity with no relationship to containers in
+//      flight.
 //   2. AN UNKEYED LIMIT IS THE STARVATION IT WAS MEANT TO PREVENT. It is global
 //      and tenant-blind, so one workspace's five repos occupy the lane while
 //      another workspace's first index queues behind all of it — the measured

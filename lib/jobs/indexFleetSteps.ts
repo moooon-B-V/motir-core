@@ -50,9 +50,20 @@ import type {
 // UNIT THE PLATFORM'S TIMEOUT APPLIES TO (`docs/jobs.md` rule 1), so the WAITING
 // is `ctx.step.sleep` — which holds no invocation AND no concurrency slot, per
 // Inngest's documented semantics (MOTIR-3245 settled this: *"a function run that
-// is sleeping … does not count against your concurrency limit"*) — and every
-// `step.run`
-// does one small thing. `codeGraphIndexDispatchService` is built for exactly
+// is sleeping … does not count against your concurrency limit"*), MEASURED on
+// the shipped scheduler against a `step.run` control by MOTIR-3246
+// (`scripts/experiments/inngest-sleep-concurrency.mjs`;
+// `docs/decisions/job-lane-occupancy.md` §1) — and every `step.run`
+// does one small thing.
+//
+// ⚠️ SO WHAT THIS LOOP OCCUPIES IS ~128 SUB-SECOND STEPS, NOT THIRTY MINUTES,
+// and the distinction is load-bearing enough to state here rather than only in
+// the record: the waits below are free, the `step.run`s are not, and the slot is
+// RELEASED between every poll. The worst a queued run waits behind one
+// supervisor is therefore ONE poll, not one container's life — which is the
+// difference the bug that produced this comment turned on (§2 does the
+// arithmetic: `min(3000 · 2^(n−1), 15000)` reaches 1 800 s in 122 polls, plus
+// six non-poll steps). `codeGraphIndexDispatchService` is built for exactly
 // this: its three operations are individually bounded and its poll NEVER THROWS,
 // because in a stepped world teardown cannot be reached from a `catch`
 // (PRODECT_FINDINGS #39).

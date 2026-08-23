@@ -102,6 +102,20 @@ import type { CodeGraphRefreshData } from '../types';
 //      `concurrency: N` here would bound N concurrent POLLS, not N live
 //      containers — so the conclusion below is unchanged and its reason is now
 //      the true one rather than a plausible one.
+//
+//      ⚠️ AND IT IS NOW MEASURED, NOT ONLY CITED (MOTIR-3246). The doc quote
+//      above was the whole warrant, and the disagreement this correction settles
+//      was between two COMMENTS — so a third citation would not have settled it.
+//      At `concurrency: { limit: 1 }`, three runs sleeping 8 s all entered
+//      within 294 ms and finished within 8.6 s; the CONTROL arm, three runs
+//      holding the same 8 s inside a `step.run`, serialized 8 s apart and
+//      finished at 24 s (`scripts/experiments/inngest-sleep-concurrency.mjs`,
+//      two trials each, `inngest-cli` 1.27.0). The control is what makes it
+//      decisive: without it a prompt start would equally mean the limit never
+//      applied. Production runs Inngest CLOUD, which this harness cannot drive —
+//      `docs/decisions/job-lane-occupancy.md` §1 states that limit, §2 the ~128
+//      sub-second steps a 30-minute index actually occupies, and §4 which of
+//      MOTIR-3245's proposed fixes the answer rules out.
 //   2. AN UNKEYED LIMIT IS THE STARVATION IT WAS MEANT TO PREVENT — and THIS job
 //      is where that was measured: one repo's retries ahead of every other
 //      repo's refresh is the production failure MOTIR-2057 fixed. A per-tenant

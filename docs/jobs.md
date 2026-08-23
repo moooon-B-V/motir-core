@@ -322,6 +322,42 @@ silently take the default and the harness will talk to the wrong one), then
 `LAB_MODE=keyed|global INNGEST_DEV=1 INNGEST_BASE_URL=http://localhost:8388 node
 scripts/experiments/inngest-concurrency-fairness.mjs`.
 
+### A WAIT is not an OCCUPANCY — a sleeping run holds no slot (MEASURED)
+
+The constraint above only binds a run that is **executing code**. A run parked in
+`ctx.step.sleep`, `step.sleepUntil`, `step.waitForEvent` or `step.invoke`
+occupies **nothing** — which is what makes the durable poll loop in
+`lib/jobs/indexFleetSteps.ts` affordable, and what makes an Inngest-level cap on
+a container supervisor meaningless.
+
+This corpus asserted the OPPOSITE for a month, in a comment, and a whole bug's
+mechanism was built on it (MOTIR-3245). It is now measured, because the
+disagreement was between two comments and a third citation would not have settled
+it — `scripts/experiments/inngest-sleep-concurrency.mjs` runs three events
+through `concurrency: { limit: 1 }` where the only variable is HOW each run holds
+for 8 s:
+
+| Arm                                      | When each run first executed code | Spread     |
+| ---------------------------------------- | --------------------------------- | ---------- |
+| `step.run` that awaits 8 s **(control)** | 241 ms / 8 328 ms / 16 429 ms     | 16 188 ms  |
+| `step.sleep(8 s)`                        | 315 ms / 465 ms / 609 ms          | **294 ms** |
+
+Two trials each, reproducing to within milliseconds. Under `sleep` all three runs
+also _finished_ inside 8.6 s; had the sleep held the slot the third could not have
+finished before ~24 s, which is exactly what the control did.
+
+**The control is the load-bearing half.** Without an arm that demonstrably DOES
+occupy the limit, a prompt start is equally well explained by the limit never
+applying — so a measurement of this shape without a control proves nothing.
+
+Consequence for any stepped supervisor: its occupancy is the **sum of its
+`step.run`s**, not its wall-clock life. A 30-minute index is ~128 sub-second
+steps, releasing the slot between every one — so the worst a queued run waits
+behind it is one poll. `docs/decisions/job-lane-occupancy.md` carries the
+arithmetic, the pool's scope, and which remedies the answer rules out.
+
+Same caveat as the row above: **this is the dev server, not Inngest Cloud.**
+
 ## Debounce — coalescing is REAL; the `timeout` cap and an unresolvable KEY are not
 
 `debounce` delays a run until `period` has passed with no further same-`key`
