@@ -352,7 +352,7 @@ the version is the measurement's scope, not a footnote.
 | Burst                                                         | Debounce           | Runs                              | Contract |
 | ------------------------------------------------------------- | ------------------ | --------------------------------- | -------- |
 | 4 events, no debounce (the CONTROL)                           | —                  | 4                                 | 4 ✓      |
-| 4–8 same-key events, sent SERIALLY                            | `2s` (± `30s` cap) | **1**, carrying the LAST event    | 1 ✓      |
+| 4–8 same-key events, sent SERIALLY                            | `2s` (± `30s` cap) | **1**, carrying an ARBITRARY one  | 1 ✓ ⚠️   |
 | the same 4–8, sent concurrently or as ONE batched `send`      | `2s` (± `30s` cap) | **1**, carrying an ARBITRARY one  | 1 ✓ ⚠️   |
 | 30 DISTINCT keys in one `send`                                | `2s` + `30s` cap   | **30**                            | 30 ✓     |
 | 24 events, 18 across 3 keys + **6 whose key field is ABSENT** | `2s` + `30s` cap   | **4** — 3 keyed + **1 for all 6** | 9 ✗      |
@@ -361,7 +361,8 @@ the version is the measurement's scope, not a footnote.
 | same key, one event every **0.7 s** for 14 s                  | `2s` + `4s`/`10s`  | **1**, only after the stream ends | ✗        |
 | same key, one event every **0.5 s** for 20 s                  | `30s` + `5s` cap   | **1**, only after the stream ends | ✗        |
 
-**Coalescing is real, and — for a serially-sent stream — the last event wins.** The property
+**Coalescing is real. WHICH event survives is arbitrary — including for a serially-sent
+stream.** The property
 `docs/decisions/code-graph-index-fleet.md` §7.3 leans on — a push storm to one
 repo produces one refresh of the newest head — holds on the dev server in every
 burst shape tried, including the one a bulk producer actually emits (the whole
@@ -370,9 +371,21 @@ array in a single `send`). No run was dropped, and
 times across ~20 trials. **Distinct keys stay independent**: one key's burst
 never swallowed another's run.
 
-**⚠️ But WHICH event survives is only defined for a serially-sent stream.** A
-batched `send` does not preserve the array's order server-side, so the debounce
-keeps the last event RECEIVED — event 4 of 6, when measured. For
+**⚠️ WHICH event survives is not defined for ANY send shape — corrected 2026-08-22
+(MOTIR-3398).** This section previously claimed the last event wins for a serially-sent
+stream, and `tests/jobs/debounce-burst.test.ts` asserted it. **A measurement falsifies
+it.** With `burst()` instrumented to read the dev server's OWN `received_at` per event
+(the sibling field `ts` is client-supplied and echoes whatever the sender sets), six
+SERIAL awaited sends landed inside **one millisecond** on the scheduler's clock —
+`schedulerSpanMs: 0`, one run, nothing stalled or split — and that run carried **event
+5**. On a second occasion, event **4**. Two of ten instrumented runs, `inngest-cli`
+1.27.0 / SDK 4.5.0.
+
+So serial sending buys no ordering at this timescale: the debounce keeps an arbitrary
+member, exactly as it does for a batched `send`. The old claim survived because it
+presents identically to a real stall in a CI log — one run, a non-last payload — and was
+diagnosed as a timing failure four times before the scheduler-side span (MOTIR-3371)
+made the two distinguishable. For
 `system.code-graph-refresh` this is immaterial: the run re-reads the repo's
 default-branch head rather than reading anything off the event. That is exactly
 the property to check before relying on "the latest event wins" — a job that

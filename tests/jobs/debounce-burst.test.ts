@@ -87,7 +87,9 @@ let devUrl: string;
 let servePort: number;
 /** Everything the probe functions serve on; one HTTP server for the whole file. */
 const functions: ReturnType<Inngest['createFunction']>[] = [];
-const runs: { fn: string; key: string; n: number }[] = [];
+const runs: { fn: string; key: string; n: number; burst: string }[] = [];
+/** Monotonic, so every `burst()` call stamps a distinct nonce. */
+let burstSeq = 0;
 let client: Inngest;
 
 /** A probe function with the given debounce key, recording every run it gets. */
@@ -102,7 +104,12 @@ function probe(id: string, key: string) {
       debounce: { key, period: PERIOD },
     },
     async ({ event }) => {
-      runs.push({ fn: id, key: String(event.data.key ?? ''), n: Number(event.data.n) });
+      runs.push({
+        fn: id,
+        key: String(event.data.key ?? ''),
+        n: Number(event.data.n),
+        burst: String(event.data.burst ?? ''),
+      });
       return id;
     },
   );
@@ -363,8 +370,15 @@ async function burst(
   fn: string,
   events: Record<string, unknown>[],
   injectStallMs = 0,
-): Promise<{ key: string; n: number }[]> {
+): Promise<{ seen: { key: string; n: number; burst: string }[]; nonce: string }> {
   const before = runs.length;
+  // ⚠️ A NONCE PER BURST (MOTIR-3398). Which MEMBER of a coalesced burst survives
+  // is not something the scheduler guarantees — measured, six events inside ONE
+  // millisecond on its own clock produced a run carrying event 5, then 4. What it
+  // does guarantee is that the run belongs to THIS burst, and that is what the
+  // cases assert instead: a stamp every member carries, so any survivor is
+  // sufficient and none of them is privileged.
+  const nonce = `${fn}-${(burstSeq += 1)}`;
   const ids: string[] = [];
   let previousAt = 0;
   // The window opens when the FIRST event lands, so the span is measured from
@@ -377,7 +391,10 @@ async function burst(
     if (injectStallMs > 0 && index === 1) {
       await new Promise((r) => setTimeout(r, injectStallMs));
     }
-    const sent = await client.send({ name: `debounce-probe/${fn}`, data });
+    const sent = await client.send({
+      name: `debounce-probe/${fn}`,
+      data: { ...data, burst: nonce },
+    });
     ids.push(...sent.ids);
     const sentAt = Date.now();
     if (index === 0) firstSentAt = sentAt;
@@ -394,12 +411,12 @@ async function burst(
   const stalled = stallDiagnosis(fn, worst, lastSentAt - firstSentAt, schedulerSpanMs);
   if (stalled) throw new Error(stalled);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
-  return runs.slice(before).filter((r) => r.fn === fn);
+  return { seen: runs.slice(before).filter((r) => r.fn === fn), nonce };
 }
 
 describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)', () => {
-  it('coalesces a same-key burst into exactly ONE run, carrying the LAST event', async () => {
-    const seen = await burst(
+  it('coalesces a same-key burst into exactly ONE run, from THIS burst', async () => {
+    const { seen, nonce } = await burst(
       'coalesce',
       Array.from({ length: 6 }, (_, i) => ({ key: 'acme/widgets', n: i + 1 })),
     );
@@ -409,13 +426,35 @@ describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)
     // could not enqueue — the failure MOTIR-2994 was filed to look for) and 6
     // (the option silently ignored). A config-level assertion catches neither.
     expect(seen).toHaveLength(1);
-    // And it is the LATEST event that survives, which is what makes the
-    // coalesced refresh index the newest head rather than a stale one.
-    expect(seen[0]?.n).toBe(6);
+
+    // ⚠️ AND IT ASSERTS THE BURST, NOT WHICH MEMBER (MOTIR-3398). This used to
+    // require `n === 6` on the stated ground that "the LATEST event survives,
+    // which is what makes the coalesced refresh index the newest head". Both
+    // halves were wrong:
+    //
+    //   • The scheduler does not promise it. Instrumented against the dev
+    //     server's own `received_at`, six SERIAL awaited sends landed inside ONE
+    //     millisecond — `schedulerSpanMs: 0`, nothing stalled, nothing split —
+    //     and the single run carried event 5. On another occasion, 4. That is
+    //     the same arbitrary-member behaviour `docs/jobs.md` already recorded for
+    //     a BATCHED send; serial sending does not buy ordering at this timescale.
+    //   • The fleet does not depend on it. `system.code-graph-refresh` re-reads
+    //     the repository's default-branch head INSIDE the run and takes nothing
+    //     off the event, so "one run per burst" is the whole of what it needs.
+    //
+    // Asserting `n === 6` therefore failed ~2 runs in 10 while testing nothing
+    // any caller relies on — and, because it presents identically to a real
+    // stall (one run, a non-last payload, `toHaveLength(1)` green), it was
+    // diagnosed as a timing failure four times and cost three cards.
+    //
+    // What is still worth asserting is that the surviving run came from THIS
+    // burst rather than a neighbour's leftover, which the nonce pins without
+    // privileging any member.
+    expect(seen[0]?.burst).toBe(nonce);
   }, 60_000);
 
   it('gives every distinct key its OWN run — one repo’s burst cannot swallow another’s', async () => {
-    const seen = await burst(
+    const { seen } = await burst(
       'per-key',
       ['acme/alpha', 'acme/beta', 'acme/gamma'].flatMap((key) =>
         [1, 2, 3].map((n) => ({ key, n })),
@@ -434,7 +473,7 @@ describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)
   }, 60_000);
 
   it('collapses every event whose key EXPRESSION does not resolve into ONE shared bucket', async () => {
-    const seen = await burst(
+    const { seen, nonce } = await burst(
       'unresolvable',
       Array.from({ length: 6 }, (_, i) => ({ key: `unrelated-${i + 1}`, n: i + 1 })),
     );
@@ -449,7 +488,9 @@ describe('debounce — what the SCHEDULER does with a burst (inngest-cli 1.27.0)
     // MOTIR-2902 is the instance: `key: 'event.data.parentId'` on
     // `work-item/created`, where a ROOT item has no parent.
     expect(seen).toHaveLength(1);
-    expect(seen[0]?.n).toBe(6);
+    // The collapse is the finding; WHICH of the six survives is not — see the
+    // `coalesce` case above for why that was never the scheduler's promise.
+    expect(seen[0]?.burst).toBe(nonce);
   }, 60_000);
 
   it('NAMES a stall past the window instead of reporting its consequence (MOTIR-3125)', async () => {
