@@ -123,8 +123,27 @@ export interface JobWorkerOptions {
     drainTimeoutMs: number;
     claimBatch: number;
   }>;
-  /** Called on every terminal outcome. The ledger + DLQ wiring (MOTIR-3424) hangs here. */
+  /** Called on every terminal outcome. */
   onOutcome?: (run: JobQueueRun, outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded') => void;
+  /**
+   * ⚠️ THE AFTER-ALL-RETRIES-EXHAUSTED HOOK — the engine's `onFailure`
+   * (MOTIR-3424). Invoked when the budget is spent, BEFORE the row is marked
+   * failed, and this is where the `failed` ledger row and the dead-letter row are
+   * written.
+   *
+   * It lives HERE, in the loop, and not in a `catch` inside the handler's own
+   * execution, for the reason `lib/jobs/engine/ledger.ts` records at length:
+   * Inngest's executor never runs a `step.run` scheduled from a catch block after
+   * the terminally-failing step, so the equivalent code there silently never wrote
+   * the rows in production while the in-process test harness made it look like it
+   * did (PRODECT_FINDINGS #39). This hook is plain code in the claim loop with no
+   * step machinery between the throw and the write.
+   *
+   * A throw from the hook itself is caught and logged — a bookkeeping failure
+   * must not leave the run `running` with no live claimant, which is a strictly
+   * worse state than a missing dashboard row.
+   */
+  onTerminalFailure?: (run: JobQueueRun, error: unknown) => Promise<void>;
   /** Structured logging sink; defaults to `console`. */
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
 }
@@ -162,6 +181,7 @@ export class JobWorker {
   readonly workerId: string;
   private readonly execute: JobRunExecutor;
   private readonly onOutcome: NonNullable<JobWorkerOptions['onOutcome']>;
+  private readonly onTerminalFailure: JobWorkerOptions['onTerminalFailure'];
   private readonly log: NonNullable<JobWorkerOptions['logger']>;
   private readonly leaseMs: number;
   private readonly renewMs: number;
@@ -184,6 +204,7 @@ export class JobWorker {
     this.workerId = opts.workerId ?? `worker-${randomUUID()}`;
     this.execute = opts.execute;
     this.onOutcome = opts.onOutcome ?? (() => {});
+    this.onTerminalFailure = opts.onTerminalFailure;
     this.log = opts.logger ?? console;
     this.leaseMs = opts.timings?.leaseMs ?? LEASE_MS;
     this.renewMs = opts.timings?.renewMs ?? RENEW_MS;
@@ -249,6 +270,19 @@ export class JobWorker {
 
       const failure = serializeWorkerFailure(err);
       if (run.attempts >= run.maxAttempts) {
+        // The budget is spent. Write the ledger + DLQ rows BEFORE marking the
+        // queue row failed, so an operator never sees a `failed` run with no
+        // record of why.
+        if (this.onTerminalFailure) {
+          try {
+            await this.onTerminalFailure(run, err);
+          } catch (hookErr) {
+            // A bookkeeping failure must not strand the run. Log it and still
+            // settle the row: `running` with no live claimant is strictly worse
+            // than a missing dashboard entry.
+            this.log.error('[job-worker] terminal-failure hook threw', hookErr);
+          }
+        }
         await withSystemContext((tx) => jobQueueRepository.markFailed(run.id, failure, tx));
         this.log.error(
           `[job-worker] ${run.jobId} run ${run.id} FAILED terminally`,

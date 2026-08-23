@@ -26,22 +26,32 @@ import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker } from '@/lib/jobs/engine/worker';
-import { runQueuedJob } from '@/lib/jobs/engine/runner';
+import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { listenForQueuedJobs } from '@/lib/jobs/engine/notify';
 // Side-effect import: evaluates all 24 definition modules so `defineJob` has
 // registered every job. See the warning above — this is not an unused import.
 import '@/lib/jobs/registry';
 
 async function main(): Promise<void> {
+  // The triggering event's payload lives on `job_event`; a cron run has no event
+  // and gets an empty payload, mirroring what a scheduled Inngest run hands a
+  // handler today.
+  const payloadFor = async (run: { eventId: string | null }): Promise<unknown> => {
+    if (!run.eventId) return {};
+    const event = await withSystemContext((tx) =>
+      tx.jobEvent.findUnique({ where: { id: run.eventId! } }),
+    );
+    return event?.data ?? {};
+  };
+
   const worker = new JobWorker({
     async execute(run) {
-      // The triggering event's payload lives on `job_event`; a cron run has no
-      // event and gets an empty payload, mirroring what a scheduled Inngest run
-      // hands a handler today.
-      const event = run.eventId
-        ? await withSystemContext((tx) => tx.jobEvent.findUnique({ where: { id: run.eventId! } }))
-        : null;
-      await runQueuedJob(run, event?.data ?? {});
+      await executeWithLedger(run, await payloadFor(run));
+    },
+    // The after-all-retries-exhausted hook — the engine's `onFailure`. See
+    // `lib/jobs/engine/ledger.ts` for why it is not a catch inside `execute`.
+    async onTerminalFailure(run, error) {
+      await recordEngineTerminalFailure(run, error, await payloadFor(run));
     },
   });
 
