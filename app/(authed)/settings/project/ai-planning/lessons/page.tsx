@@ -7,9 +7,10 @@ import { getActiveProject } from '@/lib/projects';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { guardSettingsPage } from '../../_guard';
-import { guardLessonLibrary } from '../_components/lessonAccess';
+import { canManageLessonLibrary, guardLessonLibrary } from '../_components/lessonAccess';
 import { LessonRow } from '../_components/LessonRow';
-import { lessonRowCopy } from '../_components/lessonCopy';
+import { lessonApplyCopy, lessonRowCopy } from '../_components/lessonCopy';
+import { LessonApplyControl } from '../_components/LessonApplyControl';
 
 // THE LESSON LIBRARY — `/settings/project/ai-planning/lessons` (Subtask
 // MOTIR-3338), the surface `design/ai-settings/ai-planning-lessons.mock.html`
@@ -44,9 +45,14 @@ export default async function ProjectLessonsPage() {
   const noLessons = await guardLessonLibrary(ctx);
   if (noLessons) return noLessons;
 
-  const [page, format] = await Promise.all([
+  const [page, format, mayManage] = await Promise.all([
     projectLessonsService.listLessons(ctx.projectId, wsCtx),
     getFormatter(),
+    // ⚠️ The SECOND key (MOTIR-3336): reading the library and changing what the
+    // planner is told are different permissions. Resolved here and passed down
+    // — the control does no permission reasoning of its own, and the route
+    // refuses independently whatever this says.
+    canManageLessonLibrary(ctx),
   ]);
   const copy = lessonRowCopy(t, (iso) => format.relativeTime(new Date(iso)));
 
@@ -108,6 +114,19 @@ export default async function ProjectLessonsPage() {
               lesson={lesson}
               href={`/settings/project/ai-planning/lessons/${lesson.id}`}
               copy={copy}
+              action={
+                mayManage ? (
+                  <LessonApplyControl
+                    lesson={lesson}
+                    projectKey={ctx.project.identifier}
+                    // Resolved PER LESSON — the accessible name carries the
+                    // takeaway and the badge carries that row's own window, and
+                    // neither may cross the client boundary as a function.
+                    copy={lessonApplyCopy(t, lesson)}
+                    revealOnHover
+                  />
+                ) : undefined
+              }
             />
           ))
         )}

@@ -36,7 +36,6 @@ const { MotirAiConfigError, MotirAiJobNotFoundError, MotirAiUnavailableError } =
   await import('@/lib/ai/errors');
 
 const CTX = { userId: 'user_yue', workspaceId: 'ws_1' };
-const PARAMS = { params: Promise.resolve({ key: 'MOTIR', lessonId: 'les_1' }) };
 
 function req(body: unknown, raw?: string): Request {
   return new Request('http://t/api/projects/MOTIR/lessons/les_1/applied', {
