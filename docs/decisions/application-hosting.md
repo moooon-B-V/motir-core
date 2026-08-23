@@ -1934,7 +1934,7 @@ rot.
 | --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `motir-core`    | **none** — every `setInterval` in the repo is client-side                                    | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.                           |
 | `motir-ai`      | **none** — no timer re-arms on an idle queue ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)) | **No, and not by a margin.** There is no timer to price: an idle worker schedules nothing and issues no query. |
-| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 600` s** — ⚠️ see below                         | **No** — but no longer because the database sleeps. At 600 s against a ~9 min delay it may not; see below.     |
+| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 1800` s** — raised for margin; see below        | **No** — and the database does sleep: measured 46.6% asleep at 600 s, ~83% projected at 1800 s. See below.     |
 
 **All three rows re-checked against shipped code on 2026-08-20** by
 [MOTIR-3257](motir:cmt1u6a2q000ai5ph1wjb16wa), rather than carried forward:
@@ -1955,31 +1955,88 @@ rot.
   (`errorBackoffMs` returns `null`, deliberately, so an outage cannot re-create the
   poll at 5-minute spacing), and a per-job lease renewal that exists only while a
   handler is running.
-- **`motir-gateway` — confirmed unchanged.** `fly.toml` still sets
-  `SYNC_FREQUENCY = "600"` and `common/config/config.go:110` still defaults it to
-  `10*60` s. **Read from the repo, not from the platform** — the deployed value is
-  a `fly.toml` `[env]` entry rather than a secret, so this is a code reading and
-  carries a code reading's warrant.
+- **`motir-gateway` — confirmed unchanged, and since 2026-08-23 confirmed from the
+  PLATFORM rather than from the repo.** `fly.toml` still sets `SYNC_FREQUENCY = "600"`
+  and `common/config/config.go:110` still defaults it to `10*60` s. This used to carry
+  only a code reading's warrant — _"read from the repo, not from the platform"_, the
+  deployed value being an `[env]` entry rather than a secret. It no longer has to:
+  [MOTIR-3264](motir:cmt1ws6ke007ti1n8a0epdlyb) observed the running service wake its
+  database at **601, 602, 591, 601 s** intervals, so **600 s is what is deployed**, not
+  merely what is committed. A cadence read off production closes the merged-is-not-
+  deployed gap that a file read leaves open.
 
-**⚠️ AND THE GATEWAY'S ROW SURVIVES ONLY AS AN ANSWER — ITS REASON DOES NOT.** The
-code is unchanged, but 600 s was chosen against the five-minute figure and clears
-the measured ~9 minutes by about a minute — the **same margin** that gave motir-ai
-a 77% duty cycle rather than the ~50% its arithmetic promised. So the `No` in that
-row is still correct and is now correct for the opposite reason: a second warm
-gateway adds no compute-hours because **the first one may already be holding the
-compute awake around the clock**, not because the database is asleep for both. The
-2026-08-13 duty-cycle reading below (`motir-gateway` **~100%**) is consistent with
-exactly that, and nothing has re-measured it since PR #15 landed.
+**⚠️ THE GATEWAY'S ROW IS NOW MEASURED, AND THE SUSPECTED DEFECT IS FALSIFIED
+(2026-08-23, [MOTIR-3264](motir:cmt1ws6ke007ti1n8a0epdlyb)).** What stood here said the
+`No` in that row was correct _for the opposite reason_ — that a second warm gateway adds
+no compute-hours because the first one may already be holding the compute awake around
+the clock, since 600 s clears a ~9 min delay by only about a minute. **That was an
+inference from a delay measured on OTHER endpoints, and it does not survive measuring
+this one.**
 
-**This is a standing bill, not a scaling one**, which is why it does not change any
-floor decided in this amendment and is not silently folded into §16's table: the
-cost is already being paid at a floor of 1. It is named here because the corrected
-number is what makes it visible, and because it is the same defect
-[MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228) removed from motir-ai — an interval
-tuned against a threshold nobody measured. **It has no owner yet.**
-[MOTIR-2852](motir:cmss0vww500l9i5phpl0lngzi) and
-[MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo) are `motir-core` cards and do not
-reach it.
+Sampled from the control plane every 20 s with **no database connection of the run's
+own**, over **44m52s** in which the gateway served **zero API requests** (verified from
+`fly logs`, so the two sync goroutines were the only thing touching Postgres):
+
+|                       |                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| endpoint              | `ep-crimson-dew-ai3vmlx0` (Neon project `autumn-sky-90851862`, name `motir-gateway`)                                                        |
+| window                | 2026-08-23 20:48:11Z → 21:33:03Z, 133 samples                                                                                               |
+| wakes (`last_active`) | 20:45:28 · 20:55:29 · 21:05:31 · 21:15:22 · 21:25:23 — Δ **601, 602, 591, 601 s**, each matching a `syncing options from database` log line |
+| suspend delay         | **~5m12s**, bounded 4m46s–5m37s across five consecutive cycles                                                                              |
+| duty cycle            | **53.4% awake** (71 of 133 samples), 46.6% asleep                                                                                           |
+
+**So the database sleeps between syncs, and 600 s clears the real delay by about five
+minutes rather than by one.** The gateway is not the third copy of the `motir-ai` defect.
+Its row is now measured rather than inferred, and the standing cost is roughly **half** of
+the $19.50/mo an always-awake compute would bill, not the whole of it — which is what the
+`fly.toml` cost comment already claimed and had never had evidence for.
+
+**⚠️ AND THE FINDING THAT OUTLIVES THIS CARD IS THE ONE ABOVE THE NUMBER.** This section
+states the observed delay as **~9 minutes**, measured on 2026-08-20 by the same method on
+two sibling endpoints. Three days later the gateway's endpoint gives **~5 minutes**,
+consistently, and **nothing in our configuration explains the gap**: all four Neon projects
+in the organization (`snowy-truth-13928044` motir-core, `autumn-sky-90851862` motir-gateway,
+`hidden-thunder-40380051` motir-ai, `odd-silence-89227746` taq) carry the identical
+`suspend_timeout_seconds: 0` and the same `0.25 – 8` CU autoscale, read from the platform
+on 2026-08-23. **The 2026-08-20 table below is left exactly as it was** — it is a true
+record of what was measured then, and rewriting it would destroy the evidence for this
+paragraph.
+
+**⚠️ AND THE INTERVAL WAS THEN RAISED 600 → 1800 s ON THAT FINDING — NOT ON THE SAVING
+([MOTIR-3411](motir:cmt6cyvie003ei4ph1uyq1qsm), 2026-08-23).** The measurement above says 600 s
+was adequate _on the day it was measured_. Run the same arithmetic at the other reading the same
+method has produced and it is the fragile value:
+
+| interval   | awake at ~5m12s (2026-08-23) | awake at ~9 min (2026-08-20) |
+| ---------- | ---------------------------- | ---------------------------- |
+| **600 s**  | 52%                          | **~98%** — the near-miss     |
+| **1800 s** | 17%                          | 31%                          |
+
+**600 s is one platform change away from being the defect this section went looking for; 1800 s
+is not.** The Neon line goes from ~$10.00/mo to ~$3.33/mo against the $19.35 an always-awake
+0.25 CU compute bills — but ~$6.70/mo is a side effect. The margin against a threshold already
+observed to move is the reason.
+
+**The 46.6% is a reading of 600 s and is labelled as such rather than deleted; the ~83% at
+1800 s is a PROJECTION from the same measured delay and is labelled as such too.** Nobody has
+re-measured the endpoint at the new interval. The cost is that a channel or option edited in the
+gateway admin UI reaches the running machine after up to 30 min instead of 10 — not token or
+quota enforcement, which are Redis-only paths with Redis deliberately off, and not an urgent
+cut-off, which is a `fly apps restart` away.
+
+**One knock-on for §22/§25, recorded here because the number it moves lives there.** The
+`fly.toml` cost argument priced `min_machines_running = 0` at roughly $9.75/mo of extra saving,
+reasoning that a stopped machine runs no sync. Most of that has now been taken by the interval
+instead: scaling to zero is worth about $3.33/mo of Neon plus the $3.32/mo machine. §25's open
+question is unchanged; the prize behind it is smaller than the figure it was gated on.
+
+The rule this section already states survives, and gets stronger: _"an interval is only
+ever as good as the threshold it clears."_ The correction is that **a threshold from
+MEASUREMENT is not a contract either.** It is a reading with a date on it, and this one
+moved by four minutes in three days. Any future interval here is priced against a delay
+re-measured at that time, with the date written down beside it — and whether the ~9 min
+and ~5 min readings differ by endpoint or by a platform change is **not settled by this
+card**, which measured one endpoint and says so.
 
 **All three floors above can therefore be raised without a database bill**, which
 is not a coincidence — it is the result of separate cards having already taken
@@ -1996,7 +2053,13 @@ Duty cycles measured 18:15→20:46Z on 2026-08-13, from Neon's own API: `motir-c
 awake essentially continuously, driven by timers rather than by users.
 **`motir-ai`'s driver is gone as of 2026-08-20**
 ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)); that reading is now historical for
-that service and has not been re-taken.
+that service and has not been re-taken. **And `motir-gateway`'s ~100% has now been
+RE-TAKEN and does not reproduce** — 53.4% awake over a traffic-free window on
+2026-08-23 ([MOTIR-3264](motir:cmt1ws6ke007ti1n8a0epdlyb), the block above). The
+2026-08-13 figure was measured while `SYNC_FREQUENCY` was still **60 s**, before PR #15
+raised it to 600; it is a true reading of the old interval and is not evidence about the
+current one. Two of the three numbers in this line are now historical, and only
+`motir-core`'s **99%** has been re-confirmed since (2026-08-21, still 100%).
 
 **⚠️ `motir-core` RE-MEASURED 2026-08-21 AFTER the admission wake shipped, and the
 number did not move: still 100%** ([MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo)).

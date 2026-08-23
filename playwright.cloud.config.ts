@@ -82,6 +82,10 @@ const MOTIR_AI_BILLING_FIXTURE_PATH = path.resolve('/tmp/motir-test-billing-fixt
 // is a file the SPEC writes and the SERVER reads, so both sides must agree on
 // the path, and both the runner and the webServer must see it.
 const CODE_HEALTH_FIXTURE = path.join(__dirname, 'out', 'e2e-code-health-fixture.json');
+// The LESSON LIBRARY's boundary fixture (Subtask MOTIR-3340), on the same terms:
+// the library's three screens are all SERVER rendered, so `page.route` reaches
+// none of them and the spec seeds through this file instead.
+const LESSONS_FIXTURE = path.join(__dirname, 'out', 'e2e-lessons-fixture.json');
 const MOTIR_GITHUB_CONTROL_PATH = path.resolve('/tmp/motir-cloud-github-control.json');
 const MOTIR_GITHUB_JOURNAL_PATH = path.resolve('/tmp/motir-cloud-github-journal.jsonl');
 process.env['MOTIR_GITHUB_CONTROL_PATH'] ??= MOTIR_GITHUB_CONTROL_PATH;
@@ -177,6 +181,8 @@ export default defineConfig({
         // here without its seam would assert against a product half switched on.
         E2E_TEST_CODE_HEALTH: '1',
         MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
+        E2E_TEST_LESSONS: '1',
+        MOTIR_AI_LESSONS_FIXTURE_PATH: LESSONS_FIXTURE,
         E2E_TEST_GITHUB_REPOS: '1',
         MOTIR_GITHUB_CONTROL_PATH,
         MOTIR_GITHUB_JOURNAL_PATH,

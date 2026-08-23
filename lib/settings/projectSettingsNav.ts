@@ -323,6 +323,25 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // retired by the 2026-08-08 amendment. `ai:plan`, which a member DOES hold,
     // gates running the planner, not configuring it.)
     permission: 'ai:configure',
+    // MOTIR-3332 / MOTIR-3338 add the LESSON LIBRARY as a DRILL-DOWN, the same
+    // shape `roles` uses: the AI-planning page carries a read-only card that
+    // previews what the planner has learned and links here; the library itself
+    // needs a page that can be as long as it needs, and a settings page with a
+    // Save footer is not one. `nestedRoutes` rather than a second entry, so no
+    // new Automation row competes with the settings the library belongs to and
+    // the rail keeps THIS row active on both screens (non-`exact` matching).
+    //
+    // ⚠️ The entry's key stays `ai:configure` and the destinations assert
+    // `lesson:view` ON TOP of it, in `projectLessonsService` — before any call
+    // to motir-ai. The two are deliberately not the same question: `ai:configure`
+    // is "may you open the AI-planning area", `lesson:view` is "may you read what
+    // this project taught its planner". Both sit at `admin` today, so nothing
+    // observable moves; they come apart for a custom role composed by hand,
+    // which is the case MOTIR-3336 split the keys to make expressible.
+    nestedRoutes: [
+      '/settings/project/ai-planning/lessons',
+      '/settings/project/ai-planning/lessons/[lessonId]',
+    ],
   },
   {
     id: 'automation',

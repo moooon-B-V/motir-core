@@ -49,6 +49,7 @@ const billing = vi.hoisted(() => ({ installBillingBoundaryMock: vi.fn() }));
 const githubRepos = vi.hoisted(() => ({ installGithubReposMock: vi.fn() }));
 const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() }));
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
+const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -57,6 +58,7 @@ vi.mock('@/lib/test-billing-mock', () => billing);
 vi.mock('@/lib/test-github-repos-mock', () => githubRepos);
 vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
+vi.mock('@/lib/test-lessons-mock', () => lessons);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -70,6 +72,10 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   E2E_TEST_GITHUB_REPOS: [githubRepos.installGithubReposMock],
   E2E_TEST_CODE_HEALTH: [codeHealth.installCodeHealthBoundaryMock],
   E2E_TEST_AI_JOBS: [aiJobs.installAiJobsBoundaryMock],
+  // MOTIR-3340 — the lesson-library seam. Registered HERE in the same change
+  // that adds it to the shipped table, which is the whole point of the equality
+  // assertion below: this file went red the moment the seam landed without it.
+  E2E_TEST_LESSONS: [lessons.installLessonsBoundaryMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();

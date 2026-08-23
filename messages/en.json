@@ -467,6 +467,14 @@
     "ai_decide_plan": {
       "label": "Approve or decline AI plans",
       "description": "Turn a plan’s proposals into real work items, or end the plan without creating any."
+    },
+    "lesson_view": {
+      "label": "View the lesson library",
+      "description": "Read what the project's AI planner learned from its own planning work."
+    },
+    "lesson_manage": {
+      "label": "Change the lesson library",
+      "description": "Retire a lesson or add one — both change the standing instructions the planner is given."
     }
   },
   "localeToggle": {
@@ -2600,7 +2608,40 @@
       "saveError": "Your AI planning settings weren't saved. Please try again.",
       "readOnlyBanner": "Only a project admin can change AI planning settings.",
       "notConnectedTitle": "Motir AI isn't connected.",
-      "notConnectedBody": "AI planning runs on Motir's cloud service. These settings are saved but stay inactive until this deployment is connected to Motir AI."
+      "notConnectedBody": "AI planning runs on Motir's cloud service. These settings are saved but stay inactive until this deployment is connected to Motir AI.",
+      "lessons": {
+        "cardTitle": "What Motir has learned",
+        "cardSubtitle": "Corrections this project taught its planner. Motir applies them to every plan it drafts here.",
+        "viewAll": "View all {count} lessons",
+        "pageTitle": "What Motir has learned",
+        "pageDescription": "Corrections this project taught its planner, most recently relevant first. Motir applies each of these to every plan it drafts here — until you stop it.",
+        "backToAiPlanning": "AI planning",
+        "backToLessons": "What Motir has learned",
+        "count": "{total} lessons · {applied} applied",
+        "lastSeen": "Last seen {when}",
+        "seenOnce": "seen once",
+        "seenTwice": "seen twice",
+        "seenTimes": "seen {count} times",
+        "everyCard": "Applies to every card",
+        "notApplied": "Not applied",
+        "notRecurred": "Not seen in {days} days",
+        "applyingTitle": "Motir is applying this.",
+        "applyingBody": "It goes into every plan drafted for this project.",
+        "sectionHappened": "What happened",
+        "sectionMatters": "Why it matters",
+        "sectionApply": "How to apply it",
+        "sectionProvenance": "Where it came from",
+        "factFirstRecorded": "First recorded",
+        "factLastSeen": "Last seen",
+        "factTimesSeen": "Times seen",
+        "factRecordedFrom": "Recorded from",
+        "emptyTitle": "Motir hasn't learned anything here yet",
+        "emptyBody": "When a plan turns out to be wrong — a missing dependency, a card sized past what one run can finish — Motir writes down the correction and applies it to every plan it drafts for this project afterwards. Those corrections appear here, with what happened and why, so you can read them and decide which ones to keep.",
+        "emptyRecording": "Nothing is recorded until a plan is actually corrected. Recording can be switched off in AI planning settings.",
+        "unavailableTitle": "Motir AI is unavailable right now",
+        "unavailableBody": "The rest of this page still works. Lessons will reappear when the service is reachable again.",
+        "noAccessBody": "Only a project admin can read what this project taught its planner."
+      }
     },
     "apiTokens": {
       "heading": "Tokens",
