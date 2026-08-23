@@ -11,6 +11,12 @@ what is stable is arrival burstiness. §6 is appended rather than folded into §
 standing with a pointer, because the wrong reading is the one a later card would otherwise
 re-derive. Measured with `scripts/experiments/inngest-fastlane-lag.mjs`.
 
+**AMENDED AGAIN 2026-08-23 by MOTIR-3406**, which supplied the one input §3 could not read: the
+account's configured capacity is **5 concurrent steps** (Hobby plan, read off the dashboard by a
+person). That turns §6's saturation HYPOTHESIS into arithmetic — four consumers per event against
+five slots — so §3 and §6 are both amended on the record rather than rewritten, and §4's _"the
+reading that would settle it"_ is now taken.
+
 MOTIR-3245 was filed on one sentence in `lib/jobs/definitions/codeGraphRefresh.ts`:
 
 > _"A stepped supervision loop holds its Inngest concurrency slot for the CONTAINER'S WHOLE
@@ -93,7 +99,7 @@ Two consequences, and the second is the one that matters:
 
 ---
 
-## §3 — The pool: scope is decided here, size is dashboard-only
+## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps
 
 **Scope — decisive, and it is a code fact.** **No job in this repo sets `concurrency` at all.**
 All 24 definitions under `lib/jobs/definitions/` were checked; every occurrence of the word is a
@@ -107,8 +113,18 @@ environment by plan**, shared by all 24 functions and partitioned by nothing.
 That is worth stating plainly in both directions: the parent's picture of _one unpartitioned
 pool_ is **correct**. What is false is that a supervisor sits in it for thirty minutes.
 
-**Size — NOT READABLE with any credential this deployment holds, and here is the proof rather
-than the assertion.** The production signing key (`INNGEST_SIGNING_KEY`, read off machine
+**Size — 5 CONCURRENT STEPS.** Read off the Inngest dashboard's plan page on **2026-08-23** by Yue
+(MOTIR-3406), on the **Hobby** plan, for the `prodect-core` app's production environment. The row
+reads verbatim:
+
+> **Concurrency** — _Maximum number of concurrently executing steps_ — **5 concurrent steps**
+
+It sits in the account-scoped block (its neighbour is _"Maximum number of users on the account"_),
+and the dashboard exposes **no separate environment-level figure** — so account and environment are
+the same ceiling here, which is what §3 above could only assert because nothing configures either.
+
+**Why it had to be read by a person, recorded so nobody re-derives the gap.** No credential this
+deployment holds can reach it. The production signing key (`INNGEST_SIGNING_KEY`, read off machine
 `7817663f103648` of app `motir-core`) authenticates the events API and nothing else:
 
 | probe                                                      | result                                                               |
@@ -117,16 +133,24 @@ than the assertion.** The production signing key (`INNGEST_SIGNING_KEY`, read of
 | `GET /v1/account`, `/v1/envs`, `/v1/apps`, `/v1/functions` | **404** — not part of the REST surface                               |
 | `POST /gql { account { plan … } }`                         | **UNAUTHENTICATED** — the dashboard API takes a different credential |
 
-**The configured capacity is therefore a dashboard reading, and that is a `manual` step for an
-operator, not something to infer from a plan tier.** It is named as still-owed rather than
-guessed: a number written down here from Inngest's public pricing page would be exactly the
-"config file is a claim about the deployment, not a reading of it" mistake this corpus already
-records. **What to run:** open the Inngest dashboard for the `prodect-core` app's production
-environment and read the account concurrency limit off the plan/billing page.
+**It was read, not inferred.** A number copied from Inngest's public pricing page would be a claim
+about the plan rather than a reading of the deployment — the _"a config file is a claim about the
+deployment, not a reading of it"_ mistake this corpus already records. The distinction is the whole
+reason MOTIR-3406 was a card rather than a sentence.
 
-**And note what §2 does to the stakes of that number.** A supervisor's contribution to it is a
-few percent of one slot, so the capacity matters for _total throughput_ and no longer for _this
-defect_.
+### ⚠️ And 5 is small enough to change the answer — see §6
+
+This paragraph previously closed by saying the capacity _"matters for total throughput and no longer
+for this defect."_ **That was wrong, and it was wrong because the number was unknown when it was
+written.** With the value in hand the arithmetic is immediate:
+
+- every `work-item/transitioned` event has **four** consumers (§6, and `lib/jobs/latencyBudget.ts`);
+- the account allows **five** concurrently executing steps, shared by all 24 functions;
+- so **ONE status change occupies 4 of 5 slots, and TWO simultaneous transitions oversubscribe the
+  entire account.**
+
+A cascade — the thing that runs when a parent closes — emits several transitioned events at once by
+construction. So the capacity is not a throughput footnote; it **is** the defect.
 
 ---
 
@@ -230,18 +254,44 @@ a fast event's — and that 1.7 s is identical on both windows. So this is not q
 otherwise-normal work: the arrival burst inflates the execution too, which is what contention among
 simultaneously-dispatched runs looks like and what a pure dispatch delay does not.
 
-### What this does NOT establish, said plainly
+### What this establishes — and it is now arithmetic, not a hypothesis (amended 2026-08-23)
 
-**No layer is named here, and none should be inferred.** The leading hypothesis is saturation of the
-one unpartitioned account-level capacity §3 describes: each `work-item/transitioned` has four
-consumers, and a cascade emits several transitioned events at once, so a cascade over N items
-dispatches ~4N runs into a pool nothing partitions. That is consistent with every number above and is
-**not proven by any of them**.
+**This section originally read _"What this does NOT establish, said plainly"_, and named saturation of
+the account-level pool as a hypothesis "consistent with every number above and not proven by any of
+them". The missing input was the pool's SIZE, which §3 now carries: 5 concurrent steps.** The
+amendment is recorded rather than applied silently, because the hedge was the correct thing to write
+while the number was unknown and would be the wrong thing to leave standing now.
 
-**The reading that would settle it is the one §3 could not take** — the account's configured
-concurrency limit, which is dashboard-only. That makes it load-bearing rather than housekeeping: with
-the capacity known, ~4N is either comfortably inside it or plainly over, and this stops being a
-hypothesis either way.
+With the capacity known the chain closes in one step:
+
+- **4** consumers per `work-item/transitioned` event · **5** concurrently executing steps for the
+  whole account · so **two simultaneous transitions oversubscribe it**, and a cascade emits several at
+  once by construction.
+
+Every measured signal in this section is what that predicts, and the fit is quantitative rather than
+directional:
+
+| observation                                                           | what a 5-step ceiling predicts                        |
+| --------------------------------------------------------------------- | ----------------------------------------------------- |
+| 4 transitioned events within **0.24 s** → lags 18.2–19.8 s            | ~16 runs against 5 slots — 3.2× oversubscribed        |
+| those events' fan-out span **20.2–23.3 s** vs 1.7 s                   | consumers cannot run concurrently; they serialize     |
+| after 19.9 h / 10.7 h / 10.4 h of silence → **0.3 s / 0.3 s / 0.9 s** | pool empty, no contention                             |
+| refresh-concurrent vs idle → **noise** on both windows                | a supervisor holds ~10% of one slot; a burst holds 16 |
+
+**So the burstiness finding and the capacity are the same fact seen from two ends.** The tail does not
+track idleness and does not track code-graph refreshes; it tracks how many transitions arrive at once,
+because four-per-event against five is saturated by the second one.
+
+**And it retroactively vindicates half of MOTIR-3245's instinct.** That card was right that a single
+unpartitioned pool was the problem — §3 confirms nothing in this repository partitions it. What it had
+wrong was the occupant: not a supervisor holding a slot for thirty minutes, but the fast lane's own
+four-way fan-out holding four slots for a second, several times over.
+
+**⚠️ One thing that has NOT been measured, and must not be read in.** The chain above is arithmetic
+over a capacity and a fan-out count, corroborated by the timing data — it is not a direct observation
+of Inngest rejecting or queueing a run for want of a slot. That would need a scheduler-side signal the
+REST API does not expose. Read it as: _the ceiling is small enough to explain everything observed, and
+nothing observed contradicts it._
 
 ### ⚠️ The instrument, because it silently lies (measured here)
 
