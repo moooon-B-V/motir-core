@@ -25,6 +25,12 @@
 //     fixture, so the audit-coverage journey (MOTIR-2244) can drive the
 //     SERVER-rendered /code-health page — which a browser `page.route` cannot
 //     reach — with no motir-ai instance.
+//   - E2E_TEST_LESSONS=1 → lib/test-lessons-mock intercepts the motir-ai LESSON
+//     LIBRARY seam (the MOTIR_AI_URL origin's GET /v1/lessons and
+//     /v1/lessons/:id) and answers from a JSON fixture, so MOTIR-3340 can drive
+//     the SERVER-rendered library — which a browser `page.route` cannot reach —
+//     with no motir-ai instance. A TRANSPORT mock: the real client and the real
+//     permission-asserting service both stay in the path.
 //   - E2E_TEST_AI_JOBS=1 → lib/test-ai-jobs-mock intercepts the motir-ai JOBS
 //     seam (the MOTIR_AI_URL origin's POST /v1/jobs, GET /v1/jobs/:id and its
 //     /stream). The ask journey crosses that seam three times and only the
@@ -133,6 +139,14 @@ export async function register() {
       install: async (agent) => {
         const { installCodeHealthBoundaryMock } = await import('@/lib/test-code-health-mock');
         installCodeHealthBoundaryMock(agent);
+      },
+    },
+    {
+      flag: 'E2E_TEST_LESSONS',
+      message: 'motir-ai lesson-library seam mocked.',
+      install: async (agent) => {
+        const { installLessonsBoundaryMock } = await import('@/lib/test-lessons-mock');
+        installLessonsBoundaryMock(agent);
       },
     },
     {
