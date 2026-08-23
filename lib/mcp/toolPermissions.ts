@@ -160,6 +160,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `CommentForbiddenError`. Under the six scopes this hid inside
   // `work_items:write`; commenting is now withholdable on its own.
   add_comment: 'comment:add',
+  // `add_lesson` (Story MOTIR-3331 · MOTIR-3361) — the SAME key retiring a
+  // lesson takes. `lesson:manage` is named for the LIBRARY rather than for
+  // retiring precisely so this caller does not have to widen its meaning
+  // (MOTIR-3336): adding a lesson and retiring one are both edits to the
+  // standing instructions the planner receives.
+  add_lesson: 'lesson:manage',
   // Attaching a file to a card is EDITING that card — the same permission both
   // evidence publishers assert, and one CLI_TOKEN_GRANT carries, so a
   // dispatched agent can actually call it (MOTIR-3058; MOTIR-3051 is the

@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **47 tools**.
+`initialize` handshake and registers **48 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -936,6 +936,50 @@ MCP-specific wiring.
 | `body` | string | yes      | Comment body (Markdown). Mention with `@[name](userId)`. |
 
 **Output** — `structuredContent`: the created `CommentDTO`.
+
+#### `add_lesson`
+
+Record a **lesson** for a project — something that went wrong when planning it
+and will go wrong again — so later plans for that project are given the lesson
+before they are drafted. Write it as a standing instruction to a future planner,
+not as a report about what just happened.
+
+The store lives in motir-ai and is reached over the 7.1 boundary. The lesson is
+bound to the acting project: it is never shared with another project, and there
+is **no argument through which a caller can create a global lesson** — the
+corpus every project reads is Motir's own and is curated through migrations.
+
+The three routing axes (`kinds` / `types` / `phases`) decide which later plans
+are shown it. **An omitted axis means "everything on that axis"**, which is
+occasionally right and usually the reason a lesson turns up where it does not
+belong — so leaving one out is a decision to make, not a field to skip.
+
+**Do not add one** for a one-off that will not recur, for something an existing
+lesson already covers (read the project's lessons first), or for a product
+defect — that is a bug report. A **near-duplicate is refused**, and the refusal
+names the lesson that already covers it so the caller can reword or retire it.
+
+Not to be confused with motir-ai's internal `log_planning_mistake`, which the
+planner calls during a run.
+
+| Input         | Type     | Required | Notes                                                                              |
+| ------------- | -------- | -------- | ---------------------------------------------------------------------------------- |
+| `projectKey`  | string   | yes      | The project the lesson belongs to.                                                 |
+| `title`       | string   | yes      | The takeaway in one line — what to do differently, not a headline for an incident. |
+| `body`        | string   | yes      | What goes wrong, stated so it is recognisable next time.                           |
+| `why`         | string   | yes      | Why it matters. The one field that may carry your own specifics.                   |
+| `howToApply`  | string   | yes      | The actionable rule, in the second person, addressed to a future planner.          |
+| `mistakeType` | enum     | no       | `regular_planning` (default) · `onboarding_planning` · `planning_craft`.           |
+| `kinds`       | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = every kind.               |
+| `types`       | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = every type.              |
+| `phases`      | string[] | no       | `skeleton` · `deepen`. Omitted = both.                                             |
+| `sourceRef`   | string   | no       | Provenance, and the idempotency key — a repeat returns the existing lesson.        |
+
+Requires the lesson-library-change permission (`lesson:manage`) — the same key
+retiring a lesson takes, checked **before** any call to motir-ai.
+
+**Output** — `structuredContent`: the recorded lesson's `id`, `title`, its three
+axes as stored, and `sourceRef`.
 
 #### `attach_file`
 

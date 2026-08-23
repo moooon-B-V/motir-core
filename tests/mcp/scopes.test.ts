@@ -149,7 +149,18 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
     // SECOND exclusion must appear here as a failure, not join an allowance —
     // the same discipline the ONE-named-loss assertion below applies.
     const union = new Set(LEGACY_TOKEN_SCOPES.flatMap((s) => [...LEGACY_SCOPE_PERMISSIONS[s]]));
-    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan'];
+    //
+    // ⚠️ `lesson:manage` JOINED THIS LIST 2026-08-23 (MOTIR-3361), for exactly
+    // the reason above and not as an allowance. `add_lesson` is the first MCP
+    // tool to assert the key, and the key itself is MOTIR-3336's — minted in
+    // 2026, years after these six strings stopped being written. Conferring it
+    // on a legacy `work_items:write` row would let a token minted for work-item
+    // edits rewrite the STANDING INSTRUCTIONS a project's planner is given,
+    // which is precisely the widening this test exists to forbid. The tool is
+    // therefore recorded as a named LOSS in the tool-by-tool check below: a
+    // legacy token does not reach it, deliberately, and a token that should
+    // reach it is granted `lesson:manage` in the permission vocabulary.
+    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage'];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );
@@ -171,6 +182,16 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
     // here as a failure instead of quietly joining an allowance.
     const KNOWN_LOSSES: Partial<Record<(typeof MCP_TOOL_NAMES)[number], true>> = {
       open_plan_session: true,
+      // MOTIR-3361. A SECOND loss, and of a different kind from the first:
+      // `open_plan_session` is a tool whose old scope was over-permissive, while
+      // this one is a tool NO legacy scope ever gated because it did not exist.
+      // Its `TOOL_SCOPES` entry files it under `work_items:write` as the nearest
+      // bucket in a table this story deprecates — but the forward map must NOT
+      // be widened to match, because `lesson:manage` postdates all six strings
+      // and a stale row may never gain authority. So the loss is correct, and
+      // naming it here is what keeps the check exhaustive rather than what
+      // excuses it.
+      add_lesson: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {
