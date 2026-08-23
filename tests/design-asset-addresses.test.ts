@@ -313,6 +313,25 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/projects/[key]/direction/[tier]',
     why: 'Forward-looking, and the asset says so inline ("NEW — no shipped route yet"). The tier doc shipped at /direction/[tier].',
   },
+  // MOTIR-3332 drew the lesson library before MOTIR-3338 builds it. TEMPORARY,
+  // by the convention stated above: these three rows expire when MOTIR-3338
+  // adds the two nested pages, and this comment is the instruction to DELETE
+  // them then rather than leave a mute button behind.
+  {
+    file: 'design/ai-settings/ai-planning-lessons.mock.html',
+    address: '/settings/project/ai-planning/lessons',
+    why: 'Forward-looking: the lesson-library list is drawn by MOTIR-3332 and built by MOTIR-3338, as a `nestedRoutes` drill-down of the ai-planning entry. Delete this row when that page exists.',
+  },
+  {
+    file: 'design/ai-settings/design-notes.md',
+    address: '/settings/project/ai-planning/lessons',
+    why: 'The same forward-looking address in the notes beside that mock (§L2, the registry entry the asset specifies). Delete with the row above.',
+  },
+  {
+    file: 'design/ai-settings/design-notes.md',
+    address: '/settings/project/ai-planning/lessons/[lessonId]',
+    why: 'The detail drill-down, same asset, same card. Delete with the two rows above.',
+  },
   {
     file: 'design/project-square/project-square.mock.html',
     address: '/explore/doooo/taq',
