@@ -467,6 +467,14 @@
     "ai_decide_plan": {
       "label": "批准或拒绝AI计划",
       "description": "将计划中的建议转化为真实工作项，或结束计划而不创建任何工作项。"
+    },
+    "lesson_view": {
+      "label": "查看经验库",
+      "description": "阅读本项目的AI规划器从自身规划工作中总结出的经验。"
+    },
+    "lesson_manage": {
+      "label": "修改经验库",
+      "description": "停用某条经验或新增一条——两者都会改变规划器所遵循的既定指引。"
     }
   },
   "localeToggle": {

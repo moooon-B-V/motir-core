@@ -467,6 +467,14 @@
     "ai_decide_plan": {
       "label": "Approve or decline AI plans",
       "description": "Turn a plan’s proposals into real work items, or end the plan without creating any."
+    },
+    "lesson_view": {
+      "label": "View the lesson library",
+      "description": "Read what the project's AI planner learned from its own planning work."
+    },
+    "lesson_manage": {
+      "label": "Change the lesson library",
+      "description": "Retire a lesson or add one — both change the standing instructions the planner is given."
     }
   },
   "localeToggle": {

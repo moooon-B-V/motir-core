@@ -162,6 +162,8 @@ export const PERMISSIONS = [
   'ai:plan',
   'ai:view_plan',
   'ai:decide_plan',
+  'lesson:view',
+  'lesson:manage',
 ] as const;
 
 /** One permission key — the union derived from {@link PERMISSIONS}. */
@@ -234,6 +236,25 @@ const PERMISSION_META: Record<
   'ai:plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2355 / -2357 / -2358 / -2359
   'ai:view_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2363
   'ai:decide_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-3188
+  // MOTIR-3336 — the LESSON library, split read from change. Two keys rather
+  // than one because reading what the planner concluded and changing what it
+  // applies are different acts with different blast radii, and the interesting
+  // future role is the one that may read and not change — which a single key
+  // makes impossible to express. Two rather than three because retiring a
+  // lesson and adding one are both edits to the standing instructions the
+  // planner receives; `lesson:manage` is named for the LIBRARY, not for
+  // retiring, so the next caller does not have to widen its meaning silently.
+  //
+  // `project` domain, per the card: a lesson belongs to a project.
+  //
+  // ⚠️ Both arrive `enforced`, and that is not a shortcut — it is this file's
+  // own rule. `PLANNED_PERMISSIONS` is empty and `tests/permissions/
+  // planDecisionSplit.test.ts` pins it there under the heading "the gate lands
+  // in the same change as the key". So the predicates land with them, in
+  // `lib/projects/access.ts` (`canViewLessons` / `canManageLessons`) — there is
+  // no moment where the catalog advertises a key nothing resolves through.
+  'lesson:view': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3336
+  'lesson:manage': { domain: 'project', enforcement: 'enforced' }, // MOTIR-3336
 };
 
 /**
