@@ -4,6 +4,7 @@ import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
 import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
+import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
 import type { JobRunFailure } from '@/lib/dto/jobs';
@@ -307,6 +308,31 @@ export function defineJob<N extends JobEventName>(
   } as Parameters<typeof inngest.createFunction>[0];
 
   return inngest.createFunction(config, async (ctx: JobContext) => {
+    // ── THE CUTOVER SWITCH, half two (MOTIR-3423) ──────────────────────────
+    // The OTHER half is in `sendEvent`, which decides where to ENQUEUE. This one
+    // decides whether to EXECUTE, and it is what makes "runs there and does NOT
+    // also run on Inngest" true rather than hoped for.
+    //
+    // ⚠️ THE INNGEST FUNCTION IS STILL REGISTERED FOR A MIGRATED JOB, and that
+    // is why this guard is necessary. The serve route mounts every function in
+    // `lib/jobs/registry.ts`, so Inngest keeps delivering to a job whose id has
+    // moved — an event with a SPLIT subscriber set still reaches Inngest for the
+    // sake of the subscribers that have not moved, and Inngest fans out to ALL
+    // of its registered consumers of that event, including the migrated one.
+    // Without this early return the migrated job would run on BOTH engines.
+    //
+    // Un-registering the function instead would work and is worse: it is a
+    // deploy-time change, so moving one job back would need a deploy rather than
+    // an environment variable, and the switch would stop being reversible in the
+    // one-line way the whole migration is built on.
+    //
+    // It returns a MARKER rather than `undefined` so an operator reading the
+    // Inngest dashboard sees why a run did nothing — a silent no-op there is
+    // indistinguishable from a job that broke.
+    if (routedToEngine(id)) {
+      return { skipped: 'routed-to-postgres-engine' as const, jobId: id };
+    }
+
     const { event, step } = ctx;
     const data = event.data as { workspaceId?: string | null; idempotencyKey?: string } | undefined;
     const workspaceId = data?.workspaceId ?? null;
