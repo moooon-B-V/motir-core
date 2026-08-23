@@ -5,6 +5,12 @@ index supervisor starves every other job) · **Evidence pinned at:** `motir-core
 `c5086b97` · **Measured with:** `scripts/experiments/inngest-sleep-concurrency.mjs`,
 `inngest-cli` 1.27.0, SDK 4.5.0
 
+**AMENDED 2026-08-23 by §6 (MOTIR-3405)**, which measures the one signal §4 left open and
+**withdraws it**: the "idle tail" is a small-sample artifact, the wake hypothesis is falsified, and
+what is stable is arrival burstiness. §6 is appended rather than folded into §4, and §4 is left
+standing with a pointer, because the wrong reading is the one a later card would otherwise
+re-derive. Measured with `scripts/experiments/inngest-fastlane-lag.mjs`.
+
 MOTIR-3245 was filed on one sentence in `lib/jobs/definitions/codeGraphRefresh.ts`:
 
 > _"A stepped supervision loop holds its Inngest concurrency slot for the CONTAINER'S WHOLE
@@ -140,6 +146,12 @@ exists before MOTIR-3247 rather than during it.
 be stated and asserted._ That is a **contract**, not a mechanism — it does not depend on which
 explanation of the lag is right, which is precisely why it outlived the one that was wrong.
 
+**⚠️ SUPERSEDED BY §6 (MOTIR-3405) — the paragraph below was measured and does not survive.** The
+idle tail is a small-sample artifact (the idle arm was n=13, where p95 IS the maximum), the wake
+reading is falsified outright, and the stable signal is arrival burstiness. It is kept here because
+a later card reading §4 alone would re-derive exactly this, and a deleted paragraph teaches nobody
+that it was checked.
+
 **And what is left genuinely open**, named here so the next card starts from it rather than from
 the falsified premise: the production tail is **worse when the system is idle** (p95 29.5 s with
 no refresh running). That is the opposite shape from starvation and looks like a wake / cold-path
@@ -161,3 +173,86 @@ neither said which it meant. A whole bug's mechanism was built in the gap.
 So when a comment on this substrate makes a claim about a wait, **it names the resource** —
 invocation, concurrency slot, or container — and, where the claim is load-bearing, cites what
 measured it.
+
+---
+
+## §6 — The "idle tail" is NOT a thing. Burstiness is. (MOTIR-3405, 2026-08-23)
+
+§4 left one signal open — _"the production tail is worse when the system is idle (p95 29.5 s with no
+refresh running)"_ — and named it the thing the next card should start from. It was measured.
+**It does not survive its own re-measurement, and neither does the correlation MOTIR-3245 was filed
+on. Both are window artifacts.**
+
+**Method.** `scripts/experiments/inngest-fastlane-lag.mjs`, read-only against the production Inngest
+REST API. For every `work-item/transitioned` event: `lag = min(run_started_at) − received_at`
+(`received_at` is the scheduler's own stamp, never the client-supplied `ts`). Split by whether a
+`system.code-graph-refresh` run was in flight at `received_at`.
+
+| window   | arm                  | n   | median | p95        | max    |
+| -------- | -------------------- | --- | ------ | ---------- | ------ |
+| **24 h** | while a refresh runs | 63  | 0.8 s  | 18.5 s     | 19.8 s |
+| **24 h** | while none runs      | 13  | 0.5 s  | **26.3 s** | 26.3 s |
+| **72 h** | while a refresh runs | 382 | 1.3 s  | **29.4 s** | 93.3 s |
+| **72 h** | while none runs      | 174 | 0.8 s  | 19.8 s     | 47.6 s |
+
+**The two windows give OPPOSITE answers.** At 24 h the idle arm's tail is worse; at 72 h the
+refresh arm's is. The 24 h idle arm is n=13, where p95 IS the maximum — a single observation
+wearing a percentile's clothes. **So the refresh-vs-idle split is not a property of the system; it
+is noise, and every claim built on it — this record's §4 included — was reading a small sample.**
+
+### What IS stable, on both windows
+
+**Slow events arrive in BURSTS. That is the whole signal.** Splitting on the lag instead and reading
+back the quiet period each side actually had:
+
+| window | arm         | n   | median gap before | median fan-out span |
+| ------ | ----------- | --- | ----------------- | ------------------- |
+| 24 h   | slow (>5 s) | 17  | **0.1 s**         | 20.2 s              |
+| 24 h   | fast (≤5 s) | 58  | **52.4 s**        | 1.7 s               |
+| 72 h   | slow (>5 s) | 136 | **14.1 s**        | 12.9 s              |
+| 72 h   | fast (≤5 s) | 419 | **49.9 s**        | 1.7 s               |
+
+**And the wake hypothesis §4 floated is FALSIFIED outright.** A cold-start cost predicts that the
+event after a long quiet period pays it. The three longest quiet periods in the 72 h window:
+
+```
+after 19.9h idle → lag 0.3s
+after 10.7h idle → lag 0.3s
+after 10.4h idle → lag 0.9s
+```
+
+The longest silences produce the _fastest_ runs in the dataset, and slow events follow 3–4× SHORTER
+quiet than fast ones — on both windows. Waking is not the cost.
+
+**The fan-out span is the second half of the finding, and it is the more diagnostic one.** A slow
+event's consumers do not merely start late, they take **12.9–20.2 s to finish** against **1.7 s** for
+a fast event's — and that 1.7 s is identical on both windows. So this is not queue wait in front of
+otherwise-normal work: the arrival burst inflates the execution too, which is what contention among
+simultaneously-dispatched runs looks like and what a pure dispatch delay does not.
+
+### What this does NOT establish, said plainly
+
+**No layer is named here, and none should be inferred.** The leading hypothesis is saturation of the
+one unpartitioned account-level capacity §3 describes: each `work-item/transitioned` has four
+consumers, and a cascade emits several transitioned events at once, so a cascade over N items
+dispatches ~4N runs into a pool nothing partitions. That is consistent with every number above and is
+**not proven by any of them**.
+
+**The reading that would settle it is the one §3 could not take** — the account's configured
+concurrency limit, which is dashboard-only. That makes it load-bearing rather than housekeeping: with
+the capacity known, ~4N is either comfortably inside it or plainly over, and this stops being a
+hypothesis either way.
+
+### ⚠️ The instrument, because it silently lies (measured here)
+
+**`/v1/events` caps at 51 and returns NO cursor.** `limit=100` returns 51; `metadata` carries only
+`fetched_at`. Proof it is a cap and not a count, on one 24 h window: `inngest/function.finished`
+returns 51 for the whole window **and** 51 for each 12 h half; `work-item/transitioned` returns 51
+for the window but **34 + 39 = 73** across its halves.
+
+**A capped read is RECENCY-BIASED — you get the newest 51 — so a measurement script run during a
+busy period samples the busy period and reports it as the day.** For an idle-vs-busy comparison
+that is not a rounding error; it is a bias pointing straight at the hypothesis under test. The first
+pass of this very measurement made that mistake and recovered 51 of 76 events on the 24 h window.
+**The window IS the pagination:** bisect any slice that returns exactly 51 and union the halves,
+which is what the harness now does.
