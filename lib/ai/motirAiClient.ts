@@ -956,3 +956,118 @@ export function parseSseFrame(frame: string): JobStreamEvent | null {
   }
   return { event, data };
 }
+
+// ── The per-project LESSON INSPECTION reads (Subtask MOTIR-3337 over MOTIR-3335) ──
+//
+// The `/v1/lessons` pair, keyed by the core identity exactly as `getCodeAudit`
+// and `getConvention` are. There is no new convention here: same `config()`,
+// same `authHeaders`, same `aiFetch` (which maps a transport failure and the
+// 30s deadline alike to `MotirAiUnavailableError`), same
+// `errorFromProblem(await readProblem(res))` on a non-2xx.
+//
+// ⚠️ TENANT ONLY, decided UPSTREAM. motir-ai selects `aiProjectId = <this
+// project>` and never the injection clause `scope = 'global' OR aiProjectId =
+// …`, so the shipped global corpus cannot reach a customer's screen
+// (`motir-ai/docs/contract.md`, `GET /v1/lessons`). motir-core does not filter
+// a second time and must not start: a second filter here would let the upstream
+// one be removed without a failing test on either side.
+
+/** One lesson as motir-ai returns it. Dates are ISO-8601 strings on the wire. */
+export interface RawLesson {
+  id: string;
+  scope: string;
+  aiProjectId: string | null;
+  mistakeType: string;
+  title: string;
+  body: string;
+  why: string;
+  howToApply: string;
+  categories?: string[];
+  kinds?: string[];
+  types?: string[];
+  phases?: string[];
+  sourceRef: string | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastOccurredAt: string;
+  recurrenceCount?: number;
+  /** Whether the planner is being told this today. */
+  injected: boolean;
+  /** Why not, when it is not — `disabled` | `not_recurred`, else null. */
+  injectionBlock: string | null;
+}
+
+export interface RawLessonPage {
+  lessons: RawLesson[];
+  nextCursor: string | null;
+  /** The instant every row on this page was labelled against (ISO-8601). */
+  staleCutoff: string;
+  /** The retire-by-non-recurrence window, in days. */
+  retentionDays: number;
+}
+
+export interface LessonListQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  cursor?: string;
+  limit?: number;
+}
+
+// GET /v1/lessons — one page of THIS project's own lessons.
+export async function getLessons(query: LessonListQuery): Promise<RawLessonPage> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.limit !== undefined) params.set('limit', String(query.limit));
+  const res = await aiFetch(`${url}/v1/lessons?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawLessonPage>;
+  // The malformed-body arm `refreshCodeAudit` and `setSeatQuantity` already use:
+  // a 200 whose shape is wrong is an unavailable upstream, not a page of zero
+  // lessons — which is what an unchecked `body.lessons ?? []` would render it as,
+  // and an empty list is exactly the answer a real project legitimately gives.
+  if (!Array.isArray(body.lessons)) {
+    throw new MotirAiUnavailableError('lessons response missing `lessons`');
+  }
+  return {
+    lessons: body.lessons,
+    nextCursor: body.nextCursor ?? null,
+    staleCutoff: body.staleCutoff ?? new Date(0).toISOString(),
+    retentionDays: typeof body.retentionDays === 'number' ? body.retentionDays : 0,
+  };
+}
+
+export interface LessonDetailQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  lessonId: string;
+}
+
+// GET /v1/lessons/:id — one lesson in full.
+//
+// An id belonging to another project raises the same upstream `not_found` as an
+// unknown one, so nothing here can distinguish them either — the existence-oracle
+// posture is preserved by NOT adding a check that would.
+export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  const res = await aiFetch(
+    `${url}/v1/lessons/${encodeURIComponent(query.lessonId)}?${params.toString()}`,
+    { headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawLesson>;
+  if (typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError('lesson response missing `id`');
+  }
+  return body as RawLesson;
+}
