@@ -1934,7 +1934,7 @@ rot.
 | --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `motir-core`    | **none** — every `setInterval` in the repo is client-side                                    | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.                           |
 | `motir-ai`      | **none** — no timer re-arms on an idle queue ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)) | **No, and not by a margin.** There is no timer to price: an idle worker schedules nothing and issues no query. |
-| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 600` s** — MEASURED adequate; see below         | **No** — and the database does sleep: measured 46.6% asleep on an idle window, 2026-08-23. See below.          |
+| `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 1800` s** — raised for margin; see below        | **No** — and the database does sleep: measured 46.6% asleep at 600 s, ~83% projected at 1800 s. See below.     |
 
 **All three rows re-checked against shipped code on 2026-08-20** by
 [MOTIR-3257](motir:cmt1u6a2q000ai5ph1wjb16wa), rather than carried forward:
@@ -2001,6 +2001,34 @@ in the organization (`snowy-truth-13928044` motir-core, `autumn-sky-90851862` mo
 on 2026-08-23. **The 2026-08-20 table below is left exactly as it was** — it is a true
 record of what was measured then, and rewriting it would destroy the evidence for this
 paragraph.
+
+**⚠️ AND THE INTERVAL WAS THEN RAISED 600 → 1800 s ON THAT FINDING — NOT ON THE SAVING
+([MOTIR-3411](motir:cmt6cyvie003ei4ph1uyq1qsm), 2026-08-23).** The measurement above says 600 s
+was adequate _on the day it was measured_. Run the same arithmetic at the other reading the same
+method has produced and it is the fragile value:
+
+| interval   | awake at ~5m12s (2026-08-23) | awake at ~9 min (2026-08-20) |
+| ---------- | ---------------------------- | ---------------------------- |
+| **600 s**  | 52%                          | **~98%** — the near-miss     |
+| **1800 s** | 17%                          | 31%                          |
+
+**600 s is one platform change away from being the defect this section went looking for; 1800 s
+is not.** The Neon line goes from ~$10.00/mo to ~$3.33/mo against the $19.35 an always-awake
+0.25 CU compute bills — but ~$6.70/mo is a side effect. The margin against a threshold already
+observed to move is the reason.
+
+**The 46.6% is a reading of 600 s and is labelled as such rather than deleted; the ~83% at
+1800 s is a PROJECTION from the same measured delay and is labelled as such too.** Nobody has
+re-measured the endpoint at the new interval. The cost is that a channel or option edited in the
+gateway admin UI reaches the running machine after up to 30 min instead of 10 — not token or
+quota enforcement, which are Redis-only paths with Redis deliberately off, and not an urgent
+cut-off, which is a `fly apps restart` away.
+
+**One knock-on for §22/§25, recorded here because the number it moves lives there.** The
+`fly.toml` cost argument priced `min_machines_running = 0` at roughly $9.75/mo of extra saving,
+reasoning that a stopped machine runs no sync. Most of that has now been taken by the interval
+instead: scaling to zero is worth about $3.33/mo of Neon plus the $3.32/mo machine. §25's open
+question is unchanged; the prize behind it is smaller than the figure it was gated on.
 
 The rule this section already states survives, and gets stronger: _"an interval is only
 ever as good as the threshold it clears."_ The correction is that **a threshold from
