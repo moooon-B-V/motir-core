@@ -1,4 +1,10 @@
-import { getLesson, getLessons, type RawLesson } from '@/lib/ai/motirAiClient';
+import {
+  applyLesson,
+  getLesson,
+  getLessons,
+  retireLesson,
+  type RawLesson,
+} from '@/lib/ai/motirAiClient';
 import {
   MotirAiConfigError,
   MotirAiJobNotFoundError,
@@ -6,6 +12,7 @@ import {
 } from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import type {
+  LessonHumanOverride,
   LessonInjectionBlock,
   ProjectLessonDTO,
   ProjectLessonsPageDTO,
@@ -52,6 +59,11 @@ function isTenantRow(raw: RawLesson): boolean {
   return raw.scope === 'tenant';
 }
 
+/** The upstream's override values, narrowed. An unknown value degrades to null. */
+function toHumanOverride(raw: string | null): LessonHumanOverride | null {
+  return raw === 'retired' || raw === 'exempt' ? raw : null;
+}
+
 /** The upstream's block values, narrowed. An unknown value degrades to null. */
 function toInjectionBlock(raw: string | null): LessonInjectionBlock | null {
   return raw === 'disabled' || raw === 'not_recurred' ? raw : null;
@@ -82,6 +94,9 @@ function toLessonDTO(raw: RawLesson): ProjectLessonDTO {
     recurrenceCount: raw.recurrenceCount ?? 1,
     injected: raw.injected,
     injectionBlock: toInjectionBlock(raw.injectionBlock),
+    humanOverride: toHumanOverride(raw.humanOverride ?? null),
+    humanOverrideAt: raw.humanOverrideAt ?? null,
+    humanOverrideBy: raw.humanOverrideBy ?? null,
     // An upstream that predates the field labels nothing "not seen in 0 days":
     // `injectionBlock` is what decides whether a badge renders at all, and a
     // row that IS blocked without a window is a version skew, not a zero-day
@@ -208,5 +223,55 @@ export const projectLessonsService = {
       if (err instanceof MotirAiJobNotFoundError || isSectionQuiet(err)) return null;
       throw err;
     }
+  },
+
+  /**
+   * STOP APPLYING a lesson, or APPLY IT AGAIN — the write half (MOTIR-3345).
+   *
+   * ⚠️ GUARDED BY `lesson:manage`, NOT `lesson:view` — and this is the single
+   * most likely defect on this card, because it is invisible to every test an
+   * admin performs. An admin holds both keys, so a manual walk passes, the E2E
+   * passes, and the distinction only fails for a role nobody has created yet:
+   * a member given read access could switch off what the planner tells the
+   * whole project. The two keys were separated one card earlier (MOTIR-3336)
+   * precisely to make that role expressible, and checking the view key here
+   * would quietly undo it at the first call site.
+   *
+   * ⚠️ THE ORDER IS THE GUARD, exactly as on the reads: `assertPermission` runs
+   * BEFORE the upstream call, so a caller without the key causes no request at
+   * all. Asserted as the stub's CALL COUNT rather than as a status code,
+   * because a route that called upstream and then refused would pass a status
+   * assertion.
+   *
+   * ⚠️ AND THIS ONE DOES NOT DEGRADE. The reads go quiet on a motir-ai outage
+   * because a settings page with three working groups on it must not 500 over
+   * an unrelated service. A WRITE is the opposite case: swallowing the failure
+   * would tell the user their lesson was retired when nothing happened, and the
+   * row would flip back on the next read. Every error propagates, and the route
+   * turns it into something the surface can say.
+   */
+  async setLessonApplied(
+    projectId: string,
+    ctx: AccessActorContext,
+    lessonId: string,
+    applied: boolean,
+  ): Promise<ProjectLessonDTO> {
+    await projectAccessService.assertPermission(projectId, ctx, 'lesson:manage');
+    const write = applied ? applyLesson : retireLesson;
+    const raw = await write({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      lessonId,
+      // The acting user, threaded through so motir-ai can record WHO decided.
+      actorId: ctx.userId,
+    });
+    // The same defensive narrowing the reads apply, for the same reason and in
+    // the same direction — except a global row arriving HERE would mean the
+    // upstream had performed a write it is supposed to refuse, so it is a throw
+    // rather than a filter: there is no partial answer to give.
+    if (!isTenantRow(raw)) {
+      throw new MotirAiUnavailableError('lesson write answered with a non-tenant row');
+    }
+    return toLessonDTO(raw);
   },
 };

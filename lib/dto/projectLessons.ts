@@ -8,6 +8,12 @@
 /** Why a lesson is not currently being injected into the planner's prompt. */
 export type LessonInjectionBlock = 'disabled' | 'not_recurred';
 
+/**
+ * A person's standing decision about a lesson, which the retention clock may not
+ * override (Story MOTIR-3330). Null means nobody has decided and the clock rules.
+ */
+export type LessonHumanOverride = 'retired' | 'exempt';
+
 export interface ProjectLessonDTO {
   id: string;
   /** The takeaway — the one line a row shows. */
@@ -34,6 +40,24 @@ export interface ProjectLessonDTO {
   injected: boolean;
   /** Why not, when it is not. Null exactly when `injected` is true. */
   injectionBlock: LessonInjectionBlock | null;
+  /**
+   * WHO decided this, and WHEN — the audit behind the `Not applied` badge
+   * (Story MOTIR-3330).
+   *
+   * `humanOverride` is `retired` (somebody switched it off) or `exempt`
+   * (somebody kept it despite the clock), else null. The other two are null
+   * exactly when it is: a decision that has been undone leaves no actor behind.
+   *
+   * ⚠️ The SURFACE does not branch on `humanOverride` to pick a badge —
+   * `injectionBlock` already answers that, and it deliberately reports a
+   * retired lesson as `disabled` because to a reader it is the same fact. This
+   * field is here so the row and the detail can SAY who and when.
+   */
+  humanOverride: LessonHumanOverride | null;
+  /** ISO-8601, or null when no decision stands. */
+  humanOverrideAt: string | null;
+  /** The acting user's id, or null when no decision stands. */
+  humanOverrideBy: string | null;
   /**
    * The retire-by-non-recurrence window, in days, that THIS lesson's label was
    * computed against — so a row reading "Not seen in {n} days" quotes the number
