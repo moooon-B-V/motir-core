@@ -1,5 +1,9 @@
 import { getLesson, getLessons, type RawLesson } from '@/lib/ai/motirAiClient';
-import { MotirAiJobNotFoundError, MotirAiUnavailableError } from '@/lib/ai/errors';
+import {
+  MotirAiConfigError,
+  MotirAiJobNotFoundError,
+  MotirAiUnavailableError,
+} from '@/lib/ai/errors';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import type {
   LessonInjectionBlock,
@@ -87,6 +91,32 @@ function toLessonDTO(raw: RawLesson): ProjectLessonDTO {
   };
 }
 
+/**
+ * Whether this failure means "there is nothing to show here", as opposed to
+ * "something is wrong that somebody must fix".
+ *
+ * TWO classes, and the second is the one that cost a CI round-trip:
+ *
+ *   * `MotirAiUnavailableError` — motir-ai is CONFIGURED and did not answer (a
+ *     transport failure, the 30s deadline, a 5xx). The outage case the card
+ *     names.
+ *   * `MotirAiConfigError` — motir-ai is NOT CONFIGURED AT ALL. `MOTIR_AI_URL`
+ *     unset is the shipped SELF-HOST posture, not a defect: the AI-planning page
+ *     has rendered a "Motir AI isn't connected" state off `isMotirAiConfigured()`
+ *     since MOTIR-919. Letting this one through made the whole settings page 500
+ *     on every deployment without motir-ai — which is most of them, and which is
+ *     the exact failure the degradation contract exists to prevent, arriving
+ *     through the door nobody thought to hold.
+ *
+ * ⚠️ `MotirAiUnauthorizedError` and `MotirAiBadRequestError` stay LOUD, and the
+ * distinction is not a technicality: those mean motir-ai IS reachable and
+ * REFUSED us — a wrong service token, a malformed query. Swallowing them would
+ * render as a quiet section for as long as nobody read a log.
+ */
+function isSectionQuiet(err: unknown): boolean {
+  return err instanceof MotirAiUnavailableError || err instanceof MotirAiConfigError;
+}
+
 /** The answer when motir-ai cannot be reached — the section, quiet. */
 const UNAVAILABLE: ProjectLessonsPageDTO = {
   available: false,
@@ -139,7 +169,7 @@ export const projectLessonsService = {
       // is quiet" for as long as nobody looked at a log. `aiFetch` maps both a
       // transport failure and its 30s deadline to this one type, which is
       // exactly the outage class the card names.
-      if (err instanceof MotirAiUnavailableError) return UNAVAILABLE;
+      if (isSectionQuiet(err)) return UNAVAILABLE;
       throw err;
     }
   },
@@ -175,9 +205,7 @@ export const projectLessonsService = {
       // project's to inspect and saying so would be a different disclosure.
       return isTenantRow(raw) ? toLessonDTO(raw) : null;
     } catch (err) {
-      if (err instanceof MotirAiJobNotFoundError || err instanceof MotirAiUnavailableError) {
-        return null;
-      }
+      if (err instanceof MotirAiJobNotFoundError || isSectionQuiet(err)) return null;
       throw err;
     }
   },

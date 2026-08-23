@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getLessons, getLesson, type RawLesson } from '@/lib/ai/motirAiClient';
 import {
   MotirAiBadRequestError,
+  MotirAiConfigError,
   MotirAiJobNotFoundError,
   MotirAiUnauthorizedError,
   MotirAiUnavailableError,
@@ -376,6 +377,41 @@ describe('degradation — the section goes quiet, the page does not', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(problem('internal_error', 500)));
     const page = await projectLessonsService.listLessons(PROJECT_ID, ctx);
     expect(page.available).toBe(false);
+  });
+
+  it('degrades when motir-ai is NOT CONFIGURED — the self-host posture, not a defect', async () => {
+    // ⚠️ THE REGRESSION THIS FILE MISSED ONCE. `MOTIR_AI_URL` unset is the
+    // shipped self-host state — the AI-planning page has rendered "Motir AI
+    // isn't connected" off `isMotirAiConfigured()` since MOTIR-919 — but
+    // `config()` throws `MotirAiConfigError`, which is neither of the two
+    // classes the degradation arm originally caught. The whole settings page
+    // 500'd on every deployment without motir-ai, and the earlier tests all
+    // passed because every one of them SET the env in `beforeEach`.
+    delete process.env['MOTIR_AI_URL'];
+    delete process.env['MOTIR_AI_SERVICE_TOKEN'];
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = await projectLessonsService.listLessons(PROJECT_ID, ctx);
+    expect(page.available).toBe(false);
+    expect(page.lessons).toEqual([]);
+    // …and nothing was even attempted, which is the point: there is no address.
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // The detail read answers on the same terms rather than throwing.
+    await expect(projectLessonsService.getLesson(PROJECT_ID, ctx, 'les_1')).resolves.toBeNull();
+  });
+
+  it('an UNAUTHORIZED motir-ai is NOT the same as an unconfigured one', async () => {
+    // The line the fix must not cross. A reachable motir-ai that REFUSES us is a
+    // wrong service token — our bug, and a quiet section would hide it for as
+    // long as nobody read a log. Asserted beside the case above so the two can
+    // never be collapsed by a later simplification.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(problem('service_unauthorized', 401)));
+    await expect(projectLessonsService.listLessons(PROJECT_ID, ctx)).rejects.toBeInstanceOf(
+      MotirAiUnauthorizedError,
+    );
+    expect(MotirAiConfigError).toBeTruthy();
   });
 
   it('does NOT swallow a mis-configured credential — that is our bug, and it stays loud', async () => {

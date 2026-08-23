@@ -349,6 +349,27 @@ describe('4 · an upstream failure degrades the SECTION, not the PAGE', () => {
     });
   });
 
+  it('degrades when motir-ai is NOT CONFIGURED, and the settings page still renders', async () => {
+    // The STRONGEST version of this criterion, and the one that actually broke:
+    // a deployment with no motir-ai at all. Every other case here has an address
+    // that fails; this one has no address, which `config()` raises as a
+    // different error class — so a degradation arm written for outages alone
+    // lets it through and the whole page 500s. That is not a hypothetical
+    // posture: it is what a self-hosted install and the main E2E lane both are.
+    const s = await buildScenario('unconfigured');
+    delete process.env['MOTIR_AI_URL'];
+    delete process.env['MOTIR_AI_SERVICE_TOKEN'];
+
+    const page = await projectLessonsService.listLessons(s.projectId, s.adminCtx);
+    expect(page.available).toBe(false);
+
+    // And the half that matters — the three groups that shipped before this
+    // story answer exactly as they did, on a deployment this story added a
+    // cross-service read to.
+    const settings = await projectAiSettingsService.getAiSettings(s.projectKey, s.adminCtx);
+    expect(settings).toMatchObject({ aiAutoPlanEnabled: expect.any(Boolean) });
+  });
+
   it('degrades on an upstream 5xx as well as on a transport failure', async () => {
     const s = await buildScenario('degrade-5xx');
     stubUpstream(() =>
