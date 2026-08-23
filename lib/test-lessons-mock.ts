@@ -23,8 +23,30 @@
 // re-read on EVERY request, so a spec can rewrite it mid-run — a project with
 // lessons and the same project with none are both real screens, and the empty
 // one is what most projects see for weeks.
+//
+// ── THE CAPTURE GATE (Story MOTIR-3331 · Subtask MOTIR-3353) ────────────────
+//
+// This seam also answers `POST /v1/jobs`, and it does one thing with it that a
+// plain 202 would not: it MODELS motir-ai's capture gate. The envelope carries
+// `context.recordPlanningMistakes` (MOTIR-3350); unless that field is explicitly
+// `false`, the submit APPENDS a captured lesson to the fixture — the store —
+// exactly as a planning run that corrected itself would.
+//
+// ⚠️ WHAT THAT MAKES REAL, AND WHAT IT DOES NOT. Everything on motir-core's side
+// is the shipped code: the toggle writes through the real PATCH, the real
+// `projectAiSettingsService` persists it, `resolveRecordPlanningMistakesForJob`
+// reads it back at submit time, and the real `motirAiClient` serializes the
+// envelope. What is SIMULATED is motir-ai's own decision, because motir-ai does
+// not run in this lane — and that decision has its own tests over there
+// (`lessonCaptureConsent`, `lessonCaptureEnvelopeContract`).
+//
+// So the property this seam lets a browser-level spec prove is the one no other
+// test covers: that the switch a person flips in the interface reaches the wire.
+// The gate is written here as motir-ai writes it — ABSENT MEANS ON, only an
+// explicit `false` disables — so a spec asserting "nothing was recorded" is
+// asserting against a store that would have grown had the flag not arrived.
 
-import { readFixtureFileSync } from '@/lib/test-fixture-file';
+import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
 /** One lesson, in motir-ai's WIRE shape (what `RawLesson` parses). */
@@ -113,6 +135,27 @@ function limitOf(p: string): number | null {
   return raw === null ? null : Number(raw);
 }
 
+/** Overwrite the fixture — the store, as motir-ai would have changed it. */
+function writeFixture(fixture: LessonsFixture): void {
+  const p = process.env['MOTIR_AI_LESSONS_FIXTURE_PATH'];
+  if (!p) return;
+  writeFixtureFileSync(p, JSON.stringify(fixture));
+}
+
+/**
+ * motir-ai's gate, verbatim in its polarity: only an explicit `false` disables.
+ * An ABSENT field means the producer predates the contract, which reads as ON —
+ * so a spec that forgot to send it does NOT accidentally assert the gated path.
+ */
+function envelopeAllowsCapture(rawBody: string): boolean {
+  try {
+    const body = JSON.parse(rawBody) as { context?: { recordPlanningMistakes?: unknown } };
+    return body.context?.recordPlanningMistakes !== false;
+  } catch {
+    return true;
+  }
+}
+
 export function installLessonsBoundaryMock(agent: MockAgent): void {
   const origin = (process.env['MOTIR_AI_URL'] ?? '').replace(/\/+$/, '');
   if (!origin) return;
@@ -180,5 +223,61 @@ export function installLessonsBoundaryMock(agent: MockAgent): void {
         responseOptions: json,
       };
     })
+    .persist();
+
+  // ── POST /v1/jobs — the planning submit, and the CAPTURE it would produce ──
+  //
+  // Registered by THIS seam because the thing under test is what the submit
+  // does to the LESSON STORE, and this module owns that store. `instrumentation.ts`
+  // installs the lessons seam BEFORE the jobs seam, and undici matches
+  // interceptors in registration order, so when both flags are on this one wins
+  // for `POST /v1/jobs` and the jobs mock still serves everything else.
+  pool
+    .intercept({ path: (p) => pathOnly(p) === '/v1/jobs', method: 'POST' })
+    .reply((req) => {
+      if (envelopeAllowsCapture(String(req.body ?? '{}'))) {
+        const fixture = readFixture();
+        const n = fixture.lessons.length + 1;
+        writeFixture({
+          ...fixture,
+          lessons: [
+            ...fixture.lessons,
+            {
+              id: `les_captured_${n}`,
+              title: `Captured from a planning run (${n})`,
+              body: 'The planner corrected itself during this run.',
+              why: 'Recorded because this project has recording switched on.',
+              howToApply: 'Do the thing the correction implies.',
+            },
+          ],
+          // The library total tracks the rows this seam actually holds; a spec
+          // that pinned `total` separately keeps its own number.
+          ...(fixture.total === undefined ? {} : { total: fixture.total + 1 }),
+        });
+      }
+      return { statusCode: 202, data: { jobId: 'job_lessons_e2e' }, responseOptions: json };
+    })
+    .persist();
+
+  // The two reads a submit's caller makes afterwards. Minimal on purpose — this
+  // seam is not the jobs seam, and a spec that needs a real generation stream
+  // uses `E2E_TEST_AI_JOBS`. Answering them here only keeps a planning submit
+  // from escaping to an unresolvable host mid-walk.
+  pool
+    .intercept({ path: (p) => /^\/v1\/jobs\/[^/?]+\/stream/.test(pathOnly(p)), method: 'GET' })
+    .reply(() => ({
+      statusCode: 200,
+      data: 'event: done\ndata: {"status":"succeeded"}\n\n',
+      responseOptions: { headers: { 'content-type': 'text/event-stream' } },
+    }))
+    .persist();
+
+  pool
+    .intercept({ path: (p) => /^\/v1\/jobs\/[^/?]+$/.test(pathOnly(p)), method: 'GET' })
+    .reply(() => ({
+      statusCode: 200,
+      data: { jobId: 'job_lessons_e2e', status: 'succeeded', result: { operations: [] } },
+      responseOptions: json,
+    }))
     .persist();
 }
