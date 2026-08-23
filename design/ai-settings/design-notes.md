@@ -367,3 +367,256 @@ would let the settings page and the Plans list drift apart in wording for the sa
   want. If expiry is ever wanted, it is its own decision card and its own design.
 - The **plan detail** the paused banner links to — shipped (MOTIR-847); this asset only draws the
   door to it.
+
+---
+
+# Amendment — THE LESSON LIBRARY (Story MOTIR-3329 · Subtask MOTIR-3332)
+
+**Asset:** `ai-planning-lessons.mock.html` + `ai-planning-lessons.png` (this file is the area's one
+notes file; §§1–12 above are MOTIR-914/1739's and are unchanged by this amendment).
+**Implements:** MOTIR-3338 (the list, the detail, the empty state, the door). MOTIR-3330 builds the
+retire action whose two states §L6 draws; MOTIR-3331 owns the recording switch §L5 points at.
+
+| File                            | What it is                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `ai-planning-lessons.mock.html` | The asset SOURCE — seven panels. Layout source of truth for MOTIR-3338.                |
+| `ai-planning-lessons.png`       | Full-page export (light, `deviceScaleFactor: 2`, viewport 1200) — the reviewable face. |
+| `design-notes.md` §§L1–L12      | This spec.                                                                             |
+
+The surface: **what this project taught its planner** — the corrections Motir distilled from its own
+planning work here and applies to every plan it drafts for this project afterwards.
+
+## L1. Drawn against a RENDER, not against a reading of the code
+
+The shipped AI-planning settings page was **rendered and screenshotted before anything was drawn** —
+the real `AiPlanningSettingsEditor` bundled with the real `packages/design-system/theme.css`,
+screenshotted headless at 1200×2 (the can-render-UI-headless technique). Everything in the new asset
+composes what that render actually shows: the 672 px centred column, the serif page head, the
+`SettingsCard` grammar (icon + title + `hsub`, hairline divider, body), the `SwitchRow`, the
+`--el-surface-soft` footer with Cancel + Save.
+
+**The new asset's stylesheet IS MOTIR-914's**, reused byte-for-byte with only new layout rules
+appended. Two assets describing the same page cannot then describe it differently, and no token
+value was re-copied out of `theme.css` a second time (the re-copy is where a drift would enter).
+
+## L2. Placement — a fourth CARD as the door, and a DRILL-DOWN for the library
+
+Three placements were possible and the choice is load-bearing, so it is recorded rather than implied:
+
+| option                                        | verdict                                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The whole list inline, as a fourth card       | ✗ The library is **paged and unbounded** (`ADMIN_PAGE_DEFAULT = 50`). A settings page with a Save/Cancel footer is not a place to page through a list. |
+| Its own rail row under Automation             | ✗ It would compete with the settings it belongs to, and read as a second AI concern rather than as the planner's memory.                               |
+| **A door card + a nested route** — **chosen** | ✓ The reader meets it where they already are; the library gets a page that can be as long as it needs. And it is the **shipped idiom**, not a new one. |
+
+The shipped idiom is `SettingsNavEntry.nestedRoutes` — a **DRILL-DOWN**, added in MOTIR-2263 for
+`roles/[roleKey]`: a route reached from its parent's rail row, which **gets no rail row of its own
+and still lights one**. `tests/settings/projectSettingsNav.test.ts` already enforces all three of its
+properties (a nested route is a strict sub-path of its owner; it never becomes a rail row or a
+palette action; it still lights its parent's row). So:
+
+```ts
+{
+  id: 'ai-planning',
+  group: 'automation',
+  href: '/settings/project/ai-planning',
+  nestedRoutes: [
+    '/settings/project/ai-planning/lessons',
+    '/settings/project/ai-planning/lessons/[lessonId]',
+  ],
+  …
+}
+```
+
+The route↔registry totality test stays green with no weakening, and no new rail row appears.
+
+## L3. The access path — DRAWN (panel 0)
+
+1. **Settings rail** → **Automation** → **AI planning** (unchanged; the row stays `active` on every
+   nested route, which is what `nestedRoutes` buys).
+2. On that page, a **fourth card — “What Motir has learned”** — below `Planner`. It shows the three
+   most recent takeaways and **“View all N lessons →”**. A preview, not the list.
+3. The link opens `/settings/project/ai-planning/lessons`; a row opens
+   `/settings/project/ai-planning/lessons/[lessonId]`. Both carry a back link to their parent.
+
+**⚠️ The Save/Cancel footer stays on the `Planner` card.** §4 above says the footer “appears once, on
+the last card, and governs the whole page's dirty state”. The lessons card is **read-only**, so that
+sentence is refined to **the last EDITABLE card** — which is the same card today, so nothing moves.
+A Save button rendered beneath a list would appear to govern the list.
+
+**⚠️ The card renders only for an actor holding `lesson:view`** (MOTIR-3336). A non-admin does not
+see the door — which is what MOTIR-3340's non-admin walk asserts. Hiding is presentation and never
+protection: the destination is guarded server-side too (`guardSettingsPage`, and the seam's own
+assert in MOTIR-3337).
+
+## L4. What a ROW shows, and why (panels 1–2)
+
+| element                    | why it is on the row                                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the **takeaway** (`title`) | The only one of the four text fields on the row. The reader's question here is _do I want to open this_, not _what does it say_. Never truncated with an ellipsis — a half-sentence rule is worse than a long one. |
+| **Last seen `<when>`**     | `lastOccurredAt`, as prose. Answers _is this still live_.                                                                                                                                                          |
+| **seen `<n>` times**       | `recurrenceCount`, as prose. Answers _how settled is this_ — four times is a pattern, once is an observation. The two numbers are deliberately BOTH shown: they answer different questions.                        |
+| the **axes chips**         | `kinds` / `types` / `phases`, each chip carrying its axis NAME (“kind story”), because `story` alone reads as a status. An EMPTY axis is not drawn.                                                                |
+| **Applies to every card**  | The chip a lesson with NO axes shows — empty means _unconstrained_ upstream, and three missing chips would read as missing data rather than as universal scope.                                                    |
+| the **retire affordance**  | On hover and on focus. A labelled `Button`, never a bare icon: an unlabelled ban glyph beside a rule reads as “this rule is broken”.                                                                               |
+
+Row order is `lastOccurredAt` descending — most recently relevant first, which is what the API
+returns. The one filter is the `All · Applied · Not applied` segmented control, because the only
+question a reader has about a list of twelve is which ones are live.
+
+## L5. The EMPTY state (panel 5)
+
+The common case for weeks, and the moment the feature explains itself — so it is written as an
+explanation, not as a placeholder. It says **what would appear here, when, and where it comes from**,
+and its last line names the switch that turns recording off (MOTIR-3331), because a reader who has
+just learned that Motir watches their planning should not have to search for that control. It does
+**not** say “No lessons yet” and stop: that sentence tells a reader who has never seen this mechanism
+nothing at all. Same `.lrows` container as the populated list, so the surface does not change shape
+when the first lesson arrives.
+
+## L6. NOT APPLIED — two reasons, drawn apart (panel 3)
+
+The two are different acts and the surface says which:
+
+| state                   | what it is                                                                            | treatment                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Not applied**         | Somebody switched it off (`enabled = false`).                                         | Neutral `--el-muted` badge with a `Ban` glyph. Action inverts to **Apply again**. |
+| **Not seen in 90 days** | `lastOccurredAt` fell behind the retention window. **Reverses itself** on recurrence. | `--el-tint-yellow` badge with a `Clock` glyph. Same inverted action.              |
+
+Collapsing them into one greyed row would make a lesson somebody switched off indistinguishable from
+one that simply has not come up lately. **Neither is removed from the list** — the whole point of the
+surface is to show what the planner has _stopped_ saying, which is why the API deliberately returns
+rows the injection path filters out. A not-applied row keeps its full text, loses its emphasis
+(`--el-text-tertiary`, chips drop their fill) and is **never struck through**: the lesson is not
+wrong, it is just not in force.
+
+## L7. The DETAIL (panel 4)
+
+All four text fields, under labels **in the reader's words** — **What happened · Why it matters ·
+How to apply it · Where it came from** — never the column names `body` / `why` / `howToApply` /
+`sourceRef`. Reduced to a title in a table, a lesson becomes a rule handed down without
+justification, which is the same opacity in a nicer font.
+
+Its own ROUTE rather than a modal, because a lesson is the kind of thing one person sends another.
+The status line at the top is the SAME `.callout` box the AI-planning page already uses for its
+guardrail sentence — no new primitive. `Where it came from` shows `createdAt`, `lastOccurredAt`,
+`recurrenceCount` and the work item the correction came out of (`sourceRef`), which is the provenance
+a reader can actually follow.
+
+## L8. Primitives composed — the no-hand-rolling checklist
+
+| Element                  | Primitive                                             | Notes                                                                                 |
+| ------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| The door card            | `SettingsCard`                                        | Identical composition to the three cards above it — icon + title + `hsub`, then body. |
+| Card icon                | `GraduationCap` (lucide)                              | Distinct from `Sparkles` (the page) and `Bot` (the planner).                          |
+| List container + rows    | `Card` + hairline-divided rows                        | The shipped `--el-border-soft` divider grammar; no new list primitive.                |
+| Axis chip                | `Pill` grammar (`--radius-badge`, `--spacing-chip-*`) | Chip fill `--el-chip-bg`, border `--el-chip-border`, ink `--el-text-strong`.          |
+| Not-applied badge        | The same chip, in the state role                      | `--el-muted` (switched off) / `--el-tint-yellow` (aged out) + `--el-text-strong`.     |
+| Retire / restore action  | `Button` `secondary`, `--height-btn-sm`               | Labelled, with a leading glyph. Never an icon-only button.                            |
+| Status callout on detail | The SAME `.callout` box §5 lists                      | Info role (`--el-tint-sky`), `ShieldCheck` glyph.                                     |
+| Filter                   | Segmented control from `--el-option-active-bg`        | Existing token roles; no new control.                                                 |
+| Empty state              | `EmptyState` grammar                                  | Tinted glyph tile + title + two paragraphs.                                           |
+| Back link                | `<a>` + `ChevronLeft`, `--el-link`                    | The shipped drill-down back-link shape.                                               |
+
+**No new primitive is required.** If the implementer finds one is, that is a new `design/` subtask.
+
+## L9. Copy — the exact strings
+
+Door card (on `/settings/project/ai-planning`):
+
+- Title **What Motir has learned** · sub **Corrections this project taught its planner. Motir applies
+  them to every plan it drafts here.**
+- Link **View all {n} lessons**
+
+List page:
+
+- Title **What Motir has learned**
+- Description **Corrections this project taught its planner, most recently relevant first. Motir
+  applies each of these to every plan it drafts here — until you stop it.**
+- Count line **{n} lessons · {m} applied**
+- Filter **All** · **Applied** · **Not applied**
+- Row meta **Last seen {when}** · **seen {n} times** (**seen once** / **seen twice** for 1 and 2)
+- Axis chips **kind {kind}** · **type {type}** · **phase {phase}** · **Applies to every card**
+- Row action **Stop applying** / **Apply again**
+- Badges **Not applied** · **Not seen in 90 days**
+
+Detail page:
+
+- Back link **What Motir has learned**
+- Status **Motir is applying this.** **It goes into every plan drafted for this project.**
+- Section labels **What happened** · **Why it matters** · **How to apply it** · **Where it came from**
+- Facts **First recorded** · **Last seen** · **Times seen** · **Recorded from**
+- Action **Stop applying this lesson**
+
+Empty state:
+
+- Title **Motir hasn't learned anything here yet**
+- Body **When a plan turns out to be wrong — a missing dependency, a card sized past what one run can
+  finish — Motir writes down the correction and applies it to every plan it drafts for this project
+  afterwards. Those corrections appear here, with what happened and why, so you can read them and
+  decide which ones to keep.**
+- Second line **Nothing is recorded until a plan is actually corrected. Recording can be switched off
+  in AI planning settings.**
+
+**Voice rules applied** (§6's, unchanged): “work item”, never “issue”; “Motir”, never “the AI”. And
+one this surface adds: **no implementation noun anywhere** — not “lesson store”, not “retired”, not
+“scope”, not “embedding”, not “injection”. The word the product uses to a reader is **apply**: Motir
+_applies_ a lesson, and you can _stop applying_ it.
+
+> **Where this copy touches MOTIR-3331's**, they must say the same thing. The setting's explanation
+> and this surface both describe one mechanism — Motir writing down a correction and applying it
+> afterwards — and a reader meets them minutes apart.
+
+## L10. Token roles
+
+Colour is strictly `--el-*`; shape strictly element-semantic. Roles this asset adds:
+
+- Row ink `--el-text` · row meta `--el-text-secondary` · meta glyphs `--el-icon-muted`.
+- A **not-applied** row's ink drops to `--el-text-tertiary` (4.7:1 on the card, AA) — never
+  `--el-text-faint`, which clears AA on no surface.
+- Axis chip: `--el-chip-bg` / `--el-chip-border` / `--el-text-strong`, with the axis NAME in
+  `--el-text-secondary`. The “applies everywhere” chip is transparent-filled.
+- Badges: `--el-muted` (switched off) and `--el-tint-yellow` (aged out), both with
+  `--el-text-strong` — the hue is in the FILL, the ink stays AA.
+- Empty-state glyph tile `--el-tint-lavender` + `--el-text-strong`.
+- Shape: `--radius-card` (list container, detail callout, glyph tile) · `--radius-badge` (chips) ·
+  `--radius-btn` (row actions) · `--radius-control` (segmented control) · `--spacing-card-padding` ·
+  `--spacing-chip-x/y` · `--height-btn-sm` · `--height-control` · `--shadow-card`.
+
+**No invented colour anywhere** — panel 6 renders both surfaces on the dark palette and the palette
+flip is the whole change.
+
+## L11. A11y
+
+- The list is a list of **links**, one per lesson; the row's accessible name is the takeaway. The
+  chevron is `aria-hidden`.
+- The **retire button is a real button inside the row**, labelled **Stop applying {takeaway}** via
+  `aria-label` so the name is unambiguous out of context — and it is reachable by keyboard, not only
+  on hover (the hover face is a visual reveal, never the only way in).
+- The two badges carry their meaning in **words**, never in the fill alone; their glyphs are
+  `aria-hidden`.
+- The axis chips are plain text, not interactive. Each chip's axis name is part of its text, so a
+  screen reader hears “kind story”, not “story”.
+- The `·` separators in the meta line are `aria-hidden`.
+- The detail's section labels are real headings (`<h2>`), so the page has an outline; the facts are a
+  `<dl>`.
+- The status callout is `role="status"`.
+- Keyboard order: back link → head → filter → rows top-to-bottom, each row's link then its action.
+
+## L12. Out of scope for this asset — stated, not implied
+
+- **Global lessons are NOT shown here, and are not editable here.** The shipped corpus is the
+  product's, not the project's; the read is scoped to this project's own rows at the query
+  (MOTIR-3335), and this surface has no control that could reach a global row. There is deliberately
+  no “show the built-in lessons too” affordance — a customer inspecting _our_ lessons is not asking
+  to read Motir's.
+- **Editing a lesson's text.** Nothing here is a form. A lesson is a record of what happened; the
+  only decision the product offers is whether it is applied.
+- **Creating a lesson by hand.** MOTIR-3331's `add_lesson` tool is the write path, and it is an agent
+  door, not a screen.
+- **The recording switch itself** — MOTIR-3331 owns it; this asset only points at it from the empty
+  state, and the two copies must agree.
+- **The retire ACTION's behaviour** (optimistic flip, confirm, toast) — MOTIR-3330. This asset draws
+  the two states it produces, so the row does not have to be redrawn when it lands.
+- **Search across lessons.** Twelve rows do not need one; if a project ever has hundreds, that is its
+  own card and its own decision about what is searched.
