@@ -7,6 +7,9 @@ import { projectAiSettingsService } from '@/lib/services/projectAiSettingsServic
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { projectLessonsService } from '@/lib/services/projectLessonsService';
+import { LessonLibraryCard, LESSON_PREVIEW_COUNT } from './_components/LessonLibraryCard';
+import { canViewLessonLibrary } from './_components/lessonAccess';
 import {
   AiPlanningSettingsEditor,
   type AutoPlanPauseView,
@@ -83,12 +86,27 @@ export default async function ProjectAiPlanningPage() {
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
-  const [{ canManage }, settings, pause, format] = await Promise.all([
+  const [{ canManage }, settings, pause, format, canViewLessons] = await Promise.all([
     projectAccessService.getManageCapabilities(ctx.projectId, wsCtx),
     projectAiSettingsService.getAiSettings(ctx.project.identifier, wsCtx),
     autoPlanCadenceService.getAutoPlanPauseState(ctx.projectId, wsCtx),
     getFormatter(),
+    canViewLessonLibrary(ctx),
   ]);
+
+  // THE DOOR to the lesson library (Subtask MOTIR-3338 · design §L3) — rendered
+  // only for an actor holding `lesson:view`, so a non-admin does not see it.
+  //
+  // ⚠️ The read is SKIPPED, not merely un-rendered, when the key is absent: the
+  // service would refuse it anyway (MOTIR-3337 asserts before it calls motir-ai),
+  // and asking for a payload we would then discard is the fetch-then-hide shape
+  // that card exists to rule out. Hiding is presentation; the destination page
+  // and the service are what protect it.
+  const lessons = canViewLessons
+    ? await projectLessonsService.listLessons(ctx.projectId, wsCtx, {
+        limit: LESSON_PREVIEW_COUNT,
+      })
+    : null;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -109,6 +127,24 @@ export default async function ProjectAiPlanningPage() {
         aiConfigured={isMotirAiConfigured()}
         pause={toPauseView(pause, (iso) => format.relativeTime(new Date(iso)))}
       />
+
+      {lessons && (
+        <LessonLibraryCard
+          lessons={lessons.lessons}
+          available={lessons.available}
+          href="/settings/project/ai-planning/lessons"
+          copy={{
+            title: t('aiPlanning.lessons.cardTitle'),
+            subtitle: t('aiPlanning.lessons.cardSubtitle'),
+            // The LIBRARY's total, never the preview's length — the read asks
+            // for LESSON_PREVIEW_COUNT rows and `total` counts them all.
+            viewAll: t('aiPlanning.lessons.viewAll', { count: lessons.total }),
+            unavailableTitle: t('aiPlanning.lessons.unavailableTitle'),
+            unavailableBody: t('aiPlanning.lessons.unavailableBody'),
+          }}
+          formatWhen={(iso) => format.relativeTime(new Date(iso))}
+        />
+      )}
     </div>
   );
 }

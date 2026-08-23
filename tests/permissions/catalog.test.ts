@@ -250,6 +250,17 @@ const MEMBER_FACING_ENFORCED: PermissionKey[] = [
  */
 const PLAN_DECISION_ENFORCED: PermissionKey[] = ['ai:decide_plan'];
 
+/**
+ * The LESSON LIBRARY keys MOTIR-3336 wired — a FOURTH list, for the reason
+ * `PLAN_DECISION_ENFORCED` gives for being a third: membership of a list here is
+ * evidence about the STORY that wired the key, and these two were wired by none
+ * of MOTIR-2256, MOTIR-2291 or MOTIR-3188. They arrive `enforced` because the
+ * predicates (`canViewLessons` / `canManageLessons` in `lib/projects/access.ts`)
+ * land in the same change — there was never a moment where the catalog
+ * advertised them and nothing resolved through them.
+ */
+const LESSON_LIBRARY_ENFORCED: PermissionKey[] = ['lesson:view', 'lesson:manage'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -309,11 +320,16 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => PLAN_DECISION_ENFORCED.includes(k)).sort()).toEqual(
       [...PLAN_DECISION_ENFORCED].sort(),
     );
+    // …and MOTIR-3336's two lesson-library keys, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => LESSON_LIBRARY_ENFORCED.includes(k)).sort()).toEqual(
+      [...LESSON_LIBRARY_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
         MEMBER_FACING_ENFORCED.length +
-        PLAN_DECISION_ENFORCED.length,
+        PLAN_DECISION_ENFORCED.length +
+        LESSON_LIBRARY_ENFORCED.length,
     );
   });
 

@@ -174,3 +174,39 @@ export function canManageWatchers(i: ProjectAccessInputs): boolean {
 export function canManageProject(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'project:administer');
 }
+
+/**
+ * Whether the actor may VIEW the project's lesson library — what its planner
+ * learned from its own planning work (Subtask MOTIR-3336).
+ *
+ * ⚠️ This gates the DATA, not the control. A lesson is distilled from a
+ * project's own planning work and can carry specifics about it, so a payload
+ * that ships the lessons to anyone who can load the settings page — with the
+ * list hidden in the client — has already disclosed them. The check belongs
+ * before the read, which is what MOTIR-3337's route does with this predicate.
+ *
+ * `admin` and the workspace owner/admin rail hold it; `member` and `viewer` do
+ * not, and no access level grants it — what a planner concluded about a project
+ * is not part of what `public` publishes.
+ */
+export function canViewLessons(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'lesson:view');
+}
+
+/**
+ * Whether the actor may CHANGE the project's lesson library — retire a lesson
+ * (MOTIR-3330) or add one through the `add_lesson` tool (MOTIR-3331).
+ *
+ * ⚠️ Named for the LIBRARY, not for retiring. Both acts change the standing
+ * instructions the planner is given for everyone on the project from that
+ * moment on, so both belong behind one grant; a key named `…:retire` would
+ * acquire the wrong meaning the moment the second caller arrived.
+ *
+ * Deliberately SEPARATE from {@link canViewLessons} even though the same role
+ * holds both today: reading is inspection, changing alters what the planner
+ * does, and the role worth being able to express later is the one that may read
+ * and not change.
+ */
+export function canManageLessons(i: ProjectAccessInputs): boolean {
+  return hasPermission(i, 'lesson:manage');
+}

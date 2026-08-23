@@ -118,6 +118,13 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // four access levels and both rails — `tests/permissions/planDecisionSplit.test.ts`
   // proves that equivalence rather than asserting it here.
   'ai:decide_plan',
+  // MOTIR-3336 — the lesson library. Role-gated (a role may hold or withhold
+  // them), so `admin`, which is defined as this whole set, gains both with no
+  // edit below; `member` and `viewer` name their keys explicitly and gain
+  // neither. Not level-gated: an access level decides who can see a PROJECT,
+  // and what its planner learned is not part of what `public` publishes.
+  'lesson:view',
+  'lesson:manage',
 ];
 
 /**
