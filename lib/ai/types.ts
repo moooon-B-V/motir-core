@@ -196,6 +196,31 @@ export interface JobContextBag {
   // before, so the project setting read as global while applying to a plan's
   // first pass alone. Always present (`false` when off), never omitted.
   generateExplanations?: boolean;
+  // WHETHER THIS PROJECT'S PLANNER MAY RECORD WHAT IT GOT WRONG (Story
+  // MOTIR-3331 · MOTIR-3350 producer ↔ MOTIR-3351 consumer) — the wire form of
+  // `Project.aiRecordPlanningMistakes`. Same discipline as `generateExplanations`
+  // directly above: motir-ai reads the setting ONLY from here and never from
+  // motir-core config, so a submit that omits it cannot be compensated for on the
+  // far side.
+  //
+  // ⚠️ ABSENT IS NOT `false`, and the difference is load-bearing. `false` means
+  // *this project switched capture off*; ABSENT means *the producer predates this
+  // field*, which the consumer must read as ON — otherwise a deploy in which
+  // motir-ai ships first would silently switch capture off for every tenant whose
+  // jobs were submitted by the older motir-core. So every producer that can
+  // capture sends it UNCONDITIONALLY (`false` when off), and the consumer's
+  // fallback exists for version skew alone.
+  //
+  // Sent by the two producers whose job kinds can reach motir-ai's capture path:
+  // `aiPlanEditsService` on the shared plan-EDIT submit (`augment` / `expand_item`
+  // / `replan`, contextual turns included) and `aiBugTelemetryService` on
+  // `analyze_bug`. `generate_tree` does NOT send it — its handler has no lesson
+  // capture at all — and adding it there would claim a gate that does not exist.
+  //
+  // The KEY is spelled once, in `RECORD_PLANNING_MISTAKES_CONTEXT_FIELD`
+  // (`lib/ai/lessonCapture.ts`); the call sites use it as a computed key so this
+  // string has exactly one home on this side of the boundary.
+  recordPlanningMistakes?: boolean;
   // The project's existing work-item tree summary (MOTIR-1259) — the items the
   // user already has in the project, passed to motir-ai's discovery handler so
   // tier drafting is grounded in what already exists, not a blank slate. Each
