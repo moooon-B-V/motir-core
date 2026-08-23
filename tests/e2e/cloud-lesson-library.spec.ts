@@ -153,7 +153,12 @@ test('an admin reaches the lessons from settings and reads one in full', async (
   await expect(rows.first()).toContainText('story');
 
   // 5 · Open one and read it — the reasoning, not a summary of it.
-  await rows.first().click();
+  //
+  // ⚠️ The row's LINK, not the row. Since MOTIR-3346 the row is a CONTAINER
+  // holding the link and the retire button as siblings (a `<button>` inside an
+  // `<a>` is invalid HTML and axe flags it), so a click at the row's centre is
+  // no longer guaranteed to land on the link.
+  await rows.first().getByRole('link').click();
   await expect(page).toHaveURL(/\/lessons\/les_key$/);
   await expect(page.getByRole('heading', { name: TAKEAWAY })).toBeVisible();
   for (const label of [
@@ -192,9 +197,14 @@ test('the two not-applied states are told apart on the row', async ({ page }) =>
   // The state is on the row itself, not only in its copy.
   await expect(aged).toHaveAttribute('data-not-applied', 'true');
 
-  // ⚠️ NO retire control here — MOTIR-3330 adds it. Asserted so the seam
-  // between the two cards cannot close by accident.
-  await expect(page.getByRole('button', { name: /Stop applying|Apply again/ })).toHaveCount(0);
+  // ⚠️ The retire control IS here now — MOTIR-3330 landed it, and this
+  // assertion used to read `toHaveCount(0)`: it was the deliberate seam between
+  // the two cards. It is INVERTED rather than deleted, because this spec owns
+  // the two BADGES and should still notice if a row ever stops carrying the
+  // action they sit beside. The action's own behaviour is
+  // cloud-lesson-retire.spec.ts.
+  await expect(aged.getByRole('button', { name: /Apply again/ })).toHaveCount(1);
+  await expect(off.getByRole('button', { name: /Apply again/ })).toHaveCount(1);
 });
 
 test('a project with no lessons gets the designed empty screen, not a blank panel', async ({
