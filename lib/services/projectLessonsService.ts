@@ -1,4 +1,5 @@
-import { getLesson, getLessons, type RawLesson } from '@/lib/ai/motirAiClient';
+import { createLesson, getLesson, getLessons, type RawLesson } from '@/lib/ai/motirAiClient';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import {
   MotirAiConfigError,
   MotirAiJobNotFoundError,
@@ -172,6 +173,76 @@ export const projectLessonsService = {
       if (isSectionQuiet(err)) return UNAVAILABLE;
       throw err;
     }
+  },
+
+  /**
+   * ADD one lesson to this project's own store (Story MOTIR-3331 · MOTIR-3360).
+   *
+   * The write sibling of the two reads above, and the seam the `add_lesson` MCP
+   * tool adapts over — the way `add_comment` adapts over `commentsService`. The
+   * tool holds no logic of its own, which is what keeps these properties true for
+   * the NEXT caller: if the settings surface ever grows an *add a lesson* button,
+   * it comes through here and inherits the same check.
+   *
+   * ⚠️ THE PERMISSION IS ASSERTED BEFORE THE UPSTREAM CALL, and the ORDER is the
+   * guard, exactly as it is on the reads. A refusal that has already written a
+   * row upstream is not a refusal; it also spends a tenant's budget on a request
+   * that was going to be rejected. The tests assert this as the stub's CALL
+   * COUNT rather than as a status code, because a service that called and then
+   * threw would pass a status assertion.
+   *
+   * ⚠️ TENANT-SCOPED BY CONSTRUCTION. The acting project is resolved from the
+   * caller's context; there is no parameter through which a caller could name
+   * another project, and none through which it could ask for a global lesson.
+   * That is a property of this SIGNATURE, not of a check inside it — the safest
+   * form, because there is nothing to forget to validate.
+   *
+   * ⚠️ IT DOES NOT DEGRADE, unlike `listLessons`. An outage on a READ means "the
+   * section is quiet, the page still works". An outage on a WRITE means the
+   * lesson was not recorded, and answering a caller as though it had been is the
+   * one thing this must never do. Every upstream failure propagates — including
+   * the 409 near-duplicate refusal, which carries the existing lesson's id and
+   * title that the caller needs in order to reword or retire.
+   */
+  async addLesson(
+    projectId: string,
+    ctx: AccessActorContext,
+    input: {
+      mistakeType: string;
+      title: string;
+      body: string;
+      why: string;
+      howToApply: string;
+      kinds?: string[];
+      types?: string[];
+      phases?: string[];
+      sourceRef?: string;
+    },
+  ): Promise<ProjectLessonDTO> {
+    await projectAccessService.assertPermission(projectId, ctx, 'lesson:manage');
+
+    // Resolved AFTER the gate, for the same reason the upstream call is: a
+    // caller without the permission causes no work at all, not merely no write.
+    const { organizationId } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+
+    const raw = await createLesson({
+      coreOrganizationId: organizationId,
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      mistakeType: input.mistakeType,
+      title: input.title,
+      body: input.body,
+      why: input.why,
+      howToApply: input.howToApply,
+      ...(input.kinds ? { kinds: input.kinds } : {}),
+      ...(input.types ? { types: input.types } : {}),
+      ...(input.phases ? { phases: input.phases } : {}),
+      ...(input.sourceRef ? { sourceRef: input.sourceRef } : {}),
+    });
+    return toLessonDTO(raw);
   },
 
   /**

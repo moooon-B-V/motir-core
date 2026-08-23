@@ -1066,6 +1066,59 @@ export interface LessonDetailQuery {
 // An id belonging to another project raises the same upstream `not_found` as an
 // unknown one, so nothing here can distinguish them either — the existence-oracle
 // posture is preserved by NOT adding a check that would.
+export interface CreateLessonRequest {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  mistakeType: string;
+  title: string;
+  body: string;
+  why: string;
+  howToApply: string;
+  kinds?: string[];
+  types?: string[];
+  phases?: string[];
+  sourceRef?: string;
+}
+
+// POST /v1/lessons — ADD one lesson to THIS project's own store (Story
+// MOTIR-3331 · MOTIR-3360). The write sibling of `getLessons` / `getLesson`
+// above, and shaped like them: the CORE identity in the body, the service token
+// in the header, a typed error out of `errorFromProblem`.
+//
+// ⚠️ NO `scope` FIELD, AND THAT IS THE CONTRACT, not an omission. The route
+// creates tenant rows only, and refuses a body that names `scope` rather than
+// dropping it — so this type having no such member is what keeps a caller from
+// ever forming the request. A lesson that applies to every project is Motir's own
+// curated corpus and arrives by migration.
+//
+// ⚠️ THE FIELD NAMES ARE A CROSS-REPO STRING AGREEMENT (the warning beside
+// `JOB_SCOPE_QUERY_PARAM`): motir-ai's `parseAddLessonBody` requires these exact
+// names, and a typo on either side is a `validation_error` at runtime with no
+// type error and no test failure in the repo that made it. The seam test asserts
+// on the SERIALIZED body for that reason.
+//
+// The upstream's near-duplicate refusal (409) and its validation errors are
+// mapped by `errorFromProblem` and propagate — deliberately. That refusal names
+// the existing lesson's id and title, and the caller needs both: a generic
+// "could not create" turns an actionable answer into a dead end.
+export async function createLesson(input: CreateLessonRequest): Promise<RawLesson> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/lessons`, {
+    method: 'POST',
+    headers: { ...authHeaders(serviceToken), 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawLesson>;
+  // The malformed-body arm the reads above already use: a 200/201 whose shape is
+  // wrong is an unavailable upstream, not a lesson.
+  if (typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError('create-lesson response missing `id`');
+  }
+  return body as RawLesson;
+}
+
 export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
   const { url, serviceToken } = config();
   const params = new URLSearchParams({
