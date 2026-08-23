@@ -737,6 +737,9 @@ model Workspace {
   workItemLinks               WorkItemLink[]
   jobRuns                     JobRun[]
   jobRunDlqs                  JobRunDlq[]
+  jobEvents                   JobEvent[]
+  jobQueueRuns                JobQueueRun[]
+  jobSteps                    JobStep[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
   attachments                 Attachment[]
@@ -2717,6 +2720,175 @@ enum JobRunStatus {
   failed
 
   @@map("job_run_status")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// The Postgres job engine (Story MOTIR-3414 · Subtask MOTIR-3420).
+//
+// Three tables, decided in `docs/decisions/job-queue-foundation.md`: the engine
+// is hand-rolled rather than built on Graphile Worker or pg-boss, precisely so
+// these live in `public` where the repository's own grants and RLS reach them.
+// A library's schema is outside `motir_app`'s privileges (every GRANT in
+// 20260810000000_rename_app_role_to_motir_app is `IN SCHEMA public`).
+//
+// These tables are ADDITIVE. Nothing routes to them until the cutover switch
+// (MOTIR-3423) moves a job id onto the new lane; the 24 job definitions and the
+// `job_run` / `job_run_dlq` ledger are untouched by this migration.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// One emitted event. `sendEvent(name, data)` writes exactly one row here, and
+/// the dispatcher (MOTIR-3423) fans it out to one `JobQueueRun` per subscribing
+/// job — which is why the event log is a table of its own rather than a column
+/// on the run: `work-item/transitioned` has four subscribers today and the
+/// payload is stored once.
+///
+/// `workspaceId` is NULL for a genuinely system / cross-workspace event (the
+/// `system.*` namespace, and the one `email.send` whose payload permits null).
+/// The RLS policy handles that case explicitly — see the migration header.
+model JobEvent {
+  id             String   @id @default(cuid())
+  name           String
+  data           Json
+  workspaceId    String?  @map("workspace_id")
+  idempotencyKey String?  @map("idempotency_key")
+  receivedAt     DateTime @default(now()) @map("received_at")
+
+  workspace Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      JobQueueRun[]
+
+  // The dispatcher's own sweep: events newest-first within a tenant.
+  @@index([workspaceId, receivedAt(sort: Desc)])
+  // Event-level dedup (`defineJob`'s `idempotency` option, one consumer today:
+  // `email.send`). Not UNIQUE: the key is scoped per subscribing job, and it is
+  // `job_queue`'s (event, job) pair that must not double-enqueue.
+  @@index([idempotencyKey])
+  @@map("job_event")
+}
+
+/// One RUN — the row a worker claims. The unit of work, of retry and of the
+/// step ledger below.
+///
+/// ⚠️ `eventId` is NULLABLE, and deliberately: a CRON run has no triggering
+/// event. That is also what makes the `(eventId, jobId)` unique constraint
+/// below the right shape — in Postgres a NULL never equals another NULL, so the
+/// constraint dedups event-triggered enqueues without ever constraining
+/// scheduled ones.
+model JobQueueRun {
+  id             String      @id @default(cuid())
+  /// The `defineJob` function id — `email.send`, `system.attachment-gc`, …
+  jobId          String      @map("job_id")
+  eventId        String?     @map("event_id")
+  /// Denormalised from the event (or synthesised as `scheduled.<id>` for a cron
+  /// run) so the ledger write needs no join, exactly as `job_run.event_name` is.
+  eventName      String      @map("event_name")
+  workspaceId    String?     @map("workspace_id")
+  /// When this run becomes claimable. A `step.sleep` re-enqueue moves it
+  /// forward; a retry moves it forward by the backoff.
+  runAt          DateTime    @map("run_at")
+  attempts       Int         @default(0)
+  /// The run's total attempt budget, resolved from the job's named retry policy
+  /// at enqueue (`lib/jobs/retries.ts`). Stored per-run so a policy change does
+  /// not retroactively re-budget rows already in flight.
+  maxAttempts    Int         @map("max_attempts")
+  state          JobRunState @default(pending)
+  /// The worker holding this run, and until when. A worker that dies leaves the
+  /// row `running` with an expired lease, which is what makes it reclaimable
+  /// rather than stuck (MOTIR-3421).
+  claimedBy      String?     @map("claimed_by")
+  leaseExpiresAt DateTime?   @map("lease_expires_at")
+  lastError      Json?       @map("last_error")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  event     JobEvent?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps     JobStep[]
+
+  /// FAN-OUT IDEMPOTENCY (consumed by MOTIR-3423). One run per (event, job), so
+  /// a dispatcher that retries cannot double-enqueue. Scheduled runs carry a
+  /// NULL `event_id` and are therefore not constrained — see the note above.
+  @@unique([eventId, jobId])
+  /// THE CLAIM INDEX. The worker's claim is
+  /// `WHERE state = 'pending' AND run_at <= now() ORDER BY run_at
+  ///  FOR UPDATE SKIP LOCKED LIMIT n`
+  /// — so the index is `(state, run_at)`: the equality column first, then the
+  /// column the query both ranges over and orders by, which lets Postgres seek
+  /// to the first due row and walk forward in order with no sort.
+  ///
+  /// ⚠️ It is deliberately a PLAIN `@@index`, not a hand-written PARTIAL index
+  /// on `run_at WHERE state = 'pending'`. A partial index would be marginally
+  /// tighter and would step straight into the trap `CLAUDE.md` § Migrations
+  /// records: Prisma's differ pairs indexes BY COLUMN LIST and cannot express a
+  /// `WHERE` clause, so a partial index sharing its columns with an `@@index`
+  /// on the same model is reported as a permanent spurious RENAME that the next
+  /// `migrate dev` writes into a migration. Avoiding the hand-written index
+  /// avoids the class outright, and the queue is small enough (rows are deleted
+  /// or terminal within their retention) that the difference does not pay for a
+  /// standing drift hazard.
+  @@index([state, runAt])
+  /// The LEASE-RECLAIM sweep: `WHERE state = 'running' AND lease_expires_at < now()`.
+  /// A distinct column list from the claim index, so the differ pairs each with
+  /// its own datamodel entry.
+  @@index([state, leaseExpiresAt])
+  /// Operator surfaces and the ledger correlation, per tenant.
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@map("job_queue")
+}
+
+/// A MEMOIZED STEP RESULT — the table that makes `step.run` idempotent across
+/// retries and restarts, and the whole reason the existing `step.run` call
+/// sites do not have to change (MOTIR-3422).
+///
+/// `result` is the step's JSON-round-tripped return value. It is NULLABLE for
+/// two distinct reasons that the shim must keep apart: a step that returned
+/// `undefined`/`null`, and a `step.sleep` checkpoint, which records `sleepUntil`
+/// and no result. `kind` is what tells them apart without overloading NULL.
+model JobStep {
+  id          String      @id @default(cuid())
+  runId       String      @map("run_id")
+  /// The step's own id — the first argument to `step.run` / `step.sleep`. Author
+  /// -supplied and stable across replays; never a loop position.
+  stepId      String      @map("step_id")
+  kind        JobStepKind @default(run)
+  result      Json?
+  /// Set only for a `sleep` step: when the run becomes resumable.
+  sleepUntil  DateTime?   @map("sleep_until")
+  /// Denormalised from the run so the policy below is the same predicate as the
+  /// other two tables and the hot `(run_id, step_id)` lookup stays a single
+  /// index probe with no join to `job_queue` for the tenancy check.
+  workspaceId String?     @map("workspace_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  run       JobQueueRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  workspace Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// THE memoization key. `step.run(id, fn)` is "look up (run_id, step_id); if
+  /// present return it, else execute, persist, return" — and the uniqueness is
+  /// what makes a concurrent or replayed second execution impossible rather
+  /// than merely unlikely.
+  @@unique([runId, stepId])
+  @@map("job_step")
+}
+
+/// The lifecycle of one `job_queue` row. Distinct from `JobRunStatus`, which is
+/// the LEDGER's status (`job_run`, the operator-facing history): a queue row is
+/// `pending` before it is claimable, and the ledger has no such state.
+enum JobRunState {
+  pending
+  running
+  succeeded
+  failed
+  cancelled
+
+  @@map("job_run_state")
+}
+
+/// Which step contract a `job_step` row records.
+enum JobStepKind {
+  run
+  sleep
+
+  @@map("job_step_kind")
 }
 
 /// Where an attachment row entered the system (Subtask 5.2.1). `editor` =
@@ -6154,7 +6326,6 @@ model CiContainerUsage {
   @@index([projectId])
   @@map("ci_container_usage")
 }
-
 
 /// WHAT ONE HANDLE'S SECONDS WERE SPENT ON, when the handle served more than one
 /// repo (Story MOTIR-3249 · Subtask MOTIR-3255).

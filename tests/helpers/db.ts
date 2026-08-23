@@ -38,6 +38,27 @@ export async function truncateJobRuns(): Promise<void> {
   await db.$executeRawUnsafe('TRUNCATE TABLE "job_run", "job_run_dlq" RESTART IDENTITY CASCADE');
 }
 
+// The Postgres job engine's three tables (Story MOTIR-3414 · Subtask MOTIR-3420)
+// are the same class as `job_run` above, for the same reason: a SYSTEM job's
+// rows carry `workspace_id IS NULL`, so a `TRUNCATE "workspace" CASCADE` never
+// reaches them and they leak into the next test.
+//
+// `job_queue` cascades from `job_event` and `job_step` from `job_queue`, so
+// naming the parent would be enough for the tenanted rows — but an untenanted
+// event has no parent at all, so all three are named and the CASCADE only has
+// to do the work the FKs describe.
+//
+// ⚠️ Call this in `afterEach` as well as `beforeEach` when a suite writes these
+// rows. A table outside the workspace cascade that is only cleared BEFORE each
+// test leaves its last test's rows sitting in the worker's database for whatever
+// file that worker picks up next — which surfaces as a failure in an unrelated
+// suite, nowhere near the diff that caused it.
+export async function truncateJobEngine(): Promise<void> {
+  await db.$executeRawUnsafe(
+    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
+  );
+}
+
 // `code_graph_offboarding` (MOTIR-2166) carries NO foreign key to workspace or
 // project — deliberately, so a pending removal OUTLIVES the workspace-delete
 // cascade that makes it necessary (`docs/decisions/code-graph-index-fleet.md`
