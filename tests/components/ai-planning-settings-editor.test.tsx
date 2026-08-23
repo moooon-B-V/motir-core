@@ -37,6 +37,9 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiSprintLengthDays: 2,
     aiPlannerModel: null,
     aiGenerateExplanations: false,
+    // MOTIR-3349 — ON by default. This card lands the field only; the toggle
+    // that reads it is MOTIR-3352, so nothing in this suite renders it yet.
+    aiRecordPlanningMistakes: true,
     ...over,
   };
 }

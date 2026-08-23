@@ -21,6 +21,11 @@
  *   effective value.
  * - `aiGenerateExplanations` — the Story-7.4 AI-drafted-explanations opt-in,
  *   surfaced in the same panel (MOTIR-919).
+ * - `aiRecordPlanningMistakes` — whether this project's planner records what it
+ *   got wrong (Story MOTIR-3331 · MOTIR-3349). ALWAYS a resolved boolean here,
+ *   never null: the column is nullable ("never written") and the mapper resolves
+ *   an unset value to `true` through `resolveRecordPlanningMistakes`, so no
+ *   consumer of this DTO has to know the default or repeat it.
  */
 export interface ProjectAiSettingsDto {
   aiAutoPlanEnabled: boolean;
@@ -29,6 +34,7 @@ export interface ProjectAiSettingsDto {
   aiSprintLengthDays: number;
   aiPlannerModel: string | null;
   aiGenerateExplanations: boolean;
+  aiRecordPlanningMistakes: boolean;
 }
 
 /**
@@ -48,4 +54,5 @@ export interface UpdateProjectAiSettingsInput {
   aiSprintLengthDays?: number;
   aiPlannerModel?: string | null;
   aiGenerateExplanations?: boolean;
+  aiRecordPlanningMistakes?: boolean;
 }

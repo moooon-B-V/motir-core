@@ -71,6 +71,9 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
       aiSprintLengthDays: 2,
       aiPlannerModel: null,
       aiGenerateExplanations: false,
+      // ON, and NOT because a default was written to the row — the column is
+      // NULL on a fresh project and the mapper resolves it (MOTIR-3349).
+      aiRecordPlanningMistakes: true,
     });
   });
 
@@ -86,6 +89,10 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
     expect(row.aiSprintPlanningEnabled).toBe(false);
     expect(row.aiSprintLengthDays).toBe(2);
     expect(row.aiPlannerModel).toBeNull();
+    // MOTIR-3349: deliberately NULL on the row. This is the assertion that
+    // distinguishes "unset" from "written true" — the migration adds no default,
+    // so a project that never touches the setting stores nothing at all.
+    expect(row.aiRecordPlanningMistakes).toBeNull();
   });
 
   it('the mapper projects the row (and the repository projection) to the same DTO', async () => {
@@ -113,6 +120,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
         aiSprintLengthDays: 7,
         aiPlannerModel: 'deepseek-v4-flash',
         aiGenerateExplanations: true,
+        aiRecordPlanningMistakes: false,
       },
       ctxFor(fx),
     );
@@ -124,6 +132,7 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
       aiSprintLengthDays: 7,
       aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
+      aiRecordPlanningMistakes: false,
     });
     // Committed, not just returned.
     const reread = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
@@ -148,6 +157,86 @@ describe('projectAiSettingsService.updateAiSettings — the write path', () => {
     expect(after.aiAutoPlanEnabled).toBe(true);
     expect(after.aiAutoPlanThreshold).toBe(9);
     expect(after.aiPlannerModel).toBe('claude-opus-5');
+  });
+
+  // ── MOTIR-3349 · the record-planning-mistakes switch ────────────────────────
+
+  it('a row that PREDATES the column reads as ON — the unset state, constructed', async () => {
+    const fx = await makeFixture();
+
+    // The point of the nullable column: a project created before this shipped
+    // stores NULL, because the migration adds no default and backfills nothing.
+    // Force that exact state rather than trusting that a fresh project has it.
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { aiRecordPlanningMistakes: null },
+    });
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(settings.aiRecordPlanningMistakes).toBe(true);
+  });
+
+  it('only an explicit false switches it off, and the off state is distinguishable from unset', async () => {
+    const fx = await makeFixture();
+
+    const off = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiRecordPlanningMistakes: false },
+      ctxFor(fx),
+    );
+    expect(off.aiRecordPlanningMistakes).toBe(false);
+
+    // On the ROW the two states are different values, which is what lets the
+    // consumer tell "this project switched it off" from "nobody ever touched
+    // this" — a distinction a NOT NULL DEFAULT column cannot express.
+    const offRow = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(offRow.aiRecordPlanningMistakes).toBe(false);
+
+    const backOn = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiRecordPlanningMistakes: true },
+      ctxFor(fx),
+    );
+    expect(backOn.aiRecordPlanningMistakes).toBe(true);
+  });
+
+  it('saving ANOTHER field in the group leaves the column untouched — it does not acquire a written true', async () => {
+    const fx = await makeFixture();
+
+    await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiSprintLengthDays: 4 },
+      ctxFor(fx),
+    );
+
+    // Still NULL: the sparse patch wrote only the field it was given, and the
+    // "unset reads as ON" rule lives on the read path, not the write path. If
+    // this ever becomes `true`, a later `false` would be indistinguishable from
+    // a deliberate opt-out at the row level.
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(row.aiRecordPlanningMistakes).toBeNull();
+
+    const settings = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
+    expect(settings.aiSprintLengthDays).toBe(4);
+    expect(settings.aiRecordPlanningMistakes).toBe(true);
+  });
+
+  it('an explicit false SURVIVES a later patch of another field (sparse, both directions)', async () => {
+    const fx = await makeFixture();
+
+    await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiRecordPlanningMistakes: false },
+      ctxFor(fx),
+    );
+    const after = await projectAiSettingsService.updateAiSettings(
+      fx.projectIdentifier,
+      { aiAutoPlanEnabled: true },
+      ctxFor(fx),
+    );
+
+    expect(after.aiAutoPlanEnabled).toBe(true);
+    expect(after.aiRecordPlanningMistakes).toBe(false);
   });
 
   it('clears the planner-model override with null or an empty/blank string (→ the platform default)', async () => {
@@ -344,8 +433,22 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
       ),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
 
+    // MOTIR-3349: the SAME gate covers the new field — it is refused by the one
+    // `ai:configure` assert the service already makes, and no second gate was
+    // introduced for it. A member must not be able to switch off the recording
+    // of this project's planning mistakes.
+    expect(read.aiRecordPlanningMistakes).toBe(true);
+    await expect(
+      projectAiSettingsService.updateAiSettings(
+        fx.projectIdentifier,
+        { aiRecordPlanningMistakes: false },
+        ctxFor(fx, member.id),
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
     const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(after.aiAutoPlanEnabled).toBe(false);
+    expect(after.aiRecordPlanningMistakes).toBe(true);
   });
 
   it('names `ai:configure` on the refusal — not the umbrella, and not `ai:plan`', async () => {

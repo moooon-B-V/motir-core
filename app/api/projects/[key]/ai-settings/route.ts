@@ -6,8 +6,9 @@ import type { UpdateProjectAiSettingsInput } from '@/lib/dto/projectAiSettings';
 
 // GET / PATCH /api/projects/[key]/ai-settings (Story 7.13 · Subtask MOTIR-919)
 // Read or admin-update a project's AI-planning configuration — the auto-plan
-// cadence, the AI sprint packing, the planner-model override, and the Story-7.4
-// drafted-explanations opt-in the same panel surfaces. The HTTP surface for the
+// cadence, the AI sprint packing, the planner-model override, the Story-7.4
+// drafted-explanations opt-in and the MOTIR-3331 record-planning-mistakes switch
+// the same panel surfaces. The HTTP surface for the
 // MOTIR-915 service, which is its single entry point: no route touches Prisma
 // for these fields.
 //
@@ -82,6 +83,9 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   }
   if ('aiGenerateExplanations' in raw) {
     patch.aiGenerateExplanations = raw.aiGenerateExplanations as boolean;
+  }
+  if ('aiRecordPlanningMistakes' in raw) {
+    patch.aiRecordPlanningMistakes = raw.aiRecordPlanningMistakes as boolean;
   }
 
   try {
