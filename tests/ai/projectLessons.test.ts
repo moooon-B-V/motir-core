@@ -58,6 +58,7 @@ function rawLesson(over: Partial<RawLesson> = {}): RawLesson {
     recurrenceCount: 3,
     injected: true,
     injectionBlock: null,
+    retentionDays: 90,
     ...over,
   };
 }
@@ -256,6 +257,65 @@ describe('the DTO — only what the surface needs', () => {
   });
 });
 
+describe('the counts travel, and a missing one falls back to what is VISIBLE', () => {
+  it('carries `total` and `applied` through to the DTO', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          lessons: [rawLesson()],
+          nextCursor: null,
+          total: 12,
+          applied: 11,
+          staleCutoff: 'CUT',
+          retentionDays: 90,
+        }),
+      ),
+    );
+    const page = await projectLessonsService.listLessons(PROJECT_ID, ctx);
+    expect(page.total).toBe(12);
+    expect(page.applied).toBe(11);
+  });
+
+  it('falls back to the PAGE LENGTH, not to zero, when an older upstream omits them', async () => {
+    // Zero would contradict the rows rendered beside it — a screen showing two
+    // lessons above the words "0 lessons". Wrong by at most a page beats wrong
+    // in a way the reader can see.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          lessons: [rawLesson({ id: 'a' }), rawLesson({ id: 'b' })],
+          nextCursor: null,
+          staleCutoff: 'CUT',
+          retentionDays: 90,
+        }),
+      ),
+    );
+    const page = await projectLessonsService.listLessons(PROJECT_ID, ctx);
+    expect(page.total).toBe(2);
+    expect(page.applied).toBe(2);
+  });
+
+  it('carries each row’s OWN retention window', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          lessons: [rawLesson({ retentionDays: 60 })],
+          nextCursor: null,
+          total: 1,
+          applied: 1,
+          staleCutoff: 'CUT',
+          retentionDays: 60,
+        }),
+      ),
+    );
+    const page = await projectLessonsService.listLessons(PROJECT_ID, ctx);
+    expect(page.lessons[0]!.retentionDays).toBe(60);
+  });
+});
+
 describe('the second line of defence — a non-tenant row never reaches a browser', () => {
   it('drops a `global` row from a mixed page, keeping the project’s own', async () => {
     vi.stubGlobal(
@@ -305,6 +365,8 @@ describe('degradation — the section goes quiet, the page does not', () => {
       available: false,
       lessons: [],
       nextCursor: null,
+      total: 0,
+      applied: 0,
       staleCutoff: null,
       retentionDays: null,
     });

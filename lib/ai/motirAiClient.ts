@@ -996,11 +996,17 @@ export interface RawLesson {
   injected: boolean;
   /** Why not, when it is not — `disabled` | `not_recurred`, else null. */
   injectionBlock: string | null;
+  /** The retire-by-non-recurrence window, in days, THIS row was judged against. */
+  retentionDays?: number;
 }
 
 export interface RawLessonPage {
   lessons: RawLesson[];
   nextCursor: string | null;
+  /** Every tenant lesson — the LIBRARY's size, not this page's. */
+  total: number;
+  /** The subset the planner is currently being told. */
+  applied: number;
   /** The instant every row on this page was labelled against (ISO-8601). */
   staleCutoff: string;
   /** The retire-by-non-recurrence window, in days. */
@@ -1038,6 +1044,12 @@ export async function getLessons(query: LessonListQuery): Promise<RawLessonPage>
   return {
     lessons: body.lessons,
     nextCursor: body.nextCursor ?? null,
+    // ⚠️ `??` the COUNTS to the page length rather than to 0: an upstream that
+    // predates them would otherwise render as "0 lessons" on a screen that is
+    // visibly showing some. Falling back to what we can see is wrong by at most
+    // a page; falling back to zero contradicts the rows beside it.
+    total: typeof body.total === 'number' ? body.total : body.lessons.length,
+    applied: typeof body.applied === 'number' ? body.applied : body.lessons.length,
     staleCutoff: body.staleCutoff ?? new Date(0).toISOString(),
     retentionDays: typeof body.retentionDays === 'number' ? body.retentionDays : 0,
   };

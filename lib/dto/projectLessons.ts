@@ -34,6 +34,13 @@ export interface ProjectLessonDTO {
   injected: boolean;
   /** Why not, when it is not. Null exactly when `injected` is true. */
   injectionBlock: LessonInjectionBlock | null;
+  /**
+   * The retire-by-non-recurrence window, in days, that THIS lesson's label was
+   * computed against — so a row reading "Not seen in {n} days" quotes the number
+   * that produced it, and the DETAIL screen (which has no page to read it from)
+   * renders the same label without a second request.
+   */
+  retentionDays: number;
 }
 
 /**
@@ -49,6 +56,15 @@ export interface ProjectLessonsPageDTO {
   available: boolean;
   lessons: ProjectLessonDTO[];
   nextCursor: string | null;
+  /**
+   * The LIBRARY's size and its applied subset — not this page's.
+   *
+   * Separate fields because they are not derivable from `lessons`: the surface
+   * says "{total} lessons · {applied} applied" (design §L9) and a client
+   * counting the page would tell a project of fifty that it has one page.
+   */
+  total: number;
+  applied: number;
   /** The instant every row on this page was labelled against (ISO-8601). */
   staleCutoff: string | null;
   /** The retire-by-non-recurrence window in days, so the surface can explain it. */

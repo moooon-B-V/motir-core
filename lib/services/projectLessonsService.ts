@@ -78,6 +78,12 @@ function toLessonDTO(raw: RawLesson): ProjectLessonDTO {
     recurrenceCount: raw.recurrenceCount ?? 1,
     injected: raw.injected,
     injectionBlock: toInjectionBlock(raw.injectionBlock),
+    // An upstream that predates the field labels nothing "not seen in 0 days":
+    // `injectionBlock` is what decides whether a badge renders at all, and a
+    // row that IS blocked without a window is a version skew, not a zero-day
+    // policy. 0 is the honest placeholder — the badge's own copy is what would
+    // read wrong, and it cannot be reached without the block.
+    retentionDays: typeof raw.retentionDays === 'number' ? raw.retentionDays : 0,
   };
 }
 
@@ -86,6 +92,8 @@ const UNAVAILABLE: ProjectLessonsPageDTO = {
   available: false,
   lessons: [],
   nextCursor: null,
+  total: 0,
+  applied: 0,
   staleCutoff: null,
   retentionDays: null,
 };
@@ -119,6 +127,8 @@ export const projectLessonsService = {
         // fix upstream, not a reason to blank a customer's own lessons.
         lessons: raw.lessons.filter(isTenantRow).map(toLessonDTO),
         nextCursor: raw.nextCursor,
+        total: raw.total,
+        applied: raw.applied,
         staleCutoff: raw.staleCutoff,
         retentionDays: raw.retentionDays,
       };
