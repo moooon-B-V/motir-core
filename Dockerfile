@@ -94,6 +94,28 @@ ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm exec next build
 
+# ── the worker bundle (MOTIR-3421) ──────────────────────────────────────────
+# The `worker` process group in fly.toml runs the Postgres job engine's claim
+# loop. It CANNOT be run from source in this image and it cannot import the app's
+# modules from the standalone tree, for the same reason `/app/migrate` exists:
+# `.next/standalone/node_modules` is the minimal set Next traced for the SERVER's
+# entries, and `lib/` source arriving there at all is a tracing side effect the
+# assertion below explicitly refuses to depend on.
+#
+# So the worker is esbuilt into ONE self-contained ESM file whose only unresolved
+# imports are packages the standalone tree actually carries. That set was
+# MEASURED, not assumed — `.next/standalone/node_modules` holds `@aws-sdk`,
+# `argon2`, `next`, `pg`, `react`, `react-dom` and a nested `.pnpm`, so `pg` and
+# `argon2` (both native, both present) stay external and everything else,
+# `@prisma/client` and the generated client included, is inlined. The generator
+# is `prisma-client` with a driver adapter, so there is no query-engine binary
+# for a bundler to break. `scripts/build-worker.mjs` carries the full argument.
+#
+# It runs AFTER `next build` so a build failure surfaces on the app first, and
+# BEFORE the standalone assertion so the bundle is not mistaken for traced output.
+RUN pnpm build:worker
+
+
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
 # left to prune (MOTIR-3219, 2026-08-20) — and the change of polarity is
@@ -227,6 +249,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./migrate/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./migrate/prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-deploy.mjs ./migrate/migrate-deploy.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/release-migrate.mjs ./migrate/release-migrate.mjs
+
+# ── /app/worker — the job engine's process group ────────────────────────────
+# One file. Its unresolved imports (`pg`, `argon2`) resolve UPWARD into
+# `/app/node_modules`, which is the standalone bundle's own tree — Node walks
+# `/app/worker/node_modules` then `/app/node_modules`, so the worker needs no
+# node_modules of its own. That is the whole reason the external set was pinned
+# to what that tree already contains.
+#
+# The sourcemap is copied too: a worker stack trace with no map names a line in a
+# 15 MB bundle, which is the difference between diagnosing a background-job
+# failure in minutes and not diagnosing it at all.
+COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs ./worker/worker.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.worker/worker.mjs.map ./worker/worker.mjs.map
 
 USER nextjs
 EXPOSE 8080

@@ -3,6 +3,7 @@ import { inngest } from './client';
 import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
 import { registerSchedule } from './schedules';
+import { registerEngineJob } from './engine/registry';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
 import type { JobRunFailure } from '@/lib/dto/jobs';
@@ -210,6 +211,31 @@ export function defineJob<N extends JobEventName>(
   // Resolve the retry budget once (throws if both retryPolicy and retries are
   // given). Used BOTH for Inngest's config and for the final-attempt check below.
   const maxRetries = resolveRetries(options);
+
+  // ── the Postgres engine's half of the SAME registration (MOTIR-3421) ───────
+  // `lib/jobs/registry.ts` holds the built Inngest function objects the serve
+  // route mounts; the Postgres engine cannot use one of those — it needs the raw
+  // handler and the options it was declared with. Registering here, at the one
+  // choke point every job passes through, is what keeps the engine's list
+  // complete BY CONSTRUCTION rather than by anyone remembering to update it: a
+  // job cannot be defined without appearing in both. Same argument, and same
+  // shape, as `registerSchedule` directly above.
+  //
+  // ⚠️ PURELY ADDITIVE. It builds no Inngest object, changes no config, and runs
+  // for every job whether or not the cutover switch (MOTIR-3423) routes that job
+  // to the new engine. Until it does, this table is written and never read.
+  registerEngineJob({
+    id,
+    trigger: cron !== undefined ? undefined : triggerEvent,
+    cron,
+    // `maxRetries` is Inngest's count of ADDITIONAL attempts; the engine counts
+    // TOTAL attempts, which is what `job_queue.max_attempts` stores and what
+    // `lib/jobs/retries.ts` states its policies in. +1 is that translation, in
+    // the one place it happens.
+    maxAttempts: maxRetries + 1,
+    retryPolicy: options.retryPolicy,
+    handler,
+  });
 
   // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a
   // function permanently exhausts its retry budget — a SEPARATE invocation from

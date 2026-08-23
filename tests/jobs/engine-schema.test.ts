@@ -494,12 +494,21 @@ describe('the claim index actually serves the claim query', () => {
     const fx = await makeFixture();
     // Enough rows that the planner has a reason to prefer the index; a seq scan
     // over three rows would be correct and would prove nothing.
+    //
+    // ⚠️ THEY MUST BE DUE — `runAt` in the PAST. An earlier version of this test
+    // seeded `Date.now() + i * 1000`, so all 400 rows were in the FUTURE and the
+    // predicate matched only the three the fixture had seeded. The planner
+    // estimated `rows=2`, chose a Bitmap Index Scan (which does not preserve
+    // order) and a Sort — and the assertion below failed for a reason that had
+    // nothing to do with the index. A plan test is only as good as the
+    // distribution it plans against.
+    const base = Date.now();
     await adminDb.jobQueueRun.createMany({
       data: Array.from({ length: 400 }, (_, i) => ({
         jobId: `bulk.job.${i}`,
         eventName: 'bulk',
         workspaceId: fx.workspaceW1Id,
-        runAt: new Date(Date.now() + i * 1000),
+        runAt: new Date(base - (i + 1) * 1000),
         maxAttempts: 3,
       })),
     });
@@ -507,7 +516,7 @@ describe('the claim index actually serves the claim query', () => {
 
     const plan = await adminDb.$queryRawUnsafe<{ 'QUERY PLAN': string }[]>(
       `EXPLAIN SELECT id FROM "job_queue"
-        WHERE state = 'pending' AND run_at <= now()
+        WHERE state = 'pending' AND run_at <= (now() AT TIME ZONE 'UTC')
         ORDER BY run_at
         LIMIT 10`,
     );

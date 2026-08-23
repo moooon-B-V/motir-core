@@ -24,6 +24,39 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 [build]
   dockerfile = "Dockerfile"
 
+# ── PROCESS GROUPS (MOTIR-3421) ─────────────────────────────────────────────
+#
+# `app` is the web process — the Next standalone server, unchanged. `worker` is
+# the Postgres job engine's claim loop, which runs in its OWN group rather than
+# inside the web process so job load and request serving cannot contend for one
+# event loop and the two scale independently.
+#
+# ⚠️ DECLARING A GROUP DOES NOT CREATE A MACHINE IN IT. Same distinction this
+# file's own footer draws about `min_machines_running`, and the one that cost
+# motir-ai three days of an incident filed against the wrong service (MOTIR-2102):
+# a config file is a claim about the deployment, not a reading of it. The worker
+# group is brought up with `fly scale count worker=1`, an OPERATOR action owned by
+# MOTIR-3425, which reads the result back from the platform's own API rather than
+# from this file.
+#
+# ⚠️ ADDING A `[processes]` BLOCK CHANGES WHAT `http_service` MEANS. Without one,
+# Fly runs the image's CMD on every machine and routes HTTP to all of them. With
+# one, every group is explicit and `http_service.processes` must name the groups
+# that serve traffic — omit it and Fly would route requests to the worker, which
+# listens on no port. `processes = ["app"]` below is that declaration and is not
+# optional.
+#
+# ⚠️ THE WORKER'S COMMAND IS A BUNDLE, NOT A SOURCE FILE. The runtime image is a
+# Next standalone output whose `node_modules` is the minimal set Next traced for
+# the SERVER's entries; `lib/` source arriving there at all is a tracing side
+# effect the Dockerfile explicitly refuses to depend on. So `pnpm build:worker`
+# esbuilds the entrypoint and its `lib/**` imports into one self-contained file
+# staged at `/app/worker/worker.mjs`, exactly as `/app/migrate` stages its own
+# Prisma CLI, and for the same reason.
+[processes]
+  app    = "node server.js"
+  worker = "node worker/worker.mjs"
+
 [deploy]
   # Migrations run HERE, not in the image build — Fly runs this once per deploy
   # in a temporary machine built from the same image, before any new machine
@@ -49,6 +82,11 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 [http_service]
   internal_port        = 8080
   force_https          = true
+  # REQUIRED now that [processes] exists (see its block above): only the web
+  # group serves HTTP. Without this line Fly would route requests to `worker`,
+  # which listens on no port — and every knob below would silently become a
+  # policy over the wrong machines.
+  processes            = ["app"]
   # ⚠️ These two knobs are POLICY OVER MACHINES THAT ALREADY EXIST. Fly's proxy
   # never CREATES one: auto_start starts an existing STOPPED machine and nothing
   # more, and `flyctl deploy` updates the machines that exist without adding any.
