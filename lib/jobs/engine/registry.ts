@@ -76,8 +76,3 @@ export function engineSubscribers(eventName: string): ReadonlyArray<EngineJobDef
 export function engineScheduledJobs(): ReadonlyArray<EngineJobDefinition> {
   return engineJobs().filter((d) => d.cron !== undefined);
 }
-
-/** Drop every registration. TEST ONLY — a suite that registers throwaway jobs must not leak them into the next file. */
-export function resetEngineRegistryForTests(): void {
-  definitions.clear();
-}

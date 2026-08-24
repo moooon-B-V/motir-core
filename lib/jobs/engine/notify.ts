@@ -30,6 +30,27 @@ import { JOB_QUEUE_CHANNEL } from './worker';
 // unsubscribed. Hence a raw `pg` Client, held open for the worker's life. It is
 // one extra connection per worker machine, which is the price of the feature.
 
+/**
+ * Close a client, swallowing whatever it throws.
+ *
+ * ⚠️ `end()` CAN REJECT — on a client whose socket has already errored, which is
+ * precisely the state the reconnect path finds it in. Letting that propagate
+ * would turn a recovered listener into a crashed worker, for a connection we
+ * were discarding anyway. One named helper rather than two inline
+ * `.catch(() => {})`s so the swallow is a decision with a name on it, and so a
+ * test can drive it.
+ */
+export async function closeQuietly(
+  client: { end: () => Promise<void> } | undefined,
+): Promise<void> {
+  if (!client) return;
+  try {
+    await client.end();
+  } catch {
+    // Deliberately ignored — see above.
+  }
+}
+
 export interface JobQueueListener {
   /** Close the listening connection. Idempotent. */
   stop(): Promise<void>;
@@ -73,9 +94,15 @@ export async function listenForQueuedJobs(
         log.warn('[job-listener] connection error; falling back to polling', err.message);
         scheduleReconnect();
       });
-      client.on('notification', (msg) => {
-        if (msg.channel === JOB_QUEUE_CHANNEL) onNotify();
-      });
+      // ⚠️ NO CHANNEL FILTER, and that is a statement about an INVARIANT rather
+      // than an omission. This client issues exactly ONE `LISTEN`, two lines
+      // below, so Postgres can only ever deliver `JOB_QUEUE_CHANNEL` here — a
+      // `msg.channel === …` test could not be false, which coverage confirmed by
+      // never reaching its other arm.
+      //
+      // If a second `LISTEN` is ever added to this connection, reinstate the
+      // filter: it stops being dead the moment the invariant does.
+      client.on('notification', () => onNotify());
       await client.connect();
       await client.query(`LISTEN ${JOB_QUEUE_CHANNEL}`);
       connected = true;
@@ -91,7 +118,7 @@ export async function listenForQueuedJobs(
     if (stopped || retry) return;
     retry = setTimeout(() => {
       retry = undefined;
-      void client?.end().catch(() => {});
+      void closeQuietly(client);
       client = undefined;
       void connect();
     }, reconnectMs);
@@ -111,7 +138,7 @@ export async function listenForQueuedJobs(
         clearTimeout(retry);
         retry = undefined;
       }
-      await client?.end().catch(() => {});
+      await closeQuietly(client);
       client = undefined;
     },
   };
