@@ -6,7 +6,7 @@
 // `metadataBase` is the origin Next prepends to a RELATIVE `openGraph.images` /
 // `twitter.images` entry when it writes the absolute `<meta property="og:image">`
 // value. The file-convention routes
-// `app/(public)/explore/opengraph-image.tsx` and
+// `app/(public)/explore/(square)/opengraph-image.tsx` and
 // `app/(public)/p/[identifier]/opengraph-image.tsx` (MOTIR-1150) are exactly
 // such entries: Next injects them as site-relative paths, so with no
 // `metadataBase` set it falls back to the dev origin and advertises both cards
