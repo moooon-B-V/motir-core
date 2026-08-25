@@ -35,10 +35,18 @@ export async function GET(
   const search = new URL(req.url).searchParams;
   const parentId = search.get('parentId') || null;
   const scope = search.get('scope') === 'sprint' ? 'sprint' : 'project';
+  // `all=1` — the level's "Show all", asked for only after its truncation tile
+  // has told the reader rows were dropped (MOTIR-3490). Any other value, and its
+  // absence, is the ordinary capped read; the service owns the ceiling it raises
+  // to, so a forged value cannot widen the read past it.
+  const all = search.get('all') === '1';
 
   try {
     const project = await projectsService.getByKey(key, ctx);
-    const roadmap = await workItemsService.getProjectRoadmap(project.id, parentId, ctx, { scope });
+    const roadmap = await workItemsService.getProjectRoadmap(project.id, parentId, ctx, {
+      scope,
+      all,
+    });
     return NextResponse.json(roadmap);
   } catch (err) {
     // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,

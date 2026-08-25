@@ -744,6 +744,20 @@ export interface ProjectRoadmapDto {
    *  anchors the canvas draws the red signal to). Empty when the level is a clean
    *  tree (every blocker is an on-level sibling). */
   offLevelBlockers: RoadmapBlockerStubDto[];
+  /**
+   * How many rows this level actually HAS, independent of how many `nodes`
+   * carries (MOTIR-3490). The level read is capped, and until this field existed
+   * the cap was SILENT: the canvas drew 200 nodes and had no way to know a 201st
+   * row was dropped — key-ascending, so the rows lost were the newest epics. The
+   * canvas compares this against `nodes.length` and draws its "+ N more" tile
+   * when they differ; equal counts render nothing, which is the ordinary case.
+   *
+   * Counted with the SAME predicate as the read, sprint arm included, so
+   * "Showing N of M" is a statement about this level rather than about the
+   * project. Absent on a level served synthetically by the client (the grouped
+   * node's, the pre-plan stations') — nothing was read, so nothing was capped.
+   */
+  levelTotal: number;
 }
 
 /**

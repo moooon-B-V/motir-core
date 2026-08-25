@@ -5229,7 +5229,19 @@
       },
       "showChanges": "显示变更",
       "showChangesCount": "{n} / {total}",
-      "showChangesNone": "此层级没有提案变更"
+      "showChangesNone": "此层级没有提案变更",
+      "group": {
+        "title": "不在篇章中",
+        "count": "{count} 项",
+        "countOne": "1 项",
+        "aria": "不在篇章中 — {count} 项不属于任何篇章的工作项"
+      },
+      "more": {
+        "label": "还有 {count} 项",
+        "showing": "显示 {total} 项中的 {shown} 项",
+        "showAll": "显示全部",
+        "aria": "该层级已截断：显示 {total} 项中的 {shown} 项。显示全部。"
+      }
     }
   },
   "github": {

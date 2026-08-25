@@ -3,7 +3,12 @@ import {
   ORIGIN_H,
   ORIGIN_W,
 } from '@/components/planning/PlanningOriginCluster';
-import { GhostAnchor, WorkItemNode } from '@/components/planning/WorkItemNode';
+import {
+  GhostAnchor,
+  LevelGroupNode,
+  LevelTruncationTile,
+  WorkItemNode,
+} from '@/components/planning/WorkItemNode';
 import {
   workItemCrumbLabel,
   type ProjectCanvasDep,
@@ -34,6 +39,36 @@ import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
 // intercepts this id and serves the synthetic pre-plan station level for it, so both
 // halves of the drill must name the same id — never two literals.
 export const ORIGIN_ID = '__planning_origin__';
+
+// The id of the synthetic GROUPED node holding a root level's non-epic rows
+// (MOTIR-3490). EXPORTED for the same reason `ORIGIN_ID` is: the node is a DOOR,
+// and `WorkItemRoadmap.loadLevel` intercepts this id to serve what is behind it —
+// so both halves of the drill must name the same id, never two literals.
+export const NOT_IN_EPIC_ID = '__not_in_an_epic__';
+
+// The id of the synthetic TRUNCATION tile (MOTIR-3490). Not a door — the consumer
+// intercepts it on ACTIVATION, to re-read this level with the raised ceiling.
+export const LEVEL_MORE_ID = '__level_more__';
+
+/**
+ * Does this row belong in the grouped node rather than on the road?
+ *
+ * BOTH conjuncts are load-bearing (design decision 6, `design/roadmap/design-notes.md`):
+ *
+ *  - `kind !== 'epic'` — the road IS the epics, and this is total over the four
+ *    kinds a root may take (`prisma/sql/work_item_triggers.sql` refuses only
+ *    `subtask` at the root). A `bug`-only test would leave a parentless `story` or
+ *    `task` drawing on the road and re-open this defect the first time one is filed.
+ *  - `parentId === null` — the one that stops it being destructive in SPRINT scope.
+ *    There, `findProjectTreeLevel` re-roots the level at the topmost IN-SPRINT
+ *    members, which are usually stories and subtasks: every one of them not an
+ *    epic. Without this conjunct the sprint's actual work would collapse into a
+ *    single node. A row that is a root of the sprint VIEW still has a parent, so
+ *    it stays on the road; only a root of the TREE groups.
+ */
+export function isNotInEpicRow(item: { parentId: string | null; kind: string }): boolean {
+  return item.parentId === null && item.kind !== 'epic';
+}
 
 export interface BuildWorkItemLevelOptions {
   /** Mark the in-progress frontier node "you are here" (the roadmap consumer). */
@@ -68,6 +103,23 @@ export interface BuildWorkItemLevelOptions {
    * the level can be built — and painted — before the read lands.
    */
   originProduced?: readonly DirectionDocKind[] | null;
+  /**
+   * Group this level's NON-EPIC ROOT rows into one node (MOTIR-3490). Passed by the
+   * roadmap consumer for the ROOT level only — a drilled level's rows are somebody's
+   * children and belong exactly where they are. See {@link isNotInEpicRow}.
+   */
+  groupNonEpicRoots?: boolean;
+  /** The grouped node's BREADCRUMB label — localized copy the consumer supplies,
+   *  for the same reason `originCrumbLabel` is supplied rather than resolved here:
+   *  this builder is a pure function with no translator of its own. */
+  groupCrumbLabel?: string;
+  /**
+   * How many rows the level HAS, when the read reported it. Greater than the rows
+   * actually returned ⇒ the level was truncated by the read's cap, and the
+   * truncation tile is drawn (MOTIR-3490). Absent / equal ⇒ no tile, which is both
+   * the ordinary case and the pre-MOTIR-3490 behaviour.
+   */
+  levelTotal?: number;
 }
 
 export function buildWorkItemLevel(
@@ -78,9 +130,51 @@ export function buildWorkItemLevel(
   deps: ProjectCanvasDep[];
 } {
   const scope = opts.scope ?? 'project';
-  const itemIds = new Set(wi.items.map((i) => i.id));
-  const statusById = new Map(wi.items.map((i) => [i.id, i.status]));
+  // THE PARTITION (MOTIR-3490), computed BEFORE anything else reads the level,
+  // because everything downstream depends on which rows are actually ON it.
+  // ⚠️ GROUPING MUST LEAVE SOMETHING ON THE ROAD. The point of the grouped node is
+  // that the opening canvas reads as "the work, and one door beside it" — so a
+  // partition that would take the WHOLE level is not tidying it, it is replacing
+  // the reader's entire roadmap with a single grey box and putting an extra hop in
+  // front of what used to be the first thing they saw.
+  //
+  // The design (`design/roadmap/design-notes.md`, decision 1) states the predicate
+  // over a row and assumes the epics standing beside it; this is that assumption
+  // made explicit. Two live cases need it, and the first is why the condition is
+  // NOT "the level has an epic":
+  //
+  //  - SPRINT scope re-roots at the topmost in-sprint members, and an epic is
+  //    almost never among them — so an epic-presence test would switch grouping
+  //    off for the whole sprint view and make MOTIR-3490's AC 5 unsatisfiable.
+  //    What matters there is that a committed MEMBER row remains on the road.
+  //  - A project with no epics at all (a fresh tree, the migrate population) would
+  //    otherwise collapse to one node. The shipped auto-drill suite already
+  //    encoded this expectation — its fixtures are parentless non-epic roots that
+  //    must still descend normally (MOTIR-1807).
+  const candidates = opts.groupNonEpicRoots === true ? wi.items.filter(isNotInEpicRow) : [];
+  const grouped = candidates.length < wi.items.length ? candidates : [];
+  const groupedIds = new Set(grouped.map((i) => i.id));
+  const onLevel = grouped.length > 0 ? wi.items.filter((i) => !groupedIds.has(i.id)) : wi.items;
+
+  const itemIds = new Set(onLevel.map((i) => i.id));
+  const statusById = new Map(onLevel.map((i) => [i.id, i.status]));
+  // A GROUPED row is OFF this level now, so an edge to it takes the off-level path
+  // — and we have its whole row in hand, so it gets a proper naming stub instead of
+  // an anonymous anchor. Dropping such an edge instead would have been the quiet
+  // option and the wrong one: an epic blocked by a grouped defect is still blocked,
+  // and the flag is how the reader finds out.
   const offById = new Map(wi.offLevelBlockers.map((b) => [b.id, b]));
+  for (const g of grouped) {
+    if (offById.has(g.id)) continue;
+    offById.set(g.id, {
+      id: g.id,
+      identifier: g.identifier,
+      title: g.title,
+      parentTitle: null,
+      isDone: g.status === 'done',
+      inActiveSprint: g.inActiveSprint ?? false,
+    });
+  }
 
   const crossBlocked = new Set<string>();
   const deps: ProjectCanvasDep[] = [];
@@ -139,10 +233,10 @@ export function buildWorkItemLevel(
   // this level, in the level's key-asc order (at the root that's the active epic).
   // None in progress → no marker.
   const activeId = opts.markActive
-    ? (wi.items.find((i) => i.status === 'in_progress')?.id ?? null)
+    ? (onLevel.find((i) => i.status === 'in_progress')?.id ?? null)
     : null;
 
-  const itemNodes: ProjectCanvasNode[] = wi.items.map((item) => {
+  const itemNodes: ProjectCanvasNode[] = onLevel.map((item) => {
     // NOT IN SPRINT (MOTIR-1379 follow-up): only meaningful in sprint scope. The
     // root level shows only in-sprint members, but drilling into a committed root
     // reveals its WHOLE subtree — so a child that the sprint did not commit to
@@ -210,7 +304,7 @@ export function buildWorkItemLevel(
   // onboarding init screen uses for its plan preview), so it never distorts the
   // epics' layout. Only at the ROOT level, and only when there ARE epics to anchor.
   const originNodes: ProjectCanvasNode[] =
-    opts.includeOrigin && wi.items.length > 0
+    opts.includeOrigin && onLevel.length > 0
       ? [
           {
             id: ORIGIN_ID,
@@ -247,5 +341,64 @@ export function buildWorkItemLevel(
         ]
       : [];
 
-  return { nodes: [...originNodes, ...itemNodes, ...anchorNodes], deps };
+  // THE GROUPED NODE (MOTIR-3490) — emitted only when the partition caught
+  // something, so the level it opens can never be empty and there is no empty
+  // state to draw. It carries NO explicit position: `deterministicLayout` already
+  // drops a node that takes part in no dependency edge into its own band BELOW the
+  // flow ("Loose nodes ... e.g. a standalone bug"), which is exactly where this
+  // belongs — unlike the pinned origin cluster, which overrides its own x/y.
+  const groupNodes: ProjectCanvasNode[] =
+    grouped.length > 0
+      ? [
+          {
+            id: NOT_IN_EPIC_ID,
+            parentId: null,
+            // A DOOR: the consumer's `loadLevel` intercepts this id and serves the
+            // grouped rows from the level it has ALREADY fetched.
+            drillable: true,
+            crumbLabel: opts.groupCrumbLabel,
+            // NOT `viewable` — like the planning-origin card, its detail IS the
+            // level below it; there is no work item to peek at.
+            viewable: false,
+            // NOT `decorative`, and this is the decision rather than an oversight
+            // (design decision 5). `decorative` means "not a member of the level's
+            // WORK", which is true of the origin cluster and false of this node: it
+            // holds real work items, so it IS a branch, and the canvas's "does this
+            // level offer a CHOICE?" test must count it. Marking it decorative would
+            // auto-descend the reader PAST it into a lone epic, hiding the
+            // unparented work on arrival — the silence this card exists to end.
+            searchText: grouped.map((g) => `${g.identifier} ${g.title}`).join(' '),
+            content: <LevelGroupNode count={grouped.length} />,
+          },
+        ]
+      : [];
+
+  // THE TRUNCATION TILE (MOTIR-3490) — the level read is capped, and this is the
+  // only thing that says so. Compared against the rows the READ returned
+  // (`wi.items`), never against the rows left after grouping: grouping moves rows,
+  // the cap loses them, and reporting the one as the other would be a false claim.
+  const total = opts.levelTotal;
+  const moreNodes: ProjectCanvasNode[] =
+    typeof total === 'number' && total > wi.items.length
+      ? [
+          {
+            id: LEVEL_MORE_ID,
+            parentId: null,
+            // NOT a door — there is no level behind it, only more of this one.
+            drillable: false,
+            viewable: false,
+            // DECORATIVE: it is an annotation ABOUT the level, not a branch in it,
+            // so it must not turn a single-drillable-node level into a "choice" and
+            // suppress the auto-descend.
+            decorative: true,
+            searchText: '',
+            content: <LevelTruncationTile shown={wi.items.length} total={total} />,
+          },
+        ]
+      : [];
+
+  return {
+    nodes: [...originNodes, ...itemNodes, ...groupNodes, ...anchorNodes, ...moreNodes],
+    deps,
+  };
 }
