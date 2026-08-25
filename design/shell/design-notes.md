@@ -4,15 +4,16 @@ The authed shell: the top bar, the persistent sidebar rail, the off-canvas drawe
 overlays the bar summons. This is the area's first `design-notes.md`; the five `.pen` assets beside it
 predate the three-file convention and are indexed below rather than rewritten.
 
-| Surface                                    | Asset                                           | Card             | State                                                                                                |
-| ------------------------------------------ | ----------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                          | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
-| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                | MOTIR-53         | Same                                                                                                 |
-| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                    | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
-| ⌘K command palette                         | `cmd-k.pen` / `.png`                            | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
-| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                        | MOTIR-53         | Current                                                                                              |
-| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**         | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
-| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`** | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
+| Surface                                    | Asset                                                         | Card             | State                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                        | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
+| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                              | MOTIR-53         | Same                                                                                                 |
+| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                  | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
+| ⌘K command palette                         | `cmd-k.pen` / `.png`                                          | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
+| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                      | MOTIR-53         | Current                                                                                              |
+| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                       | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
+| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**               | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
+| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`** | **MOTIR-3431**   | **The design of record for what the content area shows between the click and the arrival**           |
 
 ---
 
@@ -243,6 +244,216 @@ happy-dom drops a `background-image` whose value is a `linear-gradient()` over `
 pill's fill and its shimmer are restored verbatim from `PlanWithAILauncher.tsx`; and because every
 frame shares one document, the compiled `@media (width >= …)` blocks are re-emitted scoped to
 `[data-vw="…"]` so each frame resolves its own width. Both are properties of the board, not of the app.
+
+---
+
+## The navigation-pending grammar (MOTIR-3431)
+
+**What the authed content area shows between the click and the arrival.** The area had no drawing for
+this state at all — `git grep -in 'loading\|skeleton\|pending\|spinner\|busy' origin/main -- design/shell/design-notes.md`
+returned nothing at `dacf711b` — so every surface that has needed one so far invented its own, and
+four different pulse compositions now live in four `_components` folders. This section is the one
+grammar all of them answer to.
+
+**Asset ·** `navigation-pending.mock.html` / `navigation-pending.png`. **Cards ·** MOTIR-3431 draws it;
+MOTIR-3433 and MOTIR-3434 build it; MOTIR-3432 composes it one level down.
+
+### The surface, and its boundary
+
+The subject is **`<main>`'s single child inside `app/(authed)/layout.tsx`** while a navigation to a
+route in that group is in flight. The top bar, the persistent rail and the context path are the
+shell's; a navigation inside the group does not re-render them, and Panel A draws them four times
+identical because that is the claim, not decoration.
+
+This design does **not** draw the work-item detail page's own route-shaped frame or its per-section
+streaming states — those are MOTIR-3432's, which composes this grammar rather than restating it. It
+restyles nothing in the shell and introduces no colour: every fill is an existing `--el-*` token.
+
+### THE REVEAL DELAY — 120 ms
+
+**The frame is mounted immediately and revealed at 120 ms**, over a 90 ms fade, so it is fully visible
+at 210 ms. The declaration is CSS and nothing else:
+
+```css
+@keyframes nav-pending-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.nav-pending {
+  animation: nav-pending-reveal 90ms ease-out 120ms both;
+}
+```
+
+**Why the frame is MOUNTED at 0 and not at 120.** Once the address bar has changed, the previous
+surface is lying. Mounting immediately is what makes the destination the thing on screen; the delay
+governs only whether the reader is shown that it is still loading.
+
+**Why 120, argued from the two states a reader can be in — the only two there are:**
+
+| the route resolves                                                                      | what the reader sees                                                                   | why the number holds                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **in under 120 ms** — an empty settings pane, a cached segment                          | the previous surface, then the destination. **The frame is never visible.** One paint. | 0.1 s is the classical ceiling for a response that reads as _instantaneous_. Inside it the navigation has already succeeded, and a state placed there is an interruption the reader has to parse and discard. 120 ms is that ceiling plus one 60 Hz frame of slack, so a route landing one frame late is still treated as instant. |
+| **in longer than 120 ms** — Work Items, the item detail page, anything with a real read | the frame, fading in, before their eye has finished travelling to the content region   | the navigation has ALREADY failed to feel instantaneous, so the frame is not an interruption — it is the only evidence the click landed. A saccade to the content region lands around 150–200 ms after the click, so a reveal begun at 120 ms is in place before the reader looks at it and they never see it arrive.              |
+
+**It is an animation, not a timer, and that is load-bearing.** No `useEffect`, no `setTimeout`, no
+client state, nothing to clean up when a navigation is abandoned: the element is removed and the
+animation goes with it. A route that resolves in 40 ms unmounts the frame 80 ms before it would have
+become visible, and no code had to decide that.
+
+**Under `prefers-reduced-motion: reduce` the delay stays and the motion goes** — the reveal becomes a
+step at 120 ms with no fade, and the pulse stops, leaving static blocks. The delay is not an animation
+preference: it is what stops a fast route showing a state it does not need, and a reader who asked for
+less motion asked for fewer flashes, not more.
+
+### THE NO-SHIFT CLAIM — heights and gaps, never widths
+
+**A layout shift on settle is VERTICAL.** The frame and the arriving page both fill `<main>`'s width,
+so a placeholder bar being a different _width_ from the title it stands in for moves nothing — a
+block-level line box occupies its whole line either way. What moves the page is a block whose
+**height**, or the **gap above it**, differs from the region that replaces it. So the frame matches
+heights and gaps exactly and takes its widths from what reads as a page.
+
+| #   | block          | its box                                                                 | the region it becomes                                   | why the pair cannot shift                                                                                                                                                                                        |
+| --- | -------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Title          | `h-8` (32px) · `w-56`                                                   | the page's `<h1>` — `font-serif text-2xl font-semibold` | `text-2xl` is 1.5rem on a 2rem line box = **32px**. Same box, so the row below starts at the same y.                                                                                                             |
+| 2   | Subtitle       | `h-4` (16px) · `w-80`                                                   | the optional `<p>` under the heading                    | present on Roadmap, Reports and every settings pane; **absent** on Work Items. See the compromise below.                                                                                                         |
+| 3   | Toolbar        | `h-(--height-control)` · three chips                                    | the page's control row                                  | the real controls are all `--height-control`, so the frame inherits the height rather than restating it — and flips with the style axis for the same reason.                                                     |
+| 4   | Content        | `rounded-(--radius-card)` bordered region · 40px header + 8 × 40px rows | the table, list or board the page renders               | 40px is the shipped table's own row height. Eight rows is a screenful and is deliberately not a count of anything.                                                                                               |
+| —   | the column gap | `gap-6` (24px) on the outer flex column                                 | the `gap-6` every authed page already uses              | Work Items, Roadmap and both shipped settings `loading.tsx` files all open `flex flex-col gap-6`. The frame **is** that wrapper, so the vertical rhythm is not a copy of the pages — it is the same declaration. |
+
+**At what widths.** All of it, and that is the point of measuring vertically. The frame adds **no
+horizontal gutter of its own** — `app/(authed)/layout.tsx` already wraps `{children}` in
+`px-4 pt-6 pb-(--shell-bottom-clearance) sm:px-6 lg:px-8`, and the frame renders inside that wrapper
+exactly as a page does. A frame that re-applied the gutter would double it at every breakpoint. The
+blocks' widths are `w-56` / `w-80` / fixed chip widths, which never reach the column's edge at any
+authed width, so nothing reflows between breakpoints and there is no width at which the claim is
+weaker.
+
+**The subtitle block is the one honest compromise, and it is stated rather than hidden.** A frame that
+draws a subtitle settles **20px UP** on a page that has none; a frame that omits it settles 20px DOWN
+on the majority that do. Drawing it is the better half — an upward settle pulls content toward the
+reader's eye rather than away from it, and the pages carrying no subtitle (Work Items, Boards) are
+also the fast ones, which under the reveal delay usually never show the frame at all. **A route that
+both carries no subtitle AND reads slowly has outgrown the group frame and owes itself a nearer one.**
+
+### WHAT A NEARER BOUNDARY OWES THIS ONE
+
+One `app/(authed)/loading.tsx` is the floor for all **58** `page.tsx` files in the group (measured at
+`origin/main` `dacf711b`; the group had exactly **two** `loading.tsx`, both under
+`settings/project/`). A route may draw its own nearer frame where the group's is a poor stand-in —
+`/items/[key]` does, next door. **When it does it inherits three things and may change only the
+fourth:**
+
+|                      | the group frame                                                                                                  | a route-shaped frame                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **the wrapper**      | SAME — `flex flex-col gap-6`, no gutter of its own                                                               |                                                                                                |
+| **the header block** | SAME — `h-8` title on a `gap-1` stack. A route whose `<h1>` is the same size may not draw a different box for it |                                                                                                |
+| **the reveal**       | SAME — the one `nav-pending-reveal` keyframe and the one 120 ms delay, **referenced, never re-declared**         |                                                                                                |
+| **the body**         | a generic bordered region — 40px header, eight 40px rows                                                         | whatever that route actually renders: two columns and a rail, a board of columns, a form stack |
+
+**Two boundaries revealing at two times is the flicker this design exists to remove, wearing a second
+costume.** So the shared three live in one exported primitive that both boundaries render, and the
+body is what a route passes into it. A route-shaped frame that COPIES the inherited rows instead of
+composing them is the same drift as a skeleton restating a table's columns — which is exactly how
+`IssueTreeSkeleton` came to be three columns and 272px behind the table it stands in for, for eighty
+days, with its own comment promising it was in sync (MOTIR-3452, filed from this pass).
+
+### THE SWITCH RULE — a client-only view switch shows NO pending state
+
+**When a toggle's target body needs no new server data, there is nothing to wait for. Draw no spinner,
+disable no segment, show no skeleton, dim nothing. The body is simply there, in the same frame as the
+click.** A pending affordance on such a switch is a **defect**, not a courtesy: it manufactures a wait
+the reader would not otherwise have had, and it is the complaint this story was reported for,
+reintroduced as a feature.
+
+**The three call sites it governs** — drawn at rest in both positions in Panel E, and re-pointed at the
+lifted helper by MOTIR-3434:
+
+| call site                                             | param                    | why the server has nothing to say                                                                                            |
+| ----------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `components/planning/PlanDetail.tsx`                  | `?view=list\|canvas`     | both bodies render from the `review` the island already holds in `useState`                                                  |
+| `app/(authed)/items/[key]/_components/ChildPanel.tsx` | `?children=list\|graph`  | the list body IS the already-rendered `children` prop; the graph mounts a client canvas that fetches its own level           |
+| `components/planning/RoadmapView.tsx`                 | `?scope=project\|sprint` | the canvas refetches on its `key={scope}` remount — the file's own comment already says the navigation is not what drives it |
+
+**Three switches are NOT governed by it and keep their `router.push`:** Work Items' tree ↔ list, the
+plans list's status tabs, and the item page's activity tabs. Each changes what the server must fetch,
+so each is a real navigation and is entitled to the pending frame above. **The discriminator is not the
+control** — all six are the same `Segmented` — **it is whether the target body needs data the browser
+does not have.**
+
+### Primitives and tokens
+
+| element                     | primitive / token                                                                         | note                                                                                                                                                                                                                                                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the frame's wrapper         | `flex flex-col gap-6`                                                                     | the same wrapper an authed page opens with; no gutter — the layout's `{children}` wrapper already pays it                                                                                                                                                                                                           |
+| every placeholder block     | `bg-(--el-muted)` fill · `rounded-(--radius-control)`                                     | the shipped pulse vocabulary — `IssueTreeSkeleton`, `BacklogSkeleton`, `BoardSkeleton`, `PlanningWorkspaceSkeleton` and both settings `loading.tsx` files. **This design does not redraw any of them**; `app/(authed)/settings/project/fields/loading.tsx` is the closest existing composition and is the reference |
+| the pulse                   | `animate-pulse` on the inner wrapper                                                      | one animation for the whole frame, so the blocks pulse in phase rather than as a field of independent flickers                                                                                                                                                                                                      |
+| the content region's chrome | `rounded-(--radius-card)` · `border-(--el-border)` · header band `bg-(--el-surface-soft)` | mirrors the shipped table container, which is what makes block 4 a stand-in rather than a rectangle                                                                                                                                                                                                                 |
+| the toolbar chips           | `h-(--height-control)`                                                                    | the height every real toolbar control already takes                                                                                                                                                                                                                                                                 |
+| status-pill placeholders    | `rounded-full`                                                                            | genuinely circular ends; the shape rule's carve-out, matching the shipped `Pill`                                                                                                                                                                                                                                    |
+| the announced state         | `aria-busy="true"` on the frame; blocks are decorative                                    | the reader of a screen reader is told the region is busy once, not eight times                                                                                                                                                                                                                                      |
+| the reveal                  | `nav-pending-reveal` keyframe, `120ms` delay, `90ms ease-out`, `both`                     | the one declaration; a nearer boundary references it                                                                                                                                                                                                                                                                |
+
+**No Tier-0 anything.** No `--color-*`, no `rounded-md`/`p-2`/`h-9`, no invented hue. The board's own
+chrome takes `--el-text-secondary` for annotation ink rather than `--el-text-muted`, which fails AA on
+`--el-surface-soft` and on `--el-muted` — the two surfaces this board's tables and rule blocks paint
+on (`docs/decisions/design-board-chrome-aa.md`).
+
+### The access path
+
+**This state has no menu entry: its entrance is every navigation in the group.** That is why the asset
+opens with a TRANSITION rather than a screen — Panel A draws the surface being left, the window in
+which deliberately nothing happens, the frame revealed, and the page arrived, with the shell held
+identical across all four. A single still of a skeleton could not show the reveal delay or the no-shift
+claim at all; the sequence is what makes both readable.
+
+### The design-allocation sweep — what this asset GIVES and TAKES
+
+| card                                                                                  | GIVES / TAKES | what                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-3433** — the group boundary + the page-skeleton primitive                     | **GIVES**     | the frame's composition block by block, the `nav-pending-reveal` declaration verbatim, the `aria-busy` placement, and the rule that the primitive owns the wrapper + header + reveal so a nearer boundary can compose them |
+| **MOTIR-3434** — `shallowUrl` and the three call sites                                | **GIVES**     | the switch rule in the imperative, the three governed call sites and the three deliberately excluded ones, and the `Segmented` drawn at rest so "no pending affordance" is a picture rather than a sentence                |
+| **MOTIR-3432** — the item-detail design                                               | **GIVES**     | the header block's box, the `gap-6` wrapper and the single reveal it must reference. **TAKES nothing** — that card owns the detail page's own frame and its per-section streaming states, which this asset does not draw   |
+| **MOTIR-3435** — `/items/[key]`'s own `loading.tsx`                                   | **GIVES**     | the nearer-boundary rule: same wrapper, same header box, same reveal; only the body is its own                                                                                                                             |
+| **MOTIR-3437** — the story's vitest gate                                              | **GIVES**     | two assertions this asset makes checkable — that every authed route resolves to a boundary, and that no client-only toggle calls `router.push`                                                                             |
+| **MOTIR-3441 / MOTIR-3442** — the settings and remaining-surface designs (MOTIR-3440) | **GIVES**     | the grammar they extend. Both are `relates_to` on MOTIR-3431 and neither is blocked by it                                                                                                                                  |
+
+### What this design overrides
+
+Nothing. It is the area's first drawing of this state, so there is no prior target to reconcile. Two
+adjacent facts it does **not** change, named so a reader does not infer them:
+
+- **`app/(planning)/loading.tsx` stays as it is** (MOTIR-2069). It is the precedent this generalises,
+  not a surface this re-specifies; its `PlanningWorkspaceSkeleton` is a route-shaped body under the
+  nearer-boundary rule, and it predates the reveal delay.
+- **The four existing `_components` skeletons stay as they are.** They are `<Suspense>` fallbacks
+  INSIDE a page, not route boundaries; this design supplies the vocabulary they already speak and
+  takes nothing from them.
+
+### How the render was produced
+
+The asset is generated, not hand-drawn, so it cannot drift from the app:
+
+1. The top bar in every frame is the real `app/(authed)/_components/TopNav.tsx`, taken from this area's
+   own `context-row.mock.html` Panel A — captioned there as _"what ships today, rendered"_.
+2. The rail is the real `SidebarNav variant="rail"`, and the settled Work Items page is the real
+   `IssueTreeStaticTable` over the real `buildIssueColumns` registry — both dumped from the repo's own
+   vitest + RTL setup with the real `messages/en.json`. The three switches are the real `Segmented`, in
+   the exact option sets its three call sites pass it.
+3. Tailwind compiles `app/globals.css`'s layers over that markup, so the mock's stylesheet is the
+   build's own output rather than a retyped token block.
+
+The only markup here that is **not** already shipped is the pending frame and the keyframe beside it —
+which is what this card exists to decide.
+
+Two board artefacts, named here so nobody reads them as design: the shell stages are held at a fixed
+**560px** so four of them read as one sequence, where the app's shell is `h-dvh`; and the frames that
+show the frame REVEALED force the animation's end state, because a board is a still and a time-based
+state has to be frozen at the moment it is being drawn.
 
 ---
 

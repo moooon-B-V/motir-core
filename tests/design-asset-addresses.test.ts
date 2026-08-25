@@ -852,6 +852,16 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   },
   // ── Forward-looking: the asset proposes the file ──────────────────────────
   {
+    file: 'design/shell/design-notes.md',
+    path: 'app/(authed)/loading.tsx',
+    why: "Forward-looking: the navigation-pending grammar (MOTIR-3431) is the DESIGN for the group's loading boundary, and the boundary itself is MOTIR-3433's deliverable. ⚠️ DELETE THIS ROW IN THAT CARD — once the file exists this row stops applying, and the tightness assertion below turns red until it is removed.",
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    path: 'app/(authed)/loading.tsx',
+    why: 'The same forward reference in the mock beside those notes — Panel D names the file the group frame will live in. Same card removes it.',
+  },
+  {
     file: 'design/ai-usage/usage.mock.html',
     path: 'components/ui/Skeleton',
     why: 'Forward-looking: `components/ui/` has no Skeleton primitive; the loading state is proposed here, drawn inline.',
