@@ -996,6 +996,16 @@ export interface RawLesson {
   injected: boolean;
   /** Why not, when it is not — `disabled` | `not_recurred`, else null. */
   injectionBlock: string | null;
+  /**
+   * The HUMAN OVERRIDE (MOTIR-3330) — `retired` | `exempt`, else null.
+   *
+   * Optional here because an upstream that predates it sends none, and the
+   * absence is honest: no decision has been recorded.
+   */
+  humanOverride?: string | null;
+  /** When that decision was made (ISO-8601) and by whom (a core user id). */
+  humanOverrideAt?: string | null;
+  humanOverrideBy?: string | null;
   /** The retire-by-non-recurrence window, in days, THIS row was judged against. */
   retentionDays?: number;
 }
@@ -1082,4 +1092,61 @@ export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
     throw new MotirAiUnavailableError('lesson response missing `id`');
   }
   return body as RawLesson;
+}
+
+// ── The lesson WRITE half (Subtask MOTIR-3345 · Story MOTIR-3330) ──
+//
+// Two named acts on one axis. NEITHER SENDS THE OVERRIDE VALUE: motir-ai reads
+// the row to decide what `apply` means — clear the retirement on a row somebody
+// switched off, exempt from the clock on a row that aged out (MOTIR-3344). Core
+// says WHICH lesson and WHO is acting, and nothing else.
+
+export interface LessonWriteQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  lessonId: string;
+  /**
+   * The acting core user id.
+   *
+   * ⚠️ Required, and threaded rather than defaulted. The detail surface promises
+   * to say who switched a lesson off; the upstream can only record that if this
+   * side sends it, and its absence is invisible until somebody opens that view
+   * and finds an audit line saying nothing.
+   */
+  actorId: string;
+}
+
+async function lessonWrite(
+  query: LessonWriteQuery,
+  action: 'retire' | 'apply',
+): Promise<RawLesson> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/lessons/${encodeURIComponent(query.lessonId)}/${action}`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({
+      coreWorkspaceId: query.coreWorkspaceId,
+      coreProjectId: query.coreProjectId,
+      actorId: query.actorId,
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawLesson>;
+  // Same malformed-body arm the reads use: a 200 whose shape is wrong is an
+  // unavailable upstream, not a lesson.
+  if (typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError(`lesson ${action} response missing \`id\``);
+  }
+  return body as RawLesson;
+}
+
+// POST /v1/lessons/:id/retire — stop applying this lesson.
+export function retireLesson(query: LessonWriteQuery): Promise<RawLesson> {
+  return lessonWrite(query, 'retire');
+}
+
+// POST /v1/lessons/:id/apply — apply it again. Idempotent, and the upstream
+// decides whether that means clearing the retirement or exempting the row.
+export function applyLesson(query: LessonWriteQuery): Promise<RawLesson> {
+  return lessonWrite(query, 'apply');
 }
