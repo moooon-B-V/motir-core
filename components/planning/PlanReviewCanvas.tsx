@@ -290,6 +290,25 @@ export function PlanReviewCanvas({
     [heldNodeByPlanItemId],
   );
 
+  // ── Is the level in view made ENTIRELY of this plan's cards? (bug MOTIR-3453) ─
+  //
+  // Part IX §1.4: drilling into a proposed container asks the roadmap for the
+  // children of an id no work item has, `fetchRoadmapLevel` resolves an empty
+  // committed level, and the proposals render alone. That is correct — and it
+  // looks like nothing else on this surface, so the caption says why, or an
+  // empty-looking canvas is read as a failed load.
+  //
+  // Recorded from `loadLevel`, because that is the only place both halves of the
+  // answer are known at once: the COMMITTED read and the merged result. Written
+  // in the async continuation, never synchronously in an effect (the CI lint
+  // rule), and it feeds a PROP rather than the level, so it cannot loop — the
+  // canvas holds `loadLevel` in a ref and refetches on focus / `reloadKey` only.
+  //
+  // It falls to false on approve WITHOUT a second rule: the cards are committed
+  // by then, so the roadmap read returns them and the sentence stops being true
+  // at the same moment it stops being sayable.
+  const [levelIsAllProposed, setLevelIsAllProposed] = useState(false);
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // The COMMITTED level. A failure here must not blank the review — the plan
@@ -307,7 +326,9 @@ export function PlanReviewCanvas({
         for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
         committed = buildWorkItemLevel(wi);
       }
-      return mergePlanLevel(committed, items, parentId, outcome);
+      const merged = mergePlanLevel(committed, items, parentId, outcome);
+      setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
+      return merged;
     },
     [items, projectKey, outcome],
   );
@@ -323,6 +344,10 @@ export function PlanReviewCanvas({
         // approve, rather than being left addressed by an id that has stopped
         // naming anything (bug MOTIR-3439).
         resolveHeldNode={resolveHeldNode}
+        // Part IX §1.4's caption, on the one level that needs it. The foundation
+        // owns the slot and knows only that it has nodes; which KIND of nodes
+        // they are is this consumer's to say.
+        levelCaption={levelIsAllProposed ? tPlan('allProposedLevel') : undefined}
         searchable
         // SHOW CHANGES (MOTIR-3261) — the set is EVERY proposal's node id,
         // whatever its `op`, which is what the request's *added / updated /

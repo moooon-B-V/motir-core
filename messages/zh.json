@@ -239,6 +239,7 @@
     "listBodyRewritten": "已重写——打开卡片查看",
     "listEmptyTitle": "没有提案",
     "listEmptyBody": "此计划生成结束但没有提出任何内容。批准它不会改变任何东西。",
+    "allProposedLevel": "此层级尚无已提交的工作项——这里的每一张卡片都来自本计划",
     "proposedCrumb": "新",
     "showChangesPast": "显示已变更内容",
     "actionError": "出了点问题，请重试。",
@@ -5226,6 +5227,7 @@
         "crumb": "规划"
       },
       "showChanges": "显示变更",
+      "showChangesCount": "{n} / {total}",
       "showChangesNone": "此层级没有提案变更"
     }
   },
