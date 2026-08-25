@@ -295,5 +295,159 @@ the alternative does not actually avoid it — MOTIR-3426's crash-resume and two
 _our_ step shim and _our_ dispatcher either way — and because §4 makes the libraries unusable here
 for reasons that have nothing to do with the quality of their claim loops.
 
+## §11 — How the EMIT PATH learns the subscriber set: a data-only manifest, not a side-effect import (MOTIR-3455)
+
+- **Amends this record.** §4 and §8 name the dispatcher and the registry without settling this.
+- **Evidence pinned at:** `motir-core` `origin/main` @ `18d60791`.
+- **Consumed by:** MOTIR-3458 (the implementation + its guard), MOTIR-3416 (which inherits the
+  answer for `lib/jobs/schedules.ts` rather than re-deriving it).
+- **Ships no behaviour.** This section decides a shape. The code change is MOTIR-3458's.
+
+### The defect
+
+`dispatchEventToEngine` resolves its fan-out with `engineSubscribers(name)`, which filters the
+module-level `Map` in `lib/jobs/engine/registry.ts`. `registerEngineJob` fills that `Map` from
+inside `defineJob`, so **it holds only the jobs whose definition MODULE has been evaluated in this
+process.** `registry.ts`'s own header says so, and points at `schedules.ts` as the precedent.
+
+`lib/jobs/sendEvent.ts` imports exactly `./client`, `./types` and `./engine/dispatcher`; the
+dispatcher imports `./engine/registry`. **Nothing in that graph reaches a definition module.** So
+on a Next.js request path `engineSubscribers` returns `[]`, `dispatchEventToEngine` returns early
+without writing a `job_event` row, `hasInngestSubscribers` returns its documented safe default
+`true`, `inngest.send()` fires — and for a job whose id IS in `MOTIR_POSTGRES_JOB_IDS`,
+`defineJob`'s Inngest handler returns `{ skipped: 'routed-to-postgres-engine' }`.
+
+**The event runs on neither lane, silently.** No error, no fallback, no log. That is a worse
+failure than the latency MOTIR-3413 was filed to fix, and it would surface weeks after a cutover as
+notifications that stopped arriving.
+
+### Why every existing signal is green
+
+- **The dispatcher suite** carries `import '@/lib/jobs/registry';` at `tests/jobs/engine-dispatcher.test.ts:24`,
+  with a comment explaining that it is there for its side effect. That import makes the registry
+  complete inside the test process by a route no production request takes.
+- **The E2E lane** runs `inngest-cli dev -u http://localhost:${PORT}/api/inngest --no-discovery`
+  (`playwright.config.ts:437`). The sync evaluates the serve route — and therefore
+  `lib/jobs/registry.ts` — inside the same Next server process the specs then drive.
+- **In production neither happens.** The serve route is evaluated only on a machine Inngest has
+  synced against, and `fly.toml:118` sets `min_machines_running = 2`.
+
+### The options, and what each costs `lib/jobs/schedules.ts`
+
+`schedules.ts` carries the identical caveat in its own header ("COMPLETENESS DEPENDS ON IMPORT"),
+and `jobScheduleHealthService` is its one reader today. MOTIR-3416's scheduler will be its second,
+on the same emit-side footing — so each option is priced for both tables, not just the engine's.
+
+**(a) Side-effect import** — add `import '@/lib/jobs/registry';` to `sendEvent.ts` or the
+dispatcher. One line. Fixes `schedules.ts` at the same time and at no extra cost, because the same
+import populates both `Map`s.
+
+**(b) A data-only subscriber MANIFEST** — split registration so the emit path reads only
+`{ id, trigger, cron, maxAttempts }` and never `handler`. The manifest module imports no services,
+so importing it eagerly from `sendEvent` is cheap and acyclic. The worker keeps importing the full
+registry for the handlers it must execute. `cron` rides the same record, so `schedules.ts`'s reader
+can move to the manifest and inherit the fix.
+
+**(c) A database-backed subscriber table**, written at deploy or boot. Removes the import question
+entirely, at the cost of a read on the emit path and a table that can go stale against the deployed
+code. It would fix `schedules.ts` only by giving it a second staleness surface.
+
+### The measurement that settled it
+
+MOTIR-3455 required option (a) to be **measured rather than argued**. It was, by building the app
+with the side-effect import present and absent, from the same clean `.next`, on the same machine:
+
+|                | baseline (`18d60791`)   | with `import '@/lib/jobs/registry'` in `sendEvent.ts` |
+| -------------- | ----------------------- | ----------------------------------------------------- |
+| `next build`   | **succeeds** (`EXIT=0`) | **FAILS** (`EXIT=1`)                                  |
+| compile        | 22.0 s                  | 30.0 s                                                |
+| `.next/server` | 198 485 126 B           | 377 079 602 B (**+178.6 MB, +90.0 %**)                |
+
+The failure is not incidental and not a flake:
+
+```
+✓ Compiled successfully in 30.0s
+ReferenceError: Cannot access 'e5' before initialization
+> Build error occurred
+Error: Failed to collect page data for /api/_test/work-item-links
+```
+
+**That is the import cycle closing, observed as a temporal-dead-zone error.** The cycle is:
+
+```
+sendEvent.ts → lib/jobs/registry.ts → lib/jobs/definitions/* → defineJob.ts
+             → lib/jobs/services.ts → lib/services/workItemsService.ts → sendEvent.ts
+```
+
+**Nine of the services in `defineJob`'s injected bag import `sendEvent`** — `workItemsService`,
+`usersService`, `watcherNotificationsService`, `mentionNotificationsService`,
+`automationEngineService`, `workspaceInvitesService`, `savedFilterSubscriptionsService`,
+`parentStatusRollupService` and `childStatusCascadeService` — so the cycle is not reachable by one
+unlucky path, it is the normal one.
+
+**The route named in the error is where page-data collection reached the cycle first, not a
+property of that route.** `app/api/%5Ftest/work-item-links/route.ts` imports `workItemsService`; so
+do **42** other route and page modules under `app/`, four of them server-action files. Any of them
+closes the same cycle.
+
+### The decision
+
+**Option (b), the data-only manifest.** The measurement did not merely fail to contradict the
+recommendation — it removed (a) from the table entirely: an option that does not build is not a
+simpler option, and the 90 % server-bundle growth would have been a reason to decline it even had
+it built.
+
+Two independent supports, recorded because the measurement alone would date badly if the cycle were
+ever broken for unrelated reasons:
+
+- **Rung 2 — the emit path already needs no handler.** `dispatchEventToEngine` reads only `sub.id`
+  and `sub.maxAttempts`; `hasInngestSubscribers` reads only `id` and `trigger`.
+  `EngineJobDefinition.handler` is the one field that drags the service graph in, and it is exactly
+  the field neither emit-path caller touches. (b) is not a new abstraction — it is the split the
+  existing call sites already imply.
+- **Rung 1 — the mirror.** Inngest resolves an event's subscribers server-side from a function
+  manifest synced at deploy; the emitting process sends a name and a payload and knows nothing about
+  who consumes it. A manifest is the mirror product's shape, not an invention.
+
+**(a) is rejected on the measurement above.** **(c) is rejected on the reasoning
+`lib/jobs/engine/cutover.ts` already records for the routing set**: a cached or replicated view of
+the deployed code's shape can go stale, and stale here means a job running on both engines or on
+neither — the one outcome the switch exists to prevent.
+
+**For `lib/jobs/schedules.ts`: MOTIR-3416 takes (b) as well, and does not need to re-decide.** The
+manifest carries `cron`, so a scheduler reading the manifest gets the same completeness property
+from the same source. MOTIR-3458 is not obliged to migrate `schedules.ts` — its scope is the emit
+path — but if the manifest makes that free, it should take it and say so.
+
+### The risk this decision accepts, named
+
+**A manifest that `defineJob` does not populate is a second list, and this record has already
+argued twice that two lists drift** (`registry.ts`'s header, and §8's enumeration correction). The
+mitigation is not vigilance: **the manifest MUST be registered from inside `defineJob`**, the single
+choke point every job passes through, exactly as `registerEngineJob` and `registerSchedule` already
+are. A hand-authored manifest file would reintroduce precisely the defect this section exists to
+close, in a form that is harder to see because it would look complete.
+
+**That property is not self-enforcing at the module level**, which is why MOTIR-3458 owes a guard
+that builds the two subscriber sets from **different module graphs** and asserts they are equal. A
+guard that derives both from one import cannot fail, and the absence of such a guard is what let
+this defect ship green.
+
+### One enumeration correction MOTIR-3455 should carry
+
+**MOTIR-3455's evidence block states that `git grep -l "@/lib/jobs/registry'"` at `b944dab5`
+returns three files. At that ref it returns nineteen.** Re-measured on the ref the card itself
+names, and again at `18d60791`, where the count is also nineteen — so this is an enumeration that
+was wrong when written, not drift since.
+
+Two of the nineteen are non-test — `app/api/inngest/route.ts` and `scripts/worker.ts` — and those
+two are the load-bearing fact the card's conclusion rests on. **The conclusion is unaffected and
+stands:** no module on any production emit path imports the registry. The other seventeen are all
+under `tests/`, and they make the "why nothing caught it" argument _stronger_ rather than weaker —
+seventeen suites evaluate the definition modules in their own process, so a great deal of the
+job-suite's greenness is measured on a module graph production never has.
+
+Planning bug filed under MOTIR-1465.
+
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
