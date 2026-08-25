@@ -1,5 +1,5 @@
 import { defineJob } from '../defineJob';
-import { inngest } from '../client';
+import { dispatchSystemEvent } from '../sendEvent';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import {
   FLEET_TIME_BUDGETS,
@@ -140,16 +140,19 @@ export const ciRunnerProvisionSweep = defineJob(
 
     await ctx.step.run('dispatch-boots', async () => {
       for (const intentId of intentIds) {
-        // `inngest.send` directly, not `sendEvent`: this is a `system.*` event
-        // and carries no acting workspace of its own. The handler re-reads the
+        // `dispatchSystemEvent`, not `sendEvent`: this is a `system.*` event and
+        // carries no acting workspace of its own. The handler re-reads the
         // intent for everything, so the payload is deliberately just the id —
         // built by the SHARED `ciRunnerBootEvent` so the recovery path and the
         // webhook's hot path cannot emit two different events for one intent.
         //
         // Sent BARE, not through `dispatchCiRunnerBoot`: a failure here belongs
         // to the step, and letting it propagate buys a free Inngest retry. The
-        // webhook has no such retry, which is why only it swallows.
-        await inngest.send(ciRunnerBootEvent(intentId));
+        // webhook has no such retry, which is why only it swallows. That is why
+        // this is the STRICT door and not `sendSystemEvent` — the throw IS the
+        // retry (MOTIR-3456).
+        const bootEvent = ciRunnerBootEvent(intentId);
+        await dispatchSystemEvent(bootEvent.name, bootEvent.data);
       }
       return { dispatched: intentIds.length };
     });

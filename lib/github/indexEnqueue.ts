@@ -1,4 +1,4 @@
-import { inngest } from '@/lib/jobs/client';
+import { sendSystemEvent } from '@/lib/jobs/sendEvent';
 import type { CodeGraphIndexData, CodeGraphRefreshData } from '@/lib/jobs/types';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -31,17 +31,11 @@ export function repoRefOf(repo: { owner: string; name: string }): string {
   return `${repo.owner}/${repo.name}`;
 }
 
-/** Enqueue ONE repo's index job. Swallows + logs a transport failure. */
+/** Enqueue ONE repo's index job. Swallows + logs a transport failure — that
+ *  policy now lives in `sendSystemEvent` rather than being restated here
+ *  (MOTIR-3456), which is also what puts the event through the cutover switch. */
 export async function enqueueCodeGraphIndex(data: CodeGraphIndexData): Promise<void> {
-  try {
-    await inngest.send({ name: 'system.code-graph-index', data });
-  } catch (err) {
-    console.error(
-      `enqueueCodeGraphIndex(${data.installationId} ${data.repoOwner}/${data.repoName}) failed ` +
-        `to enqueue; the repos persisted but the code-graph index was dropped:`,
-      err,
-    );
-  }
+  await sendSystemEvent('system.code-graph-index', data);
 }
 
 /**
@@ -52,15 +46,7 @@ export async function enqueueCodeGraphIndex(data: CodeGraphIndexData): Promise<v
  * re-enqueues, so a dropped refresh self-heals).
  */
 export async function enqueueCodeGraphRefresh(data: CodeGraphRefreshData): Promise<void> {
-  try {
-    await inngest.send({ name: 'system.code-graph-refresh', data });
-  } catch (err) {
-    console.error(
-      `enqueueCodeGraphRefresh(${data.installationId} ${data.repoOwner}/${data.repoName}) failed ` +
-        `to enqueue; the push was acked but the code-graph refresh was dropped:`,
-      err,
-    );
-  }
+  await sendSystemEvent('system.code-graph-refresh', data);
 }
 
 /**
