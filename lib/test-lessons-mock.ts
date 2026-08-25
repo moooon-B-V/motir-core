@@ -64,6 +64,11 @@ export interface LessonFixtureRow {
   recurrenceCount?: number;
   /** Absent ⇒ applied. Otherwise the reason it is not. */
   injectionBlock?: 'disabled' | 'not_recurred';
+  /** A person's standing decision (MOTIR-3330) — written by the retire/apply
+   *  intercepts below, and read back by every later request. */
+  humanOverride?: 'retired' | 'exempt' | null;
+  humanOverrideAt?: string | null;
+  humanOverrideBy?: string | null;
 }
 
 export interface LessonsFixture {
@@ -121,8 +126,26 @@ function toWire(row: LessonFixtureRow, retentionDays: number) {
     recurrenceCount: row.recurrenceCount ?? 1,
     injected: block === null,
     injectionBlock: block,
+    humanOverride: row.humanOverride ?? null,
+    humanOverrideAt: row.humanOverrideAt ?? null,
+    humanOverrideBy: row.humanOverrideBy ?? null,
     retentionDays,
   };
+}
+
+/**
+ * Persist a mutated fixture, so the write is DURABLE across requests.
+ *
+ * ⚠️ This is what makes the E2E's no-flicker assertion mean anything. The
+ * control keeps the response locally AND calls `router.refresh()`; if the mock
+ * answered the write from memory and the next GET re-read an unchanged fixture,
+ * the row would visibly revert — which is the exact bug the spec is watching
+ * for, arriving from the test harness rather than from the product.
+ */
+function writeFixture(fixture: LessonsFixture): void {
+  const p = process.env['MOTIR_AI_LESSONS_FIXTURE_PATH'];
+  if (!p) return;
+  writeFixtureFileSync(p, JSON.stringify(fixture, null, 2));
 }
 
 function pathOnly(p: string): string {
@@ -135,11 +158,41 @@ function limitOf(p: string): number | null {
   return raw === null ? null : Number(raw);
 }
 
-/** Overwrite the fixture — the store, as motir-ai would have changed it. */
-function writeFixture(fixture: LessonsFixture): void {
-  const p = process.env['MOTIR_AI_LESSONS_FIXTURE_PATH'];
-  if (!p) return;
-  writeFixtureFileSync(p, JSON.stringify(fixture));
+/**
+ * The retire / apply WRITE, with motir-ai's own rule for what `apply` means.
+ *
+ * ⚠️ The rule is reproduced here rather than parameterised, because it is the
+ * thing under test at the product level: `apply` CLEARS the retirement on a row
+ * somebody switched off, and EXEMPTS a row the clock aged out — the two
+ * not-applied rows §L6 draws, which need opposite writes. A mock that took the
+ * value from the request would let the browser choose it, and the spec would
+ * then pass over a client that had implemented the state machine it must not.
+ */
+function applyWrite(
+  fixture: LessonsFixture,
+  row: LessonFixtureRow,
+  action: 'retire' | 'apply',
+  actorId: string,
+): void {
+  if (action === 'retire') {
+    row.humanOverride = 'retired';
+    row.humanOverrideAt = '2026-08-23T12:00:00.000Z';
+    row.humanOverrideBy = actorId;
+    row.injectionBlock = 'disabled';
+  } else if (row.injectionBlock === 'not_recurred') {
+    // Aged out: clearing alone would leave it exactly where it was, so the
+    // decision is recorded as an exemption and the row returns to applied.
+    row.humanOverride = 'exempt';
+    row.humanOverrideAt = '2026-08-23T12:00:00.000Z';
+    row.humanOverrideBy = actorId;
+    delete row.injectionBlock;
+  } else {
+    row.humanOverride = null;
+    row.humanOverrideAt = null;
+    row.humanOverrideBy = null;
+    delete row.injectionBlock;
+  }
+  writeFixture(fixture);
 }
 
 /**
@@ -161,7 +214,52 @@ export function installLessonsBoundaryMock(agent: MockAgent): void {
   if (!origin) return;
   const pool = agent.get(origin);
 
-  // GET /v1/lessons/:id — the DETAIL. Registered FIRST: undici matches
+  // POST /v1/lessons/:id/{retire,apply} — the WRITE (Subtask MOTIR-3346's seam;
+  // the endpoints are MOTIR-3344's). Registered before the GETs so the path
+  // predicates below cannot claim them.
+  pool
+    .intercept({
+      path: (p) => /^\/v1\/lessons\/[^/?]+\/(retire|apply)$/.test(pathOnly(p)),
+      method: 'POST',
+    })
+    .reply(
+      (
+        req,
+      ): {
+        statusCode: number;
+        data: object;
+        responseOptions: { headers: Record<string, string> };
+      } => {
+        const fixture = readFixture();
+        const parts = pathOnly(req.path).split('/');
+        const id = decodeURIComponent(parts[3] ?? '');
+        const action = parts[4] === 'retire' ? 'retire' : 'apply';
+        const row = fixture.lessons.find((l) => l.id === id);
+        if (!row) {
+          return {
+            statusCode: 404,
+            data: { code: 'not_found', title: 'not_found', status: 404, detail: 'no such lesson' },
+            responseOptions: problemJson,
+          };
+        }
+        const body = (() => {
+          try {
+            return JSON.parse(String(req.body ?? '{}')) as { actorId?: string };
+          } catch {
+            return {};
+          }
+        })();
+        applyWrite(fixture, row, action, body.actorId ?? 'unknown');
+        return {
+          statusCode: 200,
+          data: toWire(row, fixture.retentionDays ?? 90),
+          responseOptions: json,
+        };
+      },
+    )
+    .persist();
+
+  // GET /v1/lessons/:id — the DETAIL. Registered after the writes: undici matches
   // interceptors in registration order, and the list's path predicate would
   // otherwise swallow every detail request (both start `/v1/lessons`).
   pool

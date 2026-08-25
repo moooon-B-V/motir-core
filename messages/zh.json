@@ -2648,7 +2648,20 @@
         "emptyRecording": "只有当计划确实被纠正时才会记录。可以在「AI 规划」设置中关闭记录。",
         "unavailableTitle": "Motir AI 当前不可用",
         "unavailableBody": "本页其余部分仍可正常使用。服务恢复后经验会重新出现。",
-        "noAccessBody": "只有项目管理员可以查看本项目教给规划器的内容。"
+        "noAccessBody": "只有项目管理员可以查看本项目教给规划器的内容。",
+        "stopApplying": "停止套用",
+        "applyAgain": "重新套用",
+        "stopApplyingLesson": "停止套用這則心得",
+        "stopApplyingNamed": "停止套用{title}",
+        "applyAgainNamed": "重新套用：{title}",
+        "switchedOffBy": "由 {who} 於 {when} 關閉",
+        "keptBy": "由 {who} 於 {when} 保留",
+        "errorNotFound": "這則心得已不存在。請重新整理頁面以查看目前的心得庫。",
+        "errorForbidden": "你沒有權限變更 Motir 在這裡套用的內容。",
+        "errorUnavailable": "無法連線至 Motir AI，因此未做任何變更。請稍後再試。",
+        "errorGeneric": "操作未完成，因此未做任何變更。請稍後再試。",
+        "factSwitchedOffBy": "已關閉",
+        "factKeptBy": "已保留"
       }
     },
     "apiTokens": {

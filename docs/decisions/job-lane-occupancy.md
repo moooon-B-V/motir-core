@@ -5,6 +5,18 @@ index supervisor starves every other job) · **Evidence pinned at:** `motir-core
 `c5086b97` · **Measured with:** `scripts/experiments/inngest-sleep-concurrency.mjs`,
 `inngest-cli` 1.27.0, SDK 4.5.0
 
+**AMENDED 2026-08-23 by §6 (MOTIR-3405)**, which measures the one signal §4 left open and
+**withdraws it**: the "idle tail" is a small-sample artifact, the wake hypothesis is falsified, and
+what is stable is arrival burstiness. §6 is appended rather than folded into §4, and §4 is left
+standing with a pointer, because the wrong reading is the one a later card would otherwise
+re-derive. Measured with `scripts/experiments/inngest-fastlane-lag.mjs`.
+
+**AMENDED AGAIN 2026-08-23 by MOTIR-3406**, which supplied the one input §3 could not read: the
+account's configured capacity is **5 concurrent steps** (Hobby plan, read off the dashboard by a
+person). That turns §6's saturation HYPOTHESIS into arithmetic — four consumers per event against
+five slots — so §3 and §6 are both amended on the record rather than rewritten, and §4's _"the
+reading that would settle it"_ is now taken.
+
 MOTIR-3245 was filed on one sentence in `lib/jobs/definitions/codeGraphRefresh.ts`:
 
 > _"A stepped supervision loop holds its Inngest concurrency slot for the CONTAINER'S WHOLE
@@ -87,7 +99,7 @@ Two consequences, and the second is the one that matters:
 
 ---
 
-## §3 — The pool: scope is decided here, size is dashboard-only
+## §3 — The pool: one unpartitioned ceiling of FIVE concurrent steps
 
 **Scope — decisive, and it is a code fact.** **No job in this repo sets `concurrency` at all.**
 All 24 definitions under `lib/jobs/definitions/` were checked; every occurrence of the word is a
@@ -101,8 +113,18 @@ environment by plan**, shared by all 24 functions and partitioned by nothing.
 That is worth stating plainly in both directions: the parent's picture of _one unpartitioned
 pool_ is **correct**. What is false is that a supervisor sits in it for thirty minutes.
 
-**Size — NOT READABLE with any credential this deployment holds, and here is the proof rather
-than the assertion.** The production signing key (`INNGEST_SIGNING_KEY`, read off machine
+**Size — 5 CONCURRENT STEPS.** Read off the Inngest dashboard's plan page on **2026-08-23** by Yue
+(MOTIR-3406), on the **Hobby** plan, for the `prodect-core` app's production environment. The row
+reads verbatim:
+
+> **Concurrency** — _Maximum number of concurrently executing steps_ — **5 concurrent steps**
+
+It sits in the account-scoped block (its neighbour is _"Maximum number of users on the account"_),
+and the dashboard exposes **no separate environment-level figure** — so account and environment are
+the same ceiling here, which is what §3 above could only assert because nothing configures either.
+
+**Why it had to be read by a person, recorded so nobody re-derives the gap.** No credential this
+deployment holds can reach it. The production signing key (`INNGEST_SIGNING_KEY`, read off machine
 `7817663f103648` of app `motir-core`) authenticates the events API and nothing else:
 
 | probe                                                      | result                                                               |
@@ -111,16 +133,24 @@ than the assertion.** The production signing key (`INNGEST_SIGNING_KEY`, read of
 | `GET /v1/account`, `/v1/envs`, `/v1/apps`, `/v1/functions` | **404** — not part of the REST surface                               |
 | `POST /gql { account { plan … } }`                         | **UNAUTHENTICATED** — the dashboard API takes a different credential |
 
-**The configured capacity is therefore a dashboard reading, and that is a `manual` step for an
-operator, not something to infer from a plan tier.** It is named as still-owed rather than
-guessed: a number written down here from Inngest's public pricing page would be exactly the
-"config file is a claim about the deployment, not a reading of it" mistake this corpus already
-records. **What to run:** open the Inngest dashboard for the `prodect-core` app's production
-environment and read the account concurrency limit off the plan/billing page.
+**It was read, not inferred.** A number copied from Inngest's public pricing page would be a claim
+about the plan rather than a reading of the deployment — the _"a config file is a claim about the
+deployment, not a reading of it"_ mistake this corpus already records. The distinction is the whole
+reason MOTIR-3406 was a card rather than a sentence.
 
-**And note what §2 does to the stakes of that number.** A supervisor's contribution to it is a
-few percent of one slot, so the capacity matters for _total throughput_ and no longer for _this
-defect_.
+### ⚠️ And 5 is small enough to change the answer — see §6
+
+This paragraph previously closed by saying the capacity _"matters for total throughput and no longer
+for this defect."_ **That was wrong, and it was wrong because the number was unknown when it was
+written.** With the value in hand the arithmetic is immediate:
+
+- every `work-item/transitioned` event has **four** consumers (§6, and `lib/jobs/latencyBudget.ts`);
+- the account allows **five** concurrently executing steps, shared by all 24 functions;
+- so **ONE status change occupies 4 of 5 slots, and TWO simultaneous transitions oversubscribe the
+  entire account.**
+
+A cascade — the thing that runs when a parent closes — emits several transitioned events at once by
+construction. So the capacity is not a throughput footnote; it **is** the defect.
 
 ---
 
@@ -139,6 +169,12 @@ exists before MOTIR-3247 rather than during it.
 **What survives, and it is the parent's own last bullet:** _the interactive-latency budget should
 be stated and asserted._ That is a **contract**, not a mechanism — it does not depend on which
 explanation of the lag is right, which is precisely why it outlived the one that was wrong.
+
+**⚠️ SUPERSEDED BY §6 (MOTIR-3405) — the paragraph below was measured and does not survive.** The
+idle tail is a small-sample artifact (the idle arm was n=13, where p95 IS the maximum), the wake
+reading is falsified outright, and the stable signal is arrival burstiness. It is kept here because
+a later card reading §4 alone would re-derive exactly this, and a deleted paragraph teaches nobody
+that it was checked.
 
 **And what is left genuinely open**, named here so the next card starts from it rather than from
 the falsified premise: the production tail is **worse when the system is idle** (p95 29.5 s with
@@ -161,3 +197,112 @@ neither said which it meant. A whole bug's mechanism was built in the gap.
 So when a comment on this substrate makes a claim about a wait, **it names the resource** —
 invocation, concurrency slot, or container — and, where the claim is load-bearing, cites what
 measured it.
+
+---
+
+## §6 — The "idle tail" is NOT a thing. Burstiness is. (MOTIR-3405, 2026-08-23)
+
+§4 left one signal open — _"the production tail is worse when the system is idle (p95 29.5 s with no
+refresh running)"_ — and named it the thing the next card should start from. It was measured.
+**It does not survive its own re-measurement, and neither does the correlation MOTIR-3245 was filed
+on. Both are window artifacts.**
+
+**Method.** `scripts/experiments/inngest-fastlane-lag.mjs`, read-only against the production Inngest
+REST API. For every `work-item/transitioned` event: `lag = min(run_started_at) − received_at`
+(`received_at` is the scheduler's own stamp, never the client-supplied `ts`). Split by whether a
+`system.code-graph-refresh` run was in flight at `received_at`.
+
+| window   | arm                  | n   | median | p95        | max    |
+| -------- | -------------------- | --- | ------ | ---------- | ------ |
+| **24 h** | while a refresh runs | 63  | 0.8 s  | 18.5 s     | 19.8 s |
+| **24 h** | while none runs      | 13  | 0.5 s  | **26.3 s** | 26.3 s |
+| **72 h** | while a refresh runs | 382 | 1.3 s  | **29.4 s** | 93.3 s |
+| **72 h** | while none runs      | 174 | 0.8 s  | 19.8 s     | 47.6 s |
+
+**The two windows give OPPOSITE answers.** At 24 h the idle arm's tail is worse; at 72 h the
+refresh arm's is. The 24 h idle arm is n=13, where p95 IS the maximum — a single observation
+wearing a percentile's clothes. **So the refresh-vs-idle split is not a property of the system; it
+is noise, and every claim built on it — this record's §4 included — was reading a small sample.**
+
+### What IS stable, on both windows
+
+**Slow events arrive in BURSTS. That is the whole signal.** Splitting on the lag instead and reading
+back the quiet period each side actually had:
+
+| window | arm         | n   | median gap before | median fan-out span |
+| ------ | ----------- | --- | ----------------- | ------------------- |
+| 24 h   | slow (>5 s) | 17  | **0.1 s**         | 20.2 s              |
+| 24 h   | fast (≤5 s) | 58  | **52.4 s**        | 1.7 s               |
+| 72 h   | slow (>5 s) | 136 | **14.1 s**        | 12.9 s              |
+| 72 h   | fast (≤5 s) | 419 | **49.9 s**        | 1.7 s               |
+
+**And the wake hypothesis §4 floated is FALSIFIED outright.** A cold-start cost predicts that the
+event after a long quiet period pays it. The three longest quiet periods in the 72 h window:
+
+```
+after 19.9h idle → lag 0.3s
+after 10.7h idle → lag 0.3s
+after 10.4h idle → lag 0.9s
+```
+
+The longest silences produce the _fastest_ runs in the dataset, and slow events follow 3–4× SHORTER
+quiet than fast ones — on both windows. Waking is not the cost.
+
+**The fan-out span is the second half of the finding, and it is the more diagnostic one.** A slow
+event's consumers do not merely start late, they take **12.9–20.2 s to finish** against **1.7 s** for
+a fast event's — and that 1.7 s is identical on both windows. So this is not queue wait in front of
+otherwise-normal work: the arrival burst inflates the execution too, which is what contention among
+simultaneously-dispatched runs looks like and what a pure dispatch delay does not.
+
+### What this establishes — and it is now arithmetic, not a hypothesis (amended 2026-08-23)
+
+**This section originally read _"What this does NOT establish, said plainly"_, and named saturation of
+the account-level pool as a hypothesis "consistent with every number above and not proven by any of
+them". The missing input was the pool's SIZE, which §3 now carries: 5 concurrent steps.** The
+amendment is recorded rather than applied silently, because the hedge was the correct thing to write
+while the number was unknown and would be the wrong thing to leave standing now.
+
+With the capacity known the chain closes in one step:
+
+- **4** consumers per `work-item/transitioned` event · **5** concurrently executing steps for the
+  whole account · so **two simultaneous transitions oversubscribe it**, and a cascade emits several at
+  once by construction.
+
+Every measured signal in this section is what that predicts, and the fit is quantitative rather than
+directional:
+
+| observation                                                           | what a 5-step ceiling predicts                        |
+| --------------------------------------------------------------------- | ----------------------------------------------------- |
+| 4 transitioned events within **0.24 s** → lags 18.2–19.8 s            | ~16 runs against 5 slots — 3.2× oversubscribed        |
+| those events' fan-out span **20.2–23.3 s** vs 1.7 s                   | consumers cannot run concurrently; they serialize     |
+| after 19.9 h / 10.7 h / 10.4 h of silence → **0.3 s / 0.3 s / 0.9 s** | pool empty, no contention                             |
+| refresh-concurrent vs idle → **noise** on both windows                | a supervisor holds ~10% of one slot; a burst holds 16 |
+
+**So the burstiness finding and the capacity are the same fact seen from two ends.** The tail does not
+track idleness and does not track code-graph refreshes; it tracks how many transitions arrive at once,
+because four-per-event against five is saturated by the second one.
+
+**And it retroactively vindicates half of MOTIR-3245's instinct.** That card was right that a single
+unpartitioned pool was the problem — §3 confirms nothing in this repository partitions it. What it had
+wrong was the occupant: not a supervisor holding a slot for thirty minutes, but the fast lane's own
+four-way fan-out holding four slots for a second, several times over.
+
+**⚠️ One thing that has NOT been measured, and must not be read in.** The chain above is arithmetic
+over a capacity and a fan-out count, corroborated by the timing data — it is not a direct observation
+of Inngest rejecting or queueing a run for want of a slot. That would need a scheduler-side signal the
+REST API does not expose. Read it as: _the ceiling is small enough to explain everything observed, and
+nothing observed contradicts it._
+
+### ⚠️ The instrument, because it silently lies (measured here)
+
+**`/v1/events` caps at 51 and returns NO cursor.** `limit=100` returns 51; `metadata` carries only
+`fetched_at`. Proof it is a cap and not a count, on one 24 h window: `inngest/function.finished`
+returns 51 for the whole window **and** 51 for each 12 h half; `work-item/transitioned` returns 51
+for the window but **34 + 39 = 73** across its halves.
+
+**A capped read is RECENCY-BIASED — you get the newest 51 — so a measurement script run during a
+busy period samples the busy period and reports it as the day.** For an idle-vs-busy comparison
+that is not a rounding error; it is a bias pointing straight at the hypothesis under test. The first
+pass of this very measurement made that mistake and recovered 51 of 76 events on the 24 h window.
+**The window IS the pagination:** bisect any slice that returns exactly 51 and union the halves,
+which is what the harness now does.

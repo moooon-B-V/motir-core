@@ -2648,7 +2648,20 @@
         "emptyRecording": "Nothing is recorded until a plan is actually corrected. Recording can be switched off in AI planning settings.",
         "unavailableTitle": "Motir AI is unavailable right now",
         "unavailableBody": "The rest of this page still works. Lessons will reappear when the service is reachable again.",
-        "noAccessBody": "Only a project admin can read what this project taught its planner."
+        "noAccessBody": "Only a project admin can read what this project taught its planner.",
+        "stopApplying": "Stop applying",
+        "applyAgain": "Apply again",
+        "stopApplyingLesson": "Stop applying this lesson",
+        "stopApplyingNamed": "Stop applying {title}",
+        "applyAgainNamed": "Apply again: {title}",
+        "switchedOffBy": "Switched off by {who}, {when}",
+        "keptBy": "Kept by {who}, {when}",
+        "errorNotFound": "That lesson is no longer here. Reload the page to see the current library.",
+        "errorForbidden": "You do not have permission to change what Motir applies here.",
+        "errorUnavailable": "Motir AI could not be reached, so nothing was changed. Try again in a moment.",
+        "errorGeneric": "That did not go through, so nothing was changed. Try again in a moment.",
+        "factSwitchedOffBy": "Switched off",
+        "factKeptBy": "Kept"
       }
     },
     "apiTokens": {
