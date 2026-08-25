@@ -273,10 +273,18 @@ export function toolPermission(toolName: McpToolName): PermissionKey {
  * in Settings → Account → Tokens and carried by `motir auth login --token`.
  */
 export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
+  // ⚠️ CATALOG ORDER, NOT APPEND ORDER — and this is load-bearing, not tidiness.
+  // The device flow returns the minted token's scope string NORMALIZED to
+  // `lib/permissions/catalog.ts`'s `PERMISSIONS` order, and `cliDeviceService`'s
+  // and the token route's specs compare that wire string to this array joined.
+  // The two agree only while this list is DECLARED in catalog order; appending a
+  // key at the end instead breaks both, far from here and with no type error.
+  // (`lesson:view` sits beside `project:browse` in the catalog because placement
+  // there follows the DOMAIN — MOTIR-3361 records why that is deliberate.)
+  //
+  // ⚠️ It cannot be `sortByCatalogOrder(...)`: that is a VALUE import, and this
+  // module's header pins it as a LEAF whose only imports are types. Hand-order it.
   'project:browse',
-  'work_item:edit',
-  'comment:add',
-  'ai:plan',
   // ⚠️ `lesson:view` — WIDENED DELIBERATELY for `search_lessons` (Story
   // MOTIR-3466 · MOTIR-3480), and the argument is made here rather than assumed,
   // because `docs/decisions/token-permissions.md` §3 and MOTIR-3051's AC 4 both
@@ -300,4 +308,7 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   // could open a plan and never fill it, because this grant held one key of the
   // pair).
   'lesson:view',
+  'work_item:edit',
+  'comment:add',
+  'ai:plan',
 ];
