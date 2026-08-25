@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -228,6 +228,51 @@ describe('LISTEN / NOTIFY — the latency path', () => {
       expect(warns.length).toBeGreaterThan(0);
     } finally {
       await listener.stop();
+    }
+  });
+
+  it('prefers the UNPOOLED url — a transaction-mode pooler cannot hold a LISTEN', async () => {
+    // MOTIR-3454. In production `DATABASE_URL` is Neon's POOLED endpoint, where
+    // `LISTEN` binds to a session the pooler immediately recycles — so the
+    // subscription never delivers and the engine silently loses its latency path.
+    //
+    // Asserted BEHAVIOURALLY rather than by spying on `pg`: point the unpooled
+    // name at a port that refuses instantly and leave `DATABASE_URL` working
+    // (`perWorkerDb` has already bound it to this worker's database). A listener
+    // that comes up chose the pooled url, which is exactly the bug.
+    vi.stubEnv('DATABASE_URL_UNPOOLED', 'postgresql://nobody:nobody@127.0.0.1:1/nothing');
+    try {
+      const listener = await listenForQueuedJobs(() => {}, {
+        logger: { info: () => {}, warn: () => {} },
+        reconnectMs: 60_000,
+      });
+      try {
+        expect(listener.connected).toBe(false);
+      } finally {
+        await listener.stop();
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('falls back to DATABASE_URL when no unpooled name is set — local dev and CI', async () => {
+    // The other arm of the same chain, and it is not merely for coverage: with no
+    // pooler in front of it, `DATABASE_URL` IS the direct connection, and CI sets
+    // no `DATABASE_URL_UNPOOLED` at all (`ci.yml`'s test jobs set one variable).
+    // Deleting the unpooled name must therefore leave a WORKING listener, not a
+    // dead one — otherwise the production fix would cost every developer their
+    // local latency path.
+    vi.stubEnv('DATABASE_URL_UNPOOLED', undefined);
+    try {
+      const listener = await listenForQueuedJobs(() => {});
+      try {
+        expect(listener.connected).toBe(true);
+      } finally {
+        await listener.stop();
+      }
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 

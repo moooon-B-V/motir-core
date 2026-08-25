@@ -837,3 +837,123 @@ describe('PlanReviewCanvas — the level survives APPROVE (bug MOTIR-3439)', () 
     expect(within(nav()).queryByText('MOTIR-500 · The new story')).toBeNull();
   });
 });
+
+// ── The LEVEL CAPTION — Part IX §1.4, on the one level that needs it (MOTIR-3453) ─
+//
+// Drilling into a proposed container asks the roadmap for the children of an id
+// no work item has; the read resolves empty and the proposals render alone. That
+// is correct, and it looks like nothing else on this surface — so the caption
+// says why, or an empty-looking canvas reads as a failed load. The behaviour
+// shipped with MOTIR-3260; the sentence explaining it did not.
+describe('PlanReviewCanvas — the caption on an ENTIRELY proposed level (bug MOTIR-3453)', () => {
+  const CAPTION = "Nothing committed here yet — every card on this level is this plan's";
+
+  beforeEach(() => {
+    stubRoadmap();
+  });
+
+  /** A story proposed under the committed bug, with two subtasks under IT. */
+  function planWithProposedContainer(): PlanReviewItemDto[] {
+    return [
+      proposal({
+        planItemId: 'pi_story',
+        nodeId: 'pi_story',
+        kind: 'story',
+        title: 'A proposed story',
+        hasChildren: true,
+      }),
+      proposal({
+        planItemId: 'pi_a',
+        nodeId: 'pi_a',
+        parentNodeId: 'pi_story',
+        title: 'Proposed child one',
+      }),
+      proposal({
+        planItemId: 'pi_b',
+        nodeId: 'pi_b',
+        parentNodeId: 'pi_story',
+        title: 'Proposed child two',
+      }),
+    ];
+  }
+
+  it('CAPTIONS the level when every card on it is the plan’s', async () => {
+    // `arrivalLevel` opens on the proposed story — the level it most fills — so
+    // this is the arrival, not a hand-drilled corner case.
+    mount(planWithProposedContainer());
+    await screen.findByText('Proposed child one');
+
+    expect(screen.getByTestId('level-caption').textContent).toBe(CAPTION);
+  });
+
+  it('says NOTHING on a level that also holds committed cards', async () => {
+    // The default fixture: one proposal beside MOTIR-7 and MOTIR-9. The level is
+    // not "all this plan's", and the sentence would be false.
+    mount();
+    await screen.findByText('A proposed subtask');
+    expect(screen.getByText('MOTIR-7')).toBeTruthy();
+
+    expect(screen.queryByTestId('level-caption')).toBeNull();
+  });
+
+  it('says NOTHING on a purely committed level the reviewer drills to', async () => {
+    mount();
+    await screen.findByText('MOTIR-7');
+    selectNode(STORY_ID);
+    fireEvent.click(within(el(STORY_ID) as HTMLElement).getByTestId('drill-button'));
+    await screen.findByText('MOTIR-3083');
+
+    expect(screen.queryByTestId('level-caption')).toBeNull();
+  });
+
+  it('is NOT the empty state — the caption and "No items at this level" never coexist', async () => {
+    // The two must not be confused. `emptyDrilled` speaks for a level with
+    // NOTHING on it; the caption speaks for a level that HAS cards and needs
+    // them explained. On the level this card is about, exactly one of them is on
+    // screen — and it is the one whose statement is true.
+    mount(planWithProposedContainer());
+    await screen.findByText('Proposed child one');
+
+    expect(screen.getByTestId('level-caption')).toBeTruthy();
+    expect(screen.queryByText('No items at this level')).toBeNull();
+  });
+
+  it('STOPS captioning once the plan is approved — the cards are committed now', async () => {
+    // No second rule does this: the roadmap read returns the materialized cards,
+    // so the level is no longer all-proposed and the sentence stops being true at
+    // the same moment it stops being sayable.
+    const view = mount(planWithProposedContainer());
+    await screen.findByText('Proposed child one');
+    expect(screen.getByTestId('level-caption')).toBeTruthy();
+
+    // Approve: the story became MOTIR-7's committed neighbour STORY_ID, whose
+    // level the stub already serves (one committed child, MOTIR-3083).
+    view.rerender(
+      <PlanReviewCanvas
+        items={[
+          proposal({
+            planItemId: 'pi_story',
+            nodeId: STORY_ID,
+            identifier: 'MOTIR-7',
+            kind: 'story',
+            title: 'A proposed story',
+            hasChildren: true,
+          }),
+          proposal({
+            planItemId: 'pi_a',
+            nodeId: LEAF_ID,
+            identifier: 'MOTIR-3083',
+            parentNodeId: STORY_ID,
+            title: 'Proposed child one',
+          }),
+        ]}
+        projectKey="MOTIR"
+        version={1}
+        outcome="accepted"
+      />,
+    );
+
+    expect(await screen.findByText('MOTIR-3083')).toBeTruthy();
+    expect(screen.queryByTestId('level-caption')).toBeNull();
+  });
+});

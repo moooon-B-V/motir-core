@@ -212,6 +212,20 @@ export interface ProjectRoadmapCanvasProps {
    * a resolver that keeps renaming would not settle.
    */
   resolveHeldNode?: (id: string) => CanvasCrumb | null;
+  /**
+   * A one-line CAPTION for the level in view — `design/ai-planning` Part IX §1.4,
+   * the `lvlcap` slot its mock draws (bug MOTIR-3453).
+   *
+   * The consumer supplies it because only the consumer knows what is worth saying
+   * about a level; the canvas knows it has nodes, not what KIND of nodes they
+   * are. Absent by default, so the foundation's other consumers are unchanged.
+   *
+   * It is NOT an empty state. `emptyDrilled` speaks for a level with nothing on
+   * it; this speaks ABOUT a level that has something on it — the case it was
+   * drawn for is a level made entirely of proposals, which is correct, looks like
+   * nothing else on this surface, and must not be read as a failed load.
+   */
+  levelCaption?: ReactNode;
 }
 
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
@@ -248,6 +262,7 @@ export function ProjectRoadmapCanvas({
   emptyRoot,
   initialTrail,
   resolveHeldNode,
+  levelCaption,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -906,10 +921,18 @@ export function ProjectRoadmapCanvas({
               {/* `n of m` only when the level holds fewer than the whole plan —
                   the canvas is per-level and most of a spread plan is off-screen.
                   It offers no way to reach the rest, deliberately: that is the
-                  list view's job (Part IX §L5). */}
+                  list view's job (Part IX §L5).
+
+                  ⚠️ Through the CATALOGUE, not composed here (bug MOTIR-3453).
+                  This shipped as `{n}/{total}` built in JSX — a string no
+                  catalogue could reach, so `zh` could never differ from `en` and
+                  the parity gate could not see it, because there was no key for
+                  it to find missing. Part IX §5 names the key and its wording:
+                  `{n} of {total}`, which is also what a screen reader should
+                  say. */}
               {emphasisedIds.size < emphasis.total ? (
                 <span className="font-mono text-[11px] font-semibold tabular-nums">
-                  {emphasisedIds.size}/{emphasis.total}
+                  {t('showChangesCount', { n: emphasisedIds.size, total: emphasis.total })}
                 </span>
               ) : null}
             </button>
@@ -990,6 +1013,63 @@ export function ProjectRoadmapCanvas({
           <RotateCcw className="size-3.5" aria-hidden="true" />
           {t('resetLayout')}
         </button>
+      )}
+
+      {/* LEVEL CAPTION (bug MOTIR-3453) — Part IX §1.4's `lvlcap` slot, which the
+          design's mock draws and the canvas never had. Composed as the edge
+          LEGEND below already composes a canvas overlay: the same `--el-surface`
+          chip with the canvas's border and shadow, and the same 10.5px tracked
+          uppercase ramp, so a second overlay language is not invented for one
+          line of text.
+
+          ⚠️ The ink is `--el-text-secondary`, where the mock's `.lvlcap` rule
+          says `var(--accent)`. That is the one deliberate deviation, and it is
+          `CLAUDE.md`'s contrast rule doing its job — *"a design mock is NOT
+          authority here"*. `--el-accent-on-surface` is specified as the accent
+          used as text on a SURFACE, and this caption rides `--el-canvas`, a
+          RECESSED board that every `data-palette` redefines; nothing measures
+          that pairing, and there are eight palettes to be wrong in.
+          `--el-text-secondary` is the token whose own definition carries the
+          guarantee ("AA on EVERY surface"), and it is what the legend beside it
+          already uses over the same canvas. Nothing is lost: the distinction
+          this caption draws lives in its WORDS, which is what Part IX §1.3 asks
+          for one decision earlier — text first, never colour alone.
+
+          Sits UNDER the breadcrumb while drilled and takes its place when not,
+          so it never collides with the overlay above it. Suppressed while the
+          first level is still loading: a caption over a spinner describes a
+          level nobody can see.
+
+          ⚠️ The offset is DERIVED, and it is measured against the whole TOP
+          BAND, not just the breadcrumb. Two overlays live at `top-3`: the
+          breadcrumb on the left (while drilled) and the search / full-screen /
+          Show-changes cluster on the right. Both are `--height-control` tall
+          plus their own padding, and that token is 34–40px across the shipped
+          styles — so the mock's literal 56px clears them under some styles and
+          lands INSIDE them under others, and a caption wide enough to reach the
+          right edge would run under the cluster at any offset. The mock's crumb
+          is smaller than the shipped one; what it specifies is the RELATIONSHIP
+          (the caption sits just below the chrome), and a `calc` off the same
+          token is how that survives a style swap. */}
+      {levelCaption && level !== null && (
+        <div
+          data-testid="level-caption"
+          data-below-chrome={drilled || searchable || fullScreenable || !!emphasis || undefined}
+          className={[
+            'absolute left-3 z-10 max-w-[min(32rem,calc(100%-1.5rem))]',
+            // 12px band top + the overlay's own height (`--height-control` plus
+            // 8px of padding) + an 8px gap. Only a canvas with an EMPTY top band
+            // — no breadcrumb and no cluster — can take the band itself.
+            drilled || searchable || fullScreenable || emphasis
+              ? 'top-[calc(var(--height-control)+1.75rem)]'
+              : 'top-3',
+            'rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)',
+          ].join(' ')}
+        >
+          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
+            {levelCaption}
+          </span>
+        </div>
       )}
 
       {/* edge LEGEND — shown when the level has real blocked-by DEPENDENCY edges,

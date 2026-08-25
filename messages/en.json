@@ -239,6 +239,7 @@
     "listBodyRewritten": "rewritten — open the card to read it",
     "listEmptyTitle": "No proposals",
     "listEmptyBody": "This plan finished without proposing anything. Nothing will change if you approve it.",
+    "allProposedLevel": "Nothing committed here yet — every card on this level is this plan's",
     "proposedCrumb": "New",
     "showChangesPast": "Show what changed",
     "actionError": "Something went wrong. Please try again.",
@@ -5231,6 +5232,7 @@
         "crumb": "Planning"
       },
       "showChanges": "Show changes",
+      "showChangesCount": "{n} of {total}",
       "showChangesNone": "No proposed changes on this level"
     }
   },
