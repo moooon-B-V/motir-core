@@ -306,6 +306,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           why: 'leak?',
           howToApply: 'leak?',
         },
+        // MOTIR-3480 — aimed at tenant A's PROJECT, like its write sibling: a
+        // non-member must read the key as not-found rather than learn what
+        // somebody else's project has recorded about its own mistakes.
+        search_lessons: { projectKey: 'PROD', query: 'leak?' },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that
         // confirms it exists, and never a file landing in another workspace.
@@ -715,6 +719,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           body: 'A card with no repository pinned goes to whichever checkout is first.',
           why: 'It cost a day in the billing epic.',
           howToApply: 'Set the target repository before sealing the card.',
+        },
+        // MOTIR-3480 — the caller's OWN project. A READ-scoped tool, so the
+        // read-only-token loop asserts it EXECUTES rather than being refused at
+        // the scope gate; motir-ai is unconfigured in this suite, which is the
+        // well-formed `unavailable` answer rather than a failure.
+        search_lessons: {
+          projectKey: 'PROD',
+          query: 'pinning a repository on a card that ships code',
         },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that
