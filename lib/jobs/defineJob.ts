@@ -5,6 +5,7 @@ import { resolveRetries, type RetryPolicyName } from './retries';
 import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
 import { registerJobManifest } from './engine/manifest';
+import { parseIdempotencyTemplate } from './engine/idempotency';
 import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
@@ -233,12 +234,18 @@ export function defineJob<N extends JobEventName>(
   // one place it happens.
   const maxAttempts = maxRetries + 1;
 
+  // ⚠️ VALIDATE THE TEMPLATE HERE, as the definition module is evaluated, so a
+  // job the engine cannot dedupe fails loudly at load rather than silently
+  // stopping deduplication at dispatch (MOTIR-3459).
+  if (idempotency !== undefined) parseIdempotencyTemplate(id, idempotency);
+
   registerEngineJob({
     id,
     trigger: engineTrigger,
     cron,
     maxAttempts,
     retryPolicy: options.retryPolicy,
+    idempotency,
     handler,
   });
 
@@ -251,6 +258,7 @@ export function defineJob<N extends JobEventName>(
     cron,
     maxAttempts,
     retryPolicy: options.retryPolicy,
+    idempotency,
   });
 
   // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a

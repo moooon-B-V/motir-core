@@ -4,6 +4,7 @@ import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { manifestSubscribers } from './manifest';
 import { ensureJobManifestLoaded } from './subscribers';
+import { resolveIdempotencyKey } from './idempotency';
 import { routedToEngine } from './cutover';
 import { notifyQueuedJob } from './notify';
 
@@ -45,7 +46,21 @@ import { notifyQueuedJob } from './notify';
 //    ⚠️ IT READS THE MANIFEST RATHER THAN THE REGISTRY because the registry
 //    carries the HANDLER, and the handler is what drags the service graph onto
 //    an emitting request (MOTIR-3458; ADR §11). Nothing here needs it: the two
-//    functions below read `id`, `trigger` and `maxAttempts` and nothing else.
+//    functions below read `id`, `trigger`, `maxAttempts` and `idempotency`, and
+//    nothing else.
+//
+// 4. ⚠️ EVENT-LEVEL DEDUP IS A CONSTRAINT, NOT A LOOKUP (MOTIR-3459). A job
+//    declaring `idempotency` resolves its key here and stores it on the queue
+//    row, where a PARTIAL UNIQUE index on `(job_id, idempotency_key)` collapses
+//    a repeat to one run. Same reasoning as property (2), and the same `P2002`
+//    handling serves both: a check-then-insert is a read-derived write with a
+//    race in the middle, and the race here is two clicks on one button.
+//
+//    ⚠️ ENGINE DEDUP IS UNBOUNDED WHERE INNGEST'S IS WINDOWED — a deliberate,
+//    argued divergence from MOTIR-3413's "no job's observable behaviour changes",
+//    recorded in `docs/jobs.md` rather than left to be discovered. Forever is the
+//    right behaviour for the keys in use: a password-reset token and an invite
+//    token should each produce ONE email, not one per window.
 
 /** What one dispatch did — returned so `sendEvent` can log it and the tests can assert it. */
 export interface DispatchResult {
@@ -125,6 +140,10 @@ export async function dispatchEventToEngine(
             workspaceId,
             runAt: new Date(),
             maxAttempts: sub.maxAttempts,
+            // Property (4): the job's own dedup key, resolved PER SUBSCRIBER
+            // because the template is declared per job. Null for every job that
+            // declares none, which the partial unique index excludes.
+            idempotencyKey: resolveIdempotencyKey(sub.idempotency, data, sub.id),
           },
           tx,
         ),

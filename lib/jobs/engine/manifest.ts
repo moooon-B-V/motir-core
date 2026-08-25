@@ -54,6 +54,10 @@ export interface JobManifestEntry {
   maxAttempts: number;
   /** The named policy, kept for the operator surface and the ledger. */
   retryPolicy: RetryPolicyName | undefined;
+  /** The `idempotency` template the job declared, or `undefined`. The emit path
+   *  needs it: the dedup key is resolved and denormalised onto the queue row at
+   *  ENQUEUE, which is the only moment the event payload is in hand. */
+  idempotency: string | undefined;
 }
 
 const manifest = new Map<string, JobManifestEntry>();

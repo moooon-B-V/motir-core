@@ -35,6 +35,10 @@ export interface EngineJobDefinition {
   maxAttempts: number;
   /** The named policy, kept for the operator surface and the ledger. */
   retryPolicy: RetryPolicyName | undefined;
+  /** The `idempotency` template the job declared, or `undefined`. Evaluated by
+   *  `lib/jobs/engine/idempotency.ts`; see there for why an unknown template
+   *  throws rather than degrading to "not deduped". */
+  idempotency: string | undefined;
   /** The raw handler, invoked by the engine's runner with a synthesized context. */
   handler: JobHandler;
 }

@@ -138,6 +138,7 @@ describe('the job manifest is complete on the emit path', () => {
         cron: d.cron,
         maxAttempts: d.maxAttempts,
         retryPolicy: d.retryPolicy,
+        idempotency: d.idempotency,
       })),
     );
     // …and the manifest carries NO handler, which is the one field that would
