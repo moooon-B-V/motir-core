@@ -1,6 +1,8 @@
 import type { FullConfig } from '@playwright/test';
 import { assertHarnessReady } from './_helpers/readiness';
 import { ensureAppRoleCanLogIn, isAppRoleE2E } from './_helpers/appRoleServer';
+import { jobWorkerEnabled, startJobWorker } from './_helpers/job-worker-process';
+import { clearJobRouting } from './_helpers/job-routing';
 
 /**
  * Playwright globalSetup (MOTIR-1565) — the E2E harness readiness gate.
@@ -60,4 +62,22 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     poll: attempts ? { attempts } : {},
   });
   console.warn('[e2e-readiness] harness fully ready — starting specs.');
+
+  // Story MOTIR-3414 · Subtask MOTIR-3427 — the Postgres job engine's worker.
+  //
+  // Started HERE rather than as a `webServer` entry because it binds no port:
+  // Playwright's webServer plugin polls a url/port for readiness and the worker
+  // is a claim loop, not a server. After the readiness gate, so it connects to a
+  // database the app has already proven reachable.
+  //
+  // Routing is cleared FIRST: a previous run that crashed mid-spec can leave the
+  // override file on disk, which would silently route a job onto the new engine
+  // for every spec in this run — including `jobs-flow.spec.ts`, whose whole
+  // subject is that `email.send` still runs on Inngest.
+  if (jobWorkerEnabled()) {
+    await clearJobRouting();
+    console.warn('[e2e-job-worker] starting the Postgres job engine worker…');
+    await startJobWorker();
+    console.warn('[e2e-job-worker] worker ready.');
+  }
 }
