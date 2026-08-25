@@ -25,3 +25,14 @@ if (!process.env['VITEST_DB_BASE_URL']) {
   process.env['VITEST_DB_BASE_URL'] = process.env['DATABASE_URL'];
 }
 process.env['DATABASE_URL'] = currentWorkerUrl();
+// ⚠️ REBIND THE UNPOOLED NAME TOO, or the isolation holds under one name only.
+// `lib/jobs/engine/notify.ts` prefers `DATABASE_URL_UNPOOLED` for its LISTEN
+// connection (a transaction-mode pooler cannot hold a session — MOTIR-3454), and
+// CI sets no such variable, so today it falls through to the line above and
+// lands on this worker's clone by accident rather than by design. A developer
+// whose `.env` sets it — `.env.example` documents it — would instead get a
+// listener on the BASE database while the NOTIFY went to the clone, and
+// "delivers a notification to a listening worker" would fail with nothing in the
+// diff to explain it. A worker must touch only its own database under EVERY name
+// that can reach one.
+process.env['DATABASE_URL_UNPOOLED'] = currentWorkerUrl();
