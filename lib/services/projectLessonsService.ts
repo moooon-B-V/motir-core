@@ -4,7 +4,9 @@ import {
   getLesson,
   getLessons,
   retireLesson,
+  searchLessons,
   type RawLesson,
+  type RawRankedLesson,
 } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import {
@@ -16,8 +18,10 @@ import { projectAccessService, type AccessActorContext } from '@/lib/services/pr
 import type {
   LessonHumanOverride,
   LessonInjectionBlock,
+  LessonSearchResult,
   ProjectLessonDTO,
   ProjectLessonsPageDTO,
+  RankedLessonDTO,
 } from '@/lib/dto/projectLessons';
 
 // The project LESSON LIBRARY service (Subtask MOTIR-3337 · Story MOTIR-3329) —
@@ -145,6 +149,29 @@ const UNAVAILABLE: ProjectLessonsPageDTO = {
   retentionDays: null,
 };
 
+/**
+ * Map one ranked row to the teaching DTO.
+ *
+ * ⚠️ `scope` is KEPT here, unlike `toLessonDTO` which drops it. That one answers an
+ * inspection surface whose rows are always `tenant`, so echoing the field would
+ * make the surface look like it could show another scope. This read genuinely
+ * returns both, and which one a lesson came from is part of what the caller is
+ * being told.
+ */
+function toRankedLessonDTO(raw: RawRankedLesson): RankedLessonDTO {
+  return {
+    id: raw.id,
+    title: raw.title,
+    body: raw.body,
+    howToApply: raw.howToApply,
+    scope: raw.scope,
+    kinds: raw.kinds ?? [],
+    types: raw.types ?? [],
+    phases: raw.phases ?? [],
+    distance: raw.distance,
+  };
+}
+
 export const projectLessonsService = {
   /**
    * One page of the project's lessons, most-recently-relevant first.
@@ -187,6 +214,79 @@ export const projectLessonsService = {
       // transport failure and its 30s deadline to this one type, which is
       // exactly the outage class the card names.
       if (isSectionQuiet(err)) return UNAVAILABLE;
+      throw err;
+    }
+  },
+
+  /**
+   * SEARCH the lesson corpus by meaning — the TEACHING read (Subtask MOTIR-3478
+   * · Story MOTIR-3466), and the seam the `search_lessons` MCP tool adapts over.
+   *
+   * The caller writes a real question in its own words, optionally narrows by
+   * the three routing axes, and gets back ranked lessons with enough text to act
+   * on. The thin-transport shape the methods above already hold: resolve, assert
+   * the key, call ONE upstream method, map typed errors.
+   *
+   * ⚠️ THE PERMISSION IS ASSERTED BEFORE THE UPSTREAM CALL, and the ORDER is the
+   * guard — the same property every method on this service holds, and asserted
+   * the same way: as the client double's CALL COUNT, never as a status code,
+   * because a read that fetched and then refused would pass a status assertion
+   * while having already spent the round trip and assembled a payload for
+   * someone who may not read it.
+   *
+   * ⚠️ IT IS GATED ON `lesson:view`, THE READ KEY — not `lesson:manage`. The
+   * two were separated in MOTIR-3336 so a role with read access is expressible,
+   * and this is a read: it returns guidance and changes nothing.
+   *
+   * ⚠️ AND IT DOES NOT DEGRADE THE WAY `listLessons` DOES. That read answers an
+   * outage with `{ available: false, lessons: [] }` because a settings page must
+   * not 500 over an unrelated service. Here an outage rendered as an empty
+   * result would tell an agent the corpus has nothing to say about the work in
+   * front of it — the opposite of the truth, and indistinguishable from the
+   * honest empty answer. So the OUTCOME is named: `nothing-matched` and
+   * `unavailable` are different values, and the write path's non-degrading
+   * posture is the closer precedent than the read path's.
+   *
+   * The unavailable arm still catches rather than throws, because a corpus that
+   * cannot be reached is a fact the caller should be TOLD, not an exception it
+   * has to handle. `MotirAiUnauthorizedError` / `MotirAiBadRequestError` stay
+   * LOUD, exactly as on `listLessons`: those mean motir-ai is reachable and
+   * REFUSED us, which is our bug and must not read as an outage.
+   */
+  async searchLessons(
+    projectId: string,
+    ctx: AccessActorContext,
+    input: {
+      query: string;
+      kinds?: string[];
+      types?: string[];
+      phases?: string[];
+      limit?: number;
+    },
+  ): Promise<LessonSearchResult> {
+    await projectAccessService.assertPermission(projectId, ctx, 'lesson:view');
+    try {
+      const raw = await searchLessons({
+        coreWorkspaceId: ctx.workspaceId,
+        coreProjectId: projectId,
+        query: input.query,
+        // ⚠️ SPREAD, so an axis the caller omitted stays ABSENT across this hop.
+        // The upstream SQL depends on the distinction: absent omits the clause,
+        // `[]` renders a filter that matches nothing.
+        ...(input.kinds ? { kinds: input.kinds } : {}),
+        ...(input.types ? { types: input.types } : {}),
+        ...(input.phases ? { phases: input.phases } : {}),
+        ...(input.limit !== undefined ? { limit: input.limit } : {}),
+      });
+      // ⚠️ NO `isTenantRow` FILTER HERE, deliberately. It guards the inspection
+      // reads because a global row arriving there is a boundary defect; on this
+      // read the global corpus is the larger half of the correct answer, and
+      // filtering it out would leave a caller reading its own project's lessons
+      // over MCP and the shared corpus by grep.
+      if (raw.length === 0) return { outcome: 'nothing-matched', lessons: [] };
+      return { outcome: 'matched', lessons: raw.map(toRankedLessonDTO) };
+    } catch (err) {
+      if (isSectionQuiet(err)) return { outcome: 'unavailable', lessons: [] };
       throw err;
     }
   },
