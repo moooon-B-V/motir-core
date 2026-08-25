@@ -189,7 +189,10 @@ describe('system.attachment-gc wiring', () => {
   it('wires the cron expression into the Inngest function config', () => {
     const spy = vi.spyOn(inngest, 'createFunction');
     try {
-      defineJob({ id: 'system.attachment-gc', cron: ATTACHMENT_GC_CRON }, () => undefined);
+      defineJob(
+        { id: 'system.attachment-gc', cron: ATTACHMENT_GC_CRON, catchUp: 'latest' },
+        () => undefined,
+      );
       const config = spy.mock.calls.at(-1)?.[0] as
         | { triggers?: Array<{ cron?: string }> }
         | undefined;

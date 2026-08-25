@@ -43,6 +43,7 @@ export const abandonedPlanSweep = defineJob(
   {
     id: 'system.abandoned-plan-sweep',
     cron: ABANDONED_PLAN_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {

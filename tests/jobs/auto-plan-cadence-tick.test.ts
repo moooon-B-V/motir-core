@@ -59,6 +59,7 @@ describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', ()
         {
           id: 'system.auto-plan-cadence-tick',
           cron: AUTO_PLAN_CADENCE_TICK_CRON,
+          catchUp: 'latest',
           retryPolicy: 'idempotent',
         },
         () => undefined,
@@ -88,6 +89,7 @@ describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', ()
         {
           id: 'system.auto-plan-cadence-tick',
           cron: AUTO_PLAN_CADENCE_TICK_CRON,
+          catchUp: 'latest',
           retryPolicy: 'idempotent',
         },
         () => undefined,

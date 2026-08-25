@@ -63,6 +63,7 @@ export const migrateOnboardingSweep = defineJob(
   {
     id: 'system.migrate-onboarding-sweep',
     cron: MIGRATE_ONBOARDING_SWEEP_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {

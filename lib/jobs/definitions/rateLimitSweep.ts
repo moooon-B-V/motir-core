@@ -26,7 +26,12 @@ import { defineJob } from '../defineJob';
 export const RATE_LIMIT_SWEEP_CRON = '10 4 * * *';
 
 export const rateLimitSweep = defineJob(
-  { id: 'system.rate-limit-sweep', cron: RATE_LIMIT_SWEEP_CRON, retryPolicy: 'idempotent' },
+  {
+    id: 'system.rate-limit-sweep',
+    cron: RATE_LIMIT_SWEEP_CRON,
+    catchUp: 'latest',
+    retryPolicy: 'idempotent',
+  },
   async (ctx, services) => {
     return ctx.step.run('sweep-expired-counters', () => services.rateLimit.sweepExpired());
   },

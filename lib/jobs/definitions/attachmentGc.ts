@@ -31,7 +31,12 @@ import { defineJob } from '../defineJob';
 export const ATTACHMENT_GC_CRON = '30 3 * * *';
 
 export const attachmentGc = defineJob(
-  { id: 'system.attachment-gc', cron: ATTACHMENT_GC_CRON, retryPolicy: 'idempotent' },
+  {
+    id: 'system.attachment-gc',
+    cron: ATTACHMENT_GC_CRON,
+    catchUp: 'latest',
+    retryPolicy: 'idempotent',
+  },
   async (ctx, services) => {
     return ctx.step.run('sweep-orphans', () => services.attachments.sweepOrphanAttachments());
   },
