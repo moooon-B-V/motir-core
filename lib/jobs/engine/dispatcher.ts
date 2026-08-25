@@ -2,7 +2,8 @@ import type { Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
-import { engineSubscribers } from './registry';
+import { manifestSubscribers } from './manifest';
+import { ensureJobManifestLoaded } from './subscribers';
 import { routedToEngine } from './cutover';
 import { notifyQueuedJob } from './notify';
 
@@ -34,12 +35,17 @@ import { notifyQueuedJob } from './notify';
 //    an EXPECTED outcome here and is swallowed as "already enqueued", which is
 //    the correct reading of it.
 //
-// 3. ⚠️ THE SUBSCRIBER SET IS DERIVED FROM THE REGISTRY, never a second list.
-//    `engineSubscribers(name)` filters the table `defineJob` populates at the
-//    single choke point every job passes through. Two lists drift; one list
-//    cannot. The test asserts the count against the REAL registry, so adding a
-//    subscriber to a job cannot silently change the fan-out without a test
-//    noticing.
+// 3. ⚠️ THE SUBSCRIBER SET IS DERIVED FROM THE MANIFEST, never a second list.
+//    `manifestSubscribers(name)` filters the handler-free table `defineJob`
+//    populates at the single choke point every job passes through, on the same
+//    line as the engine registry. Two lists drift; one list cannot. The test
+//    asserts the count against the REAL manifest, so adding a subscriber to a
+//    job cannot silently change the fan-out without a test noticing.
+//
+//    ⚠️ IT READS THE MANIFEST RATHER THAN THE REGISTRY because the registry
+//    carries the HANDLER, and the handler is what drags the service graph onto
+//    an emitting request (MOTIR-3458; ADR §11). Nothing here needs it: the two
+//    functions below read `id`, `trigger` and `maxAttempts` and nothing else.
 
 /** What one dispatch did — returned so `sendEvent` can log it and the tests can assert it. */
 export interface DispatchResult {
@@ -75,7 +81,13 @@ export async function dispatchEventToEngine(
   opts?: { idempotencyKey?: string | null; logger?: Pick<Console, 'warn'> },
 ): Promise<DispatchResult> {
   const log = opts?.logger ?? console;
-  const subscribers = engineSubscribers(name).filter((d) => routedToEngine(d.id));
+  // ⚠️ FIRST, ALWAYS. The manifest is populated by evaluating the definition
+  // modules, and nothing on a request path does that on its own — without this
+  // the subscriber set reads empty and the cutover switch cannot move anything
+  // (MOTIR-3458; ADR §11). It is memoised, so this is one dynamic import per
+  // process and a resolved promise thereafter.
+  await ensureJobManifestLoaded();
+  const subscribers = manifestSubscribers(name).filter((d) => routedToEngine(d.id));
   if (subscribers.length === 0) {
     return { eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] };
   }
@@ -154,13 +166,23 @@ export async function dispatchEventToEngine(
  * retirement story removes the transport.
  */
 export function hasInngestSubscribers(name: string): boolean {
-  const subs = engineSubscribers(name);
-  // ⚠️ AN EVENT WITH NO REGISTERED SUBSCRIBER STILL GOES TO INNGEST. The engine
-  // registry is complete only for definition modules that have been EVALUATED
-  // (see `registry.ts`), and `sendEvent` is called from request paths that may
-  // not have imported them. Reading an empty subscriber set as "nothing is on
-  // Inngest" would silently drop the event on exactly those paths. Defaulting to
-  // the old lane is the safe direction, and it matches the switch's own default.
+  const subs = manifestSubscribers(name);
+  // ⚠️ AN EVENT WITH NO REGISTERED SUBSCRIBER STILL GOES TO INNGEST — the safe
+  // default, kept deliberately.
+  //
+  // It USED TO BE LOAD-BEARING FOR THE WRONG REASON, and the correction is worth
+  // stating rather than deleting. This comment previously read: "the registry is
+  // complete only for definition modules that have been EVALUATED, and
+  // `sendEvent` is called from request paths that may not have imported them."
+  // That was true, and it meant this arm was silently taken on EVERY production
+  // emit — the manifest was empty, so every event read as "still on Inngest"
+  // while the engine enqueued nothing. The safe default was doing the whole job,
+  // and it hid the fact that nothing else was (MOTIR-3458; ADR §11).
+  //
+  // `sendEvent` now loads `./subscribers` explicitly, so an empty set here means
+  // what it says: no job subscribes to this event. The default stays because that
+  // case is still real — an event may legitimately ship before its consumer — and
+  // routing it to the lane that has always carried it remains the safe direction.
   if (subs.length === 0) return true;
   return subs.some((d) => !routedToEngine(d.id));
 }

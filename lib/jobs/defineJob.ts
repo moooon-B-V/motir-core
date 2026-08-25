@@ -4,6 +4,7 @@ import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
 import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
+import { registerJobManifest } from './engine/manifest';
 import { routedToEngine } from './engine/cutover';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
@@ -225,17 +226,31 @@ export function defineJob<N extends JobEventName>(
   // ⚠️ PURELY ADDITIVE. It builds no Inngest object, changes no config, and runs
   // for every job whether or not the cutover switch (MOTIR-3423) routes that job
   // to the new engine. Until it does, this table is written and never read.
+  const engineTrigger = cron !== undefined ? undefined : triggerEvent;
+  // `maxRetries` is Inngest's count of ADDITIONAL attempts; the engine counts
+  // TOTAL attempts, which is what `job_queue.max_attempts` stores and what
+  // `lib/jobs/retries.ts` states its policies in. +1 is that translation, in the
+  // one place it happens.
+  const maxAttempts = maxRetries + 1;
+
   registerEngineJob({
     id,
-    trigger: cron !== undefined ? undefined : triggerEvent,
+    trigger: engineTrigger,
     cron,
-    // `maxRetries` is Inngest's count of ADDITIONAL attempts; the engine counts
-    // TOTAL attempts, which is what `job_queue.max_attempts` stores and what
-    // `lib/jobs/retries.ts` states its policies in. +1 is that translation, in
-    // the one place it happens.
-    maxAttempts: maxRetries + 1,
+    maxAttempts,
     retryPolicy: options.retryPolicy,
     handler,
+  });
+
+  // …and the HANDLER-FREE view of the same registration, for the emit path
+  // (MOTIR-3458, ADR §11). Registered HERE, beside its sibling, so the two
+  // cannot drift: a job cannot be defined without appearing in both.
+  registerJobManifest({
+    id,
+    trigger: engineTrigger,
+    cron,
+    maxAttempts,
+    retryPolicy: options.retryPolicy,
   });
 
   // Terminal-failure handler (1.6.6). Inngest invokes `onFailure` ONCE, after a

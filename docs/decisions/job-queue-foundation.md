@@ -357,11 +357,16 @@ code. It would fix `schedules.ts` only by giving it a second staleness surface.
 MOTIR-3455 required option (a) to be **measured rather than argued**. It was, by building the app
 with the side-effect import present and absent, from the same clean `.next`, on the same machine:
 
-|                | baseline (`18d60791`)   | with `import '@/lib/jobs/registry'` in `sendEvent.ts` |
-| -------------- | ----------------------- | ----------------------------------------------------- |
-| `next build`   | **succeeds** (`EXIT=0`) | **FAILS** (`EXIT=1`)                                  |
-| compile        | 22.0 s                  | 30.0 s                                                |
-| `.next/server` | 198 485 126 B           | 377 079 602 B (**+178.6 MB, +90.0 %**)                |
+|                | baseline (`18d60791`)   | (a) STATIC `import '@/lib/jobs/registry'` in `sendEvent.ts` | (b) AS BUILT — dynamic load on the emit path |
+| -------------- | ----------------------- | ----------------------------------------------------------- | -------------------------------------------- |
+| `next build`   | **succeeds** (`EXIT=0`) | **FAILS** (`EXIT=1`)                                        | **succeeds** (`EXIT=0`)                      |
+| compile        | 22.0 s                  | 30.0 s                                                      | 28.9 s                                       |
+| `.next/server` | 198 485 126 B           | 377 079 602 B (**+178.6 MB, +90.0 %**)                      | 299 731 544 B (**+101.2 MB, +51.0 %**)       |
+
+The third column was measured after MOTIR-3458 landed and is recorded here rather than left in a
+pull-request body, because a record whose only measurement is of the REJECTED option tells a later
+reader nothing about what the accepted one cost. **(b) is not free** — it is half of (a)'s growth,
+in a split chunk rather than inlined into every emitting route, and it builds.
 
 The failure is not incidental and not a flake:
 
@@ -432,6 +437,35 @@ close, in a form that is harder to see because it would look complete.
 that builds the two subscriber sets from **different module graphs** and asserts they are equal. A
 guard that derives both from one import cannot fail, and the absence of such a guard is what let
 this defect ship green.
+
+### ⚠️ How the manifest is LOADED — corrected against what MOTIR-3458 found
+
+**This section originally said the manifest would be "imported eagerly from `sendEvent`". It is
+not, and the correction is recorded rather than quietly applied**, because the eager form is the one
+a reader re-derives from the paragraphs above and it does not survive contact with the code.
+
+A manifest is complete only in a process that has EVALUATED the definition modules, so something has
+to evaluate them on the emit path. Two ways to make that affordable were tried, and only the second
+works:
+
+1. **Defer `defineJob`'s OWN service import** — `await import('./services')` inside the handler, so
+   the definitions become cheap to evaluate and a static import of the registry becomes viable. It
+   does break the cycle. **It also breaks `@inngest/test`:** four `system.daily-health-check` tests
+   in `tests/jobs/schedule-health.test.ts` go red with the job returning `undefined`, because the
+   harness cannot tolerate a dynamic import inside a job handler. It fails identically with the
+   import at the top of the handler and with it placed after the first `step.run`. **Rejected on
+   that evidence**, and `defineJob`'s handler is left byte-for-byte as it was.
+2. **Defer the LOAD ITSELF, on the emit path** — `lib/jobs/engine/subscribers.ts` holds a memoised
+   `ensureJobManifestLoaded()` whose `import('@/lib/jobs/registry')` is dynamic, and
+   `dispatchEventToEngine` awaits it before resolving subscribers. **This is what shipped.** A
+   dynamic import is not a module-evaluation edge, so nothing sits in a temporal dead zone and the
+   bundler splits the definitions into their own chunk instead of inlining them into every route
+   that emits. No job handler is involved at all.
+
+**One ordering consequence, and it is load-bearing.** `hasInngestSubscribers` is synchronous and
+cannot await the loader, so it is correct only because `sendEvent` dispatches to the engine FIRST
+and asks about Inngest second. That ordering is asserted by the reachability guard rather than left
+as a comment.
 
 ### One enumeration correction MOTIR-3455 should carry
 
