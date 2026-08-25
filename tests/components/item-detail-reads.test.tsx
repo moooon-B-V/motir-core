@@ -436,3 +436,72 @@ describe('error containment survives the move behind a boundary (MOTIR-3436)', (
     await expect(callPage()).resolves.toBeTruthy();
   });
 });
+
+describe('permission shaping travels WITH the section (MOTIR-3437)', () => {
+  // The capability reads decide what a section OFFERS, not merely what it
+  // shows. They moved into `lateReads` with their sections, so what is asserted
+  // is that the actor's caps reach the section UNMODIFIED — a page that
+  // narrowed or defaulted them on the way is how a read-only viewer gets
+  // offered a composer that will 403.
+  const callLower = async (caps: {
+    canComment: boolean;
+    canModerate: boolean;
+    canCreate: boolean;
+    canDeleteAll: boolean;
+  }) => {
+    const { LateLowerSections } =
+      await import('@/app/(authed)/items/[key]/_components/LateSections');
+    const reads = Promise.resolve({
+      pullRequests: [],
+      commentCaps: { canComment: caps.canComment, canModerate: caps.canModerate },
+      attachmentCaps: { canCreate: caps.canCreate, canDeleteAll: caps.canDeleteAll },
+      initialComments: null,
+      initialHistory: null,
+      initialAll: null,
+      initialAttachments: null,
+      acceptanceEligibility: null,
+      acceptanceEvidence: null,
+      canDecideAcceptance: false,
+      designEvidence: null,
+      isDesignCard: false,
+    });
+    return (await LateLowerSections({
+      reads: reads as never,
+      itemId: 'i1',
+      currentUserId: 'u1',
+      currentUserName: 'Yue',
+      workflowStatuses: [] as never,
+      mentionCandidates: [],
+      activityTab: 'comments',
+    })) as { props: { children: { props: Record<string, unknown> }[] } };
+  };
+
+  it('a VIEWER gets read-only Comments and Attachments', async () => {
+    const el = await callLower({
+      canComment: false,
+      canModerate: false,
+      canCreate: false,
+      canDeleteAll: false,
+    });
+    const [attachments, activity] = el.props.children;
+    expect(attachments).toBeDefined();
+    expect(activity).toBeDefined();
+    expect(attachments!.props.canCreate).toBe(false);
+    expect(attachments!.props.canDeleteAll).toBe(false);
+    expect((activity!.props.comments as { canComment: boolean }).canComment).toBe(false);
+  });
+
+  it('an EDITOR gets the composer and the upload control', async () => {
+    const el = await callLower({
+      canComment: true,
+      canModerate: false,
+      canCreate: true,
+      canDeleteAll: false,
+    });
+    const [attachments, activity] = el.props.children;
+    expect(attachments).toBeDefined();
+    expect(activity).toBeDefined();
+    expect(attachments!.props.canCreate).toBe(true);
+    expect((activity!.props.comments as { canComment: boolean }).canComment).toBe(true);
+  });
+});
