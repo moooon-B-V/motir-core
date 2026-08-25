@@ -179,6 +179,22 @@ export default defineConfig({
         'lib/repositories/jobQueueRepository.ts',
         'lib/repositories/jobStepRepository.ts',
         'lib/repositories/jobEventRepository.ts',
+        // Story MOTIR-3416 · Subtask MOTIR-3472 — the SCHEDULED cutover's own new
+        // surface. `lib/jobs/engine/scheduler.ts` needs no entry: the glob above
+        // is a glob precisely so a new engine file joins the gate without anyone
+        // remembering, and the story gate measured it at 100/100/100.
+        //
+        // `catchUp.ts` is GATED (it measured 100 and is a const vocabulary, so
+        // there is nothing for churn to erode). `defineJob.ts` is REPORT-ONLY —
+        // added to `include`, deliberately NOT to `thresholds` — by the same rule
+        // the two blocks below state: it measures 90.9 statements / 80 branches
+        // over `tests/jobs/`, and the branches BELOW 90 are pre-existing arms of
+        // the Inngest wrapper this story did not touch (this story's own change
+        // RAISED it from 78). Pinning it at 90 now would mean covering someone
+        // else's surface to land a scheduler; publishing the number is the honest
+        // step, and the pin belongs to whoever owns that gap.
+        'lib/jobs/catchUp.ts',
+        'lib/jobs/defineJob.ts',
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
         // Story MOTIR-2765 · Subtask MOTIR-2771 — the acceptance-receipt freeze.
@@ -1421,6 +1437,9 @@ export default defineConfig({
         // hand-maintained list is one a new file forgets to join — which is the
         // same failure this gate's own guard exists to catch, one level up.
         'lib/jobs/engine/**': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-3472 — measured at 100/100/100 before pinning; see the `include`
+        // note for why its sibling `defineJob.ts` is report-only instead.
+        'lib/jobs/catchUp.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/jobQueueRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/jobStepRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/jobEventRepository.ts': { branches: 90, functions: 90, lines: 90 },
