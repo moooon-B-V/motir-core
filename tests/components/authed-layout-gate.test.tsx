@@ -137,8 +137,8 @@ describe('the authed layout gate (MOTIR-3433)', () => {
     await expect(AuthedLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
 
     expect(redirected).toHaveBeenCalledWith('/sign-in');
-    // The whole point: nothing tenant-scoped was even STARTED. This is what
-    // keeps `app/(authed)/loading.tsx` inside the gate.
+    // The whole point: nothing tenant-scoped was even STARTED for a request
+    // with no session.
     expect(started).toEqual([]);
   });
 

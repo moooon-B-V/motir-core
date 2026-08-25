@@ -39,63 +39,6 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   The NAVIGATION-PENDING reveal (MOTIR-3433)
-   ═══════════════════════════════════════════════════════════════════════
-   The one declaration every loading boundary references — the group's
-   `app/(authed)/loading.tsx`, and any nearer route-shaped one. Pinned by
-   `design/shell/design-notes.md` § *The navigation-pending grammar*, which
-   argues the number; the short version is the two states a reader can be in.
-
-   MOUNTED at 0, REVEALED at 120ms. Mounted immediately because once the
-   address bar has changed the previous surface is lying. Revealed late
-   because a boundary that paints on the click makes a FAST route worse: the
-   destination would replace the previous page with a grey frame for 80ms and
-   then with content, which reads as a flicker rather than as speed.
-
-   · Under 120ms — the frame is never visible, the reader gets ONE paint, and
-     there is nothing to notice. 0.1s is the classical ceiling for a response
-     that reads as instantaneous; 120ms is that plus one 60Hz frame of slack,
-     so a route landing one frame late is still treated as instant.
-   · Over 120ms — the navigation has ALREADY failed to feel instantaneous, so
-     the frame is not an interruption but the only evidence the click landed.
-     A saccade to the content region lands around 150-200ms after the click,
-     so a reveal begun at 120ms is in place before the reader looks at it.
-
-   It is an ANIMATION and not a timer, which is load-bearing: no `useEffect`,
-   no `setTimeout`, no client state, and nothing to clean up when a navigation
-   is abandoned. A route that resolves in 40ms unmounts the frame 80ms before
-   it would have become visible, and no code had to decide that.
-
-   ⚠️ The element carries NO base `opacity`, so the rule fails OPEN: if the
-   animation never applies the frame is simply visible, never stuck at 0. */
-@keyframes nav-pending-reveal {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.nav-pending-reveal {
-  animation: nav-pending-reveal 90ms ease-out 120ms both;
-}
-/* Under reduced motion the DELAY STAYS and the MOTION goes — the reveal
-   becomes a step at the same 120ms and the pulse stops, leaving static
-   blocks. This is deliberately NOT the `no-preference` gate the shimmer and
-   the orb aura above use: those are decoration a motion-sensitive reader can
-   simply not have, whereas the delay is not an animation preference at all.
-   It is what stops a fast route showing a state it does not need, and a
-   reader who asked for less motion asked for FEWER flashes, not more. */
-@media (prefers-reduced-motion: reduce) {
-  .nav-pending-reveal {
-    animation: nav-pending-reveal 1ms step-end 120ms both;
-  }
-  .nav-pending-frame .animate-pulse {
-    animation: none;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
    "Plan with AI" launcher — the hero pill's shimmer sweep (MOTIR-1299)
    ═══════════════════════════════════════════════════════════════════════
    A periodic light band sweeping across the gradient pill (the sweep colour is

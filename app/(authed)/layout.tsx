@@ -62,11 +62,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   // ⚠️ THE GATE ABOVE STAYS FIRST AND STAYS SEQUENTIAL (MOTIR-3433). Everything
   // below runs only for a request that already has a session; `getSession()` is
-  // awaited and the redirect thrown before any of it is started, which is also
-  // what keeps `app/(authed)/loading.tsx` inside the gate — a `loading.tsx` is
-  // a fallback for the CHILDREN, so an unauthenticated visitor is bounced and
-  // never sees a frame. `tests/components/authed-layout-gate.test.ts` asserts
-  // the ordering rather than leaving it to inspection.
+  // awaited and the redirect thrown before any of it is started, so nothing
+  // tenant-scoped is even STARTED for an unauthenticated visitor.
+  // `tests/components/authed-layout-gate.test.ts` asserts the ordering rather
+  // than leaving it to inspection.
+  //
+  // (This clause used to add "which is what keeps `app/(authed)/loading.tsx`
+  // inside the gate". There is no group `loading.tsx` any more — MOTIR-3439
+  // removed it, because a boundary here flushes a 200 response head before the
+  // page runs and destroys the `notFound()` 404 on every route beneath it. The
+  // ordering rule stands on its own.)
   //
   // These four are INDEPENDENT of each other and were four sequential round
   // trips — which is what a TYPED URL pays before any HTML body exists at all,

@@ -22,11 +22,11 @@ import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-s
 // TWO ASSERTIONS CARRY THE CARD, and both are shaped to fail on the OLD
 // behaviour rather than pass slowly against it:
 //
-//   · THE ORDERED ARRIVAL. The pending frame is asserted visible BEFORE the
-//     item's title. An unordered "eventually the title is there" is green today,
-//     against the very behaviour this story exists to remove — the page that
-//     shows the previous surface for twenty-nine sequential reads would satisfy
-//     it perfectly, just late.
+//   · THE ORDERED ARRIVAL. The item's title is asserted visible WHILE a late
+//     section is still reading. An unordered "eventually the title is there" is
+//     green today, against the very behaviour this story exists to remove — the
+//     page that shows the previous surface for twenty-nine SEQUENTIAL reads
+//     would satisfy it perfectly, just late. Ordering is the whole claim.
 //   · THE ZERO-REQUEST SWITCH. A view switch looks identical either way; the
 //     whole difference is a network request that either happens or does not. So
 //     the switch is driven with a request listener armed, and the assertion is
@@ -63,8 +63,19 @@ test.describe.configure({ timeout: 300_000 });
 const ITEM_EMAIL = 'navigation-instant-item@example.com';
 const PLAN_EMAIL = 'navigation-instant-plan@example.com';
 
-/** The pending frame — `PageSkeleton`'s testid, the one node both boundaries render. */
-const frame = (page: Page) => page.getByTestId('page-skeleton');
+/**
+ * A late section still resolving — `SectionCardSkeleton`'s `aria-busy`, the one
+ * node the item page's `<Suspense>` fallbacks render while the late stack reads.
+ *
+ * This replaced a `page-skeleton` testid that stood for a route-level pending
+ * FRAME. That frame is gone and deliberately so: a `loading.tsx` fallback
+ * flushes the response head before the page function runs, which fixes the
+ * status at 200 and destroys the `notFound()` 404 on every route beneath it —
+ * including this page's own cross-workspace no-existence-leak contract. The
+ * story keeps the half that is safe (an in-page `<Suspense>`, which renders
+ * after the gate) and drops the half that is not.
+ */
+const pendingSection = (page: Page) => page.locator('[aria-busy="true"]').first();
 
 /**
  * Count DOCUMENT and RSC requests while `run` executes.
@@ -106,20 +117,20 @@ test('a work item opens on the click, streams its sections in, and a client-only
   await chapter('Typing a work-item URL opens the page immediately', async () => {
     // The reported symptom, driven exactly as reported: a URL typed into the
     // address bar, not a click inside the app.
-    const navigation = page.goto(`/items/${seed.storyKey}`);
+    await page.goto(`/items/${seed.storyKey}`);
 
-    // ORDERED, and this is the assertion the whole card turns on. The frame must
-    // be on screen while the page is still resolving. Before this story the
-    // browser sat on the PREVIOUS surface until the last of twenty-nine reads
-    // settled, so this locator would never have appeared at all.
-    await expect(frame(page)).toBeVisible();
+    // ORDERED, and this is the assertion the card turns on. The item's own
+    // title is on screen while the LATE STACK is still reading — so the page
+    // no longer waits for its slowest section to render its first. Before this
+    // story the browser sat on the PREVIOUS surface until the last of
+    // twenty-nine SEQUENTIAL reads settled; the title could not appear first
+    // because nothing appeared until everything had.
+    await expect(page.getByRole('heading', { name: seed.storyTitle })).toBeVisible();
+    await expect(pendingSection(page)).toBeVisible();
     await beat();
 
-    await navigation;
-
-    // …and only THEN the item itself. The frame is gone, the title is there.
-    await expect(page.getByRole('heading', { name: seed.storyTitle })).toBeVisible();
-    await expect(frame(page)).toBeHidden();
+    // …and only THEN the late sections settle behind it.
+    await expect(pendingSection(page)).toBeHidden();
     await beat();
   });
 
@@ -183,12 +194,23 @@ test('a work item opens on the click, streams its sections in, and a client-only
     await beat();
   });
 
-  // ── 4 — leaving and returning through the rail shows the frame ────────────
-  await chapter('Every authed surface opens on the click, not just this one', async () => {
-    // The group boundary, not the route-shaped one: a different route entirely.
+  // ── 4 — leaving and returning through the rail ────────────────────────────
+  await chapter('Leaving and returning through the rail', async () => {
+    // ⚠️ THIS CHAPTER USED TO ASSERT A PENDING FRAME on a second route, drawn
+    // by an `app/(authed)/loading.tsx` covering all 58 authed pages. That
+    // boundary was removed before this receipt was ever recorded, because it
+    // cost more than it bought: a `loading.tsx` fallback can render as soon as
+    // its ancestor layouts resolve — before the page function runs — so the
+    // response head is flushed and the status is fixed at 200. Every route
+    // beneath it that calls `notFound()` then renders its not-found BODY under
+    // a 200, and eleven of those fifty-eight do, including three isolation
+    // contracts. Hoisting the gate into a `layout.tsx` was built and measured
+    // and does NOT recover the status.
+    //
+    // So the chapter keeps the navigation and drops the frame claim. What the
+    // story delivers on this route is unchanged and is asserted below: the
+    // switch chapters pay no server round trip at all.
     await page.getByRole('link', { name: 'Backlog' }).click();
-    await expect(frame(page)).toBeVisible();
-    await beat();
     await expect(page.getByRole('heading', { name: 'Backlog' })).toBeVisible();
     await beat();
   });

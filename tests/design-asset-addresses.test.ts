@@ -852,6 +852,16 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   },
   // ── Forward-looking: the asset proposes the file ──────────────────────────
   {
+    file: 'design/shell/design-notes.md',
+    path: 'app/(authed)/loading.tsx',
+    why: 'NOT BUILT, and deliberately. The navigation-pending grammar (MOTIR-3431) designs a group-level pending frame; MOTIR-3439 established by A/B that a `loading.tsx` there flushes a 200 response head before the page runs, destroying the `notFound()` 404 on all 11 authed routes that decide existence — including a no-existence-leak contract. Hoisting the gate into a layout was built and measured and does not recover it. The asset stands as the design of record for a frame that must be re-shaped as an in-page <Suspense> below each gate; see CLAUDE.md § *A `loading.tsx` may NOT sit above a route that decides existence*.',
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    path: 'app/(authed)/loading.tsx',
+    why: 'The same reference in the mock beside those notes — Panel D names the file the group frame was to live in. Same reason it does not exist: a boundary at the group root cannot coexist with the 404 contracts beneath it.',
+  },
+  {
     file: 'design/ai-usage/usage.mock.html',
     path: 'components/ui/Skeleton',
     why: 'Forward-looking: `components/ui/` has no Skeleton primitive; the loading state is proposed here, drawn inline.',

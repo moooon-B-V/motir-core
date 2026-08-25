@@ -1,22 +1,50 @@
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // MOTIR-3437 — the two guards a coverage percentage cannot see.
 //
-// Both halves of this story decay silently. A `loading.tsx` is a file nothing
-// imports, so deleting it breaks no build and no test — the page simply goes
-// back to arriving late. A `router.push` on a client-only toggle compiles,
-// renders correctly and passes every functional test; its only symptom is a
-// wait. Neither defect has a failing test to find, which is exactly why both
-// shipped and why the fix for each was made once and never generalised
-// (MOTIR-2069 fixed `/planning` and only `/planning`; MOTIR-1086 built
-// `shallowPush` and left it in one file).
+// Both halves of this story decay silently. A `router.push` on a client-only
+// toggle compiles, renders correctly and passes every functional test; its only
+// symptom is a wait. And a `loading.tsx` is a file nothing imports, so its
+// effect on the routes BENEATH it is invisible to every test that does not
+// measure an HTTP status.
 //
-// The prose halves of these two rules live in `motir-core/CLAUDE.md`
-// (§ *Every route group carries a `loading.tsx`* and § *URL state the CLIENT
-// reads is written with `shallowPush`*). A rule with no guard is a comment.
-
+// ── WHY GUARD 1 IS THE INVERSE OF WHAT THIS CARD FIRST ASKED FOR ───────────
+// MOTIR-3437 was written to ratchet loading boundaries UP — "every route group
+// carries a `loading.tsx`" — on the assumption that a boundary is free. It is
+// not, and the assumption was falsified by experiment on this branch:
+//
+//   A `loading.tsx` fallback can render as soon as its ancestor layouts
+//   resolve, which is BEFORE the page function runs. That flushes the response
+//   head, so the status is fixed at 200 — and a `notFound()` reached later in
+//   the page renders the not-found BODY under a 200 status. The 404 is gone.
+//
+// Measured, not reasoned: `tests/e2e/billing-selfhost.spec.ts` asserts
+// `/settings/organization/billing` 404s off-cloud. With a `(authed)`-level
+// `loading.tsx` it received 200; with the boundary removed and nothing else
+// changed, 404. The same A/B held for the cross-workspace isolation assertion
+// in `issue-detail-flow.spec.ts`, whose 404 is a documented no-existence-leak
+// contract ("it must be indistinguishable from a missing issue").
+//
+// ⚠️ AND MOVING THE GATE DOES NOT HELP. The obvious repair — hoist the
+// `notFound()` into a `layout.tsx` above the page so it runs "before" the
+// stream — was BUILT AND TESTED on the billing route and still returned 200.
+// A layout is an ancestor of the boundary, so resolving it is what RELEASES
+// the fallback. There is no gate placement that recovers the status; the only
+// fix is not to put a boundary above a segment that decides existence.
+//
+// ── WHAT IS SAFE ───────────────────────────────────────────────────────────
+// An IN-PAGE `<Suspense>` is safe and is the right instrument for a page that
+// must both 404 and stream: it renders after the page's own gate, so the
+// status is already settled. `app/(authed)/items/[key]/page.tsx` (MOTIR-3436)
+// does exactly this, and `issue-detail-flow.spec.ts` passes 16/16 with it.
+//
+// So this guard now enforces the rule that actually holds, and it is stated as
+// a prohibition rather than a ratchet: NO `loading.tsx` may sit above a page
+// that calls `notFound()`. The prose half is `motir-core/CLAUDE.md`
+// § *A `loading.tsx` may not sit above a route that decides existence*.
+// A rule with no guard is a comment.
 const ROOT = process.cwd();
 const APP = join(ROOT, 'app');
 
@@ -43,219 +71,93 @@ function nearestBoundary(pageDir: string, loading: Set<string>): string | null {
     cur = next;
   }
 }
-
-// ── The RATCHET, and why this guard is one ─────────────────────────────────
+// ── The KNOWN EXCEPTION, and why it is a debt rather than a licence ────────
 //
-// The card asked for "every `page.tsx` resolves to a `loading.tsx`". Measured
-// on this tree that is 33 pages short, and every one of them is in a group
-// MOTIR-3430's own boundary section puts OUT of scope: *"It covers the
-// `(authed)` route group. `(planning)` already has its boundary; `(public)` and
-// `(auth)` are out."* A guard written to the literal instruction would be red
-// on arrival and would be deleted or weakened within a week.
+// One boundary on `main` already violates this rule:
+// `app/(public)/explore/loading.tsx` sits above
+// `app/(public)/explore/topic/[slug]/page.tsx`, which calls `notFound()`. That
+// route therefore answers 200 for a missing topic today. It is REPRODUCED, not
+// inferred — a browser `goto` of `/explore/topic/definitely-not-a-real-topic-xyz`
+// against the production build returned `EXPLORE_TOPIC_STATUS=200`.
 //
-// So it is a ratchet instead, which is what the card's stated INTENT actually
-// asks for — *"the guard that keeps a NEW route group from starting life
-// without one"*. The uncovered set is frozen as a named list. A new page
-// without a boundary fails; a listed one that GAINS a boundary also fails,
-// until it is struck off. The list can only shrink, and it cannot rot into a
-// mute button because it is asserted tight in both directions.
-//
-// MOTIR-3440 is where the rest of this list goes.
-const UNCOVERED_BY_DESIGN: { dir: string; why: string }[] = [
+// It predates this story (the boundary arrived with 6.13.6's project-square UI)
+// and belongs to that surface, not this one, so it is filed rather than
+// absorbed — the standing rule for a pre-existing bug found mid-run. It is
+// listed here so the guard is GREEN on a true statement of the tree rather
+// than red on somebody else's defect, and the entry is asserted TIGHT: the day
+// that route stops calling `notFound()`, or the boundary goes, this list must
+// shrink or the suite fails.
+const KNOWN_STATUS_DEBT: { page: string; boundary: string; why: string }[] = [
   {
-    dir: 'app',
-    why: 'The root landing page — outside every route group. A static marketing surface with no server read to wait on.',
-  },
-  {
-    dir: 'app/(admin)/admin',
-    why: 'The platform-staff console. Out of MOTIR-3430 scope; not a tenant surface and not on any reader path this story measures.',
-  },
-  {
-    dir: 'app/(auth)/device',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(auth)/reset-password',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(auth)/reset-password/new',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(auth)/sign-in',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(auth)/sign-up',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(auth)/unsubscribe/filter-subscription',
-    why: '(auth) is explicitly OUT of MOTIR-3430 scope. A sign-in surface must never flash a skeleton at an unauthenticated visitor — the frame would imply an app they have not reached.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding/direction/[tier]',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding/discovery',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding/how-it-works',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding/import',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(onboarding)/onboarding/migrate',
-    why: '(onboarding) is a guided flow that carries its own step and progress affordances; a page-shaped frame would compete with them. Not in MOTIR-3430 scope.',
-  },
-  {
-    dir: 'app/(public)/docs',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/api',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/api/getting-started',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/api/stability',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/cli',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/mcp',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/mcp/tools',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/docs/sandbox',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope, and the docs tree is statically rendered — there is no server read to wait on.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/board',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/items',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/items/[key]',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/requests/[requestKey]',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/roadmap',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/(public)/p/[identifier]/tree',
-    why: '(public) is explicitly OUT of MOTIR-3430 scope. The public project surfaces are anonymous reads and belong to their own story.',
-  },
-  {
-    dir: 'app/tokens',
-    why: 'The /tokens specimen route — a design-system reference surface, not a product page. It renders from static registries with no server read.',
-  },
-  {
-    dir: 'app/tokens/date-picker',
-    why: 'The /tokens specimen route — a design-system reference surface, not a product page. It renders from static registries with no server read.',
-  },
-  {
-    dir: 'app/tokens/markdown-editor',
-    why: 'The /tokens specimen route — a design-system reference surface, not a product page. It renders from static registries with no server read.',
-  },
-  {
-    dir: 'app/tokens/tree-table',
-    why: 'The /tokens specimen route — a design-system reference surface, not a product page. It renders from static registries with no server read.',
+    page: 'app/(public)/explore/topic/[slug]/page.tsx',
+    boundary: 'app/(public)/explore',
+    why: 'Pre-existing since 6.13.6 (`feat(project-square)`): the explore boundary flushes a 200 shell above a `notFound()` topic route, so a missing topic answers 200. Reproduced on this branch; filed as its own bug against the explore surface.',
   },
 ];
 
-describe('every route group resolves to a loading boundary (MOTIR-3437)', () => {
-  const { pages, loading } = walk(APP, { pages: [], loading: new Set() });
-  const uncovered = pages
-    .filter((p) => nearestBoundary(p, loading) === null)
-    .map(rel)
-    .sort();
-  const listed = UNCOVERED_BY_DESIGN.map((e) => e.dir).sort();
+describe('no loading boundary sits above a route that decides existence (MOTIR-3437)', () => {
+  const { pages, loading } = walk(APP, { pages: [], loading: new Set<string>() });
+
+  /** Pages whose own source calls `notFound()` — i.e. whose status is load-bearing. */
+  const deciders = pages.filter((dir) => {
+    for (const name of ['page.tsx', 'page.ts']) {
+      try {
+        if (readFileSync(join(dir, name), 'utf8').includes('notFound()')) return true;
+      } catch {
+        /* not this extension */
+      }
+    }
+    return false;
+  });
+
+  const offenders = deciders
+    .map((dir) => ({ dir, boundary: nearestBoundary(dir, loading) }))
+    .filter((r): r is { dir: string; boundary: string } => r.boundary !== null);
 
   it('has a non-empty population to rule on — the walk actually found the tree', () => {
-    // A guard whose scan silently found nothing passes forever. This is the
-    // floor that makes every assertion below non-vacuous.
     expect(pages.length).toBeGreaterThan(50);
-    expect(loading.size).toBeGreaterThan(0);
+    expect(deciders.length).toBeGreaterThan(5);
   });
 
-  it('covers every page that is not on the frozen list', () => {
-    const unexpected = uncovered.filter((d) => !listed.includes(d));
+  it('no page that calls notFound() resolves to a loading boundary', () => {
+    const listed = new Set(KNOWN_STATUS_DEBT.map((d) => d.page));
+    const unlisted = offenders
+      .map((o) => ({
+        page: rel(join(o.dir, 'page.tsx')),
+        line: `${rel(join(o.dir, 'page.tsx'))}  ← boundary at ${rel(o.boundary)}`,
+      }))
+      .filter((o) => !listed.has(o.page))
+      .map((o) => o.line);
+
     expect(
-      unexpected,
-      'A route with no `loading.tsx` on its path parks the navigation on the PREVIOUS surface until ' +
-        'its slowest await settles. Add a `loading.tsx` at the route GROUP (see CLAUDE.md § *Every route ' +
-        'group carries a `loading.tsx`*), or — if the surface genuinely must not show a frame — add it to ' +
-        'UNCOVERED_BY_DESIGN with the reason.',
+      unlisted,
+      'A `loading.tsx` above these routes flushes a 200 shell before the page runs, so their ' +
+        '`notFound()` renders under a 200 and the 404 is lost. Move the frame INTO the page as a ' +
+        '<Suspense> placed after the gate, or drop the boundary. Hoisting the gate into a layout ' +
+        'does NOT work — that was built and measured.',
     ).toEqual([]);
   });
 
-  it('carries no frozen entry that has stopped applying — the list only shrinks', () => {
-    const stale = listed.filter((d) => !uncovered.includes(d));
+  it('carries no KNOWN_STATUS_DEBT entry that has stopped applying — the list only shrinks', () => {
+    const live = new Set(offenders.map((o) => rel(join(o.dir, 'page.tsx'))));
+    const stale = KNOWN_STATUS_DEBT.filter((d) => !live.has(d.page)).map((d) => d.page);
     expect(
       stale,
-      'These are listed as deliberately uncovered but now resolve to a boundary. Strike them off — a ' +
-        'ratchet that keeps entries it no longer needs is a mute button.',
+      'These entries no longer describe the tree — the boundary or the notFound() is gone. Delete them.',
     ).toEqual([]);
   });
 
-  it('every frozen entry states a REASON, not just a path', () => {
-    const reasonless = UNCOVERED_BY_DESIGN.filter((e) => e.why.trim().length < 20).map(
-      (e) => e.dir,
-    );
-    expect(reasonless).toEqual([]);
+  it('every debt entry states a REASON, not just a path', () => {
+    for (const d of KNOWN_STATUS_DEBT) expect(d.why.length).toBeGreaterThan(40);
   });
 
-  it('FIRES on a route group with no boundary — demonstrated, not assumed', () => {
-    // The card asks for the guard to be proven to fail rather than believed to.
-    // A synthetic tree, walked by the same functions: one group WITH a boundary
-    // and one without.
-    const synthetic = {
-      pages: ['/x/app/(good)/one', '/x/app/(bad)/two'],
-      loading: new Set(['/x/app/(good)']),
-    };
-    const nearest = (d: string) => {
-      let cur = d;
-      for (;;) {
-        if (synthetic.loading.has(cur)) return cur;
-        if (cur === '/x/app') return null;
-        cur = join(cur, '..');
-      }
-    };
-    expect(nearest('/x/app/(good)/one')).toBe('/x/app/(good)');
-    expect(nearest('/x/app/(bad)/two')).toBeNull();
+  it('FIRES on a boundary placed above a decider — demonstrated, not assumed', () => {
+    // The guard is only worth its lines if it actually catches the shape. Put a
+    // synthetic boundary at the app root and every decider becomes an offender.
+    const sabotaged = new Set(loading);
+    sabotaged.add(APP);
+    const caught = deciders.map((dir) => nearestBoundary(dir, sabotaged)).filter((b) => b !== null);
+    expect(caught.length).toBe(deciders.length);
   });
 });
 

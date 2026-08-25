@@ -791,44 +791,76 @@ of a story working, which a human then approves. The full rule is
 
 ---
 
-## ⚠️ Every route group carries a `loading.tsx` — open first, stream behind
+## ⚠️ A `loading.tsx` may NOT sit above a route that decides existence
 
-**EXTREMELY IMPORTANT: Next.js parks a navigation on the PREVIOUS surface until
-the destination's slowest `await` settles, unless a `loading.tsx` or a
-`<Suspense>` sits on the path. So every route group under `app/` carries a
-`loading.tsx` at the GROUP, and it renders `components/ui/PageSkeleton`.**
+**EXTREMELY IMPORTANT: a `loading.tsx` fallback can render as soon as its
+ancestor layouts resolve — which is BEFORE the page function runs. That flushes
+the response head, so the HTTP status is fixed at 200. A `notFound()` reached
+later in that page then renders the not-found BODY under a 200, and the 404 is
+gone. So a boundary must never sit above a segment whose status is load-bearing.**
 
-A group boundary inverts the default: a route added later is open-first unless
-somebody works to make it otherwise. The alternative — a boundary per page, added
-as each one is complained about — is what left `app/(authed)` with 58 `page.tsx`
-files and two `loading.tsx` (MOTIR-3433), while `(planning)` had had the same
-fix at the group since MOTIR-2069.
+This is the inverse of the rule that stood here between MOTIR-3433 and
+MOTIR-3439, which said "every route group carries a `loading.tsx`". That rule was
+written on the assumption that a boundary is free. It is not, and the assumption
+was falsified by experiment rather than argument:
 
-### The rules
+- `tests/e2e/billing-selfhost.spec.ts` asserts `/settings/organization/billing`
+  404s on a self-host build. With an `app/(authed)/loading.tsx` it received
+  **200**; with that one file removed and nothing else changed, **404**.
+- The same A/B held for `issue-detail-flow.spec.ts`'s cross-workspace assertion,
+  whose 404 is a documented **no-existence-leak** contract — the page's own
+  comment says a browse denial "must be indistinguishable from a missing issue
+  (404, no existence leak)".
+- **11 of the 58 `app/(authed)` pages call `notFound()`.** A group-level
+  boundary covers all 58, so it breaks all 11 at once.
 
-- ✅ **A group gets ONE `loading.tsx`**, rendering `PageSkeleton`. That is the
-  floor for every route under it.
-- ✅ **A route adds a NEARER `loading.tsx` only when its shape genuinely
-  differs** — a two-column detail page, a board of columns. Next uses the
-  closest boundary, so a nearer one simply wins.
-- ✅ **A nearer frame COMPOSES `PageSkeleton`, passing its body as `children`.**
-  The wrapper, the header block and the reveal are inherited, never re-declared.
-  Copying those three rows instead of composing them is the same drift as a
-  skeleton restating a table's columns — which is how `IssueTreeSkeleton` came
-  to be three columns and 272px behind the table it stands in for, for eighty
-  days, with its own comment promising it was in sync (MOTIR-3452).
-- ✅ **The reveal is the ONE `nav-pending-reveal` class** in `app/globals.css`:
-  mounted at 0, revealed at **120ms**, so a route resolving faster than that
-  never shows a frame. Reference it; never re-declare the delay. Two boundaries
-  revealing at two times is a flicker, not a courtesy.
-- ❌ **Never implement the delay with a timer** — no `useEffect`, no
-  `setTimeout`, no client state. It is a CSS `animation-delay`, so an abandoned
-  navigation cleans itself up when the element unmounts.
-- ❌ **Never put a pending affordance on a view switch that needs no server**
-  (the plan detail's Canvas/List, the item page's Children List/Graph, the
-  roadmap's scope). Those use `shallowPush` and their body is simply there; a
-  spinner on one manufactures a wait the reader would not have had. The design
-  half of this rule is `design/shell/design-notes.md` § _THE SWITCH RULE_.
+**⚠️ MOVING THE GATE DOES NOT HELP — this was built and measured, not assumed.**
+The obvious repair is to hoist the `notFound()` into a `layout.tsx` above the
+page so it runs "before" the stream. A layout is an ANCESTOR of the boundary, so
+resolving it is precisely what RELEASES the fallback: the billing route with a
+gate layout still returned 200. There is no gate placement that recovers the
+status. The only fix is not to put a boundary there.
+
+### What to use instead
+
+- ✅ **An in-page `<Suspense>`, placed AFTER the page's own gate.** It renders
+  once the status is already settled, so it streams without touching the status.
+  This is the right instrument for a page that must both 404 and stream, and
+  `app/(authed)/items/[key]/page.tsx` (MOTIR-3436) is the worked example: its
+  late stack — Development, Acceptance, Design result, Attachments, Activity —
+  sits behind two boundaries sharing one promise, and `issue-detail-flow.spec.ts`
+  passes 16/16 with it.
+- ✅ **Parallelise the reads.** The measured win on the item page came from
+  collapsing twenty-nine SEQUENTIAL awaits into one `Promise.all` plus the late
+  stack, not from drawing a frame. A page that paints after one round trip does
+  not need a pending frame to feel immediate.
+- ✅ **A `loading.tsx` is still fine above a subtree where NO page calls
+  `notFound()`** — but see the second cost below before reaching for one.
+- ❌ **Never a `loading.tsx` at a route-group root** that contains any
+  existence-deciding route. `app/(authed)` is such a group.
+
+### The second cost — a boundary makes every unscoped locator a race
+
+A boundary also changes navigation: React keeps the PREVIOUS subtree mounted
+(hidden) while the new one streams, so both are in the DOM at once. Playwright
+resolves locators before filtering on visibility, so an unscoped `getByText` /
+`getByTestId` / `getByLabel` matches BOTH and fails strict mode. Adding one
+group boundary turned **30 assertions across 17 spec files** red at once.
+
+`getByRole` is immune — the accessibility tree excludes the hidden copy. Of those
+30 failures, exactly zero used `getByRole`. So when a spec must assert on a
+bounded route, reach for `getByRole`, or scope to the live subtree; and treat a
+new boundary as a change with a suite-wide blast radius, not a local courtesy.
+
+### Known debt
+
+`app/(public)/explore/loading.tsx` sits above
+`app/(public)/explore/topic/[slug]/page.tsx`, which calls `notFound()`, so a
+missing topic answers **200** today. Reproduced on a production build, filed
+against the explore surface, and listed in
+`tests/navigation/loading-boundary-guard.test.ts`'s `KNOWN_STATUS_DEBT` so the
+guard is green on a true statement of the tree rather than red on another
+story's defect. That list is asserted tight and can only shrink.
 
 ### URL state the CLIENT reads is written with `shallowPush`
 

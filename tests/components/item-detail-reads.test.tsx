@@ -1,9 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import { renderWithIntl } from '../helpers/renderWithIntl';
 
-// MOTIR-3435 — `/items/[key]`'s GATE, its read SHAPE, and its pending frame.
+// MOTIR-3435 — `/items/[key]`'s GATE and its read SHAPE.
+//
+// The pending-frame half of this file went with the frame: MOTIR-3439 removed
+// `app/(authed)/items/[key]/loading.tsx` after establishing by A/B that a
+// `loading.tsx` flushes a 200 response head before the page runs, which
+// destroys this route's cross-workspace `notFound()` 404 — a documented
+// no-existence-leak contract. The read-shape assertions below are unaffected
+// and are what the story's measured win actually rests on.
 //
 // The page went from 29 awaits, almost all sequential, to a gate of four plus
 // one concurrent group. What is asserted here is the pair of properties that
@@ -147,8 +153,6 @@ vi.mock('@/components/ui/EmptyState', () => ({ EmptyState: () => null }));
 vi.mock('@/components/ui/MarkdownView', () => ({ MarkdownView: () => null }));
 vi.mock('@/components/ui/Pill', () => ({ Pill: () => null }));
 vi.mock('@/components/markdown/WorkItemTitle', () => ({ WorkItemTitle: () => null }));
-
-import ItemDetailLoading from '@/app/(authed)/items/[key]/loading';
 
 const PROJECT = {
   projectId: 'p1',
@@ -321,40 +325,6 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
 
     release?.();
     await pending.catch(() => undefined);
-  });
-});
-
-describe('the route-shaped pending frame (MOTIR-3435)', () => {
-  it('composes PageSkeleton — one reveal, one wrapper, no second title box', () => {
-    const { container } = renderWithIntl(<ItemDetailLoading />);
-    const frame = container.querySelector('[data-testid="page-skeleton"]');
-    expect(frame).not.toBeNull();
-    // The shared reveal, referenced not re-declared. Exactly one frame element.
-    expect(frame!.className).toContain('nav-pending-reveal');
-    expect(container.querySelectorAll('.nav-pending-reveal').length).toBe(1);
-    expect(frame!.getAttribute('aria-busy')).toBe('true');
-  });
-
-  it('draws the eyebrow ABOVE the title, and no toolbar row', () => {
-    const { container } = renderWithIntl(<ItemDetailLoading />);
-    const header = container.querySelector('header')!;
-    // eyebrow row + title block — and NO subtitle: this page's <h1> has no <p>
-    // under it, so reserving one would settle the page 20px up.
-    expect(header.children.length).toBe(2);
-    expect(header.className).toContain('gap-2');
-    // The generic toolbar band is suppressed: this page's controls live in the
-    // eyebrow's right cluster, so a reserved band would never be filled.
-    expect(container.querySelectorAll('.h-\\(--height-control\\)').length).toBe(3);
-  });
-
-  it('carries the page’s OWN two-column declaration, so it collapses identically', () => {
-    const { container } = renderWithIntl(<ItemDetailLoading />);
-    const grid = container.querySelector('.grid')!;
-    // Not a copy of the measurements — the same declaration, so the narrow
-    // breakpoint needs no second frame.
-    expect(grid.className).toContain('grid-cols-1');
-    expect(grid.className).toContain('md:grid-cols-[1fr_18rem]');
-    expect(container.querySelector('aside')).not.toBeNull();
   });
 });
 
