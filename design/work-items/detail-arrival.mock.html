@@ -24,6 +24,16 @@
   (grid-cols-1 gap-6 md:grid-cols-[1fr_18rem], font-serif text-2xl,
   --height-control), not numbers copied out of it.
 
+  AND SO IS THE ORDER (MOTIR-3465). Rendering the real components is not the
+  same as rendering the real page. The first cut of this asset composed every
+  card from the app's own markup and then placed them in a sequence nobody had
+  read out of the page: Children was drawn second where the page renders it
+  eighth, and Explanation and Relationships were missing from both content
+  frames although the allocation table already had them. The order in those
+  frames is now taken from the main column of
+  app/(authed)/items/[key]/page.tsx in the same pass that draws them;
+  design-notes.md, How the render was produced, carries the command.
+
   The board's frames show the CONTENT REGION only. The top bar and rail are the
   shell's and do not change during a navigation inside the group, which is the
   shell asset's claim and not restated here.
@@ -332,6 +342,9 @@
         .mb-\(--spacing-md\) {
           margin-bottom: var(--spacing-md);
         }
+        .ml-2 {
+          margin-left: calc(var(--spacing) * 2);
+        }
         .ml-auto {
           margin-left: auto;
         }
@@ -377,6 +390,9 @@
         .w-2\/3 {
           width: calc(2 / 3 * 100%);
         }
+        .w-3 {
+          width: calc(var(--spacing) * 3);
+        }
         .w-3\.5 {
           width: calc(var(--spacing) * 3.5);
         }
@@ -385,6 +401,9 @@
         }
         .w-3\/5 {
           width: calc(3 / 5 * 100%);
+        }
+        .w-4 {
+          width: calc(var(--spacing) * 4);
         }
         .w-4\/5 {
           width: calc(4 / 5 * 100%);
@@ -500,6 +519,9 @@
         .border-\(--el-chip-border\) {
           border-color: var(--el-chip-border);
         }
+        .border-transparent {
+          border-color: transparent;
+        }
         .bg-\(--el-card\) {
           background-color: var(--el-card);
         }
@@ -515,6 +537,22 @@
         .bg-\(--el-tabnav-track\) {
           background-color: var(--el-tabnav-track);
         }
+        .bg-\(--el-tint-lavender\) {
+          background-color: var(--el-tint-lavender);
+        }
+        .bg-\(--el-tint-mint\) {
+          background-color: var(--el-tint-mint);
+        }
+        .bg-\[color-mix\(in_srgb\,var\(--el-status-implemented\)_14\%\,var\(--el-surface\)\)\] {
+          background-color: var(--el-status-implemented);
+          @supports (color: color-mix(in lab, red, red)) {
+            background-color: color-mix(
+              in srgb,
+              var(--el-status-implemented) 14%,
+              var(--el-surface)
+            );
+          }
+        }
         .p-\(--spacing-card-padding\) {
           padding: var(--spacing-card-padding);
         }
@@ -527,8 +565,17 @@
         .px-\(--spacing-control-x\) {
           padding-inline: var(--spacing-control-x);
         }
+        .px-2 {
+          padding-inline: calc(var(--spacing) * 2);
+        }
         .py-\(--spacing-chip-y\) {
           padding-block: var(--spacing-chip-y);
+        }
+        .py-1\.5 {
+          padding-block: calc(var(--spacing) * 1.5);
+        }
+        .pr-1 {
+          padding-right: calc(var(--spacing) * 1);
         }
         .font-mono {
           font-family: var(--font-mono);
@@ -555,6 +602,9 @@
           font-size: var(--text-xs);
           line-height: var(--tw-leading, var(--text-xs--line-height));
         }
+        .text-\[11px\] {
+          font-size: 11px;
+        }
         .text-\[13px\] {
           font-size: 13px;
         }
@@ -566,11 +616,18 @@
           --tw-font-weight: var(--font-weight-semibold);
           font-weight: var(--font-weight-semibold);
         }
+        .tracking-\[0\.06em\] {
+          --tw-tracking: 0.06em;
+          letter-spacing: 0.06em;
+        }
         .text-\(--el-tabnav-active\) {
           color: var(--el-tabnav-active);
         }
         .text-\(--el-text\) {
           color: var(--el-text);
+        }
+        .text-\(--el-text-eyebrow\) {
+          color: var(--el-text-eyebrow);
         }
         .text-\(--el-text-faint\) {
           color: var(--el-text-faint);
@@ -584,8 +641,17 @@
         .text-\(--el-text-strong\) {
           color: var(--el-text-strong);
         }
+        .text-\(--el-type-bug\) {
+          color: var(--el-type-bug);
+        }
         .text-\(--el-type-story\) {
           color: var(--el-type-story);
+        }
+        .text-\(--el-type-subtask\) {
+          color: var(--el-type-subtask);
+        }
+        .uppercase {
+          text-transform: uppercase;
         }
         .shadow-\(--shadow-card\) {
           --tw-shadow: var(--shadow-card);
@@ -618,6 +684,20 @@
         .duration-\(--transition-duration\) {
           --tw-duration: var(--transition-duration);
           transition-duration: var(--transition-duration);
+        }
+        .group-hover\:underline {
+          &:is(:where(.group):hover *) {
+            @media (hover: hover) {
+              text-decoration-line: underline;
+            }
+          }
+        }
+        .hover\:bg-\(--el-surface\) {
+          &:hover {
+            @media (hover: hover) {
+              background-color: var(--el-surface);
+            }
+          }
         }
         .hover\:text-\(--el-text\) {
           &:hover {
@@ -3074,6 +3154,10 @@
         syntax: '*';
         inherits: false;
       }
+      @property --tw-tracking {
+        syntax: '*';
+        inherits: false;
+      }
       @property --tw-shadow {
         syntax: '*';
         inherits: false;
@@ -3162,6 +3246,7 @@
           ::backdrop {
             --tw-border-style: solid;
             --tw-font-weight: initial;
+            --tw-tracking: initial;
             --tw-shadow: 0 0 #0000;
             --tw-shadow-color: initial;
             --tw-shadow-alpha: 100%;
@@ -3181,7 +3266,6 @@
           }
         }
       }
-
       body {
         background: var(--el-page-bg);
         color: var(--el-text);
@@ -3710,6 +3794,9 @@
                         <h2 class="text-(--el-text) font-sans text-base font-semibold">
                           Description
                         </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— what to do</span
+                        >
                       </div>
                     </div>
                     <div>
@@ -3717,6 +3804,252 @@
                         One promise, two mechanisms. The reader reaches the new surface in the frame
                         after the click, and the data arrives behind it.
                       </p>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
+                    data-tilt=""
+                    data-surface="card"
+                  >
+                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                      <div class="flex items-center gap-2">
+                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                          Explanation
+                        </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— why it matters</span
+                        >
+                        <span
+                          class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-sparkles h-3 w-3"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                            ></path>
+                            <path d="M20 2v4"></path>
+                            <path d="M22 4h-4"></path>
+                            <circle cx="4" cy="20" r="2"></circle></svg
+                          >AI-drafted</span
+                        >
+                      </div>
+                    </div>
+                    <div>
+                      <p class="font-sans text-sm text-(--el-text)">
+                        Motir&rsquo;s own reviewers keep describing the product as slow, and it is
+                        not: the reads are ordinary and the machine is fine. What is slow is the
+                        answer to a click.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
+                    data-tilt=""
+                    data-surface="card"
+                  >
+                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                      <div class="flex items-center gap-2">
+                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                          Relationships
+                        </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— dependencies &amp; links</span
+                        >
+                      </div>
+                    </div>
+                    <div>
+                      <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-2 px-2">
+                            <div
+                              class="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-eyebrow)"
+                            >
+                              Blocks
+                            </div>
+                            <span class="text-(--el-text-muted) font-mono text-[11px]">1</span>
+                          </div>
+                          <ul class="flex flex-col">
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3440"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-book-open text-(--el-type-story) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M12 7v14"></path>
+                                  <path
+                                    d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                                  ></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3440</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >Every remaining page streams — the 24 heavy awaits behind their
+                                    own boundaries</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent shrink-0"
+                                  >Blocked</span
+                                ></a
+                              >
+                            </li>
+                          </ul>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-2 px-2">
+                            <div
+                              class="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-eyebrow)"
+                            >
+                              Relates to
+                            </div>
+                            <span class="text-(--el-text-muted) font-mono text-[11px]">2</span>
+                          </div>
+                          <ul class="flex flex-col">
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3436"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M13 5h8"></path>
+                                  <path d="M13 12h8"></path>
+                                  <path d="M13 19h8"></path>
+                                  <path d="m3 17 2 2 4-4"></path>
+                                  <path d="m3 7 2 2 4-4"></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3436</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >The item-detail page STREAMS — the late stack behind one shared
+                                    boundary</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-status-implemented)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent shrink-0"
+                                  ><svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                                    aria-hidden="true"
+                                  >
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M17 12h.01"></path>
+                                    <path d="M12 12h.01"></path>
+                                    <path d="M7 12h.01"></path></svg
+                                  >Implemented</span
+                                ></a
+                              >
+                            </li>
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3439"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-bug text-(--el-type-bug) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M12 20v-9"></path>
+                                  <path
+                                    d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"
+                                  ></path>
+                                  <path d="M14.12 3.88 16 2"></path>
+                                  <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                                  <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                                  <path d="M22 13h-4"></path>
+                                  <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                                  <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                                  <path d="M6 13H2"></path>
+                                  <path d="m8 2 1.88 1.88"></path>
+                                  <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3439</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >Approving a plan EMPTIES the canvas level the reviewer is
+                                    standing on</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent shrink-0"
+                                  >Done</span
+                                ></a
+                              >
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="late-stack flex flex-col gap-6" aria-busy="true">
+                    <div class="flex animate-pulse flex-col gap-6" aria-hidden="true">
+                      <div
+                        class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) bg-(--el-card) shadow-(--shadow-card)"
+                        data-surface="card"
+                      >
+                        <div class="mb-(--spacing-md)">
+                          <div class="flex items-center gap-2">
+                            <div class="rounded-(--radius-control) bg-(--el-muted) h-5 w-36"></div>
+                          </div>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                          <div class="rounded-(--radius-control) bg-(--el-muted) h-3 w-2/3"></div>
+                          <div class="rounded-(--radius-control) bg-(--el-muted) h-3 w-1/2"></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div
@@ -3813,20 +4146,6 @@
                       >
                         <div class="mb-(--spacing-md)">
                           <div class="flex items-center gap-2">
-                            <div class="rounded-(--radius-control) bg-(--el-muted) h-5 w-36"></div>
-                          </div>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                          <div class="rounded-(--radius-control) bg-(--el-muted) h-3 w-2/3"></div>
-                          <div class="rounded-(--radius-control) bg-(--el-muted) h-3 w-1/2"></div>
-                        </div>
-                      </div>
-                      <div
-                        class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) bg-(--el-card) shadow-(--shadow-card)"
-                        data-surface="card"
-                      >
-                        <div class="mb-(--spacing-md)">
-                          <div class="flex items-center gap-2">
                             <div class="rounded-(--radius-control) bg-(--el-muted) h-5 w-28"></div>
                           </div>
                         </div>
@@ -3896,9 +4215,13 @@
             </div>
           </div>
           <p class="board-note">
-            The title, the description, the children and the whole rail are real. The three cards
-            below them are one boundary, not three — see Panel B. The roll-up chip holds its slot at
-            its settled WIDTH, so filling it moves nothing.
+            The title, both prose bodies, the relationships and the children are real, and so is the
+            whole rail. The three pending cards are ONE SETTLE, not three &mdash; and they are
+            <b
+              >two <code>&lt;Suspense&gt;</code> boundaries, because Children is tier&nbsp;2 and the
+              page renders it between them</b
+            >. Both await the same promise, so they flush together; see Panel&nbsp;B. The roll-up
+            chip holds its slot at its settled WIDTH, so filling it moves nothing.
           </p>
         </figure>
         <figure class="board-frame">
@@ -3964,12 +4287,264 @@
                         <h2 class="text-(--el-text) font-sans text-base font-semibold">
                           Description
                         </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— what to do</span
+                        >
                       </div>
                     </div>
                     <div>
                       <p class="font-sans text-sm text-(--el-text)">
                         One promise, two mechanisms. The reader reaches the new surface in the frame
                         after the click, and the data arrives behind it.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
+                    data-tilt=""
+                    data-surface="card"
+                  >
+                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                      <div class="flex items-center gap-2">
+                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                          Explanation
+                        </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— why it matters</span
+                        >
+                        <span
+                          class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-sparkles h-3 w-3"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                            ></path>
+                            <path d="M20 2v4"></path>
+                            <path d="M22 4h-4"></path>
+                            <circle cx="4" cy="20" r="2"></circle></svg
+                          >AI-drafted</span
+                        >
+                      </div>
+                    </div>
+                    <div>
+                      <p class="font-sans text-sm text-(--el-text)">
+                        Motir&rsquo;s own reviewers keep describing the product as slow, and it is
+                        not: the reads are ordinary and the machine is fine. What is slow is the
+                        answer to a click.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
+                    data-tilt=""
+                    data-surface="card"
+                  >
+                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                      <div class="flex items-center gap-2">
+                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                          Relationships
+                        </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— dependencies &amp; links</span
+                        >
+                      </div>
+                    </div>
+                    <div>
+                      <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-2 px-2">
+                            <div
+                              class="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-eyebrow)"
+                            >
+                              Blocks
+                            </div>
+                            <span class="text-(--el-text-muted) font-mono text-[11px]">1</span>
+                          </div>
+                          <ul class="flex flex-col">
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3440"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-book-open text-(--el-type-story) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M12 7v14"></path>
+                                  <path
+                                    d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                                  ></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3440</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >Every remaining page streams — the 24 heavy awaits behind their
+                                    own boundaries</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent shrink-0"
+                                  >Blocked</span
+                                ></a
+                              >
+                            </li>
+                          </ul>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                          <div class="flex items-center gap-2 px-2">
+                            <div
+                              class="font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-eyebrow)"
+                            >
+                              Relates to
+                            </div>
+                            <span class="text-(--el-text-muted) font-mono text-[11px]">2</span>
+                          </div>
+                          <ul class="flex flex-col">
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3436"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-list-checks text-(--el-type-subtask) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M13 5h8"></path>
+                                  <path d="M13 12h8"></path>
+                                  <path d="M13 19h8"></path>
+                                  <path d="m3 17 2 2 4-4"></path>
+                                  <path d="m3 7 2 2 4-4"></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3436</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >The item-detail page STREAMS — the late stack behind one shared
+                                    boundary</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-[color-mix(in_srgb,var(--el-status-implemented)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent shrink-0"
+                                  ><svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="lucide lucide-circle-ellipsis h-3 w-3"
+                                    aria-hidden="true"
+                                  >
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M17 12h.01"></path>
+                                    <path d="M12 12h.01"></path>
+                                    <path d="M7 12h.01"></path></svg
+                                  >Implemented</span
+                                ></a
+                              >
+                            </li>
+                            <li
+                              class="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1"
+                            >
+                              <a
+                                class="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                                href="/items/MOTIR-3439"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-bug text-(--el-type-bug) h-4 w-4 shrink-0"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M12 20v-9"></path>
+                                  <path
+                                    d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"
+                                  ></path>
+                                  <path d="M14.12 3.88 16 2"></path>
+                                  <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                                  <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                                  <path d="M22 13h-4"></path>
+                                  <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                                  <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                                  <path d="M6 13H2"></path>
+                                  <path d="m8 2 1.88 1.88"></path>
+                                  <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                                ><span class="min-w-0 flex-1 truncate"
+                                  ><span class="text-(--el-text-secondary) font-mono text-xs"
+                                    >MOTIR-3439</span
+                                  ><span
+                                    class="text-(--el-text) ml-2 font-sans text-sm group-hover:underline"
+                                    >Approving a plan EMPTIES the canvas level the reviewer is
+                                    standing on</span
+                                  ></span
+                                ><span
+                                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent shrink-0"
+                                  >Done</span
+                                ></a
+                              >
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
+                    data-tilt=""
+                    data-surface="card"
+                  >
+                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
+                      <div class="flex items-center gap-2">
+                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
+                          Development
+                        </h2>
+                        <span class="font-sans text-sm text-(--el-text-secondary)"
+                          >— Pull requests linked to this item</span
+                        >
+                      </div>
+                    </div>
+                    <div>
+                      <p class="font-sans text-sm text-(--el-text-secondary)">
+                        No linked pull requests yet.
                       </p>
                     </div>
                   </div>
@@ -4060,28 +4635,6 @@
                     <div><p class="font-sans text-sm text-(--el-text-secondary)">…</p></div>
                   </div>
                   <div
-                    class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) shadow-(--shadow-card)"
-                    data-tilt=""
-                    data-surface="card"
-                  >
-                    <div data-tilt-layer="front" class="mb-(--spacing-md)">
-                      <div class="flex items-center gap-2">
-                        <h2 class="text-(--el-text) font-sans text-base font-semibold">
-                          Development
-                        </h2>
-                        <span class="font-sans text-sm text-(--el-text-secondary)"
-                          >— Pull requests linked to this item</span
-                        >
-                      </div>
-                    </div>
-                    <div>
-                      <p class="font-sans text-sm text-(--el-text-secondary)">
-                        No linked pull requests yet.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
                     class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) bg-(--el-card) shadow-(--shadow-card)"
                     data-surface="card"
                   >
@@ -4154,9 +4707,14 @@
           <p class="board-note">
             One further change from the frame above: the late stack filled. The page settled TWICE
             in total and never moved a region the reader had already read.
-            <b>Acceptance and Design result are CONDITIONAL sections</b> — a story in review, a
-            design card — so this item renders three of the five late regions, not five; the
+            <b>Acceptance and Design result are CONDITIONAL sections</b> &mdash; a story in review,
+            a design card &mdash; so this item renders three of the five late regions, not five; the
             allocation table is the complete set, this frame is one item&rsquo;s instance of it.
+            <b>The ready / blocked badge is absent for the same kind of reason</b>: it shows only
+            while the item is still in the <code>todo</code> category, and this one is In Progress.
+            <b>The ORDER of these sections is the page&rsquo;s own</b>, read out of
+            <code>app/(authed)/items/[key]/page.tsx</code> rather than composed here &mdash; see the
+            recipe in <code>design-notes.md</code> § <i>How the render was produced</i>.
           </p>
         </figure>
       </div>
@@ -4294,6 +4852,16 @@
           >If Activity later proves slow enough to hold the other four past the fold, the split to
           make is TWO — Activity alone, and the rest — never five.</b
         >
+      </p>
+      <p class="panel-p rule">
+        <b>ONE SETTLE IS NOT ONE <code>&lt;Suspense&gt;</code>.</b> &ldquo;Twice&rdquo; is a claim
+        about TIME, not about JSX elements, and on this page it cannot be one element:
+        <b>Children is tier&nbsp;2 and the page renders it BETWEEN Design result and Attachments</b
+        >, so the late regions are not contiguous. Wrapping Children would make first-content late;
+        moving it would reorder a page this asset never argued for. So the stack is TWO boundaries
+        around a tier-2 section, both awaiting <b>the same promise</b> &mdash; they resolve in the
+        same tick and flush together, which is one settle by the only definition that matters to a
+        reader. A boundary count is an implementation of the decision, never the decision itself.
       </p>
       <p class="panel-p">
         <b>Why the roll-up badge is not a third settle.</b> It sits in the eyebrow, at the TOP,
