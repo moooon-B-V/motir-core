@@ -76,6 +76,24 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * **9.3 s**. So a local reading is in the same units and runs at or below the CI
  * cost — never above it. Re-measure from the first green run that includes it.
  *
+ * ⚠️ `jobs-postgres-engine.spec.ts` (MOTIR-3427) carries the LOCAL provenance
+ * too, and it is a brand-new spec — the guard caught it with no entry on its
+ * first CI run, which is exactly the failure this file exists to make loud: a
+ * spec with no cost here is assigned to NO leg and never runs, so it would have
+ * gone green by not executing.
+ *
+ * Measured on 2026-08-25 against a production build, TWICE, six tests each:
+ * 18.2 s and 18.0 s of test bodies. Recorded as **22.0**, from the sum of the
+ * per-test MAXIMA across the two runs (20.3 s) plus headroom — the higher
+ * reading is the one to keep, because under-estimating is the direction that
+ * unbalances a bin-packer, and the calibration note above says a local reading
+ * runs at or below the CI cost.
+ *
+ * ⚠️ IT ALSO RUNS A THIRD PROCESS. This spec's lane starts the Postgres job
+ * engine's worker (`tests/e2e/_helpers/job-worker-process.ts`), whose startup is
+ * paid ONCE in `globalSetup` and therefore does NOT appear in this per-spec cost.
+ * Re-measure from the first green run that includes it.
+ *
  * ⚠️ `shell-viewport-floor.spec.ts` (MOTIR-3208, re-measured for MOTIR-3286)
  * carries a FOURTH provenance: it had never run in this lane, so it was measured
  * LOCALLY against a production build on 2026-08-20 — three test BODIES at
@@ -171,6 +189,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'issue-list-flow.spec.ts': 44.7,
   'jobs-dashboard.spec.ts': 7.4,
   'jobs-flow.spec.ts': 89.7,
+  'jobs-postgres-engine.spec.ts': 22.0,
   'labels-components-watch.spec.ts': 27.6,
   'link-search-flow.spec.ts': 12.6,
   'mcp-docs.spec.ts': 2.2,

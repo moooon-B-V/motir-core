@@ -244,6 +244,52 @@ export function PlanReviewCanvas({
   );
   const closePeek = useCallback(() => setPeeked({ proposal: null, key: null }), []);
 
+  // ── The plan's node ids CHANGE at approve, and the canvas is holding them ────
+  //
+  // `materialize` re-keys every `add` to the work item it became — the review
+  // model's one keying rule, `nodeId: item.workItemId ?? item.id` (MOTIR-3160) —
+  // and resolves each intra-plan `planItem:` ref through the same map, so a
+  // proposed container's children re-parent onto its new cuid too. Nothing about
+  // that is wrong; what was missing is that a MOUNTED canvas is holding the old
+  // id as its drilled focus and in its breadcrumb, and `PlanDetail`'s approve is
+  // a re-render (a refetch + a version bump), not a remount. The reviewer
+  // standing on a proposed container therefore watched their level go empty —
+  // "No items at this level" — at the exact moment the rail said the plan was
+  // approved (bug MOTIR-3439).
+  //
+  // The OLD id of a materialized `add` is precisely its `planItemId`, which is
+  // the one field that never moves. So the map needs no memory of the previous
+  // render: `planItemId → what that node is now` answers the canvas's question
+  // from the CURRENT items alone.
+  //
+  // Only an `add` appears. A pending one is skipped because its `nodeId` IS its
+  // `planItemId` (mapping it would be a no-op, and the resolver has to be
+  // idempotent); a `modify` / `remove` is skipped because its `planItemId` is
+  // never a canvas node id — its node is the committed card it targets, which
+  // the canvas has held under that id all along.
+  const heldNodeByPlanItemId = useMemo(() => {
+    const byPlanItemId = new Map<string, CanvasCrumb>();
+    for (const item of items) {
+      if (item.op !== 'add' || item.nodeId === item.planItemId) continue;
+      byPlanItemId.set(item.planItemId, {
+        id: item.nodeId,
+        // The crumb keeps the committed `KEY · Title` grammar. `New` stands in
+        // the key's slot only while there is no key to put there — a
+        // placeholder would assert a work item that does not exist
+        // (`design/ai-planning/design-notes.md` Part IX §1.3) — and once the
+        // card is real, saying `New` is the lie the substitution existed to
+        // avoid. Same rule the View door already follows: an `add` carrying an
+        // identifier is a committed card (MOTIR-3161).
+        label: workItemCrumbLabel(item.identifier ?? tPlan('proposedCrumb'), item.title),
+      });
+    }
+    return byPlanItemId;
+  }, [items, tPlan]);
+  const resolveHeldNode = useCallback(
+    (id: string) => heldNodeByPlanItemId.get(id) ?? null,
+    [heldNodeByPlanItemId],
+  );
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // The COMMITTED level. A failure here must not blank the review — the plan
@@ -273,6 +319,10 @@ export function PlanReviewCanvas({
         loadLevel={loadLevel}
         reloadKey={`${version}:${proposalsAtLevel(items, null).length}`}
         initialTrail={initialTrail}
+        // The level the reviewer is standing on FOLLOWS its container through
+        // approve, rather than being left addressed by an id that has stopped
+        // naming anything (bug MOTIR-3439).
+        resolveHeldNode={resolveHeldNode}
         searchable
         // SHOW CHANGES (MOTIR-3261) — the set is EVERY proposal's node id,
         // whatever its `op`, which is what the request's *added / updated /

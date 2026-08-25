@@ -117,6 +117,41 @@ for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
 process.env['INNGEST_DEV'] ??= '1';
 process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 
+// Story MOTIR-3414 · Subtask MOTIR-3427 — the RUNNER starts the Postgres job
+// engine's worker (globalSetup) and stops it (globalTeardown). It is a child of
+// the runner rather than a `webServer` entry because it binds no port, and this
+// flag is what globalSetup reads. Defaulted ON so the lane always carries an
+// executor for the new engine, exactly as it always carries `inngest-cli dev`
+// for the old one; export `E2E_JOB_WORKER=0` to run the suite without it.
+process.env['E2E_JOB_WORKER'] ??= '1';
+// The routing override's path, for the RUNNER's own helpers. It matches the
+// value handed to the app webServer below — both processes read the same file,
+// which is the whole point of using one.
+process.env['MOTIR_POSTGRES_JOB_IDS_FILE'] ??= path.resolve('/tmp/motir-test-job-routing');
+// ⚠️ ONE resolved value, read back from the env, handed to BOTH the runner's
+// helpers and the server below. Hardcoding the literal in `webServer.env` (as
+// the email paths do) silently breaks any run that overrides the path: the
+// runner writes one file and the server reads another, and the only symptom is
+// a job that never appears on the engine. Cost one full lane run to find.
+const JOB_ROUTING_FILE = process.env['MOTIR_POSTGRES_JOB_IDS_FILE'];
+
+// ⚠️ THE EMAIL PATHS GET THE SAME TREATMENT, AND FOR A MEASURED REASON. They
+// were hardcoded literals in `webServer.env` while the runner-side helpers
+// (`email-capture.ts`, `email-fault.ts`) each accept an env override — so a run
+// that set one got a runner reading one file and a server writing another. On a
+// box where several sessions run the suite at once that is not hypothetical:
+// the defaults live at fixed `/tmp` paths, so a sibling's `clearEmailFault()` in
+// its `afterEach` disarms YOUR armed fault, and your forced-failure scenario
+// then passes when it should fail.
+//
+// Defaulting here and forwarding the resolved value keeps CI byte-identical (no
+// override -> the same literal it always used) while making a private-path run
+// coherent end to end.
+process.env['EMAIL_OUTBOX_PATH'] ??= path.resolve('/tmp/motir-test-emails.jsonl');
+process.env['EMAIL_FAULT_PATH'] ??= path.resolve('/tmp/motir-test-email-fault');
+const EMAIL_OUTBOX_FILE = process.env['EMAIL_OUTBOX_PATH'];
+const EMAIL_FAULT_FILE = process.env['EMAIL_FAULT_PATH'];
+
 // Story MOTIR-1981 · MOTIR-1993 — the container fleet's adapter SELECTOR, the
 // same `MOTIR_FLEET_ORCHESTRATOR` variable `selectedOrchestratorProvider()`
 // reads in production. Unset means `fly`, so leaving it alone would point this
@@ -167,6 +202,7 @@ export default defineConfig({
   // (failing THIS step, not 8 specs) if the server never comes up. See
   // tests/e2e/global-setup.ts + tests/e2e/_helpers/readiness.ts.
   globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   // The cloud-on billing journeys (Subtask 8.1.10) run in their own MOTIR_CLOUD
   // lane (playwright.cloud.config.ts) — excluded here so this off-cloud suite
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
@@ -240,7 +276,13 @@ export default defineConfig({
       // Secure-cookie / `/api/_test` 404 / 'file'-email guards meant for a REAL
       // deploy — E2E_PROD_HARNESS=1 (below) re-relaxes ONLY those test seams,
       // exactly as the sibling E2E_* flags already do (see lib/e2eProdHarness.ts).
-      command: `pnpm exec prisma generate && pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      // ⚠️ `pnpm build:worker` rides along here on purpose. The lane runs the
+      // Postgres engine's worker as a third process (see
+      // tests/e2e/_helpers/job-worker-process.ts), and it runs the SHIPPED
+      // BUNDLE — the same artifact the Dockerfile stages — so the lane exercises
+      // the packaging and not just the source. Building it in this command keeps
+      // the flow identical locally and in CI, exactly as `prisma generate` does.
+      command: `pnpm exec prisma generate && pnpm exec next build && pnpm run build:worker && pnpm exec next start --port ${PORT}`,
       url: BASE_URL,
       // Reuse a running dev server locally for fast iteration — but NEVER when a
       // custom origin was requested (a worktree run), since the only server that
@@ -284,7 +326,7 @@ export default defineConfig({
         UV_THREADPOOL_SIZE: '64',
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
-        EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
+        EMAIL_OUTBOX_PATH: EMAIL_OUTBOX_FILE,
         // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
         // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
         // returning a synthetic id_token. See instrumentation.ts +
@@ -336,7 +378,15 @@ export default defineConfig({
         // DLQ → replay path. The file is absent (fault disarmed) unless a spec
         // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
         // refused in production.
-        EMAIL_FAULT_PATH: path.resolve('/tmp/motir-test-email-fault'),
+        EMAIL_FAULT_PATH: EMAIL_FAULT_FILE,
+        // Story MOTIR-3414 · Subtask MOTIR-3427 — the per-job cutover switch's
+        // TEST-ONLY file channel. `lib/jobs/engine/cutover.ts` reads this file on
+        // every routing decision, so a spec can move one job onto the Postgres
+        // engine while `jobs-flow.spec.ts`, against this same server, keeps
+        // proving `email.send` on Inngest. An env var could not express both: it
+        // is fixed at boot. Absent (everything on Inngest) unless a spec writes
+        // it via tests/e2e/_helpers/job-routing.ts; refused in production.
+        ...(JOB_ROUTING_FILE ? { MOTIR_POSTGRES_JOB_IDS_FILE: JOB_ROUTING_FILE } : {}),
         // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
         // fixed portal) so it stops occluding the sidebar footer's collapse
         // toggle during the browser-driven shell-flows journey. next.config.ts

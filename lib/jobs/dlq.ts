@@ -3,6 +3,10 @@ import { inngest } from './client';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
 import type { JobRunDlqDTO } from '@/lib/dto/jobs';
+import { routedToEngine } from './engine/cutover';
+import { engineJob } from './engine/registry';
+import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
+import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 
 // Dead-letter replay (Story 1.6 · Subtask 1.6.4). The service-layer function the
 // 1.6.5 dashboard's "Replay" button calls: it re-emits a dead-lettered job's
@@ -53,6 +57,55 @@ export async function replayDLQ(
     throw new Error(`job_run_dlq ${dlqId} not found`);
   }
   const originalData = (row.eventData ?? {}) as Record<string, unknown>;
+
+  // ── REPLAY ROUTES BY THE SAME SWITCH AS EVERYTHING ELSE (MOTIR-3424) ────────
+  // The dashboard's Replay button must re-run the job on whichever engine that
+  // job now lives on. Re-emitting to Inngest for a job that has MOVED would land
+  // the event at a handler that declines to execute it (`defineJob`'s guard), so
+  // the operator would see a success toast and a `replayedAt` stamp for a run
+  // that never happened — the exact silent no-op MOTIR-1.6.6 fixed once already
+  // for the idempotency window, wearing different clothes.
+  //
+  // The engine's replay is a fresh `job_event` + `job_queue` pair rather than a
+  // reset of the dead run: the original run's step ledger records work that DID
+  // complete, and re-running the same row would skip precisely the steps an
+  // operator is replaying in order to re-do. A new run starts clean.
+  //
+  // It runs in the CALLER's transaction, exactly as the stamp below does — this
+  // function owns neither the transaction nor the RLS context.
+  if (routedToEngine(row.functionId)) {
+    const def = engineJob(row.functionId);
+    const event = await jobEventRepository.create(
+      {
+        name: row.eventName,
+        data: (originalData ?? {}) as Prisma.InputJsonValue,
+        workspaceId: row.workspaceId,
+      },
+      tx,
+    );
+    await jobQueueRepository.create(
+      {
+        jobId: row.functionId,
+        eventId: event.id,
+        eventName: row.eventName,
+        workspaceId: row.workspaceId,
+        runAt: new Date(),
+        // A job whose definition module has not been evaluated in THIS process
+        // still has to be replayable, so fall back to the default policy's budget
+        // rather than refusing. `transient`'s 3 is what `defineJob` would have
+        // resolved for a job that declared nothing.
+        maxAttempts: def?.maxAttempts ?? 3,
+      },
+      tx,
+    );
+    const replayedOnEngine = await jobRunDlqRepository.update(
+      dlqId,
+      { replayedAt: new Date() },
+      tx,
+    );
+    return toJobRunDlqDTO(replayedOnEngine);
+  }
+
   // Re-shape the idempotency key (see header comment) so the replay isn't
   // dedup-dropped. Only when the stored payload actually carries a string key;
   // otherwise re-emit untouched.

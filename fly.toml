@@ -24,6 +24,39 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 [build]
   dockerfile = "Dockerfile"
 
+# ── PROCESS GROUPS (MOTIR-3421) ─────────────────────────────────────────────
+#
+# `app` is the web process — the Next standalone server, unchanged. `worker` is
+# the Postgres job engine's claim loop, which runs in its OWN group rather than
+# inside the web process so job load and request serving cannot contend for one
+# event loop and the two scale independently.
+#
+# ⚠️ DECLARING A GROUP DOES NOT CREATE A MACHINE IN IT. Same distinction this
+# file's own footer draws about `min_machines_running`, and the one that cost
+# motir-ai three days of an incident filed against the wrong service (MOTIR-2102):
+# a config file is a claim about the deployment, not a reading of it. The worker
+# group is brought up with `fly scale count worker=1`, an OPERATOR action owned by
+# MOTIR-3425, which reads the result back from the platform's own API rather than
+# from this file.
+#
+# ⚠️ ADDING A `[processes]` BLOCK CHANGES WHAT `http_service` MEANS. Without one,
+# Fly runs the image's CMD on every machine and routes HTTP to all of them. With
+# one, every group is explicit and `http_service.processes` must name the groups
+# that serve traffic — omit it and Fly would route requests to the worker, which
+# listens on no port. `processes = ["app"]` below is that declaration and is not
+# optional.
+#
+# ⚠️ THE WORKER'S COMMAND IS A BUNDLE, NOT A SOURCE FILE. The runtime image is a
+# Next standalone output whose `node_modules` is the minimal set Next traced for
+# the SERVER's entries; `lib/` source arriving there at all is a tracing side
+# effect the Dockerfile explicitly refuses to depend on. So `pnpm build:worker`
+# esbuilds the entrypoint and its `lib/**` imports into one self-contained file
+# staged at `/app/worker/worker.mjs`, exactly as `/app/migrate` stages its own
+# Prisma CLI, and for the same reason.
+[processes]
+  app    = "node server.js"
+  worker = "node worker/worker.mjs"
+
 [deploy]
   # Migrations run HERE, not in the image build — Fly runs this once per deploy
   # in a temporary machine built from the same image, before any new machine
@@ -49,6 +82,11 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 [http_service]
   internal_port        = 8080
   force_https          = true
+  # REQUIRED now that [processes] exists (see its block above): only the web
+  # group serves HTTP. Without this line Fly would route requests to `worker`,
+  # which listens on no port — and every knob below would silently become a
+  # policy over the wrong machines.
+  processes            = ["app"]
   # ⚠️ These two knobs are POLICY OVER MACHINES THAT ALREADY EXIST. Fly's proxy
   # never CREATES one: auto_start starts an existing STOPPED machine and nothing
   # more, and `flyctl deploy` updates the machines that exist without adding any.
@@ -136,10 +174,46 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 # trigger asks for a SUSTAINED reading and has therefore NOT fired — this is
 # recorded so the trigger has something to fire against, which for eleven days it
 # did not.
+# ⚠️ ONE `[[vm]]` PER PROCESS GROUP — and the split exists because WITHOUT it the
+# worker inherits the WEB TIER'S SIZE (MOTIR-3425's own cost check, 2026-08-25).
+#
+# A `[[vm]]` block with no `processes` key applies to EVERY group. So the moment
+# `[processes]` gained a `worker` entry, a worker machine became a
+# `shared-cpu-2x` / 2 GB — the same box as a web machine, sized for Next.js SSR
+# at a 390 MB resident set — at $11.83/mo, which is the cost of adding a THIRD
+# web machine to run a queue poller.
+#
+# MOTIR-3425 names that outcome as a stop condition in its own words: *"if the
+# machine size the process group inherits is larger than intended, stop and
+# re-scope rather than absorbing the spend silently."* It fired. This is the
+# re-scope.
 [[vm]]
-  size   = "shared-cpu-2x"
-  memory = "2gb"
-  cpus   = 2
+  size      = "shared-cpu-2x"
+  memory    = "2gb"
+  cpus      = 2
+  processes = ["app"]
+
+# The WORKER, sized on a MEASUREMENT rather than on a guess or on the web tier.
+#
+# MEASURED 2026-08-25, running the shipped bundle (`.worker/worker.mjs`, the same
+# artifact the Dockerfile stages) against a real Postgres, reading `/proc/<pid>/status`:
+#
+#   VmRSS  286 MB steady   ·   VmHWM (peak) 310 MB   ·   sampled every 5 s for 30 s
+#
+# ⚠️ THAT IS AN IDLE READING, and it is labelled as one. It sizes the BASELINE —
+# the bundle inlines Prisma and the whole service bag — and says nothing about a
+# worker executing several handlers at once. 1 GB gives ~3.3x headroom over the
+# idle peak, comparable to the app group's measured 4.9x (see the pool comment
+# above), which is the only defensible way to pick a number here.
+#
+# TRIGGER to revise: the first sustained memory reading from a worker under real
+# job load, taken from the platform. Until then this is a floor set on one
+# controlled measurement, not a capacity claim.
+[[vm]]
+  size      = "shared-cpu-1x"
+  memory    = "1gb"
+  cpus      = 1
+  processes = ["worker"]
 
 # ── What this file does NOT solve, and must not pretend to ──────────────────
 #

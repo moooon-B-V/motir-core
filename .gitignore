@@ -56,3 +56,4 @@ next-env.d.ts
 # guards walk, and a generated tree inside one is read as source by every
 # sweep that does not know to skip it.
 /generated/
+.worker/

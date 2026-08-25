@@ -12,8 +12,12 @@ import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
-import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
-import { isProposedNodeId, type PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
+import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import {
+  isProposedNodeId,
+  PROPOSED_NODE_PREFIX,
+  type PlanChangeDiffIndex,
+} from '@/lib/planning/planChangeDiff';
 
 // The CANVAS pane of the plan-change conversation (Subtask MOTIR-1730; design
 // panel 4 — "the review surface is the CANVAS, not a corner dock"). A sibling
@@ -142,10 +146,48 @@ export function PlanChangeCanvas({
     [projectKey, diffKey, index, registerItems, targetKey, outcome],
   );
 
+  // ── The proposal's node ids CHANGE at approve, and the canvas holds one ─────
+  //
+  // A pending `add` draws as `proposed:<PlanItem id>`; once it has materialized
+  // `isMaterializedAdd` is true, the prefix is dropped, and the node IS the
+  // committed card (MOTIR-3206's fix — a second keyless copy of every accepted
+  // card was the alternative). Right, and it re-keys the node.
+  //
+  // A user who has DRILLED INTO a proposed container is therefore left focused on
+  // `proposed:<id>`, which after approve names no proposal and no work item: the
+  // `isProposedNodeId` branch in `loadLevel` above answers from a diff whose
+  // children have all moved onto the real cuid, so the level comes back empty
+  // (bug MOTIR-3439). `PlanReviewCanvas` has the same defect under a different id
+  // scheme, and both are answered by the same foundation prop rather than by two
+  // local repairs.
+  //
+  // Only a MATERIALIZED add can match: a pending one still draws under the id
+  // being asked about, and the resolver has to settle (its answer is never itself
+  // a `proposed:` id, so the canvas is asked once and stops).
+  const resolveHeldNode = useCallback(
+    (id: string): CanvasCrumb | null => {
+      if (!isProposedNodeId(id)) return null;
+      const planItemId = id.slice(PROPOSED_NODE_PREFIX.length);
+      const add = index.adds.find(
+        (candidate) =>
+          candidate.item.planItemId === planItemId &&
+          candidate.item.identifier !== null &&
+          !isProposedNodeId(candidate.nodeId),
+      );
+      if (!add?.item.identifier) return null;
+      // A committed crumb, in the committed grammar — the bare title the proposed
+      // node carried (`planChangeLevel.tsx`) was right only while there was no key
+      // to put in front of it.
+      return { id: add.nodeId, label: workItemCrumbLabel(add.item.identifier, add.item.title) };
+    },
+    [index],
+  );
+
   return (
     <>
       <ProjectRoadmapCanvas
         loadLevel={loadLevel}
+        resolveHeldNode={resolveHeldNode}
         // Re-runs the CURRENT level's load when the proposal — or the target set
         // — changes, so the diff and the target ring appear (and disappear)
         // without a remount, drill / zoom / pan preserved.

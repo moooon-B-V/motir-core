@@ -40,7 +40,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
     "prepare": "husky",
-    "postinstall": "prisma generate && pnpm --filter @motir/design-system build"
+    "postinstall": "prisma generate && pnpm --filter @motir/design-system build",
+    "build:worker": "node scripts/build-worker.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -118,6 +119,7 @@
     "ajv": "^8.20.0",
     "axe-core": "4.11.4",
     "dotenv": "^17.4.2",
+    "esbuild": "^0.28.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "eslint-config-prettier": "^10.1.8",

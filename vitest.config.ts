@@ -169,6 +169,16 @@ export default defineConfig({
         // pinning a threshold blind is how a gate gets loosened later to make a
         // build pass, which is worse than not having it. The follow-up is to read
         // the number off the first CI run and add the four `thresholds` entries.
+        // Story MOTIR-3414 · Subtask MOTIR-3426 — the Postgres job engine and the
+        // three repositories it added. The story gate MEASURED every file before
+        // pinning it below: 98.8 statements / 95.7 branches / 99.0 functions /
+        // 99.7 lines over the set, with every FILE clearing 90 on all four axes.
+        // Pinned at the project's 90 rather than at the measurement, so ordinary
+        // churn does not fail the build while a real regression does.
+        'lib/jobs/engine/**',
+        'lib/repositories/jobQueueRepository.ts',
+        'lib/repositories/jobStepRepository.ts',
+        'lib/repositories/jobEventRepository.ts',
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
         // Story MOTIR-2765 · Subtask MOTIR-2771 — the acceptance-receipt freeze.
@@ -1400,6 +1410,20 @@ export default defineConfig({
         // matches no reported file, so the threshold would pass vacuously.
         // MOTIR-2527 — the membership reader, measured at 100/100/100 on this
         // branch before being pinned (see the `include` note above).
+        // Story MOTIR-3414 · Subtask MOTIR-3426 — the Postgres job engine.
+        // MEASURED on this branch before being pinned (see the `include` note):
+        // cutover / dispatcher / registry / runner 100 across the board; ledger
+        // 100/95/100/100; notify 97.9/94.1/100/100; step 98.5/92.5/100/100;
+        // worker 98.3/95.9/96.2/99.0; all three repositories 100.
+        //
+        // ⚠️ A GLOB, not a per-file list, deliberately: the next story in this
+        // epic ADDS files here (the scheduler, the supervisor collapse), and a
+        // hand-maintained list is one a new file forgets to join — which is the
+        // same failure this gate's own guard exists to catch, one level up.
+        'lib/jobs/engine/**': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/jobQueueRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/jobStepRepository.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/jobEventRepository.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-2643 — MEASURED before being pinned, on this branch, with
         // `tests/acceptance-video-diagnostics.test.ts`: 90.9 branches / 100
