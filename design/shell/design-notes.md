@@ -247,7 +247,7 @@ frame shares one document, the compiled `@media (width >= …)` blocks are re-em
 
 ---
 
-## The navigation-pending grammar (MOTIR-3431)
+## The navigation-pending grammar (MOTIR-3431 · RE-MOUNTED by MOTIR-3492)
 
 **What the authed content area shows between the click and the arrival.** The area had no drawing for
 this state at all — `git grep -in 'loading\|skeleton\|pending\|spinner\|busy' origin/main -- design/shell/design-notes.md`
@@ -255,24 +255,191 @@ returned nothing at `dacf711b` — so every surface that has needed one so far i
 four different pulse compositions now live in four `_components` folders. This section is the one
 grammar all of them answer to.
 
-**Asset ·** `navigation-pending.mock.html` / `navigation-pending.png`. **Cards ·** MOTIR-3431 draws it;
-MOTIR-3433 and MOTIR-3434 build it; MOTIR-3432 composes it one level down.
+**Asset ·** `navigation-pending.mock.html` / `navigation-pending.png`. **Cards ·** MOTIR-3431 drew it;
+MOTIR-3492 re-drew it against the constraint below. The code cards that built the first revision
+(MOTIR-3433, MOTIR-3435) were **reverted**; MOTIR-3434 shipped and is untouched by this revision.
 
-### The surface, and its boundary
+### ⚠️ THE CONSTRAINT THIS REVISION EXISTS FOR — a `loading.tsx` cannot sit above a page that 404s
 
-The subject is **`<main>`'s single child inside `app/(authed)/layout.tsx`** while a navigation to a
-route in that group is in flight. The top bar, the persistent rail and the context path are the
-shell's; a navigation inside the group does not re-render them, and Panel A draws them four times
-identical because that is the claim, not decoration.
+**A `loading.tsx` fallback can render as soon as its ancestor layouts resolve, which is BEFORE the
+page function runs. That flushes the response head and fixes the HTTP status at 200, so a
+`notFound()` reached later renders the not-found BODY under a 200 and the 404 is gone.** **11 of the
+58 `app/(authed)` pages call `notFound()`**, three of those assertions are tenant-isolation
+contracts, and `/items/[key]`'s own source calls its 404 a _"no existence leak"_ guarantee. A group
+boundary breaks all 11 at once.
 
-This design does **not** draw the work-item detail page's own route-shaped frame or its per-section
-streaming states — those are MOTIR-3432's, which composes this grammar rather than restating it. It
-restyles nothing in the shell and introduces no colour: every fill is an existing `--el-*` token.
+Established by A/B with the boundary as the only variable, not by argument — the table is in
+`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_, which is
+the prose home of the rule; `tests/navigation/loading-boundary-guard.test.ts` is the guard. **Hoisting
+the `notFound()` into a `layout.tsx` above the page does not help and was built and measured:** a
+layout is an ANCESTOR of the boundary, so resolving it is precisely what RELEASES the fallback.
+
+The first revision of this section said _"one `app/(authed)/loading.tsx` is the floor for all 58
+pages"_. **That floor cannot exist.** Everything below is what survives, and where the frame goes
+instead.
+
+### THE WAIT HAS THREE WINDOWS, AND THE MISTAKE WAS BELIEVING IT HAD ONE
+
+The frame was not the error. The error was giving windows 1 and 2 the same boundary, when only one of
+them is the page's to speak for.
+
+| #     | window         | from → to                                 | who can speak                                                                                                            | instrument                                                                                      |
+| ----- | -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **1** | the GATE       | the click → the destination's first flush | only the SHELL, which is already mounted. On a HARD navigation nobody can, and that is not a defect — no page exists yet | the shell's pending mark (client-only, below)                                                   |
+| **2** | the FRAME      | the first flush → the first content       | the destination page itself                                                                                              | an in-page `<Suspense>` placed AFTER the page's gate                                            |
+| **3** | the LATE STACK | the first content → settled               | the page                                                                                                                 | the page's own allocation — `design/work-items/` § _The item page at ARRIVAL_ is the worked one |
+
+**Window 1 is the one a route boundary was buying, and it is the one that cannot be bought that way.**
+A gate is by definition the reads that decide whether this reader may see this page at all, so nothing
+may be flushed until it has run. What a route boundary offered was to flush anyway — which is exactly
+the defect.
+
+**So the design's real instruction is to SHRINK window 1**, and it is not a slogan: a gate is
+`getSession` → the active project → the existence read → the permission read, and **anything else in
+front of the boundary is a read that could have been behind it**. `app/(authed)/items/[key]/page.tsx`
+is the shipped demonstration — twenty-nine serial awaits cut to that gate plus one concurrent group
+(MOTIR-3435's surviving half).
+
+### WINDOW 1 — THE SHELL'S PENDING MARK, and why it is a MARK and not a frame
+
+**On a soft navigation the shell is already mounted, so a CLIENT affordance renders with no server
+boundary anywhere — and therefore cannot touch a status.** On a document request it does not render at
+all: the shell is being produced by the server for the first time and there is no pending navigation
+to have. That asymmetry is the whole reason this instrument is safe where a `loading.tsx` is not.
+
+**It is a MARK on the thing the reader clicked, not a skeleton.** The shell does not know the
+destination's shape. A skeleton drawn by the shell would be a guess that the page's own frame then
+replaces — two frames for one navigation, which is the flicker the reveal delay exists to remove,
+wearing a third costume.
+
+|                   | the decision                                                                                                                                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **what**          | the clicked `<Link>` marks itself pending — the rail item, the breadcrumb, the table row that navigates                                                                                                                                   |
+| **how**           | `useLinkStatus()` from `next/link` (verified exported at `next@16.2.6`), read inside ONE wrapper the shell's nav items and navigating rows compose, never at each call site                                                               |
+| **the treatment** | the rail item's OWN hover treatment, HELD — `--el-sidebar-item-bg-hover` behind it and `--el-text` ink, which is what the item already paints under a pointer. No spinner, no new hue, no size change: a mark that resizes moves the rail |
+| **when**          | the same `nav-pending-reveal` keyframe and the same 120 ms delay, REFERENCED, never re-declared                                                                                                                                           |
+| **a11y**          | `aria-busy="true"` on the marked link; the destination's own frame announces the region, so the mark does not also announce a live region                                                                                                 |
+
+**What it deliberately does NOT cover, said plainly rather than left to be discovered:**
+
+- **A typed URL, a reload, an emailed link.** A hard navigation has no mounted shell. Nothing can speak
+  in window 1 for these, at any cost, and the reader's first feedback is window 2's frame. This is
+  what makes shrinking the gate the substantive work rather than the frame.
+- **A programmatic `router.push`** — `/items`' tree ↔ list, the plans list's status tabs, the item
+  page's activity tabs. `useLinkStatus` reads a `<Link>`, and these are not links. Their pending state
+  is `useTransition()`'s `isPending` at the call site, wrapped as `startTransition(() => router.push(…))`,
+  feeding the SAME mark. Three call sites, named here so the next author does not invent a fourth
+  mechanism for them.
+- **A `shallowPush` switch** — nothing at all, and that is THE SWITCH RULE below, unchanged.
+
+### WINDOW 2 — THE FRAME, MOUNTED IN THE PAGE
+
+**The drawing is unchanged. Only the mount point moved.** The wrapper, the header block, the toolbar
+row, the content region and the whole no-shift mapping below are the first revision's, verbatim —
+they were never what was falsified.
+
+The shape a page takes:
+
+```tsx
+// the GATE — awaited, with NO boundary above or around it. The status is
+// decided here, so nothing may be flushed until it has run.
+const session = await getSession();
+if (!session) redirect('/sign-in');
+const ctx = await getActiveProject();
+const item = await …;            // may notFound() — the 404 is still a 404
+const held = await …;            // may decide the affordances
+
+// the FRAME — the first flush carries it, and the status is already committed
+return (
+  <Suspense fallback={<PageSkeleton … />}>
+    <Body … />                    {/* every non-gate read lives in here */}
+  </Suspense>
+);
+```
+
+**Why this is safe and a `loading.tsx` is not, in one sentence:** the boundary is BELOW the gate
+rather than above it, so the flush it releases happens after the status is settled instead of before.
+
+**`/items` already ships exactly this** — its header and `[Filter] · [Tree ▾] · [+ New]` toolbar render
+from the gate, and only the table sits behind `<Suspense fallback={<IssueTreeSkeleton/>}>`. Under the
+first revision `/items` was the story's stated EXCEPTION, the one page a sweep would damage. **Under
+this revision it is the worked example.** That inversion is the clearest single test of whether the
+new grammar is the right one.
+
+### WHICH SURFACES EARN A FRAME — the rule, replacing _what a nearer boundary owes this one_
+
+1. **Every page may have one; no page inherits one.** There is no group frame and there cannot be one.
+   A page without a frame is a page that has not been given one — not a page that opted out.
+2. **A frame only ever covers a region that has NOTHING to show yet.** Whatever the gate alone can
+   paint — a header, a static toolbar, a tab strip — is painted, and the boundary goes below it. A
+   frame drawn over a control the reader can already click is a page made worse by being swept.
+3. **Its SHAPE is chosen from three, in this order.** The page's OWN body shape where the page has one
+   worth standing in for; the FAMILY shape where a set of routes share a body — the 31 `settings/*`
+   routes' rail-and-pane is the one such family, and it is `design/settings/`'s to draw; the GENERIC
+   block frame (Panel B) otherwise.
+4. **The shared parts still live in ONE primitive.** `PageSkeleton` owns the wrapper, the header block
+   and the reveal; a page passes its body in. A frame that COPIES those three instead of composing
+   them is the drift that put `IssueTreeSkeleton` three columns and 272 px behind the table it stands
+   in for, for eighty days, with its own comment promising it was in sync (MOTIR-3452).
+5. **No `loading.tsx` is added anywhere under `app/(authed)`.** It stays legal above a subtree where no
+   page decides existence — 47 of the 58 qualify — and this design still declines it, for the locator
+   cost below. **One mechanism, not two.** (`app/(planning)/loading.tsx` and the two under
+   `settings/project/` predate this and are out of scope; the guard rules on the shape, not on this
+   preference.)
+
+**The 24 heavy surfaces MOTIR-3440 sweeps, by whether a route boundary was ever available to them** —
+measured at `origin/main` `4fd55464` with
+`grep -rl 'notFound()' 'app/(authed)' --include=page.tsx`:
+
+| family                       | surfaces                                                                                                                                                                                                                    | deciders among them                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| project settings (10)        | `settings/project`, and under it the board, workflow, automation, repositories, AI-planning and lesson-list panes, `settings/project/ai-planning/lessons/[lessonId]`, `settings/project/roles/[roleKey]` and its edit route | **3** — the lesson, the role, the role's edit         |
+| workspace + organization (4) | `settings/workspace/jobs` · `settings/workspace/gitlab` · `settings/organization` · `settings/organization/billing`                                                                                                         | **1** — billing, the self-host 404 the A/B was run on |
+| work-item lists (2)          | `items/archived` · `items/[key]/edit`                                                                                                                                                                                       | **1** — the edit route                                |
+| canvases (4)                 | `roadmap` · `plans` · `plans/[id]` · `boards`                                                                                                                                                                               | **1** — `plans/[id]`                                  |
+| its own card (1)             | `code-health`                                                                                                                                                                                                               | 0                                                     |
+| reports + one-shots (3)      | `reports/burndown` · `sprints/[id]/report` · `invite/accept`                                                                                                                                                                | **1** — the sprint report                             |
+| the non-regression (1)       | `items`                                                                                                                                                                                                                     | 0 — and it already streams                            |
+
+**Seven of the 24, and five of the eleven deciders sit under `settings/`** — so the settings family,
+the one place a shared boundary looked most obviously right, is the one place it is most obviously
+wrong. The family's shared frame survives as a shared COMPONENT that all 31 routes render in-page; it
+does not survive as `app/(authed)/settings/loading.tsx`.
+
+### THE LOCATOR COST — decided, and the decision is not to incur it
+
+**The cost belongs to the ROUTE boundary, not to the frame.** A route-level fallback makes React
+retain the previous route's subtree mounted-and-hidden while the new one streams, so both are in the
+DOM; Playwright resolves locators before filtering on visibility, so an unscoped `getByText` /
+`getByTestId` / `getByLabel` matches both and fails strict mode. One group boundary turned **30
+assertions across 17 spec files** red at once, and exactly zero of the 30 used `getByRole`, which is
+immune because the accessibility tree excludes the hidden copy.
+
+**An in-page `<Suspense>` renders INSIDE the destination page, so the previous route is already gone
+and there is one subtree in the DOM.** Measured on the same file rather than argued:
+
+| `tests/e2e/issue-detail-flow.spec.ts`                                   | result             |
+| ----------------------------------------------------------------------- | ------------------ |
+| with the `(authed)` group boundary                                      | **8 of 16 failed** |
+| boundary removed, nothing else changed                                  | **16 passed**      |
+| with the two in-page boundaries `/items/[key]` ships today (MOTIR-3436) | **16 passed**      |
+
+and that file still contains **23** unscoped `page.getByText` / `getByTestId` / `getByLabel` calls
+against 76 `getByRole` ones (counted at `origin/main` `4fd55464`). It is the spec most exposed to the
+collision and it is green.
+
+**So the decision is (b) of the two MOTIR-3492 offered — scope the boundaries, not the assertions.**
+No spec is rewritten by this design and none needs to be; scoping the 30 to `getByRole` stays good
+practice on its own merits and is a prerequisite of nothing here. **The standing rule this leaves:
+a route-level boundary is a suite-wide change and an in-page one is a local change.** If a route
+boundary is ever reintroduced, the 30 come back with it, and that is the number to weigh at the
+moment of reintroducing it.
 
 ### THE REVEAL DELAY — 120 ms
 
-**The frame is mounted immediately and revealed at 120 ms**, over a 90 ms fade, so it is fully visible
-at 210 ms. The declaration is CSS and nothing else:
+**Unchanged, and it now governs both reveals** — the shell's mark in window 1 and the page's frame in
+window 2. One declaration, referenced twice; two reveals at two times is the flicker this design
+exists to remove.
 
 ```css
 @keyframes nav-pending-reveal {
@@ -288,21 +455,21 @@ at 210 ms. The declaration is CSS and nothing else:
 }
 ```
 
-**Why the frame is MOUNTED at 0 and not at 120.** Once the address bar has changed, the previous
-surface is lying. Mounting immediately is what makes the destination the thing on screen; the delay
-governs only whether the reader is shown that it is still loading.
+**Why the affordance is MOUNTED at 0 and not at 120.** Once the reader has committed to a
+destination, the previous surface is lying. Mounting immediately is what makes the pending state the
+thing on screen; the delay governs only whether the reader is shown it.
 
 **Why 120, argued from the two states a reader can be in — the only two there are:**
 
-| the route resolves                                                                      | what the reader sees                                                                   | why the number holds                                                                                                                                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **in under 120 ms** — an empty settings pane, a cached segment                          | the previous surface, then the destination. **The frame is never visible.** One paint. | 0.1 s is the classical ceiling for a response that reads as _instantaneous_. Inside it the navigation has already succeeded, and a state placed there is an interruption the reader has to parse and discard. 120 ms is that ceiling plus one 60 Hz frame of slack, so a route landing one frame late is still treated as instant. |
-| **in longer than 120 ms** — Work Items, the item detail page, anything with a real read | the frame, fading in, before their eye has finished travelling to the content region   | the navigation has ALREADY failed to feel instantaneous, so the frame is not an interruption — it is the only evidence the click landed. A saccade to the content region lands around 150–200 ms after the click, so a reveal begun at 120 ms is in place before the reader looks at it and they never see it arrive.              |
+| the window resolves                                                              | what the reader sees                                                                        | why the number holds                                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **in under 120 ms** — a cached segment, an empty settings pane                   | the previous surface, then the destination. **Nothing pending is ever visible.** One paint. | 0.1 s is the classical ceiling for a response that reads as _instantaneous_. Inside it the navigation has already succeeded, and a state placed there is an interruption the reader has to parse and discard. 120 ms is that ceiling plus one 60 Hz frame of slack, so a route landing one frame late is still treated as instant. |
+| **in longer than 120 ms** — Work Items, the item page, anything with a real read | the mark, then the frame, before their eye has finished travelling                          | the navigation has ALREADY failed to feel instantaneous, so a pending state is not an interruption — it is the only evidence the click landed. A saccade to the content region lands around 150–200 ms after the click, so a reveal begun at 120 ms is in place before the reader looks at it and they never see it arrive.        |
 
 **It is an animation, not a timer, and that is load-bearing.** No `useEffect`, no `setTimeout`, no
 client state, nothing to clean up when a navigation is abandoned: the element is removed and the
-animation goes with it. A route that resolves in 40 ms unmounts the frame 80 ms before it would have
-become visible, and no code had to decide that.
+animation goes with it. A window that closes in 40 ms unmounts its affordance 80 ms before it would
+have become visible, and no code had to decide that.
 
 **Under `prefers-reduced-motion: reduce` the delay stays and the motion goes** — the reveal becomes a
 step at 120 ms with no fade, and the pulse stops, leaving static blocks. The delay is not an animation
@@ -338,40 +505,20 @@ draws a subtitle settles **20px UP** on a page that has none; a frame that omits
 on the majority that do. Drawing it is the better half — an upward settle pulls content toward the
 reader's eye rather than away from it, and the pages carrying no subtitle (Work Items, Boards) are
 also the fast ones, which under the reveal delay usually never show the frame at all. **A route that
-both carries no subtitle AND reads slowly has outgrown the group frame and owes itself a nearer one.**
-
-### WHAT A NEARER BOUNDARY OWES THIS ONE
-
-One `app/(authed)/loading.tsx` is the floor for all **58** `page.tsx` files in the group (measured at
-`origin/main` `dacf711b`; the group had exactly **two** `loading.tsx`, both under
-`settings/project/`). A route may draw its own nearer frame where the group's is a poor stand-in —
-`/items/[key]` does, next door. **When it does it inherits three things and may change only the
-fourth:**
-
-|                      | the group frame                                                                                                  | a route-shaped frame                                                                           |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **the wrapper**      | SAME — `flex flex-col gap-6`, no gutter of its own                                                               |                                                                                                |
-| **the header block** | SAME — `h-8` title on a `gap-1` stack. A route whose `<h1>` is the same size may not draw a different box for it |                                                                                                |
-| **the reveal**       | SAME — the one `nav-pending-reveal` keyframe and the one 120 ms delay, **referenced, never re-declared**         |                                                                                                |
-| **the body**         | a generic bordered region — 40px header, eight 40px rows                                                         | whatever that route actually renders: two columns and a rail, a board of columns, a form stack |
-
-**Two boundaries revealing at two times is the flicker this design exists to remove, wearing a second
-costume.** So the shared three live in one exported primitive that both boundaries render, and the
-body is what a route passes into it. A route-shaped frame that COPIES the inherited rows instead of
-composing them is the same drift as a skeleton restating a table's columns — which is exactly how
-`IssueTreeSkeleton` came to be three columns and 272px behind the table it stands in for, for eighty
-days, with its own comment promising it was in sync (MOTIR-3452, filed from this pass).
+both carries no subtitle AND reads slowly should pass its own body to `PageSkeleton` rather than take
+the generic one** — which under this revision is a prop, not a second boundary.
 
 ### THE SWITCH RULE — a client-only view switch shows NO pending state
 
-**When a toggle's target body needs no new server data, there is nothing to wait for. Draw no spinner,
-disable no segment, show no skeleton, dim nothing. The body is simply there, in the same frame as the
-click.** A pending affordance on such a switch is a **defect**, not a courtesy: it manufactures a wait
-the reader would not otherwise have had, and it is the complaint this story was reported for,
-reintroduced as a feature.
+**Unchanged by this revision, and it is the one part of the first one that shipped.** When a toggle's
+target body needs no new server data, there is nothing to wait for. Draw no spinner, disable no
+segment, show no skeleton, dim nothing. The body is simply there, in the same frame as the click. A
+pending affordance on such a switch is a **defect**, not a courtesy: it manufactures a wait the reader
+would not otherwise have had, and it is the complaint this story was reported for, reintroduced as a
+feature.
 
-**The three call sites it governs** — drawn at rest in both positions in Panel E, and re-pointed at the
-lifted helper by MOTIR-3434:
+**The three call sites it governs** — drawn at rest in both positions in Panel E, re-pointed at the
+lifted helper by MOTIR-3434, and guarded by `tests/navigation/loading-boundary-guard.test.ts`:
 
 | call site                                             | param                    | why the server has nothing to say                                                                                            |
 | ----------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -381,9 +528,10 @@ lifted helper by MOTIR-3434:
 
 **Three switches are NOT governed by it and keep their `router.push`:** Work Items' tree ↔ list, the
 plans list's status tabs, and the item page's activity tabs. Each changes what the server must fetch,
-so each is a real navigation and is entitled to the pending frame above. **The discriminator is not the
-control** — all six are the same `Segmented` — **it is whether the target body needs data the browser
-does not have.**
+so each is a real navigation — and under this revision each is entitled to the shell's MARK (via
+`startTransition`, above) and to its destination's own frame. **The discriminator is not the control**
+— all six are the same `Segmented` — **it is whether the target body needs data the browser does not
+have.**
 
 ### Primitives and tokens
 
@@ -395,8 +543,9 @@ does not have.**
 | the content region's chrome | `rounded-(--radius-card)` · `border-(--el-border)` · header band `bg-(--el-surface-soft)` | mirrors the shipped table container, which is what makes block 4 a stand-in rather than a rectangle                                                                                                                                                                                                                 |
 | the toolbar chips           | `h-(--height-control)`                                                                    | the height every real toolbar control already takes                                                                                                                                                                                                                                                                 |
 | status-pill placeholders    | `rounded-full`                                                                            | genuinely circular ends; the shape rule's carve-out, matching the shipped `Pill`                                                                                                                                                                                                                                    |
-| the announced state         | `aria-busy="true"` on the frame; blocks are decorative                                    | the reader of a screen reader is told the region is busy once, not eight times                                                                                                                                                                                                                                      |
-| the reveal                  | `nav-pending-reveal` keyframe, `120ms` delay, `90ms ease-out`, `both`                     | the one declaration; a nearer boundary references it                                                                                                                                                                                                                                                                |
+| the shell's pending mark    | `--el-sidebar-item-bg-hover` fill · `--el-text` ink                                       | the rail item's own hover pair, HELD. It exists in the build only as a `hover:` variant, so the treatment is a state the component already owns rather than a new one — no new hue, and no size change, because a mark that resizes moves the rail                                                                  |
+| the announced state         | `aria-busy="true"` on the frame and on the marked link; blocks are decorative             | the reader of a screen reader is told the region is busy once, not eight times                                                                                                                                                                                                                                      |
+| the reveal                  | `nav-pending-reveal` keyframe, `120ms` delay, `90ms ease-out`, `both`                     | the one declaration; window 1 and window 2 both reference it                                                                                                                                                                                                                                                        |
 
 **No Tier-0 anything.** No `--color-*`, no `rounded-md`/`p-2`/`h-9`, no invented hue. The board's own
 chrome takes `--el-text-secondary` for annotation ink rather than `--el-text-muted`, which fails AA on
@@ -407,32 +556,48 @@ on (`docs/decisions/design-board-chrome-aa.md`).
 
 **This state has no menu entry: its entrance is every navigation in the group.** That is why the asset
 opens with a TRANSITION rather than a screen — Panel A draws the surface being left, the window in
-which deliberately nothing happens, the frame revealed, and the page arrived, with the shell held
-identical across all four. A single still of a skeleton could not show the reveal delay or the no-shift
-claim at all; the sequence is what makes both readable.
+which deliberately nothing happens, the gate window with the shell's mark on it, the page's own frame
+after the flush, and the arrival, with the shell held identical throughout. A single still of a
+skeleton could not show the reveal delay, the three windows or the no-shift claim at all; the
+sequence is what makes them readable.
 
 ### The design-allocation sweep — what this asset GIVES and TAKES
 
-| card                                                                                  | GIVES / TAKES | what                                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MOTIR-3433** — the group boundary + the page-skeleton primitive                     | **GIVES**     | the frame's composition block by block, the `nav-pending-reveal` declaration verbatim, the `aria-busy` placement, and the rule that the primitive owns the wrapper + header + reveal so a nearer boundary can compose them |
-| **MOTIR-3434** — `shallowUrl` and the three call sites                                | **GIVES**     | the switch rule in the imperative, the three governed call sites and the three deliberately excluded ones, and the `Segmented` drawn at rest so "no pending affordance" is a picture rather than a sentence                |
-| **MOTIR-3432** — the item-detail design                                               | **GIVES**     | the header block's box, the `gap-6` wrapper and the single reveal it must reference. **TAKES nothing** — that card owns the detail page's own frame and its per-section streaming states, which this asset does not draw   |
-| **MOTIR-3435** — `/items/[key]`'s own `loading.tsx`                                   | **GIVES**     | the nearer-boundary rule: same wrapper, same header box, same reveal; only the body is its own                                                                                                                             |
-| **MOTIR-3437** — the story's vitest gate                                              | **GIVES**     | two assertions this asset makes checkable — that every authed route resolves to a boundary, and that no client-only toggle calls `router.push`                                                                             |
-| **MOTIR-3441 / MOTIR-3442** — the settings and remaining-surface designs (MOTIR-3440) | **GIVES**     | the grammar they extend. Both are `relates_to` on MOTIR-3431 and neither is blocked by it                                                                                                                                  |
+| card                                                   | GIVES / TAKES | what                                                                                                                                                                                                             |
+| ------------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-3434** — `shallowUrl` and the three call sites | **GIVES**     | the switch rule, unchanged from the first revision and already shipped. This revision takes nothing back from it                                                                                                 |
+| **MOTIR-3440** — the remaining-surfaces story          | **GIVES**     | the three windows, the in-page mount point, the earn-a-frame rule, the per-family decider count, and the locator decision. **TAKES** its "settings gets a frame of its own" premise, which named a `loading.tsx` |
+| **MOTIR-3441** — the settings family's arrival frame   | **GIVES**     | that the family shape survives as a shared COMPONENT rendered in-page by all 31 routes, and that five of the eleven deciders are inside that family                                                              |
+| **MOTIR-3442** — the earn-your-own-frame rule          | **GIVES**     | the rule in full, above. **TAKES** its "instead of the group's" framing: there is no group's frame to be an alternative to                                                                                       |
+| **MOTIR-3492** — this card                             | **TAKES**     | everything the first revision said about a route-group boundary                                                                                                                                                  |
+
+### ⚠️ What this asset SPECIFIES that no card owns
+
+Named here rather than left to be inferred, because all three are things the first revision's code
+cards built and the revert removed. **This asset does not create them, and it is not a plan:**
+
+1. **`PageSkeleton`** — the shared primitive owning the wrapper, header block and reveal. Built by
+   MOTIR-3433, reverted with it. Every in-page frame composes it, so nothing above can be built first.
+2. **The shell's pending mark** (window 1) — the `useLinkStatus` wrapper and its adoption by the rail.
+   MOTIR-3433 spent this window on the group boundary instead, so it has never been built.
+3. **`/items/[key]`'s own frame** (window 2) — MOTIR-3435's boundary half was reverted, so the page
+   today flushes nothing until its tier-2 group resolves. Its concurrency half shipped and stands.
 
 ### What this design overrides
 
-Nothing. It is the area's first drawing of this state, so there is no prior target to reconcile. Two
-adjacent facts it does **not** change, named so a reader does not infer them:
+**Its own first revision, MOTIR-3431's, and only in the mount point.** The frame's composition, the
+reveal delay, the no-shift mapping and the switch rule are carried forward verbatim; what is withdrawn
+is the route-group boundary that mounted them, the sentence _"one `app/(authed)/loading.tsx` is the
+floor for all 58 pages"_, and the nearer-boundary table that read `the group frame` against
+`a route-shaped frame`. Two adjacent facts it still does **not** change, named so a reader does not
+infer them:
 
-- **`app/(planning)/loading.tsx` stays as it is** (MOTIR-2069). It is the precedent this generalises,
-  not a surface this re-specifies; its `PlanningWorkspaceSkeleton` is a route-shaped body under the
-  nearer-boundary rule, and it predates the reveal delay.
+- **`app/(planning)/loading.tsx` stays as it is** (MOTIR-2069), and the two under `settings/project/`
+  stay as they are. They sit above no page that calls `notFound()`, so the rule does not reach them;
+  rule 5 above is a preference for new work, not a sweep of existing files.
 - **The four existing `_components` skeletons stay as they are.** They are `<Suspense>` fallbacks
-  INSIDE a page, not route boundaries; this design supplies the vocabulary they already speak and
-  takes nothing from them.
+  INSIDE a page — which is now the sanctioned shape rather than the tolerated one — and this design
+  supplies the vocabulary they already speak and takes nothing from them.
 
 ### How the render was produced
 
@@ -446,14 +611,19 @@ The asset is generated, not hand-drawn, so it cannot drift from the app:
    the exact option sets its three call sites pass it.
 3. Tailwind compiles `app/globals.css`'s layers over that markup, so the mock's stylesheet is the
    build's own output rather than a retyped token block.
+4. **This revision re-uses those renders unchanged and edits only what the constraint falsified** —
+   the sequence's captions and mechanism, the rule panel, and the two panels added for the shell mark
+   and the locator decision. Re-generating the shipped-component regions would have changed pixels
+   that no finding touched, and made the diff unreadable for the reviewer who has to check the part
+   that did change. The PNG is re-exported with `node scripts/render-design-mock.mjs`.
 
-The only markup here that is **not** already shipped is the pending frame and the keyframe beside it —
-which is what this card exists to decide.
+The only markup here that is **not** already shipped is the pending frame, the shell's mark, and the
+keyframe beside them — which is what this card exists to decide.
 
 Two board artefacts, named here so nobody reads them as design: the shell stages are held at a fixed
-**560px** so four of them read as one sequence, where the app's shell is `h-dvh`; and the frames that
-show the frame REVEALED force the animation's end state, because a board is a still and a time-based
-state has to be frozen at the moment it is being drawn.
+**560px** so the sequence reads as one, where the app's shell is `h-dvh`; and the frames that show a
+revealed state force the animation's end state, because a board is a still and a time-based state has
+to be frozen at the moment it is being drawn.
 
 ---
 

@@ -1,13 +1,29 @@
 <!doctype html>
 <!--
   THE NAVIGATION-PENDING GRAMMAR — what the authed content area shows between
-  the click and the arrival (MOTIR-3431).
+  the click and the arrival (MOTIR-3431, RE-MOUNTED by MOTIR-3492).
 
-  The design of record for the pending frame every route under app/(authed)
-  inherits, the delay at which it is revealed, what a route-shaped boundary owes
-  it, and the rule that a client-only view switch shows no pending state at all.
-  Read it with design/shell/design-notes.md, which carries the argument, the
-  token map and the allocation to each consuming card.
+  ⚠️ THIS IS THE SECOND REVISION, AND IT EXISTS BECAUSE THE FIRST ONE'S MOUNT
+  POINT IS ILLEGAL. A loading.tsx fallback renders as soon as its ancestor
+  layouts resolve — BEFORE the page function runs — which flushes the response
+  head and fixes the status at 200. A notFound() reached later then renders the
+  not-found BODY under a 200, and 11 of the 58 app/(authed) pages call
+  notFound(). Established by A/B with the boundary as the only variable;
+  motir-core/CLAUDE.md, A loading.tsx may NOT sit above a route that decides
+  existence, is the prose home and
+  tests/navigation/loading-boundary-guard.test.ts is the guard. Hoisting the
+  gate into a layout does NOT recover the status — a layout is an ANCESTOR of
+  the boundary, so resolving it is what RELEASES the fallback. That was built
+  and measured, and it is the first idea everyone has.
+
+  So the design of record is now: the wait has THREE windows; the shell speaks
+  for the first with a MARK on the link that was clicked; the page speaks for
+  the second with its own frame behind an in-page <Suspense> placed AFTER its
+  gate; and no route-group boundary exists at all. The frame's own drawing,
+  the 120ms reveal, the no-shift mapping and the switch rule are carried
+  forward from the first revision unchanged — they were never what was
+  falsified. Read it with design/shell/design-notes.md, which carries the
+  argument, the token map and the allocation to each consuming card.
 
   BUILT AGAINST SHIPPED REALITY, NOT AGAINST THE SOURCE (notes.html #73). The
   top bar in every frame is the real app/(authed)/_components/TopNav.tsx, taken
@@ -18,20 +34,21 @@
   vitest + RTL setup with the real messages/en.json, then laid out in Chromium
   against Tailwind's own compiled output of app/globals.css. The three view
   switches are the real Segmented, in the exact option sets their three call
-  sites pass it.
+  sites pass it. This revision re-uses those renders unchanged and edits only
+  what the constraint falsified.
 
-  The one thing here that is NOT already shipped is the pending frame itself and
-  the nav-pending-reveal keyframe beside it — which is what this card exists to
-  decide.
+  The one thing here that is NOT already shipped is the pending frame itself,
+  the shell's mark beside it and the nav-pending-reveal keyframe — which is
+  what this card exists to decide.
 
-  The shell stages are held at a fixed 560px so four of them read as one
-  sequence; the app's shell is h-dvh. That is a property of this board.
+  The shell stages are held at a fixed 560px so the sequence reads as one; the
+  app's shell is h-dvh. That is a property of this board.
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The navigation-pending grammar (MOTIR-3431)</title>
+    <title>The navigation-pending grammar (MOTIR-3431 · MOTIR-3492)</title>
     <style>
       @layer properties;
       @layer theme, base, components, utilities;
@@ -3973,6 +3990,28 @@
         background: var(--el-tint-sky);
         color: var(--el-text-strong);
       }
+      /* THE SHELL'S MARK (Panel E). The rail item's own hover pair, in its
+         RESTING form: the build compiles that utility only as a `hover:`
+         variant, so the board declares the held state here. Board chrome, not
+         design — the app applies the component's own hover classes. */
+      .nav-mark {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .rail-strip {
+        padding: 10px;
+        background: var(--el-sidebar-bg);
+      }
+      /* The two rail strips are a before/after pair and must read side by side,
+         so their captions and notes are capped to the strip rather than to the
+         board's full width. */
+      .rail-figure {
+        max-width: 300px;
+      }
+      .rail-figure .board-note,
+      .rail-figure .board-cap {
+        max-width: 300px;
+      }
       .seg-table {
         max-width: none;
       }
@@ -3985,18 +4024,22 @@
   <body>
     <h1 class="board-title">The navigation-pending grammar</h1>
     <p class="board-sub">
-      What the authed content area shows between the click and the arrival: the pending frame, the
-      120&nbsp;ms delay that stops a fast route flashing it, what a nearer boundary owes this one,
+      What the authed content area shows between the click and the arrival: the THREE windows of the
+      wait, the shell&rsquo;s mark on the first, the page&rsquo;s own in-page frame on the second,
+      the 120&nbsp;ms delay that stops a fast route flashing either, which surfaces earn a frame,
       and the rule that a view switch needing no server shows no pending state at all.
-      <b>MOTIR-3431</b> · the code cards are <b>MOTIR-3433</b> and <b>MOTIR-3434</b>.
+      <b>MOTIR-3431</b> drew it; <b>MOTIR-3492</b> re-mounted it after a route-group boundary was
+      found to destroy the 404 on all 11 authed routes that decide existence. <b>MOTIR-3433</b> and
+      <b>MOTIR-3435</b> were reverted; <b>MOTIR-3434</b> shipped and is untouched.
     </p>
 
     <section class="panel">
       <h2 class="panel-h">
-        Panel A · The transition, drawn —
+        Panel A · The transition, drawn — a HARD navigation
         <span class="panel-h-note"
           >the shell is the same object in all four frames; only <code>&lt;main&gt;</code>'s child
-          changes</span
+          changes. Window&nbsp;1 is structurally EMPTY here, and Panel&nbsp;E is the soft
+          navigation, where it is not</span
         >
       </h2>
       <p class="panel-p">
@@ -4006,6 +4049,15 @@
         are unchanged by a navigation inside the group; drawing them four times identical is the
         claim, not decoration. The region that changes is <code>&lt;main&gt;</code>'s single child,
         and it is the only thing this design owns.
+      </p>
+      <p class="panel-p rule">
+        <b
+          >A TYPED URL is a document request, so there is no mounted shell to speak for window 1.</b
+        >
+        Nothing can be shown between the address being entered and the page's own gate resolving —
+        at any cost, by any instrument. That is not a gap in this design: it is why
+        <b>shrinking the gate</b> is the substantive work and the frame is the visible half. Panel D
+        carries the three windows; Panel E carries what a reader who CLICKED gets instead.
       </p>
       <div class="board-col">
         <figure class="board-frame">
@@ -5836,8 +5888,8 @@
         </figure>
         <figure class="board-frame">
           <figcaption class="board-cap">
-            Clicked. Under the reveal delay — deliberately nothing<span class="board-vw"
-              >t = 0 → 120 ms</span
+            The GATE is running — deliberately nothing<span class="board-vw"
+              >t = 0 → the gate resolves</span
             >
           </figcaption>
           <div class="board-device">
@@ -7659,14 +7711,20 @@
             </div>
           </div>
           <p class="board-note">
-            Identical to the frame above, on purpose. A route that resolves inside this window never
-            shows a frame at all, so the reader sees ONE paint instead of two.
-            <b>This is also what today looks like at +900 ms</b> — which is the whole defect.
+            Identical to the frame above, on purpose &mdash; and now for TWO reasons. Nothing may be
+            flushed while the gate is deciding whether this reader may see the page at all, so
+            nothing is; and a gate that resolves inside 120&nbsp;ms would show no frame afterwards
+            either, so the reader sees ONE paint instead of two.
+            <b>This is also what today looks like at +900 ms</b> — which is the whole defect, and
+            what shrinking the gate is for.
           </p>
         </figure>
         <figure class="board-frame">
           <figcaption class="board-cap">
-            The pending frame, revealed<span class="board-vw">t = 120 → 210 ms</span>
+            The FIRST FLUSH — the page&rsquo;s own frame, mounted in-page after its gate<span
+              class="board-vw"
+              >gate + 120 → +210 ms</span
+            >
           </figcaption>
           <div class="board-device">
             <div class="board-frozen">
@@ -8530,6 +8588,10 @@
           <p class="board-note">
             Only the content region was replaced. The rail did not blink, the bar did not reflow,
             the breadcrumb still reads the same path.
+            <b>The frame is the same drawing the first revision made</b> — what changed is that it
+            is now the fallback of a <code>&lt;Suspense&gt;</code> INSIDE the page, released after
+            the status is already committed, rather than a <code>loading.tsx</code> released before
+            the page ran.
           </p>
         </figure>
         <figure class="board-frame">
@@ -10567,10 +10629,10 @@
         that carry no subtitle (Work Items, Boards) are also the fastest ones, which under the
         reveal delay never show the frame at all.
         <b
-          >A route that both carries no subtitle AND reads slowly has outgrown the group frame and
-          owes itself a nearer one</b
+          >A route that both carries no subtitle AND reads slowly passes its OWN body to the shared
+          primitive rather than taking this generic one</b
         >
-        — Panel D.
+        — which under this revision is a prop, not a second boundary. Panel D.
       </p>
     </section>
     <section class="panel">
@@ -10579,12 +10641,23 @@
         <span class="panel-h-note">120&nbsp;ms, and the argument for it</span>
       </h2>
       <p class="panel-p">
-        A boundary that paints on the click makes a <b>fast</b> route worse. The destination
-        replaces the previous surface with a grey frame, holds it for 80&nbsp;ms, and replaces it
-        again with content: two paints where the reader asked for one, read as a flicker rather than
-        as speed. So the frame is <b>mounted immediately and revealed on a delay</b>. Mounted,
-        because the reader must never see the previous surface once the address has changed;
-        revealed late, because a frame nobody needed is worse than no frame.
+        An affordance that paints the instant its window opens makes a <b>fast</b> one worse: the
+        surface is replaced with a grey frame, holds it for 80&nbsp;ms, and is replaced again with
+        content — two paints where the reader asked for one, read as a flicker rather than as speed.
+        So every pending state here is <b>mounted immediately and revealed on a delay</b>. Mounted,
+        because the reader must never be left looking at something that is no longer true; revealed
+        late, because a frame nobody needed is worse than no frame.
+      </p>
+      <p class="panel-p rule">
+        <b>ONE declaration, referenced by BOTH windows.</b> The shell&rsquo;s mark (window 1, Panel
+        E) and the page&rsquo;s frame (window 2) share this keyframe and this delay, and each
+        window&rsquo;s clock starts when that window opens: the mark&rsquo;s at the click, the
+        frame&rsquo;s at the first flush.
+        <b
+          >Two pending states revealing on two timings is the flicker this delay exists to remove,
+          wearing a second costume</b
+        >
+        — which is why the declaration is referenced and never re-declared.
       </p>
       <div class="timeline">
         <div class="tl-bar">
@@ -10594,14 +10667,14 @@
             <span>frame fully visible, pulsing, until the page settles</span>
           </div>
         </div>
-        <div class="tl-tick" style="left: 0%"><span>0 ms · click</span></div>
+        <div class="tl-tick" style="left: 0%"><span>0 ms · the window opens</span></div>
         <div class="tl-tick" style="left: 24%"><span>120 ms · reveal starts</span></div>
         <div class="tl-tick" style="left: 42%"><span>210 ms · fully shown</span></div>
       </div>
       <table class="disp">
         <thead>
           <tr>
-            <th>the reader is in one of two states</th>
+            <th>the window closes in one of two ways</th>
             <th>what they see</th>
             <th>why the number holds</th>
           </tr>
@@ -10609,13 +10682,13 @@
         <tbody>
           <tr>
             <td>
-              <b>The route resolves in under 120&nbsp;ms</b><br /><span class="disp-sub"
-                >an empty settings pane, a cached segment</span
+              <b>In under 120&nbsp;ms</b><br /><span class="disp-sub"
+                >a cached segment, an empty settings pane</span
               >
             </td>
             <td>
-              The previous surface, then the destination. <b>The frame is never visible.</b> One
-              paint.
+              The previous surface, then the destination. <b>Nothing pending is ever visible.</b>
+              One paint.
             </td>
             <td>
               0.1&nbsp;s is the classical ceiling for a response that reads as <i>instantaneous</i>.
@@ -10627,15 +10700,16 @@
           </tr>
           <tr>
             <td>
-              <b>The route takes longer than 120&nbsp;ms</b><br /><span class="disp-sub"
-                >Work Items, the item detail page, anything with a real read</span
+              <b>In longer than 120&nbsp;ms</b><br /><span class="disp-sub"
+                >Work Items, the work-item page, anything with a real read</span
               >
             </td>
             <td>
-              The frame, fading in, before their eye has finished travelling to the content region.
+              The mark, then the frame, fading in before their eye has finished travelling to the
+              content region.
             </td>
             <td>
-              The navigation has ALREADY failed to feel instantaneous, so the frame is not an
+              The navigation has ALREADY failed to feel instantaneous, so a pending state is not an
               interruption — it is the only evidence the click landed. A saccade to the content
               region lands around 150&ndash;200&nbsp;ms after the click, so a reveal begun at
               120&nbsp;ms is in place before the reader looks at it, and they never see it arrive.
@@ -10664,71 +10738,593 @@
     </section>
     <section class="panel">
       <h2 class="panel-h">
-        Panel D · A nearer boundary sits on the SAME grid —
-        <span class="panel-h-note"
-          >the rule that keeps 58 routes and their exceptions in one language</span
-        >
+        Panel D &middot; Where the frame MOUNTS &mdash;
+        <span class="panel-h-note">three windows, and the one of them no boundary may cover</span>
       </h2>
       <p class="panel-p">
-        One <code>app/(authed)/loading.tsx</code> is the floor for all 58 pages in the group. A
-        route may draw its own nearer frame when the group&rsquo;s is a poor stand-in for it — the
-        item detail page does, next door. When it does, it inherits three things and may change only
-        the fourth.
+        <b
+          >A <code>loading.tsx</code> fallback renders as soon as its ancestor layouts resolve,
+          which is BEFORE the page function runs.</b
+        >
+        That flushes the response head and fixes the HTTP status at <b>200</b>, so a
+        <code>notFound()</code> reached later renders the not-found BODY under a 200 and the 404 is
+        gone.
+        <b>11 of the 58 <code>app/(authed)</code> pages call <code>notFound()</code></b> &mdash;
+        three of those assertions are tenant-isolation contracts, and <code>/items/[key]</code>'s
+        own source calls its 404 a <i>no existence leak</i> guarantee. A group boundary breaks all
+        11 at once. Hoisting the gate into a <code>layout.tsx</code> above the page does not help
+        and was BUILT AND MEASURED: a layout is an ANCESTOR of the boundary, so resolving it is
+        precisely what RELEASES the fallback.
+      </p>
+      <p class="panel-p rule">
+        <b>The frame was never the error. Giving windows 1 and 2 the same boundary was.</b>
+      </p>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>the window</th>
+            <th>from &rarr; to</th>
+            <th>who can speak</th>
+            <th>the instrument</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="anat-n">1</td>
+            <td><b>the GATE</b></td>
+            <td>the click &rarr; the destination's first flush</td>
+            <td>
+              only the SHELL, which is already mounted. On a HARD navigation <b>nobody can</b>, and
+              that is not a defect &mdash; there is no page yet
+            </td>
+            <td class="d-move">the shell's pending MARK &mdash; Panel E</td>
+          </tr>
+          <tr>
+            <td class="anat-n">2</td>
+            <td><b>the FRAME</b></td>
+            <td>the first flush &rarr; the first content</td>
+            <td>the destination page itself</td>
+            <td class="d-move">
+              an in-page <code>&lt;Suspense&gt;</code> placed AFTER the page's gate &mdash; Panels A
+              and B
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">3</td>
+            <td><b>the LATE STACK</b></td>
+            <td>the first content &rarr; settled</td>
+            <td>the page</td>
+            <td class="d-stay">
+              the page's own allocation. <code>design/work-items/</code>
+              <i>The item page at ARRIVAL</i> is the worked one, and it SHIPPED
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel-p">
+        <b
+          >Window 1 is what a route boundary was buying, and it is the one that cannot be bought
+          that way.</b
+        >
+        A gate is by definition the reads that decide whether this reader may see this page at all,
+        so nothing may be flushed until it has run &mdash; and what a route boundary offered was to
+        flush anyway. <b>So the instruction is to SHRINK window 1</b>, and it is not a slogan: a
+        gate is the session, the active project, the existence read and the permission read, and
+        anything else in front of the boundary is a read that could have been behind it.
+        <code>app/(authed)/items/[key]/page.tsx</code> is the shipped demonstration &mdash;
+        twenty-nine serial awaits cut to that gate plus one concurrent group.
       </p>
       <table class="disp">
         <thead>
           <tr>
             <th></th>
-            <th>the group frame</th>
-            <th>a route-shaped frame</th>
+            <th>the first revision &mdash; reverted</th>
+            <th>this revision</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><b>the wrapper</b></td>
-            <td colspan="2" class="d-stay">
-              SAME — <code>flex flex-col gap-6</code>, no gutter of its own. Inherited, not
-              restated.
-            </td>
-          </tr>
-          <tr>
-            <td><b>the header block</b></td>
-            <td colspan="2" class="d-stay">
-              SAME — <code>h-8</code> title on a <code>gap-1</code> stack. A route whose
-              <code>&lt;h1&gt;</code> is the same size may not draw a different box for it.
-            </td>
-          </tr>
-          <tr>
-            <td><b>the reveal</b></td>
-            <td colspan="2" class="d-stay">
-              SAME — the one <code>nav-pending-reveal</code> keyframe and the one 120&nbsp;ms delay,
-              referenced, never re-declared. Two boundaries revealing at two times is the flicker
-              this design exists to remove, wearing a second costume.
-            </td>
-          </tr>
-          <tr>
-            <td><b>the body</b></td>
-            <td class="d-move">a generic bordered region — 40px header, eight 40px rows</td>
+            <td><b>where the boundary sits</b></td>
             <td class="d-move">
-              whatever that route actually renders: two columns and a rail, a board of columns, a
-              form stack
+              <code>app/(authed)/loading.tsx</code> &mdash; ABOVE the page, released when the
+              LAYOUTS resolve
+            </td>
+            <td class="d-stay">
+              <code>&lt;Suspense&gt;</code> inside <code>page.tsx</code> &mdash; BELOW the gate,
+              released when the page RETURNS
+            </td>
+          </tr>
+          <tr>
+            <td><b>what has happened by then</b></td>
+            <td class="d-move">nothing the page decides. The status is still open, and is spent</td>
+            <td class="d-stay">
+              the gate has run. <code>notFound()</code>, <code>redirect()</code> and the permission
+              read are all already committed
+            </td>
+          </tr>
+          <tr>
+            <td><b>what it covers</b></td>
+            <td class="d-move">windows 1 and 2, and destroys the 404 to do it</td>
+            <td class="d-stay">window 2. Window 1 is Panel E's, and only on a soft navigation</td>
+          </tr>
+          <tr>
+            <td><b>the frame's drawing</b></td>
+            <td colspan="2" class="d-stay">
+              SAME &mdash; Panel B, unchanged. The wrapper, the header block, the toolbar row, the
+              content region and the whole no-shift mapping are carried forward verbatim. They were
+              never what was falsified
             </td>
           </tr>
         </tbody>
       </table>
+      <h3 class="panel-h" style="font-size: 13px; margin-top: 6px">
+        WHICH SURFACES EARN A FRAME
+        <span class="panel-h-note"
+          >replacing <i>what a nearer boundary owes this one</i>, which had a group frame to be
+          nearer THAN</span
+        >
+      </h3>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>the rule</th>
+            <th>and what it rules out</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="anat-n">1</td>
+            <td>
+              <b>Every page MAY have one; no page INHERITS one.</b> There is no group frame and
+              there cannot be one
+            </td>
+            <td>
+              a page without a frame is a page that has not been given one &mdash; not a page that
+              opted out. The absence is a to-do, not a decision
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">2</td>
+            <td>
+              <b>A frame only ever covers a region that has NOTHING to show yet.</b> Whatever the
+              gate alone can paint &mdash; a header, a static toolbar, a tab strip &mdash; is
+              painted, and the boundary goes below it
+            </td>
+            <td>
+              a frame drawn over a control the reader can already click. <code>/items</code> was the
+              first revision's stated EXCEPTION for exactly this reason; here it is the
+              <b>worked example</b>, and it already ships
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">3</td>
+            <td>
+              <b>Its SHAPE is chosen from three, in this order:</b> the page's OWN body shape; the
+              FAMILY shape where a set of routes share a body; the GENERIC block frame (Panel B)
+            </td>
+            <td>
+              a bespoke fourth. The 31 <code>settings/*</code> routes are the one family, and their
+              shape is <code>design/settings/</code>'s to draw &mdash; as a shared COMPONENT they
+              all render in-page, not as a boundary above them
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">4</td>
+            <td>
+              <b>The shared parts still live in ONE primitive.</b> It owns the wrapper, the header
+              block and the reveal; a page passes its body in
+            </td>
+            <td>
+              a frame that COPIES those three &mdash; the drift that put
+              <code>IssueTreeSkeleton</code> three columns and 272px behind the table it stands in
+              for, for eighty days, with its own comment promising it was in sync
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">5</td>
+            <td>
+              <b>No <code>loading.tsx</code> is ADDED anywhere under <code>app/(authed)</code>.</b>
+              It stays legal above a subtree where no page decides existence &mdash; 47 of the 58
+              qualify &mdash; and this design still declines it, for Panel F's cost
+            </td>
+            <td>
+              two mechanisms for one state. The three boundaries that already exist under
+              <code>(planning)</code> and <code>settings/project/</code> stay: this is a preference
+              for new work, not a sweep
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel-p">
+        <b
+          >The 24 heavy surfaces the follow-on story sweeps, by whether a route boundary was ever
+          available to them.</b
+        >
+        Measured at <code>origin/main</code> <code>4fd55464</code> with
+        <code>grep -rl 'notFound()' app/(authed) --include=page.tsx</code>.
+      </p>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th>family</th>
+            <th>surfaces</th>
+            <th>deciders among them</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>project settings</td>
+            <td>
+              10 &mdash; the pane, board, workflow, automation, repositories, AI planning, the
+              lesson list and <span class="disp-sub">[lessonId]</span>, and both role routes
+            </td>
+            <td class="d-move"><b>3</b> &mdash; the lesson, the role, the role's edit</td>
+          </tr>
+          <tr>
+            <td>workspace + organization</td>
+            <td>4 &mdash; jobs, GitLab, the organization pane and its billing pane</td>
+            <td class="d-move"><b>1</b> &mdash; billing, which is the route the A/B was run on</td>
+          </tr>
+          <tr>
+            <td>work-item lists</td>
+            <td>2 &mdash; archived, and the edit route</td>
+            <td class="d-move"><b>1</b> &mdash; the edit route</td>
+          </tr>
+          <tr>
+            <td>canvases</td>
+            <td>4 &mdash; roadmap, plans, the plan detail, boards</td>
+            <td class="d-move"><b>1</b> &mdash; the plan detail</td>
+          </tr>
+          <tr>
+            <td>code health</td>
+            <td>1</td>
+            <td class="d-stay">0</td>
+          </tr>
+          <tr>
+            <td>reports + one-shots</td>
+            <td>3 &mdash; the burndown, the sprint report, the invite landing</td>
+            <td class="d-move"><b>1</b> &mdash; the sprint report</td>
+          </tr>
+          <tr>
+            <td>the non-regression</td>
+            <td>1 &mdash; Work Items, which already streams</td>
+            <td class="d-stay">0</td>
+          </tr>
+        </tbody>
+      </table>
       <p class="panel-p rule">
-        <b>Where the shared parts LIVE decides whether the rule holds.</b> The wrapper, the header
-        block and the reveal belong to one exported primitive that both boundaries render; the body
-        is what a route passes into it. A route-shaped frame that copies the three inherited rows
-        instead of composing them is the same drift as a skeleton restating a table&rsquo;s columns
-        — which is exactly how <code>IssueTreeSkeleton</code> came to be three columns and 272px
-        behind the table it stands in for, for eighty days, with its own comment promising it was in
-        sync.
+        <b
+          >Seven of the 24 &mdash; and FIVE of the eleven deciders sit under
+          <code>settings/</code>.</b
+        >
+        So the settings family, the one place a shared boundary looked most obviously right, is the
+        place it is most obviously wrong. Its shared frame survives as a shared COMPONENT that all
+        31 routes render in-page. It does not survive as a file at
+        <code>app/(authed)/settings/</code>.
       </p>
     </section>
     <section class="panel">
       <h2 class="panel-h">
-        Panel E · The switch rule —
+        Panel E &middot; The shell&rsquo;s MARK &mdash;
+        <span class="panel-h-note"
+          >window 1, and only on a SOFT navigation. Drawn at rest and marked</span
+        >
+      </h2>
+      <p class="panel-p">
+        On a soft navigation the shell is already mounted, so a <b>client</b> affordance renders
+        with no server boundary anywhere &mdash; and therefore cannot touch a status. On a document
+        request it does not render at all: the shell is being produced by the server for the first
+        time and there is no pending navigation to have.
+        <b
+          >That asymmetry is the whole reason this instrument is safe where a
+          <code>loading.tsx</code> is not.</b
+        >
+      </p>
+      <p class="panel-p rule">
+        <b>It is a MARK on the thing the reader clicked, not a skeleton.</b> The shell does not know
+        the destination's shape. A skeleton drawn by the shell would be a guess that the page's own
+        frame then replaces &mdash; two frames for one navigation, which is the flicker the reveal
+        delay exists to remove, wearing a third costume.
+      </p>
+      <div class="board-row">
+        <figure class="board-frame rail-figure">
+          <figcaption class="board-cap">
+            At rest &mdash; the reader is on Work Items<span class="board-vw">t = 0&#8315;</span>
+          </figcaption>
+          <div class="board-device rail-strip" style="width: 260px">
+            <a
+              href="/items"
+              aria-current="page"
+              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text) shadow-(--shadow-subtle) border border-(--el-sidebar-border)"
+              ><span
+                aria-hidden="true"
+                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-active)"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-dot"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <circle cx="12" cy="12" r="1"></circle></svg></span
+              ><span class="flex-1 truncate">Work Items</span></a
+            >
+            <a
+              href="/roadmap"
+              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
+              ><span
+                aria-hidden="true"
+                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-map"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+                  ></path>
+                  <path d="M15 5.764v15"></path>
+                  <path d="M9 3.236v15"></path></svg></span
+              ><span class="flex-1 truncate">Roadmap</span></a
+            >
+          </div>
+          <p class="board-note">
+            The real <code>SidebarNav variant="rail"</code> items, taken from the shell above. Work
+            Items carries the active treatment; Roadmap is resting.
+          </p>
+        </figure>
+        <figure class="board-frame rail-figure">
+          <figcaption class="board-cap">
+            Marked &mdash; Roadmap was clicked and its gate is running<span class="board-vw"
+              >revealed at 120 ms</span
+            >
+          </figcaption>
+          <div class="board-device rail-strip board-frozen" style="width: 260px">
+            <a
+              href="/items"
+              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
+              ><span
+                aria-hidden="true"
+                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-circle-dot"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <circle cx="12" cy="12" r="1"></circle></svg></span
+              ><span class="flex-1 truncate">Work Items</span></a
+            >
+            <a
+              href="/roadmap"
+              aria-busy="true"
+              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text) shadow-(--shadow-subtle) border border-(--el-sidebar-border) nav-pending reveal"
+              ><span
+                aria-hidden="true"
+                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-active)"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-map"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+                  ></path>
+                  <path d="M15 5.764v15"></path>
+                  <path d="M9 3.236v15"></path></svg></span
+              ><span class="flex-1 truncate">Roadmap</span></a
+            >
+          </div>
+          <p class="board-note">
+            <b>The active mark MOVES, ahead of the navigation.</b> Roadmap takes the treatment it is
+            about to have and Work Items gives it up in the same frame &mdash; one item gains the
+            border, one loses it, so the rail&rsquo;s height is unchanged. No spinner, no new token,
+            and nothing a reader whose pointer is still on the item could mistake for hover.
+          </p>
+        </figure>
+      </div>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th></th>
+            <th>the decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>what</b></td>
+            <td>
+              the clicked <code>&lt;Link&gt;</code> marks itself pending &mdash; the rail item, the
+              breadcrumb, the table row that navigates. In the rail that mark is the
+              <b>ACTIVE treatment, taken early</b>: the item is about to be current, so it becomes
+              current, and the outgoing item gives it up in the same frame
+            </td>
+          </tr>
+          <tr>
+            <td><b>how</b></td>
+            <td>
+              <code>useLinkStatus()</code> from <code>next/link</code> (exported at
+              <code>next@16.2.6</code>), read inside ONE wrapper the shell's nav items and
+              navigating rows compose &mdash; never at each call site
+            </td>
+          </tr>
+          <tr>
+            <td><b>when</b></td>
+            <td>
+              the same <code>nav-pending-reveal</code> keyframe and the same 120&nbsp;ms delay as
+              the frame, REFERENCED, never re-declared &mdash; Panel C
+            </td>
+          </tr>
+          <tr>
+            <td><b>announced</b></td>
+            <td>
+              <code>aria-busy="true"</code> on the marked link, and
+              <code>aria-current="page"</code> stays on the item that IS still current until the
+              navigation commits &mdash; an optimistic FILL is a hint, an optimistic
+              <code>aria-current</code> would be a lie. The destination's own frame announces the
+              region, so the mark does not also open a live region
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel-p">
+        <b>What it deliberately does NOT cover, said plainly rather than left to be discovered:</b>
+      </p>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th>the carrier</th>
+            <th>window 1</th>
+            <th>why, and what the reader gets instead</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>a typed URL, a reload, an emailed link</td>
+            <td class="d-move"><b>nothing</b></td>
+            <td>
+              a hard navigation has no mounted shell. Nothing can speak here at any cost, which is
+              what makes shrinking the gate the substantive work. The first feedback is window 2's
+              frame &mdash; Panel A
+            </td>
+          </tr>
+          <tr>
+            <td>
+              a programmatic <code>router.push</code><br /><span class="disp-sub"
+                >tree &harr; list &middot; the plans status tabs &middot; the activity tabs</span
+              >
+            </td>
+            <td class="d-stay">the same mark</td>
+            <td>
+              <code>useLinkStatus</code> reads a <code>&lt;Link&gt;</code> and these are not links.
+              Their pending state is <code>useTransition()</code>'s <code>isPending</code>, wrapped
+              as <code>startTransition(() =&gt; router.push(&hellip;))</code>, feeding the SAME
+              mark. Three call sites, named so nobody invents a fourth mechanism
+            </td>
+          </tr>
+          <tr>
+            <td>a <code>shallowPush</code> view switch</td>
+            <td class="d-stay"><b>nothing, deliberately</b></td>
+            <td>there is no wait. That is THE SWITCH RULE &mdash; Panel G, unchanged</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel-p rule">
+        <b>Why the ACTIVE treatment and not the hover one.</b> The hover fill was the first answer
+        and it is wrong for one specific reason:
+        <b>the reader's pointer is usually still on the item they just clicked</b>, so a held hover
+        tint is indistinguishable from the state they already had &mdash; a mark that only appears
+        when nobody is looking at it. The active treatment is unambiguous against hover, invents no
+        token, and is semantically what is happening: the rail says
+        <i>you are going there</i> rather than <i>something is loading</i>. If the navigation is
+        abandoned the mark unwinds with <code>useLinkStatus</code> and the rail is as it was.
+      </p>
+      <p class="panel-p">
+        <b>One board artefact.</b> The marked sample forces the reveal's end state, because a board
+        is a still. Everything in both strips is the shipped component's own markup and its own
+        classes &mdash; the mark is a state the rail item already HAS, moved in time, not a
+        treatment this board invented.
+      </p>
+    </section>
+    <section class="panel">
+      <h2 class="panel-h">
+        Panel F &middot; The locator cost &mdash;
+        <span class="panel-h-note">decided, and the decision is not to incur it</span>
+      </h2>
+      <p class="panel-p">
+        <b>The cost belongs to the ROUTE boundary, not to the frame.</b> A route-level fallback
+        makes React retain the previous route's subtree mounted-and-hidden while the new one
+        streams, so both are in the DOM at once. Playwright resolves locators before filtering on
+        visibility, so an unscoped <code>getByText</code> / <code>getByTestId</code> /
+        <code>getByLabel</code>
+        matches BOTH and fails strict mode. One group boundary turned
+        <b>30 assertions across 17 spec files</b> red at once, and exactly zero of the 30 used
+        <code>getByRole</code>, which is immune because the accessibility tree excludes the hidden
+        copy.
+      </p>
+      <p class="panel-p rule">
+        <b
+          >An in-page <code>&lt;Suspense&gt;</code> renders INSIDE the destination page, so the
+          previous route is already gone and there is one subtree in the DOM.</b
+        >
+        Measured on the same spec file rather than argued:
+      </p>
+      <table class="disp">
+        <thead>
+          <tr>
+            <th><code>tests/e2e/issue-detail-flow.spec.ts</code></th>
+            <th>result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>with the <code>(authed)</code> group boundary</td>
+            <td class="d-move"><b>8 of 16 failed</b></td>
+          </tr>
+          <tr>
+            <td>the boundary removed, nothing else changed</td>
+            <td class="d-stay"><b>16 passed</b></td>
+          </tr>
+          <tr>
+            <td>with the two IN-PAGE boundaries <code>/items/[key]</code> ships today</td>
+            <td class="d-stay"><b>16 passed</b></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="panel-p">
+        &mdash; and that file still contains <b>23</b> unscoped <code>page.getByText</code> /
+        <code>getByTestId</code> / <code>getByLabel</code> calls against 76
+        <code>getByRole</code> ones, counted at <code>origin/main</code> <code>4fd55464</code>. It
+        is the spec most exposed to the collision, and it is green.
+      </p>
+      <p class="panel-p rule">
+        <b>So: scope the BOUNDARIES, not the assertions.</b> No spec is rewritten by this design and
+        none needs to be; scoping the 30 to <code>getByRole</code> stays good practice on its own
+        merits and is a prerequisite of nothing here.
+        <b
+          >The standing rule this leaves: a route-level boundary is a SUITE-WIDE change and an
+          in-page one is a LOCAL change.</b
+        >
+        If a route boundary is ever reintroduced, the 30 come back with it &mdash; and that is the
+        number to weigh at the moment of reintroducing it, not afterwards.
+      </p>
+    </section>
+    <section class="panel">
+      <h2 class="panel-h">
+        Panel G · The switch rule —
         <span class="panel-h-note"
           >a view switch that needs no server shows NO pending state at all</span
         >
