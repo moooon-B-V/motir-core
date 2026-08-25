@@ -25,6 +25,19 @@ import { NoAccessState } from '@/components/projects/NoAccessState';
 /** The one declaration of the key the lesson surfaces gate on. */
 export const LESSON_VIEW_PERMISSION: PermissionKey = 'lesson:view';
 
+/**
+ * The key that gates CHANGING what the planner is told (MOTIR-3346).
+ *
+ * ⚠️ Declared here beside the view key for the same reason that one is: so the
+ * control's presence and the route's refusal cannot come apart. They are
+ * DIFFERENT keys — that is the whole point of MOTIR-3336 — and an admin holds
+ * both, so nothing a person can see would reveal them drifting.
+ *
+ * The route asserts it independently (`projectLessonsService.setLessonApplied`).
+ * Hiding the button is presentation; the route is the boundary.
+ */
+export const LESSON_MANAGE_PERMISSION: PermissionKey = 'lesson:manage';
+
 export interface LessonAccessContext {
   projectId: string;
   userId: string;
@@ -38,6 +51,15 @@ export async function canViewLessonLibrary(ctx: LessonAccessContext): Promise<bo
     workspaceId: ctx.workspaceId,
   });
   return held.has(LESSON_VIEW_PERMISSION);
+}
+
+/** Whether this actor may change what Motir applies for this project. */
+export async function canManageLessonLibrary(ctx: LessonAccessContext): Promise<boolean> {
+  const held = await projectAccessService.getPermissions(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  return held.has(LESSON_MANAGE_PERMISSION);
 }
 
 /**

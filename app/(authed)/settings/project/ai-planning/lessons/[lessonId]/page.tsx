@@ -6,9 +6,10 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { guardSettingsPage } from '../../../_guard';
-import { guardLessonLibrary } from '../../_components/lessonAccess';
+import { canManageLessonLibrary, guardLessonLibrary } from '../../_components/lessonAccess';
 import { AxisChip, EveryCardChip, NotAppliedBadge } from '../../_components/LessonRow';
-import { lessonRowCopy } from '../../_components/lessonCopy';
+import { lessonApplyCopy, lessonRowCopy } from '../../_components/lessonCopy';
+import { LessonDetailStatus } from '../../_components/LessonDetailStatus';
 
 // ONE LESSON, IN FULL — `/settings/project/ai-planning/lessons/[lessonId]`
 // (Subtask MOTIR-3338), the surface `ai-planning-lessons.mock.html` panel 4 and
@@ -47,13 +48,15 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
   if (noLessons) return noLessons;
 
   const { lessonId } = await params;
-  const [lesson, format] = await Promise.all([
+  const [lesson, format, mayManage] = await Promise.all([
     projectLessonsService.getLesson(ctx.projectId, wsCtx, lessonId),
     getFormatter(),
+    canManageLessonLibrary(ctx),
   ]);
   if (!lesson) notFound();
 
   const copy = lessonRowCopy(t, (iso) => format.relativeTime(new Date(iso)));
+  const applyCopy = lessonApplyCopy(t, lesson);
   const axes = [
     ...lesson.kinds.map((value) => ({ axis: 'kind', value })),
     ...lesson.types.map((value) => ({ axis: 'type', value })),
@@ -64,6 +67,22 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
     { label: t('aiPlanning.lessons.sectionMatters'), body: lesson.why },
     { label: t('aiPlanning.lessons.sectionApply'), body: lesson.howToApply },
   ];
+  // The §L7 callout — the SAME `.callout` box the AI-planning page already uses
+  // for its guardrail sentence; no new primitive. Built once so the two arms
+  // below cannot describe "Motir is applying this" differently.
+  const applyingCallout = (
+    <div
+      role="status"
+      data-testid="lesson-applying"
+      className="bg-(--el-tint-sky) flex items-start gap-2.5 rounded-(--radius-card) px-4 py-3"
+    >
+      <ShieldCheck className="text-(--el-text-strong) mt-px size-4 shrink-0" aria-hidden />
+      <p className="text-(--el-text-strong) text-sm">
+        <strong className="font-semibold">{t('aiPlanning.lessons.applyingTitle')}</strong>{' '}
+        {t('aiPlanning.lessons.applyingBody')}
+      </p>
+    </div>
+  );
   const facts = [
     [t('aiPlanning.lessons.factFirstRecorded'), format.dateTime(new Date(lesson.createdAt))],
     [t('aiPlanning.lessons.factLastSeen'), format.relativeTime(new Date(lesson.lastOccurredAt))],
@@ -97,20 +116,25 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
         </header>
       </div>
 
-      {/* The status line — the SAME callout box the AI-planning page already
-          uses for its guardrail sentence (§L7); no new primitive. */}
-      {lesson.injectionBlock === null ? (
-        <div
-          role="status"
-          data-testid="lesson-applying"
-          className="bg-(--el-tint-sky) flex items-start gap-2.5 rounded-(--radius-card) px-4 py-3"
-        >
-          <ShieldCheck className="text-(--el-text-strong) mt-px size-4 shrink-0" aria-hidden />
-          <p className="text-(--el-text-strong) text-sm">
-            <strong className="font-semibold">{t('aiPlanning.lessons.applyingTitle')}</strong>{' '}
-            {t('aiPlanning.lessons.applyingBody')}
-          </p>
-        </div>
+      {/* THE LIVE-STATE REGION — the §L7 status callout, the not-applied badge
+          and the action, which all render ONE fact: is Motir applying this.
+          When the reader may act, they are one client island so the acted-on
+          lesson's state comes from the mutation RESPONSE (the page-state
+          contract) rather than from a re-read that would revert it. A reader who
+          cannot act gets the same markup, server-rendered — there is nothing to
+          keep in sync. */}
+      {mayManage ? (
+        <LessonDetailStatus
+          lesson={lesson}
+          projectKey={ctx.project.identifier}
+          copy={applyCopy}
+          retireLabel={t('aiPlanning.lessons.stopApplyingLesson')}
+          applyingCallout={applyingCallout}
+          notAppliedLabel={copy.notApplied}
+          notRecurredLabel={copy.notRecurred(lesson.retentionDays)}
+        />
+      ) : lesson.injectionBlock === null ? (
+        applyingCallout
       ) : (
         <div data-testid="lesson-not-applied">
           <NotAppliedBadge
@@ -144,6 +168,29 @@ export default async function ProjectLessonPage({ params }: RouteParams) {
               <dd className="m-0 tabular-nums text-(--el-text)">{value}</dd>
             </div>
           ))}
+          {/* WHO switched it off (or kept it) and WHEN — the audit the write
+              records, and the question the surface promised to answer. Absent
+              when no decision stands, because there is nothing to say. */}
+          {lesson.humanOverrideBy && lesson.humanOverrideAt && (
+            <div className="contents">
+              <dt className="text-(--el-text-secondary)">
+                {lesson.humanOverride === 'exempt'
+                  ? t('aiPlanning.lessons.factKeptBy')
+                  : t('aiPlanning.lessons.factSwitchedOffBy')}
+              </dt>
+              <dd className="m-0 text-(--el-text)" data-testid="lesson-override-audit">
+                {t(
+                  lesson.humanOverride === 'exempt'
+                    ? 'aiPlanning.lessons.keptBy'
+                    : 'aiPlanning.lessons.switchedOffBy',
+                  {
+                    who: lesson.humanOverrideBy,
+                    when: format.dateTime(new Date(lesson.humanOverrideAt)),
+                  },
+                )}
+              </dd>
+            </div>
+          )}
           {lesson.sourceRef && (
             <div className="contents">
               <dt className="text-(--el-text-secondary)">

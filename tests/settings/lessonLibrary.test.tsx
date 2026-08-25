@@ -56,6 +56,9 @@ function lesson(over: Partial<ProjectLessonDTO> = {}): ProjectLessonDTO {
     recurrenceCount: 4,
     injected: true,
     injectionBlock: null,
+    humanOverride: null,
+    humanOverrideAt: null,
+    humanOverrideBy: null,
     retentionDays: 90,
     ...over,
   };
