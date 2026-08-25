@@ -800,7 +800,7 @@ later in that page then renders the not-found BODY under a 200, and the 404 is
 gone. So a boundary must never sit above a segment whose status is load-bearing.**
 
 This is the inverse of the rule that stood here between MOTIR-3433 and
-MOTIR-3439, which said "every route group carries a `loading.tsx`". That rule was
+MOTIR-3492, which said "every route group carries a `loading.tsx`". That rule was
 written on the assumption that a boundary is free. It is not, and the assumption
 was falsified by experiment rather than argument:
 
@@ -860,7 +860,9 @@ missing topic answers **200** today. Reproduced on a production build, filed
 against the explore surface, and listed in
 `tests/navigation/loading-boundary-guard.test.ts`'s `KNOWN_STATUS_DEBT` so the
 guard is green on a true statement of the tree rather than red on another
-story's defect. That list is asserted tight and can only shrink.
+story's defect. That list is asserted tight and can only shrink. The bug is
+MOTIR-3491; MOTIR-3492 carries what the pending frame still owes, and blocks
+MOTIR-3440 until its "the group's frame" premise is restated.
 
 ### URL state the CLIENT reads is written with `shallowPush`
 

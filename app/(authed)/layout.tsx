@@ -68,10 +68,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // than leaving it to inspection.
   //
   // (This clause used to add "which is what keeps `app/(authed)/loading.tsx`
-  // inside the gate". There is no group `loading.tsx` any more — MOTIR-3439
-  // removed it, because a boundary here flushes a 200 response head before the
-  // page runs and destroys the `notFound()` 404 on every route beneath it. The
-  // ordering rule stands on its own.)
+  // inside the gate". There is no group `loading.tsx` any more — it was removed
+  // because a boundary here flushes a 200 response head before the page runs
+  // and destroys the `notFound()` 404 on every route beneath it (MOTIR-3492
+  // carries the finding and what the frame owes). The ordering rule above
+  // stands on its own.)
   //
   // These four are INDEPENDENT of each other and were four sequential round
   // trips — which is what a TYPED URL pays before any HTML body exists at all,

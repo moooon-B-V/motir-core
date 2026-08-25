@@ -4,7 +4,7 @@ import { cleanup } from '@testing-library/react';
 
 // MOTIR-3435 — `/items/[key]`'s GATE and its read SHAPE.
 //
-// The pending-frame half of this file went with the frame: MOTIR-3439 removed
+// The pending-frame half of this file went with the frame: MOTIR-3492 removed
 // `app/(authed)/items/[key]/loading.tsx` after establishing by A/B that a
 // `loading.tsx` flushes a 200 response head before the page runs, which
 // destroys this route's cross-workspace `notFound()` 404 — a documented
