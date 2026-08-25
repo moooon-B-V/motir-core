@@ -2792,6 +2792,16 @@ model JobEvent {
 /// below the right shape — in Postgres a NULL never equals another NULL, so the
 /// constraint dedups event-triggered enqueues without ever constraining
 /// scheduled ones.
+///
+/// ⚠️ AND THE MIRROR OF THAT SENTENCE IS `scheduledFor` (MOTIR-3469). The note
+/// above named a gap as well as a design: an enqueue with no `event_id` had no
+/// constraint at all, so two workers ticking the same minute each inserted a row
+/// and the job ran twice. `scheduledFor` is the identity a SCHEDULED run was
+/// missing, and `(jobId, scheduledFor)` is the constraint that dedups it — by the
+/// SAME NULL-never-equals-NULL property, read the other way round: an
+/// event-triggered row carries a NULL `scheduled_for` and is untouched by it. The
+/// two constraints are complementary halves of one idea, each covering exactly
+/// the population the other cannot see.
 model JobQueueRun {
   id             String      @id @default(cuid())
   /// The `defineJob` function id — `email.send`, `system.attachment-gc`, …
@@ -2804,6 +2814,14 @@ model JobQueueRun {
   /// When this run becomes claimable. A `step.sleep` re-enqueue moves it
   /// forward; a retry moves it forward by the backoff.
   runAt          DateTime    @map("run_at")
+  /// THE PER-TICK KEY for a SCHEDULED run (MOTIR-3469) — the cron FIRE INSTANT
+  /// this row stands for, never the moment it was enqueued. NULL on every
+  /// event-triggered row, which is what keeps the unique below off them.
+  ///
+  /// It differs from `runAt` the moment a run is retried or yields: `run_at` moves
+  /// forward, `scheduled_for` does not. That is the point — the identity of a tick
+  /// must survive its own rescheduling, or a retry would look like a new fire.
+  scheduledFor   DateTime?   @map("scheduled_for")
   attempts       Int         @default(0)
   /// The run's total attempt budget, resolved from the job's named retry policy
   /// at enqueue (`lib/jobs/retries.ts`). Stored per-run so a policy change does
@@ -2827,6 +2845,13 @@ model JobQueueRun {
   /// a dispatcher that retries cannot double-enqueue. Scheduled runs carry a
   /// NULL `event_id` and are therefore not constrained — see the note above.
   @@unique([eventId, jobId])
+  /// TICK IDEMPOTENCY (consumed by MOTIR-3471). One run per (job, fire instant),
+  /// so two workers ticking the same minute produce ONE run. The model comment
+  /// carries the argument; what belongs here is that this is the guarantee, not a
+  /// check-then-insert — `enqueueScheduled` reads a `P2002` as *already queued*,
+  /// exactly as `dispatchEventToEngine` reads its own, and for the same reason: a
+  /// check would be a read-derived write with a race in the middle.
+  @@unique([jobId, scheduledFor])
   /// THE CLAIM INDEX. The worker's claim is
   /// `WHERE state = 'pending' AND run_at <= now() ORDER BY run_at
   ///  FOR UPDATE SKIP LOCKED LIMIT n`

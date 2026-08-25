@@ -1,5 +1,20 @@
 import { Prisma, type JobQueueRun, type JobRunState } from '@/generated/prisma/client';
 
+/**
+ * What `enqueueScheduled` did — a DISCRIMINATED result rather than a nullable
+ * row, because "another worker already queued this tick" is a normal outcome of
+ * a healthy system and a caller must not have to tell it apart from a failure by
+ * inspecting a null (MOTIR-3469).
+ */
+export type EnqueueScheduledResult =
+  | { outcome: 'enqueued'; run: JobQueueRun }
+  | { outcome: 'already-queued' };
+
+/** True when a thrown value is Prisma's unique-constraint violation. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
+}
+
 // Data access for `job_queue` — the RUN table the Postgres job engine's worker
 // claims from (Story MOTIR-3414 · Subtask MOTIR-3421). Single-op methods only;
 // writes require `tx` (the 4-layer contract). `lib/jobs/engine/worker.ts` owns
@@ -232,6 +247,71 @@ export const jobQueueRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<JobQueueRun> {
     return tx.jobQueueRun.create({ data });
+  },
+
+  /**
+   * ⚠️ ENQUEUE ONE SCHEDULED TICK, IDEMPOTENTLY PER `(jobId, scheduledFor)`
+   * (MOTIR-3469). The scheduler's write; its first caller is MOTIR-3471.
+   *
+   * INSERT-IF-ABSENT, and the "if absent" is the `@@unique([jobId,
+   * scheduledFor])` constraint — NOT a preceding read. A check-then-insert here
+   * would be a read-derived write with a race in the middle, which is precisely
+   * the shape `claimDueRuns` above exists to avoid and precisely the shape two
+   * workers ticking the same minute would defeat. So a `P2002` is an EXPECTED
+   * outcome and is reported as `already-queued`, exactly as
+   * `dispatchEventToEngine` reads its own constraint's violation and for the same
+   * reason.
+   *
+   * ⚠️ THE CLOCK RULE IS NOT VIOLATED BY BINDING THESE TWO DATES, AND HERE IS WHY
+   * — the file header's warning is about a value one process writes and another
+   * process compares AGAINST A CLOCK, which is why `lease_expires_at` must never
+   * be bound in JS. Neither date here is that:
+   *
+   *   * `scheduledFor` is a cron FIRE INSTANT — a minute boundary derived from the
+   *     expression by `previousFireAtOrBefore`, not a reading of any clock. Two
+   *     workers whose clocks differ still compute the SAME instant for the same
+   *     fire, so the unique dedups them; skew changes WHEN a worker notices a
+   *     fire, never WHICH instant it names. It is compared only for equality,
+   *     inside the index.
+   *   * `runAt` is bound in JS for the same reason `rescheduleAt` and
+   *     `dispatchEventToEngine` already bind theirs: Prisma writes a `DateTime`
+   *     as naive UTC into `timestamp(3)`, and the only thing that ever compares
+   *     it to a clock is `claimDueRuns`, which does so DATABASE-side against
+   *     `(now() AT TIME ZONE 'UTC')` — the same convention, so the two agree.
+   *
+   * This method therefore adds no clock expression of its own, deliberately.
+   */
+  async enqueueScheduled(
+    data: {
+      jobId: string;
+      scheduledFor: Date;
+      eventName: string;
+      runAt: Date;
+      maxAttempts: number;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<EnqueueScheduledResult> {
+    try {
+      const run = await tx.jobQueueRun.create({
+        data: {
+          jobId: data.jobId,
+          scheduledFor: data.scheduledFor,
+          eventName: data.eventName,
+          runAt: data.runAt,
+          maxAttempts: data.maxAttempts,
+          // A scheduled run has no triggering event and belongs to no tenant.
+          // Both are stated rather than defaulted: `event_id` NULL is what keeps
+          // the `(event_id, job_id)` unique off this row, and `workspace_id` NULL
+          // is what makes it a `system.*` row under the table's RLS policy.
+          eventId: null,
+          workspaceId: null,
+        },
+      });
+      return { outcome: 'enqueued', run };
+    } catch (err) {
+      if (isUniqueViolation(err)) return { outcome: 'already-queued' };
+      throw err;
+    }
   },
 
   /** Read one run by id. */
