@@ -82,14 +82,15 @@ export const sendInvoice = defineJob(
 
 **Options**
 
-| Field         | Default       | Meaning                                                                                                                          |
-| ------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | —             | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.      |
-| `retryPolicy` | `'transient'` | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`. |
-| `retries`     | —             | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                               |
-| `concurrency` | —             | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below. |
-| `idempotency` | —             | Event-payload-keyed dedup template (Inngest event-level dedup).                                                                  |
-| `cron`        | —             | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                   |
+| Field         | Default                  | Meaning                                                                                                                                                                         |
+| ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | —                        | The job id, **also the triggering event name** (1:1 convention). Must be a key of `JobEventDataMap` in `lib/jobs/types.ts`.                                                     |
+| `retryPolicy` | `'transient'`            | Named retry policy — the preferred way to declare retry intent. See **Retry policies** below. Mutually exclusive with `retries`.                                                |
+| `retries`     | —                        | Raw Inngest retry count (escape hatch; prefer `retryPolicy`). Passing both throws.                                                                                              |
+| `concurrency` | —                        | Concurrency constraint(s): a bare limit, or Inngest's `{ limit, key?, scope? }`, or an array of them. See **Concurrency** below.                                                |
+| `idempotency` | —                        | Event-payload-keyed dedup template (Inngest event-level dedup).                                                                                                                 |
+| `cron`        | —                        | Schedule the job instead of event-triggering it. See **Scheduled jobs** below.                                                                                                  |
+| `catchUp`     | — (REQUIRED with `cron`) | What a missed tick does: `all` / `latest` / `skip`. A `cron` job that omits it does not type-check, and a job without a `cron` may not supply it. See **Scheduled jobs** below. |
 
 **Handler signature** — `(ctx, services) => result`:
 
@@ -225,7 +226,11 @@ await sendEvent('email.send', {
 3. **Register it** — add it to the `jobFunctions` array in `lib/jobs/registry.ts`.
    (The serve route imports from the registry, so it never changes.)
 4. **Emit it** from a route or service via `sendEvent` (business events) — or
-   give it a `cron` (system jobs, see **Scheduled jobs**).
+   give it a `cron` **and a `catchUp`** (system jobs, see **Scheduled jobs**).
+   The two go together and the compiler enforces it: there is no default, because
+   a default is how a cron job added later inherits a catch-up disposition nobody
+   chose for it. Decide it deliberately — the three answers and the argument for
+   picking between them are in **Scheduled jobs**.
 5. **Test it** with `@inngest/test`'s `InngestTestEngine` against the real
    Postgres (see `tests/jobs/scheduled.test.ts` for a cron job,
    `tests/jobs/dlq.test.ts` for the failure/DLQ path). For an **event-triggered**
@@ -686,7 +691,75 @@ export const dailyHealthCheck = defineJob(
 );
 ```
 
-Inngest's cron trigger means there's **no separate scheduler service** to run.
+**There IS a scheduler now, and it is not a service.** This line used to read
+_"Inngest's cron trigger means there's no separate scheduler service to run"_, and
+the constraint it described has gone rather than the sentence having been wrong:
+on the Postgres engine a **tick inside the existing worker process**
+(`lib/jobs/engine/scheduler.ts`) turns a cron expression into a `job_queue` row.
+It adds no machine, no process and no environment variable — which is why the
+correction is worth stating rather than deleting. A job still on Inngest is still
+scheduled by Inngest, exactly as before; which engine fires a given job is the
+per-job cutover switch's answer (`MOTIR_POSTGRES_JOB_IDS`), not this document's.
+
+### Where the scheduler runs, and the guard that makes that safe
+
+It rides the worker's claim loop, beside the claim rather than on a timer of its
+own. A tick that runs late still enqueues the fire it OWED — every fire instant
+is computed from the clock against the cron expression, never as "one interval
+since the last tick" — so the tick's cadence decides latency and can never decide
+which fire.
+
+⚠️ **It refuses to start against an empty registry.** The engine's tables hold only
+jobs whose definition module has been EVALUATED, and `scripts/worker.ts` carries a
+side-effect `import '@/lib/jobs/registry'` that looks unused for exactly that
+reason. A scheduler over an empty registry enqueues nothing, forever, in complete
+silence — indistinguishable from a deployment with no cron jobs. So start-up
+throws, naming the missing import, rather than proceeding.
+
+### What a MISSED tick does — the catch-up policy
+
+Every scheduled job declares a `catchUp` disposition beside its `cron`, and the
+compiler will not let it omit one:
+
+| disposition | on restart, the scheduler…                                    |
+| ----------- | ------------------------------------------------------------- |
+| `all`       | enqueues **every** fire owed across the gap, oldest first     |
+| `latest`    | enqueues **only the most recent** owed fire                   |
+| `skip`      | enqueues **nothing**; the next scheduled fire is the next run |
+
+**Thirteen of the fourteen take `latest`** — each is a convergent sweep, so one
+run answers for every fire it missed — and `system.ci-runner-provision-sweep`
+takes **`skip`**, because at `* * * * *` the next fire is under a minute away and
+a long outage would otherwise fan out hundreds of ticks against a batch ceiling.
+No job takes `all` today.
+
+**The per-job table and the reasoning live in
+[`docs/decisions/job-queue-foundation.md` §11](decisions/job-queue-foundation.md),
+and are deliberately not repeated here** — two copies of an argument disagree the
+first time one is edited. §11 is the record; this section is the reference.
+
+⚠️ **`retryPolicy` is not a catch-up licence.** `idempotent` says a handler may
+safely run the same tick twice. It says nothing about whether a tick that is now
+six hours _stale_ is worth running at all. The two are independent axes and every
+scheduled job declares both.
+
+### How a scheduled run is identified
+
+- **On the ledger**, by `event_name = scheduled.{job_id}` — unchanged, and the
+  key `jobScheduleHealthService` groups on.
+- **On the queue**, by `job_queue.scheduled_for`: the cron FIRE INSTANT the row
+  stands for, never the moment it was enqueued. A unique on
+  `(job_id, scheduled_for)` is what guarantees **one run per tick regardless of
+  how many workers are running** — the same NULL-never-equals-NULL property that
+  keeps the `(event_id, job_id)` unique off scheduled rows, read the other way
+  round. `run_at` is that same instant, so a caught-up run is claimable at once
+  and the claim's `ORDER BY run_at` puts the oldest owed work first.
+
+A handler cannot currently tell that it is running late: the engine hands a cron
+run an empty payload, so `scheduled_for` sits on the row and never reaches `ctx`.
+Every job today is a convergent sweep that does not need to know; the two that
+would benefit are named in §11.6.
+
 Cron jobs are uniform with event-triggered jobs in the ledger: the wrapper
 records the `job_run` row's `event_name` as the synthetic `scheduled.{job_id}`
 (a cron run carries no real triggering-event name), so the dashboard treats both
@@ -772,6 +845,17 @@ Two mechanisms now close it, and they are deliberately independent:
    message. Cron jobs are the tripwire because they are the only ones whose
    silence is unambiguous — an event-triggered job that never ran may simply
    never have been triggered.
+
+   ⚠️ **AND THE SAME SILENCE MEANS SOMETHING DIFFERENT FOR A MIGRATED JOB.** The
+   probe is UNCHANGED and everything above stays true for every job still on
+   Inngest. For a job routed to the Postgres engine there is no app registry to go
+   stale, so an overdue verdict means **a dead worker or a stalled scheduler**
+   instead. Same probe, same one-tick tolerance, different diagnosis — check the
+   `worker` process before the Inngest sync. (This is also why
+   `system.daily-health-check` declares `catchUp: 'latest'`: under `skip`, a
+   routine worker restart spanning 09:00 would leave the probe two ticks stale
+   and its first act the next day would be to report ITSELF overdue — a fault
+   manufactured by the schedule rather than observed.)
 
 The probe lives in `system.daily-health-check` **specifically because that job is
 old** (2026-06-01) and is therefore registered in any stale sync the cloud could
