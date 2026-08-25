@@ -12,6 +12,22 @@ const INNGEST_RESTRICTION = {
     'Import the Inngest SDK only in lib/jobs/** or app/api/inngest/. Elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
 };
 
+// Postgres job-engine boundary (Story MOTIR-3414 · Subtask MOTIR-3426). The
+// engine's internals — the claim loop, the step shim, the dispatcher, the queue
+// repositories — may be imported ONLY by the jobs runtime (lib/jobs/**) and the
+// worker entrypoint (scripts/worker.ts). Everywhere else goes through
+// sendEvent() / defineJob(), exactly as with Inngest.
+//
+// ⚠️ THIS IS THE MIRROR OF `INNGEST_RESTRICTION`, and it exists for the reason
+// the whole epic exists: last time a job substrate's abstractions reached past
+// `lib/jobs/**`, leaving it became the cost of a whole epic. The boundary is
+// cheap to hold now and expensive to establish later.
+const JOB_ENGINE_RESTRICTION = {
+  group: ['@/lib/jobs/engine', '@/lib/jobs/engine/*', '**/lib/jobs/engine/*'],
+  message:
+    'The Postgres job engine is internal to the jobs runtime. Import it only in lib/jobs/** or scripts/worker.ts; elsewhere use sendEvent() / defineJob() from @/lib/jobs.',
+};
+
 // Async-email boundary (Story 1.6 · Subtask 1.6.3). The provider primitive
 // `@/lib/email` (`sendEmail`) may be imported ONLY by lib/services/emailService.ts,
 // which the `email.send` job calls. Every other caller — auth wiring, the
@@ -59,7 +75,7 @@ const eslintConfig = defineConfig([
         'error',
         {
           paths: [EMAIL_RESTRICTION],
-          patterns: [INNGEST_RESTRICTION],
+          patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION],
         },
       ],
     },
@@ -72,6 +88,21 @@ const eslintConfig = defineConfig([
     files: ['lib/jobs/**/*.{ts,tsx}', 'app/api/inngest/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { paths: [EMAIL_RESTRICTION] }],
+    },
+  },
+
+  // The WORKER ENTRYPOINT is the one file outside lib/jobs/** that is allowed to
+  // reach the engine: it is the process that RUNS it (fly.toml's `worker` group),
+  // so it necessarily constructs the loop and the ledger wrapper directly. The
+  // Inngest and email boundaries still apply to it — it enqueues nothing and
+  // sends no mail.
+  {
+    files: ['scripts/worker.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { paths: [EMAIL_RESTRICTION], patterns: [INNGEST_RESTRICTION] },
+      ],
     },
   },
 
@@ -95,7 +126,10 @@ const eslintConfig = defineConfig([
   {
     files: ['lib/services/emailService.ts'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [INNGEST_RESTRICTION] }],
+      'no-restricted-imports': [
+        'error',
+        { patterns: [INNGEST_RESTRICTION, JOB_ENGINE_RESTRICTION] },
+      ],
     },
   },
 

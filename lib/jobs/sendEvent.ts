@@ -1,5 +1,6 @@
 import { inngest } from './client';
 import type { WorkspaceScopedEventName, JobEventData } from './types';
+import { dispatchEventToEngine, hasInngestSubscribers } from './engine/dispatcher';
 
 // The canonical way to emit a background-job event (Story 1.6 · Subtask
 // 1.6.2, extended in 1.6.3). Routes and services call THIS — never
@@ -40,6 +41,43 @@ export async function sendEvent<N extends WorkspaceScopedEventName>(
   // "snaps back but a refresh shows it moved" bug — PROD-443). Drop + log the
   // event instead; the durable state stands. The argument validation above
   // still throws — that's a programming error, not a transport one.
+  // ── THE CUTOVER SWITCH (MOTIR-3423) ────────────────────────────────────────
+  // One of exactly two places the per-job routing is read (the other is
+  // `defineJob`'s Inngest handler, which declines to run a job that has moved).
+  // Not one call site of `sendEvent` knows this exists.
+  //
+  // BOTH lanes are attempted, and that is not redundancy: an event's subscribers
+  // can be SPLIT across engines mid-migration. `work-item/transitioned` has four
+  // subscribers, and moving one of them must move exactly one — so the Postgres
+  // dispatcher enqueues the subscribers that have moved, `inngest.send()` still
+  // delivers to the ones that have not, and each job runs exactly once on its own
+  // lane. The half that prevents a DOUBLE run is in `defineJob`: a migrated job's
+  // Inngest handler returns without executing.
+  //
+  // Ordering is deliberate. The engine dispatch goes FIRST because it is the lane
+  // we are moving TO: if the process dies between the two, an event that reached
+  // the new engine and not the old one is the recoverable direction (the run is a
+  // durable row), whereas the reverse loses it entirely.
+  try {
+    await dispatchEventToEngine(name, data, {
+      idempotencyKey: (data as { idempotencyKey?: string }).idempotencyKey ?? null,
+    });
+  } catch (err) {
+    // Same best-effort contract as the transport below, and for the same reason:
+    // `sendEvent` is always called POST-COMMIT, so a failure here must not turn
+    // an already-committed mutation into a 500.
+    console.error(
+      `sendEvent("${name}") failed to dispatch to the Postgres engine ` +
+        `(workspaceId=${String(workspaceId)}):`,
+      err,
+    );
+  }
+
+  // Still on Inngest for every subscriber that has not moved. Skipped entirely
+  // once they all have — which is what makes the retirement story a deletion
+  // rather than a rewrite.
+  if (!hasInngestSubscribers(name)) return;
+
   try {
     await inngest.send({ name, data });
   } catch (err) {
