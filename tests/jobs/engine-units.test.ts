@@ -21,7 +21,7 @@ import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import '@/lib/jobs/registry';
 
 // The story gate's COVERAGE TOP-UP (Story MOTIR-3414 · Subtask MOTIR-3426).
@@ -34,11 +34,11 @@ import '@/lib/jobs/registry';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterAll(async () => {

@@ -8,7 +8,7 @@ import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker, retryBackoffMs, serializeWorkerFailure } from '@/lib/jobs/engine/worker';
 import { JobStepYield } from '@/lib/jobs/engine/step';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // The WORKER (Story MOTIR-3414 · Subtask MOTIR-3421), against a real Postgres.
 //
@@ -22,11 +22,11 @@ import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterAll(async () => {

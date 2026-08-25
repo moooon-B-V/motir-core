@@ -12,7 +12,7 @@ import { createStepApi, JobStepYield } from '@/lib/jobs/engine/step';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JOB_ENGINE_JOBS_ENV, routedToEngine } from '@/lib/jobs/engine/cutover';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine, truncateJobRuns } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // THE STORY GATE (Story MOTIR-3414 · Subtask MOTIR-3426).
 //
@@ -38,13 +38,11 @@ const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
   await truncateJobRuns();
   delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
   await truncateJobRuns();
   if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
   else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // The Postgres job engine's SCHEMA (Story MOTIR-3414 · Subtask MOTIR-3420) —
 // the three tables' structural guarantees, proved against a real Postgres.
@@ -30,14 +30,14 @@ import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 // AFTER as well as before: these tables sit outside the workspace cascade, so a
 // suite that only cleared them up-front would leave its last test's rows for
 // whatever file this worker runs next.
 afterEach(async () => {
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterAll(async () => {

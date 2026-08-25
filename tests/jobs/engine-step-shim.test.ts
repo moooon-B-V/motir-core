@@ -12,7 +12,7 @@ import {
   parseSleepMs,
 } from '@/lib/jobs/engine/step';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // The `step` SHIM (Story MOTIR-3414 · Subtask MOTIR-3422), against a real
 // Postgres.
@@ -34,11 +34,11 @@ import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
+  await truncateJobRuns();
 });
 
 afterAll(async () => {

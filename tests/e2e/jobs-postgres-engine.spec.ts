@@ -36,20 +36,33 @@
 // the substrate, not a shortcut: the same three attempts still run.
 
 import { expect, test, type Page } from '@playwright/test';
-import { resetDatabase, db } from './_helpers/db-reset';
+import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { truncateJobRuns } from '@/tests/helpers/db';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
 import { clearJobRouting, routeJobsToEngine } from './_helpers/job-routing';
 import { startSignedOut } from './_helpers/shell-session';
 
+// ⚠️ EVERY DIRECT-DB CALL HERE IS `adminDb`, THE OWNER CLIENT — not the runtime
+// singleton, which is what `jobs-flow.spec.ts` and most of this lane still use.
+// Two reasons, and neither is style:
+//
+//   * It is what the client is FOR. These are post-condition assertions and a
+//     TRUNCATE. `adminDb`'s own header says so, and `TRUNCATE` requires table
+//     ownership outright — the runtime role cannot perform it and must never be
+//     granted the ability.
+//   * `tests/rls/test-singleton-statement-guard.test.ts` RATCHETS the count of
+//     singleton statements under `tests/e2e/**`, and that ratchet only ever
+//     falls. Writing this spec the way its sibling is written added 13 to it and
+//     turned the guards job red. Converting is the fix; raising the ceiling is
+//     the one move that guard exists to refuse.
 const PASSWORD = 'pg-engine-spec-pass-123';
 const PILOT_JOB = 'email.send';
 
 test.beforeEach(async () => {
   await resetDatabase();
   await truncateJobRuns();
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
   );
   await clearEmailFault();
@@ -66,7 +79,7 @@ test.afterEach(async () => {
 });
 
 test.afterAll(async () => {
-  await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -83,7 +96,7 @@ async function signUp(page: Page, email: string): Promise<void> {
 
 async function workspaceIdFor(email: string): Promise<string> {
   const local = email.split('@')[0]!;
-  const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
+  const ws = await adminDb.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(ws, `auto-created workspace for ${email} should exist`).not.toBeNull();
   return ws!.id;
 }
@@ -123,18 +136,18 @@ test('@smoke the pilot job runs on the POSTGRES ENGINE and the dashboard is unch
   // one `job_event` and the dispatcher enqueued one `job_queue` run for the
   // pilot. Nothing else in the product produces those rows.
   await expect
-    .poll(async () => db.jobQueueRun.count({ where: { jobId: PILOT_JOB } }), {
+    .poll(async () => adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB } }), {
       timeout: 30_000,
       intervals: [500],
     })
     .toBe(1);
-  expect(await db.jobEvent.count({ where: { name: PILOT_JOB } })).toBe(1);
+  expect(await adminDb.jobEvent.count({ where: { name: PILOT_JOB } })).toBe(1);
 
   // ── the worker claimed it and it succeeded ───────────────────────────────
   await expect
     .poll(
       async () =>
-        (await db.jobQueueRun.findFirst({ where: { jobId: PILOT_JOB } }))?.state ?? 'missing',
+        (await adminDb.jobQueueRun.findFirst({ where: { jobId: PILOT_JOB } }))?.state ?? 'missing',
       { timeout: 30_000, intervals: [500] },
     )
     .toBe('succeeded');
@@ -148,10 +161,10 @@ test('@smoke the pilot job runs on the POSTGRES ENGINE and the dashboard is unch
   // exactly one row, which is what the memoized `job-run:start` guarantees.
   await expect
     .poll(async () =>
-      db.jobRun.count({ where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' } }),
+      adminDb.jobRun.count({ where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' } }),
     )
     .toBe(1);
-  expect(await db.jobRun.count({ where: { workspaceId, status: 'failed' } })).toBe(0);
+  expect(await adminDb.jobRun.count({ where: { workspaceId, status: 'failed' } })).toBe(0);
 
   // ── and the operator dashboard renders it, untouched by this story ───────
   await gotoJobs(page);
@@ -180,21 +193,21 @@ test('@smoke a failing pilot run retries on the engine’s own backoff, then dea
   await expect
     .poll(
       async () => ({
-        failed: await db.jobRun.count({ where: { workspaceId, status: 'failed' } }),
-        dlq: await db.jobRunDlq.count({ where: { workspaceId } }),
+        failed: await adminDb.jobRun.count({ where: { workspaceId, status: 'failed' } }),
+        dlq: await adminDb.jobRunDlq.count({ where: { workspaceId } }),
       }),
       { timeout: 90_000, intervals: [1_000] },
     )
     .toEqual({ failed: 1, dlq: 1 });
 
   // The queue row is terminal too, and carries the reason an operator needs.
-  const queued = await db.jobQueueRun.findFirstOrThrow({ where: { jobId: PILOT_JOB } });
+  const queued = await adminDb.jobQueueRun.findFirstOrThrow({ where: { jobId: PILOT_JOB } });
   expect(queued.state).toBe('failed');
   expect(queued.attempts).toBe(3); // `transient` = 3 total attempts, preserved
   expect(queued.lastError).not.toBeNull();
 
   // The dead-letter row records the full budget and has not been replayed.
-  const dlqRow = await db.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
+  const dlqRow = await adminDb.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
   expect(dlqRow.attempts).toBe(3);
   expect(dlqRow.replayedAt).toBeNull();
 
@@ -225,7 +238,7 @@ test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on 
   await armEmailFault('forcefail');
   await sendInvite(page, invitee);
   await expect
-    .poll(async () => db.jobRunDlq.count({ where: { workspaceId } }), {
+    .poll(async () => adminDb.jobRunDlq.count({ where: { workspaceId } }), {
       timeout: 90_000,
       intervals: [1_000],
     })
@@ -233,7 +246,7 @@ test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on 
 
   // Disarm, so the replay can actually deliver.
   await clearEmailFault();
-  const runsBefore = await db.jobQueueRun.count({ where: { jobId: PILOT_JOB } });
+  const runsBefore = await adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB } });
 
   await gotoJobs(page);
   await page.getByRole('link', { name: /Dead letter/ }).click();
@@ -246,7 +259,7 @@ test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on 
   // one — the original's step ledger records work that completed, and re-running
   // that row would skip exactly the steps an operator is replaying to re-do.
   await expect
-    .poll(async () => db.jobQueueRun.count({ where: { jobId: PILOT_JOB } }), {
+    .poll(async () => adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB } }), {
       timeout: 30_000,
       intervals: [500],
     })
@@ -254,16 +267,19 @@ test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on 
 
   // …and it succeeds: a new succeeded run, and the email actually delivered.
   await expect
-    .poll(async () => db.jobQueueRun.count({ where: { jobId: PILOT_JOB, state: 'succeeded' } }), {
-      timeout: 60_000,
-      intervals: [1_000],
-    })
+    .poll(
+      async () => adminDb.jobQueueRun.count({ where: { jobId: PILOT_JOB, state: 'succeeded' } }),
+      {
+        timeout: 60_000,
+        intervals: [1_000],
+      },
+    )
     .toBe(1);
   const delivered = await waitForEmail(invitee);
   expect(delivered.subject).toContain('invited to join');
 
   // The DLQ row is stamped, so the action is auditable.
-  const row = await db.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
+  const row = await adminDb.jobRunDlq.findFirstOrThrow({ where: { workspaceId } });
   expect(row.replayedAt).not.toBeNull();
 });
 
@@ -289,7 +305,9 @@ test('the runs table renders its EMPTY-FOR-THIS-FILTER state', async ({ page }) 
   await expect
     .poll(
       async () =>
-        db.jobRun.count({ where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' } }),
+        adminDb.jobRun.count({
+          where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' },
+        }),
       { timeout: 30_000, intervals: [500] },
     )
     .toBe(1);
@@ -345,7 +363,9 @@ test('a job NOT routed to the engine still runs on Inngest — the 23 this story
   await expect
     .poll(
       async () =>
-        db.jobRun.count({ where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' } }),
+        adminDb.jobRun.count({
+          where: { workspaceId, functionId: PILOT_JOB, status: 'succeeded' },
+        }),
       { timeout: 90_000, intervals: [1_000] },
     )
     .toBe(1);
@@ -355,6 +375,6 @@ test('a job NOT routed to the engine still runs on Inngest — the 23 this story
   expect(email.subject).toContain('invited to join');
 
   // …and it did NOT touch the new engine. No event row, no queue row.
-  expect(await db.jobEvent.count()).toBe(0);
-  expect(await db.jobQueueRun.count()).toBe(0);
+  expect(await adminDb.jobEvent.count()).toBe(0);
+  expect(await adminDb.jobQueueRun.count()).toBe(0);
 });

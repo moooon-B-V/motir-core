@@ -15,7 +15,7 @@ import {
 } from '@/lib/jobs/engine/cutover';
 import { engineJobs, engineSubscribers } from '@/lib/jobs/engine/registry';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // The REAL registry — imported for its side effect, so all 24 definition modules
 // are evaluated and `defineJob` has registered every job. The fan-out count below
 // is asserted against THIS, not against a fixture, which is the point: adding a
@@ -34,12 +34,12 @@ function routeToEngine(...jobIds: string[]): void {
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
+  await truncateJobRuns();
   delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
+  await truncateJobRuns();
   if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
   else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;
 });

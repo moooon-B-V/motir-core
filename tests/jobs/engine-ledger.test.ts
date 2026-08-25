@@ -11,7 +11,7 @@ import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engin
 import { JobStepYield } from '@/lib/jobs/engine/step';
 import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables, truncateJobEngine, truncateJobRuns } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // LEDGER + DLQ PARITY (Story MOTIR-3414 · Subtask MOTIR-3424), against a real
 // Postgres.
@@ -27,13 +27,11 @@ const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await truncateJobEngine();
   await truncateJobRuns();
   delete process.env[JOB_ENGINE_JOBS_ENV];
 });
 
 afterEach(async () => {
-  await truncateJobEngine();
   await truncateJobRuns();
   if (ORIGINAL_ENV === undefined) delete process.env[JOB_ENGINE_JOBS_ENV];
   else process.env[JOB_ENGINE_JOBS_ENV] = ORIGINAL_ENV;

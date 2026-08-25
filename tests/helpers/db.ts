@@ -31,31 +31,32 @@ export async function truncateAuthTables(): Promise<void> {
   );
 }
 
-// job_run / job_run_dlq rows from SYSTEM jobs carry a null workspace_id, so
-// they are NOT reached by truncating "workspace" CASCADE. The jobs suite
-// truncates both ledger tables directly between tests.
-export async function truncateJobRuns(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "job_run", "job_run_dlq" RESTART IDENTITY CASCADE');
-}
-
-// The Postgres job engine's three tables (Story MOTIR-3414 · Subtask MOTIR-3420)
-// are the same class as `job_run` above, for the same reason: a SYSTEM job's
-// rows carry `workspace_id IS NULL`, so a `TRUNCATE "workspace" CASCADE` never
-// reaches them and they leak into the next test.
+// Rows from SYSTEM jobs carry a null workspace_id, so they are NOT reached by
+// truncating "workspace" CASCADE. The jobs suite truncates these tables directly
+// between tests.
 //
-// `job_queue` cascades from `job_event` and `job_step` from `job_queue`, so
-// naming the parent would be enough for the tenanted rows — but an untenanted
-// event has no parent at all, so all three are named and the CASCADE only has
-// to do the work the FKs describe.
+// ⚠️ ALL FIVE IN ONE STATEMENT, and the Postgres engine's three joined the
+// ledger's two rather than getting a helper of their own (MOTIR-3420/3426).
+// Three reasons, in order of weight:
 //
-// ⚠️ Call this in `afterEach` as well as `beforeEach` when a suite writes these
+//   1. They are ONE concern — "job rows the workspace cascade does not reach" —
+//      and every suite that wants one wants the others.
+//   2. `job_queue` cascades from `job_event` and `job_step` from `job_queue`, so
+//      a single CASCADE statement is enough; naming all five only saves the FKs
+//      from having to do work an untenanted parent could not do anyway.
+//   3. `tests/rls/test-singleton-statement-guard.test.ts` RATCHETS the number of
+//      raw `$executeRaw*` statements under `tests/`, and that ratchet only ever
+//      falls. A sixth helper would have added one more — and a ceiling raised to
+//      admit it is the one move that guard exists to refuse.
+//
+// ⚠️ CALL IT IN `afterEach` AS WELL AS `beforeEach` when a suite writes these
 // rows. A table outside the workspace cascade that is only cleared BEFORE each
-// test leaves its last test's rows sitting in the worker's database for whatever
-// file that worker picks up next — which surfaces as a failure in an unrelated
-// suite, nowhere near the diff that caused it.
-export async function truncateJobEngine(): Promise<void> {
+// test leaves its last test's rows in the worker's database for whatever file
+// that worker picks up next — which surfaces as a failure in an unrelated suite,
+// nowhere near the diff that caused it.
+export async function truncateJobRuns(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "job_run", "job_run_dlq", "job_event", "job_queue", "job_step" RESTART IDENTITY CASCADE',
   );
 }
 
