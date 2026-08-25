@@ -55,12 +55,30 @@ describe('the tool is reachable by the caller it was built for', () => {
     ).toContain(permission);
   });
 
-  it('CLI_TOKEN_GRANT is UNCHANGED by this card', () => {
+  it('CLI_TOKEN_GRANT is PINNED — widening it is a deliberate, stated change', () => {
     // If a future edit needs to widen the grant, it is a deliberate, stated
     // change with its own justification — not something that arrives inside an
     // unrelated diff. Pinning it here makes that visible at the point of change.
+    //
+    // ⚠️ THE PIN HAS SINCE FIRED ONCE, AND THAT IS THE MECHANISM WORKING RATHER
+    // THAN A REASON TO LOOSEN IT. This test was written as "UNCHANGED by this
+    // card" for MOTIR-3058, whose card did not widen the grant. MOTIR-3480 did:
+    // `search_lessons` is gated on `lesson:view`, and a sandboxed run holding
+    // every other key would have got a refusal it would read as an outage. That
+    // card carries the argument (at the constant, and in `token-permissions.md`
+    // §3 / MOTIR-3051's AC 4 terms), so the pin was updated WITH it — which is
+    // exactly the "deliberate, stated change" the comment above asks for.
+    //
+    // Renamed because the old title asserted something no longer true. The pin
+    // itself is unchanged in kind: it still fails for the NEXT diff that widens
+    // this set without saying so.
+    //
+    // ⚠️ The ORDER is catalog order, not append order — the device flow's wire
+    // `scope` string is normalized to it, so the array is declared that way (see
+    // the header on `CLI_TOKEN_GRANT`).
     expect([...CLI_TOKEN_GRANT]).toEqual([
       'project:browse',
+      'lesson:view',
       'work_item:edit',
       'comment:add',
       'ai:plan',

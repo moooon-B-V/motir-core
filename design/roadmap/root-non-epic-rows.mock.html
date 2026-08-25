@@ -1,0 +1,1525 @@
+<!doctype html>
+<!--
+  ROADMAP — the ROOT level's NON-EPIC rows (MOTIR-3493, unblocking bug MOTIR-3490).
+
+  COMPOSES the shipped roadmap node (WorkItemNode, MOTIR-1194) and the shipped
+  canvas breadcrumb — it does NOT redraw either. The card box, status pill, kind
+  tile, identifier/title, drill chevron, progress meter, ready wash and cross-story
+  chrome below are the real shipped structure, mirrored class-role for class-role
+  from a render of the real components. The only NEW element is the grouped node
+  (sheet 2) and the truncated-level tile (sheet 4).
+
+  Built from the real design system: every value is the light-theme resolution of a
+  globals.css token, referenced through its --el-* / shape-token name (never a
+  Tier-0 --color-* or a raw rounded-*/p-*/h-*).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — the root level's non-epic rows (MOTIR-3493)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-inverted: #ffffff;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-danger: #e03131;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-peach: #ffe8d4;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-secondary);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-left: auto;
+      }
+      .body {
+        padding: 22px 20px 24px;
+      }
+      .note {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin: 14px 0 0;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code,
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 4px;
+        color: var(--el-text-strong);
+      }
+
+      /* recessed canvas board the nodes sit on (the shipped --el-canvas + dot grid) */
+      .canvas {
+        padding: 22px 18px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow-x: auto;
+      }
+      .road {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .band {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        margin-top: 26px;
+        padding-top: 22px;
+        border-top: 1px dashed var(--el-border-strong);
+      }
+      .bandlabel {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* ── WorkItemNode (components/planning/WorkItemNode.tsx) ──
+         width/height are the layout's NODE_W x NODE_H (280 x 124). */
+      .node {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        width: 280px;
+        height: 124px;
+        flex: none;
+        padding: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .node.ready {
+        background: var(--el-tint-mint);
+      }
+      .node.done {
+        background: var(--el-tint-sky);
+        box-shadow: var(--shadow-subtle);
+      }
+      .noderow {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+      }
+      .noderow .right {
+        margin-left: auto;
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 6px;
+      }
+      .pill {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .pill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .pill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill.ready {
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+      }
+      .pill.ready svg {
+        color: var(--el-success);
+      }
+      .pill.done {
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
+      }
+      .nodebody {
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        align-items: flex-start;
+        gap: 8px;
+        overflow: hidden;
+        margin-top: 6px;
+      }
+      .tile {
+        display: flex;
+        width: 28px;
+        height: 28px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+        color: var(--el-type-epic);
+      }
+      .tile.bug {
+        background: var(--el-tint-peach);
+        color: var(--el-type-bug);
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+        color: var(--el-type-story);
+      }
+      .tile.task {
+        background: var(--el-tint-sky);
+        color: var(--el-type-task);
+      }
+      .tile.subtask {
+        background: var(--el-tint-lavender);
+        color: var(--el-type-subtask);
+      }
+      /* the GROUP node's tile: no kind backs it, so no --el-type-* hue */
+      .tile.group {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .nodemain {
+        min-width: 0;
+        flex: 1;
+      }
+      .ident {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: none;
+        padding: 0;
+      }
+      .ttl {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-top: 2px;
+        font-size: 13.5px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .meter {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .track {
+        height: 6px;
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      .fill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .count {
+        flex: none;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── NEW: the "+ N more" TRUNCATION tile ── */
+      .moretile {
+        display: flex;
+        width: 280px;
+        height: 124px;
+        flex: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .moretile .n {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .moretile .of {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .showall {
+        margin-top: 2px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        padding: 3px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+
+      /* ── the shipped canvas BREADCRUMB row ── */
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .backbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        padding: 3px 10px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .crumbs .sep {
+        color: var(--el-text-muted);
+      }
+      .crumbs .here {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* annotation callouts */
+      .callout {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .callout b {
+        color: var(--el-text-strong);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin-top: 4px;
+      }
+      table.spec th,
+      table.spec td {
+        border-bottom: 1px solid var(--el-border);
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text-secondary);
+      }
+      table.spec th {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        background: var(--el-surface-soft);
+      }
+      table.spec td b {
+        color: var(--el-text-strong);
+      }
+      .lbl {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        text-align: center;
+        margin-top: 8px;
+      }
+      .lbl b {
+        color: var(--el-text-strong);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        width: 280px;
+        flex: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — the root level's non-epic rows</h1>
+    <p class="docsub">
+      MOTIR-3493, unblocking MOTIR-3490. How the roadmap canvas draws a root row that is not an
+      epic, and how a level says it is showing only part of itself. Composes the shipped
+      <code>WorkItemNode</code> and the shipped canvas breadcrumb; the grouped node and the
+      truncation tile are the two new elements.
+    </p>
+
+    <!-- ══════════════ SHEET 1 — TODAY ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>1 · Today — every parentless row draws on the road</b>
+        <span class="cap">shipped behaviour, rendered from the real components</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="road">
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="1"></circle></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-653</span>
+                  <span class="ttl">Epic 8: Launch readiness</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 43%"></div></div>
+                <span class="count">41 / 96</span>
+              </div>
+            </div>
+
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="1"></circle></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3413</span>
+                  <span class="ttl">Own the job substrate — a Postgres-backed queue</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 25%"></div></div>
+                <span class="count">6 / 24</span>
+              </div>
+            </div>
+
+            <div class="node ready">
+              <div class="noderow">
+                <span class="pill ready"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+                    ></path>
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >Ready</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 20v-9"></path>
+                    <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                    <path d="M14.12 3.88 16 2"></path>
+                    <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                    <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                    <path d="M22 13h-4"></path>
+                    <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                    <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                    <path d="M6 13H2"></path>
+                    <path d="m8 2 1.88 1.88"></path>
+                    <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3491</span>
+                  <span class="ttl">`/explore/topic/[slug]` answers 200 for a missing topic</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >To Do</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 20v-9"></path>
+                    <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                    <path d="M14.12 3.88 16 2"></path>
+                    <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                    <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                    <path d="M22 13h-4"></path>
+                    <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                    <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                    <path d="M6 13H2"></path>
+                    <path d="m8 2 1.88 1.88"></path>
+                    <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3490</span>
+                  <span class="ttl">Roadmap root level draws every parentless bug beside</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>Read the mint card.</b> The defect is usually described as "a bug appears between two
+            epics", which undersells it. A parentless bug that is READY takes the whole-card mint
+            wash the canvas gives a startable node, so on the opening canvas the defect is not
+            merely present among the epics — it is the <b>most prominent node on the road</b>.
+            Rendered from the real <code>WorkItemNode</code> at <code>origin/main</code> 9b504a47;
+            the kind tile, the pills and the meter above are that render's markup, not a redrawing
+            of it.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 2 — THE GROUPED ROOT ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>2 · The grouped root — the road is epics, and one door beside it</b>
+        <span class="cap">the new element</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <p class="bandlabel">The road</p>
+          <div class="road">
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="1"></circle></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-653</span>
+                  <span class="ttl">Epic 8: Launch readiness</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 43%"></div></div>
+                <span class="count">41 / 96</span>
+              </div>
+            </div>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill prog"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="1"></circle></svg
+                  >In Progress</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3413</span>
+                  <span class="ttl">Own the job substrate — a Postgres-backed queue</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 25%"></div></div>
+                <span class="count">6 / 24</span>
+              </div>
+            </div>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3489</span>
+                  <span class="ttl">Epic 12: The lesson corpus</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 0%"></div></div>
+                <span class="count">0 / 11</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="band">
+            <div class="stack">
+              <div class="node">
+                <div class="noderow">
+                  <span class="right"
+                    ><svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="color: var(--el-text-muted)"
+                      aria-hidden="true"
+                    >
+                      <path d="m9 18 6-6-6-6"></path></svg
+                  ></span>
+                </div>
+                <div class="nodebody">
+                  <span class="tile group" aria-hidden="true"
+                    ><svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+                      ></path>
+                      <path
+                        d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
+                      ></path>
+                      <path
+                        d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
+                      ></path></svg
+                  ></span>
+                  <div class="nodemain">
+                    <span class="ident">7 items</span>
+                    <span class="ttl">Not in an epic</span>
+                  </div>
+                </div>
+              </div>
+              <p class="lbl"><b>The grouped node.</b> Same box, no kind, no status, no meter.</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>It sits below the road on its own, and no code places it there.</b>
+            <code>deterministicLayout</code> already drops a node that is in no dependency edge into
+            a separate band beneath the flow — its own comment names the case, "a standalone bug".
+            The group node has no edges, so it lands in that band by the shipped rule. Unlike the
+            pinned planning-origin cluster it carries
+            <b>no explicit <code>x</code> / <code>y</code></b
+            >.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 3 — THE DRILLED LEVEL ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>3 · Behind the door — the level the group opens onto</b>
+        <span class="cap">the members, unchanged</span>
+      </div>
+      <div class="body">
+        <div class="crumbs">
+          <span class="backbtn"
+            ><svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 19-7-7 7-7"></path>
+              <path d="M19 12H5"></path></svg
+            >Back</span
+          >
+          <span>Motir</span>
+          <span class="sep">/</span>
+          <span class="here">Not in an epic</span>
+        </div>
+        <div class="canvas">
+          <div class="road">
+            <div class="node ready">
+              <div class="noderow">
+                <span class="pill ready"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+                    ></path>
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >Ready</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 20v-9"></path>
+                    <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                    <path d="M14.12 3.88 16 2"></path>
+                    <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                    <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                    <path d="M22 13h-4"></path>
+                    <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                    <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                    <path d="M6 13H2"></path>
+                    <path d="m8 2 1.88 1.88"></path>
+                    <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3491</span>
+                  <span class="ttl">`/explore/topic/[slug]` answers 200 for a missing topic</span>
+                </div>
+              </div>
+            </div>
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile bug" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 20v-9"></path>
+                    <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                    <path d="M14.12 3.88 16 2"></path>
+                    <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                    <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                    <path d="M22 13h-4"></path>
+                    <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                    <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                    <path d="M6 13H2"></path>
+                    <path d="m8 2 1.88 1.88"></path>
+                    <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3490</span>
+                  <span class="ttl">Roadmap root level draws every parentless bug beside</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 0%"></div></div>
+                <span class="count">0 / 1</span>
+              </div>
+            </div>
+            <div class="node done">
+              <div class="noderow">
+                <span class="pill done"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21.801 10A10 10 0 1 1 17 3.335"></path>
+                    <path d="m9 11 3 3L22 4"></path></svg
+                  >Done</span
+                >
+              </div>
+              <div class="nodebody">
+                <span class="tile task" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 5h.01"></path>
+                    <path d="M3 12h.01"></path>
+                    <path d="M3 19h.01"></path>
+                    <path d="M8 5h13"></path>
+                    <path d="M8 12h13"></path>
+                    <path d="M8 19h13"></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3120</span>
+                  <span class="ttl">Rotate the Tigris credential</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>Nothing here is new.</b> Each member is the ordinary <code>WorkItemNode</code> it is
+            today — its own status chip, its kind tile, the ready wash, the drill chevron when it
+            has children, and the quick-view peek on select. The level is served from the root read
+            the canvas has <b>already fetched</b>: the members were in it, and grouping only decided
+            where to draw them. A parentless <code>task</code> is in the picture on purpose — the
+            group is not defect-only. See decision 1.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 4 — THE TRUNCATED LEVEL ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>4 · A level that is showing only part of itself says so</b>
+        <span class="cap">the second new element</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="road">
+            <div class="node">
+              <div class="noderow">
+                <span class="pill todo"
+                  ><svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle></svg
+                  >To Do</span
+                >
+                <span class="right"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="color: var(--el-text-muted)"
+                    aria-hidden="true"
+                  >
+                    <path d="m9 18 6-6-6-6"></path></svg
+                ></span>
+              </div>
+              <div class="nodebody">
+                <span class="tile epic" aria-hidden="true"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                    ></path></svg
+                ></span>
+                <div class="nodemain">
+                  <span class="ident">MOTIR-3402</span>
+                  <span class="ttl">Epic 11: Metering and balance</span>
+                </div>
+              </div>
+              <div class="meter">
+                <div class="track"><div class="fill" style="width: 12%"></div></div>
+                <span class="count">2 / 17</span>
+              </div>
+            </div>
+            <div class="stack">
+              <div class="moretile">
+                <span class="n">+ 47 more</span>
+                <span class="of">Showing 200 of 247</span>
+                <span class="showall">Show all</span>
+              </div>
+              <p class="lbl"><b>The truncation tile.</b> Last cell of the level. Not a door.</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b>Grouping is not the cap fix, and must not be mistaken for one.</b> The cap is applied
+            by the level READ, before anything can be grouped — so collapsing the non-epic rows
+            removes none of the pressure on it. The two halves of MOTIR-3490 are independent, and
+            this tile is the second one. It reports a fact the reader currently cannot see at all:
+            today the level simply stops at 200 rows, sorted by key ascending, so the rows it drops
+            are the <b>newest epics</b>, with no cursor and no message.
+          </div>
+        </div>
+        <p class="note">
+          The <b>dashed</b> edge is borrowed deliberately: the onboarding init screen's plan-preview
+          cluster already ends its epic strip with a dashed <code>+ N more epics</code> tile, so the
+          canvas vocabulary for "there is more of this than is drawn" exists. The difference is the
+          <code>Show all</code> action — that tile caps a preview on purpose, this one reports an
+          overflow the reader must be able to escape.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 5 — SPRINT SCOPE ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>5 · Sprint scope — the predicate is <code>parentId === null</code>, not "is a root"</b>
+        <span class="cap">why the obvious rule is wrong here</span>
+      </div>
+      <div class="body">
+        <div class="grid2">
+          <div>
+            <p class="bandlabel">Groups — a committed parentless defect</p>
+            <div class="canvas">
+              <div class="road">
+                <div class="node">
+                  <div class="noderow">
+                    <span class="right"
+                      ><svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="color: var(--el-text-muted)"
+                        aria-hidden="true"
+                      >
+                        <path d="m9 18 6-6-6-6"></path></svg
+                    ></span>
+                  </div>
+                  <div class="nodebody">
+                    <span class="tile group" aria-hidden="true"
+                      ><svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+                        ></path>
+                        <path
+                          d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
+                        ></path>
+                        <path
+                          d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
+                        ></path></svg
+                    ></span>
+                    <div class="nodemain">
+                      <span class="ident">2 items</span>
+                      <span class="ttl">Not in an epic</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="note">
+              Its <code>parentId</code> is <code>null</code> and its kind is not <code>epic</code> —
+              the same row the whole-project view groups. MOTIR-3490's fifth acceptance criterion,
+              satisfied.
+            </p>
+          </div>
+          <div>
+            <p class="bandlabel">Does not group — a committed member story</p>
+            <div class="canvas">
+              <div class="road">
+                <div class="node">
+                  <div class="noderow">
+                    <span class="pill prog"
+                      ><svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <circle cx="12" cy="12" r="1"></circle></svg
+                      >In Progress</span
+                    >
+                    <span class="right"
+                      ><svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="color: var(--el-text-muted)"
+                        aria-hidden="true"
+                      >
+                        <path d="m9 18 6-6-6-6"></path></svg
+                    ></span>
+                  </div>
+                  <div class="nodebody">
+                    <span class="tile story" aria-hidden="true"
+                      ><svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M3 5h.01"></path>
+                        <path d="M3 12h.01"></path>
+                        <path d="M3 19h.01"></path>
+                        <path d="M8 5h13"></path>
+                        <path d="M8 12h13"></path>
+                        <path d="M8 19h13"></path></svg
+                    ></span>
+                    <div class="nodemain">
+                      <span class="ident">MOTIR-3430</span>
+                      <span class="ttl">Navigation is instant — every authed surface opens</span>
+                    </div>
+                  </div>
+                  <div class="meter">
+                    <div class="track"><div class="fill" style="width: 72%"></div></div>
+                    <span class="count">8 / 11</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="note">
+              A root of the SPRINT view, not of the tree: its <code>parentId</code> names an epic,
+              and the sprint read re-rooted it because that epic is not a member. It is the sprint's
+              actual work and must stay on the road.
+            </p>
+          </div>
+        </div>
+        <div class="callout">
+          <div>
+            <b
+              >A <code>kind !== 'epic'</code> rule alone would have swept nearly the whole sprint
+              into one node.</b
+            >
+            Sprint scope re-roots the level at the topmost in-sprint items, which are usually
+            stories and subtasks — every one of them not an epic. The
+            <code>parentId === null</code> conjunct is what keeps the two apart, and the wire
+            already carries <code>parentId</code>, so nothing new is needed to tell them apart.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SHEET 6 — ANATOMY ══════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <b>6 · Anatomy — what the grouped node borrows, and what it does not</b>
+        <span class="cap">every slot accounted for</span>
+      </div>
+      <div class="body">
+        <table class="spec">
+          <thead>
+            <tr>
+              <th style="width: 20%">Slot</th>
+              <th style="width: 30%">On a work-item node</th>
+              <th>On the grouped node</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Box</b></td>
+              <td>
+                280 × 124, <code>--radius-card</code>, <code>--el-border</code>,
+                <code>--el-surface</code>, <code>--shadow-card</code>
+              </td>
+              <td>
+                <b>Identical.</b> It is a node on the same board and must sit on the same grid.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Status pill</b></td>
+              <td>The workflow status, its own label and category</td>
+              <td>
+                <b>Empty.</b> The group has no status. A "Mixed" or "7 open" chip in that slot would
+                be a claim about work the node does not own.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Kind tile</b></td>
+              <td>The kind's <code>--el-type-*</code> hue behind its glyph</td>
+              <td>
+                Neutral <code>--el-muted</code> behind a <code>layers</code> glyph in
+                <code>--el-text-secondary</code>. <b>No <code>--el-type-*</code></b> — no kind backs
+                it, and borrowing one would say the group IS that kind.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Identifier</b></td>
+              <td><code>MOTIR-&lt;n&gt;</code>, mono, <code>--el-text-secondary</code></td>
+              <td>
+                The <b>count</b> — <code>7 items</code> — in the same slot and the same type. It is
+                what identifies this node, and no key exists to put there.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Title</b></td>
+              <td>The work item's title, two lines</td>
+              <td><b>Not in an epic.</b> See decision 1 for why not "Defects".</td>
+            </tr>
+            <tr>
+              <td><b>Drill chevron</b></td>
+              <td>Present when the item has children</td>
+              <td><b>Always present.</b> The node exists only when it has members.</td>
+            </tr>
+            <tr>
+              <td><b>Progress meter</b></td>
+              <td>The container's subtree done / total</td>
+              <td>
+                <b>Absent.</b> The meter means "this container's own work is N% done"; the group is
+                a drawer, not a unit of work, and its members are unrelated to each other.
+              </td>
+            </tr>
+            <tr>
+              <td><b>Quick-view</b></td>
+              <td><code>viewable</code> — select surfaces a View button</td>
+              <td>
+                <b>Not viewable.</b> Like the planning-origin card, its detail IS the level below
+                it.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <b><code>decorative</code></b>
+              </td>
+              <td>Never</td>
+              <td>
+                <b>Never.</b> It holds real work, so it counts as a branch when the canvas asks
+                whether a level offers a choice. See decision 3.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <div>
+            <b>Two slots left deliberately empty is the point of this sheet.</b> The status pill and
+            the progress meter are the two places a synthetic node is most tempted to say something,
+            and both would be saying it about work the node does not own. An empty slot reports that
+            honestly; a filled one reports a number the reader will act on.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

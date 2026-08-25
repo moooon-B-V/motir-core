@@ -93,8 +93,12 @@ describe('the permission split the six scopes could not express', () => {
 
 describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
   it('is every permission the CLI needs and nothing else', () => {
+    // `lesson:view` joined the set in MOTIR-3480: `search_lessons` is gated on
+    // it, and the sandboxed `motir run` agent that tool exists for is exactly the
+    // caller a narrower grant would lock out. The argument for widening lives at
+    // the constant, as `token-permissions.md` §3 requires.
     expect([...CLI_TOKEN_GRANT].sort()).toEqual(
-      ['ai:plan', 'comment:add', 'project:browse', 'work_item:edit'].sort(),
+      ['ai:plan', 'comment:add', 'lesson:view', 'project:browse', 'work_item:edit'].sort(),
     );
   });
 
@@ -160,7 +164,16 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
     // therefore recorded as a named LOSS in the tool-by-tool check below: a
     // legacy token does not reach it, deliberately, and a token that should
     // reach it is granted `lesson:manage` in the permission vocabulary.
-    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage'];
+    //
+    // ⚠️ `lesson:view` JOINS IT 2026-08-25 (MOTIR-3480), for the SAME reason as
+    // its manage sibling and on the same terms. `search_lessons` is the first
+    // tool to assert the READ key, and `lesson:view` is MOTIR-3336's — also
+    // minted long after these six strings stopped being written. Conferring it
+    // on a legacy `read` row would let a token minted years ago for work-item
+    // reads pull a project's accumulated planning lessons, which are distilled
+    // from its own work and can name specifics of it. A stale row may not gain
+    // that, so the tool is a named LOSS below rather than a widening here.
+    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage', 'lesson:view'];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );
@@ -192,6 +205,15 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // naming it here is what keeps the check exhaustive rather than what
       // excuses it.
       add_lesson: true,
+      // MOTIR-3480. A THIRD loss, of the same kind as `add_lesson` and for the
+      // same reason one key over: no legacy scope ever gated `search_lessons`,
+      // because `lesson:view` did not exist when the six strings were written.
+      // Its `TOOL_SCOPES` entry files it under `read` as the nearest bucket in a
+      // table this story deprecates; the forward map is deliberately NOT widened
+      // to match, so a stale `read` row cannot start pulling a project's
+      // lessons. The loss is correct, and naming it is what keeps this check
+      // exhaustive rather than what excuses it.
+      search_lessons: true,
     };
     const losses: string[] = [];
     for (const name of MCP_TOOL_NAMES) {

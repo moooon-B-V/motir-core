@@ -40,6 +40,12 @@ import { describe, expect, it } from 'vitest';
 // status is already settled. `app/(authed)/items/[key]/page.tsx` (MOTIR-3436)
 // does exactly this, and `issue-detail-flow.spec.ts` passes 16/16 with it.
 //
+// A ROUTE GROUP is the other safe instrument, and it is the one to reach for
+// when a frame is worth keeping for the SIBLINGS of a deciding route. A group
+// adds no URL segment but does own its own `loading.tsx`, so putting the safe
+// page and the boundary inside it excludes the decider without moving either
+// route. `app/(public)/explore/(square)/` (MOTIR-3491) is the worked example.
+//
 // So this guard now enforces the rule that actually holds, and it is stated as
 // a prohibition rather than a ratchet: NO `loading.tsx` may sit above a page
 // that calls `notFound()`. The prose half is `motir-core/CLAUDE.md`
@@ -71,34 +77,42 @@ function nearestBoundary(pageDir: string, loading: Set<string>): string | null {
     cur = next;
   }
 }
-// ── The KNOWN EXCEPTION, and why it is a debt rather than a licence ────────
+// ── The debt list — EMPTY as of MOTIR-3491, and it only ever shrinks ───────
 //
-// One boundary on `main` already violates this rule:
-// `app/(public)/explore/loading.tsx` sits above
-// `app/(public)/explore/topic/[slug]/page.tsx`, which calls `notFound()`. That
-// route therefore answers 200 for a missing topic today. It is REPRODUCED, not
-// inferred — a browser `goto` of `/explore/topic/definitely-not-a-real-topic-xyz`
-// against the production build returned `EXPLORE_TOPIC_STATUS=200`.
+// This list exists so the guard can be GREEN on a true statement of the tree
+// rather than red on a defect that belongs to another story. It carried exactly
+// one entry when it was written: `app/(public)/explore/loading.tsx` sat above
+// `app/(public)/explore/topic/[slug]/page.tsx`, so a missing topic answered 200.
 //
-// It predates this story (the boundary arrived with 6.13.6's project-square UI)
-// and belongs to that surface, not this one, so it is filed rather than
-// absorbed — the standing rule for a pre-existing bug found mid-run. It is
-// listed here so the guard is GREEN on a true statement of the tree rather
-// than red on somebody else's defect, and the entry is asserted TIGHT: the day
-// that route stops calling `notFound()`, or the boundary goes, this list must
-// shrink or the suite fails.
-const KNOWN_STATUS_DEBT: { page: string; boundary: string; why: string }[] = [
-  {
-    page: 'app/(public)/explore/topic/[slug]/page.tsx',
-    boundary: 'app/(public)/explore',
-    why: 'Pre-existing since 6.13.6 (`feat(project-square)`): the explore boundary flushes a 200 shell above a `notFound()` topic route, so a missing topic answers 200. Reproduced on this branch; filed as its own bug against the explore surface.',
-  },
-];
+// MOTIR-3491 retired it, and HOW is worth recording, because the obvious repair
+// — delete the boundary — would have cost `/explore` its pending frame. The
+// square's page and its `loading.tsx` moved together into a
+// `app/(public)/explore/(square)/` route group instead. A route group adds no URL
+// segment, so `/explore` is unchanged and still framed; but `topic/[slug]` sits
+// OUTSIDE the group, so the boundary is no longer its ancestor and its 404
+// survives. Measured on a production build: 200 before, 404 after.
+//
+// So the general remedy is three-way, not two-way: drop the boundary, move the
+// frame INTO the page as a `<Suspense>` after the gate, or SCOPE the boundary
+// into a route group that excludes the deciding route.
+//
+// A new entry here is a defect being parked, not a rule being bent: it needs a
+// filed bug, a reproduction, and a reason. Both assertions below stay tight
+// against it — the day a listed route stops applying, the list must shrink or
+// the suite fails.
+const KNOWN_STATUS_DEBT: { page: string; boundary: string; why: string }[] = [];
 
 describe('no loading boundary sits above a route that decides existence (MOTIR-3437)', () => {
   const { pages, loading } = walk(APP, { pages: [], loading: new Set<string>() });
 
-  /** Pages whose own source calls `notFound()` — i.e. whose status is load-bearing. */
+  /** Pages whose own source calls `notFound()` — i.e. whose status is load-bearing.
+   *
+   *  A plain substring search, so a page that merely NAMES the call in a comment
+   *  counts as a decider. That is the safe direction — the guard over-reports and
+   *  fails loudly rather than quietly clearing a route whose status is real — but
+   *  it is worth knowing before you argue with it: MOTIR-3491's own framed page
+   *  tripped this by explaining, in a comment, why its deciding sibling must stay
+   *  outside the boundary. Name the call indirectly in a framed page's prose. */
   const deciders = pages.filter((dir) => {
     for (const name of ['page.tsx', 'page.ts']) {
       try {
