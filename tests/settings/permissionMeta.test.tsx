@@ -124,11 +124,25 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     // and it is not broken across the columns (the assertion below proves that).
     // The modal is one row taller than 938px at its tallest; re-measure the asset
     // when the set next grows, rather than letting the numbers drift untouched.
+    //
+    // ⚠️ 2026-08-25 (MOTIR-3361): EIGHT to NINE, and this is the next "look
+    // again". `add_lesson` is the first MCP tool to assert `lesson:manage`, so
+    // that key became grantable by the same derivation `ai:view_plan` arrived
+    // through. The group that grew is **project** — `project:browse` +
+    // `lesson:manage`, since a lesson belongs to a project — and the split is now
+    // 5/4: still balanced within one row, still no group broken across the
+    // columns, and one row taller again on the LEFT.
+    //
+    // The same card also had to MOVE the two lesson keys in the catalog to sit
+    // beside `project:browse`. They were appended at the end while carrying
+    // `domain: 'project'`, which broke the contiguity every other domain keeps —
+    // harmless only for as long as neither key was grantable. The two
+    // order-preservation assertions in this file are what caught it.
     const [left, right] = permissionColumnsForTokens();
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
     expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(1);
     expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
-    expect(rows(left)).toBe(4);
+    expect(rows(left)).toBe(5);
     expect(rows(right)).toBe(4);
   });
 

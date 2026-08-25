@@ -20,6 +20,8 @@ import {
 } from '@/lib/permissions/catalog';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { GRANTABLE_PERMISSIONS, UNGRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { LEGACY_SCOPE_PERMISSIONS, LEGACY_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 
 // THE LESSON LIBRARY KEYS (Subtask MOTIR-3336 · Story MOTIR-3329).
 //
@@ -189,10 +191,42 @@ describe('the split earns its keep — read WITHOUT change is expressible', () =
 });
 
 describe('no token surface gains them by accident', () => {
-  it('neither key is grantable to an API token — no tool takes one yet', () => {
+  // ⚠️ THIS SPLIT WHEN THE FIRST TOOL TOOK ONE (MOTIR-3361), which is what the
+  // old title's "yet" was waiting for. Grantability is DERIVED, not declared: a
+  // permission is grantable exactly when a token-reachable operation asserts it
+  // (`lib/tokens/grant.ts`, ADR §2). So `add_lesson` asserting `lesson:manage`
+  // moved that key across on its own, and the two keys now sit on opposite
+  // sides — which is precisely the asymmetry MOTIR-3336 split them for.
+  it('the MANAGE key is grantable — and only because a tool asserts it', () => {
+    expect(GRANTABLE_PERMISSIONS).toContain(MANAGE_KEY);
+    expect(UNGRANTABLE_PERMISSIONS).not.toContain(MANAGE_KEY);
+    // Said against the derivation source rather than the derived set, so this
+    // stays a statement about WHY it is grantable: remove the tool and the key
+    // goes back.
+    expect(Object.values(TOOL_PERMISSIONS)).toContain(MANAGE_KEY);
+  });
+
+  it('the VIEW key is NOT grantable — no tool reads a lesson', () => {
+    // The lesson READS are server-rendered settings pages, not MCP tools, so no
+    // token-reachable operation asserts this key and a picker switch for it
+    // would gate nothing. If a read tool ever lands, this flips — and it should
+    // flip HERE, deliberately, rather than by a set drifting under a surface.
+    expect(GRANTABLE_PERMISSIONS).not.toContain(VIEW_KEY);
+    expect(UNGRANTABLE_PERMISSIONS).toContain(VIEW_KEY);
+    expect(Object.values(TOOL_PERMISSIONS)).not.toContain(VIEW_KEY);
+  });
+
+  it('neither key is reachable by a LEGACY token row, grantable or not', () => {
+    // Grantable is not the same as legacy-reachable, and this is the one place
+    // both are in scope. `lesson:manage` postdates the six retired scope strings
+    // by years; a stored row is stale data and stale data may never WIDEN
+    // access, so no legacy scope confers it. `tests/tokens/grant.test.ts` and
+    // `tests/mcp/scopes.test.ts` hold the same line from their own ends.
+    const legacyReach = new Set(
+      LEGACY_TOKEN_SCOPES.flatMap((scope) => LEGACY_SCOPE_PERMISSIONS[scope]),
+    );
     for (const key of [VIEW_KEY, MANAGE_KEY]) {
-      expect(GRANTABLE_PERMISSIONS).not.toContain(key);
-      expect(UNGRANTABLE_PERMISSIONS).toContain(key);
+      expect(legacyReach.has(key), `${key} must not be reachable by a legacy row`).toBe(false);
     }
   });
 });

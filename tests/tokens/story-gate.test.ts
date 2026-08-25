@@ -19,7 +19,7 @@ import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
 import { LEGACY_SCOPE_PERMISSIONS, LEGACY_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { PERMISSIONS, permissionSlug } from '@/lib/permissions/catalog';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
-import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
@@ -121,11 +121,32 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
     expect([...verified.grant].sort()).toEqual([...expected].sort());
 
     // …and the gate agrees, tool by tool, rather than in aggregate.
+    //
+    // ⚠️ WITH ONE NAMED EXCEPTION, AND THE PROMISE IS UNBROKEN BY IT
+    // (MOTIR-3361). This test's subject is that a legacy row "permits exactly
+    // what it ALWAYS did" — a no-LOSS promise. `add_lesson` did not exist when
+    // those six strings stopped being written, and `lesson:manage` was minted
+    // years later, so a legacy row never had this tool and loses nothing by not
+    // gaining it. Conferring it would be the opposite failure: a token issued
+    // for work-item edits silently able to rewrite the standing instructions a
+    // project's planner is given.
+    //
+    // The loop over EVERY tool was the right shape while every tool's key
+    // predated the vocabulary; it over-states the promise the moment one does
+    // not. Naming the exception keeps the check exhaustive — a SECOND one
+    // appears here as a failure rather than joining an allowance — which is the
+    // same discipline `tests/mcp/scopes.test.ts` applies with `KNOWN_LOSSES`.
+    const POSTDATES_THE_SIX: Partial<Record<McpToolName, true>> = { add_lesson: true };
     for (const name of MCP_TOOL_NAMES) {
-      expect(
-        verified.grant.includes(TOOL_PERMISSIONS[name]),
-        `${name} must stay reachable for an all-six legacy token`,
-      ).toBe(true);
+      const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);
+      if (POSTDATES_THE_SIX[name]) {
+        expect(
+          reachable,
+          `${name} postdates the six strings and must NOT be reachable by a legacy row`,
+        ).toBe(false);
+        continue;
+      }
+      expect(reachable, `${name} must stay reachable for an all-six legacy token`).toBe(true);
     }
   });
 

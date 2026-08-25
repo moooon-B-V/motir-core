@@ -238,11 +238,21 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // MOTIR-3188 that was the key gating plan approval — so a token holding a
     // legacy string could have approved a plan into somebody's tree. Splitting
     // DECIDE off closed that without anybody having to notice it.
+    //
+    // ⚠️ AND `lesson:manage` IS THE SECOND EXCLUSION (MOTIR-3361), arriving by
+    // the same route and for the same reason. `add_lesson` is the first MCP tool
+    // to assert it, which made the key grantable; the key itself is MOTIR-3336's,
+    // minted in 2026. Conferring it on a stored `work_items:write` row would let
+    // a token issued for work-item edits rewrite the standing instructions a
+    // project's planner is given. Named as a LIST now rather than a single
+    // filter, so a third exclusion has somewhere to be written down instead of
+    // quietly widening the expression.
+    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage'];
     expect([...grant].sort()).toEqual(
-      GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:decide_plan').sort(),
+      GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );
-    // Said as its own assertion so the exclusion cannot be read as an oversight
-    // in the line above: no legacy scope confers the decide key, by construction.
-    expect(grant).not.toContain('ai:decide_plan');
+    // Said as its own assertion so an exclusion cannot be read as an oversight
+    // in the line above: no legacy scope confers either key, by construction.
+    for (const key of POSTDATE_THE_SCOPES) expect(grant).not.toContain(key);
   });
 });
