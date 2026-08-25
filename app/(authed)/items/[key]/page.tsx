@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Archive } from 'lucide-react';
@@ -7,11 +8,6 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
-import { commentsService } from '@/lib/services/commentsService';
-import { attachmentsService } from '@/lib/services/attachmentsService';
-import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
-import { designEvidenceService } from '@/lib/services/designEvidenceService';
-import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
@@ -35,26 +31,19 @@ import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
-import { AcceptancePanel } from './_components/AcceptancePanel';
-import { DesignResultPanel } from './_components/DesignResultPanel';
+import { readLateSections } from './_components/lateReads';
 import {
-  DevelopmentLinkProvider,
-  LinkPullRequestDoor,
-  LinkPullRequestForm,
-} from './_components/DevelopmentLinkControl';
+  LateUpperSections,
+  LateLowerSections,
+  LateUpperFallback,
+  LateLowerFallback,
+} from './_components/LateSections';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
-import { ActivitySection } from './_components/ActivitySection';
-import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
-import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import { IssueQuickViewController } from '../_components/IssueQuickViewController';
-import type { CommentsPageDTO } from '@/lib/dto/comments';
-import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
-import type { ActivityAllPageDto, ActivityHistoryPageDto } from '@/lib/dto/activity';
-import { activityService } from '@/lib/services/activityService';
 import { parseActivityTab } from '@/lib/activity/tab';
 
 // The issue DETAIL route (Story 2.4 · Subtask 2.4.1). Server Component:
@@ -80,7 +69,6 @@ export default async function IssueDetailPage({
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('issueViews');
-  const tGithub = await getTranslations('github');
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -171,144 +159,69 @@ export default async function IssueDetailPage({
   // Each `try` that used to wrap a read is now inside its own arm, so a section
   // whose read fails still degrades to its own ErrorState + retry instead of
   // rejecting the whole group.
-  const showAcceptance =
-    item.kind === 'story' && (item.status === 'in_review' || item.status === 'done');
+  // ── THE LATE STACK'S READS, STARTED BUT NOT AWAITED (Subtask MOTIR-3436) ──
+  //
+  // `design/work-items/design-notes.md` § *The item page at ARRIVAL, and while
+  // it STREAMS* allocates every region to a tier. The THIRD tier — Development,
+  // Acceptance, Design result, Attachments, Activity — is everything below the
+  // fold, and this page no longer waits for any of it: the promise is created
+  // here and awaited inside the two `<Suspense>` boundaries below, which share
+  // it so they flush together and the reader sees ONE settle rather than five
+  // arrivals. `_components/lateReads.ts` carries the reads verbatim.
+  const lateReads = readLateSections({
+    itemId: item.id,
+    itemType: item.type,
+    itemStatus: item.status,
+    itemKind: item.kind,
+    projectId: ctx.projectId,
+    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    fullCtx: ctx,
+    activityTab,
+    canEdit,
+  });
 
+  // ── TIER TWO: what the reader came for, awaited before the first flush ─────
+  //
+  // The title, both prose bodies, the children list and the core-fields rail.
+  // Still ONE round trip rather than eight, and still conditional where it was:
+  // `rollupForParent` only when the item has children.
+  //
+  // ⚠️ THE ROLL-UP stays here rather than moving to its component's lazy path.
+  // The tier table calls it "late, IN PLACE", and `ParentRollupBadge` does ship
+  // that path — but it renders NOTHING while pending, so the slot is not
+  // reserved and its neighbours shift when it fills, which is what the in-place
+  // rule exists to prevent. This group already has the figure at no marginal
+  // cost, so it is cheaper to not be late at all.
   const [
-    pullRequests,
-    repoDelivery,
     members,
     sprints,
-    commentCaps,
-    activity,
-    attachmentCaps,
-    initialAttachments,
-    acceptanceEligibility,
-    acceptanceEvidence,
-    designEvidence,
-    tAcceptance,
-    tDesignResult,
+    repoDelivery,
     projectComponents,
     estimationConfig,
     parentRollup,
     locale,
     workItemRefs,
   ] = await Promise.all([
-    // The Development section's linked PRs (MOTIR-1579) — the same display-ready
-    // read the peek payload uses; item.id came from the access-gated detail read.
-    workItemsService.listLinkedPullRequests(detail.item.id, ctx),
-    // Per-repository DELIVERY for the rail's Repositories card (Story MOTIR-2725 ·
-    // MOTIR-2415) — a RESOLVED value, so it is read here, server-side, in the
-    // page's existing data path rather than fetched by the client. Empty set →
-    // no query at all.
-    workItemsService.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx),
-    // Members back the inline assignee picker + reporter display (getIssueDetail
-    // carries ids only); the workflow (already in the detail bundle) backs the
-    // inline status picker's legal-transition set.
-    // Assignable users scoped by access level (6.4.6): private → project members.
+    // Members back the inline assignee picker + reporter display, and the
+    // Activity section's mention candidates. Assignable users are scoped by
+    // access level (6.4.6): private → project members.
     assignableMembersService.list({
       projectId: ctx.projectId,
       accessLevel: ctx.project.accessLevel,
       ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
     }),
-    // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the current
-    // sprint's display name, and the ⋯ menu's "Add to active sprint" quick action.
+    // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the ⋯
+    // menu's "Add to active sprint" quick action.
     sprintsService.listByProject(ctx.projectId, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
-    // Comments (Story 5.1 · 5.1.5): the caller's comment capabilities (the Jira
-    // permission split on the 6.4 role model — viewer reads only).
-    projectAccessService.getCommentCapabilities(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
-    // The active tab's FIRST cursor page — the newest 20 threads; the section's
-    // "Show more" extends backward (finding #57, never load-all). A failed read
-    // renders that tab's ErrorState + retry instead of crashing the page.
-    (async (): Promise<{
-      comments: CommentsPageDTO | null;
-      history: ActivityHistoryPageDto | null;
-      all: ActivityAllPageDto | null;
-    }> => {
-      const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-      try {
-        if (activityTab === 'comments') {
-          return {
-            comments: await commentsService.listComments(item.id, { order: 'desc' }, actor),
-            history: null,
-            all: null,
-          };
-        }
-        if (activityTab === 'history') {
-          return {
-            comments: null,
-            history: await activityService.listHistory(item.id, { order: 'desc' }, actor),
-            all: null,
-          };
-        }
-        return {
-          comments: null,
-          history: null,
-          all: await activityService.listAll(item.id, { order: 'desc' }, actor),
-        };
-      } catch {
-        return { comments: null, history: null, all: null };
-      }
-    })(),
-    // Attachments (Story 5.2 · 5.2.5): the caller's attachment capabilities (the
-    // Jira three-permission split on the 6.4 roles — create / delete own / delete
-    // all; viewers read only)…
-    projectAccessService.getAttachmentCapabilities(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
-    // …and the first cursor page (the newest 50; the panel's "Show more (N)"
-    // extends backward — finding #57, never load-all). A failed read renders the
-    // panel's ErrorState + retry.
-    (async (): Promise<AttachmentsPageDTO | null> => {
-      try {
-        return await attachmentsService.listForWorkItem(
-          item.id,
-          {},
-          { userId: ctx.userId, workspaceId: ctx.workspaceId },
-        );
-      } catch {
-        return null;
-      }
-    })(),
-    // Acceptance (Story MOTIR-1627 · Subtask MOTIR-1634): the story-acceptance
-    // panel shows on a STORY once it reaches in_review (and stays on the accepted,
-    // done story). It reads the eligibility verdict (plan + org toggle) + the
-    // current evidence; the panel branches into its three states. Non-stories and
-    // earlier statuses render nothing — and read NOTHING, still.
-    showAcceptance
-      ? acceptanceVideoEligibilityService.resolve({
-          actorUserId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        })
-      : null,
-    showAcceptance
-      ? acceptanceEvidenceService.getCurrentForStory(item.id, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        })
-      : null,
-    // Design result (Story MOTIR-2664 · Subtask MOTIR-2670): the published design
-    // artifacts of THIS card — read in the same server pass as the acceptance
-    // evidence above, so the panel needs no client fetch on first paint. A design
-    // subtask with none still renders the section, with its empty state.
-    designEvidenceService.getCurrentForWorkItem(item.id, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
-    getTranslations('acceptance'),
-    getTranslations('designResult'),
-    // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
-    // detail read above; the rail's Components picker additionally needs the
-    // project taxonomy (browse-gated, name-ordered, admin-bounded — finding #57),
-    // and the empty-taxonomy "Manage components" link is admin-only — resolved
-    // like the settings pages do (workspace manager OR project-role admin).
+    // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2415). TIER TWO because
+    // the rail's Repositories card renders it — the Development section below
+    // uses the same value, passed down rather than read twice.
+    workItemsService.listRepoDelivery(item.id, item.targetRepos, ctx),
+    // The project taxonomy behind the rail's Components picker (Story 5.4 ·
+    // Subtask 5.4.8) — browse-gated, name-ordered, admin-bounded (finding #57).
     componentsService.listComponents(ctx.project.identifier, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -319,10 +232,8 @@ export default async function IssueDetailPage({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
-    // Epic/parent subtree roll-up (Subtask 4.3.5) — the SUM of the configured
-    // statistic across this item's descendants, computed server-side (one bounded
-    // recursive-CTE aggregate — finding #57) ONLY when the item has children, so
-    // the header badge renders with no client fetch / flash. A leaf shows none.
+    // Epic/parent subtree roll-up (Subtask 4.3.5) — one bounded recursive-CTE
+    // aggregate, ONLY when the item has children. A leaf shows none.
     detail.children.length > 0
       ? estimationService.rollupForParent(item.id, {
           userId: ctx.userId,
@@ -330,12 +241,11 @@ export default async function IssueDetailPage({
         })
       : null,
     getLocale() as Promise<Locale>,
-    // Work-item references (Story 5.8 · 5.8.6) — resolve every `[KEY](motir:<id>)`
-    // token in the description / explanation AND every bare `MOTIR-N` in the title
-    // to its LIVE summary (current key · title · status · archived/no-access
-    // state), so the body chips + the title link render live and open the peek.
-    // The same `filterBrowsable` view gate `quickSearch` rides (reused, not
-    // reinvented); a deleted / forbidden reference degrades, never breaks.
+    // Work-item references (Story 5.8 · 5.8.6) — every `[KEY](motir:<id>)` in
+    // the description / explanation and every bare `MOTIR-N` in the title,
+    // resolved to its LIVE summary so the body chips render live and open the
+    // peek. TIER TWO because the prose bodies are, and a chip that arrives
+    // after its paragraph is a reflow inside text the reader is already reading.
     workItemsService.resolveReferenceSummaries(
       parseWorkItemRefs(
         [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
@@ -347,11 +257,6 @@ export default async function IssueDetailPage({
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
-  const initialComments = activity.comments;
-  const initialHistory = activity.history;
-  const initialAll = activity.all;
-  const isDesignCard = item.type === 'design';
-  const showDesignResult = designEvidence !== null || isDesignCard;
 
   // Archived state (Story 2.9 · Subtask 2.9.6) — an archived item's detail page
   // renders (the read doesn't filter `archivedAt`), so it gets a top-of-main
@@ -550,52 +455,21 @@ export default async function IssueDetailPage({
               the provider; gated on canEdit (a read-only actor sees no door and
               the caption drops the "or linked by hand" clause). The peek stays
               read-only (no door). */}
-            <DevelopmentLinkProvider currentItemId={item.id} identifier={item.identifier}>
-              <ContentSectionCard
-                title={tGithub('development.title')}
-                subtitle={tGithub('development.gloss')}
-                headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
-              >
-                {canEdit ? <LinkPullRequestForm /> : null}
-                <DevelopmentSectionBody
-                  pullRequests={pullRequests}
-                  itemIdentifier={item.identifier}
-                  manualLinkable={canEdit}
-                  // The item's repository set, VERBATIM (Story MOTIR-2725 ·
-                  // MOTIR-2415) — which rows it earns is the section's
-                  // derivation, not this page's. Pre-filtering here is what let
-                  // this page and the quick view disagree (MOTIR-3036).
-                  repoDelivery={repoDelivery}
-                />
-              </ContentSectionCard>
-            </DevelopmentLinkProvider>
-            {/* MOTIR-1634: the story-acceptance panel — after Development, on a
-              story in_review/done (per design/work-items/acceptance-panel.png). */}
-            {showAcceptance && acceptanceEligibility ? (
-              <ContentSectionCard title={tAcceptance('title')} subtitle={tAcceptance('gloss')}>
-                <AcceptancePanel
-                  workItemId={item.id}
-                  organizationId={acceptanceEligibility.organizationId}
-                  eligibility={acceptanceEligibility}
-                  initialEvidence={acceptanceEvidence}
-                  canDecide={canEdit && item.status === 'in_review'}
-                  settingsHref="/settings/organization"
-                />
-              </ContentSectionCard>
-            ) : null}
-            {/* MOTIR-2670: the design-result panel — after Acceptance, before
-              Children (per design/work-items/design-result.png panel 0). Renders
-              on any leaf with a published result, and on a `type: design` card
-              with none, whose empty state is the point. */}
-            {showDesignResult ? (
-              <ContentSectionCard title={tDesignResult('title')} subtitle={tDesignResult('gloss')}>
-                <DesignResultPanel evidence={designEvidence} isDesignCard={isDesignCard} />
-              </ContentSectionCard>
-            ) : null}
-            {/* 2.4.3: direct children (a leaf renders nothing). MOTIR-2288 wraps
-              the SERVER-rendered rows in the client `ChildPanel`, which owns the
-              section card + its List / Graph switcher; graph mode mounts the
-              roadmap canvas rooted at this item. */}
+            {/* THE LATE STACK, upper half — Development · Acceptance · Design
+              result (Subtask MOTIR-3436). Both halves await the SAME
+              `lateReads` promise, so they resolve in one tick and the page
+              settles ONCE for the whole stack, as the design decided. They are
+              two boundaries only because `ChildPanel` below is TIER TWO and the
+              page renders it between them. */}
+            <Suspense fallback={<LateUpperFallback />}>
+              <LateUpperSections
+                reads={lateReads}
+                itemId={item.id}
+                itemIdentifier={item.identifier}
+                canEdit={canEdit}
+                repoDelivery={repoDelivery}
+              />
+            </Suspense>
             <ChildPanel
               count={detail.children.length}
               itemId={item.id}
@@ -608,36 +482,25 @@ export default async function IssueDetailPage({
               (the reserved Epic-5 slot, per the attachments mockup's panel 0;
               content-width and multi-row, so the left column — the rail is
               for scalars). */}
-            <AttachmentsPanel
-              workItemId={item.id}
-              canCreate={attachmentCaps.canCreate}
-              canDeleteAll={attachmentCaps.canDeleteAll}
-              currentUserId={ctx.userId}
-              initialPage={initialAttachments}
-            />
-            {/* 5.1.5 + 5.5.4: the completed Activity section — the All /
-              Comments / History tabs (URL-driven, default Comments) in the
-              slot the page reserved for Epic 5 (after Relationships and
-              Children, per the activity-history mockup's panel 0). */}
-            <ActivitySection
-              workItemId={item.id}
-              tab={activityTab}
-              workflowStatuses={detail.workflow.statuses}
-              comments={{
-                canComment: commentCaps.canComment,
-                canModerate: commentCaps.canModerate,
-                currentUserId: ctx.userId,
-                currentUserName: session.user.name,
-                mentionCandidates: members.map((m) => ({
+            {/* THE LATE STACK, lower half — Attachments · Activity. KEYED on the
+              activity tab so switching `?activity=` re-shows the fallback
+              instead of freezing on the previous tab's content (the shipped
+              `/items` pattern). */}
+            <Suspense key={activityTab} fallback={<LateLowerFallback />}>
+              <LateLowerSections
+                reads={lateReads}
+                itemId={item.id}
+                currentUserId={ctx.userId}
+                currentUserName={session.user.name}
+                workflowStatuses={detail.workflow.statuses}
+                mentionCandidates={members.map((m) => ({
                   id: m.userId,
                   name: m.name,
                   email: m.email,
-                })),
-              }}
-              initialComments={initialComments}
-              initialHistory={initialHistory}
-              initialAll={initialAll}
-            />
+                }))}
+                activityTab={activityTab}
+              />
+            </Suspense>
           </main>
 
           <aside className="flex flex-col gap-4">

@@ -357,3 +357,82 @@ describe('the route-shaped pending frame (MOTIR-3435)', () => {
     expect(container.querySelector('aside')).not.toBeNull();
   });
 });
+
+// ── MOTIR-3436 — the late stack ────────────────────────────────────────────
+//
+// The design decides the page settles TWICE, so the five late sections share
+// ONE settle. On this page that is delivered by TWO `<Suspense>` boundaries
+// awaiting the SAME promise, because `ChildPanel` is tier-2 and the shipped page
+// renders it between them — so what is asserted is the property (one promise,
+// therefore one arrival), not the JSX element count.
+describe('the late stack (MOTIR-3436)', () => {
+  it('does not hold the first flush — the page resolves while the late reads are still pending', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['work_item:edit']));
+
+    // `gate` is never released, so every LATE read is stuck. The page must
+    // still return: that is the whole point of the boundary. Before this card
+    // the same conditions would hang forever.
+    const rendered = await callPage();
+    expect(rendered).toBeTruthy();
+
+    // …and the late reads were nonetheless STARTED, not deferred to the client.
+    expect(started).toContain('commentCaps');
+    expect(started).toContain('attachmentCaps');
+  });
+
+  it('starts the late reads ONCE for both halves — one promise, one settle', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set());
+
+    await callPage();
+
+    // Two boundaries await the same promise. If each had built its own, every
+    // late read would have run twice — which is the regression this asserts
+    // against, and the reason the two halves cannot each call readLateSections.
+    const once = (n: string) => started.filter((s) => s === n).length;
+    expect(once('commentCaps')).toBe(1);
+    expect(once('attachmentCaps')).toBe(1);
+    expect(once('designEvidence')).toBe(1);
+  });
+
+  it('keeps the RAIL’s repo delivery in tier two — read once, not once per tier', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set());
+
+    const pending = callPage();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The rail's Repositories card renders it, so it must be awaited before the
+    // first flush; the Development section takes the same value as a prop.
+    expect(started.filter((s) => s === 'repoDelivery').length).toBe(1);
+    release?.();
+    await pending.catch(() => undefined);
+  });
+});
+
+describe('error containment survives the move behind a boundary (MOTIR-3436)', () => {
+  it('a failing attachments read degrades that section, it does not reject the stack', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set());
+    const { attachmentsService } = await import('@/lib/services/attachmentsService');
+    (
+      attachmentsService.listForWorkItem as unknown as ReturnType<typeof vi.fn>
+    ).mockRejectedValueOnce(new Error('boom'));
+
+    // The try/catch travelled WITH the read into `lateReads`, so the failure
+    // becomes a null page and the panel renders its own ErrorState + retry. A
+    // boundary must not turn a caught failure into a thrown one — that is what
+    // an `error.tsx` would have done, and why this card adds none.
+    release?.();
+    await expect(callPage()).resolves.toBeTruthy();
+  });
+});
