@@ -139,7 +139,7 @@ const nextConfig: NextConfig = {
   // guards that call with `if (bundler !== Bundler.Turbopack && …)`. Next 16
   // builds with Turbopack, so the module never runs and neither key is consulted.
   // Turbopack's own tracer follows the read on its own: the three TTFs appear in
-  // `.next/server/app/(public)/explore/opengraph-image-*/route.js.nft.json` and
+  // `.next/server/app/(public)/explore/(square)/opengraph-image-*/route.js.nft.json` and
   // in no unrelated route's trace.
   //
   // It is kept, rather than deleted, because it is the only written record of

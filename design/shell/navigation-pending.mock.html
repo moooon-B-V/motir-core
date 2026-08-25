@@ -10932,11 +10932,46 @@
             <td>
               two mechanisms for one state. The three boundaries that already exist under
               <code>(planning)</code> and <code>settings/project/</code> stay: this is a preference
-              for new work, not a sweep
+              for new work, not a sweep. <b>Including the ROUTE-GROUP form</b> &mdash; see the row
+              below, which is why this reads <i>declined</i> and not <i>impossible</i>
+            </td>
+          </tr>
+          <tr>
+            <td class="anat-n">5b</td>
+            <td>
+              <b
+                >THE THIRD INSTRUMENT &mdash; a ROUTE GROUP, weighed and declined for THIS group.</b
+              >
+              A <code>(group)</code> adds no URL segment and owns its own boundary, so the safe
+              routes and the <code>loading.tsx</code> can move into one together, leaving the
+              deciding sibling OUTSIDE it. <code>/explore</code> keeps its frame from
+              <code>app/(public)/explore/(square)/loading.tsx</code> while
+              <code>explore/topic/[slug]</code> keeps its 404 &mdash; verified in the built loader
+              trees (MOTIR-3491, merged while this asset was in review)
+            </td>
+            <td>
+              nothing, and that is the point: it is <b>correct, and it is not for this group</b>. It
+              is still a ROUTE boundary, so it carries Panel F's locator cost <b>in full</b>; it
+              does not reach window 1; and <code>/explore</code> is two routes and one boundary
+              where <code>app/(authed)</code> is 58 routes with
+              <b>11 deciders across six directories</b>
+              &mdash; six carve-outs moving pages between folders, to buy what an in-page
+              <code>&lt;Suspense&gt;</code> gives one page at a time with no tree surgery
             </td>
           </tr>
         </tbody>
       </table>
+      <p class="panel-p rule">
+        <b
+          >Rule 5 reads DECLINED, not impossible &mdash; and the distinction is the reusable
+          part.</b
+        >
+        A future authed subtree that is genuinely uniform &mdash; several routes, none deciding, one
+        frame worth sharing, no spec asserting unscoped against it &mdash; is the
+        <code>/explore</code> shape, and the group is right there. What must not happen is a
+        carve-out justified by <i>the design says no <code>loading.tsx</code></i> when the real
+        reasons are the two in the cell above.
+      </p>
       <p class="panel-p">
         <b
           >The 24 heavy surfaces the follow-on story sweeps, by whether a route boundary was ever
@@ -11309,6 +11344,13 @@
         <code>getByTestId</code> / <code>getByLabel</code> calls against 76
         <code>getByRole</code> ones, counted at <code>origin/main</code> <code>4fd55464</code>. It
         is the spec most exposed to the collision, and it is green.
+      </p>
+      <p class="panel-p rule">
+        <b>⚠️ A ROUTE GROUP does not escape this.</b> Scoping a boundary into a
+        <code>(group)</code> (Panel D, 5b) changes WHICH routes sit beneath it and changes nothing
+        about what a boundary does to the DOM: the previous route's subtree is still retained while
+        the new one streams, so every unscoped locator on a route inside the group is still a race.
+        <b>The cost is a property of the boundary, not of how it was scoped.</b>
       </p>
       <p class="panel-p rule">
         <b>So: scope the BOUNDARIES, not the assertions.</b> No spec is rewritten by this design and

@@ -387,6 +387,37 @@ new grammar is the right one.
    `settings/project/` predate this and are out of scope; the guard rules on the shape, not on this
    preference.)
 
+### ⚠️ THE THIRD INSTRUMENT — a ROUTE GROUP, weighed and declined FOR THIS GROUP (MOTIR-3491, merged 2026-08-26 while this asset was in review)
+
+**This asset was drawn on the premise that a decider-containing subtree has two options: drop the
+boundary, or move the frame in-page. There is a third, it shipped on `main` mid-review, and naming it
+is owed** — a design that presents two options where the codebase has three is wrong in the way a
+reader cannot detect.
+
+**A route group adds no URL segment and owns its own boundary.** So the fix is not always to remove a
+boundary from above a decider — it can be to move the SAFE routes and the `loading.tsx` together into
+a `(group)`, leaving the deciding sibling outside it and above the boundary rather than beneath it.
+`/explore` keeps its frame from `app/(public)/explore/(square)/loading.tsx` while
+`explore/topic/[slug]` keeps its 404, verified in the built loader trees: `(square)/page.js` carries
+the loading chunk and `topic/[slug]/page.js` carries none. `motir-core/CLAUDE.md` § _What to use
+instead_ carries it as a fourth ✅.
+
+**It changes rule 5's REASON and not rule 5.** The rule was never _a route boundary is impossible
+here_; it is _a route boundary is declined here_. Three things decide it, and only the third is about
+this group specifically:
+
+|                                           |                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **it is still a ROUTE boundary**          | so it carries the locator cost below **in full** — React retains the previous route's subtree either way. A group scopes which routes are beneath a boundary; it does not change what a boundary does to the DOM                                                                                                                                            |
+| **it does not reach window 1**            | the gate still runs before anything is flushed, and a group does not change when. Only the shell's mark reaches that window                                                                                                                                                                                                                                 |
+| **the shape of THIS group is against it** | `/explore` is two routes and one boundary. `app/(authed)` is **58 routes with 11 deciders scattered across `settings/`, `items/`, `plans/`, `sprints/`, `dashboard/` and `direction/`** — six separate group carve-outs, each moving pages between directories, to buy a frame an in-page `<Suspense>` gives one page at a time with no tree surgery at all |
+
+**So: correct instrument, wrong group — and that is a judgement to re-take, not a rule to inherit.**
+A future authed subtree that is genuinely uniform — several routes, none deciding, one frame worth
+sharing, no spec asserting unscoped against them — is the `/explore` shape, and the group is right
+there. What must not happen is a carve-out justified by _the design says no `loading.tsx`_ when the
+real reasons are the two rows above.
+
 **The 24 heavy surfaces MOTIR-3440 sweeps, by whether a route boundary was ever available to them** —
 measured at `origin/main` `4fd55464` with
 `grep -rl 'notFound()' 'app/(authed)' --include=page.tsx`:
@@ -570,6 +601,7 @@ sequence is what makes them readable.
 | **MOTIR-3441** — the settings family's arrival frame   | **GIVES**     | that the family shape survives as a shared COMPONENT rendered in-page by all 31 routes, and that five of the eleven deciders are inside that family                                                              |
 | **MOTIR-3442** — the earn-your-own-frame rule          | **GIVES**     | the rule in full, above. **TAKES** its "instead of the group's" framing: there is no group's frame to be an alternative to                                                                                       |
 | **MOTIR-3492** — this card                             | **TAKES**     | everything the first revision said about a route-group boundary                                                                                                                                                  |
+| **MOTIR-3491** — the `/explore` 404 fix                | **TAKES**     | the two-option framing. It shipped the ROUTE-GROUP instrument mid-review and proved it on a live surface, so rule 5 now reads _declined for this group_ with its reasons, rather than _there is no other way_    |
 
 ### ⚠️ What this asset SPECIFIES that no card owns
 
@@ -585,7 +617,10 @@ cards built and the revert removed. **This asset does not create them, and it is
 
 ### What this design overrides
 
-**Its own first revision, MOTIR-3431's, and only in the mount point.** The frame's composition, the
+**Its own first revision, MOTIR-3431's, and only in the mount point.** (And it was itself amended
+once before merging, by MOTIR-3491 landing on `main` mid-review — the third-instrument section above.
+The amendment is recorded there rather than folded in silently, because a reader who meets a route
+group in this codebase should find the moment this asset learned about it.) The frame's composition, the
 reveal delay, the no-shift mapping and the switch rule are carried forward verbatim; what is withdrawn
 is the route-group boundary that mounted them, the sentence _"one `app/(authed)/loading.tsx` is the
 floor for all 58 pages"_, and the nearer-boundary table that read `the group frame` against

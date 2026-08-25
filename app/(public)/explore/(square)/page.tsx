@@ -7,15 +7,15 @@ import {
   type ExploreQuery,
   type RawSearchParams,
 } from '@/lib/projectSquare/exploreParams';
-import { ExploreHero } from './_components/ExploreHero';
-import { RankTabs } from './_components/RankTabs';
-import { CategoryFilter } from './_components/CategoryFilter';
-import { ActiveFilters } from './_components/ActiveFilters';
-import { ExploreGallery } from './_components/ExploreGallery';
-import { CategoriesBrowse } from './_components/CategoriesBrowse';
-import { ExploreFaq, exploreFaqItems } from './_components/ExploreFaq';
-import { ExploreJsonLd } from './_components/ExploreJsonLd';
-import { loadSquare, categoryLabel } from './_lib/loadSquare';
+import { ExploreHero } from '../_components/ExploreHero';
+import { RankTabs } from '../_components/RankTabs';
+import { CategoryFilter } from '../_components/CategoryFilter';
+import { ActiveFilters } from '../_components/ActiveFilters';
+import { ExploreGallery } from '../_components/ExploreGallery';
+import { CategoriesBrowse } from '../_components/CategoriesBrowse';
+import { ExploreFaq, exploreFaqItems } from '../_components/ExploreFaq';
+import { ExploreJsonLd } from '../_components/ExploreJsonLd';
+import { loadSquare, categoryLabel } from '../_lib/loadSquare';
 
 // The PROJECT SQUARE — the fully-public, server-rendered, SEO/GEO-optimised
 // `/explore` marketing-site page (Story 6.13 · Subtask 6.13.6). Renders the SEO
@@ -24,6 +24,18 @@ import { loadSquare, categoryLabel } from './_lib/loadSquare';
 // browse-by-topic facet, and the GEO FAQ — for a LOGGED-OUT visitor / crawler,
 // with NO session gate. 4-layer: it reads THROUGH the shipped services
 // (`projectSquareService` / `projectTagsService`), no raw Prisma here.
+//
+// ⚠️ THE `(square)` GROUP IS NOT COSMETIC — it is what scopes `loading.tsx` to
+// this page alone (MOTIR-3491). The group adds no URL segment: this file still
+// serves `/explore`, under `explore/layout.tsx`, with `explore/opengraph-image`
+// and `explore/error.tsx` inherited exactly as before. What it changes is that
+// the sibling `explore/topic/[slug]` route — which 404s an unknown topic through
+// `next/navigation` — is no longer BENEATH the loading boundary, so that 404
+// survives. Do not flatten this back; `loading.tsx`'s own header carries the
+// measurement. (The call is named indirectly on purpose: the repo-wide guard in
+// `tests/navigation/loading-boundary-guard.test.ts` decides which pages are
+// status-deciding by a plain substring search of the page source, so writing the
+// literal here would make this framed page look like a decider.)
 
 const BASE = '/explore';
 

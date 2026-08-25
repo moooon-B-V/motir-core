@@ -247,7 +247,14 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // project's planner is given. Named as a LIST now rather than a single
     // filter, so a third exclusion has somewhere to be written down instead of
     // quietly widening the expression.
-    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage'];
+    //
+    // ⚠️ AND `lesson:view` IS THE THIRD — the one the list above was made a LIST
+    // for (MOTIR-3480). Same route, same reason: `search_lessons` is the first
+    // MCP tool to assert the READ key, which made it grantable; the key is
+    // MOTIR-3336's, minted in 2026. Conferring it on a stored `read` row would
+    // let a token issued years ago for work-item reads pull a project's
+    // accumulated planning lessons, which are distilled from its own work.
+    const POSTDATE_THE_SCOPES: PermissionKey[] = ['ai:decide_plan', 'lesson:manage', 'lesson:view'];
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
     );

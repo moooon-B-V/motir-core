@@ -66,6 +66,15 @@ export const EXEMPT_TOOLS = {
     'surface, which consumes `ProjectLessonDTO` server-side and never over REST. So there is ' +
     'no shared component to derive from, by architecture rather than by omission ' +
     '(MOTIR-3361).',
+  search_lessons:
+    'Returns RANKED LESSONS AS PROSE — `{ outcome, lessons: [{ id, title, body, howToApply, ' +
+    'scope, kinds, types, phases, distance }] }`. Two reasons it cannot derive: the lesson store ' +
+    'lives in motir-ai and no `/api/v1` operation returns a lesson at all (the same reason ' +
+    '`add_lesson` is exempt), and `outcome` / `distance` have no v1 counterpart — no v1 ' +
+    'operation exposes lesson search. ⚠️ `outcome` is load-bearing rather than decorative: ' +
+    '`nothing-matched` and `unavailable` are opposite answers that both carry an empty ' +
+    '`lessons`, so a caller reading the payload structurally must be able to tell them apart ' +
+    '(MOTIR-3480).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +

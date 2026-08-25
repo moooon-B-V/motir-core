@@ -836,8 +836,16 @@ status. The only fix is not to put a boundary there.
   not need a pending frame to feel immediate.
 - ✅ **A `loading.tsx` is still fine above a subtree where NO page calls
   `notFound()`** — but see the second cost below before reaching for one.
+- ✅ **A ROUTE GROUP scopes a boundary away from a deciding sibling.** When the
+  frame is worth keeping for the safe routes, put those routes and the
+  `loading.tsx` inside a group: it adds no URL segment but does own its own
+  boundary, so the deciding sibling stops being beneath it. `/explore` keeps its
+  skeleton from `app/(public)/explore/(square)/loading.tsx` while
+  `explore/topic/[slug]` — one directory up and outside the group — keeps its
+  404 (MOTIR-3491). Deleting the boundary is not the only remedy.
 - ❌ **Never a `loading.tsx` at a route-group root** that contains any
-  existence-deciding route. `app/(authed)` is such a group.
+  existence-deciding route. `app/(authed)` is such a group — and so was
+  `explore/` before the `(square)` group was carved out of it.
 
 ### The second cost — a boundary makes every unscoped locator a race
 
@@ -852,17 +860,21 @@ group boundary turned **30 assertions across 17 spec files** red at once.
 bounded route, reach for `getByRole`, or scope to the live subtree; and treat a
 new boundary as a change with a suite-wide blast radius, not a local courtesy.
 
-### Known debt
+### Known debt — none
 
-`app/(public)/explore/loading.tsx` sits above
-`app/(public)/explore/topic/[slug]/page.tsx`, which calls `notFound()`, so a
-missing topic answers **200** today. Reproduced on a production build, filed
-against the explore surface, and listed in
-`tests/navigation/loading-boundary-guard.test.ts`'s `KNOWN_STATUS_DEBT` so the
-guard is green on a true statement of the tree rather than red on another
-story's defect. That list is asserted tight and can only shrink. The bug is
-MOTIR-3491; MOTIR-3492 carries what the pending frame still owes, and blocks
-MOTIR-3440 until its "the group's frame" premise is restated.
+`KNOWN_STATUS_DEBT` in `tests/navigation/loading-boundary-guard.test.ts` is
+**empty**. It held one entry: `app/(public)/explore/loading.tsx` sat above
+`app/(public)/explore/topic/[slug]/page.tsx`, so a missing topic answered **200**.
+MOTIR-3491 fixed it with the route-group remedy above — the square's page and its
+`loading.tsx` moved into `app/(public)/explore/(square)/`, which keeps the frame
+on `/explore` and takes it off `topic/[slug]`. Measured on a production build:
+`/explore/topic/definitely-not-a-real-topic-xyz` was 200, and is 404.
+
+The list is asserted tight in both directions, so it only shrinks: an entry that
+stops describing the tree fails the suite. Adding one means parking a defect —
+it needs a filed bug and a reproduction, not a judgement that a boundary is worth
+the status. MOTIR-3492 still carries what the pending frame owes on the authed
+side, and blocks MOTIR-3440 until its "the group's frame" premise is restated.
 
 ### URL state the CLIENT reads is written with `shallowPush`
 
@@ -911,6 +923,16 @@ the rule for which surfaces earn a frame, and the decision to scope the
 BOUNDARIES rather than the 30 assertions above. Its short form: **the frame is
 an in-page `<Suspense>` placed after the page's own gate, every page's frame is
 its own, and no `loading.tsx` is added under `app/(authed)`.**
+
+**The ROUTE-GROUP instrument above is the one that asset weighs and declines,
+for this group only** — it is a route-level boundary, so it still carries the
+30-assertion locator cost, and scoping it around eleven deciders scattered
+across `settings/`, `items/`, `plans/`, `sprints/`, `dashboard/` and
+`direction/` is a tree-wide restructuring where an in-page `<Suspense>` is one
+line in one page. **That is a judgement about this group, not about the
+instrument**: `/explore` was the opposite case — two routes, one boundary worth
+keeping, no spec asserting unscoped against it — and there the group is
+correct.
 
 ---
 

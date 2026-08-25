@@ -807,6 +807,11 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(authed)/settings/account/api-tokens/page.tsx',
     why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
   },
+  {
+    file: 'design/brand/brand-mark.mock.html',
+    path: 'app/(public)/explore/opengraph-image.tsx',
+    why: "Two point-in-time citations (the read-but-not-re-rendered list, and Panel 6's section-card label) naming the file MOTIR-1150 lifted the ad-hoc M-tile's inline hexes from, at the path it had when that card drew the asset. MOTIR-3491 moved it into `app/(public)/explore/(square)/` — a metadata image file is resolved for the page in its OWN segment, so when the square's page moved into the route group that scopes its `loading.tsx`, leaving this behind silently dropped every og:image tag from /explore. The asset is history and stays as drawn; correcting it from that bug's branch would also have published the brand mark's design result onto the bug (MOTIR-3130).",
+  },
   // ── A path the design says must NEVER exist (MOTIR-3492) ──────────────────
   // The inverse of every other row here: these are not paths an asset expects
   // to find, they are the files the design forbids. A `loading.tsx` fallback
