@@ -229,7 +229,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **48 tools**.
+`initialize` handshake and registers **49 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -977,6 +977,71 @@ planner calls during a run.
 
 Requires the lesson-library-change permission (`lesson:manage`) — the same key
 retiring a lesson takes, checked **before** any call to motir-ai.
+
+#### `search_lessons`
+
+READ the recorded **lessons** by MEANING — the read half of the pair `add_lesson`
+opens. You get the **shared corpus AND this project's own lessons in one answer**,
+because a caller about to act should be taught by both and it does not matter
+which of the two a past mistake happens to be recorded in. (This is deliberately
+wider than the AI-planning settings surface, which shows a project only its own
+library — a customer's screen is not the place for the product's corpus.)
+
+**Two steps, and the second decides what you get.** The three routing axes
+(`kinds` / `types` / `phases`) choose the candidate **pool**; the `query` text
+then chooses **which few arrive**:
+
+```
+WHERE  … kinds/types/phases overlap …      ← chooses the candidate POOL
+ORDER BY "embedding" <=> query ASC         ← chooses which few arrive
+LIMIT  n
+```
+
+So a vague query returns `n` near-arbitrary rows out of a correctly-filtered
+slice — which reads as the mechanism working while it hands back noise. **Narrow
+by axis, THEN ask a real question.** An omitted axis is unconstrained, which is
+often the right answer here: a lesson tagged with no kind reaches every query
+either way.
+
+**Write the query in TAKEAWAY register.** A lesson is stored as _"a count taken
+from a working tree is not a property of the ref"_, never as _"board filter at
+scale"_. Describe the action you are about to take and the shape of what could go
+wrong; a card title ranks against the wrong words.
+
+**It returns PROSE**, unlike `search_work_items_semantic`, which returns keys and
+scores and tells you to read each candidate through `get_work_item`. That rule
+governs claims _about the product_, which must trace to a keyed read. A lesson
+makes no claim about the product — it is guidance written to be read, and the
+same rows already reach the hosted planner as prose by injection.
+
+⚠️ **An empty result is not one thing.** Read `outcome`:
+
+| `outcome`         | What it means                                                           |
+| ----------------- | ----------------------------------------------------------------------- |
+| `matched`         | Lessons came back, nearest first.                                       |
+| `nothing-matched` | The corpus WAS searched and has nothing. A normal answer — proceed.     |
+| `unavailable`     | The corpus could NOT be reached. **Not** evidence that nothing applies. |
+
+The last two both carry an empty `lessons`, and treating `unavailable` as
+`nothing-matched` is a search that reports "nothing exists" truthfully and
+wrongly.
+
+| Input        | Type     | Required | Notes                                                                    |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------ |
+| `projectKey` | string   | yes      | The project whose lessons join the shared corpus in the answer.          |
+| `query`      | string   | yes      | The question, in takeaway register — the action and the risk shape.      |
+| `kinds`      | string[] | no       | `epic` · `story` · `task` · `bug` · `subtask`. Omitted = unconstrained.  |
+| `types`      | string[] | no       | The work-type vocabulary (`code`, `design`, …). Omitted = unconstrained. |
+| `phases`     | string[] | no       | `skeleton` · `deepen`. Omitted = unconstrained.                          |
+| `limit`      | number   | no       | How many to return, nearest first. Default 8, max 50.                    |
+
+**Output** — each lesson's `title`, `body`, `howToApply`, its `scope`
+(`global` / `tenant`), the axes it is tagged on, and its cosine `distance`.
+
+⚠️ **Costs an AI call**: the query is embedded through Motir's AI backend and
+draws the same per-minute allowance as the planning chat, so do not call it in a
+tight loop. Requires the lesson-read permission (`lesson:view`) — the READ key,
+not `lesson:manage` — checked **before** any call to motir-ai.
 
 **Output** — `structuredContent`: the recorded lesson's `id`, `title`, its three
 axes as stored, and `sourceRef`.

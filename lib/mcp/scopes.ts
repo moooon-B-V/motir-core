@@ -224,6 +224,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // as the nearest write bucket, exactly as `add_comment` is, rather than
   // inventing a scope in a table this story deprecates.
   add_lesson: 'work_items:write',
+  // `search_lessons` (MOTIR-3480). Same note as its write sibling above: this
+  // legacy table has no lesson axis, and the real gate is the PERMISSION
+  // (`lesson:view`, in `toolPermissions.ts`). A READ, so it files under `read`.
+  search_lessons: 'read',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
   expand_item: 'work_items:write',

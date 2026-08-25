@@ -349,6 +349,18 @@ const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
       '`EmailChangeRateLimitedError`. A row count has no deadline to miss. (MOTIR-3067)',
   ],
   [
+    'tests/mcp/searchLessons.test.ts',
+    'The `search_lessons` tool spec DOUBLES `@/lib/rateLimit/aiGuard` wholesale ' +
+      '(`vi.mock`), so `enforceAiRateLimit` is a `vi.fn()` and `enforceRateLimit`, ' +
+      '`sharedRateLimitStore()` and the Postgres counter are never reached at all. The 429 it ' +
+      'asserts is a `Response` the test CONSTRUCTED to check that the tool renders a refusal as ' +
+      'a tool ERROR carrying `Retry-After` rather than throwing — the same shape as ' +
+      '`retryAfterPluralisation.test.ts` above: an input it wrote, not an outcome a limiter ' +
+      'reached. The real store path IS exercised for this tool, one tier up and unmocked, by ' +
+      '`tests/mcp/searchLessonsTransport.test.ts`, which asserts no refusal and so is not a ' +
+      'subject. (MOTIR-3480)',
+  ],
+  [
     'tests/password-reset.test.ts',
     'The 429 here is Better-Auth’s OWN limiter — `rateLimit.customRules` in ' +
       '`lib/auth/index.ts`, bound to `/request-password-reset` — reached by calling ' +

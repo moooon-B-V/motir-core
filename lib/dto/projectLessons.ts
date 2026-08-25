@@ -94,3 +94,61 @@ export interface ProjectLessonsPageDTO {
   /** The retire-by-non-recurrence window in days, so the surface can explain it. */
   retentionDays: number | null;
 }
+
+// ── The TEACHING read's shapes (Subtask MOTIR-3478 · Story MOTIR-3466) ───────
+
+/**
+ * One lesson as the teaching read returns it — PROSE, plus the axes it is tagged
+ * on so a caller can see WHY it came back and re-narrow.
+ *
+ * ⚠️ IT IS NOT `ProjectLessonDTO`, and the difference is deliberate rather than
+ * an oversight. That one is the LIBRARY row an admin reads: it carries the
+ * lifecycle a settings screen renders — `injected`, `injectionBlock`,
+ * `humanOverride`, `recurrenceCount`, `retentionDays` — and none of that is a
+ * question the caller of a search is asking. This one carries `scope`, which
+ * `ProjectLessonDTO` deliberately DROPS because an inspection row is always
+ * `tenant`; here both scopes arrive and which one a lesson came from is part of
+ * the answer.
+ */
+export interface RankedLessonDTO {
+  id: string;
+  /** The takeaway. */
+  title: string;
+  /** What happened. */
+  body: string;
+  /** The actionable rule. */
+  howToApply: string;
+  /** `global` (the shared corpus) or `tenant` (this project's own). */
+  scope: string;
+  /** Which card KIND / WORK TYPE / PLAN PHASE it applies to; empty = any. */
+  kinds: string[];
+  types: string[];
+  phases: string[];
+  /** Cosine distance to the query; lower is nearer. */
+  distance: number;
+}
+
+/**
+ * The result of a lesson search — THREE outcomes a caller can tell apart.
+ *
+ * ⚠️ THIS IS THE WHOLE REASON THE TYPE IS A UNION RATHER THAN AN ARRAY, and it
+ * is the one place this seam deliberately parts company with `listLessons`.
+ * That read DEGRADES: a motir-ai outage renders as `{ available: false,
+ * lessons: [] }` and the settings page stays usable, which is right for a page
+ * with three working groups on it that has no dependency on motir-ai being up.
+ *
+ * **That posture is wrong here.** The caller is an agent deciding whether a past
+ * mistake applies to the work in front of it, and *"nothing matched your
+ * question"* and *"the corpus could not be reached"* are OPPOSITE answers. The
+ * first says the corpus has been consulted and has nothing; the second says it
+ * has not been consulted at all. Rendering the second as the first is a search
+ * that reports "nothing exists" truthfully and wrongly — and the agent proceeds
+ * believing it checked.
+ *
+ * So the outcomes are named, the way `search_work_items_semantic` names its own,
+ * and an outage is never an empty result set.
+ */
+export type LessonSearchResult =
+  | { outcome: 'matched'; lessons: RankedLessonDTO[] }
+  | { outcome: 'nothing-matched'; lessons: [] }
+  | { outcome: 'unavailable'; lessons: [] };

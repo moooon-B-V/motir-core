@@ -1129,6 +1129,79 @@ export async function createLesson(input: CreateLessonRequest): Promise<RawLesso
   return body as RawLesson;
 }
 
+// ── The TEACHING read (Subtask MOTIR-3478 over MOTIR-3477) ──────────────────
+//
+// `POST /v1/lessons/search`. The reads above are the INSPECTION pair and are
+// tenant-only by decision; this one is the teaching read and answers across BOTH
+// scopes — the shared corpus and this project's own — because a caller about to
+// act should be taught by both and it does not matter which of the two a past
+// mistake happens to be recorded in.
+//
+// ⚠️ SO THE `isTenantRow` NARROWING THAT GUARDS THE INSPECTION READS MUST NOT BE
+// APPLIED TO THIS ONE. It is a second line of defence there precisely because a
+// global row arriving would be a defect; here a global row is the larger half of
+// the correct answer. Same store, same client, opposite filters — the reason
+// each is written at its own call site rather than in a shared helper.
+//
+// ⚠️ NO `scope` FIELD AND NO `aiProjectId` ON THE WIRE. The acting project is
+// the core identity in the body, resolved upstream, so a caller cannot name
+// another project's store. Same cross-repo string agreement as `createLesson`:
+// `parseSearchLessonsBody` requires these exact names.
+
+/** One ranked lesson as the teaching read returns it — prose, not identifiers. */
+export interface RawRankedLesson {
+  id: string;
+  title: string;
+  body: string;
+  howToApply: string;
+  scope: string;
+  kinds?: string[];
+  types?: string[];
+  phases?: string[];
+  /** Cosine distance to the query; lower is nearer. */
+  distance: number;
+}
+
+export interface SearchLessonsRequest {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  query: string;
+  kinds?: string[];
+  types?: string[];
+  phases?: string[];
+  limit?: number;
+}
+
+export async function searchLessons(input: SearchLessonsRequest): Promise<RawRankedLesson[]> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/lessons/search`, {
+    method: 'POST',
+    headers: { ...authHeaders(serviceToken), 'content-type': 'application/json' },
+    body: JSON.stringify({
+      coreWorkspaceId: input.coreWorkspaceId,
+      coreProjectId: input.coreProjectId,
+      query: input.query,
+      // ⚠️ SPREAD, so an axis the caller omitted is ABSENT from the JSON rather
+      // than present as `null` or `[]`. The distinction survives this hop
+      // because the upstream SQL depends on it: an absent axis omits its clause,
+      // and an empty one renders a filter that matches nothing.
+      ...(input.kinds ? { kinds: input.kinds } : {}),
+      ...(input.types ? { types: input.types } : {}),
+      ...(input.phases ? { phases: input.phases } : {}),
+      ...(input.limit !== undefined ? { limit: input.limit } : {}),
+    }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as { lessons?: unknown };
+  // The malformed-body arm the reads above use: a 200 whose shape is wrong is an
+  // unavailable upstream, NOT a search that matched nothing — and here the two
+  // are the exact pair of answers the caller must be able to tell apart.
+  if (!Array.isArray(body.lessons)) {
+    throw new MotirAiUnavailableError('lesson-search response missing `lessons`');
+  }
+  return body.lessons as RawRankedLesson[];
+}
+
 export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
   const { url, serviceToken } = config();
   const params = new URLSearchParams({
