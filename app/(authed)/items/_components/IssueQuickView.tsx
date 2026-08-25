@@ -4,6 +4,12 @@ import { useCallback, type MouseEvent, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
+// The peek's shallow URL update, lifted into `lib/navigation/` by MOTIR-3434 so
+// the three view switches share ONE implementation with it rather than each
+// growing a copy. The reasoning that used to sit here — a pure, immediate URL
+// change that does not re-render the host server page, and a history entry so
+// Back / Esc step back — moved with it.
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 
 // The quick-view (peek) MODAL FRAME (Subtask 2.5.19) — the client shell mounted
 // by IssueQuickViewController when `?peek=<key>` is present (on /items, /ready,
@@ -23,18 +29,6 @@ import { Modal } from '@/components/ui/Modal';
 // (view/sort/filter/page). `usePeekClose` is the one place that computes the
 // cleared URL — reused by the header × and the not-found Close
 // (QuickViewCloseButton).
-
-/**
- * Shallow URL update — push `href` onto the history stack WITHOUT a server
- * navigation (so the host page does not re-render / refetch). Next's App Router
- * syncs `usePathname` / `useSearchParams` with native `history.pushState`, so
- * the client peek controller picks the change up; the underlying list is
- * untouched (bug 8.8.2). A history entry (not `replaceState`) so Back / Esc step
- * back through peeked items, the design's "Back closes it" behaviour.
- */
-function shallowPush(href: string) {
-  window.history.pushState(null, '', href);
-}
 
 /**
  * Returns a stable `(identifier) => void` that opens the quick-view peek for a

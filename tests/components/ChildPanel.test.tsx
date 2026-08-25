@@ -13,7 +13,11 @@ import { ChildPanel } from '@/app/(authed)/items/[key]/_components/ChildPanel';
 // mounts the subtree-rooted `WorkItemRoadmap`. So these tests hand it a marker
 // node for the rows and assert the panel never re-implements them.
 
+// `push` is kept as a spy with the OPPOSITE job it used to have (MOTIR-3434):
+// the switch must NOT navigate. The URL is now written shallowly, so the
+// positive assertion is on `history.pushState` and `push` is asserted absent.
 const push = vi.fn();
+const pushState = vi.spyOn(window.history, 'pushState');
 let params = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
@@ -26,6 +30,7 @@ vi.mock('next/navigation', () => ({
 // deterministic and these tests stay about the PANEL.
 beforeEach(() => {
   push.mockClear();
+  pushState.mockClear();
   params = new URLSearchParams();
   vi.stubGlobal(
     'fetch',
@@ -87,26 +92,36 @@ describe('ChildPanel', () => {
     expect(level[0]).toContain('parentId=P9');
   });
 
-  it('writes ?children=graph on switching to Graph, without scrolling', () => {
+  it('writes ?children=graph SHALLOWLY on switching to Graph — no navigation', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
-    expect(push).toHaveBeenCalledWith('/items/MOTIR-2284?children=graph', { scroll: false });
+    // MOTIR-3434: `history.pushState`, not `router.push`. The list body is the
+    // already-rendered `children` prop and the graph fetches its own level, so
+    // the item page's twenty-nine awaits must not be re-run to switch between
+    // them. A `pushState` also does not scroll, which is what the old
+    // `{ scroll: false }` was asking for.
+    expect(pushState).toHaveBeenCalledWith(null, '', '/items/MOTIR-2284?children=graph');
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('clears the param on switching back to List, leaving a CLEAN url', () => {
     params = new URLSearchParams('children=graph');
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'List' }));
-    expect(push).toHaveBeenCalledWith('/items/MOTIR-2284', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/items/MOTIR-2284');
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('preserves the page’s other query state when it writes the view', () => {
     params = new URLSearchParams('tab=history');
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Graph' }));
-    expect(push).toHaveBeenCalledWith('/items/MOTIR-2284?tab=history&children=graph', {
-      scroll: false,
-    });
+    expect(pushState).toHaveBeenCalledWith(
+      null,
+      '',
+      '/items/MOTIR-2284?tab=history&children=graph',
+    );
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('treats an unknown ?children value as the default list', () => {

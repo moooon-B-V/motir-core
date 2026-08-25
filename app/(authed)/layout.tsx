@@ -60,17 +60,57 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const ctx = await getWorkspaceContext();
-  const workspaceModels = await workspacesService.listUserWorkspaces(session.user.id);
-
-  // Platform standing — the ONLY thing that surfaces the account menu's
-  // staff-only "Platform admin" door (design `platform-admin/` Panel 1,
-  // MOTIR-2896). Read fresh per request off the `platformRole` column rather
-  // than carried in the session, so a revoked operator loses the door on their
-  // next request, not their next sign-in (`docs/decisions/platform-staff-auth.md`
-  // §1). A boolean crosses into the client: the ROLE is a server-side identity
-  // assertion and nothing in the tenant shell renders it.
-  const platformStanding = await platformStaffRepository.findStandingByUserId(session.user.id);
+  // ⚠️ THE GATE ABOVE STAYS FIRST AND STAYS SEQUENTIAL (MOTIR-3433). Everything
+  // below runs only for a request that already has a session; `getSession()` is
+  // awaited and the redirect thrown before any of it is started, so nothing
+  // tenant-scoped is even STARTED for an unauthenticated visitor.
+  // `tests/components/authed-layout-gate.test.ts` asserts the ordering rather
+  // than leaving it to inspection.
+  //
+  // (This clause used to add "which is what keeps `app/(authed)/loading.tsx`
+  // inside the gate". There is no group `loading.tsx` any more — it was removed
+  // because a boundary here flushes a 200 response head before the page runs
+  // and destroys the `notFound()` 404 on every route beneath it (MOTIR-3492
+  // carries the finding and what the frame owes). The ordering rule above
+  // stands on its own.)
+  //
+  // These four are INDEPENDENT of each other and were four sequential round
+  // trips — which is what a TYPED URL pays before any HTML body exists at all,
+  // and therefore before the skeleton that is supposed to appear immediately
+  // can be rendered. The boundary alone would not have answered the reported
+  // case; this is why. One `Promise.all`, so the shell's own reads cost one
+  // round trip instead of four:
+  //
+  //   · getWorkspaceContext()      — resolves the active workspace. Reaches
+  //                                  `getSession()` again, but through the
+  //                                  request-memoised helper (MOTIR-2453), so
+  //                                  it is not a second validation.
+  //   · listUserWorkspaces()       — the switcher's list.
+  //   · findStandingByUserId()     — platform standing; the ONLY thing that
+  //     (MOTIR-2896)                 surfaces the account menu's staff-only
+  //                                  "Platform admin" door. Read fresh per
+  //                                  request off `platformRole` rather than
+  //                                  carried in the session, so a revoked
+  //                                  operator loses the door on their next
+  //                                  request, not their next sign-in
+  //                                  (`docs/decisions/platform-staff-auth.md`
+  //                                  §1). A boolean crosses into the client:
+  //                                  the ROLE is a server-side identity
+  //                                  assertion and nothing in the shell renders
+  //                                  it.
+  //   · cookies()                  — the org cookie, read here rather than at
+  //                                  its use site below.
+  //
+  // Everything AFTER this point depends on `ctx` or on one of these results and
+  // keeps its existing order. This is the only performance work in the card: no
+  // query changed, no index, no cache, and the shell renders exactly what it
+  // rendered before.
+  const [ctx, workspaceModels, platformStanding, cookieStore] = await Promise.all([
+    getWorkspaceContext(),
+    workspacesService.listUserWorkspaces(session.user.id),
+    platformStaffRepository.findStandingByUserId(session.user.id),
+    cookies(),
+  ]);
   const isPlatformStaff = platformStanding?.platformRole != null;
 
   // The active ORGANIZATION (Story 6.10.5 — the shell org control). It must
@@ -84,7 +124,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // the WORKSPACE switcher shows only when the active org has ≥2 workspaces — so
   // the workspace list handed to the shell is scoped to the active org, and ITS
   // length is the reveal test (in ShellTierNav).
-  const orgCookie = (await cookies()).get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
+  const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
   const activeWorkspaceModel = ctx
     ? (workspaceModels.find((w) => w.id === ctx.workspaceId) ?? null)
     : null;

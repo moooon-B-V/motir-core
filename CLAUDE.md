@@ -791,6 +791,124 @@ of a story working, which a human then approves. The full rule is
 
 ---
 
+## ⚠️ A `loading.tsx` may NOT sit above a route that decides existence
+
+**EXTREMELY IMPORTANT: a `loading.tsx` fallback can render as soon as its
+ancestor layouts resolve — which is BEFORE the page function runs. That flushes
+the response head, so the HTTP status is fixed at 200. A `notFound()` reached
+later in that page then renders the not-found BODY under a 200, and the 404 is
+gone. So a boundary must never sit above a segment whose status is load-bearing.**
+
+This is the inverse of the rule that stood here between MOTIR-3433 and
+MOTIR-3492, which said "every route group carries a `loading.tsx`". That rule was
+written on the assumption that a boundary is free. It is not, and the assumption
+was falsified by experiment rather than argument:
+
+- `tests/e2e/billing-selfhost.spec.ts` asserts `/settings/organization/billing`
+  404s on a self-host build. With an `app/(authed)/loading.tsx` it received
+  **200**; with that one file removed and nothing else changed, **404**.
+- The same A/B held for `issue-detail-flow.spec.ts`'s cross-workspace assertion,
+  whose 404 is a documented **no-existence-leak** contract — the page's own
+  comment says a browse denial "must be indistinguishable from a missing issue
+  (404, no existence leak)".
+- **11 of the 58 `app/(authed)` pages call `notFound()`.** A group-level
+  boundary covers all 58, so it breaks all 11 at once.
+
+**⚠️ MOVING THE GATE DOES NOT HELP — this was built and measured, not assumed.**
+The obvious repair is to hoist the `notFound()` into a `layout.tsx` above the
+page so it runs "before" the stream. A layout is an ANCESTOR of the boundary, so
+resolving it is precisely what RELEASES the fallback: the billing route with a
+gate layout still returned 200. There is no gate placement that recovers the
+status. The only fix is not to put a boundary there.
+
+### What to use instead
+
+- ✅ **An in-page `<Suspense>`, placed AFTER the page's own gate.** It renders
+  once the status is already settled, so it streams without touching the status.
+  This is the right instrument for a page that must both 404 and stream, and
+  `app/(authed)/items/[key]/page.tsx` (MOTIR-3436) is the worked example: its
+  late stack — Development, Acceptance, Design result, Attachments, Activity —
+  sits behind two boundaries sharing one promise, and `issue-detail-flow.spec.ts`
+  passes 16/16 with it.
+- ✅ **Parallelise the reads.** The measured win on the item page came from
+  collapsing twenty-nine SEQUENTIAL awaits into one `Promise.all` plus the late
+  stack, not from drawing a frame. A page that paints after one round trip does
+  not need a pending frame to feel immediate.
+- ✅ **A `loading.tsx` is still fine above a subtree where NO page calls
+  `notFound()`** — but see the second cost below before reaching for one.
+- ❌ **Never a `loading.tsx` at a route-group root** that contains any
+  existence-deciding route. `app/(authed)` is such a group.
+
+### The second cost — a boundary makes every unscoped locator a race
+
+A boundary also changes navigation: React keeps the PREVIOUS subtree mounted
+(hidden) while the new one streams, so both are in the DOM at once. Playwright
+resolves locators before filtering on visibility, so an unscoped `getByText` /
+`getByTestId` / `getByLabel` matches BOTH and fails strict mode. Adding one
+group boundary turned **30 assertions across 17 spec files** red at once.
+
+`getByRole` is immune — the accessibility tree excludes the hidden copy. Of those
+30 failures, exactly zero used `getByRole`. So when a spec must assert on a
+bounded route, reach for `getByRole`, or scope to the live subtree; and treat a
+new boundary as a change with a suite-wide blast radius, not a local courtesy.
+
+### Known debt
+
+`app/(public)/explore/loading.tsx` sits above
+`app/(public)/explore/topic/[slug]/page.tsx`, which calls `notFound()`, so a
+missing topic answers **200** today. Reproduced on a production build, filed
+against the explore surface, and listed in
+`tests/navigation/loading-boundary-guard.test.ts`'s `KNOWN_STATUS_DEBT` so the
+guard is green on a true statement of the tree rather than red on another
+story's defect. That list is asserted tight and can only shrink. The bug is
+MOTIR-3491; MOTIR-3492 carries what the pending frame still owes, and blocks
+MOTIR-3440 until its "the group's frame" premise is restated.
+
+### URL state the CLIENT reads is written with `shallowPush`
+
+**A URL that only the client reads is written with `shallowPush`
+(`lib/navigation/shallowUrl.ts`). `router.push` is for a URL change the SERVER
+must answer.**
+
+`router.push` re-runs the whole Server-Component page. That is right when the
+destination body needs data the browser does not have — a different query, a
+different page of results, a server-computed series. It is pure cost when the
+body is already in the browser and the URL is only there so a deep link, a
+reload and Back/forward agree. Three view toggles were paying it (MOTIR-3434):
+the plan detail's Canvas/List re-ran seven awaits, and the item page's Children
+List/Graph re-ran twenty-nine, to render something already on screen.
+
+- ✅ **`shallowPush(href)`** for a view toggle, a peek, a panel mode — anything
+  whose target body is already rendered or fetches itself client-side. Next
+  syncs `usePathname` / `useSearchParams` with `history.pushState`, so every
+  `searchParams.get(...)` derivation keeps working untouched.
+- ✅ **Keep the history entry.** `shallowPush`, not `shallowReplace`, unless the
+  URL genuinely should not be somewhere Back returns to. MOTIR-1549 was filed
+  because the roadmap toggle used a replace and Back stopped restoring the scope.
+- ✅ **`router.push` stays** where the server must answer: `/items`' tree ↔ list,
+  the plans list's status tabs, the item page's activity tabs, every report
+  control, and any change of ROUTE.
+- ❌ **No pending affordance on a shallow switch** — no spinner, no disabled
+  segment, no skeleton, no dim. There is nothing to wait for, and drawing a wait
+  manufactures one. The visual half of this rule is
+  `design/shell/design-notes.md` § _THE SWITCH RULE_, which draws the three
+  toggles at rest; the two homes cite each other.
+
+**The discriminator is not the control** — the same `Segmented` primitive serves
+both kinds — **it is whether the target body needs data the browser does not
+have.**
+
+**The gate is unaffected by a group boundary and structurally cannot be:** a
+group's `layout.tsx` awaits its session and redirects before it renders
+`children`, and a `loading.tsx` is a fallback for the children — so an
+unauthenticated visitor is bounced, never shown a frame.
+
+`design/shell/navigation-pending.mock.html` + `design/shell/design-notes.md`
+§ _The navigation-pending grammar_ is the design of record: the frame block by
+block, the argument for 120ms, and the no-shift mapping.
+
+---
+
 ## ⚠️ Page state after a mutation — server refresh vs. client-island refetch
 
 **EXTREMELY IMPORTANT: a mutation made on a page MUST update EVERY surface it
