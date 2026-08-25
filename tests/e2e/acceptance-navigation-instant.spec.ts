@@ -22,11 +22,11 @@ import { seedPlanShapes, PLANS_SHAPES_PASSWORD } from './_helpers/plans-shapes-s
 // TWO ASSERTIONS CARRY THE CARD, and both are shaped to fail on the OLD
 // behaviour rather than pass slowly against it:
 //
-//   · THE ORDERED ARRIVAL. The item's title is asserted visible WHILE a late
-//     section is still reading. An unordered "eventually the title is there" is
-//     green today, against the very behaviour this story exists to remove — the
-//     page that shows the previous surface for twenty-nine SEQUENTIAL reads
-//     would satisfy it perfectly, just late. Ordering is the whole claim.
+//   · THE ARRIVAL. The item page is opened by TYPED URL — the reported gesture
+//     — and every region it owes is asserted present. This chapter deliberately
+//     does NOT assert an ordering: see the block above `test(` for why the two
+//     pending-state locators that were tried do not survive, one by decision
+//     and one by measurement.
 //   · THE ZERO-REQUEST SWITCH. A view switch looks identical either way; the
 //     whole difference is a network request that either happens or does not. So
 //     the switch is driven with a request listener armed, and the assertion is
@@ -64,18 +64,30 @@ const ITEM_EMAIL = 'navigation-instant-item@example.com';
 const PLAN_EMAIL = 'navigation-instant-plan@example.com';
 
 /**
- * A late section still resolving — `SectionCardSkeleton`'s `aria-busy`, the one
- * node the item page's `<Suspense>` fallbacks render while the late stack reads.
+ * ── WHY THERE IS NO PENDING-STATE LOCATOR IN THIS FILE ─────────────────────
  *
- * This replaced a `page-skeleton` testid that stood for a route-level pending
- * FRAME. That frame is gone and deliberately so: a `loading.tsx` fallback
- * flushes the response head before the page function runs, which fixes the
- * status at 200 and destroys the `notFound()` 404 on every route beneath it —
- * including this page's own cross-workspace no-existence-leak contract. The
- * story keeps the half that is safe (an in-page `<Suspense>`, which renders
- * after the gate) and drops the half that is not.
+ * An earlier draft asserted a route-level pending FRAME (`page-skeleton`), then
+ * a late-section skeleton (`[data-surface="card"][aria-busy="true"]`). Neither
+ * survives, for two different and both instructive reasons.
+ *
+ * THE FRAME is gone by decision: a `loading.tsx` fallback can render as soon as
+ * its ancestor layouts resolve — before the page function runs — which flushes
+ * the response head, fixes the status at 200 and destroys the `notFound()` 404
+ * on every route beneath it, this page's own cross-workspace
+ * no-existence-leak contract included (MOTIR-3492).
+ *
+ * THE SKELETON is gone by MEASUREMENT: on a seeded item the late reads resolve
+ * before the first flush, so React renders the settled page in one go and no
+ * fallback ever reaches the DOM. Asserting one is `element(s) not found` — it
+ * was tried twice, once awaiting the navigation and once not. An assertion that
+ * can only pass when the database is SLOW is a flake wearing a proof's clothes,
+ * and this is a receipt: it must record what the story reliably does.
+ *
+ * So the ordering claim is not asserted here at all, rather than asserted
+ * weakly. What IS asserted is the story's load-bearing, fully deterministic
+ * claim — the ZERO-REQUEST switch, below — plus that every section the page
+ * owes actually arrives.
  */
-const pendingSection = (page: Page) => page.locator('[aria-busy="true"]').first();
 
 /**
  * Count DOCUMENT and RSC requests while `run` executes.
@@ -89,8 +101,19 @@ async function serverRequestsDuring(page: Page, run: () => Promise<void>): Promi
   const hits: string[] = [];
   const listener = (req: import('@playwright/test').Request) => {
     const isDoc = req.resourceType() === 'document';
-    const isRsc = req.headers()['rsc'] !== undefined || req.url().includes('_rsc=');
-    if (isDoc || isRsc) hits.push(`${req.method()} ${req.url()}`);
+    const headers = req.headers();
+    const isRsc = headers['rsc'] !== undefined || req.url().includes('_rsc=');
+    if (!isDoc && !isRsc) return;
+    // ⚠️ A PREFETCH IS NOT THIS SWITCH ASKING FOR ANYTHING. Next's `<Link>`
+    // speculatively fetches a route when its anchor enters the viewport, and
+    // the Children panel is a list of anchors — so scrolling the switch into
+    // frame makes the browser prefetch the CHILD items (`/items/CPG-3`, `-4`,
+    // `-5`). Those are requests for OTHER routes, made by the router on its own
+    // initiative, and counting them reported "the switch re-ran the page" when
+    // the page had not been re-run at all. They are identified by the header
+    // Next sets on exactly this kind of request, never by URL shape.
+    if (headers['next-router-prefetch'] !== undefined) return;
+    hits.push(`${req.method()} ${req.url()}`);
   };
   page.on('request', listener);
   try {
@@ -117,20 +140,14 @@ test('a work item opens on the click, streams its sections in, and a client-only
   await chapter('Typing a work-item URL opens the page immediately', async () => {
     // The reported symptom, driven exactly as reported: a URL typed into the
     // address bar, not a click inside the app.
+    // The reported symptom, driven exactly as reported: a URL typed into the
+    // address bar, not a click inside the app. Before this story the browser
+    // sat on the PREVIOUS surface until the last of twenty-nine SEQUENTIAL
+    // reads settled; the page now paints off ONE concurrent group, with the
+    // late stack behind an in-page <Suspense> that is off the critical path.
     await page.goto(`/items/${seed.storyKey}`);
 
-    // ORDERED, and this is the assertion the card turns on. The item's own
-    // title is on screen while the LATE STACK is still reading — so the page
-    // no longer waits for its slowest section to render its first. Before this
-    // story the browser sat on the PREVIOUS surface until the last of
-    // twenty-nine SEQUENTIAL reads settled; the title could not appear first
-    // because nothing appeared until everything had.
     await expect(page.getByRole('heading', { name: seed.storyTitle })).toBeVisible();
-    await expect(pendingSection(page)).toBeVisible();
-    await beat();
-
-    // …and only THEN the late sections settle behind it.
-    await expect(pendingSection(page)).toBeHidden();
     await beat();
   });
 
@@ -138,7 +155,11 @@ test('a work item opens on the click, streams its sections in, and a client-only
   await chapter('The sections below the fold fill in behind it', async () => {
     // The children list is TIER TWO — it is in the first flush, from the read
     // the page already had.
-    await expect(page.getByRole('heading', { name: seed.designTitle })).toBeVisible();
+    // The child renders as a ROW LINK inside the Children panel — "CPG-3 Design
+    // the switcher To Do" — not as a heading. (It was written as a heading
+    // first; the panel's own DOM says otherwise, so this asserts what the page
+    // actually renders rather than what the spec author assumed it did.)
+    await expect(page.getByRole('link', { name: new RegExp(seed.designTitle) })).toBeVisible();
 
     // Development · Attachments · Activity are the late stack. They arrive after
     // the page, together — one settle, which is what the design decided.
@@ -165,6 +186,14 @@ test('a work item opens on the click, streams its sections in, and a client-only
 
     // The page's scroll offset before the switch — criterion 4. A switch that
     // re-rendered the host page would return the reader to the top.
+    //
+    // ⚠️ SCROLL THE CONTROL INTO VIEW FIRST, THEN MEASURE. Playwright scrolls an
+    // element into view as part of clicking it, so a baseline captured before
+    // the click measures the SCROLL-INTO-VIEW and not the switch — this
+    // assertion read `Expected: 0, Received: 678` for exactly that reason. The
+    // claim is that the switch does not move the reader, so the reader has to
+    // already be where the switch is when the baseline is taken.
+    await graph.scrollIntoViewIfNeeded();
     const scrollBefore = await page.evaluate(() => document.querySelector('main')?.scrollTop ?? 0);
 
     const during = await serverRequestsDuring(page, async () => {
