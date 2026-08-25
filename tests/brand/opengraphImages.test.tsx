@@ -62,7 +62,7 @@ describe('the fonts the cards are set in (§6)', () => {
     // `collect-build-traces.js` is skipped entirely under Turbopack, so on this
     // repo's build the key is inert and Turbopack's own tracer is what carries
     // the fonts — verified in the built
-    // `.next/server/app/(public)/explore/opengraph-image-*/route.js.nft.json`.
+    // `.next/server/app/(public)/explore/(square)/opengraph-image-*/route.js.nft.json`.
     // The assertion is kept because the key is the webpack-path safety net, and
     // a net with a wrong key in it is worse than no net. Do not read a green
     // result here as evidence the fonts shipped; read the `.nft.json`.
@@ -71,7 +71,12 @@ describe('the fonts the cards are set in (§6)', () => {
       .outputFileTracingIncludes;
     expect(includes).toBeDefined();
 
-    const built = ['/explore/opengraph-image-1br99b', '/p/[identifier]/opengraph-image-yrf2i5'];
+    // The trailing hash is ILLUSTRATIVE, and Next derives it — editing the image
+    // module changes it, and MOTIR-3491's move re-hashed the explore card from
+    // `-1br99b`. Only its PRESENCE is load-bearing here: it is what proves the
+    // key still matches a route Next has appended a hash to. Refresh a stale one
+    // from the `next build` route table rather than deleting it.
+    const built = ['/explore/opengraph-image-7g1in7', '/p/[identifier]/opengraph-image-yrf2i5'];
     for (const route of built) {
       const matching = Object.entries(includes!).filter(([key]) =>
         picomatch(key, { dot: true, contains: true })(route),
@@ -93,7 +98,11 @@ describe('the fonts the cards are set in (§6)', () => {
 
 describe('the explore card — the SECTION layout (§6)', () => {
   it('renders a real PNG at 1200 x 630', async () => {
-    const { default: route, size, alt } = await import('@/app/(public)/explore/opengraph-image');
+    const {
+      default: route,
+      size,
+      alt,
+    } = await import('@/app/(public)/explore/(square)/opengraph-image');
     expect(size).toEqual({ width: 1200, height: 630 });
     expect(alt).toBeTruthy();
     const png = await renderRoute(await route());
@@ -103,9 +112,9 @@ describe('the explore card — the SECTION layout (§6)', () => {
   }, 30_000);
 
   it('draws the real mark, not the ad-hoc M tile', async () => {
-    const mod = await import('@/app/(public)/explore/opengraph-image');
+    const mod = await import('@/app/(public)/explore/(square)/opengraph-image');
     const src = readFileSync(
-      join(process.cwd(), 'app/(public)/explore/opengraph-image.tsx'),
+      join(process.cwd(), 'app/(public)/explore/(square)/opengraph-image.tsx'),
       'utf8',
     );
     expect(src).toContain('WAVE_BAND_PATH');

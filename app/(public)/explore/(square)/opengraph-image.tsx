@@ -3,7 +3,17 @@ import { loadOgFonts, OG_FONT_FAMILY } from '@/app/_brand/ogFonts';
 import { BRAND_ACCENT_HEX, WAVE_BAND_PATH, WAVE_BAND_VIEW_BOX } from '@/components/brand/waveBand';
 
 // The generated OpenGraph share card for the project square (Story 6.13 ·
-// Subtask 6.13.6 · design Panel 4 — social/share image). A branded card: the
+// Subtask 6.13.6 · design Panel 4 — social/share image).
+//
+// ⚠️ IT LIVES BESIDE ITS PAGE, IN `(square)/`, AND MUST STAY THERE (MOTIR-3491).
+// A metadata image file is resolved for the page in its OWN segment — it is NOT
+// inherited by nested segments, which is why `explore/topic/[slug]` has never
+// carried this card. So when `page.tsx` moved into the `(square)` route group,
+// leaving this file at `explore/` silently dropped every `og:image` tag from
+// `/explore` while the image ROUTE went on serving a 200 — measured, in the
+// rendered HTML, not reasoned. The URL is unaffected by the group either way:
+// `normalizeAppPath` strips it, so this still serves `/explore/opengraph-image`
+// and `next.config.ts`'s font-tracing key still matches. A branded card: the
 // Motir lockup + the square headline + a one-line lede. Rendered server-side via
 // next/og. Inline hex is required here — this is an isolated raster surface
 // OUTSIDE the React/CSS token tree (ImageResponse can't read CSS vars), the one
