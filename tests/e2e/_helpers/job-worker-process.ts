@@ -70,6 +70,21 @@ export async function startJobWorker(): Promise<void> {
       // exactly what re-relaxes those seams for a production-mode test process,
       // and the worker is one. Found by running the spec, not by reading it.
       E2E_PROD_HARNESS: '1',
+      // ⚠️ AND THE EMAIL SINK, FOR THE SAME REASON ONE FLAG OVER (Bug MOTIR-3498).
+      // `playwright.config.ts` sets `EMAIL_PROVIDER: 'file'` on the **webServer
+      // only**. This is a THIRD process and inherits the RUNNER's env, which
+      // carries `EMAIL_OUTBOX_PATH` (set at config load) but not the provider —
+      // so every job the engine runs sent its mail through the dev-CONSOLE
+      // provider and the outbox never saw it. The failure is maximally quiet: the
+      // send succeeds, the ledger row reaches `succeeded`, the message is printed
+      // to this process's stdout, and `waitForEmail` times out having seen zero.
+      //
+      // Any webServer-only variable a JOB HANDLER reads has to be mirrored here.
+      // The worker runs the same app modules; it just is not the app server.
+      EMAIL_PROVIDER: 'file',
+      ...(process.env['EMAIL_OUTBOX_PATH']
+        ? { EMAIL_OUTBOX_PATH: process.env['EMAIL_OUTBOX_PATH'] }
+        : {}),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
