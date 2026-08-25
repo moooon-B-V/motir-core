@@ -33,6 +33,8 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `auto-drill.png`                          | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
 | `planning-origin-drill.mock.html`         | the **planning card DRILLS into the pre-plan stations** (MOTIR-2204): the phase card, the drilled station level, and the card's honest states |
 | `planning-origin-drill.png` / `.dark.png` | its full-page exports (light + dark — the station tiles' tier tints are checked in both)                                                      |
+| `root-non-epic-rows.mock.html`            | the ROOT level's **non-epic rows** (MOTIR-3493): the grouped node, the level it drills into, and a level cap that is visible                  |
+| `root-non-epic-rows.png`                  | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                                                              |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -1278,6 +1280,196 @@ Eleven three-file surfaces under `design/roadmap/`, sharing this `design-notes.m
 - **Planning card drills into the pre-plan stations** —
   `planning-origin-drill.mock.html` + `planning-origin-drill.png` +
   `planning-origin-drill.dark.png` (MOTIR-2204 / Story MOTIR-1755).
+- **The root level's non-epic rows** — `root-non-epic-rows.mock.html` +
+  `root-non-epic-rows.png` (MOTIR-3493, unblocking bug MOTIR-3490).
+
+## ⭐ The ROOT level's NON-EPIC rows (MOTIR-3493 — `root-non-epic-rows.mock.html`)
+
+The card this unblocks is **MOTIR-3490**, and it has two halves that look like one:
+a parentless `bug` draws on the road beside the epics, and the level read is
+capped at 200 rows sorted by key ascending, so overflow silently discards the
+**newest epics**. They are independent — grouping happens after the read, so it
+relieves none of the pressure on the cap — and this sheet answers both.
+
+**What the root level is today, measured not assumed.** `findProjectTreeLevel`
+builds its root predicate as `w."parentId" IS NULL` and nothing else — there is no
+kind predicate anywhere on that path — so every legal root draws. Only `subtask`
+is refused a root position (`prisma/sql/work_item_triggers.sql`), which leaves
+`epic | story | task | bug` all eligible. This spec's own §507 line, _"the full
+root level (every epic)"_, describes an assumption the code has never enforced.
+
+**Rendered before drawn.** Sheet 1 is the shipped `WorkItemNode` at
+`origin/main` 9b504a47, rendered from its own source with the real theme, not a
+stylised stand-in — and it changes the framing. A parentless bug that is READY
+takes the whole-card `--el-tint-mint` wash (MOTIR-1422), so the defect is not
+"a bug appears between two epics": on the opening canvas it is the **most
+prominent node on the road**.
+
+The seven decisions below are each a choice the code card would otherwise make
+silently. Every one has a disposition; none is left to be inferred.
+
+### DECISION 1 — the predicate is `parentId === null && kind !== 'epic'`
+
+MOTIR-3490 contradicts itself here, which is why this is decision one: its first
+acceptance criterion says the root draws no **`bug`** node beside the epics, while
+its fix direction says collapse every **non-`epic`** row into a _"Defects"_ node.
+Those group different sets.
+
+| root kind | grouped? | why                                                                                               |
+| --------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `epic`    | **no**   | The road IS the epics. This is the level's whole subject.                                         |
+| `bug`     | **yes**  | The case the card was filed for.                                                                  |
+| `task`    | **yes**  | A parentless task is on the road for the same reason a bug is — nobody put it under an epic.      |
+| `story`   | **yes**  | Same. A story with no epic is not a stop on the road; it is work that has not been placed on one. |
+
+**The predicate is on the KIND, not on the defect-ness**, because a bug-only rule
+leaves the story and task cases unhandled and re-opens this same defect the first
+time somebody files a parentless story. A rule that is total over the four legal
+root kinds cannot be outlived that way.
+
+**And the second conjunct is load-bearing — see decision 6.** `parentId === null`
+is what separates a row that is a root **of the tree** from one that is a root only
+because the sprint view re-rooted it.
+
+### DECISION 2 — the node's NAME is "Not in an epic", not "Defects"
+
+Rejected: **"Defects"**. It is false the moment a parentless `story` or `task`
+joins the group, and under decision 1 that is a normal state rather than an edge
+case. A label that has to be re-read every time the membership changes is a label
+that will eventually lie.
+
+**"Not in an epic"** states the one property every member shares, in the reader's
+words, and needs no vocabulary the product does not already have. It is also the
+crumb label (decision 4), so the door and the room say the same thing.
+
+### DECISION 3 — the card FACE is the shipped `WorkItemNode` box, minus three slots
+
+Rejected in turn: `GhostAnchor` (dashed red — it means _broken dependency_, and
+this is not a problem); `StationCard` (the pre-plan journey's language, a
+different domain); the wide plan-preview cluster (a summary of a whole tree, at
+360px — it would out-shout the epics it stands beside).
+
+So: the **same box** — `NODE_W × NODE_H`, `--radius-card`, `--el-border`,
+`--el-surface`, `--shadow-card` — with three substitutions, drawn slot by slot in
+sheet 6:
+
+- the **kind tile** loses its `--el-type-*` hue for a neutral `--el-muted` tile
+  carrying a `layers` glyph in `--el-text-secondary`. No kind backs this node, and
+  borrowing a kind's hue would say it IS that kind;
+- the **identifier** slot carries the **count** (`7 items`) in the same mono type.
+  It is what identifies the node, and there is no key to put there;
+- the **status pill** slot is **empty**, and the **progress meter** is **absent**.
+
+Those last two are the decision worth stating out loud. They are the two places a
+synthetic node is most tempted to say something — _"Mixed"_, _"7 open"_, a
+done/total bar — and each would be a claim about work the node does not own. The
+meter in particular means _"this container's own work is N% done"_, and the group
+is a drawer, not a unit of work: its members are unrelated to one another.
+
+### DECISION 4 — the drilled level is served from the read the canvas ALREADY made
+
+The members are in the root read already; grouping only decided where to draw
+them. So `loadLevel` intercepts the group's id and serves them from the cached
+level — **the same shape `ORIGIN_ID` already uses** for the pre-plan station
+level, and for the same reason: no work item backs the node, so asking the API
+for its children would ask for the children of an id it has never heard of.
+
+- **No second fetch, no new endpoint, no new wire field** — `RoadmapLevelItem`
+  already carries `kind` and `parentId`.
+- **Crumb label: "Not in an epic"** — supplied by the consumer as localized copy,
+  exactly as `originCrumbLabel` is.
+- **Each member renders unchanged** (sheet 3): its own status chip, kind tile,
+  ready wash, drill chevron where it has children, and the quick-view peek on
+  select. MOTIR-3490's second acceptance criterion is satisfied by reuse, not by
+  a new treatment.
+- **No empty state exists to draw.** The group node is emitted only when the
+  partition is non-empty, so the level it opens can never be empty. Recorded
+  because the absence of an empty state is otherwise indistinguishable from a
+  forgotten one.
+
+### DECISION 5 — it is NOT `decorative`
+
+`decorative` means _not a member of the level's work_, and its one effect is to be
+excluded from the count `autoDescendSingleParent` uses to ask whether a level
+offers the reader a **choice**. The planning-origin card is decorative because it
+is provenance drawn beside the road. This node is not: it holds real work, and
+drilling it is a real choice.
+
+**The cost, stated rather than discovered.** A single-epic project that acquires
+its first parentless row stops auto-descending — its root level now has two
+choices. That is correct, and it is the same verdict panel E already records for
+the negative case (_≥2 nodes → the choice is the user's_). Marking it decorative
+would auto-descend the reader **past** the group into the epic, hiding the
+unparented work on arrival — which is the silence this whole card exists to end.
+
+### DECISION 6 — SPRINT scope, and why the obvious rule is wrong there
+
+Sprint scope re-roots the level at the **topmost in-sprint members** — usually
+stories and subtasks, since their epic ancestors are not themselves committed. A
+`kind !== 'epic'` rule alone would therefore sweep nearly the whole sprint into
+one node.
+
+`parentId === null` is what keeps the two apart (sheet 5):
+
+- a **committed parentless defect** has no parent, so it groups — MOTIR-3490's
+  fifth acceptance criterion, satisfied;
+- a **committed member story** has an epic parent and is a root only of the sprint
+  VIEW, so it stays on the road. It is the sprint's actual work.
+
+In project scope the two conjuncts pick out the same set, so nothing changes
+there. The wire already carries `parentId`, so telling them apart costs nothing.
+
+### DECISION 7 — the truncated level says so, at EVERY level
+
+The cap is the sharper half of MOTIR-3490 and it is **not** addressed by anything
+above: `TREE_LEVEL_MAX_TAKE` is applied by the level read, before grouping can see
+a row. Today a level simply stops at 200, ordered by key ascending, so the rows it
+drops are the highest keys — the **most recently created epics** — with no cursor,
+no affordance and no error.
+
+**A truncated level draws a `+ N more` tile in its last cell** (sheet 4):
+`WorkItemNode`-sized, a dashed `--el-border-strong` edge on `--el-surface-soft`,
+reading `+ 47 more` over `Showing 200 of 247`, with a **Show all** action that
+re-reads the level unbounded.
+
+- **It is not a door.** A drill chevron would say there is a level behind it;
+  there is not — there is more of _this_ level.
+- **At every level, not only the root.** The cap is per-level, so an epic with 300
+  stories has the same silence.
+- **The number needs no cursor.** `countProjectTreeLevel` already exists beside
+  the level read, so this is one field on the level DTO, not a paging protocol.
+- **The sort is NOT changed.** Re-ordering the root read so the newest epics
+  survive would silently reorder the road for every project, to fix an overflow
+  almost none of them have. The tile makes the loss visible and Show all makes it
+  recoverable; that is enough, and it is less invasive.
+
+**The dashed edge is borrowed on purpose.** The onboarding init screen's
+plan-preview cluster already ends its epic strip with a dashed
+`+ N more epics` tile, so the canvas has a vocabulary for _there is more of this
+than is drawn_. The difference is `Show all`: that tile caps a preview
+deliberately, this one reports an overflow the reader must be able to escape.
+
+### The ACCESS PATH, and where the node sits
+
+The grouped node **is** the door to the unparented work, so both halves are drawn:
+the root canvas with the node among the epics (sheet 2) and the level behind it
+with its breadcrumb and Back (sheet 3).
+
+**Its position needs no code.** `deterministicLayout` already drops a node that
+takes part in no dependency edge into a separate band **below** the flow — its own
+comment names the case, _"a standalone bug"_. The group node has no edges, so it
+lands in that band by the shipped rule, and unlike the pinned planning-origin
+cluster it carries **no explicit `x` / `y`** and overrides nothing.
+
+### What this sheet does NOT decide
+
+The code card owns where the partition happens (`buildWorkItemLevel` is the
+obvious seat, since it already receives the level and builds the origin node
+beside it) and what the group node's synthetic id is. Those are build choices with
+no reader-visible consequence, and pinning them here would only invite the two
+files to drift.
+
+---
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean. (The
