@@ -174,10 +174,46 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 # trigger asks for a SUSTAINED reading and has therefore NOT fired — this is
 # recorded so the trigger has something to fire against, which for eleven days it
 # did not.
+# ⚠️ ONE `[[vm]]` PER PROCESS GROUP — and the split exists because WITHOUT it the
+# worker inherits the WEB TIER'S SIZE (MOTIR-3425's own cost check, 2026-08-25).
+#
+# A `[[vm]]` block with no `processes` key applies to EVERY group. So the moment
+# `[processes]` gained a `worker` entry, a worker machine became a
+# `shared-cpu-2x` / 2 GB — the same box as a web machine, sized for Next.js SSR
+# at a 390 MB resident set — at $11.83/mo, which is the cost of adding a THIRD
+# web machine to run a queue poller.
+#
+# MOTIR-3425 names that outcome as a stop condition in its own words: *"if the
+# machine size the process group inherits is larger than intended, stop and
+# re-scope rather than absorbing the spend silently."* It fired. This is the
+# re-scope.
 [[vm]]
-  size   = "shared-cpu-2x"
-  memory = "2gb"
-  cpus   = 2
+  size      = "shared-cpu-2x"
+  memory    = "2gb"
+  cpus      = 2
+  processes = ["app"]
+
+# The WORKER, sized on a MEASUREMENT rather than on a guess or on the web tier.
+#
+# MEASURED 2026-08-25, running the shipped bundle (`.worker/worker.mjs`, the same
+# artifact the Dockerfile stages) against a real Postgres, reading `/proc/<pid>/status`:
+#
+#   VmRSS  286 MB steady   ·   VmHWM (peak) 310 MB   ·   sampled every 5 s for 30 s
+#
+# ⚠️ THAT IS AN IDLE READING, and it is labelled as one. It sizes the BASELINE —
+# the bundle inlines Prisma and the whole service bag — and says nothing about a
+# worker executing several handlers at once. 1 GB gives ~3.3x headroom over the
+# idle peak, comparable to the app group's measured 4.9x (see the pool comment
+# above), which is the only defensible way to pick a number here.
+#
+# TRIGGER to revise: the first sustained memory reading from a worker under real
+# job load, taken from the platform. Until then this is a floor set on one
+# controlled measurement, not a capacity claim.
+[[vm]]
+  size      = "shared-cpu-1x"
+  memory    = "1gb"
+  cpus      = 1
+  processes = ["worker"]
 
 # ── What this file does NOT solve, and must not pretend to ──────────────────
 #
