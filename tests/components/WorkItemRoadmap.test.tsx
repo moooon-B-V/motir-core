@@ -662,6 +662,27 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     expect(within(screen.getByTestId('level-group-node')).getByText('1 item')).toBeTruthy();
   });
 
+  // The degenerate case the design's predicate assumed away, and which the shipped
+  // auto-drill suite already encoded: when EVERY row would group there is no road
+  // left to keep clear, so grouping would replace the whole roadmap with one grey
+  // box and put an extra hop in front of what used to be the first thing on screen.
+  it('does NOT group when the partition would take the WHOLE level', async () => {
+    stubRoot({
+      nodes: [
+        looseRow('S1', 'MOTIR-1', 'A parentless story', 'story'),
+        looseRow('B9', 'MOTIR-9', 'A parentless defect', 'bug'),
+      ],
+      edges: [],
+      offLevelBlockers: [],
+      levelTotal: 2,
+    });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+
+    expect(await screen.findByText('A parentless story')).toBeTruthy();
+    expect(screen.getByText('A parentless defect')).toBeTruthy();
+    expect(screen.queryByTestId('level-group-node')).toBeNull();
+  });
+
   it('leaves a level with no non-epic root untouched — no grouped node at all', async () => {
     stubRoot({ ...mixedRoot, nodes: [epic('E1', 'MOTIR-1', 'Epic one')] });
     render(<WorkItemRoadmap projectKey="MOTIR" />);

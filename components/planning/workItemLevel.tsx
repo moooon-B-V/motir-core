@@ -132,7 +132,27 @@ export function buildWorkItemLevel(
   const scope = opts.scope ?? 'project';
   // THE PARTITION (MOTIR-3490), computed BEFORE anything else reads the level,
   // because everything downstream depends on which rows are actually ON it.
-  const grouped = opts.groupNonEpicRoots === true ? wi.items.filter(isNotInEpicRow) : [];
+  // ⚠️ GROUPING MUST LEAVE SOMETHING ON THE ROAD. The point of the grouped node is
+  // that the opening canvas reads as "the work, and one door beside it" — so a
+  // partition that would take the WHOLE level is not tidying it, it is replacing
+  // the reader's entire roadmap with a single grey box and putting an extra hop in
+  // front of what used to be the first thing they saw.
+  //
+  // The design (`design/roadmap/design-notes.md`, decision 1) states the predicate
+  // over a row and assumes the epics standing beside it; this is that assumption
+  // made explicit. Two live cases need it, and the first is why the condition is
+  // NOT "the level has an epic":
+  //
+  //  - SPRINT scope re-roots at the topmost in-sprint members, and an epic is
+  //    almost never among them — so an epic-presence test would switch grouping
+  //    off for the whole sprint view and make MOTIR-3490's AC 5 unsatisfiable.
+  //    What matters there is that a committed MEMBER row remains on the road.
+  //  - A project with no epics at all (a fresh tree, the migrate population) would
+  //    otherwise collapse to one node. The shipped auto-drill suite already
+  //    encoded this expectation — its fixtures are parentless non-epic roots that
+  //    must still descend normally (MOTIR-1807).
+  const candidates = opts.groupNonEpicRoots === true ? wi.items.filter(isNotInEpicRow) : [];
+  const grouped = candidates.length < wi.items.length ? candidates : [];
   const groupedIds = new Set(grouped.map((i) => i.id));
   const onLevel = grouped.length > 0 ? wi.items.filter((i) => !groupedIds.has(i.id)) : wi.items;
 

@@ -245,7 +245,8 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    expect(roadmap).toEqual({ nodes: [], edges: [], offLevelBlockers: [] });
+    // `levelTotal` rides the same DTO (MOTIR-3490) — an empty level is `0 of 0`.
+    expect(roadmap).toEqual({ nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 });
   });
 
   it('case 6 — tenant gate is NOT bypassed by sprint scope', async () => {
