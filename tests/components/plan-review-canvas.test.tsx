@@ -584,3 +584,256 @@ describe('PlanReviewCanvas — a proposed dependency edge (bug MOTIR-3366)', () 
     expect(drawnEdges()).toHaveLength(1);
   });
 });
+
+// ── bug MOTIR-3439 — APPROVE re-keys the level the reviewer is standing on ────
+//
+// `materialize` re-keys every `add` to the work item it became
+// (`planReviewService`: `nodeId: item.workItemId ?? item.id`, MOTIR-3160), and
+// resolves each intra-plan `planItem:` ref through the same map — so a proposed
+// container's children stop pointing at its PlanItem id and start pointing at
+// its new cuid. Meanwhile `ProjectRoadmapCanvas` holds its drilled `focusId` and
+// its crumbs in mount-time state, deliberately (`initialTrail` is a seed, not a
+// controlled level), and `PlanDetail`'s approve is a `setState` re-render with no
+// `key` on the canvas.
+//
+// So the canvas was left focused on an id that names nothing: the roadmap read
+// returned an empty level, `proposalsAtLevel` matched nothing, and the reviewer
+// got `emptyDrilled` — "No items at this level" — in the same breath the rail
+// said the plan was approved.
+//
+// ⚠️ EVERY CASE HERE RE-RENDERS A MOUNTED CANVAS. A fresh mount on the approved
+// model already worked before the fix (`arrivalLevel` resolves the materialized
+// container), so a test that mounts twice passes on the broken code and proves
+// nothing. The bug lives in the transition, and so do these.
+describe('PlanReviewCanvas — the level survives APPROVE (bug MOTIR-3439)', () => {
+  const PARENT_ID = 'wi_parent';
+  const NEW_STORY_ID = 'wi_new_story';
+  const CHILD_A = 'wi_child_a';
+  const CHILD_B = 'wi_child_b';
+
+  /** Has the plan been approved? The roadmap read genuinely changes at approve. */
+  let materialized = false;
+
+  function approveStub() {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/work-items/peek') {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      const parentId = url.searchParams.get('parentId') ?? '__root__';
+      const levels: Record<string, unknown> = {
+        __root__: {
+          nodes: [
+            wireNode({
+              id: PARENT_ID,
+              kind: 'epic',
+              identifier: 'MOTIR-2200',
+              title: 'The Motir agent loop',
+              hasChildren: true,
+            }),
+          ],
+          edges: [],
+          offLevelBlockers: [],
+        },
+        // The container the plan proposes into — it gains the new story only
+        // once the plan is approved.
+        [PARENT_ID]: {
+          nodes: materialized
+            ? [
+                wireNode({
+                  id: NEW_STORY_ID,
+                  parentId: PARENT_ID,
+                  kind: 'story',
+                  identifier: 'MOTIR-500',
+                  title: 'The new story',
+                  hasChildren: true,
+                }),
+              ]
+            : [],
+          edges: [],
+          offLevelBlockers: [],
+        },
+        // The story's own level — it does not exist at all until approve.
+        ...(materialized
+          ? {
+              [NEW_STORY_ID]: {
+                nodes: [
+                  wireNode({
+                    id: CHILD_A,
+                    parentId: NEW_STORY_ID,
+                    identifier: 'MOTIR-501',
+                    title: 'The first subtask',
+                  }),
+                  wireNode({
+                    id: CHILD_B,
+                    parentId: NEW_STORY_ID,
+                    identifier: 'MOTIR-502',
+                    title: 'The second subtask',
+                  }),
+                ],
+                edges: [],
+                offLevelBlockers: [],
+              },
+            }
+          : {}),
+      };
+      const body = levels[parentId] ?? { nodes: [], edges: [], offLevelBlockers: [] };
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  /** A proposal under the committed container, carrying its trail. */
+  function under(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
+    return proposal({
+      parentNodeId: PARENT_ID,
+      parentIdentifier: 'MOTIR-2200',
+      parentTitle: 'The Motir agent loop',
+      parentKind: 'epic',
+      parentTrail: [{ id: PARENT_ID, identifier: 'MOTIR-2200', title: 'The Motir agent loop' }],
+      ...over,
+    });
+  }
+
+  /** The plan as REVIEWED: one story under the epic, two subtasks under it. */
+  const PENDING: PlanReviewItemDto[] = [
+    under({
+      planItemId: 'pi_story',
+      nodeId: 'pi_story',
+      kind: 'story',
+      title: 'The new story',
+      hasChildren: true,
+    }),
+    under({
+      planItemId: 'pi_a',
+      nodeId: 'pi_a',
+      parentNodeId: 'pi_story',
+      title: 'The first subtask',
+    }),
+    under({
+      planItemId: 'pi_b',
+      nodeId: 'pi_b',
+      parentNodeId: 'pi_story',
+      title: 'The second subtask',
+    }),
+  ];
+
+  /** …and as APPROVED: every `add` re-keyed to the work item it became. */
+  const APPROVED: PlanReviewItemDto[] = [
+    under({
+      planItemId: 'pi_story',
+      nodeId: NEW_STORY_ID,
+      identifier: 'MOTIR-500',
+      kind: 'story',
+      title: 'The new story',
+      hasChildren: true,
+      status: 'todo',
+    }),
+    under({
+      planItemId: 'pi_a',
+      nodeId: CHILD_A,
+      identifier: 'MOTIR-501',
+      parentNodeId: NEW_STORY_ID,
+      title: 'The first subtask',
+      status: 'todo',
+    }),
+    under({
+      planItemId: 'pi_b',
+      nodeId: CHILD_B,
+      identifier: 'MOTIR-502',
+      parentNodeId: NEW_STORY_ID,
+      title: 'The second subtask',
+      status: 'todo',
+    }),
+  ];
+
+  function mountPending() {
+    return render(
+      <PlanReviewCanvas items={PENDING} projectKey="MOTIR" version={0} outcome={null} />,
+    );
+  }
+
+  /** What `PlanDetail` does on approve: refetch → new items + a version bump.
+   *  A RE-RENDER of the mounted canvas — never a remount, which is the whole
+   *  point (`PlanDetail` mounts `PlanReviewCanvas` with no `key`). */
+  function approve(view: ReturnType<typeof mountPending>) {
+    materialized = true;
+    view.rerender(
+      <PlanReviewCanvas items={APPROVED} projectKey="MOTIR" version={1} outcome="accepted" />,
+    );
+  }
+
+  beforeEach(() => {
+    materialized = false;
+    approveStub();
+  });
+
+  it('draws the MATERIALIZED children on the level the reviewer was already on', async () => {
+    const view = mountPending();
+    // Arrival: drilled into the proposed story, its proposed subtasks on screen.
+    expect(await screen.findByText('The first subtask')).toBeTruthy();
+    expect(screen.getByText('The second subtask')).toBeTruthy();
+
+    approve(view);
+
+    // The same level, now holding the real cards — the RECORD Part VI says this
+    // pane becomes after a decision, not an empty room.
+    expect(await screen.findByText('MOTIR-501')).toBeTruthy();
+    expect(screen.getByText('MOTIR-502')).toBeTruthy();
+    expect(screen.queryByText('No items at this level')).toBeNull();
+  });
+
+  it('re-labels the proposed crumb with the KEY the container now has', async () => {
+    const view = mountPending();
+    const nav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    // `New · <title>` is right ONLY while the container has no key — a
+    // placeholder would assert a work item that does not exist (Part IX §1.3).
+    expect(within(nav()).getByText('New · The new story')).toBeTruthy();
+
+    approve(view);
+
+    // It has one now, so the crumb reads like every other committed crumb.
+    await screen.findByText('MOTIR-501');
+    expect(within(nav()).getByText('MOTIR-500 · The new story')).toBeTruthy();
+    expect(within(nav()).queryByText('New · The new story')).toBeNull();
+  });
+
+  it('leaves every crumb NAVIGABLE — a crumb click loads a level, not a dead id', async () => {
+    const view = mountPending();
+    await screen.findByText('The first subtask');
+    approve(view);
+    await screen.findByText('MOTIR-501');
+
+    const nav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    // Up to the committed parent, which now holds the story that was created…
+    fireEvent.click(within(nav()).getByText('MOTIR-2200 · The Motir agent loop'));
+    expect(await screen.findByText('MOTIR-500')).toBeTruthy();
+
+    // …and back down into it, by the ordinary drill. A crumb still carrying the
+    // PlanItem id would have re-loaded the same empty level instead.
+    selectNode(NEW_STORY_ID);
+    fireEvent.click(within(el(NEW_STORY_ID) as HTMLElement).getByTestId('drill-button'));
+    expect(await screen.findByText('MOTIR-501')).toBeTruthy();
+  });
+
+  it('does NOT move a reviewer who climbed AWAY from the arrival level before approving', async () => {
+    // The control that rules out "remount the canvas at approve": re-arriving
+    // would yank this reviewer back down to the story's level, and where the
+    // canvas sits is the user's, not the plan's (`initialTrail` is a seed).
+    const view = mountPending();
+    await screen.findByText('The first subtask');
+
+    const nav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    fireEvent.click(within(nav()).getByText('MOTIR-2200 · The Motir agent loop'));
+    await waitFor(() => expect(screen.queryByText('The first subtask')).toBeNull());
+
+    approve(view);
+
+    // Still on the parent's level: the story it gained is here, its subtasks are
+    // one drill away, and the breadcrumb has not regrown a crumb below this one.
+    expect(await screen.findByText('MOTIR-500')).toBeTruthy();
+    expect(screen.queryByText('MOTIR-501')).toBeNull();
+    expect(within(nav()).queryByText('MOTIR-500 · The new story')).toBeNull();
+  });
+});

@@ -881,3 +881,137 @@ describe('ProjectRoadmapCanvas', () => {
     });
   });
 });
+
+// ── `resolveHeldNode` — following a node the consumer RE-KEYS (bug MOTIR-3439) ─
+//
+// The canvas holds two things by node id — the drilled `focusId` and every crumb
+// — in mount-time state, because `initialTrail` is a SEED and a later prop must
+// not move the user. That is a contract about NAVIGATION. A consumer whose node
+// ids CHANGE under a mounted canvas (the plan detail, where approving re-keys
+// every proposal onto the work item it became) was not covered by it: the focus
+// went on pointing at an id that named nothing, the level loaded empty, and the
+// breadcrumb offered a crumb that could not navigate.
+//
+// These hold the prop's own contract, at the foundation, independently of the
+// plan surface that needs it.
+describe('ProjectRoadmapCanvas — resolveHeldNode', () => {
+  /** The tree, with E1 RE-KEYED to E1b and its level moved with it. */
+  const rekeyed: Record<string, RoadmapLevel> = {
+    __root__: { nodes: [node('E1b', 'Epic one', true), node('E2', 'Epic two')], deps: [] },
+    E1b: { nodes: [node('S1', 'Story one'), node('S2', 'Story two')], deps: [] },
+  };
+  const loadRekeyed = (parentId: string | null): Promise<RoadmapLevel> =>
+    Promise.resolve(rekeyed[parentId ?? '__root__'] ?? { nodes: [], deps: [] });
+
+  async function drillIntoE1() {
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Story one');
+  }
+
+  it('re-addresses the drilled level and its crumb when the id it holds changes', async () => {
+    const view = render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" reloadKey="v1" />,
+    );
+    await screen.findByText('Epic one');
+    await drillIntoE1();
+    const nav = () => screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(nav()).getByText('E1')).toBeTruthy();
+
+    // The consumer re-keys E1 → E1b and re-renders the SAME canvas. Without the
+    // resolver the canvas stays focused on `E1`, which `loadRekeyed` no longer
+    // knows, and the level goes empty.
+    view.rerender(
+      <ProjectRoadmapCanvas
+        loadLevel={loadRekeyed}
+        rootLabel="Roadmap"
+        reloadKey="v2"
+        resolveHeldNode={(id) => (id === 'E1' ? { id: 'E1b', label: 'E1b' } : null)}
+      />,
+    );
+
+    expect(await screen.findByText('Story one')).toBeTruthy();
+    expect(screen.queryByText('No items at this level')).toBeNull();
+    // The crumb moved with it — id AND label — so it still navigates.
+    expect(within(nav()).getByText('E1b')).toBeTruthy();
+    expect(within(nav()).queryByText('E1')).toBeNull();
+  });
+
+  it('leaves an id it does not recognise exactly where it is', async () => {
+    const view = render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" reloadKey="v1" />,
+    );
+    await screen.findByText('Epic one');
+    await drillIntoE1();
+
+    // A resolver that knows nothing about this id must not disturb the canvas —
+    // `null` is "not mine", not "clear it".
+    view.rerender(
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        rootLabel="Roadmap"
+        reloadKey="v2"
+        resolveHeldNode={() => null}
+      />,
+    );
+
+    expect(await screen.findByText('Story one')).toBeTruthy();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('E1'),
+    ).toBeTruthy();
+  });
+
+  it('SETTLES — an id it has already adopted is not re-adopted forever', async () => {
+    // The prop's idempotency requirement, held as a test rather than only as a
+    // comment: the canvas re-runs the resolver on the id it just took, so one
+    // that kept renaming would not converge. This resolver maps E1 → E1b and
+    // says nothing about E1b, which is the shape a `planItemId → nodeId` map has.
+    const resolve = vi.fn((id: string) => (id === 'E1' ? { id: 'E1b', label: 'E1b' } : null));
+    const view = render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" reloadKey="v1" />,
+    );
+    await screen.findByText('Epic one');
+    await drillIntoE1();
+
+    view.rerender(
+      <ProjectRoadmapCanvas
+        loadLevel={loadRekeyed}
+        rootLabel="Roadmap"
+        reloadKey="v2"
+        resolveHeldNode={resolve}
+      />,
+    );
+    await screen.findByText('Story one');
+
+    // It settled on E1b: every later call is asked about the id it already has,
+    // and none of them is asked about E1 again.
+    const calls = resolve.mock.calls.map(([id]) => id);
+    expect(calls).toContain('E1');
+    expect(calls.filter((id) => id === 'E1b').length).toBeGreaterThan(0);
+    expect(
+      within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('E1b'),
+    ).toBeTruthy();
+  });
+
+  it('does not MOVE the canvas — a re-key while the user is at the ROOT changes nothing', async () => {
+    const view = render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" reloadKey="v1" />,
+    );
+    await screen.findByText('Epic one');
+
+    view.rerender(
+      <ProjectRoadmapCanvas
+        loadLevel={loadRekeyed}
+        rootLabel="Roadmap"
+        reloadKey="v2"
+        resolveHeldNode={(id) => (id === 'E1' ? { id: 'E1b', label: 'E1b' } : null)}
+      />,
+    );
+
+    // Still the root level: the resolver re-addresses what the canvas HOLDS, and
+    // at the root it holds nothing. No crumb appears, no drill happens.
+    expect(await screen.findByText('Epic two')).toBeTruthy();
+    expect(el('S1')).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
+  });
+});
