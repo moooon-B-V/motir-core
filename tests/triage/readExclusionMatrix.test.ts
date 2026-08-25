@@ -369,12 +369,12 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
     ).length;
     expect(
       await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
-        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, null, tx),
+        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, null, null, tx),
       ),
     ).toBe(rootLevel);
     expect(
       await withWorkspaceServiceContext(m.fx.workspaceId, (tx) =>
-        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, m.epic, tx),
+        workItemRepository.countProjectTreeLevel(fx.projectId, fx.workspaceId, m.epic, null, tx),
       ),
     ).toBe(1); // only the normal child under the epic — the triage twin is excluded
   });

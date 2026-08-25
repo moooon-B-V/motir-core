@@ -215,7 +215,12 @@ describe('WorkItemRoadmap', () => {
         {
           id: 'T1',
           parentId: null,
-          kind: 'subtask',
+          // An EPIC, so it stays on the road under MOTIR-3490's root grouping —
+          // this fixture's subject is the cross-story anchor, not the root's kind
+          // composition. (It was a parentless `subtask`, which the kind-parent
+          // trigger refuses at the root anyway: `prisma/sql/work_item_triggers.sql`
+          // admits only epic/story/task/bug there.)
+          kind: 'epic',
           identifier: 'MOTIR-5',
           title: 'Wire it',
           status: 'todo',
@@ -256,7 +261,12 @@ describe('WorkItemRoadmap', () => {
         {
           id: 'T1',
           parentId: null,
-          kind: 'subtask',
+          // An EPIC, so it stays on the road under MOTIR-3490's root grouping —
+          // this fixture's subject is the cross-story anchor, not the root's kind
+          // composition. (It was a parentless `subtask`, which the kind-parent
+          // trigger refuses at the root anyway: `prisma/sql/work_item_triggers.sql`
+          // admits only epic/story/task/bug there.)
+          kind: 'epic',
           identifier: 'MOTIR-5',
           title: 'Wire it',
           status: 'todo',
@@ -542,5 +552,278 @@ describe('WorkItemRoadmap', () => {
       await waitFor(() => expect(onRefreshSettled).toHaveBeenCalled());
       expect(await screen.findByText('Epic one')).toBeTruthy(); // same level, in place
     });
+  });
+});
+
+// ── MOTIR-3490 · the ROOT level's non-epic rows ──────────────────────────────
+// The roadmap's root read selects on `parentId IS NULL` and nothing else, so a
+// parentless bug/task/story drew on the road beside the epics; and the read is
+// capped at 200 key-ascending, so overflow dropped the NEWEST epics silently.
+// Design: `design/roadmap/root-non-epic-rows.*` (MOTIR-3493).
+describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
+  const epic = (id: string, key: string, title: string) => ({
+    id,
+    parentId: null,
+    kind: 'epic',
+    identifier: key,
+    title,
+    status: 'in_progress',
+    isDone: false,
+    hasChildren: true,
+  });
+  const looseRow = (id: string, key: string, title: string, kind: string) => ({
+    id,
+    parentId: null,
+    kind,
+    identifier: key,
+    title,
+    status: 'todo',
+    isDone: false,
+    hasChildren: false,
+  });
+
+  // Two epics on the road; a parentless bug AND a parentless task beside them.
+  const mixedRoot = {
+    nodes: [
+      epic('E1', 'MOTIR-1', 'Epic one'),
+      looseRow('B9', 'MOTIR-9', 'A parentless defect', 'bug'),
+      looseRow('T7', 'MOTIR-7', 'A parentless task', 'task'),
+      epic('E2', 'MOTIR-2', 'Epic two'),
+    ],
+    edges: [],
+    offLevelBlockers: [],
+    levelTotal: 4,
+  };
+
+  function stubRoot(body: unknown, extra?: (u: string) => unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+        const hit = extra?.(u);
+        if (hit) return { ok: true, json: async () => hit };
+        return { ok: true, json: async () => body };
+      }),
+    );
+  }
+
+  it('draws no bug or task node beside the epics — they collapse into one grouped node', async () => {
+    stubRoot(mixedRoot);
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+
+    // The epics stay on the road.
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.getByText('Epic two')).toBeTruthy();
+
+    // Neither non-epic row is a sibling of them any more — this is AC 1.
+    expect(screen.queryByText('A parentless defect')).toBeNull();
+    expect(screen.queryByText('A parentless task')).toBeNull();
+
+    // Exactly one grouped node, carrying the COUNT of what it holds.
+    const group = screen.getByTestId('level-group-node');
+    expect(within(group).getByText('Not in an epic')).toBeTruthy();
+    expect(within(group).getByText('2 items')).toBeTruthy();
+  });
+
+  it('the grouped node drills in, revealing its rows with their own treatment (AC 2)', async () => {
+    stubRoot(mixedRoot);
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' }); // select
+    fireEvent.click(await screen.findByTestId('drill-button')); // Open → drill
+
+    // Both grouped rows are behind the door, as ordinary work-item nodes.
+    expect(await screen.findByText('A parentless defect')).toBeTruthy();
+    expect(screen.getByText('A parentless task')).toBeTruthy();
+    // And the epics are not — we are one level down.
+    expect(screen.queryByText('Epic one')).toBeNull();
+  });
+
+  it('serves the drilled level from the ALREADY-FETCHED root read — no second request', async () => {
+    stubRoot(mixedRoot);
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    const before = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+
+    // The rows were in the root read; grouping only decided where to draw them.
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
+  });
+
+  it('a single grouped row reads "1 item", not "1 items"', async () => {
+    stubRoot({ ...mixedRoot, nodes: [epic('E1', 'MOTIR-1', 'Epic one'), mixedRoot.nodes[1]] });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    expect(within(screen.getByTestId('level-group-node')).getByText('1 item')).toBeTruthy();
+  });
+
+  it('leaves a level with no non-epic root untouched — no grouped node at all', async () => {
+    stubRoot({ ...mixedRoot, nodes: [epic('E1', 'MOTIR-1', 'Epic one')] });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('level-group-node')).toBeNull();
+  });
+
+  // SPRINT SCOPE — the conjunct MOTIR-3490 did not anticipate (design decision 6).
+  // The sprint read re-roots the level at the topmost IN-SPRINT members, which are
+  // usually stories and subtasks. Grouping on `kind !== 'epic'` alone would have
+  // swept the sprint's own work into one node.
+  it('groups a committed parentless defect but NOT a re-rooted member story (AC 5)', async () => {
+    stubRoot({
+      nodes: [
+        // A root of the SPRINT VIEW only: it has a parent (an epic the sprint did
+        // not commit to), so it is the sprint's actual work and stays on the road.
+        {
+          id: 'S5',
+          parentId: 'E1',
+          kind: 'story',
+          identifier: 'MOTIR-5',
+          title: 'A committed member story',
+          status: 'in_progress',
+          isDone: false,
+          hasChildren: true,
+        },
+        // A root of the TREE: parentless, non-epic → grouped.
+        looseRow('B9', 'MOTIR-9', 'A committed parentless defect', 'bug'),
+      ],
+      edges: [],
+      offLevelBlockers: [],
+      levelTotal: 2,
+    });
+    render(<WorkItemRoadmap projectKey="MOTIR" scope="sprint" />);
+
+    expect(await screen.findByText('A committed member story')).toBeTruthy();
+    expect(screen.queryByText('A committed parentless defect')).toBeNull();
+    expect(within(screen.getByTestId('level-group-node')).getByText('1 item')).toBeTruthy();
+  });
+
+  it('keeps the dependency signal when an on-road epic is blocked by a grouped row', async () => {
+    stubRoot({
+      ...mixedRoot,
+      // E1 is blocked_by the parentless defect, which the partition just moved
+      // off-level. The flag must survive the move.
+      edges: [{ blockedId: 'E1', blockerId: 'B9' }],
+    });
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    // The ghost anchor NAMES the grouped blocker rather than showing an anonymous
+    // chip — the row was in hand, so its stub is built from it.
+    expect(screen.getByText('MOTIR-9')).toBeTruthy();
+  });
+});
+
+describe('a truncated level says so (MOTIR-3490 · AC 3)', () => {
+  const manyRoots = {
+    nodes: Array.from({ length: 3 }, (_, i) => ({
+      id: `E${i}`,
+      parentId: null,
+      kind: 'epic',
+      identifier: `MOTIR-${i}`,
+      title: `Epic ${i}`,
+      status: 'todo',
+      isDone: false,
+      hasChildren: true,
+    })),
+    edges: [],
+    offLevelBlockers: [],
+    // The read returned 3 of 250 — the cap dropped the rest, silently until now.
+    levelTotal: 250,
+  };
+
+  it('draws the "+ N more" tile with an honest Showing N of M', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/api/work-items/peek'))
+          return { ok: true, json: async () => PEEK };
+        return { ok: true, json: async () => manyRoots };
+      }),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    const tile = await screen.findByTestId('level-truncation-tile');
+    expect(within(tile).getByText('+ 247 more')).toBeTruthy();
+    expect(within(tile).getByText('Showing 3 of 250')).toBeTruthy();
+    expect(within(tile).getByText('Show all')).toBeTruthy();
+  });
+
+  it('renders NO tile when the level came back whole', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/api/work-items/peek'))
+          return { ok: true, json: async () => PEEK };
+        return { ok: true, json: async () => ({ ...manyRoots, levelTotal: 3 }) };
+      }),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic 0');
+    expect(screen.queryByTestId('level-truncation-tile')).toBeNull();
+  });
+
+  it('activating the tile re-reads the level with all=1, so every epic is reachable', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+        seen.push(u);
+        if (u.includes('all=1')) {
+          return {
+            ok: true,
+            json: async () => ({
+              ...manyRoots,
+              nodes: [
+                ...manyRoots.nodes,
+                {
+                  id: 'E250',
+                  parentId: null,
+                  kind: 'epic',
+                  identifier: 'MOTIR-250',
+                  title: 'The newest epic',
+                  status: 'todo',
+                  isDone: false,
+                  hasChildren: true,
+                },
+              ],
+              levelTotal: 4,
+            }),
+          };
+        }
+        return { ok: true, json: async () => manyRoots };
+      }),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    const tile = await screen.findByTestId('level-truncation-tile');
+    expect(seen.some((u) => u.includes('all=1'))).toBe(false); // not before it is asked for
+
+    fireEvent.keyDown(tile.closest('[data-node-id]')!, { key: 'Enter' });
+
+    // The epic the cap had been dropping is now on the canvas, and the tile is gone.
+    expect(await screen.findByText('The newest epic')).toBeTruthy();
+    expect(seen.some((u) => u.includes('all=1'))).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId('level-truncation-tile')).toBeNull());
+  });
+
+  it('does not forward the tile activation to onSelect — it is not a work item', async () => {
+    const onSelect = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/api/work-items/peek'))
+          return { ok: true, json: async () => PEEK };
+        return { ok: true, json: async () => manyRoots };
+      }),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" onSelect={onSelect} />);
+    const tile = await screen.findByTestId('level-truncation-tile');
+    fireEvent.keyDown(tile.closest('[data-node-id]')!, { key: 'Enter' });
+    expect(onSelect).not.toHaveBeenCalledWith('__level_more__');
   });
 });

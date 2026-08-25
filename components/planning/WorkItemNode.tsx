@@ -8,6 +8,7 @@ import {
   CircleDashed,
   CirclePlay,
   Flag,
+  Layers,
   MapPin,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -501,6 +502,122 @@ export function GhostAnchor({
           {t('elsewhere')}
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * The GROUPED node for a root level's NON-EPIC rows (MOTIR-3490; design
+ * `design/roadmap/root-non-epic-rows.*`, decisions 2 and 3).
+ *
+ * The roadmap's root level has never had a notion of KIND — `findProjectTreeLevel`
+ * selects on `parentId IS NULL` and nothing else — so a parentless bug, task or
+ * story drew on the road beside the epics. This node is where they go instead: one
+ * door, and the road stays the epics.
+ *
+ * It reuses {@link WorkItemNode}'s BOX exactly — same `NODE_W`/`NODE_H`, same
+ * `--radius-card` / `--el-border` / `--el-surface` / `--shadow-card` — because it
+ * sits on the same grid and must line up with its neighbours. Three slots differ,
+ * and each difference is a decision rather than an omission:
+ *
+ *  - the KIND TILE is neutral `--el-muted` behind a `layers` glyph, NOT an
+ *    `--el-type-*` hue: no kind backs this node, and borrowing one would say the
+ *    group IS that kind;
+ *  - the IDENTIFIER slot carries the COUNT, in the same mono type — it is what
+ *    identifies the node, and there is no `MOTIR-<n>` to put there;
+ *  - the STATUS PILL and the PROGRESS METER are ABSENT. Those are the two places
+ *    a synthetic node is most tempted to say something ("Mixed", "7 open", a
+ *    done/total bar) and each would be a claim about work this node does not own.
+ *    The meter in particular means "this container's own work is N% done", and the
+ *    group is a drawer, not a unit of work — its members are unrelated.
+ *
+ * Presentational: the consumer owns the partition and the drilled level.
+ */
+export function LevelGroupNode({ count }: { count: number }) {
+  const t = useTranslations('roadmap.canvas.group');
+  return (
+    <div
+      style={{ width: NODE_W, height: NODE_H }}
+      data-node-state="group"
+      data-testid="level-group-node"
+      aria-label={t('aria', { count })}
+      className="relative flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-3.5 shadow-(--shadow-card)"
+    >
+      {/* TOP ROW — no status pill (the group has none); the drill chevron alone,
+          in the slot every other node puts it in. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <ChevronRight
+            className="size-4 shrink-0 text-(--el-text-muted)"
+            aria-hidden="true"
+            data-testid="drill-affordance"
+          />
+        </div>
+      </div>
+      <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
+        <span
+          className="flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-muted)"
+          aria-hidden="true"
+        >
+          <Layers className="size-4 text-(--el-text-secondary)" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-(--el-text-secondary)">
+              {count === 1 ? t('countOne') : t('count', { count })}
+            </span>
+          </div>
+          <span
+            data-node-title
+            className="mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold text-(--el-text)"
+          >
+            {t('title')}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The TRUNCATION tile for a level the read could not return whole (MOTIR-3490;
+ * design decision 7).
+ *
+ * `TREE_LEVEL_MAX_TAKE` caps every level read at 200 rows under a key-ASCENDING
+ * sort, so overflow discarded the HIGHEST keys — the most recently created epics —
+ * with no cursor, no affordance and no error. The level simply stopped, and
+ * nothing on the canvas said so. This tile is the saying-so.
+ *
+ * It is deliberately NOT a door: a drill chevron would promise a level behind it,
+ * and what is behind it is more of THIS level. Activating it re-reads the level
+ * with the raised ceiling (`?all=1`), which is the "Show all" the design draws.
+ * The dashed `--el-border-strong` edge is the canvas's existing vocabulary for
+ * "there is more of this than is drawn" — the onboarding init screen's
+ * plan-preview cluster ends its epic strip the same way.
+ */
+export function LevelTruncationTile({ shown, total }: { shown: number; total: number }) {
+  const t = useTranslations('roadmap.canvas.more');
+  const remaining = Math.max(0, total - shown);
+  return (
+    <div
+      style={{ width: NODE_W, height: NODE_H }}
+      data-node-state="truncated"
+      data-testid="level-truncation-tile"
+      aria-label={t('aria', { shown, total })}
+      className="relative flex flex-col items-center justify-center gap-1.5 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-3.5"
+    >
+      <span className="text-sm font-semibold text-(--el-text-strong)">
+        {t('label', { count: remaining })}
+      </span>
+      <span className="text-xs text-(--el-text-secondary) tabular-nums">
+        {t('showing', { shown, total })}
+      </span>
+      {/* A LABEL, not a nested button. A control drawn inside a canvas card has to
+          fight the wrapper's keydown/drag handlers (notes.html #139); the canvas's
+          own activation is the affordance, exactly as it is for every other node. */}
+      <span className="mt-0.5 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-3 py-0.5 text-xs font-medium text-(--el-text-strong)">
+        {t('showAll')}
+      </span>
     </div>
   );
 }
