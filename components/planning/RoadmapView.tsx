@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { Goal, LayoutGrid, RefreshCw, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
@@ -21,16 +22,20 @@ import type { RoadmapScope } from '@/lib/planning/roadmapClient';
 // as the SINGLE SOURCE OF TRUTH (MOTIR-1549): `scope` is DERIVED from
 // `useSearchParams()` (`?scope=sprint` → sprint, anything else → the default project
 // scope) — never a one-shot `useState`. Switching scope writes the URL with
-// `router.push` (`scroll:false`, a clean `/roadmap` for the default scope), which
-// stacks a genuine browser-history entry AND re-renders this island with the new
-// `?scope=` — so a deep-link, a reload, AND browser Back/forward all resolve the right
-// scope (Back after a toggle returns to the previous scope's URL and view). The scope
-// change drives the refetch by REMOUNTING the canvas (its React `key={scope}`) so the
-// root re-loads in the new scope. It is NEVER a `router.refresh()` (the page-state
-// contract: the canvas is a client island seeded from its own fetch; the navigation
-// only moves the URL, the `key` drives the refetch). `router.push` is chosen over
-// `router.replace` deliberately: each toggle is a distinct history entry so Back works
-// — the standard behaviour for URL-addressable view state (the MOTIR-1549 fix). With
+// `shallowPush` (MOTIR-3434), which stacks a genuine browser-history entry AND
+// re-renders this island with the new `?scope=` — so a deep-link, a reload, AND
+// browser Back/forward all resolve the right scope (Back after a toggle returns to the
+// previous scope's URL and view). It was `router.push` until MOTIR-3434: the scope
+// change drives the refetch by REMOUNTING the canvas (its React `key={scope}`), NOT by
+// the navigation, so re-running the page's server reads produced nothing this body
+// uses — a round trip the reader waited on for no result. `history.pushState` writes
+// the same URL without it, and Next keeps `useSearchParams` in sync with it, so every
+// derivation below is untouched. It is NEVER a `router.refresh()` either (the
+// page-state contract: the canvas is a client island seeded from its own fetch; the
+// URL change only moves the URL, the `key` drives the refetch). A PUSH and not a
+// replace, deliberately: each toggle is a distinct history entry so Back works — the
+// standard behaviour for URL-addressable view state, and the MOTIR-1549 fix, which
+// exists precisely because this toggle once used a replace. With
 // no active sprint, the Active-sprint option renders the design's "No active sprint"
 // empty state in place; the toggle stays available and the default scope is unaffected.
 
@@ -62,7 +67,6 @@ export function RoadmapView({
   showPlanningOrigin,
 }: RoadmapViewProps) {
   const t = useTranslations('roadmap');
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // The URL is the single source of truth for scope (MOTIR-1549): derive it from
@@ -74,10 +78,10 @@ export function RoadmapView({
 
   // Mirror the chosen scope into the URL so the sprint roadmap is addressable:
   // `?scope=sprint` for the sprint scope, a clean `/roadmap` (no param) for the
-  // default project scope. A shallow `router.push` (`scroll:false`) — pushing a
-  // distinct history entry is what makes Back/forward restore the prior scope
-  // (MOTIR-1549); the resulting `?scope=` re-render both re-derives `scope` and (via
-  // the `key={scope}` remount below) drives the canvas refetch, not this navigation.
+  // default project scope. A `shallowPush` — pushing a distinct history entry is
+  // what makes Back/forward restore the prior scope (MOTIR-1549); the resulting
+  // `?scope=` re-render both re-derives `scope` and (via the `key={scope}` remount
+  // below) drives the canvas refetch, not any navigation.
   // A MANUAL REFRESH (MOTIR-1542): the header refresh control bumps `refreshSignal`,
   // which `WorkItemRoadmap` watches to drop its level cache and re-run the canvas's
   // per-level load IN PLACE (drill / breadcrumb / zoom preserved) — never the
@@ -90,12 +94,19 @@ export function RoadmapView({
     // A scope switch remounts the canvas and supersedes any in-flight refresh, so
     // clear the loading state (the remounted canvas won't fire onRefreshSettled).
     setRefreshing(false);
-    // Push (not replace) so the toggle is a distinct history entry — Back/forward then
-    // restores the prior scope (MOTIR-1549). The new `?scope=` re-derives `scope`; no
-    // local state to set (the URL is the source of truth).
-    router.push(next === 'sprint' ? `${pathname}?scope=sprint` : pathname, {
-      scroll: false,
-    });
+    // SHALLOW (MOTIR-3434). The canvas refetches on its `key={scope}` remount —
+    // the comment at the top of this file already said the navigation is not
+    // what drives it — so `router.push` was re-running the page's server reads
+    // to produce nothing the body uses. `shallowPush` writes the same URL
+    // without the round trip, and does not scroll (what the old `scroll: false`
+    // was asking for).
+    //
+    // Push (not replace) so the toggle is a distinct history entry — Back/forward
+    // then restores the prior scope (MOTIR-1549, which exists precisely because
+    // this toggle once used a replace). The new `?scope=` re-derives `scope`; no
+    // local state to set (the URL is the source of truth, and Next keeps
+    // `useSearchParams` in sync with `history.pushState`).
+    shallowPush(next === 'sprint' ? `${pathname}?scope=sprint` : pathname);
   };
 
   const handleRefresh = () => {

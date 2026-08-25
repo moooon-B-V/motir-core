@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { AlertTriangle, List, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -260,11 +261,18 @@ export function PlanDetail({
       if (next === pinnedDefaultView) params.delete(PLAN_VIEW_PARAM);
       else params.set(PLAN_VIEW_PARAM, next);
       const query = params.toString();
-      // `scroll: false` — switching a body must never yank the reader to the top
-      // of a pane they were already reading (`ChildPanel`'s own decision).
-      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      // SHALLOW (MOTIR-3434). BOTH bodies render from the `review` this island
+      // already holds in `useState`, so the server has nothing to say — and
+      // `router.push` here re-ran `/plans/[id]/page.tsx`'s seven awaits to
+      // render what was already in the browser. That round trip is the
+      // "clicking canvas or list doesn't go there immediately" this story was
+      // reported for. `shallowPush` writes the same URL without it, keeps the
+      // history entry so Back restores the previous view, and does not scroll —
+      // which is what the old `scroll: false` was asking for (a body must never
+      // yank the reader to the top of a pane they were already reading).
+      shallowPush(query ? `${pathname}?${query}` : pathname);
     },
-    [pathname, pinnedDefaultView, router, searchParams],
+    [pathname, pinnedDefaultView, searchParams],
   );
 
   const outcome: PlanItemOutcome | null =

@@ -830,6 +830,40 @@ fix at the group since MOTIR-2069.
   spinner on one manufactures a wait the reader would not have had. The design
   half of this rule is `design/shell/design-notes.md` § _THE SWITCH RULE_.
 
+### URL state the CLIENT reads is written with `shallowPush`
+
+**A URL that only the client reads is written with `shallowPush`
+(`lib/navigation/shallowUrl.ts`). `router.push` is for a URL change the SERVER
+must answer.**
+
+`router.push` re-runs the whole Server-Component page. That is right when the
+destination body needs data the browser does not have — a different query, a
+different page of results, a server-computed series. It is pure cost when the
+body is already in the browser and the URL is only there so a deep link, a
+reload and Back/forward agree. Three view toggles were paying it (MOTIR-3434):
+the plan detail's Canvas/List re-ran seven awaits, and the item page's Children
+List/Graph re-ran twenty-nine, to render something already on screen.
+
+- ✅ **`shallowPush(href)`** for a view toggle, a peek, a panel mode — anything
+  whose target body is already rendered or fetches itself client-side. Next
+  syncs `usePathname` / `useSearchParams` with `history.pushState`, so every
+  `searchParams.get(...)` derivation keeps working untouched.
+- ✅ **Keep the history entry.** `shallowPush`, not `shallowReplace`, unless the
+  URL genuinely should not be somewhere Back returns to. MOTIR-1549 was filed
+  because the roadmap toggle used a replace and Back stopped restoring the scope.
+- ✅ **`router.push` stays** where the server must answer: `/items`' tree ↔ list,
+  the plans list's status tabs, the item page's activity tabs, every report
+  control, and any change of ROUTE.
+- ❌ **No pending affordance on a shallow switch** — no spinner, no disabled
+  segment, no skeleton, no dim. There is nothing to wait for, and drawing a wait
+  manufactures one. The visual half of this rule is
+  `design/shell/design-notes.md` § _THE SWITCH RULE_, which draws the three
+  toggles at rest; the two homes cite each other.
+
+**The discriminator is not the control** — the same `Segmented` primitive serves
+both kinds — **it is whether the target body needs data the browser does not
+have.**
+
 **The gate is unaffected by a group boundary and structurally cannot be:** a
 group's `layout.tsx` awaits its session and redirects before it renders
 `children`, and a `loading.tsx` is a fallback for the children — so an
