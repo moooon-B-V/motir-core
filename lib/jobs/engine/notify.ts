@@ -76,7 +76,31 @@ export async function listenForQueuedJobs(
 ): Promise<JobQueueListener> {
   const log = opts?.logger ?? console;
   const reconnectMs = opts?.reconnectMs ?? 5_000;
-  const connectionString = opts?.connectionString ?? process.env['DATABASE_URL'];
+  // ⚠️ THE UNPOOLED URL, and it is the paragraph above carried ONE LAYER OUT.
+  // `LISTEN` binds to a SESSION that must stay open — which is precisely what a
+  // TRANSACTION-MODE POOLER will not give it: Neon's pooled endpoint (PgBouncer)
+  // hands the session back to its pool the moment the statement ends, so the
+  // subscription either is refused outright or is silently dropped. Prisma's pool
+  // and Neon's pooler break this connection for the same reason, one layer apart,
+  // and a dedicated `Client` on the POOLED url only solves the nearer half.
+  //
+  // ⚠️ THE SENDER STAYS POOLED, DELIBERATELY — do not "fix" `dispatcher.ts` to
+  // match. `NOTIFY` executes on a real backend and Postgres broadcasts
+  // SERVER-SIDE to every session holding a matching `LISTEN`; Neon's pooled and
+  // direct endpoints front the same compute, so a NOTIFY sent through the pooler
+  // reaches a listener on the direct endpoint. Only the LISTEN half needs a
+  // session of its own.
+  //
+  // ⚠️ IN PRODUCTION THIS URL IS THE OWNER ROLE (`rolbypassrls = true`; see
+  // `scripts/detectStrayDesignResults.mjs`). That is safe here ONLY because this
+  // client issues exactly one statement — the `LISTEN` below — and thereafter
+  // reads notifications. It must never be reused to query a table; a bypassing
+  // connection with no tenant context is the one thing RLS cannot protect.
+  //
+  // Falls back to `DATABASE_URL` for local dev and CI, where there is no pooler
+  // and the two variables name the same database.
+  const connectionString =
+    opts?.connectionString ?? process.env['DATABASE_URL_UNPOOLED'] ?? process.env['DATABASE_URL'];
 
   let client: Client | undefined;
   let stopped = false;
