@@ -260,7 +260,16 @@ describe('the degenerate levels (Part IX §L6)', () => {
 });
 
 describe('the OFF-LEVEL count (Part IX §L5)', () => {
-  it('reads `n/m` when the level holds fewer than the whole plan', async () => {
+  // ⚠️ AMENDED by bug MOTIR-3453, not rewritten. This asserted the literal
+  // `3/11` — and that string was the defect: the count was composed in JSX, so
+  // no catalogue could reach it, `zh` could never differ from `en`, and the
+  // parity gate could not see it because there was no key to be missing. Part IX
+  // §5 names the key AND its wording (`showChangesCount`, "{n} of {total}").
+  //
+  // What this case GUARDS is unchanged and is why it survives the amendment:
+  // that the control states the off-level share at all, and offers no way to
+  // reach the rest. Only the string it reads for has moved into the catalogue.
+  it('reads `{n} of {total}` when the level holds fewer than the whole plan', async () => {
     render(
       <ProjectRoadmapCanvas
         loadLevel={loadLevel}
@@ -273,13 +282,15 @@ describe('the OFF-LEVEL count (Part IX §L5)', () => {
     // The canvas is per-level and most of a spread plan is off-screen. The
     // control says so and offers no way to reach the rest — that is the list
     // view's job.
-    expect(within(toggle()).getByText('3/11')).toBeTruthy();
+    expect(within(toggle()).getByText('3 of 11')).toBeTruthy();
+    // …and the shape that shipped is gone, so a revert cannot pass this quietly.
+    expect(within(toggle()).queryByText('3/11')).toBeNull();
   });
 
   it('shows NO count when the level holds all of them', async () => {
     renderCanvas();
     await screen.findByText('A proposal');
 
-    expect(within(toggle()).queryByText(/\//)).toBeNull();
+    expect(within(toggle()).queryByText(/\bof\b/)).toBeNull();
   });
 });

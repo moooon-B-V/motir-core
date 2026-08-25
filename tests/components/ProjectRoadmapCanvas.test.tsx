@@ -1015,3 +1015,107 @@ describe('ProjectRoadmapCanvas — resolveHeldNode', () => {
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull();
   });
 });
+
+// ── `levelCaption` — Part IX §1.4's `lvlcap` slot (bug MOTIR-3453) ────────────
+//
+// A one-line statement ABOUT the level in view, which the design's mock draws
+// and the canvas never had. It is the consumer's to write — the foundation knows
+// it has nodes, not what kind of nodes they are — and it is NOT an empty state:
+// `emptyDrilled` speaks for a level with nothing on it, this speaks for a level
+// that has something on it worth explaining.
+describe('ProjectRoadmapCanvas — levelCaption', () => {
+  it('renders NOTHING when the consumer passes none — the four other consumers are untouched', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('level-caption')).toBeNull();
+  });
+
+  it('renders the caption the consumer supplies, over the level', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="Only this plan's cards" />);
+    await screen.findByText('Epic one');
+    expect(screen.getByTestId('level-caption').textContent).toBe("Only this plan's cards");
+  });
+
+  it('does NOT caption the level while the first read is still in flight', async () => {
+    // A caption over the spinner describes a level nobody can see yet.
+    let release!: (lvl: RoadmapLevel) => void;
+    const pending = new Promise<RoadmapLevel>((r) => {
+      release = r;
+    });
+    render(<ProjectRoadmapCanvas loadLevel={() => pending} levelCaption="Not yet" />);
+    expect(screen.queryByTestId('level-caption')).toBeNull();
+
+    await act(async () => {
+      release(levels.__root__!);
+    });
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.getByTestId('level-caption')).toBeTruthy();
+  });
+
+  it('clears the TOP BAND’s way — the breadcrumb on the left, the cluster on the right', async () => {
+    // Asserted on the STATE, not the offset: the offset is a `calc` off
+    // `--height-control` precisely so it tracks a style swap, and pinning its
+    // literal value here would forbid the thing that makes it correct.
+    const bare = render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="A caption" />);
+    await screen.findByText('Epic one');
+    // A canvas with NO chrome at all: the band is empty, so the caption has it.
+    expect(screen.getByTestId('level-caption').getAttribute('data-below-chrome')).toBeNull();
+    bare.unmount();
+
+    // The CLUSTER alone pushes it down — it is on the right, but a caption wide
+    // enough to reach the right edge would run under it.
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} levelCaption="A caption" searchable />);
+    await screen.findByText('Epic one');
+    expect(screen.getByTestId('level-caption').getAttribute('data-below-chrome')).toBe('true');
+    cleanup();
+
+    // …and so does the BREADCRUMB, once the canvas is drilled.
+    render(
+      <ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" levelCaption="A caption" />,
+    );
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('Story one');
+
+    expect(screen.getByTestId('level-caption').getAttribute('data-below-chrome')).toBe('true');
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeTruthy();
+  });
+});
+
+// ── `showChangesCount` — through the CATALOGUE, not composed in JSX (MOTIR-3453) ─
+//
+// This shipped as `{n}/{total}` built inline: a string no catalogue could reach,
+// so `zh` could never differ from `en` and the parity gate could not see it —
+// there was no key for it to find missing. Part IX §5 names the key AND its
+// wording, and "3 of 11" is also what a screen reader should say.
+describe('ProjectRoadmapCanvas — the Show-changes count is catalogue copy', () => {
+  const wide: RoadmapLevel = {
+    nodes: [node('A', 'a'), node('B', 'b'), node('C', 'c')],
+    deps: [],
+  };
+
+  it('reads "{n} of {total}" from the catalogue when the level holds part of the plan', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(wide)}
+        emphasis={{ ids: ['A', 'B', 'C'], total: 11, label: 'Show changes', emptyLabel: 'None' }}
+      />,
+    );
+    await screen.findByText('a');
+    // The en catalogue's real string, rendered — not a slash composed in JSX.
+    expect(screen.getByTestId('show-changes-toggle').textContent).toContain('3 of 11');
+    expect(screen.getByTestId('show-changes-toggle').textContent).not.toContain('3/11');
+  });
+
+  it('says nothing when the level holds the WHOLE plan — unchanged', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(wide)}
+        emphasis={{ ids: ['A', 'B', 'C'], total: 3, label: 'Show changes', emptyLabel: 'None' }}
+      />,
+    );
+    await screen.findByText('a');
+    expect(screen.getByTestId('show-changes-toggle').textContent).not.toContain('of');
+  });
+});
