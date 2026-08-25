@@ -838,6 +838,7 @@
       "global": "全局",
       "brandHome": "Motir — 前往工作台"
     },
+    "pageLoading": "页面加载中",
     "project": {
       "createFirst": "创建你的第一个项目",
       "emptyDescription": "项目用于归类你的工作项，并赋予它们类似ACME-1的标识。创建一个即可开始规划。",

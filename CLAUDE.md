@@ -791,6 +791,56 @@ of a story working, which a human then approves. The full rule is
 
 ---
 
+## ⚠️ Every route group carries a `loading.tsx` — open first, stream behind
+
+**EXTREMELY IMPORTANT: Next.js parks a navigation on the PREVIOUS surface until
+the destination's slowest `await` settles, unless a `loading.tsx` or a
+`<Suspense>` sits on the path. So every route group under `app/` carries a
+`loading.tsx` at the GROUP, and it renders `components/ui/PageSkeleton`.**
+
+A group boundary inverts the default: a route added later is open-first unless
+somebody works to make it otherwise. The alternative — a boundary per page, added
+as each one is complained about — is what left `app/(authed)` with 58 `page.tsx`
+files and two `loading.tsx` (MOTIR-3433), while `(planning)` had had the same
+fix at the group since MOTIR-2069.
+
+### The rules
+
+- ✅ **A group gets ONE `loading.tsx`**, rendering `PageSkeleton`. That is the
+  floor for every route under it.
+- ✅ **A route adds a NEARER `loading.tsx` only when its shape genuinely
+  differs** — a two-column detail page, a board of columns. Next uses the
+  closest boundary, so a nearer one simply wins.
+- ✅ **A nearer frame COMPOSES `PageSkeleton`, passing its body as `children`.**
+  The wrapper, the header block and the reveal are inherited, never re-declared.
+  Copying those three rows instead of composing them is the same drift as a
+  skeleton restating a table's columns — which is how `IssueTreeSkeleton` came
+  to be three columns and 272px behind the table it stands in for, for eighty
+  days, with its own comment promising it was in sync (MOTIR-3452).
+- ✅ **The reveal is the ONE `nav-pending-reveal` class** in `app/globals.css`:
+  mounted at 0, revealed at **120ms**, so a route resolving faster than that
+  never shows a frame. Reference it; never re-declare the delay. Two boundaries
+  revealing at two times is a flicker, not a courtesy.
+- ❌ **Never implement the delay with a timer** — no `useEffect`, no
+  `setTimeout`, no client state. It is a CSS `animation-delay`, so an abandoned
+  navigation cleans itself up when the element unmounts.
+- ❌ **Never put a pending affordance on a view switch that needs no server**
+  (the plan detail's Canvas/List, the item page's Children List/Graph, the
+  roadmap's scope). Those use `shallowPush` and their body is simply there; a
+  spinner on one manufactures a wait the reader would not have had. The design
+  half of this rule is `design/shell/design-notes.md` § _THE SWITCH RULE_.
+
+**The gate is unaffected by a group boundary and structurally cannot be:** a
+group's `layout.tsx` awaits its session and redirects before it renders
+`children`, and a `loading.tsx` is a fallback for the children — so an
+unauthenticated visitor is bounced, never shown a frame.
+
+`design/shell/navigation-pending.mock.html` + `design/shell/design-notes.md`
+§ _The navigation-pending grammar_ is the design of record: the frame block by
+block, the argument for 120ms, and the no-shift mapping.
+
+---
+
 ## ⚠️ Page state after a mutation — server refresh vs. client-island refetch
 
 **EXTREMELY IMPORTANT: a mutation made on a page MUST update EVERY surface it
