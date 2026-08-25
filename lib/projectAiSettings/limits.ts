@@ -39,3 +39,31 @@ export const AI_SPRINT_LENGTH_DAYS_MAX = 14;
 // formed id fails at the gateway with its own typed error.
 export const AI_PLANNER_MODEL_MAX_LENGTH = 100;
 export const AI_PLANNER_MODEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._:/-]*[A-Za-z0-9])?$/;
+
+// ── The "Record planning mistakes" default (Story MOTIR-3331 · MOTIR-3349) ────
+//
+// Unlike everything above, this is not a BOUND — it is the resolution of an
+// UNSET column, and it lives here because this is the one dependency-free module
+// both the server write path and the browser panel already import, and because a
+// second copy of this rule is exactly the failure it exists to prevent.
+//
+// `Project.aiRecordPlanningMistakes` is nullable with no database default: NULL
+// means "never written". EVERY reader — the mapper (MOTIR-3349), the job-envelope
+// producer (MOTIR-3350) — resolves it through `resolveRecordPlanningMistakes`, so
+// the "on when unset" rule is stated ONCE. That single point is the whole reason
+// a nullable column is safe here: a reader that forgot the `?? true` would switch
+// a project's capture off invisibly, which is the failure mode this setting can
+// least afford, so there is no `?? true` to forget at a call site.
+export const AI_RECORD_PLANNING_MISTAKES_DEFAULT = true;
+
+/**
+ * Resolve the stored `aiRecordPlanningMistakes` column to the effective setting.
+ *
+ * `null` (never written — including every row that predates the column) resolves
+ * to {@link AI_RECORD_PLANNING_MISTAKES_DEFAULT}, i.e. ON. Only an explicit
+ * `false` disables capture, which is what lets a consumer distinguish a project
+ * that switched the setting off from one that has never touched it at all.
+ */
+export function resolveRecordPlanningMistakes(value: boolean | null | undefined): boolean {
+  return value ?? AI_RECORD_PLANNING_MISTAKES_DEFAULT;
+}

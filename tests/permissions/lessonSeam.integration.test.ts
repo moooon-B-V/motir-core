@@ -142,17 +142,21 @@ function wireLesson(over: Record<string, unknown> = {}): Record<string, unknown>
  */
 function stubUpstream(handler: (url: string) => Response | Promise<Response>): {
   calls: string[];
+  /** The `RequestInit` of each call, so a WRITE's serialized body is readable. */
+  inits: RequestInit[];
 } {
   const calls: string[] = [];
+  const inits: RequestInit[] = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: unknown) => {
+    vi.fn(async (input: unknown, init?: unknown) => {
       const url = String(input);
       calls.push(url);
+      inits.push((init ?? {}) as RequestInit);
       return handler(url);
     }),
   );
-  return { calls };
+  return { calls, inits };
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -386,5 +390,145 @@ describe('4 · an upstream failure degrades the SECTION, not the PAGE', () => {
     stubUpstream(() => jsonResponse({ items: [] }));
     const page = await projectLessonsService.listLessons(s.projectId, s.adminCtx);
     expect(page.available).toBe(false);
+  });
+});
+
+// ─── 5 · THE WRITE SEAM (Story MOTIR-3331 · MOTIR-3360) ─────────────────────
+//
+// `addLesson` is the seam the `add_lesson` MCP tool adapts over, so everything
+// that must be true of the tool has to be true HERE — the tool holds no logic.
+// Three properties, each chosen for the same reason as the read seam's: the
+// natural way to write it passes under a broken implementation.
+//
+//   1. Refused BEFORE the upstream call, asserted as the CALL COUNT. A refusal
+//      that has already written a row upstream is not a refusal.
+//   2. The project comes from the SESSION, never a parameter — and there is no
+//      argument through which a caller could ask for a global lesson. That is a
+//      property of the signature, so the assertion is about what reaches the
+//      wire.
+//   3. The upstream's near-duplicate refusal reaches the caller INTACT, with the
+//      existing lesson's id and title. A generic "could not create" turns an
+//      actionable answer into a dead end.
+describe('5 · the write seam — gated first, tenant-scoped by construction', () => {
+  const INPUT = {
+    mistakeType: 'regular_planning',
+    title: 'Pin the repository on every card that ships code',
+    body: 'A card with no repository pinned goes to whichever checkout is first.',
+    why: 'It cost us a day in the billing epic.',
+    howToApply: 'Set the target repository before sealing the card.',
+  };
+
+  it('a project MEMBER is refused and motir-ai is never called', async () => {
+    const s = await buildScenario('write-member');
+    const upstream = stubUpstream(() => jsonResponse(wireLesson()));
+
+    await expect(
+      projectLessonsService.addLesson(s.projectId, s.memberCtx, INPUT),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    // The assertion this test exists for: no request went out. A check that ran
+    // AFTER the call would read identically from the thrown error.
+    expect(upstream.calls).toEqual([]);
+  });
+
+  it('a project VIEWER is refused and motir-ai is never called', async () => {
+    const s = await buildScenario('write-viewer');
+    const upstream = stubUpstream(() => jsonResponse(wireLesson()));
+
+    await expect(
+      projectLessonsService.addLesson(s.projectId, s.viewerCtx, INPUT),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(upstream.calls).toEqual([]);
+  });
+
+  it('a project ADMIN may write — so the gate is not simply refusing everyone', async () => {
+    const s = await buildScenario('write-admin');
+    const upstream = stubUpstream(() => jsonResponse(wireLesson(), 201));
+
+    const created = await projectLessonsService.addLesson(s.projectId, s.adminCtx, INPUT);
+
+    expect(created.title).toBe('A takeaway');
+    expect(upstream.calls).toHaveLength(1);
+    expect(upstream.calls[0]).toContain('/v1/lessons');
+  });
+
+  it('sends the ACTING project on the SERIALIZED body, and no scope field at all', async () => {
+    const s = await buildScenario('write-body');
+    const upstream = stubUpstream(() => jsonResponse(wireLesson(), 201));
+
+    await projectLessonsService.addLesson(s.projectId, s.ownerCtx, INPUT);
+
+    // Asserted on the serialized body, not the argument object: these field
+    // names are a cross-repo string agreement with no shared type, and
+    // `JSON.stringify` is the only form motir-ai ever sees.
+    const body = JSON.parse(upstream.inits[0]!.body as string) as Record<string, unknown>;
+    expect(upstream.inits[0]!.method).toBe('POST');
+    expect(body['coreProjectId']).toBe(s.projectId);
+    expect(body['coreWorkspaceId']).toBe(s.workspaceId);
+    expect(body['title']).toBe(INPUT.title);
+    // The wire names, as literals — motir-ai's `parseAddLessonBody` requires
+    // exactly these, and a rename on either side is a runtime validation error
+    // with no type error anywhere.
+    for (const key of ['coreOrganizationId', 'coreWorkspaceId', 'coreProjectId', 'mistakeType']) {
+      expect(Object.prototype.hasOwnProperty.call(body, key), key).toBe(true);
+    }
+    // NO SCOPE. There is no parameter for it, so there is nothing to validate —
+    // which is why this asserts on the wire rather than on a rejected input.
+    expect(Object.prototype.hasOwnProperty.call(body, 'scope')).toBe(false);
+  });
+
+  it('cannot be pointed at ANOTHER project — the project is the session’s', async () => {
+    const mine = await buildScenario('write-mine');
+    const theirs = await buildScenario('write-theirs');
+    const upstream = stubUpstream(() => jsonResponse(wireLesson(), 201));
+
+    // The caller holds `lesson:manage` on their OWN project and nothing on the
+    // other one. Passing the other project's id is refused by the same gate, and
+    // still before any request goes out.
+    await expect(
+      projectLessonsService.addLesson(theirs.projectId, mine.ownerCtx, INPUT),
+    ).rejects.toBeInstanceOf(Error);
+    expect(upstream.calls).toEqual([]);
+  });
+
+  it('the near-duplicate refusal reaches the caller with the existing id and title', async () => {
+    const s = await buildScenario('write-dup');
+    stubUpstream(() =>
+      jsonResponse(
+        {
+          type: 'about:blank',
+          title: 'conflict',
+          status: 409,
+          code: 'conflict',
+          detail:
+            'a lesson very like this one already applies to this project: les_existing — "Pin the repository"',
+        },
+        409,
+      ),
+    );
+
+    // It THROWS rather than degrading — a write that did not happen must never
+    // be answered as though it had.
+    const err = await projectLessonsService
+      .addLesson(s.projectId, s.ownerCtx, INPUT)
+      .then(() => null)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    // Both, intact, all the way out: the caller needs the id to retire the row
+    // and the title to tell whether rewording is the right answer.
+    expect(String((err as Error).message)).toContain('les_existing');
+    expect(String((err as Error).message)).toContain('Pin the repository');
+  });
+
+  it('an upstream OUTAGE throws rather than degrading — unlike the read', async () => {
+    const s = await buildScenario('write-outage');
+    stubUpstream(() => jsonResponse({ code: 'internal_error' }, 503));
+
+    // `listLessons` answers `available: false` on this. A write must not: the
+    // lesson was not recorded, and a quiet success is the one unacceptable
+    // answer.
+    await expect(
+      projectLessonsService.addLesson(s.projectId, s.ownerCtx, INPUT),
+    ).rejects.toBeInstanceOf(Error);
   });
 });

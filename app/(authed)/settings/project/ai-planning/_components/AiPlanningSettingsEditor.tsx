@@ -12,6 +12,7 @@ import {
   Info,
   Lock,
   Minus,
+  NotebookPen,
   PauseCircle,
   Plus,
   Sparkles,
@@ -50,14 +51,24 @@ import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 // write (assertCanManage), so `isAdmin` here only governs whether the edit
 // affordances render.
 //
-// Three cards, one shared footer on the LAST card governing the whole page's
-// dirty state — three decisions with different blast radius (when to expand ·
-// how to pack sprints · which model runs), and a project may want one without
-// the others:
+// FOUR cards, one shared footer on the LAST EDITABLE card governing the whole
+// page's dirty state — four decisions with different blast radius (when to
+// expand · how to pack sprints · which model runs · whether Motir writes down
+// what it got wrong), and a project may want one without the others:
 //   * Auto-plan          — aiAutoPlanEnabled + aiAutoPlanThreshold
 //   * AI sprint planning — aiSprintPlanningEnabled + aiSprintLengthDays
 //   * Planner            — aiGenerateExplanations (the Story-7.4 column
 //                          SURFACED here, never duplicated) + aiPlannerModel
+//   * Planning mistakes  — aiRecordPlanningMistakes (Story MOTIR-3331 ·
+//                          MOTIR-3352)
+//
+// ⚠️ THE FOOTER MOVED FROM `Planner` TO `Planning mistakes` (MOTIR-3352). The
+// rule is design-notes §4 as REFINED by §L3: the footer sits on the last
+// EDITABLE card. §L3 could say "which is the same card today, so nothing moves"
+// because the lessons DOOR it added is read-only — a Save button rendered
+// beneath a list would appear to govern the list. This card is editable, so it
+// is now the last one and the footer follows it. The door card still renders
+// BELOW this whole editor, from `page.tsx`, and is unaffected.
 //
 // A dependent control is present but DISABLED, never hidden (the reader sees
 // what the switch unlocks); its group's explanatory callout appears only when
@@ -97,6 +108,7 @@ interface WorkingSettings {
   sprintLengthDays: string;
   generateExplanations: boolean;
   plannerModel: PlannerModelChoice;
+  recordPlanningMistakes: boolean;
 }
 
 /** The persisted DTO → the panel's working state. */
@@ -108,6 +120,10 @@ function toWorking(dto: ProjectAiSettingsDto): WorkingSettings {
     sprintLengthDays: String(dto.aiSprintLengthDays),
     generateExplanations: dto.aiGenerateExplanations,
     plannerModel: plannerModelToChoice(dto.aiPlannerModel),
+    // Always a real boolean off the DTO — the mapper has already resolved the
+    // nullable column's "never written" state to ON (MOTIR-3349), so the panel
+    // never has to know the default.
+    recordPlanningMistakes: dto.aiRecordPlanningMistakes,
   };
 }
 
@@ -119,7 +135,8 @@ export function aiSettingsEqual(a: WorkingSettings, b: WorkingSettings): boolean
     a.sprintPlanningEnabled === b.sprintPlanningEnabled &&
     a.sprintLengthDays === b.sprintLengthDays &&
     a.generateExplanations === b.generateExplanations &&
-    a.plannerModel === b.plannerModel
+    a.plannerModel === b.plannerModel &&
+    a.recordPlanningMistakes === b.recordPlanningMistakes
   );
 }
 
@@ -151,6 +168,7 @@ export function AiPlanningSettingsEditor({
   settings,
   isAdmin,
   aiConfigured,
+  canViewLessons = false,
   pause = null,
 }: {
   projectKey: string;
@@ -158,6 +176,12 @@ export function AiPlanningSettingsEditor({
   settings: ProjectAiSettingsDto;
   isAdmin: boolean;
   aiConfigured: boolean;
+  /** Whether the actor may read this project's lessons (`lesson:view`,
+   *  MOTIR-3336) — the SAME gate the door card below the editor renders under
+   *  (design §L3). Governs only the explanation's "where to look" link;
+   *  defaults to `false` so a caller that has not resolved the permission shows
+   *  no link rather than a link that 403s. */
+  canViewLessons?: boolean;
   pause?: AutoPlanPauseView | null;
 }) {
   const t = useTranslations('settings');
@@ -222,6 +246,7 @@ export function AiPlanningSettingsEditor({
         aiSprintLengthDays: Number(next.sprintLengthDays),
         aiGenerateExplanations: next.generateExplanations,
         aiPlannerModel: choiceToPlannerModel(next.plannerModel),
+        aiRecordPlanningMistakes: next.recordPlanningMistakes,
       }),
     })
       .then(async (res) => {
@@ -389,11 +414,35 @@ export function AiPlanningSettingsEditor({
         </DependentField>
       </SettingsCard>
 
-      {/* ── Card 3 · Planner (+ the shared footer) ─────────────────────────── */}
+      {/* ── Card 3 · Planner ───────────────────────────────────────────────── */}
       <SettingsCard
         icon={<Bot className="size-[17px]" aria-hidden />}
         title={t('aiPlanning.planner.title')}
         subtitle={t('aiPlanning.planner.subtitle')}
+      >
+        {notConnected}
+
+        <SwitchRow
+          checked={working.generateExplanations}
+          onCheckedChange={(v) => patch({ generateExplanations: v })}
+          disabled={locked}
+          label={t('aiPlanning.planner.explanationsLabel')}
+          hint={t('aiPlanning.planner.explanationsHint')}
+        />
+
+        <PlannerModelField
+          value={working.plannerModel}
+          onChange={(v) => patch({ plannerModel: v })}
+          disabled={locked}
+          serverError={serverError?.field === 'aiPlannerModel' ? serverError.message : null}
+        />
+      </SettingsCard>
+
+      {/* ── Card 4 · Planning mistakes (+ the shared footer) ────────────────── */}
+      <SettingsCard
+        icon={<NotebookPen className="size-[17px]" aria-hidden />}
+        title={t('aiPlanning.lessonCapture.title')}
+        subtitle={t('aiPlanning.lessonCapture.subtitle')}
         footer={
           isAdmin ? (
             <div className="bg-(--el-surface-soft) border-(--el-border-soft) flex items-center justify-end gap-2.5 border-t px-(--spacing-card-padding) py-3.5">
@@ -426,19 +475,48 @@ export function AiPlanningSettingsEditor({
         {notConnected}
 
         <SwitchRow
-          checked={working.generateExplanations}
-          onCheckedChange={(v) => patch({ generateExplanations: v })}
+          checked={working.recordPlanningMistakes}
+          onCheckedChange={(v) => patch({ recordPlanningMistakes: v })}
           disabled={locked}
-          label={t('aiPlanning.planner.explanationsLabel')}
-          hint={t('aiPlanning.planner.explanationsHint')}
-        />
+          label={t('aiPlanning.lessonCapture.enableLabel')}
+          hint={t('aiPlanning.lessonCapture.enableHint')}
+          testId="ai-planning-record-mistakes"
+        >
+          {/* ⚠️ ALWAYS RENDERED, unlike the guardrail / rationale callouts, which
+              appear only while their feature is live. Those explain a feature the
+              reader has switched ON; this one is how the reader decides in the
+              first place — and it is the only setting on this page whose subject
+              (Motir observing their planning work and keeping conclusions about
+              it) is not guessable from the label. Hiding it once the switch is
+              off would also hide the sentence about what turning it off costs
+              from the one reader who most needs it.
 
-        <PlannerModelField
-          value={working.plannerModel}
-          onChange={(v) => patch({ plannerModel: v })}
-          disabled={locked}
-          serverError={serverError?.field === 'aiPlannerModel' ? serverError.message : null}
-        />
+              `tint="plain"` deliberately: the three tinted slots are taken by the
+              guardrail, the rationale and the pause, and this is explanation, not
+              an alert. */}
+          <Callout
+            tint="plain"
+            icon={<Info className="size-[15px]" aria-hidden />}
+            testId="ai-planning-record-mistakes-explanation"
+          >
+            <span className="block">{t('aiPlanning.lessonCapture.explanation')}</span>
+            {/* Point five — WHERE TO LOOK, so the setting and the thing it
+                produces are one step apart. Gated on `lesson:view` exactly as the
+                door card below the editor is (design §L3): a link to a page the
+                reader cannot open is worse than no link. Hiding is presentation —
+                the destination guards itself server-side. */}
+            {canViewLessons ? (
+              <Link
+                href="/settings/project/ai-planning/lessons"
+                className="text-(--el-link) mt-2 inline-flex items-center gap-1 text-xs font-medium hover:underline"
+                data-testid="ai-planning-record-mistakes-lessons-link"
+              >
+                {t('aiPlanning.lessonCapture.viewLessons')}
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
+            ) : null}
+          </Callout>
+        </SwitchRow>
       </SettingsCard>
     </div>
   );

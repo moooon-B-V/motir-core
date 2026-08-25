@@ -16,7 +16,7 @@ import type { ProjectAiSettingsDto } from '@/lib/dto/projectAiSettings';
 // editor is a pure client consumer of the MOTIR-919
 // `PATCH /api/projects/[key]/ai-settings` endpoint, so we stub global fetch and
 // assert the design's states:
-//   (a) the three cards + their controls render with the design's copy, and the
+//   (a) the four cards + their controls render with the design's copy, and the
 //       explanation toggle (the Story-7.4 column) is SURFACED here;
 //   (b) a dependent control is present but DISABLED until its parent switch is
 //       on, and its explanatory callout appears only when the setting is live;
@@ -37,6 +37,9 @@ function dto(over: Partial<ProjectAiSettingsDto> = {}): ProjectAiSettingsDto {
     aiSprintLengthDays: 2,
     aiPlannerModel: null,
     aiGenerateExplanations: false,
+    // MOTIR-3349 — ON by default, resolved from a NULL column by the mapper, so
+    // the panel receives a real boolean and never re-derives the default.
+    aiRecordPlanningMistakes: true,
     ...over,
   };
 }
@@ -60,7 +63,12 @@ function pauseView(over: Partial<AutoPlanPauseView> = {}): AutoPlanPauseView {
 
 function mount(
   over: Partial<ProjectAiSettingsDto> = {},
-  props: { isAdmin?: boolean; aiConfigured?: boolean; pause?: AutoPlanPauseView | null } = {},
+  props: {
+    isAdmin?: boolean;
+    aiConfigured?: boolean;
+    canViewLessons?: boolean;
+    pause?: AutoPlanPauseView | null;
+  } = {},
 ) {
   return render(
     <AiPlanningSettingsEditor
@@ -69,6 +77,7 @@ function mount(
       settings={dto(over)}
       isAdmin={props.isAdmin ?? true}
       aiConfigured={props.aiConfigured ?? true}
+      canViewLessons={props.canViewLessons ?? true}
       pause={props.pause ?? null}
     />,
   );
@@ -80,6 +89,9 @@ const saveButton = () => screen.getByTestId('ai-planning-save') as HTMLButtonEle
 const autoPlanSwitch = () => screen.getByRole('switch', { name: 'Expand the plan automatically' });
 const sprintSwitch = () => screen.getByRole('switch', { name: 'Plan sprints with Motir' });
 const explanationsSwitch = () => screen.getByRole('switch', { name: 'Draft a why for each item' });
+const recordMistakesSwitch = () => screen.getByRole('switch', { name: 'Record planning mistakes' });
+const explanationText = () =>
+  screen.getByTestId('ai-planning-record-mistakes-explanation').textContent ?? '';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -102,17 +114,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('AiPlanningSettingsEditor — the three cards', () => {
-  it('renders auto-plan, AI sprint planning and planner, with the explanation toggle SURFACED here', () => {
+describe('AiPlanningSettingsEditor — the four cards', () => {
+  it('renders auto-plan, AI sprint planning, planner and planning mistakes, with the explanation toggle SURFACED here', () => {
     mount();
 
     expect(screen.getByText('Auto-plan')).toBeTruthy();
     expect(screen.getByText('AI sprint planning')).toBeTruthy();
     expect(screen.getByText('Planner')).toBeTruthy();
+    expect(screen.getByText('Planning mistakes')).toBeTruthy();
 
-    // Three enable switches — including the Story-7.4 `aiGenerateExplanations`
-    // column, which had no UI anywhere before this panel.
-    expect(screen.getAllByRole('switch')).toHaveLength(3);
+    // FOUR enable switches — the Story-7.4 `aiGenerateExplanations` column,
+    // which had no UI anywhere before this panel, plus the MOTIR-3331
+    // record-planning-mistakes switch.
+    expect(screen.getAllByRole('switch')).toHaveLength(4);
     expect(explanationsSwitch().getAttribute('aria-checked')).toBe('false');
 
     // The planner-model picker offers the SHIPPED model set (no invented names).
@@ -258,6 +272,7 @@ describe('AiPlanningSettingsEditor — save', () => {
       aiSprintLengthDays: 2,
       aiGenerateExplanations: false,
       aiPlannerModel: null, // the Default row CLEARS the override
+      aiRecordPlanningMistakes: true, // ON, and sent on every save
     });
     // Optimistic + reconciled: the footer settles back to not-dirty.
     await waitFor(() => expect(saveButton().disabled).toBe(true));
@@ -331,11 +346,11 @@ describe('AiPlanningSettingsEditor — read-only + not-connected states', () => 
     expect(screen.queryByTestId('ai-planning-save')).toBeNull();
   });
 
-  it('an unconnected deployment states the reason on ALL THREE cards, with no "Connect" CTA', () => {
+  it('an unconnected deployment states the reason on ALL FOUR cards, with no "Connect" CTA', () => {
     mount({}, { aiConfigured: false });
 
     const banners = screen.getAllByTestId('ai-planning-not-connected-banner');
-    expect(banners).toHaveLength(3);
+    expect(banners).toHaveLength(4);
     expect(banners[0]!.textContent).toContain("Motir AI isn't connected.");
     expect(banners[0]!.textContent).toContain('stay inactive until this deployment is connected');
     // Deliberately no in-app provisioning affordance — that route does not exist.
@@ -443,5 +458,133 @@ describe('AiPlanningSettingsEditor — the auto-plan PAUSED state (MOTIR-1740)',
     expect(body).toMatchObject({ aiAutoPlanEnabled: true, aiAutoPlanThreshold: 9 });
     // The banner is a server-derived state — a settings save does not clear it.
     expect(screen.getByTestId('ai-planning-paused-banner')).toBeTruthy();
+  });
+});
+
+// ─── Planning mistakes — the fourth card (Story MOTIR-3331 · MOTIR-3352) ─────
+// The copy is the deliverable here, so it is asserted as copy: the explanation
+// has to carry five specific things, and the one most likely to be dropped is
+// what turning the setting OFF costs, because it is the least flattering.
+//
+// The group also inherits the page's SAVE, which moved onto this card — it is
+// now the last EDITABLE one (design-notes §4 as refined by §L3), and the
+// read-only lessons door renders below the whole editor, from `page.tsx`.
+describe('AiPlanningSettingsEditor — planning mistakes (MOTIR-3352)', () => {
+  it('renders the group with its switch reflecting the stored value', () => {
+    mount();
+    expect(screen.getByText('Planning mistakes')).toBeTruthy();
+    expect(recordMistakesSwitch().getAttribute('aria-checked')).toBe('true');
+
+    cleanup();
+    mount({ aiRecordPlanningMistakes: false });
+    expect(recordMistakesSwitch().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('the explanation covers all FIVE points, in the product’s voice', () => {
+    mount();
+    const text = explanationText();
+
+    // 1. WHAT IS CAPTURED — the correction, and explicitly not their work items
+    //    or their code.
+    expect(text).toContain('the correction itself');
+    expect(text).toContain('not your work items and not your code');
+
+    // 2. WHERE IT GOES — this project only.
+    expect(text).toContain('stays with this project');
+    expect(text).toContain('never shared with any other');
+
+    // 3. WHAT IT DOES — later plans here are given the relevant ones.
+    expect(text).toContain('drafts later plans here');
+    expect(text).toContain('the same mistake is less likely twice');
+
+    // 4. WHAT TURNING IT OFF COSTS — the point a vague brief drops. Both halves:
+    //    no NEW ones are written, and the existing ones KEEP APPLYING.
+    expect(text).toContain('Turn this off');
+    expect(text).toContain('stops writing new ones down');
+    expect(text).toContain('keeps applying until you stop it');
+
+    // 5. WHERE TO LOOK — one step away, and it is a real link to the list.
+    const link = screen.getByTestId(
+      'ai-planning-record-mistakes-lessons-link',
+    ) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/settings/project/ai-planning/lessons');
+  });
+
+  it('says the same thing as the lessons surface where the two touch', () => {
+    // The design's own instruction (§L9): the setting's explanation and the
+    // lessons surface describe ONE mechanism and a reader meets them minutes
+    // apart. The shared vocabulary is what makes them read as one thing —
+    // "correction", and the verb "apply".
+    mount();
+    const hint = screen.getByText(/When a plan turns out to be wrong/).textContent ?? '';
+
+    // The lessons empty state opens with the same clause and the same verb.
+    expect(hint).toContain('When a plan turns out to be wrong');
+    expect(hint).toContain('Motir writes down the correction');
+    expect(hint).toContain('applies it to every plan it drafts for this project');
+  });
+
+  it('uses NO implementation noun — the vocabulary rule the design states', () => {
+    // §L9: not "lesson store", not "retired", not "scope", not "embedding", not
+    // "injection". A reader is told what happens, in words they already have.
+    mount();
+    const copy = `${explanationText()} ${screen.getByText('Planning mistakes').textContent}`;
+    for (const jargon of ['lesson store', 'corpus', 'retire', 'embedding', 'injection', 'scope']) {
+      expect(copy.toLowerCase()).not.toContain(jargon);
+    }
+  });
+
+  it('writes through the sparse PATCH when switched off', async () => {
+    mount();
+
+    fireEvent.click(recordMistakesSwitch());
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
+    expect(body['aiRecordPlanningMistakes']).toBe(false);
+    // The rest of the group rides along untouched — the panel saves the whole
+    // page, and the SERVER patch is what is sparse.
+    expect(body['aiGenerateExplanations']).toBe(false);
+  });
+
+  it('a non-admin cannot change it — the surface follows the server, it does not re-derive the rule', () => {
+    mount({}, { isAdmin: false });
+
+    expect((recordMistakesSwitch() as HTMLButtonElement).disabled).toBe(true);
+    // Disabled, never hidden: a reader who cannot change the setting is still
+    // entitled to know what it does with their project's planning work.
+    expect(explanationText()).toContain('the correction itself');
+    expect(screen.getByText('Only a project admin can change AI planning settings.')).toBeTruthy();
+  });
+
+  it('hides the "where to look" link from a reader who may not read the lessons', () => {
+    // The same `lesson:view` gate the door card renders under (design §L3). A
+    // link to a page that would 403 is worse than no link; the destination
+    // guards itself server-side either way.
+    mount({}, { canViewLessons: false });
+
+    expect(screen.queryByTestId('ai-planning-record-mistakes-lessons-link')).toBeNull();
+    // The other four points survive — only the pointer is withheld.
+    expect(explanationText()).toContain('Turn this off');
+  });
+
+  it('carries the page SAVE — it is now the last editable card', () => {
+    // §4 as refined by §L3: the footer sits on the LAST EDITABLE card, and this
+    // group is it. If it ever renders under `Planner` again, the read-only
+    // lessons door would sit between the last control and its Save button.
+    mount();
+
+    // One save button on the page, not one per card.
+    expect(screen.getAllByTestId('ai-planning-save')).toHaveLength(1);
+
+    // And it lives INSIDE this group's card: walk up from the Save button to the
+    // card that contains it and assert that card's heading is this one. A
+    // position check on the DOM is what pins the footer's owner — asserting only
+    // that a Save exists somewhere would pass with it still on `Planner`.
+    const owningCard = saveButton().closest('section, div[class*="rounded"]');
+    expect(owningCard?.textContent).toContain('Planning mistakes');
+    expect(owningCard?.textContent).not.toContain('Planner model');
   });
 });

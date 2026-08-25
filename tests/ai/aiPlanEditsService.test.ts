@@ -12,6 +12,15 @@ vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
 // nothing about the envelope they are here for. The real read is covered against
 // Postgres in `tests/ai/projectRepoContext.test.ts`.
 vi.mock('@/lib/ai/projectRepoContext', () => ({ resolveProjectRepoContext: vi.fn() }));
+// The record-planning-mistakes resolver (MOTIR-3350), mocked for the same reason
+// as the two above — it reads the project's settings row, and these cases drive a
+// SYNTHETIC ProjectContext with nothing behind it. The real read is covered
+// against Postgres in `tests/ai/lessonCapture.test.ts`; here the mock lets each
+// case state the SETTING and assert what reaches the envelope.
+vi.mock('@/lib/ai/lessonCapture', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/ai/lessonCapture')>()),
+  resolveRecordPlanningMistakesForJob: vi.fn(),
+}));
 vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/repositories/workItemRepository');
 // …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
@@ -29,6 +38,10 @@ import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
+import {
+  RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
+  resolveRecordPlanningMistakesForJob,
+} from '@/lib/ai/lessonCapture';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
@@ -97,6 +110,8 @@ beforeEach(() => {
   vi.mocked(resolveTenantOrg).mockResolvedValue(mockOrg);
   vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
   vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
+  // Default ON, which is what an untouched project resolves to (MOTIR-3349).
+  vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
   vi.mocked(plansService.createPlan).mockResolvedValue({ id: 'plan_1' } as PlanDto);
 });
 
@@ -481,5 +496,99 @@ describe('aiPlanEditsService.stream*', () => {
 
     expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
+  });
+});
+
+// ─── The record-planning-mistakes flag on the wire (MOTIR-3350) ──────────────
+// The producer half of a cross-repo contract with no shared type: motir-ai reads
+// the setting ONLY from `context.recordPlanningMistakes`, so a submit that omits
+// it is read on the far side as "old producer" and capture continues — the exact
+// failure a project that switched the setting off would experience, silently.
+//
+// Asserted on EVERY plan-edit submit for the same reason the explanations block
+// above is: a contextual turn submits as `augment` and motir-ai's scoping module
+// can resolve it INTO a re-plan, so a replan-only site would leave the hole one
+// path over.
+describe('aiPlanEditsService — the record-planning-mistakes flag rides every plan-edit envelope', () => {
+  // The WIRE STRING, written out rather than imported from the module under test.
+  // A test that took the key from the code would agree with itself about the name
+  // and prove nothing about the contract; motir-ai's fixture spells the same
+  // literal (MOTIR-3354).
+  const WIRE_KEY = 'recordPlanningMistakes';
+
+  const CASES: Array<{
+    name: string;
+    kind: string;
+    run: (c: ProjectContext) => Promise<{ jobId: string; planId: string }>;
+  }> = [
+    {
+      name: 'submitAugment',
+      kind: 'augment',
+      run: (c) => aiPlanEditsService.submitAugment('add a login flow', c),
+    },
+    {
+      name: 'submitContextual',
+      kind: 'augment',
+      run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
+    },
+    {
+      name: 'submitExpand',
+      kind: 'expand_item',
+      run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
+    },
+    {
+      name: 'submitReplan',
+      kind: 'replan',
+      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
+    },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const c of CASES) {
+    it(`${c.name} sends the flag as true for a project that has it on`, async () => {
+      vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
+
+      await c.run(ctx);
+
+      const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
+      expect(kind).toBe(c.kind);
+      expect((context as Record<string, unknown>)[WIRE_KEY]).toBe(true);
+    });
+
+    it(`${c.name} sends the flag as false — PRESENT, not omitted — when the project switched it off`, async () => {
+      vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(false);
+
+      await c.run(ctx);
+
+      const context = vi.mocked(submitJob).mock.calls[0]![2] as Record<string, unknown>;
+      // Strictly `false`, and the KEY is present. An omission is not a weaker
+      // form of `false` here — it is the OPPOSITE, because the consumer reads an
+      // absent field as "the producer predates this contract" and keeps
+      // capturing.
+      expect(context[WIRE_KEY]).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(context, WIRE_KEY)).toBe(true);
+    });
+
+    it(`${c.name} resolves the flag for the SUBMITTING project`, async () => {
+      await c.run(ctx);
+
+      expect(resolveRecordPlanningMistakesForJob).toHaveBeenCalledWith('pj_1', {
+        userId: 'user_1',
+        workspaceId: 'ws_1',
+      });
+    });
+  }
+
+  it('the exported constant IS the wire string — a rename fails here, not in production', () => {
+    // The call sites use the constant as a computed key, so this is what ties the
+    // one name in the code to the one name on the wire. If someone renames the
+    // constant's VALUE, every assertion above still passes (they read the literal)
+    // and this one fails, which is the intended blast radius.
+    expect(RECORD_PLANNING_MISTAKES_CONTEXT_FIELD).toBe(WIRE_KEY);
   });
 });

@@ -2597,6 +2597,14 @@
         "modelThorough": "深入",
         "modelFast": "快速"
       },
+      "lessonCapture": {
+        "title": "规划失误",
+        "subtitle": "当 Motir 起草的计划被证明有误时，它会做什么。",
+        "enableLabel": "记录规划失误",
+        "enableHint": "当一份计划被证明有误时，Motir 会记下这条纠正，并在之后应用到为本项目起草的每一份计划。",
+        "explanation": "记下的是纠正本身——不是你的工作项，也不是你的代码。它只留在本项目，绝不会与任何其他项目共享。之后在此起草计划时，Motir 会读取其中相关的内容，让同样的失误更不容易再次发生。关闭后，Motir 不再记录新的纠正；已经学到的内容会继续应用，直到你停用它。",
+        "viewLessons": "查看 Motir 学到的经验"
+      },
       "footer": {
         "save": "保存更改",
         "dirtyHint": "有未保存的更改",

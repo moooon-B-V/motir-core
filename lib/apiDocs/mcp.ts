@@ -579,6 +579,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',
   },
+  add_lesson: {
+    summary:
+      'Record a lesson for this project, so later plans for it are given the lesson. This project only.',
+    descriptionFingerprint: '0089c4f1139f',
+  },
   expand_item: {
     summary:
       "Submit an AI expansion of one container item. Spends the owner's credits; proposals await approval.",

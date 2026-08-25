@@ -1020,6 +1020,25 @@ model Project {
   /// in the settings panel means "back to the default" rather than "the empty
   /// model".
   aiPlannerModel                   String?               @map("ai_planner_model")
+  /// RECORD PLANNING MISTAKES — whether this project's planner writes down what
+  /// it got wrong (Story MOTIR-3331 · MOTIR-3349). When enabled, a planning run
+  /// that corrects itself captures a TENANT lesson for this project
+  /// (motir-ai's `lessonService.captureMistake`), which later plans for the same
+  /// project are given. The flag reaches motir-ai on the job envelope's context
+  /// (MOTIR-3350) — core config is never read across the repository boundary.
+  ///
+  /// ⚠️ NULLABLE WITH NO `@default`, and that is the whole design of this column.
+  /// NULL means "never written", and every reader resolves it through
+  /// {@link resolveRecordPlanningMistakes} to **true**. Two properties follow, and
+  /// a written `@default(true)` would have neither:
+  ///   * there is no backfill to miss — a row that predates this column reads as
+  ///     ON because NULL resolves to ON, not because a data step reached it; and
+  ///   * the "predates the field" case is CONSTRUCTIBLE in a test (set the column
+  ///     NULL), so the default is asserted rather than assumed.
+  /// The failure this rules out is the invisible one: a project whose capture is
+  /// silently off because nobody ever wrote its row. Only an explicit `false`
+  /// disables capture.
+  aiRecordPlanningMistakes         Boolean?              @map("ai_record_planning_mistakes")
   /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
   /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
   /// the first commit) or `motir` (created under Motir's org, recorded as
@@ -6154,7 +6173,6 @@ model CiContainerUsage {
   @@index([projectId])
   @@map("ci_container_usage")
 }
-
 
 /// WHAT ONE HANDLE'S SECONDS WERE SPENT ON, when the handle served more than one
 /// repo (Story MOTIR-3249 · Subtask MOTIR-3255).

@@ -59,6 +59,13 @@ export const EXEMPT_TOOLS = {
     'derive from a resource whose whole job is to describe an item. `score`, `coverage` and ' +
     '`outcome` have no v1 counterpart at all — no v1 operation exposes semantic search ' +
     '(MOTIR-3101).',
+  add_lesson:
+    'Returns the recorded LESSON (`id`, `title`, its three routing axes, `sourceRef`). The ' +
+    'lesson store lives in motir-ai and is reached over the 7.1 boundary; no `/api/v1` ' +
+    'operation returns a lesson at all — the only other reader is the AI-planning settings ' +
+    'surface, which consumes `ProjectLessonDTO` server-side and never over REST. So there is ' +
+    'no shared component to derive from, by architecture rather than by omission ' +
+    '(MOTIR-3361).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +

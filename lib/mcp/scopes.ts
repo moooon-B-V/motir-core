@@ -218,6 +218,12 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // card named rather than picked.
   claim_work_item: 'work_items:write',
   add_comment: 'work_items:write',
+  // `add_lesson` (MOTIR-3361). This legacy table records the 7.7.16 vocabulary,
+  // which has no lesson axis at all — the real gate is the PERMISSION
+  // (`lesson:manage`, in `toolPermissions.ts`). Filed under `work_items:write`
+  // as the nearest write bucket, exactly as `add_comment` is, rather than
+  // inventing a scope in a table this story deprecates.
+  add_lesson: 'work_items:write',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
   expand_item: 'work_items:write',

@@ -1,6 +1,10 @@
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import {
+  RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
+  resolveRecordPlanningMistakesForJob,
+} from '@/lib/ai/lessonCapture';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobKind, JobStreamEvent } from '@/lib/ai/types';
@@ -146,6 +150,16 @@ async function submitPlanEditJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // May this project's planner record what it got wrong (MOTIR-3350)? Resolved
+  // on THIS shared submit for exactly the reason the two lines above are: the
+  // anchor set makes the submitted kind only a FALLBACK, so a per-kind site would
+  // drop the flag on the contextual path — and a dropped flag here reads on the
+  // far side as "old producer", i.e. as ON, which is the wrong answer for a
+  // project that switched it off.
+  const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   const tenant = buildTenant(ctx, organizationId, isMeta);
   const { jobId } = await submitJob(
     kind,
@@ -170,6 +184,13 @@ async function submitPlanEditJob(
       // boolean column), no new config path; ALWAYS present, `false` when off,
       // exactly as the `generate_tree` submit sends it.
       generateExplanations: ctx.project.aiGenerateExplanations,
+      // ALWAYS present, `false` when off — never spread-conditionally like `code`
+      // and `repositories` below. Those two use absence to mean "this workspace
+      // has none"; here absence means "the producer predates the field" and the
+      // consumer reads it as ON, so omitting it when the setting is off would
+      // silently keep capturing. The key is the constant, not a literal: there is
+      // no shared type across the boundary and a typo is not a type error.
+      [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
       ...(code ? { code } : {}),
       ...(repositories ? { repositories } : {}),
     },

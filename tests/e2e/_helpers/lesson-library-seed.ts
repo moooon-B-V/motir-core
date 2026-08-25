@@ -3,6 +3,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
+import { workItemsService } from '@/lib/services/workItemsService';
 
 // Seed for the LESSON LIBRARY E2E (Story MOTIR-3329 · Subtask MOTIR-3340).
 //
@@ -41,6 +42,14 @@ export interface LessonLibrarySeed {
   workspaceId: string;
   projectId: string;
   projectKey: string;
+  /**
+   * A story to run a planning pass against (Subtask MOTIR-3353). The
+   * record-planning-mistakes walk has to PROVOKE a capture and then look at the
+   * store, and a planning pass needs something to be about — so the seam that
+   * already builds this project's people builds its one work item too, rather
+   * than the walk standing up a second harness beside it.
+   */
+  storyKey: string;
 }
 
 export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySeed> {
@@ -117,6 +126,11 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
     return email;
   }
 
+  const story = await workItemsService.createWorkItem(
+    { projectId: project.id, kind: 'story', title: 'A story a planning pass can correct' },
+    ownerCtx,
+  );
+
   return {
     adminEmail: await actor('admin'),
     memberEmail: await actor('member'),
@@ -125,5 +139,6 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
     workspaceId: workspace.id,
     projectId: project.id,
     projectKey: project.identifier,
+    storyKey: story.identifier,
   };
 }

@@ -125,6 +125,7 @@ export default async function ProjectAiPlanningPage() {
         settings={settings}
         isAdmin={canManage}
         aiConfigured={isMotirAiConfigured()}
+        canViewLessons={canViewLessons}
         pause={toPauseView(pause, (iso) => format.relativeTime(new Date(iso)))}
       />
 

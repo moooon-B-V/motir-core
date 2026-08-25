@@ -296,6 +296,16 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'leak?' },
+        // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
+        // key as not-found rather than write a standing planner instruction
+        // into somebody else's project.
+        add_lesson: {
+          projectKey: 'PROD',
+          title: 'leak?',
+          body: 'leak?',
+          why: 'leak?',
+          howToApply: 'leak?',
+        },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that
         // confirms it exists, and never a file landing in another workspace.
@@ -696,6 +706,16 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         change_kind: { key: item1, kind: 'task' },
         transition_status: { key: item1, status: 'in_progress' },
         add_comment: { key: item1, body: 'scoped comment' },
+        // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate rather
+        // than reaching motir-ai.
+        add_lesson: {
+          projectKey: 'PROD',
+          title: 'Pin the repository on every card that ships code',
+          body: 'A card with no repository pinned goes to whichever checkout is first.',
+          why: 'It cost a day in the billing epic.',
+          howToApply: 'Set the target repository before sealing the card.',
+        },
         // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
         // cross-tenant caller must read the key as not-found — never a 403 that
         // confirms it exists, and never a file landing in another workspace.

@@ -92,6 +92,9 @@ describe('GET /api/projects/[key]/ai-settings', () => {
       aiSprintLengthDays: 2,
       aiPlannerModel: null,
       aiGenerateExplanations: false,
+      // MOTIR-3349 — the one field that is ON by default, resolved from a NULL
+      // column rather than written to the row.
+      aiRecordPlanningMistakes: true,
     });
   });
 
@@ -138,6 +141,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiSprintLengthDays: 3,
       aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
+      aiRecordPlanningMistakes: false,
     });
 
     expect(res.status).toBe(200);
@@ -148,6 +152,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiSprintLengthDays: 3,
       aiPlannerModel: 'deepseek-v4-flash',
       aiGenerateExplanations: true,
+      aiRecordPlanningMistakes: false,
     });
 
     // Read back through the service — the write really landed on the columns.
@@ -174,6 +179,10 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiAutoPlanEnabled: false,
       aiGenerateExplanations: false,
       aiPlannerModel: null,
+      // MOTIR-3349: this field's OFF value is `false`, and its default is `true`
+      // — so a route that dropped falsy keys would make switching it off a
+      // silent no-op, the one direction that matters here.
+      aiRecordPlanningMistakes: false,
     });
 
     expect(res.status).toBe(200);
@@ -181,6 +190,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
       aiAutoPlanEnabled: false,
       aiGenerateExplanations: false,
       aiPlannerModel: null,
+      aiRecordPlanningMistakes: false,
     });
   });
 

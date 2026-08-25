@@ -1,0 +1,16 @@
+-- MOTIR-3349 — the "Record planning mistakes" setting, stored on the project.
+--
+-- NULLABLE, with NO DEFAULT, deliberately. NULL means "this project has never
+-- expressed a preference", and every reader resolves NULL to TRUE through
+-- `resolveRecordPlanningMistakes` (lib/projectAiSettings/limits.ts). So:
+--
+--   * every project that existed before this migration reads as ON, with no
+--     backfill step — there is no UPDATE here to miss rows, and no window in
+--     which a project's capture is off because nobody wrote its row; and
+--   * a test can CONSTRUCT the "predates the column" state (set it NULL) and
+--     assert the default, which a `NOT NULL DEFAULT true` column cannot express.
+--
+-- Only an explicit FALSE switches capture off. Adding a nullable column with no
+-- default is a metadata-only change in Postgres: no table rewrite, no lock held
+-- beyond the catalog update.
+ALTER TABLE "project" ADD COLUMN "ai_record_planning_mistakes" BOOLEAN;

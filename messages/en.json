@@ -2597,6 +2597,14 @@
         "modelThorough": "Thorough",
         "modelFast": "Fast"
       },
+      "lessonCapture": {
+        "title": "Planning mistakes",
+        "subtitle": "What Motir does when a plan it drafted turns out to be wrong.",
+        "enableLabel": "Record planning mistakes",
+        "enableHint": "When a plan turns out to be wrong, Motir writes down the correction and applies it to every plan it drafts for this project afterwards.",
+        "explanation": "What gets written down is the correction itself — not your work items and not your code. It stays with this project and is never shared with any other. Motir reads the relevant ones back as it drafts later plans here, so the same mistake is less likely twice. Turn this off and Motir stops writing new ones down; everything it has already learned keeps applying until you stop it.",
+        "viewLessons": "See what Motir has learned"
+      },
       "footer": {
         "save": "Save changes",
         "dirtyHint": "Unsaved changes",

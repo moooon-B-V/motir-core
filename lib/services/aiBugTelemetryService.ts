@@ -2,6 +2,10 @@ import 'server-only';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 import { submitJob } from '@/lib/ai/motirAiClient';
+import {
+  RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
+  resolveRecordPlanningMistakesForJob,
+} from '@/lib/ai/lessonCapture';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -123,10 +127,24 @@ export const aiBugTelemetryService = {
       projectKey,
     };
 
+    // May this project's planner record what it got wrong (MOTIR-3350)? An
+    // `analyze_bug` run reaches `captureMistake` directly (motir-ai's
+    // `handlers/analyzeBug.ts`), so it is a capture-capable kind and carries the
+    // flag exactly as the plan-edit submit does. Sent UNCONDITIONALLY, `false`
+    // included: on the far side an absent field means "old producer" and reads
+    // as ON.
+    const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(bug.projectId, {
+      userId: trigger.actorId,
+      workspaceId: trigger.workspaceId,
+    });
+
     const { jobId } = await submitJob(
       'analyze_bug',
       tenant,
-      { bugAnalysis },
+      {
+        bugAnalysis,
+        [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+      },
       { userId: trigger.actorId },
     );
     return { dispatched: true, jobId };

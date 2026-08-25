@@ -21,7 +21,8 @@ import type {
 // business logic over the AI configuration COLUMNS on `project`
 // (`aiAutoPlanEnabled` / `aiAutoPlanThreshold` / `aiSprintPlanningEnabled` /
 // `aiSprintLengthDays` / `aiPlannerModel`, plus the Story-7.4
-// `aiGenerateExplanations` the same panel surfaces).
+// `aiGenerateExplanations` and the MOTIR-3331 `aiRecordPlanningMistakes` the
+// same panel surfaces).
 //
 // Open-core by construction: these are ordinary project-settings columns the PM
 // core owns and reads (the cadence engine MOTIR-916, the sprint-packing persist
@@ -147,6 +148,7 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   aiSprintLengthDays?: number;
   aiPlannerModel?: string | null;
   aiGenerateExplanations?: boolean;
+  aiRecordPlanningMistakes?: boolean;
 } {
   const data: {
     aiAutoPlanEnabled?: boolean;
@@ -155,6 +157,7 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
     aiSprintLengthDays?: number;
     aiPlannerModel?: string | null;
     aiGenerateExplanations?: boolean;
+    aiRecordPlanningMistakes?: boolean;
   } = {};
 
   if (patch.aiAutoPlanEnabled !== undefined) data.aiAutoPlanEnabled = patch.aiAutoPlanEnabled;
@@ -163,6 +166,15 @@ function validateAiSettingsPatch(patch: UpdateProjectAiSettingsInput): {
   }
   if (patch.aiGenerateExplanations !== undefined) {
     data.aiGenerateExplanations = patch.aiGenerateExplanations;
+  }
+  // A plain boolean with no bound to check — and deliberately NOT normalized to
+  // the default here. `undefined` (absent) leaves the column alone, and an
+  // explicit `false` is what switches capture off; the "unset reads as ON" rule
+  // belongs to the READ path (the mapper), so a project that has never touched
+  // this setting keeps a NULL column rather than acquiring a written `true` the
+  // first time some other field in this group is saved (MOTIR-3349).
+  if (patch.aiRecordPlanningMistakes !== undefined) {
+    data.aiRecordPlanningMistakes = patch.aiRecordPlanningMistakes;
   }
 
   if (patch.aiAutoPlanThreshold !== undefined) {
