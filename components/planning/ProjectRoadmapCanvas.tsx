@@ -185,6 +185,33 @@ export interface ProjectRoadmapCanvasProps {
    * remounts on a `key`.
    */
   initialTrail?: readonly CanvasCrumb[];
+  /**
+   * FOLLOW a node the consumer RE-KEYS under a mounted canvas (bug MOTIR-3439).
+   *
+   * The canvas HOLDS two things by node id — its drilled `focusId` and every
+   * crumb — and holds them in mount-time state, which `initialTrail` above
+   * explains and is right about: where the canvas SITS is the user's, and a
+   * later prop must not move them. That contract is about NAVIGATION. This prop
+   * is about IDENTITY, which is a different thing and was not covered.
+   *
+   * A consumer whose node ids change under a mounted canvas — the plan detail is
+   * the one that does, because approving a plan re-keys every proposal to the
+   * work item it became (`planReviewService`, MOTIR-3160) — otherwise leaves the
+   * focus and the crumbs pointing at ids that name nothing: `loadLevel` resolves
+   * an empty level and the reader gets `emptyDrilled` on the level they were
+   * standing on. Given an id the canvas holds, return what that id is NOW
+   * (`{ id, label }`), or `null` for "not mine — leave it alone".
+   *
+   * It RE-ADDRESSES the level the canvas is already on and never MOVES it, so a
+   * user who navigated elsewhere before the re-keying stays exactly where they
+   * are. That is what makes this the right shape rather than a remount on a
+   * `key`, which would re-seed and yank them.
+   *
+   * ⚠️ MUST BE IDEMPOTENT: applied to the id it just returned, it must return
+   * that same id (or `null`). The canvas re-runs it after adopting a new id, and
+   * a resolver that keeps renaming would not settle.
+   */
+  resolveHeldNode?: (id: string) => CanvasCrumb | null;
 }
 
 // The suppression ref (below) is keyed by LEVEL; the root level has no id.
@@ -220,6 +247,7 @@ export function ProjectRoadmapCanvas({
   loadingFallback,
   emptyRoot,
   initialTrail,
+  resolveHeldNode,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
@@ -289,6 +317,29 @@ export function ProjectRoadmapCanvas({
   // our own descent path would otherwise descend forever, hanging the canvas rather
   // than failing visibly. Never descend into an ancestor; render the level instead.
   const crumbIdsRef = useRef<Set<string>>(new Set());
+
+  // ── FOLLOW a RE-KEYED node (bug MOTIR-3439) ─────────────────────────────────
+  //
+  // The `resolveHeldNode` contract, applied. It runs DURING RENDER — React's
+  // adjust-state-when-an-input-changes pattern, the same one `prevTargetSig`
+  // below uses — rather than in a `useEffect`, which the CI lint rule
+  // (`react-hooks/set-state-in-effect`) forbids and which would render one frame
+  // of the dead level first anyway.
+  //
+  // Only the ADDRESS changes: the level the canvas is on, the depth of the
+  // crumb stack and the user's place in it are all untouched, so this cannot
+  // move anybody. The load effect fires on the new `focusId` and reads the level
+  // the node became.
+  const remappedFocus = focusId !== null ? (resolveHeldNode?.(focusId) ?? null) : null;
+  if (remappedFocus !== null && remappedFocus.id !== focusId) setFocusId(remappedFocus.id);
+  const remappedCrumbs = resolveHeldNode
+    ? crumbs.map((crumb) => {
+        const next = resolveHeldNode(crumb.id);
+        return next && (next.id !== crumb.id || next.label !== crumb.label) ? next : crumb;
+      })
+    : crumbs;
+  if (remappedCrumbs.some((crumb, i) => crumb !== crumbs[i])) setCrumbs(remappedCrumbs);
+
   // The opt-in flag, held in a ref so the load effect stays keyed strictly on level
   // identity (`focusId` / `reloadKey`) — toggling the prop must not refetch a level.
   const autoDescendRef = useRef(autoDescendSingleParent);
@@ -340,6 +391,11 @@ export function ProjectRoadmapCanvas({
   useEffect(() => {
     loadLevelRef.current = loadLevel;
   }, [loadLevel]);
+  // Same reason, for the auto-descend suppression's level comparison below.
+  const resolveHeldNodeRef = useRef(resolveHeldNode);
+  useEffect(() => {
+    resolveHeldNodeRef.current = resolveHeldNode;
+  }, [resolveHeldNode]);
   // Mirror the crumb ids for the auto-descend's cycle guard (a ref, so the load
   // effect can read the current path without re-running on every crumb change).
   useEffect(() => {
@@ -406,10 +462,19 @@ export function ProjectRoadmapCanvas({
         // (`auto-drill.mock.html` panel E), and a pinned annotation is neither.
         const choices = lvl.nodes.filter((n) => n.decorative !== true);
         const only = choices.length === 1 ? choices[0] : undefined;
+        // The suppressed level is compared through `resolveHeldNode` as well: it
+        // is keyed by LEVEL, and a re-keyed level is the SAME level under a new
+        // address (bug MOTIR-3439), so a canvas that was told to stay put must
+        // not descend out of it just because its id moved. Resolved HERE, at read
+        // time, rather than rewritten when the focus is adopted — a ref may not
+        // be touched during render.
+        const suppressed = suppressedLevelRef.current;
+        const suppressedNow =
+          suppressed === null ? null : (resolveHeldNodeRef.current?.(suppressed)?.id ?? suppressed);
         if (
           autoDescendRef.current &&
           only?.drillable === true &&
-          suppressedLevelRef.current !== levelKey(focusId) &&
+          suppressedNow !== levelKey(focusId) &&
           !crumbIdsRef.current.has(only.id) // never descend back into an ancestor
         ) {
           applyDrill(only);
