@@ -24,6 +24,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
 | **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.              |
 | **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
+| **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the ROUTE-SHAPED pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card), and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design). Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                                                                                                                                               |
 
 ---
 
@@ -4966,3 +4967,127 @@ The pair is now measured rather than asserted: `tests/design-ink-contrast.test.t
 - The detail page — MOTIR-2413. This asset changes nothing there.
 - The modal's other content, the Development section's internals, and the rail's other fields.
 - Storage, dispatch and the completion rule — `docs/decisions/work-item-repository-set.md`.
+
+---
+
+## ⭐ The item page at ARRIVAL, and while it STREAMS (Story MOTIR-3430 · MOTIR-3432 — `detail-arrival.mock.html`)
+
+**What a reader sees between typing an `/items/<KEY>` URL and reading the item.** This folder already
+draws a loading state for many of the page's PARTS — comment rows, attachment tiles, custom-field
+rows, the quick-view's field skeleton, the tree and list tables — but nothing for the **page as a
+whole on arrival**, because until now the page did not exist until every read had settled. There was
+nothing to draw.
+
+**Asset ·** `detail-arrival.mock.html` / `detail-arrival.png`. **Cards ·** MOTIR-3432 draws it;
+MOTIR-3435 builds the boundary and makes the blocking reads concurrent; MOTIR-3436 moves the late
+regions behind their `<Suspense>`.
+
+### It COMPOSES the shell grammar; it does not redraw it
+
+The pulse vocabulary (`--el-muted` fills, element-semantic radii, `animate-pulse`, `aria-busy`) and
+the **120 ms reveal** are `design/shell/design-notes.md` § _The navigation-pending grammar_
+(MOTIR-3431). This asset references them and restates neither. Per that section's **nearer-boundary
+rule**, a route-shaped frame inherits the WRAPPER, the HEADER BLOCK and the REVEAL from the shared
+primitive and supplies only its BODY — so `/items/[key]`'s frame is `PageSkeleton` with the item
+page's own body passed in, never a second composition that can drift from it.
+
+What makes this frame route-shaped rather than generic is geometry the group frame cannot assume: the
+**eyebrow row** (type glyph · identifier · breadcrumb · right cluster), the **wide title**, the
+**`1fr / 18rem` split**, and the **rail's card**.
+
+### THE ALLOCATION — three tiers, and every region is in exactly one
+
+| region                                                                                      | tier                       | what it shows meanwhile                                           | already drawn?                                                                                                                                    |
+| ------------------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the eyebrow row's geometry · the title box · the two-column split · the rail card's outline | **with the FRAME**         | the frame's own pulse blocks                                      | the grammar is `design/shell/design-notes.md` § _The navigation-pending grammar_                                                                  |
+| type glyph · identifier · breadcrumb · title                                                | **with the FIRST CONTENT** | —                                                                 | —                                                                                                                                                 |
+| Description · Explanation                                                                   | **with the FIRST CONTENT** | —                                                                 | —                                                                                                                                                 |
+| Relationships + the ready / blocked badge                                                   | **with the FIRST CONTENT** | —                                                                 | —                                                                                                                                                 |
+| Children (list mode)                                                                        | **with the FIRST CONTENT** | —                                                                 | the switcher is `child-panel-graph.mock.html`; graph mode fetches its own level client-side                                                       |
+| the core-fields rail                                                                        | **with the FIRST CONTENT** | —                                                                 | custom-field rows: § _Custom fields on the detail rail_                                                                                           |
+| the roll-up points badge                                                                    | **late, IN PLACE**         | a chip-sized `--el-muted` slot at the settled width               | `ParentRollupBadge` already ships the lazy path — `initialTotal: undefined` means _not yet known_                                                 |
+| Development (linked PRs + CI)                                                               | **AFTER the page**         | card chrome + row-shaped pulse bars                               | the section is `design/github/` Panel 5a                                                                                                          |
+| Acceptance                                                                                  | **AFTER the page**         | card chrome + a two-line body pulse                               | § _Story-acceptance surfaces_                                                                                                                     |
+| Design result                                                                               | **AFTER the page**         | card chrome + a thumbnail-shaped pulse                            | `design-result.mock.html`                                                                                                                         |
+| Attachments                                                                                 | **AFTER the page**         | **tile-shaped pulse skeletons, `aria-busy`** — CITED, not redrawn | § _Attachments panel_: _"tile-shaped pulse skeletons (`--el-muted`, `aria-busy`) so the card doesn't jump"_                                       |
+| Activity (comments · history · all)                                                         | **AFTER the page**         | **comment-row-shaped pulse skeletons** — CITED, not redrawn       | § _Comments + @mentions_: _"comment-row-shaped pulse skeletons (`--el-muted` bars + avatar circle, `aria-busy`) — the `BacklogSkeleton` grammar"_ |
+
+Acceptance and Design result are **conditional** sections (a story in review; a design card), so a
+given item renders three of the five late regions or all five. The table is the complete set; the
+mock's settled frame is one item's instance of it.
+
+### THE PAGE SETTLES TWICE — and that number is the decision
+
+Once when the first content replaces the frame, and once when the late stack fills. **It is not six.**
+A page that streams six regions independently ARRIVES six times, in whatever order the reads happen
+to finish, and a reader watching blocks pop in at random reads instability, not speed — the eye is
+pulled back to a region it had already left.
+
+**So the five late sections are ONE `<Suspense>`, not five.** The alternative — a boundary each — would
+let Attachments arrive without waiting for Activity, which is the slowest of them. It loses because
+every one of the five sits **below the fold** at arrival, so the wait it saves is a wait nobody is
+watching, while the cost it pays is visible: a reader who scrolls down mid-arrival meets a mixture of
+real sections and pending ones and cannot tell which is which. One boundary means the stack is either
+all pending or all there.
+
+**If Activity later proves slow enough to hold the other four past the fold, the split to make is
+TWO — Activity alone, and the rest — never five.** That is the amendment this section authorises in
+advance, so the next author does not have to re-derive it.
+
+**Why the roll-up badge is not a third settle.** It sits in the eyebrow, at the TOP, where a late
+arrival is maximally visible — so it gets no boundary at all. Its slot is reserved at the settled
+width and filled in place, which is the shape `ParentRollupBadge` already ships. **An in-place swap
+inside a reserved box is not an arrival.** That is the general rule: a region that cannot make the
+first-content deadline either joins the late stack or reserves its own box — it never resizes one.
+
+### The no-shift correspondence
+
+| frame block                       | becomes                                | why the pair cannot shift                                                                                                                                            |
+| --------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `h-5 w-5` glyph + `h-4 w-24`      | the type glyph and `MOTIR-3430`        | the glyph ships at `h-5 w-5`; the identifier is `font-mono text-sm`, a 20px line box, so the row's height is the glyph's either way                                  |
+| the `min-w-0 flex-1` cell         | the breadcrumb                         | it truncates inside a bounded track (the shipped fix for the eyebrow overflowing the viewport), so its content never changes the row's height                        |
+| `h-(--height-control)` × 3, right | Re-plan · watch · ⋯                    | all three are real controls at `--height-control`; the frame inherits the token rather than restating a number                                                       |
+| `h-8 w-[34rem]`                   | the `<h1 class="font-serif text-2xl">` | **32px** — the same box the group frame's title block uses                                                                                                           |
+| the `1fr / 18rem` grid, `gap-6`   | the same grid                          | not a copy: the frame declares `grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]`, which is the page's own declaration                                                     |
+| each card's chrome                | the arrived `ContentSectionCard`       | same `--radius-card`, `--spacing-card-padding`, `--shadow-card` and `mb-(--spacing-md)` header gap; only the BODY height differs, and a body is below its own header |
+
+**At the narrow breakpoint** the grid collapses to one column and the rail moves under the main
+column — **in the frame exactly as on the page**, because the frame carries the page's own
+`grid-cols-1 … md:grid-cols-[1fr_18rem]` rather than a fixed two-column drawing. The narrow width
+therefore needs no second frame: it is the same declaration resolving differently, and a drawing of
+it would be a second thing to keep in sync.
+
+**The one honest exception: a long title.** The frame reserves ONE line (32px). A title that wraps to
+two settles 32px taller, pushing the body down once. Reserving two lines instead would settle every
+SHORT title 32px up, which is the more common case and the more annoying direction. So the frame
+reserves one line, and the shift is downward-and-rare rather than upward-and-usual.
+
+### The design-allocation sweep — what this asset GIVES and TAKES
+
+| card                                                                       | GIVES / TAKES | what                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-3435** — `/items/[key]`'s own `loading.tsx` + the concurrent reads | **GIVES**     | the frame's body block by block, and the rule that it composes `PageSkeleton` rather than redrawing the wrapper, header and reveal                                                                                                   |
+| **MOTIR-3436** — the streaming sections                                    | **GIVES**     | the allocation table, the settles-twice decision, the ONE-boundary-not-five argument with its stated future amendment, and the pending state for each late region — with a citation for every skeleton this folder already specifies |
+| **MOTIR-3431** — the shell grammar                                         | **TAKES**     | the pulse vocabulary, the 120 ms reveal and the nearer-boundary rule. Nothing is given back: the shell asset does not draw this page                                                                                                 |
+| **MOTIR-3437** — the story's vitest gate                                   | **GIVES**     | the checkable claim that the late stack is one boundary rather than five                                                                                                                                                             |
+
+### What this design overrides
+
+Nothing. It is the first drawing of this state. Two adjacent facts it does **not** change, named so a
+reader does not infer them: the ARRIVED page's layout, copy and controls are exactly as
+`detail.png` and the sections below already specify — this asset adds a state and changes none — and
+every section skeleton this folder already draws stays as drawn, cited above rather than superseded.
+
+### How the render was produced
+
+Generated, not hand-drawn. Every settled card is the real `ContentSectionCard` over the real `Card`
+primitive; the switcher is the real `Segmented`; the type glyph is the real `IssueTypeIcon`; the chip
+is the real `Pill` — all rendered through the repo's own vitest + RTL setup with the real
+`messages/en.json`, then laid out against Tailwind's own compiled output of `app/globals.css`. The
+frame's geometry is the page's own declarations (`grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]`,
+`font-serif text-2xl`, `--height-control`), not numbers copied out of it. The reveal declaration in
+the mock's stylesheet is quoted verbatim from the shell asset so the two cannot drift.
+
+One board artefact, named so nobody reads it as design: the frames that show the frame REVEALED force
+the animation's end state, because a board is a still and a time-based state has to be frozen at the
+moment it is being drawn.
