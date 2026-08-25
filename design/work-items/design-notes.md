@@ -5034,6 +5034,16 @@ all pending or all there.
 TWO — Activity alone, and the rest — never five.** That is the amendment this section authorises in
 advance, so the next author does not have to re-derive it.
 
+**ONE SETTLE MAY BE DELIVERED BY MORE THAN ONE `<Suspense>`, and on this page it must be
+(MOTIR-3465).** _"Twice"_ is a claim about TIME, not about JSX elements. The five late regions are
+**not contiguous** in the page's main column: **Children is tier 2 and renders BETWEEN Design result
+and Attachments**, so a single element cannot span them without either making tier-2 content late or
+reordering a page nothing here argues for. The mechanism is instead **two boundaries awaiting the
+SAME promise** — they resolve in one tick and flush together, which is one settle by the only
+definition a reader can perceive. MOTIR-3436 implements exactly that, and its test asserts each late
+read runs ONCE, which is what breaks if either half builds its own promise. **Read a boundary count
+as an implementation of this decision, never as the decision.**
+
 **Why the roll-up badge is not a third settle.** It sits in the eyebrow, at the TOP, where a late
 arrival is maximally visible — so it gets no boundary at all. Its slot is reserved at the settled
 width and filled in place, which is the shape `ParentRollupBadge` already ships. **An in-place swap
@@ -5087,6 +5097,31 @@ is the real `Pill` — all rendered through the repo's own vitest + RTL setup wi
 frame's geometry is the page's own declarations (`grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]`,
 `font-serif text-2xl`, `--height-control`), not numbers copied out of it. The reveal declaration in
 the mock's stylesheet is quoted verbatim from the shell asset so the two cannot drift.
+
+**THE SECTION ORDER IS READ, NOT COMPOSED (MOTIR-3465).** Rendering the real components is
+necessary and it is not sufficient: it makes every _element_ the app's and says nothing about their
+_arrangement_. The first cut of this asset drew Children second where the page renders it eighth and
+omitted Explanation and Relationships entirely, while every class string traced to real markup — which
+is what made it read as trustworthy. The order in both content frames now comes from the page's own
+`<main>`, in the same pass that draws them:
+
+```sh
+awk '/<main className="flex min-w-0 flex-col gap-6">/,/<\/main>/' \
+  'app/(authed)/items/[key]/page.tsx' \
+  | grep -oE '<(ArchivedBanner|ContentSectionCard|IssueExplanation|RelationshipsPanel|ChildPanel|AttachmentsPanel|ActivitySection)'
+```
+
+**Reproducing the stylesheet.** The mock's `<style>` is Tailwind's own compiled output, scanned over
+the mock's BODY MARKUP ONLY — not the whole file, which already contains that output and feeds
+candidates back into the next compile. With `@tailwindcss/cli` at the version in `package.json`:
+
+```sh
+printf "@import 'tailwindcss' source(none);\n@import '@motir/design-system/theme.css';\n@source \"<the body markup>\";\n" > /tmp/in.css
+npx @tailwindcss/cli -i /tmp/in.css -o /tmp/out.css   # then drop the banner line
+```
+
+Verified byte-identical against the committed stylesheet before it was regenerated, which is the
+check that makes the recipe worth writing down rather than re-derived.
 
 One board artefact, named so nobody reads it as design: the frames that show the frame REVEALED force
 the animation's end state, because a board is a still and a time-based state has to be frozen at the
