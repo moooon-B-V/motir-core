@@ -98,6 +98,26 @@ function DefaultBody() {
 
 export interface PageSkeletonProps {
   /**
+   * The title block's width. The HEIGHT is fixed at `h-8` — that is the
+   * invariant, because a settle shift is vertical — but a route whose titles run
+   * long may widen the bar so the frame reads like the page it stands in for.
+   */
+  titleWidth?: string;
+  /**
+   * A route-shaped row ABOVE the title, inside the header stack — the item
+   * detail page's eyebrow (type glyph · identifier · breadcrumb · right
+   * cluster). Omitted by the group frame, which stands in for 58 pages and can
+   * assume no such row.
+   */
+  eyebrow?: ReactNode;
+  /**
+   * Draw the generic toolbar row under the header. Default `true`. A route
+   * whose controls live in its eyebrow rather than in a control row passes
+   * `false` — the detail page does — so the frame does not reserve a band the
+   * arrived page never fills.
+   */
+  toolbar?: boolean;
+  /**
    * The route-shaped body. Omit for the generic bordered region above — which
    * is what the GROUP boundary shows, since it stands in for 58 different
    * pages and can assume nothing about any one of them.
@@ -112,7 +132,13 @@ export interface PageSkeletonProps {
   subtitle?: boolean;
 }
 
-export function PageSkeleton({ children, subtitle = true }: PageSkeletonProps) {
+export function PageSkeleton({
+  children,
+  subtitle = true,
+  eyebrow,
+  toolbar = true,
+  titleWidth = 'w-56',
+}: PageSkeletonProps) {
   const t = useTranslations('shell');
   return (
     <div
@@ -125,16 +151,22 @@ export function PageSkeleton({ children, subtitle = true }: PageSkeletonProps) {
           eight placeholder rows. */}
       <span className="sr-only">{t('pageLoading')}</span>
       <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
-        <header className="flex flex-col gap-1">
-          <Block className="h-8 w-56" />
+        {/* `gap-2` when a route supplies an eyebrow — the detail page's own
+            `<header className="flex flex-col gap-2">`; `gap-1` otherwise, the
+            title/subtitle stack every other authed page opens with. */}
+        <header className={`flex flex-col ${eyebrow ? 'gap-2' : 'gap-1'}`}>
+          {eyebrow}
+          <Block className={`h-8 ${titleWidth}`} />
           {subtitle ? <Block className="h-4 w-80" /> : null}
         </header>
-        <div className="flex items-center gap-2">
-          <Block className="h-(--height-control) w-28" />
-          <Block className="h-(--height-control) w-24" />
-          <div className="flex-1" />
-          <Block className="h-(--height-control) w-32" />
-        </div>
+        {toolbar ? (
+          <div className="flex items-center gap-2">
+            <Block className="h-(--height-control) w-28" />
+            <Block className="h-(--height-control) w-24" />
+            <div className="flex-1" />
+            <Block className="h-(--height-control) w-32" />
+          </div>
+        ) : null}
         {children ?? <DefaultBody />}
       </div>
     </div>

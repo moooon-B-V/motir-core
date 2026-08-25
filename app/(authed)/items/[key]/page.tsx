@@ -135,165 +135,223 @@ export default async function IssueDetailPage({
   const canDelete = held.has('work_item:delete');
   const canManageProject = held.has('project:administer');
 
-  // The Development section's linked PRs (MOTIR-1579) — the same display-ready
-  // read the peek payload uses; item.id came from the access-gated detail read.
-  const pullRequests = await workItemsService.listLinkedPullRequests(detail.item.id, ctx);
-  // Per-repository DELIVERY for the rail's Repositories card (Story MOTIR-2725 ·
-  // MOTIR-2415) — a RESOLVED value, so it is read here, server-side, in the
-  // page's existing data path rather than fetched by the client. Empty set →
-  // no query at all.
-  const repoDelivery = await workItemsService.listRepoDelivery(
-    detail.item.id,
-    detail.item.targetRepos,
-    ctx,
-  );
-
-  // Members back the inline assignee picker + reporter display (getIssueDetail
-  // carries ids only); the workflow (already in the detail bundle) backs the
-  // inline status picker's legal-transition set.
-  // Assignable users scoped by access level (6.4.6): private → project members.
-  const members = await assignableMembersService.list({
-    projectId: ctx.projectId,
-    accessLevel: ctx.project.accessLevel,
-    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  });
-
-  // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the current
-  // sprint's display name, and the ⋯ menu's "Add to active sprint" quick action.
-  // The active sprint (one per project) is the menu's assign target.
-  const sprints = await sprintsService.listByProject(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
-
-  // Comments (Story 5.1 · 5.1.5): the caller's comment capabilities (the Jira
-  // permission split on the 6.4 role model — viewer reads only) + the first
-  // cursor page (the NEWEST 20 threads; the section's "Show more comments"
-  // extends backward — finding #57, never load-all). A failed read renders the
-  // section's ErrorState + retry instead of crashing the page.
-  const commentCaps = await projectAccessService.getCommentCapabilities(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-
   // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
   // (default Comments — the Jira default); the server fetches ONLY the
   // active tab's first cursor page (finding #57 — the other tabs fetch when
-  // switched to, via a URL replace that re-renders this page). A failed read
-  // renders that tab's ErrorState + retry instead of crashing the page.
+  // switched to, via a URL replace that re-renders this page). Read BEFORE the
+  // group below because it selects which of the three reads that group runs;
+  // `searchParams` is Next's own promise, not a round trip.
   const activityTab = parseActivityTab((await searchParams).activity);
-  let initialComments: CommentsPageDTO | null = null;
-  let initialHistory: ActivityHistoryPageDto | null = null;
-  let initialAll: ActivityAllPageDto | null = null;
-  try {
-    if (activityTab === 'comments') {
-      initialComments = await commentsService.listComments(
-        item.id,
-        { order: 'desc' },
-        { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      );
-    } else if (activityTab === 'history') {
-      initialHistory = await activityService.listHistory(
-        item.id,
-        { order: 'desc' },
-        { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      );
-    } else {
-      initialAll = await activityService.listAll(
-        item.id,
-        { order: 'desc' },
-        { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      );
-    }
-  } catch {
-    // The active tab's section renders ErrorState + retry on its null page.
-  }
 
-  // Attachments (Story 5.2 · 5.2.5): the caller's attachment capabilities
-  // (the Jira three-permission split on the 6.4 roles — create / delete own /
-  // delete all; viewers read only) + the first cursor page (the newest 50;
-  // the panel's "Show more (N)" extends backward — finding #57, never
-  // load-all). A failed read renders the panel's ErrorState + retry.
-  const attachmentCaps = await projectAccessService.getAttachmentCapabilities(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  let initialAttachments: AttachmentsPageDTO | null = null;
-  try {
-    initialAttachments = await attachmentsService.listForWorkItem(
-      item.id,
-      {},
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    );
-  } catch {
-    initialAttachments = null;
-  }
-
-  // Acceptance (Story MOTIR-1627 · Subtask MOTIR-1634): the story-acceptance
-  // panel shows on a STORY once it reaches in_review (and stays on the accepted,
-  // done story). It reads the eligibility verdict (plan + org toggle) + the
-  // current evidence; the panel branches into its three states. Non-stories and
-  // earlier statuses render nothing.
+  // ── EVERY REMAINING READ, CONCURRENTLY (Subtask MOTIR-3435) ───────────────
+  //
+  // This page used to await 29 times, almost all of them in sequence, before it
+  // returned a single element — which is what a reader pays when they paste a
+  // key into the address bar and watch the PREVIOUS page for as long as the SUM
+  // of those reads takes. Everything below is independent of everything else
+  // once `ctx`, `detail`, `item` and `held` exist, so the page's wait is now the
+  // SLOWEST single read rather than their total.
+  //
+  // ⚠️ THE GATE ABOVE IS DELIBERATELY NOT IN HERE, and must never be moved in.
+  // `getSession` → `getActiveProject` → `getIssueDetail` → `getPermissions` stay
+  // sequential and ahead of this, because they decide whether this actor may see
+  // the item AT ALL: a browse denial and a missing item are the same 404 (no
+  // existence leak), a retired project key 308-redirects, and `held` decides
+  // whether edit affordances render. Parallelising a page whose first job is to
+  // decide whether you may look at it is exactly how a hidden item becomes
+  // visible for a frame. `tests/components/item-detail-reads.test.tsx` asserts
+  // the ordering and this group's membership rather than leaving it to a
+  // reviewer to notice.
+  //
+  // ⚠️ A CONDITIONAL READ STAYS CONDITIONAL. Skipping a query is cheaper than
+  // parallelising one, so `acceptance*` still runs only for a story at
+  // in_review / done, and `rollupForParent` only when the item has children —
+  // the ternaries are inside the group, not replaced by it.
+  //
+  // Each `try` that used to wrap a read is now inside its own arm, so a section
+  // whose read fails still degrades to its own ErrorState + retry instead of
+  // rejecting the whole group.
   const showAcceptance =
     item.kind === 'story' && (item.status === 'in_review' || item.status === 'done');
-  const acceptanceEligibility = showAcceptance
-    ? await acceptanceVideoEligibilityService.resolve({
-        actorUserId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      })
-    : null;
-  const acceptanceEvidence = showAcceptance
-    ? await acceptanceEvidenceService.getCurrentForStory(item.id, {
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      })
-    : null;
-  // Design result (Story MOTIR-2664 · Subtask MOTIR-2670): the published design
-  // artifacts of THIS card — read in the same server pass as the acceptance
-  // evidence above, so the panel needs no client fetch on first paint. A design
-  // subtask with none still renders the section, with its empty state.
-  const designEvidence = await designEvidenceService.getCurrentForWorkItem(item.id, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  const isDesignCard = item.type === 'design';
-  const showDesignResult = designEvidence !== null || isDesignCard;
 
-  const tAcceptance = await getTranslations('acceptance');
-  const tDesignResult = await getTranslations('designResult');
-
-  // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
-  // detail read above; the rail's Components picker additionally needs the
-  // project taxonomy (browse-gated, name-ordered, admin-bounded — finding #57),
-  // and the empty-taxonomy "Manage components" link is admin-only — resolved
-  // like the settings pages do (workspace manager OR project-role admin).
-  // The project-members read that used to ride this batch went with the private
-  // admin check MOTIR-2473 retired — one fewer round trip on every detail page.
-  const [projectComponents] = await Promise.all([
+  const [
+    pullRequests,
+    repoDelivery,
+    members,
+    sprints,
+    commentCaps,
+    activity,
+    attachmentCaps,
+    initialAttachments,
+    acceptanceEligibility,
+    acceptanceEvidence,
+    designEvidence,
+    tAcceptance,
+    tDesignResult,
+    projectComponents,
+    estimationConfig,
+    parentRollup,
+    locale,
+    workItemRefs,
+  ] = await Promise.all([
+    // The Development section's linked PRs (MOTIR-1579) — the same display-ready
+    // read the peek payload uses; item.id came from the access-gated detail read.
+    workItemsService.listLinkedPullRequests(detail.item.id, ctx),
+    // Per-repository DELIVERY for the rail's Repositories card (Story MOTIR-2725 ·
+    // MOTIR-2415) — a RESOLVED value, so it is read here, server-side, in the
+    // page's existing data path rather than fetched by the client. Empty set →
+    // no query at all.
+    workItemsService.listRepoDelivery(detail.item.id, detail.item.targetRepos, ctx),
+    // Members back the inline assignee picker + reporter display (getIssueDetail
+    // carries ids only); the workflow (already in the detail bundle) backs the
+    // inline status picker's legal-transition set.
+    // Assignable users scoped by access level (6.4.6): private → project members.
+    assignableMembersService.list({
+      projectId: ctx.projectId,
+      accessLevel: ctx.project.accessLevel,
+      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    }),
+    // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the current
+    // sprint's display name, and the ⋯ menu's "Add to active sprint" quick action.
+    sprintsService.listByProject(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    // Comments (Story 5.1 · 5.1.5): the caller's comment capabilities (the Jira
+    // permission split on the 6.4 role model — viewer reads only).
+    projectAccessService.getCommentCapabilities(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    // The active tab's FIRST cursor page — the newest 20 threads; the section's
+    // "Show more" extends backward (finding #57, never load-all). A failed read
+    // renders that tab's ErrorState + retry instead of crashing the page.
+    (async (): Promise<{
+      comments: CommentsPageDTO | null;
+      history: ActivityHistoryPageDto | null;
+      all: ActivityAllPageDto | null;
+    }> => {
+      const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+      try {
+        if (activityTab === 'comments') {
+          return {
+            comments: await commentsService.listComments(item.id, { order: 'desc' }, actor),
+            history: null,
+            all: null,
+          };
+        }
+        if (activityTab === 'history') {
+          return {
+            comments: null,
+            history: await activityService.listHistory(item.id, { order: 'desc' }, actor),
+            all: null,
+          };
+        }
+        return {
+          comments: null,
+          history: null,
+          all: await activityService.listAll(item.id, { order: 'desc' }, actor),
+        };
+      } catch {
+        return { comments: null, history: null, all: null };
+      }
+    })(),
+    // Attachments (Story 5.2 · 5.2.5): the caller's attachment capabilities (the
+    // Jira three-permission split on the 6.4 roles — create / delete own / delete
+    // all; viewers read only)…
+    projectAccessService.getAttachmentCapabilities(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    // …and the first cursor page (the newest 50; the panel's "Show more (N)"
+    // extends backward — finding #57, never load-all). A failed read renders the
+    // panel's ErrorState + retry.
+    (async (): Promise<AttachmentsPageDTO | null> => {
+      try {
+        return await attachmentsService.listForWorkItem(
+          item.id,
+          {},
+          { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        );
+      } catch {
+        return null;
+      }
+    })(),
+    // Acceptance (Story MOTIR-1627 · Subtask MOTIR-1634): the story-acceptance
+    // panel shows on a STORY once it reaches in_review (and stays on the accepted,
+    // done story). It reads the eligibility verdict (plan + org toggle) + the
+    // current evidence; the panel branches into its three states. Non-stories and
+    // earlier statuses render nothing — and read NOTHING, still.
+    showAcceptance
+      ? acceptanceVideoEligibilityService.resolve({
+          actorUserId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null,
+    showAcceptance
+      ? acceptanceEvidenceService.getCurrentForStory(item.id, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null,
+    // Design result (Story MOTIR-2664 · Subtask MOTIR-2670): the published design
+    // artifacts of THIS card — read in the same server pass as the acceptance
+    // evidence above, so the panel needs no client fetch on first paint. A design
+    // subtask with none still renders the section, with its empty state.
+    designEvidenceService.getCurrentForWorkItem(item.id, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    getTranslations('acceptance'),
+    getTranslations('designResult'),
+    // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
+    // detail read above; the rail's Components picker additionally needs the
+    // project taxonomy (browse-gated, name-ordered, admin-bounded — finding #57),
+    // and the empty-taxonomy "Manage components" link is admin-only — resolved
+    // like the settings pages do (workspace manager OR project-role admin).
     componentsService.listComponents(ctx.project.identifier, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
-  ]);
-  // The project estimation config (Subtask 4.3.4) — the rail's inline
-  // story-points EstimateBadge reads the scale deck from it via context.
-  const estimationConfig = await estimationService.getEstimationConfig(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-
-  // Epic/parent subtree roll-up (Subtask 4.3.5) — the SUM of the configured
-  // statistic across this item's descendants, computed server-side (one bounded
-  // recursive-CTE aggregate — finding #57) ONLY when the item has children, so
-  // the header badge renders with no client fetch / flash. A leaf shows none.
-  const parentRollup =
+    // The project estimation config (Subtask 4.3.4) — the rail's inline
+    // story-points EstimateBadge reads the scale deck from it via context.
+    estimationService.getEstimationConfig(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+    // Epic/parent subtree roll-up (Subtask 4.3.5) — the SUM of the configured
+    // statistic across this item's descendants, computed server-side (one bounded
+    // recursive-CTE aggregate — finding #57) ONLY when the item has children, so
+    // the header badge renders with no client fetch / flash. A leaf shows none.
     detail.children.length > 0
-      ? await estimationService.rollupForParent(item.id, {
+      ? estimationService.rollupForParent(item.id, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         })
-      : null;
+      : null,
+    getLocale() as Promise<Locale>,
+    // Work-item references (Story 5.8 · 5.8.6) — resolve every `[KEY](motir:<id>)`
+    // token in the description / explanation AND every bare `MOTIR-N` in the title
+    // to its LIVE summary (current key · title · status · archived/no-access
+    // state), so the body chips + the title link render live and open the peek.
+    // The same `filterBrowsable` view gate `quickSearch` rides (reused, not
+    // reinvented); a deleted / forbidden reference degrades, never breaks.
+    workItemsService.resolveReferenceSummaries(
+      parseWorkItemRefs(
+        [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
+        ctx.project.identifier,
+      ),
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    ),
+  ]);
+
+  const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
+  const initialComments = activity.comments;
+  const initialHistory = activity.history;
+  const initialAll = activity.all;
+  const isDesignCard = item.type === 'design';
+  const showDesignResult = designEvidence !== null || isDesignCard;
 
   // Archived state (Story 2.9 · Subtask 2.9.6) — an archived item's detail page
   // renders (the read doesn't filter `archivedAt`), so it gets a top-of-main
@@ -308,23 +366,7 @@ export default async function IssueDetailPage({
   // and a project may define more.
   const statusCategory =
     detail.workflow.statuses.find((s) => s.key === item.status)?.category ?? null;
-  const locale = (await getLocale()) as Locale;
   const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
-
-  // Work-item references (Story 5.8 · 5.8.6) — resolve every `[KEY](motir:<id>)`
-  // token in the description / explanation AND every bare `MOTIR-N` in the title
-  // to its LIVE summary (current key · title · status · archived/no-access
-  // state), so the body chips + the title link render live and open the peek.
-  // The same `filterBrowsable` view gate `quickSearch` rides (reused, not
-  // reinvented); a deleted / forbidden reference degrades, never breaks.
-  const workItemRefs = await workItemsService.resolveReferenceSummaries(
-    parseWorkItemRefs(
-      [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
-      ctx.project.identifier,
-    ),
-    ctx.projectId,
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  );
 
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
