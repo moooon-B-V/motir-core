@@ -319,6 +319,27 @@ export const jobQueueRepository = {
     return tx.jobQueueRun.findUnique({ where: { id } });
   },
 
+  /**
+   * The NEWEST fire instant already enqueued for one job, or null when none has
+   * been (MOTIR-3471). The watermark an `all` catch-up walks back to.
+   *
+   * It reads the QUEUE rather than the ledger deliberately: the question is "which
+   * ticks have I already written a row for", not "which ticks ran". A row that was
+   * enqueued and then failed has still been scheduled, and re-enqueuing it would
+   * be a retry wearing a schedule's clothes.
+   *
+   * Served by the `(job_id, scheduled_for)` unique index, which orders on exactly
+   * these two columns — so this is an index scan to one row, not a table walk.
+   */
+  async latestScheduledFor(jobId: string, tx: Prisma.TransactionClient): Promise<Date | null> {
+    const row = await tx.jobQueueRun.findFirst({
+      where: { jobId, scheduledFor: { not: null } },
+      orderBy: { scheduledFor: 'desc' },
+      select: { scheduledFor: true },
+    });
+    return row?.scheduledFor ?? null;
+  },
+
   /** Count runs in a state — an operator/read surface and the tests' assertion handle. */
   async countByState(state: JobRunState, tx: Prisma.TransactionClient): Promise<number> {
     return tx.jobQueueRun.count({ where: { state } });
