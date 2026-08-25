@@ -129,6 +129,33 @@ import type { CodeGraphRefreshData } from '../types';
 // global bound read from `MOTIR_INDEX_MAX_IN_FLIGHT` plus a per-workspace bound
 // of `ceil(global / 2)` — which is also the only place that can see the OTHER
 // workloads sharing the invoice (MOTIR-1997).
+//
+// ⚠️ AND WHAT PROTECTS EVERY OTHER FUNCTION, since the absence of a cap here is
+// exactly the thing that used to look alarming (MOTIR-3247). The reasoning above
+// says why a cap on THIS job would be meaningless; it stopped short of saying
+// what the interactive jobs may therefore rely on, and MOTIR-3245 was filed in
+// that gap. The answer is now measured rather than argued:
+//
+//   1. THIS JOB IS NOT WHAT DELAYS THEM. A supervisor holds a slot only while a
+//      `step.run` executes — ~128 sub-second steps across a 30-minute index,
+//      released between every one — so the worst a queued run waits behind one
+//      is ONE POLL, not one container's life
+//      (`docs/decisions/job-lane-occupancy.md` §1–§2).
+//   2. THE CORRELATION WAS CHECKED IN BOTH DIRECTIONS AND IS NOISE. Splitting
+//      production `work-item/transitioned` latency on whether a refresh was
+//      running gives OPPOSITE answers on a 24 h and a 72 h window (§6). Neither
+//      "a refresh slows the fast lane" nor its inverse survives re-measurement.
+//   3. THE FAST LANE HAS A STATED BUDGET AND A GUARD. `lib/jobs/latencyBudget.ts`
+//      carries the number and its measured baseline;
+//      `tests/jobs/fast-lane-latency-budget.test.ts` pins the lane's membership
+//      and asserts that no consumer of it is capped or debounced. So "nothing
+//      caps this job" is a decision with a check behind it rather than an
+//      omission — and if a cap is ever wanted here, that record is what has to
+//      change first.
+//
+// What is NOT claimed: that the budget is currently MET. It is not — measured
+// p95 is ~20-29 s against a 5 s target, and §6 attributes the gap to arrival
+// burstiness rather than to anything on this job's side.
 export const codeGraphRefresh = defineJob(
   {
     id: 'system.code-graph-refresh',
