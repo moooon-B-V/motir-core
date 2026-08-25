@@ -142,8 +142,24 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
     expect(Math.abs(rows(left) - rows(right))).toBeLessThanOrEqual(1);
     expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
+    //
+    // ⚠️ 2026-08-25 (MOTIR-3480): NINE to TEN, and the next "look again".
+    // `search_lessons` is the first MCP tool to assert `lesson:view`, so that key
+    // became grantable by the same derivation `lesson:manage` and `ai:view_plan`
+    // arrived through — and the **project** group grew again, to three
+    // (`project:browse` + the two lesson keys, which the catalog keeps contiguous
+    // beside it). The split is now 5/5: EXACTLY balanced for the first time since
+    // MOTIR-2578 measured the asset, with the RIGHT column taking the new row and
+    // the left unchanged. No group is broken across the columns (the assertion
+    // below proves that).
+    //
+    // ⚠️ THE ASSET IS NOW TWO ROWS BEHIND, not one. The note above asked for a
+    // re-measure "when the set next grows", and it has grown twice since. That is
+    // a DESIGN card, not this one — recorded here and surfaced on the pull
+    // request rather than absorbed silently, because the numbers below going
+    // green is exactly what would otherwise hide it.
     expect(rows(left)).toBe(5);
-    expect(rows(right)).toBe(4);
+    expect(rows(right)).toBe(5);
   });
 
   it('loses no permission to the column split, and never breaks a group across one', () => {
