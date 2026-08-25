@@ -73,21 +73,29 @@ function inngestSendCallCount(absPath: string): number {
 }
 
 describe('the emit seam — nothing reaches the Inngest client but sendEvent and the DLQ replay', () => {
-  it('calls inngest.send in exactly two files, counting CALLS rather than the string', () => {
-    const files = SOURCE_ROOTS.flatMap((root) => sourceFilesUnder(join(REPO_ROOT, root)));
+  // ⚠️ AN EXPLICIT TIMEOUT, because this walks every `.ts` under lib/app/scripts
+  // through the TypeScript parser. It is comfortably fast on its own and several
+  // times slower under v8 coverage instrumentation, which is the lane that
+  // matters: a guard that only goes red in the coverage job reads as a flake.
+  it(
+    'calls inngest.send in exactly two files, counting CALLS rather than the string',
+    { timeout: 120_000 },
+    () => {
+      const files = SOURCE_ROOTS.flatMap((root) => sourceFilesUnder(join(REPO_ROOT, root)));
 
-    const callers = files
-      .map((absPath) => ({
-        path: relative(REPO_ROOT, absPath),
-        calls: inngestSendCallCount(absPath),
-      }))
-      .filter((f) => f.calls > 0)
-      .map((f) => f.path)
-      .sort();
+      const callers = files
+        .map((absPath) => ({
+          path: relative(REPO_ROOT, absPath),
+          calls: inngestSendCallCount(absPath),
+        }))
+        .filter((f) => f.calls > 0)
+        .map((f) => f.path)
+        .sort();
 
-    // Named rather than counted, so a failure says WHICH file appeared.
-    expect(callers).toEqual(ALLOWED_SEND_CALLERS);
-  });
+      // Named rather than counted, so a failure says WHICH file appeared.
+      expect(callers).toEqual(ALLOWED_SEND_CALLERS);
+    },
+  );
 
   it('does not count the string where it appears in prose or in a seed fixture', () => {
     // The guard above is only trustworthy if it demonstrably ignores these.
