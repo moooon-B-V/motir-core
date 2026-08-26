@@ -168,15 +168,43 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
     page.getByText(`${T1_DEE} added to the organization`, { exact: true }).first(),
   ).toBeVisible();
 
-  // The roster now renders (2 people); Dee appears with org role Member and "No
-  // workspaces" (org-only member — the asymmetric membership direction). Anchor
+  // The roster now renders (2 people); Dee appears with org role Member. Anchor
   // on Dee's unique role combobox: the success toast renders as an <li> naming
   // the same email, so an `li`/text match would collide in strict mode.
   await expect(page.getByText('2 people')).toBeVisible();
   const roleCombo = page.getByRole('combobox', { name: 'Organization role for Dee Member' });
   await expect(roleCombo).toBeVisible();
   const deeRow = page.locator('li').filter({ has: roleCombo });
-  await expect(deeRow.getByText('No workspaces')).toBeVisible();
+
+  // ⚠️ THIS ASSERTION INVERTED IN MOTIR-3501, and the inversion is the fix.
+  //
+  // It used to read `await expect(deeRow.getByText('No workspaces')).toBeVisible()`,
+  // citing "org-only member — the asymmetric membership direction". That was a
+  // faithful description of §5 and it was also the DEAD END MOTIR-3500 was filed
+  // about: this org has ONE workspace (only `signUp` above), so the tier Dee
+  // needs to be in is the tier §6 hides — no switcher, no add-to-workspace
+  // action on this roster, and their only exit creates a second workspace and
+  // splits the team. "No workspaces" was the admin's view of a teammate who
+  // could not work.
+  //
+  // §5 now carries a count-1 arm: at exactly one workspace an org add ALSO
+  // creates that workspace's membership, so Dee lands somewhere they can work
+  // and the roster shows the workspace rather than the gap.
+  //
+  // The asymmetry itself is UNCHANGED at ≥ 2 and is still asserted — at the
+  // service layer, where the fixture can put the acting admin in exactly one of
+  // two workspaces (`tests/organizations-service.test.ts` → "adding a user to
+  // the ORG creates NO workspace membership at TWO workspaces"). That shape is
+  // the only one that distinguishes an org-scoped count from an actor-scoped
+  // one, which is why it belongs there and not here.
+  //
+  // The chip is matched by its SHAPE rather than the literal name: the
+  // auto-provisioned workspace is `${user.name}'s Workspace` and that name is
+  // derived from the email local part by the sign-up path, so pinning the whole
+  // string couples this assertion to a derivation two layers away. Both halves
+  // are asserted — the gap is gone, and a real workspace chip is there.
+  await expect(deeRow.getByText('No workspaces')).toHaveCount(0);
+  await expect(deeRow.getByText(/'s Workspace$/)).toBeVisible();
 
   // Change Dee's org role → Admin (inline edit; success IS the confirmation).
   await roleCombo.click();
