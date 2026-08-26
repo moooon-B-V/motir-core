@@ -232,6 +232,41 @@ async function engineProposes(
   await plansService.markPlanned(planId, svcCtx());
 }
 
+/**
+ * The same playback, but writing the PlanItems UNDERNEATH the service
+ * (MOTIR-3539).
+ *
+ * `addProposals` now refuses an unresolvable intra-plan `planItem:` ref AT THE
+ * APPEND, so a plan carrying one can no longer be built through the public door
+ * — which is the point of that card. The APPROVE-time ref gate this file also
+ * covers has not become dead code, it has become the BACKSTOP: every plan
+ * appended before that check shipped is sitting in exactly this state, and
+ * approve is where they are still caught. So the one case that needs a dangling
+ * ref seeds it directly and the assertion is unchanged.
+ */
+async function engineProposesUnchecked(
+  planId: string,
+  proposals: Parameters<typeof plansService.addProposals>[1],
+): Promise<void> {
+  for (const p of proposals) {
+    await adminDb.planItem.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        planId,
+        op: p.op,
+        workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
+        parentRef: p.parentRef ?? null,
+        blockedByRefs: p.blockedByRefs ?? [],
+        ...(p.op === 'add' && p.proposedFields
+          ? { proposedFields: p.proposedFields as object }
+          : {}),
+        ...(p.op === 'modify' && p.patch ? { patch: p.patch as object } : {}),
+      },
+    });
+  }
+  await plansService.markPlanned(planId, svcCtx());
+}
+
 /** Everything an approve could touch, for a byte-identical no-write check. */
 async function treeSnapshot(): Promise<unknown> {
   const items = await adminDb.workItem.findMany({
@@ -731,6 +766,10 @@ describe('every rejection class leaves the database untouched — through the an
     proposals: Parameters<typeof plansService.addProposals>[1],
     expected: { status: number; code: string },
     anchorId: string,
+    /** How the run's proposals reach the plan. Defaults to the real append; the
+     *  dangling-ref case passes the unchecked seeder, because that shape is no
+     *  longer appendable through the service (MOTIR-3539). */
+    append: typeof engineProposes = engineProposes,
   ): Promise<void> {
     const { planId } = await planFromItem(anchorId, 'Do the thing');
     // Snapshot AFTER the run has opened, not before. The subject of these cases
@@ -739,7 +778,7 @@ describe('every rejection class leaves the database untouched — through the an
     // not a proposal. Anchoring `before` ahead of it would make every case here
     // assert the lock instead of the refusal.
     const before = await treeSnapshot();
-    await engineProposes(planId, proposals);
+    await append(planId, proposals);
 
     const err = await approvePlanRequest(planId).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanRequestError);
@@ -776,6 +815,10 @@ describe('every rejection class leaves the database untouched — through the an
       ],
       { status: 400, code: 'INVALID_PLAN_REF_GRAPH' },
       anchor.id,
+      // ⚠️ Seeded underneath the service — see `engineProposesUnchecked`. The
+      // append refuses this shape now; approve is the backstop for the plans
+      // that predate it, and that is what this case still covers.
+      engineProposesUnchecked,
     );
   });
 

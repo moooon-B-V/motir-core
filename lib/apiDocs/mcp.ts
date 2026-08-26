@@ -553,6 +553,19 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Fill in a proposal you appended — the deepen turn, while the plan is still being written.',
     descriptionFingerprint: 'b5b5fb20ecb2',
   },
+  update_plan_proposal: {
+    // The line has to carry what SEPARATES it from the deepen above, because a
+    // reader picking between two adjacent tools is choosing on exactly that.
+    summary:
+      'Correct a proposal — including its parent, its dependency edges and its repo — even after the plan is in review.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '8b5189ee92b1',
+  },
+  withdraw_plan_proposal: {
+    summary:
+      'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
+    descriptionFingerprint: 'b0245a956fa6',
+  },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",
     descriptionFingerprint: 'aa4e7ce9b277',

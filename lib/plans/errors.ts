@@ -94,12 +94,33 @@ export class PlanNotInExpectedStatusError extends Error {
 /**
  * A PlanItem references (parentRef / a blockedByRef) an intra-plan temp-ref
  * that does not resolve to a materialized add in the same plan, or a real
- * work-item id that does not exist. Surfaced at materialize (approve). → 422
+ * work-item id that does not exist.
+ *
+ * Raised at TWO moments now, and the second is the one that matters
+ * (MOTIR-3539):
+ *
+ *   · at APPEND, by `assertRefsResolvable`, against the proposals the plan
+ *     already holds — which is the whole resolvable set a temp-ref may name, so
+ *     the answer is final the instant the ref arrives;
+ *   · at MATERIALIZE (approve), by `resolveRef`, which stays exactly as it was
+ *     — the backstop for every plan appended before the append check shipped.
+ *
+ * `proposal` is OPTIONAL and present only on the append side, where the batch is
+ * still in hand and the offending proposal can be named. The approve path
+ * constructs it with one argument and produces a byte-identical message to the
+ * one it produced before this second call site existed. → 422
  */
 export class UnresolvedPlanRefError extends Error {
   readonly code = 'UNRESOLVED_PLAN_REF' as const;
-  constructor(ref: string) {
-    super(`Plan reference "${ref}" could not be resolved to a work item.`);
+  constructor(ref: string, proposal?: string) {
+    super(
+      proposal
+        ? `Plan reference "${ref}" on ${proposal} names no proposal in this plan. ` +
+            'An intra-plan `planItem:` ref may only name an `add` returned by an ' +
+            'EARLIER `add_plan_items` call on this same plan — never one appended ' +
+            'in the same batch, whose id does not exist until that call returns.'
+        : `Plan reference "${ref}" could not be resolved to a work item.`,
+    );
     this.name = 'UnresolvedPlanRefError';
   }
 }
@@ -443,5 +464,68 @@ export class PlanApproveTimedOutError extends Error {
       `Approving plan ${planId} (${itemCount} proposal${itemCount === 1 ? '' : 's'}) exceeded the transaction budget and was rolled back. Nothing was created and the plan is still awaiting a decision — retry, and if it keeps timing out the plan is too large to materialize in one transaction.`,
     );
     this.name = 'PlanApproveTimedOutError';
+  }
+}
+
+/**
+ * A CORRECTION or a WITHDRAW was attempted on a plan whose proposals are FROZEN
+ * (Story MOTIR-3533 · Subtask MOTIR-3540).
+ *
+ * `generating` and `planned` are editable; `approved` and `declined` are not,
+ * for two different reasons the message states rather than implies:
+ *
+ *   · **approved** — the proposals have MATERIALIZED. The work item is now the
+ *     source of truth and `update_work_item` is its door, so editing the
+ *     proposal afterwards would leave two disagreeing records of one thing.
+ *   · **declined** — a closed decision. There is nothing downstream for an edit
+ *     to reach.
+ *
+ * The refusal NAMES the status and points at the editable surface, because the
+ * caller is usually an agent that can act on being told where to go and cannot
+ * act on being told no. → 409
+ */
+export class PlanNotEditableError extends Error {
+  readonly code = 'PLAN_NOT_EDITABLE' as const;
+  constructor(
+    readonly planId: string,
+    readonly status: string,
+  ) {
+    super(
+      `Plan ${planId} is \`${status}\` — its proposals can no longer be corrected or withdrawn. ` +
+        (status === 'approved'
+          ? 'Its proposals have materialized into work items, which are now the source of truth: edit the work item with `update_work_item` instead.'
+          : 'A declined plan is a closed decision; author a new plan instead.') +
+        ' Only a `generating` or `planned` plan is editable.',
+    );
+    this.name = 'PlanNotEditableError';
+  }
+}
+
+/**
+ * A WITHDRAW would have left a SIBLING proposal's ref pointing at nothing
+ * (Story MOTIR-3533 · Subtask MOTIR-3540).
+ *
+ * The mirror of the append-time check: MOTIR-3539 made it impossible to CREATE a
+ * dangling ref, and this is what stops one being created by DELETION instead.
+ * Reported rather than cascaded — removing the siblings that referenced it would
+ * take cards off the plan the caller never asked to withdraw, and silently
+ * blanking their refs would change what those proposals mean.
+ *
+ * The message names every referrer, so one refusal is one round trip: correct
+ * or withdraw them first, then retry. → 409
+ */
+export class PlanProposalReferencedError extends Error {
+  readonly code = 'PLAN_PROPOSAL_REFERENCED' as const;
+  constructor(
+    readonly planItemId: string,
+    readonly referrers: readonly string[],
+  ) {
+    super(
+      `Proposal ${planItemId} cannot be withdrawn: ${referrers.length} other proposal${
+        referrers.length === 1 ? '' : 's'
+      } in this plan still reference it (${referrers.join(', ')}). ` +
+        'Correct or withdraw those first — withdrawing it now would leave their refs pointing at nothing, which is the state the append-time ref check exists to prevent.',
+    );
+    this.name = 'PlanProposalReferencedError';
   }
 }

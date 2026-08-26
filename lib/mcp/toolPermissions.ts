@@ -250,6 +250,27 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // starts no model job — and `CLI_TOKEN_GRANT` below is deliberately NOT widened
   // for it, exactly as it was not for `add_plan_items`.
   update_plan_item: 'ai:view_plan',
+  // The CORRECTION door (Story MOTIR-3533 · Subtask MOTIR-3541). Same key, and
+  // again by the rule rather than by family resemblance: both
+  // `plansService.correctProposal` and `.withdrawProposal` assert
+  // `ai:view_plan` themselves, as their FIRST act, exactly as `editAddProposal`
+  // does (`agent-authored-plans.md` AMENDMENT 8).
+  //
+  // ⚠️ AND `CLI_TOKEN_GRANT` IS DELIBERATELY NOT WIDENED FOR THEM — read this
+  // before "fixing" a sandboxed run that gets refused here. A dispatched agent
+  // holds `['project:browse', 'work_item:edit', 'comment:add', 'ai:plan']`, so
+  // it can `create_plan` and is refused on its first `add_plan_items`; these two
+  // are refused for the same reason and it is the SAME reason as MOTIR-3051's.
+  // That is the grant working: a run executing a card does not get to reshape
+  // the plan it was handed, and the missing key is the mechanism enforcing it.
+  // Widening it here would hand a sandboxed run the whole plan-authoring
+  // surface through the back door. These tools serve the WORKSPACE-PAT author —
+  // the caller that actually hits the un-repairable-typo failure — and
+  // `tests/mcp/correct-plan-proposal.test.ts` asserts the CLI-token REFUSAL off
+  // this very constant, so a later widening of it fails that test rather than
+  // silently changing what a sandboxed agent may do to a plan.
+  update_plan_proposal: 'ai:view_plan',
+  withdraw_plan_proposal: 'ai:view_plan',
 
   // ── work_item:delete — the recoverable and the irreversible ──────────────
   // `archiveWorkItem` / `unarchiveWorkItem` / `deleteWorkItem` all assert

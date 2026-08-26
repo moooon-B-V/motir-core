@@ -61,6 +61,15 @@ export const planItemRepository = {
     return tx.planItem.update({ where: { id }, data });
   },
 
+  /** Delete ONE proposal — the WITHDRAW path (Story MOTIR-3533 · MOTIR-3540).
+   *
+   *  The per-item delete `agent-authored-plans.md` AMENDMENT 3 D4 recorded as
+   *  absent: `deleteByPlan` is a whole-plan operation and could not express a
+   *  single proposal coming off a plan. A write, so `tx` is required. */
+  async deleteById(id: string, tx: Prisma.TransactionClient): Promise<PlanItem> {
+    return tx.planItem.delete({ where: { id } });
+  },
+
   /** Write the materialized work-item id back onto an `add` PlanItem (approve). */
   async setWorkItemId(
     id: string,

@@ -155,6 +155,8 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   add_plan_items: true,
   // MOTIR-3090 — the deepen turn, deriving through the same plan shape
   update_plan_item: true,
+  update_plan_proposal: true,
+  withdraw_plan_proposal: true,
   open_plan_session: true,
   append_plan_turn: true,
   submit_plan_session: true,
