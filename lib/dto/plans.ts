@@ -463,6 +463,41 @@ export interface UpdateProposalInput {
   executor?: string | null;
 }
 
+/**
+ * The fields an explicit CORRECTION may change (Story MOTIR-3533 · Subtask
+ * MOTIR-3540) — `UpdateProposalInput` plus the STRUCTURAL columns the deepen
+ * turn excludes, and a `modify`'s `patch`.
+ *
+ * ⚠️ A SEPARATE INTERFACE, deliberately, and NOT a widening of
+ * `UpdateProposalInput`. `agent-authored-plans.md` AMENDMENT 3 D3 fixed the
+ * deepen turn's editable set with a rule — *a deepen may change what a card SAYS
+ * and who ACTS on it, never where it SITS or SHIPS* — and that rule is still
+ * right for a deepen. AMENDMENT 7 amends it for a CORRECTION, which is a
+ * different act with a different trigger: the author has just discovered that
+ * the structure it appended is wrong, and its only alternative is a whole new
+ * plan. Two inputs is what keeps both true at once; widening the one would have
+ * silently re-opened structure on the deepen path as well.
+ *
+ * Sparse, like its parent: an omitted key is left alone, an explicit `null`
+ * clears. `blockedByRefs` is the one exception and cannot be otherwise — it is a
+ * LIST, so a partial edit has no meaning; supplying it REPLACES the set, and
+ * `[]` clears it.
+ */
+export interface CorrectProposalInput extends UpdateProposalInput {
+  /** `add` only — a real work-item id, an intra-plan `planItem:` temp-ref, or
+   *  `null` to make the proposal top-level. Re-validated by the same check the
+   *  append runs, so a correction cannot introduce an unresolvable ref. */
+  parentRef?: string | null;
+  /** REPLACES the blocked-by set (see the note above); `[]` clears it. */
+  blockedByRefs?: string[];
+  /** `add` only — the repo pin, re-validated against the project's connected
+   *  repositories exactly as approve does; `null` unpins. */
+  targetRepo?: string | null;
+  /** `modify` only — REPLACES the patch. The op that carries a dependency edit,
+   *  and the one no door could touch at all before this. */
+  patch?: PlanItemPatch | null;
+}
+
 /** Options for `plansService.listPlans`. */
 export interface ListPlansOptions {
   cursor?: string | null;

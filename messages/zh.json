@@ -187,6 +187,7 @@
     "event_abandoned": "已自动结束 — 生成始终未完成",
     "event_appended": "{n, plural, other {追加了 # 条提案}}",
     "event_edited": "{n, plural, other {编辑了 # 条提案}}",
+    "event_withdrawn": "{n, plural, other {撤回了 # 条提案}}",
     "event_removed": "{n, plural, other {移除了 # 条提案}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
