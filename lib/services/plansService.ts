@@ -1858,22 +1858,32 @@ export const plansService = {
           // An append is ONE ACT however many proposals it carries — the reader's
           // question is "what arrived, and who sent it", not "how many INSERTs
           // ran" — so the count lives in the diff rather than in the row count.
-          await planRevisionsService.recordRevision(
-            {
-              planId,
-              changeKind: 'appended',
-              ...generationActor(fresh, ctx),
-              diff: {
-                proposalCount: proposals.length,
-                ops: {
-                  add: proposals.filter((p) => p.op === 'add').length,
-                  modify: proposals.filter((p) => p.op === 'modify').length,
-                  remove: proposals.filter((p) => p.op === 'remove').length,
+          //
+          // ⚠️ EXCEPT AN EMPTY BATCH, WHICH IS NOT A CONTENT MUTATION AT ALL
+          // (MOTIR-3538). The MCP's CLOSE is `add_plan_items { final: true }` with
+          // NO proposals: it goes through here, inserts nothing, and hands off to
+          // `markPlanned` — which writes its own `planned` row. Recording this one
+          // too would put *"0 proposals appended"* on the timeline of every plan
+          // authored through that door, immediately above the close it belongs to.
+          // The trail records what CHANGED; nothing did.
+          if (proposals.length > 0) {
+            await planRevisionsService.recordRevision(
+              {
+                planId,
+                changeKind: 'appended',
+                ...generationActor(fresh, ctx),
+                diff: {
+                  proposalCount: proposals.length,
+                  ops: {
+                    add: proposals.filter((p) => p.op === 'add').length,
+                    modify: proposals.filter((p) => p.op === 'modify').length,
+                    remove: proposals.filter((p) => p.op === 'remove').length,
+                  },
                 },
               },
-            },
-            tx,
-          );
+              tx,
+            );
+          }
           const allItems = await planItemRepository.findByPlan(planId, tx);
           return { row: fresh, items: allItems };
         },

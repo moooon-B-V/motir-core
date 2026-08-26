@@ -369,9 +369,17 @@ function ReviewAttribution({
  * than by attributing it to the project owner.
  */
 function actorLabel(ev: PlanHistoryEventDto, t: ReturnType<typeof useTranslations>): string | null {
-  if (ev.byName) return ev.byName;
+  // ⚠️ THE AGENT WINS, and the order is the decision rather than an accident.
+  // An agent authors under a PERSON's credential, so an agent-written row carries
+  // BOTH an acting user and an agent triple — and the four rows of Part X §4's
+  // table are mutually exclusive on `actorSource`, not on whether a name happens
+  // to be present. Reading `byName` first names the TOKEN'S OWNER on every row an
+  // agent wrote, which is precisely the *who wrote it* / *who asked for it*
+  // conflation the header spells out in words to avoid. The requester is on the
+  // header, once; a row says who performed THIS act.
   if (ev.actorSource === 'mcp' && ev.actorHarness) return ev.actorHarness;
   if (ev.actorSource === 'native') return t('actorMotir');
+  if (ev.byName) return ev.byName;
   return null;
 }
 

@@ -134,6 +134,28 @@ describe('the actor — an agent is named, and is never styled as a person', () 
     expect(screen.getByTitle('claude-opus-5')).toBeTruthy();
   });
 
+  it('names the AGENT, not the token’s owner, when both are on the row', () => {
+    // An agent authors under a person's credential, so an agent-written row
+    // carries both. The row says who PERFORMED the act; the header says who
+    // asked. Naming the owner here is the conflation the header spells out in
+    // words to avoid.
+    renderRail({
+      history: [
+        {
+          id: 'rev_1',
+          kind: 'appended',
+          at: '2026-08-26T08:23:40.000Z',
+          count: 3,
+          byName: 'Mara Okafor',
+          actorSource: 'mcp',
+          actorHarness: 'Claude Code',
+        },
+      ],
+    });
+    expect(rows()[0]).toContain('· Claude Code');
+    expect(rows()[0]).not.toContain('Mara Okafor');
+  });
+
   it('names Motir for a `native` actor', () => {
     renderRail({
       history: [

@@ -103,6 +103,18 @@ describe('every plan mutation writes exactly one revision row', () => {
     expect(rows[1]!.diff).toEqual({ proposalCount: 2, ops: { add: 2, modify: 0, remove: 0 } });
   });
 
+  it('an EMPTY append writes NO row — the MCP close is not a content mutation', async () => {
+    const fx = await makeWorkItemFixture();
+    const { plan } = await seedPlanWithProposals(fx);
+
+    // `add_plan_items { final: true }` with no proposals: it goes through
+    // `addProposals`, inserts nothing, and hands off to `markPlanned`. A row here
+    // would read *"0 proposals appended"* on every plan authored over the MCP.
+    await plansService.addProposals(plan.id, [], fx.ctx);
+
+    expect((await trail(plan.id)).map((r) => r.changeKind)).toEqual(['created', 'appended']);
+  });
+
   it('a deepen writes an `edited` row naming the proposal and the fields it supplied', async () => {
     const fx = await makeWorkItemFixture();
     const { plan, items } = await seedPlanWithProposals(fx);
