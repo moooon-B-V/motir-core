@@ -31,13 +31,45 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 # inside the web process so job load and request serving cannot contend for one
 # event loop and the two scale independently.
 #
-# ⚠️ DECLARING A GROUP DOES NOT CREATE A MACHINE IN IT. Same distinction this
-# file's own footer draws about `min_machines_running`, and the one that cost
-# motir-ai three days of an incident filed against the wrong service (MOTIR-2102):
-# a config file is a claim about the deployment, not a reading of it. The worker
-# group is brought up with `fly scale count worker=1`, an OPERATOR action owned by
-# MOTIR-3425, which reads the result back from the platform's own API rather than
-# from this file.
+# ⚠️ DECLARING A GROUP DOES NOT CREATE A MACHINE IN IT — and yet `flyctl deploy`
+# DOES. Both halves are true and the second one was learned late. This file cannot
+# provision: that is the distinction its own footer draws about
+# `min_machines_running`, and the one that cost motir-ai three days of an incident
+# filed against the wrong service (MOTIR-2102). What closes the gap is the RELEASE,
+# not this file — `flyctl deploy` reconciles the declared group set and creates the
+# missing machine itself.
+#
+# ⚠️ CORRECTED 2026-08-25 (MOTIR-3425). This block used to say the worker group is
+# brought up with `fly scale count worker=1`, an OPERATOR action, and a whole manual
+# card was written around that claim. Release v131 carried the new `worker` entry and
+# machine `8576143c4ee538` appeared `started` with no `fly scale count` ever run. The
+# claim came from MOTIR-2386's precedent, which was about RAISING an existing group's
+# count (`app`, 1 → 2) — a different operation. Growing a group is an operator action;
+# INTRODUCING one is not. Deploy first, then read `fly machine list -a motir-core
+# --json`; running `fly scale count` against a group already at its intended count
+# risks destroying the standby rather than doing nothing.
+#
+# ⚠️ ADDING A GROUP HERE ALSO CHANGES WHAT THE DEPLOY GUARD EXPECTS — and that is now
+# automatic rather than something to remember. `ci.yml`'s `Assert the machine pool
+# against fly.toml` step runs `scripts/assert-machine-pool.mjs`, which DERIVES its
+# expectation from this table plus `http_service.processes` /
+# `min_machines_running` below, and compares it against the platform's own machine
+# list. So a new group needs no other edit: it is expected to exist the moment it is
+# declared, and the release is what makes that true.
+#
+# It used to need one. The guard asserted a TOTAL against the repo variable
+# `FLY_EXPECTED_MACHINE_COUNT`, which MOTIR-2408 set to 2 when the pool was two app
+# machines; adding `worker` made it four and nothing updated the variable, so every
+# deploy ended RED on a deploy that had SUCCEEDED — for sixteen hours, and only then
+# because an earlier failure had been skipping the job (MOTIR-3570). That variable is
+# gone; do not reintroduce a stored count.
+#
+# ⚠️ Fly also adds a STANDBY machine to a single-machine group, which `fly status`
+# marks with a dagger: `worker† … stopped`, *"it will take over only in case of host
+# hardware failure"*. TWO rows in the group is therefore the normal steady state for a
+# count of one — not a double-provision to clean up, and a stopped machine bills no
+# compute. The guard counts pool members and reports standbys separately, for exactly
+# this reason.
 #
 # ⚠️ ADDING A `[processes]` BLOCK CHANGES WHAT `http_service` MEANS. Without one,
 # Fly runs the image's CMD on every machine and routes HTTP to all of them. With
@@ -89,7 +121,9 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
   processes            = ["app"]
   # ⚠️ These two knobs are POLICY OVER MACHINES THAT ALREADY EXIST. Fly's proxy
   # never CREATES one: auto_start starts an existing STOPPED machine and nothing
-  # more, and `flyctl deploy` updates the machines that exist without adding any.
+  # more, and `flyctl deploy` updates the machines that exist without adding any
+  # to a group that already has one. (It DOES create the first machine of a newly
+  # declared group — the [processes] block above.)
   auto_stop_machines   = "stop"
   auto_start_machines  = true
   # ⚠️ 2, AND IT IS AN AVAILABILITY DECISION — NOT A CAPACITY ONE (MOTIR-2785,
@@ -141,7 +175,8 @@ primary_region = "iad"          # Ashburn — co-located with motir-ai AND with 
 #
 # The count is created by `fly scale count 2`, an OPERATOR action owned by
 # MOTIR-2386, and read back FROM THE PLATFORM (`fly status` /
-# `GET https://api.machines.dev/v1/apps/<app>` → machine_count) by MOTIR-2392.
+# `GET https://api.machines.dev/v1/apps/<app>/machines`) by MOTIR-2392 and, on every
+# release since MOTIR-3570, by the deploy guard named in the [processes] block above.
 # `min_machines_running` above is a floor on how many of an existing pool stay
 # warm; it is not a request for a pool, and no key in this file is. (It reads 2
 # since MOTIR-2785 — the POOL is still created by the command above, and the

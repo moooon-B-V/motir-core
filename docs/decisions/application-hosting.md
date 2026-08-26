@@ -349,8 +349,15 @@ should not need a local checkout to see the change.
    events **silently** — five production jobs were dead for a month for exactly
    this reason (MOTIR-1970). A red check is the signal.
 5. **Post-deploy verification reads the PLATFORM.**
-   `GET https://api.machines.dev/v1/apps/<app>` → `machine_count`, or
-   `fly status` — **never a line in `fly.toml`.** See Q6.
+   `GET https://api.machines.dev/v1/apps/<app>/machines`, or `fly status` —
+   **never a line in `fly.toml`.** See Q6.
+   _Narrowed 2026-08-26 (MOTIR-3570): that rule governs the OBSERVATION and is
+   unchanged. The EXPECTATION it is compared against now comes from `fly.toml`'s
+   `[processes]` and `min_machines_running`, because a stored total goes stale the
+   moment a process group is added — which is what happened, and every deploy then
+   ended red on a deploy that had succeeded. Deriving the expectation from the
+   lines the release itself acts on is the opposite failure mode from MOTIR-2102's,
+   not a repeat of it._
 
 ### Rejected alternatives
 

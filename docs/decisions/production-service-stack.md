@@ -67,8 +67,14 @@ assigns it to exactly one card. **A choice whose public surface is small is
 therefore worth real money here**, and §5 takes that seriously.
 
 **2 — The runtime is a warm process holding a live Postgres pool.** Not a cold
-function per request. The pool is `machine_count: 2` — created deliberately by
-`fly scale count 2`, asserted from Fly's API on every deploy by `ci.yml`. Any
+function per request. The pool is deliberate and asserted from Fly's API on every
+deploy by `ci.yml`. _Amended 2026-08-26 (MOTIR-3570): it was `machine_count: 2`
+when this was written; MOTIR-3425 added the `worker` process group and the pool is
+now two `app` machines plus one `worker`. What the deploy asserts is no longer a
+total — it is the per-group shape `fly.toml` declares, derived from `[processes]`
+and `min_machines_running` rather than stored in a repo variable. The argument
+below is unaffected: what carries it is that the web tier is a warm process with an
+open pool, not the number of them._ Any
 argument of the form _"we need an external store because serverless"_ is an
 argument about a deployment Motir no longer has, and §6 is where that matters.
 
@@ -326,11 +332,11 @@ reversal is the point.** The previous answer was Upstash Redis, argued as
 _"serverless-native"_ because the instance count was _"neither small nor
 stable."_ That reasoning described Vercel. It does not describe Fly:
 
-| the old argument                | what is actually true (read 2026-08-10)                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| a cold function per request     | ONE long-lived Node process per machine, holding an open connection pool                                |
-| instance count unpredictable    | `machine_count: 2` — set by an explicit `fly scale count 2` and asserted from Fly's API on every deploy |
-| no database connection to spare | the process already holds a Postgres pool and uses it on essentially every request                      |
+| the old argument                | what is actually true (read 2026-08-10)                                                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a cold function per request     | ONE long-lived Node process per machine, holding an open connection pool                                                                                       |
+| instance count unpredictable    | a deliberate pool — two `app` machines and one `worker` — asserted from Fly's API on every deploy against the per-group shape `fly.toml` declares (MOTIR-3570) |
+| no database connection to spare | the process already holds a Postgres pool and uses it on essentially every request                                                                             |
 
 Once those three lines are true, adding Redis means **a new vendor, a new bill, a
 new subprocessor on MOTIR-1160's list, and a new failure domain in the path of
