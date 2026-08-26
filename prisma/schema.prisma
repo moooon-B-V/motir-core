@@ -246,6 +246,13 @@ model User {
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   withdrawnDesignEvidences    DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
   requestedPlans              Plan[]                    @relation("PlanCreatedBy")
+  // Plan CONTENT mutations this user made (Story MOTIR-3532 · MOTIR-3535) — the
+  // append-only trail beside the plan's own three party columns. SetNull on the
+  // FK so a departed author leaves the change on record, unattributed: the trail
+  // is the plan's history, not the person's, and the same audit-not-ownership
+  // semantics `decidedPlans` above uses. Modelled both sides per the
+  // FK-`@relation` rule.
+  authoredPlanRevisions       PlanRevision[]            @relation("PlanRevisionAuthor")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
   createdImports              Import[]                  @relation("ImportCreatedBy")
@@ -4588,11 +4595,12 @@ model Plan {
   /// status. Never set on `approved` — an approval has one history.
   decisionReason PlanDecisionReason?     @map("decision_reason")
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  decidedBy User?      @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-  createdBy User?      @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  decidedBy User?          @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdBy User?          @relation("PlanCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   items     PlanItem[]
+  revisions PlanRevision[]
 
   @@index([workspaceId])
   @@index([projectId, createdAt])
@@ -4655,11 +4663,12 @@ model PlanItem {
   baseRevision   String?    @map("base_revision")
   createdAt      DateTime   @default(now()) @map("created_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  plan      Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan      Plan           @relation(fields: [planId], references: [id], onDelete: Cascade)
   /// SetNull (not Cascade): archiving a target work item leaves the PlanItem as
   /// history. `add` rows have a null target until materialize.
-  workItem  WorkItem? @relation("PlanItemWorkItem", fields: [workItemId], references: [id], onDelete: SetNull)
+  workItem  WorkItem?      @relation("PlanItemWorkItem", fields: [workItemId], references: [id], onDelete: SetNull)
+  revisions PlanRevision[]
 
   /// A `modify`/`remove` target is unique per plan (one op per target per plan).
   /// Postgres treats NULLs as distinct, so multiple `add` rows (null target) in
@@ -4668,6 +4677,80 @@ model PlanItem {
   @@index([planId])
   @@index([workspaceId])
   @@map("plan_item")
+}
+
+/// One CONTENT mutation of a `Plan`, append-only (Story MOTIR-3532 · MOTIR-3535).
+///
+/// The plan's own timeline is DERIVED — `planReviewService` computes at most four
+/// events from `createdAt` / `plannedAt` / `decidedAt` / `decisionReason`, all of
+/// them status transitions, and its only actor is the decider. So a proposal
+/// deepened five times is byte-indistinguishable from one written once, and the
+/// party who WROTE the plan never appears on it at all. This table is what makes
+/// the second kind of event sayable.
+///
+/// ⚠️ MIRRORS `WorkItemRevision` (`changedById` / `changedAt` / `changeKind` /
+/// `diff Json`) rather than inventing a second vocabulary for the same idea, and
+/// it inherits that model's tenancy decision too: there is deliberately **no
+/// `workspace_id` column**. Denormalizing tenancy onto a revision row would let
+/// it lie about which workspace it belongs to; the RLS policy (see the
+/// `add_plan_revisions` migration) JOINS to the parent `plan` instead, exactly as
+/// `work_item_revision`'s joins to `work_item`.
+///
+/// ⚠️ THE ROW IS WRITTEN INSIDE THE MUTATION'S OWN TRANSACTION, and that is the
+/// whole guarantee. A revision written after the commit can be lost while the
+/// mutation stands; one written in its own transaction can commit while the
+/// mutation rolls back. Both produce a trail that LIES, in opposite directions.
+/// The repository's required `tx` is the compile-time half of that contract.
+/// This is NOT an instance of the side-effects-outside-the-transaction rule —
+/// that rule is about external I/O (email, webhooks, blob ops) whose failure must
+/// not roll back the write. This is a database write ABOUT a database write, in
+/// the same database, and its atomicity with the mutation is the point.
+model PlanRevision {
+  id           String                  @id @default(cuid())
+  planId       String                  @map("plan_id")
+  /// The proposal this change was ABOUT, when it was about one (a deepen / an
+  /// edit). Null for a plan-level act — the open, an append, the close, a
+  /// decision. SetNull rather than Cascade so a vanished proposal leaves the
+  /// change on record.
+  planItemId   String?                 @map("plan_item_id")
+  /// The acting USER, or null when no person acted.
+  ///
+  /// NULL IS A MEANING, and it is the same one `Plan.createdById` documents for
+  /// itself: `autoPlanCadenceService` runs the watcher under the PROJECT OWNER's
+  /// credential so the job has one, and recording that owner here would attribute
+  /// to a person an act they never performed. So the generation-time writes on a
+  /// `cadence` plan record null; the review edit and both decisions always record
+  /// their actor, because those are only ever reached by a person.
+  changedById  String?                 @map("changed_by_id")
+  changedAt    DateTime                @default(now()) @map("changed_at")
+  /// `created` | `appended` | `edited` | `planned` | `approved` | `declined`.
+  /// String, not an enum — the same call `WorkItemRevision.changeKind` makes and
+  /// for the same reason: a new verb is then a code change rather than a
+  /// migration, and the value set is read by this product's own surfaces only.
+  changeKind   String                  @map("change_kind")
+  /// WHICH AGENT acted, when one did — the `source · harness · model` triple
+  /// `docs/decisions/work-item-provenance.md` Decision 2 fixes, recorded PER ACT
+  /// rather than read off the plan. The plan's `authorSource` says who wrote the
+  /// plan; it cannot say who performed THIS change, and the two differ the moment
+  /// a person edits or decides an agent-written plan. Null ⟺ no agent acted.
+  actorSource  WorkItemPlanningSource? @map("actor_source")
+  actorHarness String?                 @map("actor_harness")
+  actorModel   String?                 @map("actor_model")
+  /// WHAT changed, per `changeKind` — a COUNT-shaped payload (how many proposals
+  /// an append carried, which fields an edit supplied), never the proposal bodies
+  /// themselves. `design/ai-planning/design-notes.md` Part X §5 decides what the
+  /// timeline shows of it.
+  diff         Json
+
+  plan      Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planItem  PlanItem? @relation(fields: [planItemId], references: [id], onDelete: SetNull)
+  changedBy User?     @relation("PlanRevisionAuthor", fields: [changedById], references: [id], onDelete: SetNull)
+
+  /// The timeline's read: one plan's trail, in time order.
+  @@index([planId, changedAt])
+  @@index([planItemId])
+  @@index([changedById])
+  @@map("plan_revision")
 }
 
 /// A Motir member's GitHub OAuth user-identity binding (Story 7.10 ·
