@@ -740,6 +740,7 @@ model Workspace {
   jobEvents                   JobEvent[]
   jobQueueRuns                JobQueueRun[]
   jobSteps                    JobStep[]
+  emailDeliveries             EmailDelivery[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
   attachments                 Attachment[]
@@ -2956,6 +2957,92 @@ enum JobStepKind {
   sleep
 
   @@map("job_step_kind")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Transactional-mail DELIVERY (Bug MOTIR-3507 · Subtask MOTIR-3513).
+//
+// The job ledger records whether the SEND succeeded — which, for a real
+// provider, means only "the provider accepted the POST". It says nothing about
+// whether the message was delivered, and `succeeded` next to a bounced
+// invitation is what hid MOTIR-3507 for a day. This table is the other half:
+// one row per accepted message, keyed on the PROVIDER's own id, so the events
+// the provider already emits about it have somewhere to land.
+//
+// ⚠️ `workspaceId` is NULLABLE, exactly as `JobEvent.workspaceId` is and for
+// the same reason: `email.send` is the one job whose payload permits a null
+// workspace (a password reset is not owned by a workspace). The RLS policy
+// handles that case with the system-admin branch — see the migration header.
+// ───────────────────────────────────────────────────────────────────────────
+
+/// One transactional message the provider ACCEPTED, and what became of it.
+model EmailDelivery {
+  id String @id @default(cuid())
+
+  /// The provider's own handle for the message — Resend's `{ id }`. UNIQUE, so
+  /// a retried job attempt that the provider deduped to the same message
+  /// cannot write a second row. NULLABLE because the dev providers issue no id
+  /// and a 2xx whose body does not parse is still an accepted send (see
+  /// `EmailSendResult` in lib/email.ts); Postgres allows many NULLs under a
+  /// unique index, which is the wanted behaviour.
+  providerMessageId String? @unique @map("provider_message_id")
+
+  /// Which provider took it — `resend`, `console`, `file`. Recorded because a
+  /// null `provider_message_id` means something different per provider.
+  provider  String
+  recipient String
+  /// The `TransactionalEmail` discriminant this message was rendered from.
+  template  String
+
+  workspaceId String? @map("workspace_id")
+
+  state EmailDeliveryState @default(accepted)
+
+  /// The send's dedup key (the reset token, the invite token). Indexed on BOTH
+  /// job ledgers (`job_run.idempotency_key`, `job_event.idempotency_key`), so
+  /// it is the lane-independent join back to the run — it is on the payload
+  /// itself and needs no context plumbing.
+  idempotencyKey String? @map("idempotency_key")
+  /// The run that sent it, as the ACTIVE lane numbers runs: a `job_queue.id`
+  /// cuid on the Postgres engine, an Inngest ULID on the Inngest lane. Recorded
+  /// truthfully rather than normalised — the discriminator is the id's shape.
+  runId          String? @map("run_id")
+  /// The triggering event's id, same lane caveat as `runId`.
+  eventId        String? @map("event_id")
+
+  /// When the provider last told us something about this message. Null until
+  /// the first delivery event arrives.
+  lastEventAt DateTime? @map("last_event_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// The operator surface's read: this workspace's deliveries, newest first.
+  @@index([workspaceId, createdAt(sort: Desc)])
+  /// The join the jobs dashboard makes from a run row to its delivery.
+  @@index([idempotencyKey])
+  @@index([runId])
+  @@map("email_delivery")
+}
+
+/// What became of an accepted message. `accepted` is what every row starts at —
+/// the provider took the POST and nothing has been heard since. The other four
+/// are the provider's own delivery events, and they are the WHOLE set: the
+/// webhook that writes them (MOTIR-3515) adds no sixth value.
+///
+/// ⚠️ `delivered` does NOT mean "read", and it does not mean "in the inbox" —
+/// a spam-foldered message is `delivered`. That distinction is why MOTIR-3516
+/// exists and why nothing in this table can answer it.
+enum EmailDeliveryState {
+  accepted
+  delivered
+  bounced
+  complained
+  delayed
+
+  @@map("email_delivery_state")
 }
 
 /// Where an attachment row entered the system (Subtask 5.2.1). `editor` =

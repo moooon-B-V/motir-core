@@ -2146,6 +2146,7 @@
       "runsTableCaption": "Background job runs",
       "col": {
         "status": "Status",
+        "delivery": "Delivery",
         "function": "Function",
         "event": "Event",
         "attempts": "Attempts",
@@ -2177,7 +2178,24 @@
       "dlqEmptyTitle": "Nothing in the dead-letter queue",
       "dlqEmptyDesc": "Every job has succeeded or is still retrying.",
       "runsEmptyTitle": "No job runs yet",
-      "runsEmptyDesc": "When a background job runs, it'll appear here."
+      "runsEmptyDesc": "When a background job runs, it'll appear here.",
+      "delivery": {
+        "accepted": "accepted",
+        "delivered": "delivered",
+        "bounced": "bounced",
+        "complained": "complained",
+        "delayed": "delayed"
+      },
+      "deliveryNone": "No delivery record",
+      "deliveryDetail": {
+        "heading": "Delivery",
+        "state": "State",
+        "messageId": "Message id",
+        "recipient": "Recipient",
+        "template": "Template",
+        "lastEvent": "Last event",
+        "never": "No provider event yet"
+      }
     },
     "account": {
       "eyebrow": "Account settings",

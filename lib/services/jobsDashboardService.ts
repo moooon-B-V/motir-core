@@ -2,6 +2,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDTO, toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
+import { emailDeliveryRepository } from '@/lib/repositories/emailDeliveryRepository';
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { replayDLQ as replayDlqInTx } from '@/lib/jobs/dlq';
 import { isOwnerRole } from '@/lib/workspaces/roles';
@@ -40,19 +41,61 @@ export interface ListDlqInput {
   offset: number;
 }
 
+/**
+ * Join each run to its message's delivery record (Bug MOTIR-3507 · Subtask
+ * MOTIR-3517), in ONE extra query for the whole page.
+ *
+ * The join key is `idempotencyKey`, which is on the run ledger and on the
+ * delivery row and indexed on both. It is deliberately NOT the engine's run id:
+ * that id means different things on the two lanes (a `job_queue` cuid on the
+ * Postgres engine, an Inngest ULID on the other), whereas the send key is the
+ * payload's own and is identical either way.
+ *
+ * Runs with no key, and runs that are not `email.send`, are skipped before the
+ * query — so a workspace whose jobs are all reindexes pays nothing for this.
+ * `tx` is threaded from the caller's context binding, so the lookup is scoped
+ * by the same RLS the runs read was.
+ */
+async function withDeliveries(
+  runs: Awaited<ReturnType<typeof jobRunRepository.listByWorkspace>>,
+  tx: Parameters<typeof emailDeliveryRepository.listByIdempotencyKeys>[1],
+): Promise<JobRunDTO[]> {
+  const keys = [
+    ...new Set(
+      runs
+        .filter((run) => run.functionId === EMAIL_SEND_FUNCTION_ID)
+        .map((run) => run.idempotencyKey)
+        .filter((key): key is string => key !== null),
+    ),
+  ];
+  const deliveries = await emailDeliveryRepository.listByIdempotencyKeys(keys, tx);
+  const byKey = new Map(
+    deliveries
+      .filter((row) => row.idempotencyKey !== null)
+      .map((row) => [row.idempotencyKey as string, row]),
+  );
+  return runs.map((run) =>
+    toJobRunDTO(run, run.idempotencyKey === null ? null : (byKey.get(run.idempotencyKey) ?? null)),
+  );
+}
+
+/** The one job whose runs carry a delivery record. */
+const EMAIL_SEND_FUNCTION_ID = 'email.send';
+
 export const jobsDashboardService = {
   /** A workspace's job runs (newest-first, optional status filter), as DTOs. */
   async listJobRuns(input: ListRunsInput): Promise<JobRunDTO[]> {
-    const rows = await withWorkspaceContext(
+    return withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
-      (tx) =>
-        jobRunRepository.listByWorkspace(
+      async (tx) => {
+        const rows = await jobRunRepository.listByWorkspace(
           input.workspaceId,
           { status: input.status, limit: input.limit, offset: input.offset },
           tx,
-        ),
+        );
+        return withDeliveries(rows, tx);
+      },
     );
-    return rows.map(toJobRunDTO);
   },
 
   /** A workspace's dead-letter entries (newest-failure-first), as DTOs. */
@@ -88,13 +131,16 @@ export const jobsDashboardService = {
     limit: number;
     offset: number;
   }): Promise<JobRunDTO[]> {
-    const rows = await withSystemContext((tx) =>
-      jobRunRepository.listAll(
+    return withSystemContext(async (tx) => {
+      const rows = await jobRunRepository.listAll(
         { status: input.status, limit: input.limit, offset: input.offset },
         tx,
-      ),
-    );
-    return rows.map(toJobRunDTO);
+      );
+      // The system view is the one place an UNTENANTED delivery is visible —
+      // a password reset carries a null workspace on both the run and its
+      // delivery row, so only this binding's RLS branch admits either.
+      return withDeliveries(rows, tx);
+    });
   },
 
   /**
