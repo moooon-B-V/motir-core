@@ -145,6 +145,23 @@ Check, at minimum: `count(*)` on the affected table against the same count on
 
 ### 4.4 Rewinding the root branch
 
+> ⚠️ **`main` is a protected branch, and a protected branch REFUSES a restore.**
+> Measured 2026-08-26 (MOTIR-3617), not quoted from the docs — the same call
+> that returns `200` on an unprotected branch returns
+> `422 {"message":"cannot reset protected branch"}` on a protected one. The
+> rewind is therefore a three-step sequence, not one call. Do not skip step 3.
+
+**Step 1 — un-protect.** From here until step 3, production is deletable again;
+that window is the price of the rewind, so keep it short and do not walk away.
+
+```bash
+curl -s -X PATCH "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/branches/br-cool-king-auw0r6up" \
+  -H "Authorization: Bearer $K" -H 'Content-Type: application/json' \
+  -d '{"branch":{"protected":false}}'
+```
+
+**Step 2 — restore.**
+
 ```bash
 curl -s -X POST "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/branches/br-cool-king-auw0r6up/restore" \
   -H "Authorization: Bearer $K" -H 'Content-Type: application/json' \
@@ -153,6 +170,26 @@ curl -s -X POST "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/
        "preserve_under_name":"pre-restore-<incident>"}'
 ```
 
+**Step 3 — re-protect. This is not optional and it is not cleanup.** Until it
+runs, the guard this database relies on is off. Re-assert it by reading the
+branch back, not by trusting the `PATCH` response:
+
+```bash
+curl -s -X PATCH "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/branches/br-cool-king-auw0r6up" \
+  -H "Authorization: Bearer $K" -H 'Content-Type: application/json' \
+  -d '{"branch":{"protected":true}}'
+# then, as a separate call:
+curl -s "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/branches/br-cool-king-auw0r6up" \
+  -H "Authorization: Bearer $K" | grep -o '"protected":[a-z]*'
+```
+
+- **⚠️ `423` between these steps is a queue, not a refusal.** Back-to-back branch
+  operations return
+  `423 {"message":"project already has running conflicting operations, scheduling of new ones is prohibited"}`
+  while the previous one settles. Observed repeatedly on 2026-08-26. Under
+  incident pressure this reads as "the restore is blocked" and invites a wrong
+  diagnosis — it is not `422`, and the fix is to retry the same call a moment
+  later. Poll `GET …/branches/<id>` until `current_state` is `ready`.
 - **`preserve_under_name` is not optional in practice.** It keeps the
   pre-restore state as a branch, which is the only undo this operation has. Use
   it every time.
@@ -173,6 +210,11 @@ and the Launch plan's limit is 5000 (not a real constraint; the tidiness is):
 curl -s -X DELETE -H "Authorization: Bearer $K" \
   "https://console.neon.tech/api/v2/projects/snowy-truth-13928044/branches/<branch-id>"
 ```
+
+**If that call answers `422 {"message":"cannot delete protected branch"}`, you
+have just aimed it at production.** `main` (`br-cool-king-auw0r6up`) is one
+character away from most scratch ids and is protected precisely so this typo is
+refused instead of obeyed (MOTIR-3617). Read the id, do not retry the call.
 
 ---
 
@@ -270,9 +312,24 @@ nothing needed rotating.
 - **A restored branch's compute may run a newer Postgres minor than the one it
   was branched from** — observed 18.6 on the drill branch against 18.4 on
   `main`. Harmless here; worth knowing before it reads as corruption.
-- **`main` is not a _protected_ branch** (`protected: false`, read 2026-08-26).
-  Protecting it would enforce the (currently empty) IP allow-list and refuse
-  deletion. Not done here — it is a policy change, not a restore step.
+- **`main` IS a protected branch as of 2026-08-26** (MOTIR-3617); it was
+  `protected: false` when this runbook was first written. What that flag was
+  measured to do, on this project, that day:
+
+  | call against a protected branch         | result                               |
+  | --------------------------------------- | ------------------------------------ |
+  | `DELETE …/branches/{id}`                | `422 cannot delete protected branch` |
+  | `POST …/branches/{id}/restore`          | `422 cannot reset protected branch`  |
+  | the same two calls, branch un-protected | `200`                                |
+
+  Both readings come from a control branch that was protected, called, then
+  un-protected and called again with an identical body, so the flag is the only
+  variable. The `DELETE` was deliberately **not** aimed at `main` itself. The
+  restore refusal is why §4.4 is now three steps.
+
+- **Protection does not currently enforce anything about IP.** The project's
+  allow-list is empty with `protected_branches_only: false`, so that half of the
+  feature buys nothing here today. Do not cite it as a control that exists.
 
 ## §8 — What this runbook does not cover
 
@@ -280,7 +337,11 @@ nothing needed rotating.
   restore does not restore them; a work item restored with an attachment row may
   point at an object that still exists (Tigris was not rewound) or, after a
   deletion incident, at one that does not.
-- **Anything outside this project** — motir-ai and motir-gateway have their own
-  Neon projects, both also at 7-day retention, and neither is covered by a drill.
+- **Anything outside this project** — motir-ai (`hidden-thunder-40380051`) and
+  motir-gateway (`autumn-sky-90851862`) have their own Neon projects, both also
+  at 7-day retention, and neither is covered by a drill. **Both are also
+  `protected: false`** as of 2026-08-26; MOTIR-3617 protected only `motir-core`
+  and knowingly left those two alone. Whether they warrant the same treatment is
+  an open question, not an oversight.
 - **A tested application-level rollback**, which is MOTIR-2516's card, not this
   one. §5 step 3 depends on it.
