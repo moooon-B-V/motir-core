@@ -308,25 +308,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // (`design/platform-admin/design-notes.md` cited `/admin` as forward-looking.
   //  MOTIR-2896 built the route group, so the row expired and is gone — the
   //  mechanism working exactly as its sibling comment below describes.)
-  // ⚠️ FORWARD-LOOKING, AND TEMPORARY — DELETE BOTH ROWS IN **MOTIR-1220**, the
-  // card that builds `app/(authed)/settings/account/security/page.tsx`. Story
-  // 8.11 (MOTIR-1213) designs the account 2FA pane before it is built, which is
-  // Principle #13 working as intended, and the design PR merges BEFORE the code
-  // PR because the design is that story's stopper. So for exactly that window the
-  // two notes name an address the app does not yet serve. The sibling comment
-  // above states the rule these rows follow: a forward-looking row names the card
-  // that removes it, and the tight assertion turns it red the day the route
-  // exists — which is how it gets removed on time.
-  {
-    file: 'design/settings/design-notes.md',
-    address: '/settings/account/security',
-    why: 'Forward-looking: the account two-factor pane (Story 8.11 · MOTIR-1216 designs it, MOTIR-1220 builds it). Delete this row in MOTIR-1220.',
-  },
-  {
-    file: 'design/auth/design-notes.md',
-    address: '/settings/account/security',
-    why: 'Forward-looking: the challenge asset lands a reader on the same unbuilt pane after they spend their last recovery code. Same card removes it — MOTIR-1220.',
-  },
   {
     file: 'design/roadmap/design-notes.md',
     address: '/projects/[key]/direction/[tier]',

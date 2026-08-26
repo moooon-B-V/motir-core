@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   filesForIncludePattern,
@@ -27,6 +27,26 @@ import {
  * stops matching when a directory is renamed or a route group is introduced.
  */
 describe('the coverage gate resolves every pattern it names', () => {
+  // ⚠️ Glob ONCE, and give that one call a budget of its own.
+  //
+  // `reportableFiles()` resolves the whole `coverage.include` set against the
+  // tree and is memoised at module scope, so every case below is a cache hit —
+  // but the FIRST case pays it, and `vitest.config.ts`'s `testTimeout` is 15 s,
+  // sized for a database test rather than a whole-tree glob. Under `vitest run
+  // --coverage` the v8 provider instruments every module the resolution touches,
+  // and on a CI runner with three shards competing for the box that first case
+  // times out while passing locally — a failure that reads as a broken guard
+  // rather than a slow one (MOTIR-2815; the same shape `tests/rls/
+  // test-call-site-guard.test.ts` and `test-singleton-statement-guard.test.ts`
+  // hit, and the same remedy they took).
+  //
+  // Hoisting it here does not weaken an assertion: every `expect` below is
+  // unchanged and still fails on a pattern that reaches no file. It moves the
+  // cost to the one place that can honestly carry a budget.
+  beforeAll(async () => {
+    await reportableFiles();
+  }, 60_000);
+
   it('has no `coverage.include` pattern that resolves to no file', async () => {
     const dead: string[] = [];
     for (const pattern of includePatterns) {

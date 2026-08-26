@@ -71,8 +71,8 @@ SETUP COMMANDS:
   login [options]           Connect this terminal: shows a code, opens Motir,
                             waits for your approval.
   auth                      Authenticate to a Motir server with a PAT.
-  link [options]            Bind this workspace-root folder to a server +
-                            workspace + project.
+  link [options]            Bind this workspace-root folder to a project, and
+                            clone the repositories it is missing.
   doctor [options]          Preflight your BYOK setup: auth, project link, agent
                             binary, credential presence.
 
@@ -753,7 +753,10 @@ describe('the whole run, end to end over the stubs', () => {
     // reported as inconclusive because a second image failed to download.
     const io = stubIo({
       runNode: () =>
-        Promise.resolve(REAL_HELP.replace(/ {2}link \[options\][\s\S]*?project\.\n/, '')),
+        // Cut the whole `link` block, up to the next two-space-indented command
+        // line. Anchored on the SHAPE rather than on the last word of the
+        // description, which is prose and moves (it did, with MOTIR-3589).
+        Promise.resolve(REAL_HELP.replace(/ {2}link \[options\][\s\S]*?(?=\n {2}\S)/, '')),
     });
     const code = await main(
       [

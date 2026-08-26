@@ -45,6 +45,16 @@ export default defineConfig({
         'src/plan.ts': { branches: 90, functions: 90, lines: 90 },
         'src/projectLink.ts': { branches: 90, functions: 90, lines: 90 },
         'src/render.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3584 · Subtask MOTIR-3590 — the ONE place the CLI clones a
+        // repository. MEASURED FIRST, then pinned: 100 / 100 / 100 / 100 on this
+        // branch. It entered the gate at 84.31% branches, and the shortfall was
+        // instructive rather than a gap in the tests: three of the uncovered arms
+        // were `entry.path ?? ''` fallbacks for a case the planner cannot produce.
+        // They were REMOVED — the plan entry is a discriminated union now, so a
+        // `clone` and a `present` entry carry a non-null path in the TYPE — rather
+        // than covered or ignored. An unreachable fallback is a branch no test can
+        // cover and no reader can classify.
+        'src/repoClone.ts': { branches: 90, functions: 90, lines: 90 },
         'src/serverResolve.ts': { branches: 90, functions: 90, lines: 90 },
         'src/session.ts': { branches: 90, functions: 90, lines: 90 },
         'src/transport.ts': { branches: 90, functions: 90, lines: 90 },

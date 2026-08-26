@@ -9,6 +9,7 @@ import {
   type V1Parameter,
 } from '@/lib/api/v1/openapi/operation';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
+import { projectRepositorySchema } from '@/lib/api/v1/projects/repositories';
 import { projectSchema } from '@/lib/api/v1/projects/schema';
 import { readyItemSchema, SPRINT_ACTIVE, UNASSIGNED } from '@/lib/api/v1/ready/schema';
 import {
@@ -163,6 +164,22 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
       description: 'The project.',
     },
     errorStatuses: [404],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/repositories',
+    operationId: 'listProjectRepositories',
+    summary: 'List a project’s repositories',
+    description:
+      'The project’s repository SET, in set order — the FIRST row is the project’s primary repository. Each row carries what a client needs to FIND and CLONE one: the checkout `name` (the host’s own casing, which is what a `targetRepo` pin stores), `repoRef`, `cloneUrl`, `defaultBranch` and `archived`. ⚠️ A row with no repository behind it yet is PRESENT with those fields `null` and its own `state` — a `proposed` row is a real member of the set, and a client must be able to say why it was skipped rather than watch it vanish. Branch on `established`, which is the same two-part rule (`state` is `created` or `connected` AND the repository is still connected) that dispatch itself resolves a checkout with. `cloneUrl` is DERIVED, and is `null` for a provider this build cannot address — the API never invents a host. Gated on `project:browse`, the key a CLI-minted token already holds.',
+    permission: 'project:browse',
+    parameters: [projectKeyParameter, ...pageParameters()],
+    response: {
+      status: 200,
+      body: { kind: 'page', item: projectRepositorySchema },
+      description: 'A page of the project’s repositories, primary first.',
+    },
+    errorStatuses: [404, 422],
   }),
   defineOperation({
     method: 'GET',
@@ -410,6 +427,7 @@ export const PLANNING_COMPONENTS: Readonly<Record<string, ZodType>> = {
   Me: meSchema,
   WorkspaceSummary: workspaceSummarySchema,
   Project: projectSchema,
+  ProjectRepository: projectRepositorySchema,
   Sprint: sprintSchema,
   ReadyItem: readyItemSchema,
   MembershipMoveResult: membershipMoveResultSchema,

@@ -593,12 +593,12 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[0]?.query.get('sessionBranch')).toBeNull();
     expect(server.v1Calls[1]?.query.get('sessionBranch')).toBe('motir/auto-1');
     expect(server.v1Calls[2]?.query.get('sessionBranch')).toBeNull();
-    // The two SCALAR repo-plumbing fields the payload carries are NOT on the view
-    // model: nothing routes on them, and a field with no reader is dropped at
-    // the adapter rather than carried in case someone wants it later. The SET is
-    // carried (MOTIR-3133) precisely because something does read it — the
-    // launcher resolves a checkout per element — and its own `delivery` is
-    // dropped by the same rule.
+    // The field-with-no-reader rule, and what it looks like once a reader
+    // arrives. The two SCALAR repo-plumbing fields were dropped while nothing
+    // routed on them; MOTIR-3588 made the resolution read them — a missing
+    // checkout is CLONED from that URL rather than dispatched at the workspace
+    // root — so they are carried now. The SET is carried for the same reason
+    // (MOTIR-3133), and its own `delivery` is still dropped by the same rule.
     expect(Object.keys(bare).sort()).toEqual([
       'advisories',
       'key',
@@ -607,6 +607,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
       'prompt',
       'sessionBranch',
       'targetRepo',
+      // MOTIR-3588 — where the pinned repository is cloned from, and onto which
+      // branch, for the dispatch that has to materialize it.
+      'targetRepoCloneUrl',
+      'targetRepoDefaultBranch',
       // MOTIR-3133 — the whole set, of which `targetRepo` is element 0's name.
       'targetRepos',
       'workflowMode',

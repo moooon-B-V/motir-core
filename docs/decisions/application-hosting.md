@@ -540,22 +540,30 @@ here).
 - **MOTIR-2393 (deleting the abandoned path)** — deletes `@vercel/blob`, the
   `VERCEL_*` and `BLOB_*` reads and `cleanup-preview-deployments.yml`. Q4 is why
   the preview-cleanup workflow goes: it reaps something that no longer exists.
-  **`vercel.json` is NOT in that set, and the exception is load-bearing:** it is
-  not a client of the old platform but the MUZZLE on it — its
-  `git.deploymentEnabled: false` plus the `ignoreCommand` are the only things
+  **`vercel.json` was NOT in that set, and the exception was load-bearing:** it
+  was not a client of the old platform but the MUZZLE on it — its
+  `git.deploymentEnabled: false` plus the `ignoreCommand` were the only things
   stopping the still-connected Vercel Git integration from building every branch.
-  Deleting it while the project lives re-enables a caller instead of removing
+  Deleting it while the project lived re-enabled a caller instead of removing
   one (measured on motir-core#1983: with the file gone, Vercel built the branch
   and the deploy failed on the 250 MB function-size limit — the same packaging
-  wall §"What is lost" describes). So it goes with the project, in MOTIR-2508,
-  which is `blocked_by` MOTIR-2396.
+  wall §"What is lost" describes). So it went with the project, in MOTIR-2508,
+  `blocked_by` MOTIR-2396. _Done 2026-08-26: MOTIR-2396 deleted the Vercel
+  project `motir-core` (`prj_okYo…`) outright — not downgraded, not merely
+  Git-disconnected — and MOTIR-2508 then deleted `vercel.json`. There is no
+  longer a project whose Git integration the two keys could muzzle, so the file
+  is what MOTIR-2393 originally took it for: inert configuration naming a
+  platform this repository has left._
 - **MOTIR-2394 / MOTIR-2395 (the Story's tests)** — the no-Vercel-import guard is
   an exact set because Q1 leaves no legitimate Vercel import; the blob seam is
   exercised through its real consumers because Q2 changes semantics behind an
   unchanged signature.
 - **MOTIR-2396 (retirement)** — ends the rollback. Q4 is the reason there is no
-  preview workload left on Vercel to strand. **MOTIR-2508** follows it and
-  deletes `vercel.json`, which cannot go before the project it silences.
+  preview workload left on Vercel to strand. **MOTIR-2508** followed it and
+  deleted `vercel.json`, which could not go before the project it silenced.
+  _Both done 2026-08-26: the Neon Marketplace resource, both blob stores and the
+  Vercel project are deleted, and `vercel.json` is gone with them. Nothing of
+  motir-core is left on the old platform, and the rollback is a rebuild._
 
 ---
 

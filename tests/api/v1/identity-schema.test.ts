@@ -31,6 +31,12 @@ function userRow(extra: Record<string, unknown> = {}) {
     email: 'ada@example.com',
     // Real `User` columns that are NOT contract, and must not become contract.
     emailVerified: true,
+    // Two-factor standing (MOTIR-1217), at its TRUE value on purpose — the same
+    // reasoning as `platformRole` below. Whether an account carries a second
+    // factor is a fact about its security posture, and the v1 identity contract
+    // is `user.{id,name,email}`; `false` would have satisfied the type and
+    // proved nothing.
+    twoFactorEnabled: true,
     image: 'https://example.com/ada.png' as string | null,
     lastActiveProjectId: null as string | null,
     // PLATFORM STANDING, at its widest value on purpose (MOTIR-2896). This is

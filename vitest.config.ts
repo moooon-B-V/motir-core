@@ -1060,6 +1060,11 @@ export default defineConfig({
         // it added, each gated independently so a regression in one fails the
         // run rather than being averaged away by the others.
         'lib/api/v1/projects/schema.ts',
+        // Story MOTIR-3584 · Subtask MOTIR-3590 — the project's repository SET on
+        // `/api/v1`, the read `motir link` materializes from. MEASURED FIRST, then
+        // pinned below, per this block's own rule.
+        'lib/api/v1/projects/repositories.ts',
+        'app/api/v1/projects/[projectKey]/repositories/route.ts',
         'lib/api/v1/sprints/schema.ts',
         'lib/api/v1/sprints/membership.ts',
         'lib/api/v1/ready/schema.ts',
@@ -1592,6 +1597,26 @@ export default defineConfig({
         'app/**/_components/ProjectLogoField.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/_components/ProjectMark.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/api/upload/project-image/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3584 · Subtask MOTIR-3590 — the project's repository SET on
+        // `/api/v1`. MEASURED FIRST, then pinned, on this branch over
+        // `tests/api/v1/project-repositories-route` and
+        // `tests/integration/linkClonesCheckoutsStoryGate`:
+        //   lib/api/v1/projects/repositories.ts     100 / 100 / 100 / 100
+        //   app/api/v1/…/repositories/route.ts      100 / 100 / 100 / 100
+        //
+        // The route ENTERED this card at 50% branches: the `position` tie-break
+        // was unexercised, because no service API produces two rows sharing a
+        // fractional key on demand. It is a RULE-BEARING arm, not a defensive one
+        // — `moveRow` computes `position` from a read that guards a write, so two
+        // concurrent moves really can land the same value, and a cursor cannot
+        // page soundly over an order that shuffles. The test forces the tie
+        // through the admin client rather than ignoring the arm.
+        'lib/api/v1/projects/repositories.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/[projectKey]/repositories/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },
