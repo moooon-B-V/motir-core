@@ -187,6 +187,45 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
+// ── MOTIR-3446 — THE AWAIT COUNT IS A TRIGGER, NOT THE FINDING ──────────────
+//
+// This page matches `await` ELEVEN times, which sorts it second-worst in the app
+// behind `/items/[key]`'s twenty-nine, and MOTIR-3440 put it on the sweep list
+// for that number. The number is misleading, and the measurement is recorded
+// here rather than in a pull-request body so the next sweep meets it before it
+// starts rather than re-deriving it:
+//
+//   GATE — 3, and they must stay ahead of any paint
+//     getSession · getTranslations('codeHealth') · getActiveProject
+//
+//   GENUINELY DEPENDENT — 3, each needing the previous one's output
+//     resolveCodeContext(...)              needs the project → yields repoRefs
+//     loadCodeHealthSurfaces(..., repoRefs) needs repoRefs
+//     readRepoAudit(..., selectedRepoKey)   needs the selection, which is
+//                                           computed from the summary pass
+//
+//   ALREADY CONCURRENT — 5, the fan-out machinery itself
+//     the two per-repo leaves (getAudit / getConvention) and the three
+//     `allSettledOrThrow` call sites that fan them out: conventions across N
+//     repos, and — in both the N=1 and N>1 branches — the audit work against the
+//     convention work.
+//
+// So there is NOTHING LEFT TO PARALLELISE, and that is this card's honest
+// result rather than a gap in it. The expensive part — an audit and a convention
+// for every indexed repository — has been concurrent since MOTIR-3077, and the
+// serial remainder is serial because each step consumes the previous step's
+// output. A sweep driven by the count would have wrapped correct code in
+// boundaries, churned 260 lines, and reported a win nobody would feel.
+//
+// ⚠️ NO BOUNDARY IS ADDED EITHER, and that is a deferral with a named reason.
+// The design's entry (`design/coding-convention/design-notes.md` § The streaming
+// allocation at ARRIVAL) gives this surface verdict NONE and observes that a
+// boundary would buy only the `Header` painting ahead of the island. Buying MORE
+// than that — the repo selector and the empty state ahead of the per-repo
+// surfaces, which is what MOTIR-3446's acceptance criterion asks for — means
+// handing `CodeHealthClient` a pending state it does not have and nothing has
+// drawn, and the generic rung (`PageSkeleton`) does not exist on `main`
+// (MOTIR-3520). Reads unchanged, fan-outs untouched.
 export default async function CodeHealthPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
