@@ -267,6 +267,26 @@ describe('deleteToken', () => {
   // The old behaviour was idempotent because the row was still there to return.
   // With a delete there is nothing left, and "this token is gone" is the true
   // answer to a second revoke — the same 404 a stranger's id gets.
+  // The LIST half of the deploy-window guard (MOTIR-3546), asserted for the
+  // same reason as verify's: a row an old image stamps mid-rollout must not
+  // read as a live credential on a new one — that is the very defect this card
+  // removes. Goes with the column.
+  it('omits a row carrying `revokedAt` from the list — the deploy-window guard', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto: stamped } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'stamped-by-the-old-image',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+    const { dto: live } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'live',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
+    await adminDb.apiToken.update({ where: { id: stamped.id }, data: { revokedAt: new Date() } });
+
+    const listed = await apiTokensService.listForUser(owner.id);
+    expect(listed.map((t) => t.id)).toEqual([live.id]);
+  });
+
   it('re-revoking an already-deleted id is a not-found', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {

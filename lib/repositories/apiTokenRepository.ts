@@ -53,13 +53,21 @@ export interface CreateApiTokenInput {
 }
 
 export const apiTokenRepository = {
-  /** A user's tokens across ALL their workspaces, newest first — the
+  /** A user's LIVE tokens across ALL their workspaces, newest first — the
    * account-level settings list (bug 7.21: each row carries its bound workspace
    * + org so the list labels it). Runs under `withUserContext`, so RLS already
-   * narrows to the owner. */
+   * narrows to the owner.
+   *
+   * ⚠️ The `revokedAt: null` predicate is the LIST half of the same transition
+   * guard `verify` carries (MOTIR-3546), and it goes with the column. Revoking
+   * deletes the row, so in the steady state no row can match — but the OLD
+   * image still stamps `revoked_at` for the length of a rolling release, and
+   * without this a user who revoked a token on an old machine and then landed
+   * on a new one would see the dead row listed as live. That is the exact
+   * defect this card removes, so it must not reappear in the deploy window. */
   async findByUser(userId: string, tx: Prisma.TransactionClient): Promise<ApiTokenWithScope[]> {
     return tx.apiToken.findMany({
-      where: { userId },
+      where: { userId, revokedAt: null },
       orderBy: { createdAt: 'desc' },
       include: SCOPE_INCLUDE,
     });
