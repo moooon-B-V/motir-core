@@ -44,9 +44,10 @@ export default async function AccountSecurityPage() {
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('settings.account.twoFactor');
-  const [status, passwordCapability] = await Promise.all([
+  const [status, passwordCapability, trustedDevices] = await Promise.all([
     twoFactorService.getStatus(session.user.id),
     usersService.getPasswordCapability(session.user.id),
+    twoFactorService.listTrustedDevices(session.user.id),
   ]);
 
   return (
@@ -60,6 +61,7 @@ export default async function AccountSecurityPage() {
         initialStatus={status}
         email={session.user.email}
         hasPassword={passwordCapability.hasPassword}
+        initialTrustedDevices={trustedDevices}
         backupCodeCount={TWO_FACTOR_BACKUP_CODE_COUNT}
         otpPeriodMinutes={TWO_FACTOR_OTP_PERIOD_MINUTES}
         totpPeriodSeconds={TWO_FACTOR_TOTP_PERIOD_SECONDS}

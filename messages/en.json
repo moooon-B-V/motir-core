@@ -831,7 +831,52 @@
     "wrongEmailSubhead": "This invite is for {invitedEmail}. You're signed in as {currentEmail}. Sign in with the invited email to accept, or ask the inviter to re-send to your address.",
     "signInWith": "Sign in with {invitedEmail}",
     "inviteAcceptFailed": "This invite could not be accepted. Refresh to see details.",
-    "acceptInvite": "Accept invite"
+    "acceptInvite": "Accept invite",
+    "twoFactor": {
+      "title": "Two-step verification",
+      "subtitle": "Enter the six-digit code from your authenticator app.",
+      "signingInAs": "Signing in as {email}",
+      "codeLabel": "Six-digit code",
+      "verify": "Verify",
+      "trustDevice": "Don’t ask again on this device for {days} days",
+      "tryAnother": "Try another way",
+      "backToCode": "Back to the code",
+      "chooseTitle": "Try another way",
+      "chooseSubtitle": "Pick how you’d rather confirm it’s you.",
+      "methods": {
+        "totp": {
+          "label": "Use your authenticator app",
+          "sub": "Works offline. The strongest option."
+        },
+        "email": {
+          "label": "Email a code to {email}",
+          "sub": "Lower security — an inbox is not a device."
+        },
+        "backup": {
+          "label": "Use a recovery code",
+          "sub": "One of the ten you saved. Each works once."
+        }
+      },
+      "emailSent": {
+        "title": "Check your email",
+        "subtitle": "We sent a six-digit code to {email}.",
+        "expiry": "The code expires in {minutes, plural, one {# minute} other {# minutes}}. Asking for a new one replaces it.",
+        "resend": "Send a new code"
+      },
+      "backup": {
+        "title": "Use a recovery code",
+        "subtitle": "One of the ten you saved when you turned on two-step verification.",
+        "label": "Recovery code",
+        "helper": "Each code works once, then it’s gone."
+      },
+      "errors": {
+        "totp": "That code didn’t match. If it keeps failing, check your phone’s clock is set automatically — a drifted clock generates codes Motir can’t accept.",
+        "expired": "That code didn’t match or has expired. Send a new one — it’s good for a few minutes.",
+        "backup": "That recovery code is not valid. Each code works only once.",
+        "sendFailed": "We couldn’t send the code. Try again, or use your authenticator app.",
+        "generic": "Something went wrong. Try again."
+      }
+    }
   },
   "shell": {
     "nav": {

@@ -831,7 +831,52 @@
     "wrongEmailSubhead": "此邀请发给的是 {invitedEmail}，而你当前以 {currentEmail} 登录。请用受邀邮箱登录以接受邀请，或请邀请人重新发送到你的邮箱。",
     "signInWith": "使用 {invitedEmail} 登录",
     "inviteAcceptFailed": "无法接受此邀请。请刷新查看详情。",
-    "acceptInvite": "接受邀请"
+    "acceptInvite": "接受邀请",
+    "twoFactor": {
+      "title": "两步验证",
+      "subtitle": "输入身份验证器应用中的六位验证码。",
+      "signingInAs": "正在以{email}登录",
+      "codeLabel": "六位验证码",
+      "verify": "验证",
+      "trustDevice": "{days}天内不再在此设备上询问",
+      "tryAnother": "换一种方式",
+      "backToCode": "返回输入验证码",
+      "chooseTitle": "换一种方式",
+      "chooseSubtitle": "选择你更方便的验证方式。",
+      "methods": {
+        "totp": {
+          "label": "使用身份验证器应用",
+          "sub": "无需联网，也是最安全的方式。"
+        },
+        "email": {
+          "label": "将验证码发送至{email}",
+          "sub": "安全性较低——邮箱并不等同于设备。"
+        },
+        "backup": {
+          "label": "使用恢复代码",
+          "sub": "你保存的十个代码之一，每个仅能使用一次。"
+        }
+      },
+      "emailSent": {
+        "title": "查看你的邮箱",
+        "subtitle": "我们已将六位验证码发送至{email}。",
+        "expiry": "验证码将在{minutes}分钟后过期。重新获取会替换当前验证码。",
+        "resend": "发送新验证码"
+      },
+      "backup": {
+        "title": "使用恢复代码",
+        "subtitle": "开启两步验证时你保存的十个代码之一。",
+        "label": "恢复代码",
+        "helper": "每个代码仅能使用一次，用后即失效。"
+      },
+      "errors": {
+        "totp": "验证码不匹配。如果反复失败，请检查手机时间是否设为自动获取——时间偏差会导致生成的验证码无法通过验证。",
+        "expired": "验证码不匹配或已过期。请重新获取，有效期为几分钟。",
+        "backup": "该恢复代码无效。每个代码仅能使用一次。",
+        "sendFailed": "验证码发送失败。请重试，或改用身份验证器应用。",
+        "generic": "出了点问题，请重试。"
+      }
+    }
   },
   "shell": {
     "nav": {

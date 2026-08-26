@@ -55,3 +55,21 @@ export interface BackupCodeSetDTO {
   /** Equal to `codes.length`; carried so a caller need not recount. */
   remaining: number;
 }
+
+/**
+ * One browser the reader told Motir to stop asking.
+ *
+ * ⚠️ IT HAS NO NAME, and that is the row's shape rather than an omission. A
+ * trusted device is a `verification` row carrying an opaque identifier, the
+ * owner's id and an expiry — no user-agent, no IP, no label. So this DTO says
+ * WHEN and UNTIL WHEN, and a surface that wants "Chrome on macOS" would need
+ * Motir to start recording it at the moment of trust, which nothing does today.
+ */
+export interface TrustedDeviceDTO {
+  /** The `verification` row id — what a revoke addresses. Opaque to the reader. */
+  id: string;
+  /** When the reader ticked "don't ask again". */
+  trustedAt: string;
+  /** When the grant lapses on its own. */
+  expiresAt: string;
+}

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { TwoFactorManager } from '@/app/(authed)/settings/account/_components/TwoFactorManager';
-import type { TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
+import type { TrustedDeviceDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
 
 // The account Security pane's island (Story 8.11 · Subtask MOTIR-1220).
 //
@@ -53,12 +53,16 @@ const ON: TwoFactorStatusDTO = {
   backupCodesTotal: 10,
 };
 
-function render(status: TwoFactorStatusDTO, overrides: Partial<{ hasPassword: boolean }> = {}) {
+function render(
+  status: TwoFactorStatusDTO,
+  overrides: Partial<{ hasPassword: boolean; devices: TrustedDeviceDTO[] }> = {},
+) {
   return renderWithIntl(
     <TwoFactorManager
       initialStatus={status}
       email="ada@example.com"
       hasPassword={overrides.hasPassword ?? true}
+      initialTrustedDevices={overrides.devices ?? []}
       backupCodeCount={10}
       otpPeriodMinutes={3}
       totpPeriodSeconds={30}
@@ -171,5 +175,52 @@ describe('the step-up branches on whether the account HAS a password', () => {
     expect(screen.getByText(/Turn off two-factor authentication\?/i)).toBeTruthy();
     expect(screen.getByText(/remaining recovery codes are deleted/i)).toBeTruthy();
     expect(twoFactorDisable).not.toHaveBeenCalled();
+  });
+});
+
+describe('trusted devices', () => {
+  const DEVICE: TrustedDeviceDTO = {
+    id: 'ver_1',
+    trustedAt: '2026-08-20T10:00:00.000Z',
+    expiresAt: '2026-09-19T10:00:00.000Z',
+  };
+
+  it('says so plainly when there are none — the challenge is asked everywhere', () => {
+    render(ON);
+
+    expect(screen.getByText(/asks for a second factor everywhere/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Revoke all/i })).toBeNull();
+  });
+
+  it('lists a device by its DATES, because the row carries no name', () => {
+    // The design mock draws "Chrome on macOS". A trusted device is a
+    // `verification` row with an opaque identifier and an expiry — no
+    // user-agent, no IP — so the row shows the two dates it really knows and
+    // invents nothing.
+    render(ON, { devices: [DEVICE] });
+
+    expect(screen.getByText(/Trusted /i)).toBeTruthy();
+    expect(screen.getByText(/expires /i)).toBeTruthy();
+    expect(screen.queryByText(/Chrome|Safari|macOS|iPhone/i)).toBeNull();
+  });
+
+  it('drops a revoked row from the list without a refresh', async () => {
+    // The island seeds from server props, so `router.refresh()` cannot reach it
+    // (CLAUDE.md case 3). The row goes because THIS component removed it from
+    // the state it owns.
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ revoked: 1 }) }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(ON, { devices: [DEVICE] });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Revoke$/i })[0]!);
+    await screen.findByText(/asks for a second factor everywhere/i);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/account/two-factor/trusted-devices',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    vi.unstubAllGlobals();
   });
 });

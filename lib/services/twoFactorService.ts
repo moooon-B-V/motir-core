@@ -3,8 +3,9 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { twoFactorRepository } from '@/lib/repositories/twoFactorRepository';
-import { toTwoFactorStatusDTO } from '@/lib/mappers/twoFactorMappers';
-import type { BackupCodeSetDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
+import { verificationRepository } from '@/lib/repositories/verificationRepository';
+import { toTrustedDeviceDTO, toTwoFactorStatusDTO } from '@/lib/mappers/twoFactorMappers';
+import type { BackupCodeSetDTO, TrustedDeviceDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
 import {
   TWO_FACTOR_BACKUP_CODE_COUNT,
   TWO_FACTOR_OTP_PERIOD_MINUTES,
@@ -227,6 +228,41 @@ export const twoFactorService = {
         locale: await currentLocale(),
       },
     });
+  },
+
+  /**
+   * The browsers this user told Motir to stop asking (Subtask MOTIR-1221).
+   *
+   * Read-only, so no transaction: an expired grant already fails the cookie
+   * check, and a list one revoke stale is corrected by the next render.
+   */
+  async listTrustedDevices(userId: string): Promise<TrustedDeviceDTO[]> {
+    const rows = await verificationRepository.findTrustedDevicesByUserId(userId);
+    return rows.map(toTrustedDeviceDTO);
+  },
+
+  /**
+   * Revoke ONE trusted device, so the next sign-in on it is challenged again.
+   *
+   * Returns whether anything was deleted, and the route turns `false` into a
+   * 404. The ownership check lives in the repository's `where` — see its comment
+   * for why pairing the id with the owner is the authorization rather than a
+   * filter.
+   *
+   * A transaction for one delete looks like ceremony and is not: the repository
+   * write requires `tx` by the layer contract, which is what makes "this write
+   * happened inside a transaction" a compile-time fact rather than a habit.
+   */
+  async revokeTrustedDevice(userId: string, id: string): Promise<boolean> {
+    return db.$transaction(async (tx) => {
+      const count = await verificationRepository.deleteTrustedDeviceForUser(id, userId, tx);
+      return count > 0;
+    });
+  },
+
+  /** Revoke every trusted device — the "ask me everywhere again" button. */
+  async revokeAllTrustedDevices(userId: string): Promise<number> {
+    return db.$transaction((tx) => verificationRepository.deleteTrustedDevicesForUser(userId, tx));
   },
 
   async disable(userId: string): Promise<void> {

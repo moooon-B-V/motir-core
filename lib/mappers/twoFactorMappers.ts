@@ -1,4 +1,5 @@
-import type { TwoFactorMethod, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
+import type { Verification } from '@/generated/prisma/client';
+import type { TrustedDeviceDTO, TwoFactorMethod, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
 
 // Prisma rows → the two-factor DTOs (Story MOTIR-1213 · Subtask MOTIR-1218).
 //
@@ -41,5 +42,20 @@ export function toTwoFactorStatusDTO(args: {
     primaryMethod: methods[0] ?? null,
     backupCodesRemaining: args.backupCodesRemaining,
     backupCodesTotal: args.backupCodesTotal,
+  };
+}
+
+/**
+ * A `verification` trusted-device row → its DTO.
+ *
+ * Dates cross as ISO strings, not `Date`s: this shape is serialised into a
+ * Server Component's props and returned from a JSON route, and a `Date` survives
+ * neither trip intact.
+ */
+export function toTrustedDeviceDTO(row: Verification): TrustedDeviceDTO {
+  return {
+    id: row.id,
+    trustedAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
   };
 }

@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  MonitorSmartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -21,7 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { twoFactor } from '@/lib/auth/client';
-import type { TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
+import type { TrustedDeviceDTO, TwoFactorStatusDTO } from '@/lib/dto/twoFactor';
 
 // The account Security pane's interactive half (Story 8.11 · Subtask
 // MOTIR-1220), built to `design/settings/two-factor.mock.html`.
@@ -67,6 +68,8 @@ interface Props {
    * the seam instead of being rediscovered from the mock.
    */
   trustDeviceDays: number;
+  /** The browsers this reader told Motir to stop asking (MOTIR-1221). */
+  initialTrustedDevices: TrustedDeviceDTO[];
 }
 
 export function TwoFactorManager({
@@ -76,6 +79,8 @@ export function TwoFactorManager({
   backupCodeCount,
   otpPeriodMinutes,
   totpPeriodSeconds,
+  trustDeviceDays,
+  initialTrustedDevices,
 }: Props) {
   const t = useTranslations('settings.account.twoFactor');
 
@@ -97,6 +102,27 @@ export function TwoFactorManager({
   // The shown-once set, after a confirm or a regenerate.
   const [shownCodes, setShownCodes] = useState<string[] | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+
+  // The trusted-device list is island state for the same reason the status is:
+  // a revoke updates it from the response, never via `router.refresh()`.
+  const [devices, setDevices] = useState<TrustedDeviceDTO[]>(initialTrustedDevices);
+
+  async function revoke(id?: string) {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/account/two-factor/trusted-devices', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(id ? { id } : {}),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setDevices((current) => (id ? current.filter((d) => d.id !== id) : []));
+    } catch {
+      setError(t('errors.generic'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const reset = useCallback(() => {
     setPassword('');
@@ -289,6 +315,66 @@ export function TwoFactorManager({
                 </Button>
               </div>
             </div>
+          </Card>
+
+          <Card
+            header={
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-sans text-[15px] font-semibold text-(--el-text)">
+                    {t('devices.title')}
+                  </h3>
+                  <p className="mt-1 max-w-[46ch] font-sans text-xs leading-relaxed text-(--el-text-muted)">
+                    {t('devices.subtitle', { days: trustDeviceDays })}
+                  </p>
+                </div>
+                {devices.length > 0 ? (
+                  <Button variant="ghost" size="sm" loading={busy} onClick={() => void revoke()}>
+                    {t('devices.revokeAll')}
+                  </Button>
+                ) : null}
+              </div>
+            }
+          >
+            {devices.length === 0 ? (
+              <p className="font-sans text-sm text-(--el-text-secondary)">{t('devices.empty')}</p>
+            ) : (
+              <div className="flex flex-col">
+                {devices.map((device) => (
+                  <div
+                    key={device.id}
+                    className="flex items-center gap-3 border-b border-(--el-border-soft) py-3 last:border-b-0"
+                  >
+                    {/* ⚠️ NO DEVICE NAME, and the row says so by not pretending.
+                        A trusted device is a `verification` row carrying an
+                        opaque identifier, the owner and an expiry — no
+                        user-agent, no IP. The design mock draws "Chrome on
+                        macOS"; the data has never held it, so the row shows the
+                        two dates it really knows. */}
+                    <MonitorSmartphone
+                      className="h-[17px] w-[17px] shrink-0 text-(--el-text-secondary)"
+                      aria-hidden
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-sans text-sm text-(--el-text)">
+                        {t('devices.trustedOn', { date: formatDate(device.trustedAt) })}
+                      </div>
+                      <div className="mt-0.5 font-sans text-xs text-(--el-text-muted)">
+                        {t('devices.expires', { date: formatDate(device.expiresAt) })}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busy}
+                      onClick={() => void revoke(device.id)}
+                    >
+                      <span className="text-(--el-danger)">{t('devices.revoke')}</span>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card
@@ -698,4 +784,19 @@ function downloadCodes(codes: string[]): void {
   a.download = 'motir-recovery-codes.txt';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+/**
+ * A trusted-device date, rendered client-side only.
+ *
+ * `toLocaleDateString` with an explicit option set rather than the bare call:
+ * the bare form is implementation-defined, and this component is a client
+ * island whose output a component test asserts on.
+ */
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
