@@ -1502,6 +1502,28 @@ the sprint read is issued after the empty-state branch and feeds only `hasActive
 `sprintName` / `sprintGoal`. One `Promise.all` collapses two round trips into one. Nothing else on
 this page is serial.
 
+> ## ⚠️ AMENDMENT — 2026-08-26, MOTIR-3445. THE CONCURRENCY CHANGE IS REFUSED, AND THE PAGE GETS NO DIFF.
+>
+> The paragraph above says this surface _"owes the story a concurrency change, not a frame"_:
+> `getProjectRoadmap` and `sprintsService.getActiveSprint` are independent and serial, so one
+> `Promise.all` collapses two round trips into one. That is true, it was built, and it is **wrong to
+> ship** — which the build discovered by running the page's own guard file.
+>
+> **The page returns early for an EMPTY roadmap, before the sprint read.** So today a first-run
+> project pays one read; the concurrent version makes it pay two.
+> `tests/planning/roadmapPageStreaming.test.tsx` asserts exactly that
+> (`expect(getActiveSprint).not.toHaveBeenCalled(); // the empty branch returns early`), and it
+> exists because _"`/roadmap` already pays two reads before it paints, and MOTIR-2069 is the record
+> of what a third one costs on a flagship surface."_
+>
+> **The empty branch is the ONBOARDING path** — the reader with the least reason to wait and the
+> least patience for it. A round trip saved on populated projects does not pay for one added to
+> every empty one, on the one surface carrying a guard file that says so.
+>
+> The entry's own reasoning was sound and its ARITHMETIC skipped the branch: two independent reads
+> are not two unconditional reads. **`/roadmap` ships no diff in MOTIR-3445**, and its serial pair
+> is correct as it stands.
+
 **The canvas's own pending state is REUSED, not redrawn.** `ProjectRoadmapCanvas` owns what it shows
 while a level is in flight; this asset adds nothing to it and the code card must not either.
 
