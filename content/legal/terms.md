@@ -92,14 +92,72 @@ The [Acceptable Use Policy](/legal/acceptable-use) forms part of these terms. It
 what you may publish and do, and it matters most where Motir hosts **public projects** that
 anyone can read and contribute to.
 
-## 7. Our intellectual property
+## 7. Third-party services you connect
+
+Motir integrates with services other companies run — GitHub, GitLab, Jira, Linear and
+Plane today. **You choose whether to connect any of them, per workspace.** A workspace
+that connects nothing reaches none of them.
+
+- **They are governed by their own terms and privacy policies, not by these terms.** We
+  suggest reading them; we cannot accept them on your behalf.
+- **We do not control them and are not responsible for them** — for their availability,
+  their content, or what they do with data you already hold there.
+- **Connecting one authorises data to flow** between that service and the workspace that
+  authorised it, and only that workspace. Disconnecting stops the flow; it does not
+  retrieve what has already been exchanged.
+- **If a third party changes, restricts or withdraws its interface, an integration may
+  stop working.** We will tell you when we know. Where that integration was a material
+  part of what you are paying for, §3's notice and pro-rata refund apply — we do not treat
+  someone else's decision as a reason you should be out of pocket.
+
+## 8. Our intellectual property
 
 The open-source core is licensed under the GPL-3.0 — read that licence for what it
 permits. Everything else — the closed AI layer, the hosted service, the Motir name and
 logo — remains ours. **These terms grant you no trademark rights**; you may say you use
 Motir, not present yourself as us.
 
-## 8. Suspension and termination
+## 9. Confidentiality
+
+Each of us may learn things about the other that are not public. Each of us will protect
+the other's confidential information with at least reasonable care, use it only to perform
+this agreement, and disclose it only to people who need it and are under equivalent
+obligations.
+
+This does not apply to information that is or becomes public without a breach, that the
+receiving party already knew, that it develops independently, or that it lawfully receives
+from someone else. Either of us may disclose where legally compelled, giving the other
+notice first where the law allows.
+
+**Your content is not governed by this section.** §5 and, where one applies, the
+[Data Processing Agreement](/legal/dpa) govern it, and they are stricter. This is said
+explicitly so that the two are never read against each other.
+
+## 10. Indemnification
+
+**This section applies between businesses. If you are a consumer it does not apply to
+you** — general law governs, and nothing here asks you to underwrite our costs.
+
+**You will defend us** against a third-party claim arising from your content, from your use
+of the service in breach of these terms or the [Acceptable Use Policy](/legal/acceptable-use),
+or from your infringement of someone's rights — and pay damages finally awarded or agreed
+in settlement.
+
+**We will defend you** against a third-party claim that the hosted service, as we provide
+it, infringes that party's intellectual property rights, and pay damages finally awarded or
+agreed in settlement. If such a claim looks likely we may modify the service, replace the
+affected part, or terminate it and refund prepaid fees for the unused period.
+
+**Our defence does not extend to** a claim arising from your content, from anything you
+built or modified, from combining the service with something we did not supply, or **from
+a self-hosted deployment** — the open-source software is licensed under the GPL-3.0, which
+carries its own disclaimer, and we do not indemnify a deployment we do not run.
+
+**Either way**: tell the other promptly and in writing, let them control the defence,
+cooperate reasonably, and do not settle in a way that admits the other's liability without
+their consent.
+
+## 11. Suspension and termination
 
 **You may stop at any time** by deleting your account in settings.
 
@@ -111,25 +169,47 @@ On termination we delete or return your data as described in the
 [Privacy Policy](/legal/privacy) and, where one applies, the DPA. **Export your data
 before you close your account** — after deletion we cannot recover it.
 
-## 9. Warranties and liability
+## 12. Warranties and liability
 
 The service is provided **"as is"**. To the extent the law permits, we exclude implied
 warranties of merchantability, fitness for a particular purpose, and non-infringement. We
 do not warrant uninterrupted or error-free operation.
 
-To the extent the law permits:
+### If you are a business
 
 - **We are not liable** for indirect or consequential loss, loss of profits, revenue,
   goodwill, or lost or corrupted data beyond our obligation to maintain backups.
 - **Our total liability** under these terms in any twelve-month period is limited to the
   fees you paid us in that period, or **EUR 100** if you paid nothing.
+- **The indemnities in §10 sit outside this cap, both ways.** An indemnity limited to the
+  fees somebody paid is not an indemnity, and we are not going to offer you one that
+  quietly is.
 
-**Nothing here excludes liability that cannot lawfully be excluded** — including for death
-or personal injury caused by negligence, for fraud, or for anything else Dutch law does not
-permit to be limited. **If you are a consumer, your mandatory statutory rights are
-unaffected**, and the limits above apply only so far as the law allows.
+### If you are a consumer
 
-## 10. Governing law and disputes
+**The limits above are written for business customers, and we do not rely on them against
+a consumer where Dutch consumer-protection law would treat them as unreasonably onerous**
+(Articles 6:233(a) and 6:237 BW). Your statutory rights are unaffected, and our liability
+to you is limited only so far as the law actually permits.
+
+We say this plainly rather than stating a cap and leaving you to discover it is
+unenforceable: a limit that has to be abandoned in a dispute protects nobody and misleads
+you in the meantime.
+
+### What is never excluded, whoever you are
+
+Nothing in these terms excludes or limits our liability for:
+
+- death or personal injury caused by negligence;
+- fraud or fraudulent misrepresentation;
+- **damage caused by intent or conscious recklessness — _opzet of bewuste
+  roekeloosheid_ — on the part of moooon B.V. or the members of its executive
+  management**, which Dutch law does not permit to be excluded and which the general
+  standard of reasonableness and fairness (Article 6:248(2) BW) would override in any
+  case;
+- anything else the law does not permit to be limited or excluded.
+
+## 13. Governing law and disputes
 
 These terms are governed by **the law of the Netherlands**, and disputes are subject to
 the exclusive jurisdiction of the courts of moooon B.V.'s registered seat.
@@ -140,7 +220,7 @@ You keep the protection of the mandatory rules of your country of habitual resid
 — the courts of your own domicile (Brussels I bis, Article 18). **We will not argue
 otherwise.** Where those rules conflict with the paragraph above, they win.
 
-## 11. Changes to these terms
+## 14. Changes to these terms
 
 We may update these terms. Each version carries a version label and an effective date.
 
@@ -150,7 +230,7 @@ may terminate** and receive a pro-rata refund of prepaid fees for the unused per
 Non-material changes (clarifications, corrections, a new sub-processor already covered by
 the Privacy Policy) take effect when published.
 
-## 12. General
+## 15. General
 
 - **Entire agreement.** These terms, the AUP, the Privacy Policy and any DPA are the whole
   agreement between us about the service.

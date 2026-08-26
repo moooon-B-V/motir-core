@@ -112,13 +112,26 @@ in this agreement, and moooon B.V. remains fully liable to you for their perform
 
 ## 7. International transfers
 
-Several subprocessors are established outside the EEA, predominantly in the United
-States. Each such transfer is made under a mechanism permitted by Chapter V of the
-GDPR — the receiving organisation's certification under the EU–US Data Privacy
-Framework, or the Standard Contractual Clauses.
+**moooon B.V. is established in the Netherlands.** Personal data you place in the service
+is processed by us inside the EEA, so **the transfer from you to us is not a restricted
+transfer** and needs no Chapter V mechanism between the two of us. This clause is about
+what happens after that.
 
-Where the Standard Contractual Clauses apply between you and moooon B.V., **Module 2
-(controller to processor)** is incorporated into this agreement by reference, with:
+**Several of our subprocessors are established outside the EEA**, predominantly in the
+United States. Those onward transfers are ours to make lawful, not yours. For each one we
+hold a mechanism permitted by Chapter V of the GDPR — the recipient's certification under
+the **EU–US Data Privacy Framework**, or the **Standard Contractual Clauses, Module 3
+(processor to sub-processor)**, which is the correct module where we act as your
+processor. **The mechanism relied on for each subprocessor is published, company by
+company, at [/legal/subprocessors](/legal/subprocessors).**
+
+We remain fully liable to you for those subprocessors' performance (§6).
+
+### Standard Contractual Clauses directly with us, on request
+
+You may need Module 2 (controller to processor) on file — because you are established
+outside the EEA and your own regime calls for it, or because your compliance programme
+requires it. **We will enter into it on request**, with:
 
 - **Clause 7** (docking) — applicable.
 - **Clause 9(a)** — **Option 2**, general written authorisation, with the thirty-day
@@ -127,13 +140,23 @@ Where the Standard Contractual Clauses apply between you and moooon B.V., **Modu
   apply.
 - **Clause 17** — governed by the law of **the Netherlands**.
 - **Clause 18(b)** — the courts of **the Netherlands**.
-- **Annex I** — the parties in §1, the description in §2, and the subprocessor list in §6.
-- **Annex II** — the measures in §5.
+- **Annex I.A** (parties) — §1. **Annex I.B** (description of processing) — §2.
+  **Annex I.C** (competent supervisory authority) — the **Autoriteit Persoonsgegevens**,
+  the Dutch data protection authority.
+- **Annex II** (technical and organisational measures) — §5.
+- **Annex III** (list of sub-processors) — the published subprocessor list, as it stands
+  at the date of signature.
 
-> **⚠️ Counsel must confirm this section before the template is sent to anyone.** The
-> module selection and the clause options are the part of an Article 28 agreement most
-> often got wrong, and the per-vendor transfer bases the list in §6 depends on are still
-> being gathered.
+### Competent supervisory authority
+
+moooon B.V.'s supervisory authority is the **Autoriteit Persoonsgegevens** (Netherlands).
+
+> **⚠️ Counsel should still confirm this section before the template is sent to a
+> customer.** It was **corrected on 2026-08-26**: an earlier draft incorporated Module 2
+> unconditionally, as though the customer-to-moooon transfer were itself restricted. It is
+> not — we are EEA-established — and the module that actually carries the risk here is
+> **Module 3**, between us and each non-EEA subprocessor. The per-vendor bases behind that
+> are published and one row remains open.
 
 ## 8. Assistance to the controller
 
