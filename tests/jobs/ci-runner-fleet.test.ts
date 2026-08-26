@@ -182,6 +182,7 @@ describe('the schedules say what they can and cannot promise', () => {
     const config = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
+      catchUp: 'skip',
       retryPolicy: 'idempotent',
     });
     expect(config?.triggers).toEqual([{ cron: '* * * * *' }]);
@@ -213,11 +214,13 @@ describe('the retry budgets are correctness decisions, not defaults', () => {
     const sweep = configFor({
       id: 'system.ci-runner-provision-sweep',
       cron: CI_RUNNER_PROVISION_SWEEP_CRON,
+      catchUp: 'skip',
       retryPolicy: 'idempotent',
     });
     const reap = configFor({
       id: 'system.ci-runner-reap',
       cron: CI_RUNNER_REAP_CRON,
+      catchUp: 'latest',
       retryPolicy: 'idempotent',
     });
     expect(sweep?.retries).toBe(RETRY_POLICIES.idempotent.maxAttempts - 1);

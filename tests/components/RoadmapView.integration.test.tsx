@@ -31,6 +31,13 @@ const { push, replace, sp } = vi.hoisted(() => ({
   replace: vi.fn(),
   sp: { current: '' },
 }));
+
+// MOTIR-3434 — the scope toggle writes the URL SHALLOWLY now, so the positive
+// assertion moved to `history.pushState`. `push` keeps its spy with the
+// OPPOSITE job: the toggle must NOT navigate, because the canvas refetches on
+// its `key={scope}` remount and the page's server reads produce nothing this
+// body uses.
+const pushState = vi.spyOn(window.history, 'pushState');
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace, refresh: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => '/roadmap',
@@ -136,6 +143,7 @@ function stubGatedFetch(): { release: () => void } {
 beforeEach(() => {
   sp.current = '';
   push.mockClear();
+  pushState.mockClear();
   replace.mockClear();
   stubImmediateFetch();
 });
@@ -222,7 +230,8 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     // navigation to ?scope=sprint then remounts the canvas (simulated by the URL +
     // rerender of the SAME instance, as Next's router would after push).
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
-    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap?scope=sprint');
+    expect(push).not.toHaveBeenCalled();
     sp.current = 'scope=sprint';
     rerender(<RoadmapView {...baseProps()} />);
 
@@ -242,8 +251,9 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
 
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
     // The toggle wrote the URL once (the scope contract) — a distinct history entry.
-    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap?scope=sprint');
+    expect(push).not.toHaveBeenCalled();
+    expect(pushState).toHaveBeenCalledTimes(1);
     // Simulate the resulting client navigation to sprint scope.
     sp.current = 'scope=sprint';
     rerender(<RoadmapView {...baseProps()} />);
@@ -260,7 +270,7 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     // …the control's loading→idle transition tracks the mocked fetch resolution…
     await waitFor(() => expect(refresh.getAttribute('aria-busy')).not.toBe('true'));
     // …and the refresh did NOT navigate (only the earlier toggle did).
-    expect(push).toHaveBeenCalledTimes(1);
+    expect(pushState).toHaveBeenCalledTimes(1);
   });
 
   it('toggling back to Whole project clears the ?scope= param and reloads the unscoped root — even after a refresh', async () => {
@@ -275,7 +285,8 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     // …then return to Whole project: the toggle pushes a clean /roadmap, and the
     // resulting navigation (URL cleared + rerender) reloads the unscoped root.
     fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
-    expect(push).toHaveBeenCalledWith('/roadmap', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap');
+    expect(push).not.toHaveBeenCalled();
     sp.current = '';
     rerender(<RoadmapView {...baseProps()} />);
     expect(await screen.findByText('Whole-project epic')).toBeTruthy();

@@ -128,6 +128,20 @@ process.env['E2E_JOB_WORKER'] ??= '1';
 // value handed to the app webServer below — both processes read the same file,
 // which is the whole point of using one.
 process.env['MOTIR_POSTGRES_JOB_IDS_FILE'] ??= path.resolve('/tmp/motir-test-job-routing');
+
+// MOTIR-3473 — the PLATFORM-ADMIN identity the jobs dashboard's SYSTEM tab is
+// gated on. Set here so the spec and the app server agree on one value.
+//
+// ⚠️ IT IS NEEDED BECAUSE A SCHEDULED RUN IS UNTENANTED. Every `system.*` job
+// writes `workspace_id = NULL`, and the dashboard's ordinary tab reads
+// `listByWorkspace`, which filters on it — so a workspace operator cannot see a
+// cron run at all, on either engine. The system tab (`listAll`, under
+// `withSystemContext`) is where such a run has ALWAYS been visible, so driving it
+// is the faithful automation of the story's verification recipe rather than a way
+// around it. It changes nothing for any other spec: the tab appears only for a
+// session whose email is exactly this one, and only this spec signs up as it.
+process.env['PLATFORM_ADMIN_EMAIL'] ??= 'sched-platform-admin@example.com';
+const PLATFORM_ADMIN_EMAIL = process.env['PLATFORM_ADMIN_EMAIL'];
 // ⚠️ ONE resolved value, read back from the env, handed to BOTH the runner's
 // helpers and the server below. Hardcoding the literal in `webServer.env` (as
 // the email paths do) silently breaks any run that overrides the path: the
@@ -299,6 +313,9 @@ export default defineConfig({
         // /api/_test 404 gate / 'file' email sink) that the production server
         // would otherwise trip. Only ever set here, never in a real deploy.
         E2E_PROD_HARNESS: '1',
+        // MOTIR-3473 — the same value the runner holds, so the server's
+        // system-tab gate and the spec's sign-up agree. See the note above it.
+        PLATFORM_ADMIN_EMAIL,
         // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
         ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
           ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }

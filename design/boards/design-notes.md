@@ -1495,3 +1495,28 @@ point of use.
 - **The picker** keeps the shipped `role="combobox"` / `role="listbox"` /
   `role="option"` structure and its `aria-activedescendant`; the eighth status
   adds an option, not a control.
+
+---
+
+## The streaming allocation at ARRIVAL — `/boards` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+|                            |                                                                                                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations('boards')` → `getActiveProject` → `getCapabilities` (`canBrowse`)                                                                                                                                        |
+| **with the frame**         | the `<h1>` + subtitle, and the **`BoardSwitcher`**, which owns its own board-list fetch and its own `?board=` selection — its own header comment says it stays present across the board's loading, error and empty states                |
+| **with the first content** | the seven-way `Promise.all` (members, workflow, sprints, custom fields, components, referenced labels, saved-filter capabilities) — **already one wave** — which feeds the filter chrome and the group-by control                        |
+| **after the page**         | the board columns themselves: `BoardContainer` fetches its own projection client-side                                                                                                                                                    |
+| **settles**                | **twice, and legitimately** — the filter chrome, then the columns. The second settle is the canvas's own and predates this story                                                                                                         |
+| **verdict**                | **NONE — reuse.** `app/(authed)/boards/_components/BoardSkeleton.tsx` is already the drawn pending state for the column region and is what the board shows today. This asset does not redraw it, and the code card composes it unchanged |
+
+**Nothing here is serial**, which is the finding: the count of seven awaits is the `Promise.all`'s
+own members. The only change this surface takes from the story is the boundary that lets the header
+and the switcher paint before the filter chrome resolves.
+
+**A route boundary is declined as a preference** — `/boards` does not call `notFound()`.

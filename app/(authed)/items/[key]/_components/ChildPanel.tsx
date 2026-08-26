@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { List, Workflow } from 'lucide-react';
 import { ContentSectionCard } from './ContentSectionCard';
 import { Pill } from '@/components/ui/Pill';
@@ -63,7 +64,6 @@ export function ChildPanel({
   children,
 }: ChildPanelProps) {
   const t = useTranslations('issueViews');
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -92,17 +92,25 @@ export function ChildPanel({
   ];
 
   const changeView = (next: ChildPanelView) => {
-    // PUSH (not replace) so the switch is its own history entry and Back undoes it,
-    // and `scroll: false` so switching a section's view never yanks the page to the
-    // top. The default list mode writes a CLEAN url (no param), so every existing
-    // link to this page is byte-identical to what it is today. There is no local
-    // state to set — the re-render re-derives `view` from the URL. No
-    // `router.refresh()`: the rest of the detail page is untouched by this.
+    // SHALLOW (MOTIR-3434). The list body IS the already-rendered `children`
+    // prop and the graph mounts a client canvas that fetches its own level, so
+    // neither body needs anything from the server — and `router.push` here re-ran
+    // the item page's twenty-nine awaits to render what was already on screen.
+    // `shallowPush` writes the same URL without the round trip.
+    //
+    // PUSH (not replace) so the switch is its own history entry and Back undoes
+    // it. Scrolling is unchanged: a `pushState` does not scroll, which is what
+    // the old `scroll: false` was asking for. The default list mode writes a
+    // CLEAN url (no param), so every existing link to this page is
+    // byte-identical to what it is today. There is no local state to set — the
+    // re-render re-derives `view` from the URL, which Next keeps in sync with
+    // `history.pushState`. No `router.refresh()`: the rest of the detail page is
+    // untouched by this.
     const params = new URLSearchParams(searchParams.toString());
     if (next === 'graph') params.set(CHILD_VIEW_PARAM, 'graph');
     else params.delete(CHILD_VIEW_PARAM);
     const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    shallowPush(query ? `${pathname}?${query}` : pathname);
   };
 
   return (

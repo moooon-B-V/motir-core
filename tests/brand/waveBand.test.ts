@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,7 +7,11 @@ import {
   BRAND_PAGE_BG_HEX,
   WAVE_BAND_PATH,
   WAVE_BAND_VIEW_BOX,
-  waveBandDataUri,
+  EMAIL_MARK_CANVAS_PX,
+  EMAIL_MARK_FILE,
+  EMAIL_MARK_PATH,
+  EMAIL_MARK_PX,
+  EMAIL_MARK_SCALE,
   waveBandSvg,
 } from '@/components/brand/waveBand';
 
@@ -124,15 +128,48 @@ describe('the baked-colour exports (design-notes.md §2, §5, §6)', () => {
     expect(svg).not.toContain('--');
   });
 
-  it('percent-encodes the data URI so an email client can parse it', () => {
-    const uri = waveBandDataUri({ size: 20, fill: BRAND_ACCENT_HEX });
-    expect(uri.startsWith('data:image/svg+xml;utf8,')).toBe(true);
-    // A raw '#' would terminate the URL at the fill colour and a raw '"' would
-    // close the src attribute — both are silent, both produce a broken header.
-    expect(uri).not.toContain('#');
-    expect(uri).not.toContain('"');
-    expect(decodeURIComponent(uri.slice('data:image/svg+xml;utf8,'.length))).toContain(
-      WAVE_BAND_PATH,
-    );
+  it('exports no data-URI helper at all — email cannot take one (MOTIR-3505)', async () => {
+    // This module used to export `waveBandDataUri`, and `EmailLayout` shipped its
+    // output as the mark's `src`. It rendered in no mail client: Gmail drops an
+    // image source it cannot FETCH through its proxy, and SVG renders in none of
+    // Gmail / Outlook / Yahoo in any transport. The helper is gone rather than
+    // merely unused — the only surface it was written for is the one surface it
+    // cannot work on, so anything still able to emit a `data:` URI here is a
+    // regression waiting to be re-wired.
+    const mod: Record<string, unknown> = await import('@/components/brand/waveBand');
+    expect(Object.keys(mod)).not.toContain('waveBandDataUri');
+    for (const [name, value] of Object.entries(mod)) {
+      if (typeof value === 'string') expect(value, name).not.toContain('data:');
+    }
+  });
+});
+
+describe('the email mark (§7e · MOTIR-3505)', () => {
+  it('renders at 2× the displayed size, so a retina client is not soft', () => {
+    // The <img> constrains to EMAIL_MARK_PX with its own width/height attributes;
+    // email has no srcset worth relying on, so the extra density has to be in the
+    // file itself.
+    expect(EMAIL_MARK_PX).toBe(20);
+    expect(EMAIL_MARK_SCALE).toBe(2);
+    expect(EMAIL_MARK_CANVAS_PX).toBe(EMAIL_MARK_PX * EMAIL_MARK_SCALE);
+  });
+
+  it('names a file under public/, whose path is derived rather than repeated', () => {
+    // `app/`-convention names are a trap at this size: Next's static-metadata
+    // matcher takes ONE optional digit after `icon`, so `app/icon-192.png` is
+    // served at no URL at all (§5). public/ is a stable root path.
+    expect(EMAIL_MARK_FILE).toBe(`email-mark-${EMAIL_MARK_CANVAS_PX}.png`);
+    expect(EMAIL_MARK_PATH).toBe(`/${EMAIL_MARK_FILE}`);
+    expect(existsSync(join(process.cwd(), 'public', EMAIL_MARK_FILE))).toBe(true);
+  });
+
+  it('is a PNG at the declared canvas — the format is the other half of the fix', () => {
+    // A hosted SVG would satisfy the transport and still render nowhere. Read the
+    // IHDR rather than trusting the extension.
+    const buf = readFileSync(join(process.cwd(), 'public', EMAIL_MARK_FILE));
+    expect(buf.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(buf.subarray(12, 16).toString('ascii')).toBe('IHDR');
+    expect(buf.readUInt32BE(16)).toBe(EMAIL_MARK_CANVAS_PX);
+    expect(buf.readUInt32BE(20)).toBe(EMAIL_MARK_CANVAS_PX);
   });
 });

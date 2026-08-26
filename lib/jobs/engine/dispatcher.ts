@@ -45,7 +45,7 @@ import { notifyQueuedJob } from './notify';
 //
 //    ⚠️ IT READS THE MANIFEST RATHER THAN THE REGISTRY because the registry
 //    carries the HANDLER, and the handler is what drags the service graph onto
-//    an emitting request (MOTIR-3458; ADR §11). Nothing here needs it: the two
+//    an emitting request (MOTIR-3458; ADR §12). Nothing here needs it: the two
 //    functions below read `id`, `trigger`, `maxAttempts` and `idempotency`, and
 //    nothing else.
 //
@@ -125,7 +125,7 @@ export async function dispatchEventToEngine(
   // initializing — vite-node resolves imports through promises, so a macrotask
   // interleaves with graph evaluation — and eleven job suites failed to load
   // with `ReferenceError: Cannot access '__vite_ssr_import_3__' before
-  // initialization`. The same temporal-dead-zone shape ADR §11 measured at build
+  // initialization`. The same temporal-dead-zone shape ADR §12 measured at build
   // time, one level down.
   if (routedJobIds().size === 0) {
     return { eventId: null, enqueued: [], alreadyEnqueued: [], failed: [] };
@@ -230,7 +230,7 @@ export function hasInngestSubscribers(name: string): boolean {
   // That was true, and it meant this arm was silently taken on EVERY production
   // emit — the manifest was empty, so every event read as "still on Inngest"
   // while the engine enqueued nothing. The safe default was doing the whole job,
-  // and it hid the fact that nothing else was (MOTIR-3458; ADR §11).
+  // and it hid the fact that nothing else was (MOTIR-3458; ADR §12).
   //
   // `sendEvent` now loads `./subscribers` explicitly, so an empty set here means
   // what it says: no job subscribes to this event. The default stays because that

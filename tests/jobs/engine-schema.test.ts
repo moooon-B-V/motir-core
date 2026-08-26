@@ -5,6 +5,9 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { withSystemContext } from '@/lib/workspaces/context';
+import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
+import { dispatchEventToEngine } from '@/lib/jobs/engine/dispatcher';
 
 // The Postgres job engine's SCHEMA (Story MOTIR-3414 · Subtask MOTIR-3420) —
 // the three tables' structural guarantees, proved against a real Postgres.
@@ -17,6 +20,11 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 //      exists; only inserting proves it constrains.)
 //   2. `(event_id, job_id)` is UNIQUE on `job_queue` — fan-out idempotency —
 //      AND it does not constrain scheduled runs, whose `event_id` is NULL.
+//   2b. `(job_id, scheduled_for)` is UNIQUE on `job_queue` — TICK idempotency
+//      (MOTIR-3469) — AND it does not constrain event-triggered runs, whose
+//      `scheduled_for` is NULL. The two constraints are complementary halves of
+//      one idea and each is asserted the same way: by making the database refuse
+//      the duplicate, and by making it ADMIT the population the other covers.
 //   3. RLS denies cross-tenant reads and writes on all three tables, under the
 //      non-bypass `motir_app` role.
 //   4. The FKs cascade, in both directions the engine depends on.
@@ -328,6 +336,222 @@ describe('job_queue — fan-out idempotency', () => {
     });
     expect(runs).toHaveLength(2);
     expect(runs.every((r) => r.eventId === null)).toBe(true);
+  });
+});
+
+describe('job_queue — the per-tick key (MOTIR-3469)', () => {
+  const FIRE = new Date(Date.UTC(2026, 7, 25, 3, 30, 0));
+  const LATER_FIRE = new Date(Date.UTC(2026, 7, 26, 3, 30, 0));
+
+  it('REFUSES a second row for the same (job_id, scheduled_for)', async () => {
+    await makeFixture();
+    await adminDb.jobQueueRun.create({
+      data: {
+        jobId: 'system.attachment-gc',
+        eventName: 'scheduled.system.attachment-gc',
+        runAt: FIRE,
+        scheduledFor: FIRE,
+        maxAttempts: 5,
+      },
+    });
+
+    // This is the whole defect the column closes. Before it, both workers'
+    // inserts succeeded — `event_id` is NULL on a scheduled run, and in Postgres
+    // a NULL never equals a NULL, so `(event_id, job_id)` could not see them.
+    await expect(
+      adminDb.jobQueueRun.create({
+        data: {
+          jobId: 'system.attachment-gc',
+          eventName: 'scheduled.system.attachment-gc',
+          runAt: FIRE,
+          scheduledFor: FIRE,
+          maxAttempts: 5,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+
+    const rows = await adminDb.jobQueueRun.findMany({ where: { jobId: 'system.attachment-gc' } });
+    expect(rows).toHaveLength(1);
+  });
+
+  it('ADMITS two fire times for the SAME job — the key is the pair', async () => {
+    await makeFixture();
+    for (const fire of [FIRE, LATER_FIRE]) {
+      await adminDb.jobQueueRun.create({
+        data: {
+          jobId: 'system.attachment-gc',
+          eventName: 'scheduled.system.attachment-gc',
+          runAt: fire,
+          scheduledFor: fire,
+          maxAttempts: 5,
+        },
+      });
+    }
+    const rows = await adminDb.jobQueueRun.findMany({ where: { jobId: 'system.attachment-gc' } });
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.scheduledFor?.getTime()).sort()).toEqual(
+      [FIRE.getTime(), LATER_FIRE.getTime()].sort(),
+    );
+  });
+
+  it('does NOT constrain EVENT-triggered runs, which carry a null scheduled_for', async () => {
+    const fx = await makeFixture();
+    // The mirror of the `(event_id, job_id)` block above, and the reason the two
+    // constraints can coexist on one table: each is blind to the other's rows.
+    const second = await seedEvent(fx.workspaceW1Id);
+    for (const eventId of [fx.eventW1Id, second]) {
+      await adminDb.jobQueueRun.create({
+        data: {
+          jobId: 'watcher.notify',
+          event: { connect: { id: eventId } },
+          eventName: 'work-item/transitioned',
+          workspace: { connect: { id: fx.workspaceW1Id } },
+          runAt: new Date(),
+          maxAttempts: 3,
+        },
+      });
+    }
+    const rows = await adminDb.jobQueueRun.findMany({ where: { jobId: 'watcher.notify' } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.scheduledFor === null)).toBe(true);
+  });
+
+  it('enqueueScheduled REPORTS already-queued rather than throwing', async () => {
+    await makeFixture();
+    const args = {
+      jobId: 'system.rate-limit-sweep',
+      scheduledFor: FIRE,
+      eventName: 'scheduled.system.rate-limit-sweep',
+      runAt: FIRE,
+      maxAttempts: 5,
+    };
+
+    const first = await withSystemContext((tx) => jobQueueRepository.enqueueScheduled(args, tx));
+    const second = await withSystemContext((tx) => jobQueueRepository.enqueueScheduled(args, tx));
+
+    // A second worker's tick is a NORMAL outcome, not an error — the caller must
+    // be able to tell the two apart without inspecting a thrown value.
+    expect(first.outcome).toBe('enqueued');
+    expect(second.outcome).toBe('already-queued');
+    expect(await adminDb.jobQueueRun.count({ where: { jobId: args.jobId } })).toBe(1);
+  });
+
+  it('writes the row the scheduler contract specifies', async () => {
+    await makeFixture();
+    const result = await withSystemContext((tx) =>
+      jobQueueRepository.enqueueScheduled(
+        {
+          jobId: 'system.daily-health-check',
+          scheduledFor: FIRE,
+          eventName: 'scheduled.system.daily-health-check',
+          runAt: FIRE,
+          maxAttempts: 1,
+        },
+        tx,
+      ),
+    );
+    expect(result.outcome).toBe('enqueued');
+
+    const row = await adminDb.jobQueueRun.findFirstOrThrow({
+      where: { jobId: 'system.daily-health-check' },
+    });
+    // `event_name` is asserted here rather than left to the scheduler because
+    // three separate consumers read it — `jobScheduleHealthService` groups on
+    // exactly `scheduled.{functionId}`, and a typo would make every migrated cron
+    // job read as permanently overdue.
+    expect(row.eventName).toBe('scheduled.system.daily-health-check');
+    expect(row.eventId).toBeNull();
+    expect(row.workspaceId).toBeNull();
+    expect(row.scheduledFor?.getTime()).toBe(FIRE.getTime());
+    expect(row.runAt.getTime()).toBe(FIRE.getTime());
+    expect(row.maxAttempts).toBe(1);
+    expect(row.state).toBe('pending');
+  });
+
+  it('TWO CONCURRENT enqueues of the same tick produce exactly ONE row', async () => {
+    await makeFixture();
+    const args = {
+      jobId: 'system.ci-runner-reap',
+      scheduledFor: FIRE,
+      eventName: 'scheduled.system.ci-runner-reap',
+      runAt: FIRE,
+      maxAttempts: 5,
+    };
+
+    // ⚠️ GENUINELY CONCURRENT, and that is the point. Two SEQUENTIAL calls pass
+    // against a check-then-insert with no constraint under it — the second read
+    // simply sees the first row. The race this closes needs both inserts in
+    // flight at once against a warm pool, which is the same argument
+    // `claimDueRuns` makes about its own claim one file over.
+    const [a, b] = await Promise.all([
+      withSystemContext((tx) => jobQueueRepository.enqueueScheduled(args, tx)),
+      withSystemContext((tx) => jobQueueRepository.enqueueScheduled(args, tx)),
+    ]);
+
+    // Either interleaving is legitimate; what must never happen is two rows.
+    const outcomes = [a.outcome, b.outcome].sort();
+    expect(outcomes).toEqual(['already-queued', 'enqueued']);
+    expect(await adminDb.jobQueueRun.count({ where: { jobId: args.jobId } })).toBe(1);
+  });
+
+  it('leaves the EVENT-triggered enqueue path exactly as it was', async () => {
+    const fx = await makeFixture();
+    // The scope boundary, asserted rather than assumed: this card touches the
+    // dispatcher not at all, so its own idempotency must still be the
+    // `(event_id, job_id)` constraint and its rows must still carry no fire time.
+    const first = await dispatchEventToEngine('work-item/transitioned', {
+      workspaceId: fx.workspaceW1Id,
+    });
+    const replay = await dispatchEventToEngine('work-item/transitioned', {
+      workspaceId: fx.workspaceW1Id,
+    });
+
+    // Nothing is routed to the engine in this suite's environment, so both calls
+    // return the no-subscriber shape. That is the assertion: the dispatcher's
+    // behaviour is unchanged, and the new column did not give it a second lane.
+    expect(first.failed).toEqual([]);
+    expect(replay.failed).toEqual([]);
+    const scheduledRows = await adminDb.jobQueueRun.findMany({
+      where: { scheduledFor: { not: null } },
+    });
+    expect(scheduledRows).toEqual([]);
+  });
+
+  it('the system-admin branch admits an enqueueScheduled write under the app role', async () => {
+    const fx = await makeFixture();
+    // RLS on `job_queue` is UNCHANGED by this card, and a new write path is
+    // exactly where that would silently stop being true: an untenanted row is
+    // admitted only by the policy's system-admin arm, which is the context the
+    // worker runs under.
+    const created = await asAppRole({ systemAdmin: true }, (tx) =>
+      jobQueueRepository.enqueueScheduled(
+        {
+          jobId: 'system.plan-target-lock-sweep',
+          scheduledFor: FIRE,
+          eventName: 'scheduled.system.plan-target-lock-sweep',
+          runAt: FIRE,
+          maxAttempts: 5,
+        },
+        tx,
+      ),
+    );
+    expect(created.outcome).toBe('enqueued');
+
+    // And a TENANT context is still refused — the write path inherits the
+    // policy rather than routing around it.
+    await expect(
+      asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
+        tx.jobQueueRun.create({
+          data: {
+            jobId: 'system.smuggled-sweep',
+            eventName: 'scheduled.system.smuggled-sweep',
+            runAt: FIRE,
+            scheduledFor: FIRE,
+            maxAttempts: 5,
+          },
+        }),
+      ),
+    ).rejects.toThrow(/row-level security/i);
   });
 });
 

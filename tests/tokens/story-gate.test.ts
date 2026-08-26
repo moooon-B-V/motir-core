@@ -136,7 +136,16 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
     // not. Naming the exception keeps the check exhaustive — a SECOND one
     // appears here as a failure rather than joining an allowance — which is the
     // same discipline `tests/mcp/scopes.test.ts` applies with `KNOWN_LOSSES`.
-    const POSTDATES_THE_SIX: Partial<Record<McpToolName, true>> = { add_lesson: true };
+    // MOTIR-3480 adds the SECOND, by the same rule and not as an allowance:
+    // `search_lessons` asserts `lesson:view`, also minted long after these six
+    // strings stopped being written, so a legacy row never had this tool and
+    // loses nothing by not gaining it. `tests/mcp/scopes.test.ts`'s
+    // `KNOWN_LOSSES` and `tests/tokens/grant.test.ts`'s `POSTDATE_THE_SCOPES`
+    // name the same pair from their own ends.
+    const POSTDATES_THE_SIX: Partial<Record<McpToolName, true>> = {
+      add_lesson: true,
+      search_lessons: true,
+    };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);
       if (POSTDATES_THE_SIX[name]) {

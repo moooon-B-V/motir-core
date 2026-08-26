@@ -118,6 +118,14 @@ export const ciRunnerProvisionSweep = defineJob(
   {
     id: 'system.ci-runner-provision-sweep',
     cron: CI_RUNNER_PROVISION_SWEEP_CRON,
+    // The ONLY `skip` among the fourteen (`docs/decisions/job-queue-foundation.md`
+    // §11.4). At `* * * * *` the next fire is under a minute away, so replaying a
+    // missed one saves less than the claim loop's own poll interval — while after
+    // a six-hour outage it would enqueue 360 rows fanning out against the batch
+    // ceiling below, which exists to protect GitHub's registration limit. Note
+    // that its sibling `system.ci-runner-reap` is `latest` despite a comparable
+    // cadence: the dispositions differ because the COSTS do, not the schedules.
+    catchUp: 'skip',
     // `idempotent`: the sweep only READS pending intents and fans out events;
     // the claim that follows is a compare-and-set, so a duplicate event costs one
     // losing claim and nothing else.
@@ -256,6 +264,11 @@ export const ciRunnerReap = defineJob(
   {
     id: 'system.ci-runner-reap',
     cron: CI_RUNNER_REAP_CRON,
+    // `latest`, not `skip` like the provision sweep above, and the ten-minute
+    // cadence is not what decides it: an orphaned container bills for every
+    // minute it survives, so an immediate reap on restart reclaims spend the next
+    // fire would not. One pass suffices — it reads the CURRENT orphan set.
+    catchUp: 'latest',
     // `idempotent`: destroying an already-destroyed container is a no-op at every
     // provider the port targets, and the port requires teardown to be idempotent
     // anyway.

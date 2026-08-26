@@ -48,7 +48,12 @@ const t = messages.github.development;
 afterEach(cleanup);
 
 const QUICK_VIEW_PANEL = 'app/(authed)/items/_components/IssueQuickViewPanel.tsx';
-const DETAIL_PAGE = 'app/(authed)/items/[key]/page.tsx';
+// MOTIR-3436 moved the Development SECTION off the detail page's critical path
+// and into the late stack's own component. The guard follows the surface, not
+// the filename it used to live in — a source guard pointed at a file the code
+// left passes forever. Its anchor assertion below is what makes that visible
+// the next time the surface moves.
+const DETAIL_PAGE = 'app/(authed)/items/[key]/_components/LateSections.tsx';
 
 /** The pull request in the report: OPEN, so its repository is `awaiting`. Its
  *  DTO names the repository `owner/name`; the item's set names it bare. */

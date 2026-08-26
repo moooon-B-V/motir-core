@@ -38,6 +38,7 @@ export const autoPlanCadenceTick = defineJob(
   {
     id: 'system.auto-plan-cadence-tick',
     cron: AUTO_PLAN_CADENCE_TICK_CRON,
+    catchUp: 'latest',
     retryPolicy: 'idempotent',
   },
   (ctx, services) => {

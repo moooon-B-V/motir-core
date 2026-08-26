@@ -321,3 +321,49 @@ test('@smoke the project square: a logged-out visitor browses the cross-org gall
   await expect(card(anon, 'Trendy Tracker')).toBeVisible();
   await anonCtx.close();
 });
+
+// ── MOTIR-3491 — the topic landing page's STATUS, not just its body ──────────
+//
+// `/explore/topic/<slug>` 404s an unknown topic (`strictCategory` → the route's
+// `notFound()`), and that 404 is the point: a public marketing surface is read
+// by crawlers and monitoring, which see the status and not the page. The defect
+// this test pins was invisible to every assertion above it, because the BODY was
+// always right — `app/(public)/explore/loading.tsx` sat above this route, and a
+// loading fallback flushes the response head before the page function runs, so
+// the not-found body was served under a 200.
+//
+// It is asserted HERE, in a browser, and not only by
+// `tests/navigation/loading-boundary-guard.test.ts`. That guard is the structural
+// half — it forbids the file placement that causes this — and it is the cheap one
+// to keep green. This is the half that measures the thing the product actually
+// promises: a real HTTP status off a real production build. The two are not
+// redundant; the whole lesson of MOTIR-3437 is that a structure a test never
+// measures is a structure that decays silently.
+//
+// Both arms matter. A 404 on EVERY slug would satisfy the missing-topic assertion
+// while breaking the surface completely, so the real topic's 200 is what keeps it
+// honest.
+test('a topic landing page answers 200 for a real topic and 404 for a missing one (MOTIR-3491)', async ({
+  page,
+}) => {
+  const desn = await seedProject({
+    orgName: 'Initech Studio',
+    projectName: 'Design Studio',
+    identifier: 'DESN',
+  });
+  await makePublic(desn, { madePublicAt: days(1), overview: 'A shared design system studio.' });
+  await tag(desn, 'design');
+  await addRequestWithVotes(desn, 1, days(0));
+
+  const known = await page.goto('/explore/topic/design');
+  expect(known?.status(), 'a curated topic slug is 200').toBe(200);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(card(page, 'Design Studio')).toBeVisible();
+
+  const missing = await page.goto('/explore/topic/definitely-not-a-real-topic-xyz');
+  expect(
+    missing?.status(),
+    'an unknown topic slug is 404 — a 200 here means a loading boundary flushed the head ' +
+      'before the page ran (MOTIR-3491); see tests/navigation/loading-boundary-guard.test.ts',
+  ).toBe(404);
+});

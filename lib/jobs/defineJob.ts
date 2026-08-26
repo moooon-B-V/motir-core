@@ -2,6 +2,7 @@ import type { ConcurrencyOption } from 'inngest/types';
 import { inngest } from './client';
 import { jobServices, type JobServices } from './services';
 import { resolveRetries, type RetryPolicyName } from './retries';
+import type { CatchUpPolicy } from './catchUp';
 import { registerSchedule } from './schedules';
 import { registerEngineJob } from './engine/registry';
 import { registerJobManifest } from './engine/manifest';
@@ -176,14 +177,49 @@ export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
    * Asserting the option off `fn.opts` proves only that it was forwarded.
    */
   debounce?: { key: string; period: string; timeout?: string };
-  /**
-   * Optional cron expression (1.6.4). When set, the job is SCHEDULED rather
-   * than event-triggered: Inngest invokes it on the cron, and the wrapper
-   * records the ledger row's `event_name` as `scheduled.{id}` so the dashboard
-   * treats scheduled + event-triggered runs uniformly.
-   */
-  cron?: string;
-};
+} & JobScheduleAndCatchUp;
+
+/**
+ * ⚠️ THE SCHEDULE AND ITS CATCH-UP DISPOSITION ARE ONE DECISION, so the type
+ * makes them one field pair (Story MOTIR-3416 · Subtask MOTIR-3470;
+ * `docs/decisions/job-queue-foundation.md` §11).
+ *
+ *   - a definition supplying `cron` **must** supply `catchUp`;
+ *   - a definition supplying neither is an ordinary event-triggered job;
+ *   - supplying `catchUp` WITHOUT `cron` is a type error, because the option is
+ *     meaningless without a schedule and an accepted-but-ignored field is a lie.
+ *
+ * A two-arm union rather than an optional field, for the reason §11.8 records: a
+ * DEFAULT is exactly how a cron job added next year inherits a disposition nobody
+ * chose for it, and that is the failure the decision exists to prevent. The
+ * pattern is already established one type up — `JobIdAndTrigger` is the same
+ * shape, making `trigger` conditional on which arm the id takes.
+ */
+export type JobScheduleAndCatchUp =
+  | {
+      /**
+       * Cron expression (1.6.4). When set, the job is SCHEDULED rather than
+       * event-triggered: Inngest invokes it on the cron, and the wrapper records
+       * the ledger row's `event_name` as `scheduled.{id}` so the dashboard treats
+       * scheduled + event-triggered runs uniformly.
+       */
+      cron: string;
+      /**
+       * What the Postgres engine's scheduler owes this job for a fire the worker
+       * was down across — `all` / `latest` / `skip` (`lib/jobs/catchUp.ts`).
+       * REQUIRED here and nowhere else: declaring it beside the cron is what
+       * makes the policy complete BY CONSTRUCTION, the same property
+       * `registerSchedule` and `registerEngineJob` already depend on.
+       *
+       * ⚠️ It is NOT implied by `retryPolicy`. A retry says the handler may run
+       * the same tick twice; this says whether a STALE tick is worth running.
+       */
+      catchUp: CatchUpPolicy;
+    }
+  | {
+      cron?: undefined;
+      catchUp?: undefined;
+    };
 
 /** Serialize an unknown thrown value into the JobRunFailure wire shape. */
 function serializeFailure(err: unknown): JobRunFailure {
@@ -201,7 +237,7 @@ export function defineJob<N extends JobEventName>(
   options: DefineJobOptions<N>,
   handler: JobHandler,
 ) {
-  const { id, concurrency, idempotency, debounce, cron } = options;
+  const { id, concurrency, idempotency, debounce, cron, catchUp } = options;
   // Publish the schedule so `jobScheduleHealthService` can check that this cron
   // is still actually firing in production (MOTIR-1970). Registering HERE, at
   // the single choke point every job passes through, is what keeps the schedule
@@ -246,11 +282,17 @@ export function defineJob<N extends JobEventName>(
     maxAttempts,
     retryPolicy: options.retryPolicy,
     idempotency,
+    // The catch-up disposition, beside the `cron` it qualifies (MOTIR-3470). It
+    // rides the ENGINE registration and NOT the Inngest `config` object below —
+    // it is an engine-side fact about a scheduler Inngest does not have, exactly
+    // as the `maxAttempts` translation directly above is. Forwarding it would put
+    // an unknown key in a function's synced config for no reader.
+    catchUp,
     handler,
   });
 
   // …and the HANDLER-FREE view of the same registration, for the emit path
-  // (MOTIR-3458, ADR §11). Registered HERE, beside its sibling, so the two
+  // (MOTIR-3458, ADR §12). Registered HERE, beside its sibling, so the two
   // cannot drift: a job cannot be defined without appearing in both.
   registerJobManifest({
     id,

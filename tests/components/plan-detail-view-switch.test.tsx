@@ -25,6 +25,12 @@ const mocks = vi.hoisted(() => ({
   fetchPlanReview: vi.fn(),
 }));
 
+// MOTIR-3434 — the Canvas/List switch writes its URL SHALLOWLY. Both bodies
+// render from the `review` this island already holds, so the switch must not
+// re-run `/plans/[id]/page.tsx`'s awaits. `mocks.push` keeps its spy with the
+// opposite job: it must never be called.
+const pushState = vi.spyOn(window.history, 'pushState');
+
 // The search params are settable per test, because they ARE the input this file
 // is about.
 vi.mock('next/navigation', () => ({
@@ -166,6 +172,7 @@ const approved = () =>
   review({ status: 'approved' as PlanStatusDto, decidedByName: 'Yue', decidedAt: '2026-07-31' });
 
 beforeEach(() => {
+  pushState.mockClear();
   mocks.search.value = '';
   mocks.defaultView.value = null;
   mocks.fetchPlanReview.mockResolvedValue(approved());
@@ -228,7 +235,8 @@ describe('the DEFAULT view is DERIVED from the plan (MOTIR-3262)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1?view=canvas', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1?view=canvas');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('and switching BACK to it writes a CLEAN url', () => {
@@ -237,7 +245,8 @@ describe('the DEFAULT view is DERIVED from the plan (MOTIR-3262)', () => {
     renderWithIntl(<PlanDetail initialReview={straddling()} projectKey="MOTIR" />);
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('a POLL that crosses the threshold does NOT move the reviewer', async () => {
@@ -308,7 +317,8 @@ describe('the List / Canvas switcher (MOTIR-3239)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1?view=list', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1?view=list');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('switching BACK to the default writes a CLEAN url with no parameter', () => {
@@ -320,7 +330,8 @@ describe('the List / Canvas switcher (MOTIR-3239)', () => {
     renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
     fireEvent.click(screen.getByRole('button', { name: /Canvas/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('keeps any OTHER query parameter when it writes its own', () => {
@@ -329,9 +340,8 @@ describe('the List / Canvas switcher (MOTIR-3239)', () => {
     renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1?peek=item-1&view=list', {
-      scroll: false,
-    });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1?peek=item-1&view=list');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('switching NEVER scrolls the reader to the top of a pane they were reading', () => {
@@ -339,7 +349,13 @@ describe('the List / Canvas switcher (MOTIR-3239)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
 
-    expect(mocks.push.mock.calls[0]![1]).toEqual({ scroll: false });
+    // The property is unchanged; its CARRIER is. It used to be `router.push`'s
+    // `{ scroll: false }` option. A `history.pushState` does not scroll at all,
+    // so the guarantee is now structural rather than opted into — which is
+    // asserted by the switch going through `pushState` and issuing no
+    // navigation that could have scrolled (MOTIR-3434).
+    expect(pushState).toHaveBeenCalledTimes(1);
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('switching reveals no server surface, so it does not refresh', () => {
@@ -382,6 +398,7 @@ describe('GUARD: the default-view seam is CALLED, not inlined (MOTIR-3242)', () 
     renderWithIntl(<PlanDetail initialReview={review()} projectKey="MOTIR" />);
     fireEvent.click(screen.getByRole('button', { name: /List/ }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/plans/plan_1', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/plans/plan_1');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 });

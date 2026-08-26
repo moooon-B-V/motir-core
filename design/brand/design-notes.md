@@ -438,7 +438,7 @@ six it is also the **home link**.
 | **7b** | Auth card         | horizontal lockup, 28 px               | In `AuthLayout` — **not** per page — so all five auth screens inherit it from one place. Sits above the `AuthShell` header inside the existing `gap-8` column; adds ~40 px.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **7c** | `ExploreTopBar`   | horizontal lockup, 26 px               | Replaces the tile + letter at the same optical height, so the bar's `py-3` rhythm is unchanged. Keeps its existing `<Link href="/">`; the wordmark gains its pinned face.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **7d** | `PublicTopBar`    | quiet lockup, 18 px, right             | "on Motir", before the auth CTAs. The project's tile is **left alone** — a visitor is here for the project; the brand is the host.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **7e** | `EmailLayout`     | 20 px image + "Motir"                  | See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **7e** | `EmailLayout`     | 20 px **hosted PNG** + "Motir"         | See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **7f** | Browser chrome    | 16 px tiled icon                       | The one place the mark is judged with no wordmark, no colour context and no second chance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 **⚠ 7a's tile is a FIELD, not a recolour (amended 2026-08-10, MOTIR-2555).** §9 says the mark takes
@@ -457,12 +457,50 @@ the frames are in `design/shell/design-notes.md` § _The context row_ and
 exists). It takes the **mark-only** form at 24 px — 24 px instead of 40 — or the lockup is suppressed
 under `has-[[data-auth-wide]]`. MOTIR-1150 must **re-measure** that screen; do not assume.
 
-**7e — email is a raster-and-tables world.** The mark is an `<img>` (a PNG or a data-URI SVG), never
-an inline `<svg>` element and never a CSS variable: Outlook's Word renderer drops inline SVG entirely
-and Gmail strips `<style>`. It needs a literal `#5645d4` stroke, explicit `width`/`height` attributes,
+**7e — email is a raster-and-tables world.** The mark is an `<img>`, never an inline `<svg>` element
+and never a CSS variable: Outlook's Word renderer drops inline SVG entirely and Gmail strips
+`<style>`. It needs a literal `#5645d4` baked into the pixels, explicit `width`/`height` attributes,
 and `alt="Motir"` — roughly 40% of clients block images by default and the alt text is then the entire
 header. One colour for both themes: email has no reliable dark-mode signal, and `#5645d4` holds 6.57:1
 on the white body `EmailLayout` hardcodes.
+
+**⚠️ Amended 2026-08-25 (MOTIR-3505) — a PNG at an ABSOLUTE `https://` URL, and NOT a data-URI SVG.**
+This paragraph used to read _"a PNG or a data-URI SVG"_, and `EmailLayout` took the second option. It
+rendered in no mail client at all: all eight transactional templates wrap in this layout, so every one
+of them shipped an empty header that degraded to the alt text for **100%** of recipients rather than
+the 40% the budget above is for — which is also why it went unnoticed until Yue read an invite in
+Gmail. The two causes are independent and either is sufficient on its own, so the alternative had to
+move on both axes at once:
+
+| axis          | what fails                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **transport** | `data:` is not a source Gmail can use. It rewrites every image through its `googleusercontent.com` proxy and drops what it cannot FETCH; a data URI has nothing to proxy. |
+| **format**    | SVG renders in email in **no** major client — Gmail, Outlook and Yahoo alike — hosted or inline. A hosted `.svg` would fix the transport and change nothing.              |
+
+So the shipped rule is one line: **the `src` is an absolute `https://` URL to a raster.** Not a `data:`
+URI, not SVG, and not a root-relative path either — an email is not a document, so it has no base URL
+to resolve one against.
+
+- **The asset** is `public/email-mark-40.png`, a build output of
+  `scripts/brand/generate-brand-icons.mts` beside the icon set (§5) and asserted against the generator
+  by `tests/brand/iconAssets.test.ts`. It is the **bare glyph** in `#5645d4` on transparency — the same
+  artwork this section always specified — and deliberately **not** one of §5's tiles, which are opaque
+  accent fields with the glyph knocked out in its ink and sized against the maskable safe circle.
+- **40 px for a 20 px slot**, constrained by the `<img>`'s own `width`/`height`: a mail client has no
+  `srcset` worth relying on, so the retina density has to be in the file.
+- **It lives in `public/`**, which is the same trap §5 records for `icon-192.png` — Next's
+  static-metadata matcher takes one optional _digit_ after `icon`, so an `app/`-convention name
+  carrying a size is served at no URL at all.
+- **The origin is `MOTIR_BASE_URL`** (`lib/baseUrl.ts`), resolved per send, never the literal
+  `app.motir.co`: a self-hosted Motir serves its own mark from its own origin.
+- **A guard asserts the transport**, in `tests/brand/emailBrandHeader.test.tsx`. The rendering test
+  that was already here read the `src` and asserted what it DREW — the path data, the fill — which is
+  why it stayed green throughout. Assert what a `src` IS, not only what it depicts.
+
+**On panel 7e of `brand-mark.mock.html`:** the mock embeds its mark as a data URI because a mock is a
+self-contained HTML page a browser renders — that is the correct choice _there_ and carries no
+implication for the shipped email. (Its panel also still draws the **lattice**, the mark set aside in
+§1, rather than the wave band; that is a stale-artwork defect of the asset, tracked separately.)
 
 ---
 

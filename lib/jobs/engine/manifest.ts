@@ -1,7 +1,7 @@
 import type { RetryPolicyName } from '../retries';
 
 // THE SUBSCRIBER MANIFEST (Story MOTIR-3415 · Subtask MOTIR-3458).
-// Decided in `docs/decisions/job-queue-foundation.md` §11.
+// Decided in `docs/decisions/job-queue-foundation.md` §12.
 //
 // ===========================================================================
 // What it is, and why it is not `engine/registry.ts`
@@ -82,8 +82,17 @@ export function manifestSubscribers(eventName: string): ReadonlyArray<JobManifes
   return manifestJobs().filter((d) => d.trigger === eventName);
 }
 
-/** Every job declaring a cron. `lib/jobs/schedules.ts` carries the identical
- *  import caveat this table fixes; MOTIR-3416 inherits the answer (ADR §11). */
+/**
+ * Every job declaring a cron — the manifest's own partition helper.
+ *
+ * ⚠️ NOT THE SCHEDULER'S SOURCE, and deliberately so. `JobScheduler`
+ * (MOTIR-3416) reads `engineScheduledJobs()` off the full registry, because it
+ * runs inside the WORKER, which imports the registry for its handlers anyway —
+ * so it never had the reachability problem this table exists to fix. That
+ * problem belongs to the EMIT PATH, and a scheduler is not on one. Used here by
+ * the story gate, which asserts the cron and event-triggered halves partition
+ * the manifest (ADR §12).
+ */
 export function manifestScheduledJobs(): ReadonlyArray<JobManifestEntry> {
   return manifestJobs().filter((d) => d.cron !== undefined);
 }

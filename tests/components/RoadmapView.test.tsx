@@ -16,6 +16,13 @@ const { push, replace, sp } = vi.hoisted(() => ({
   replace: vi.fn(),
   sp: { current: '' },
 }));
+
+// MOTIR-3434 — the scope toggle writes the URL SHALLOWLY now, so the positive
+// assertion moved to `history.pushState`. `push` keeps its spy with the
+// OPPOSITE job: the toggle must NOT navigate, because the canvas refetches on
+// its `key={scope}` remount and the page's server reads produce nothing this
+// body uses.
+const pushState = vi.spyOn(window.history, 'pushState');
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace, refresh: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => '/roadmap',
@@ -91,6 +98,7 @@ beforeEach(() => {
   fetchUrls = [];
   sp.current = '';
   push.mockClear();
+  pushState.mockClear();
   replace.mockClear();
   vi.stubGlobal(
     'fetch',
@@ -147,7 +155,8 @@ describe('RoadmapView — scope toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
 
     // The toggle writes a DISTINCT history entry via push (not replace) — MOTIR-1549.
-    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap?scope=sprint');
+    expect(push).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
 
     // Simulate the resulting client navigation: the URL now carries scope=sprint, so
@@ -173,7 +182,8 @@ describe('RoadmapView — scope toggle', () => {
     await screen.findByText('Whole-project epic'); // default scope still works
 
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
-    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap?scope=sprint');
+    expect(push).not.toHaveBeenCalled();
 
     // Simulate the navigation to sprint scope.
     sp.current = 'scope=sprint';
@@ -189,7 +199,8 @@ describe('RoadmapView — scope toggle', () => {
 
     // The toggle stays available; navigating back to whole-project restores the tree.
     fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
-    expect(push).toHaveBeenCalledWith('/roadmap', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap');
+    expect(push).not.toHaveBeenCalled();
     sp.current = '';
     rerender(<RoadmapView {...props} />);
     expect(await screen.findByText('Whole-project epic')).toBeTruthy();
@@ -228,7 +239,8 @@ describe('RoadmapView — URL-addressable scope + Back/forward (MOTIR-1541, MOTI
 
     fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
 
-    expect(push).toHaveBeenCalledWith('/roadmap', { scroll: false });
+    expect(pushState).toHaveBeenCalledWith(null, '', '/roadmap');
+    expect(push).not.toHaveBeenCalled();
   });
 
   // The MOTIR-1549 regression: browser Back/forward is a query-only client navigation

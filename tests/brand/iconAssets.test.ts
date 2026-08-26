@@ -2,8 +2,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifest from '@/app/manifest';
-import { BRAND_ACCENT_HEX, BRAND_PAGE_BG_HEX, WAVE_BAND_PATH } from '@/components/brand/waveBand';
 import {
+  BRAND_ACCENT_HEX,
+  BRAND_ACCENT_INK_HEX,
+  BRAND_PAGE_BG_HEX,
+  WAVE_BAND_PATH,
+} from '@/components/brand/waveBand';
+import {
+  EMAIL_MARK_PNG,
+  emailMarkSvg,
   ICO_SIZES,
   MASKABLE_SCALE,
   NON_MASKABLE_SCALE,
@@ -132,6 +139,35 @@ describe('the committed files still match the generator', () => {
     expect(ico.readUInt32LE(6 + 12)).toBe(6 + 32);
     expect(ico.readUInt32LE(6 + 16 + 12)).toBe(6 + 32 + png.length);
     expect(ico.length).toBe(6 + 32 + png.length * 2);
+  });
+});
+
+describe('the email mark is generated here too, and is NOT one of the icons', () => {
+  // MOTIR-3505. `EmailLayout` needs a hosted raster because email takes the glyph
+  // no other way, so the mark is a build output of this script exactly as the
+  // icon set is — same generator, same committed-bytes guarantee. What it is NOT
+  // is a member of PNG_ICONS: those are opaque accent TILES sized against the
+  // maskable safe circle, and neither the tile nor either scale means anything
+  // for a 20px glyph sitting beside grey text on a white email body.
+  it('emits the bare glyph in the accent colour, with no tile behind it', () => {
+    const svg = emailMarkSvg();
+    expect(svg).toContain(`d="${WAVE_BAND_PATH}"`);
+    expect(svg).toContain(`fill="${BRAND_ACCENT_HEX}"`);
+    // The tiled form opens with a full-canvas <rect>; this one must not.
+    expect(svg).not.toContain('<rect');
+    expect(svg).not.toContain(BRAND_ACCENT_INK_HEX);
+  });
+
+  it('stays out of PNG_ICONS, so the safe-zone assertions do not read as its rules', () => {
+    expect(PNG_ICONS.map((s) => s.out)).not.toContain(EMAIL_MARK_PNG.out);
+  });
+
+  it('is committed at its declared canvas', () => {
+    const buf = readFileSync(join(REPO, EMAIL_MARK_PNG.out));
+    expect(pngSize(buf)).toEqual({
+      width: EMAIL_MARK_PNG.canvas,
+      height: EMAIL_MARK_PNG.canvas,
+    });
   });
 });
 

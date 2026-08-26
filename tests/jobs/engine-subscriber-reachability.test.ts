@@ -26,7 +26,7 @@ import { JOB_ENGINE_JOBS_ENV } from '@/lib/jobs/engine/cutover';
 // routed returns before touching the database and is exactly the call every real
 // emit makes.
 //
-// ADR: `docs/decisions/job-queue-foundation.md` §11.
+// ADR: `docs/decisions/job-queue-foundation.md` §12.
 
 /** What the EMIT PATH sees, after doing what the emit path does. */
 async function jobsVisibleToTheEmitPath(): Promise<string[]> {
@@ -159,9 +159,13 @@ describe('the job manifest is complete on the emit path', () => {
       })),
     );
     // …and the manifest carries NO handler, which is the one field that would
-    // drag the service graph onto an emitting request.
+    // drag the service graph onto an emitting request — nor `catchUp`, which is
+    // the scheduler's (MOTIR-3416) and is read off the registry in the worker.
+    // The projection above is the manifest's OWN key set, so a field added to
+    // the registry for a worker-side consumer does not have to appear here.
     for (const entry of manifestJobs()) {
       expect(entry).not.toHaveProperty('handler');
+      expect(entry).not.toHaveProperty('catchUp');
     }
   });
 });

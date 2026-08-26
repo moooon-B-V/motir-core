@@ -206,14 +206,26 @@ describe('no token surface gains them by accident', () => {
     expect(Object.values(TOOL_PERMISSIONS)).toContain(MANAGE_KEY);
   });
 
-  it('the VIEW key is NOT grantable — no tool reads a lesson', () => {
-    // The lesson READS are server-rendered settings pages, not MCP tools, so no
-    // token-reachable operation asserts this key and a picker switch for it
-    // would gate nothing. If a read tool ever lands, this flips — and it should
-    // flip HERE, deliberately, rather than by a set drifting under a surface.
-    expect(GRANTABLE_PERMISSIONS).not.toContain(VIEW_KEY);
-    expect(UNGRANTABLE_PERMISSIONS).toContain(VIEW_KEY);
-    expect(Object.values(TOOL_PERMISSIONS)).not.toContain(VIEW_KEY);
+  it('the VIEW key is grantable TOO now — and only because a tool asserts it', () => {
+    // ⚠️ THIS IS THE FLIP THE OLD TEST ASKED FOR, MADE HERE AND DELIBERATELY
+    // (MOTIR-3480). It read "the VIEW key is NOT grantable — no tool reads a
+    // lesson", and said: *"If a read tool ever lands, this flips — and it should
+    // flip HERE, deliberately, rather than by a set drifting under a surface."*
+    // `search_lessons` is that read tool, so the flip is performed rather than
+    // discovered — which is the whole reason the sentence was written.
+    //
+    // The two keys are back on the SAME side, and that is not the asymmetry
+    // MOTIR-3336 split them for going away: the split is about what a ROLE may
+    // hold (read a project's lessons vs. rewrite them), and it is still enforced
+    // everywhere a role is checked. Grantability is a different question —
+    // DERIVED, not declared: a permission is grantable exactly when a
+    // token-reachable operation asserts it. Two tools now do, one per key.
+    expect(GRANTABLE_PERMISSIONS).toContain(VIEW_KEY);
+    expect(UNGRANTABLE_PERMISSIONS).not.toContain(VIEW_KEY);
+    // Said against the derivation source rather than the derived set, so this
+    // stays a statement about WHY it is grantable: remove the tool and the key
+    // goes back.
+    expect(Object.values(TOOL_PERMISSIONS)).toContain(VIEW_KEY);
   });
 
   it('neither key is reachable by a LEGACY token row, grantable or not', () => {

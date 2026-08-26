@@ -144,6 +144,22 @@ export interface JobWorkerOptions {
    * worse state than a missing dashboard row.
    */
   onTerminalFailure?: (run: JobQueueRun, error: unknown) => Promise<void>;
+  /**
+   * ⚠️ THE SCHEDULER TICK (MOTIR-3471) — run at the TOP of every claim tick, so a
+   * fire this enqueues is claimed in the SAME pass rather than at the next poll
+   * boundary.
+   *
+   * It lives on the loop rather than on a timer of its own for the reason
+   * `lib/jobs/engine/scheduler.ts` gives at length: a `setTimeout` chain expresses
+   * a schedule as "one interval since the last tick" and skews under load, while a
+   * tick driven by the poll recomputes every fire from the CLOCK and so cannot.
+   * It also means the drain needs no second shutdown path — `tick()` returns early
+   * once `draining` is set, so a half-enqueued tick is not a state this can reach.
+   *
+   * A throw is logged and swallowed: a scheduling failure must not stop the worker
+   * CLAIMING, which is the strictly more important half of the loop.
+   */
+  onSchedulerTick?: () => Promise<void>;
   /** Structured logging sink; defaults to `console`. */
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
 }
@@ -182,6 +198,7 @@ export class JobWorker {
   private readonly execute: JobRunExecutor;
   private readonly onOutcome: NonNullable<JobWorkerOptions['onOutcome']>;
   private readonly onTerminalFailure: JobWorkerOptions['onTerminalFailure'];
+  private readonly onSchedulerTick: JobWorkerOptions['onSchedulerTick'];
   private readonly log: NonNullable<JobWorkerOptions['logger']>;
   private readonly leaseMs: number;
   private readonly renewMs: number;
@@ -205,6 +222,7 @@ export class JobWorker {
     this.execute = opts.execute;
     this.onOutcome = opts.onOutcome ?? (() => {});
     this.onTerminalFailure = opts.onTerminalFailure;
+    this.onSchedulerTick = opts.onSchedulerTick;
     this.log = opts.logger ?? console;
     this.leaseMs = opts.timings?.leaseMs ?? LEASE_MS;
     this.renewMs = opts.timings?.renewMs ?? RENEW_MS;
@@ -230,6 +248,17 @@ export class JobWorker {
    */
   async tick(): Promise<number> {
     if (this.draining) return 0;
+
+    // The SCHEDULER, before anything else (MOTIR-3471): a cron fire it enqueues
+    // is then claimed by the very same tick. Guarded because a scheduling failure
+    // must not stop the worker claiming — see the option's own comment.
+    if (this.onSchedulerTick) {
+      try {
+        await this.onSchedulerTick();
+      } catch (err) {
+        this.log.error('[job-worker] scheduler tick failed; continuing to claim', err);
+      }
+    }
 
     // Reclaim first: a run abandoned by a dead worker is due work, and doing
     // this before the claim means it is picked up in the SAME tick rather than

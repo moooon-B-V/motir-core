@@ -129,3 +129,34 @@ rung 1 — verified against Atlassian's "Complete a sprint" docs, not asserted).
 - The **scrum board** render + the sprint header — Story **4.5**.
 - The backend (start/complete/carry-over/report) — Story 4.4 subtasks **4.4.2 /
   4.4.3 / 4.4.4** (consumed by these UI subtasks, not built here).
+
+---
+
+## The streaming allocation at ARRIVAL — `/sprints/[id]/report` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+|                            |                                                                                                                                                                                                                                                                                          |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate, as it stands** | `getSession` → `params` → `getTranslations('backlog')` → `getActiveProject` (**`notFound()`**) → `listByProject` + `sprints.find` (**`notFound()`**) → the four-way `Promise.all`, after which `if (!report) notFound()` fires — **so the whole `Promise.all` is inside the gate today** |
+| **with the frame**         | the back-link to `/backlog` and the `<h1>`, which interpolates `sprint.name` from the sprint read                                                                                                                                                                                        |
+| **with the first content** | `getSprintReport` + `getWorkflow` — the report table and its status mapping                                                                                                                                                                                                              |
+| **after the page**         | `getVelocity` + `getSprintCycleGraph` — the two chart series, neither of which the 404 depends on                                                                                                                                                                                        |
+| **settles**                | **twice**                                                                                                                                                                                                                                                                                |
+| **verdict**                | **NONE for a new drawing — but the GATE must be split, and that is this entry's substantive instruction**                                                                                                                                                                                |
+
+**The gate is wider than the decision it protects.** `notFound()` fires on `!report`, so
+`getSprintReport` is genuinely a gate read — but `getVelocity` and `getSprintCycleGraph` are not,
+and today they sit inside the same wave, holding the response head for two series the status does
+not depend on. **The code card narrows the gate to `getSprintReport` (with `getWorkflow` beside it,
+since the table cannot render without the status map) and moves the two chart reads behind the
+boundary.** The 404 is unaffected: it is decided by the read that still runs before the flush.
+
+**The fallback is `SprintReport`'s own chart states**, exactly as on `/reports/burndown` — one
+vocabulary for a pending chart across both report surfaces, and no new asset in this area.
+
+**A route boundary is PROHIBITED here, not declined** — this route calls `notFound()` twice.

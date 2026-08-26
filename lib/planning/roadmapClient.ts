@@ -85,6 +85,12 @@ export interface RoadmapLevelData {
   items: RoadmapLevelItem[];
   edges: RoadmapEdge[];
   offLevelBlockers: RoadmapBlockerStub[];
+  /** How many rows the level HAS, against `items.length` for how many came back
+   *  (MOTIR-3490) — the `M` the canvas's "+ N more" tile reports. Optional
+   *  client-side: a read that omits it (an older server, the best-effort empty
+   *  level) degrades to "no tile", which is the pre-MOTIR-3490 behaviour and
+   *  never a false claim that the level is complete. */
+  levelTotal?: number;
 }
 
 /** The per-level node shape `GET …/roadmap?parentId=` returns (RoadmapNodeDto). */
@@ -188,10 +194,14 @@ export async function fetchRoadmapLevel(
   parentId: string | null,
   scope: RoadmapScope = 'project',
   signal?: AbortSignal,
+  all = false,
 ): Promise<RoadmapLevelData> {
   const params = new URLSearchParams();
   if (parentId) params.set('parentId', parentId);
   if (scope === 'sprint') params.set('scope', 'sprint');
+  // Only ever set after the reader has asked for it (MOTIR-3490) — the default
+  // read stays the capped one, so nothing gets slower for the levels that fit.
+  if (all) params.set('all', '1');
   const qs = params.toString() ? `?${params.toString()}` : '';
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/roadmap${qs}`, {
@@ -203,11 +213,13 @@ export async function fetchRoadmapLevel(
       nodes?: RoadmapNode[];
       edges?: RoadmapEdge[];
       offLevelBlockers?: RoadmapBlockerStub[];
+      levelTotal?: number;
     };
     return {
       items: (body.nodes ?? []).map(toItem),
       edges: body.edges ?? [],
       offLevelBlockers: body.offLevelBlockers ?? [],
+      levelTotal: typeof body.levelTotal === 'number' ? body.levelTotal : undefined,
     };
   } catch {
     return { items: [], edges: [], offLevelBlockers: [] };

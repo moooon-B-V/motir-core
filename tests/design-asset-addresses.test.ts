@@ -807,6 +807,41 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(authed)/settings/account/api-tokens/page.tsx',
     why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
   },
+  {
+    file: 'design/brand/brand-mark.mock.html',
+    path: 'app/(public)/explore/opengraph-image.tsx',
+    why: "Two point-in-time citations (the read-but-not-re-rendered list, and Panel 6's section-card label) naming the file MOTIR-1150 lifted the ad-hoc M-tile's inline hexes from, at the path it had when that card drew the asset. MOTIR-3491 moved it into `app/(public)/explore/(square)/` — a metadata image file is resolved for the page in its OWN segment, so when the square's page moved into the route group that scopes its `loading.tsx`, leaving this behind silently dropped every og:image tag from /explore. The asset is history and stays as drawn; correcting it from that bug's branch would also have published the brand mark's design result onto the bug (MOTIR-3130).",
+  },
+  // ── A path the design says must NEVER exist (MOTIR-3492) ──────────────────
+  // The inverse of every other row here: these are not paths an asset expects
+  // to find, they are the files the design forbids. A `loading.tsx` fallback
+  // renders once its ancestor layouts resolve — before the page function runs —
+  // which flushes the response head and fixes the status at 200, so a
+  // `notFound()` reached later renders the not-found BODY under a 200. Eleven
+  // `app/(authed)` pages call `notFound()`, five of them under `settings/`.
+  // `motir-core/CLAUDE.md` § *A `loading.tsx` may NOT sit above a route that
+  // decides existence* carries the rule and the A/B;
+  // `tests/navigation/loading-boundary-guard.test.ts` is the guard on the shape.
+  //
+  // These rows are asserted TIGHT like every other, and here that cuts the
+  // useful way round: the day one of these files is created, its finding stops
+  // firing, the row goes stale and THIS suite goes red. The exemption is also
+  // an alarm.
+  {
+    file: 'design/shell/design-notes.md',
+    path: 'app/(authed)/settings/loading.tsx',
+    why: 'MOTIR-3492 — named as the file the settings family may NOT have, because five of the eleven existence-deciding authed routes sit under `settings/`. Its absence is the design.',
+  },
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'app/(authed)/items/[key]/loading.tsx',
+    why: 'MOTIR-3492 — the boundary MOTIR-3435 shipped and that was reverted, named in the amendment that explains why the frame moved in-page. `/items/[key]` calls `notFound()` as a documented no-existence-leak contract.',
+  },
+  {
+    file: 'design/work-items/detail-arrival.mock.html',
+    path: 'app/(authed)/items/[key]/loading.tsx',
+    why: 'The same reverted file, named in the mock header comment so a reader of the asset alone learns why the frame is not a route file. Same reason it must stay absent.',
+  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',
@@ -854,12 +889,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   {
     file: 'design/shell/design-notes.md',
     path: 'app/(authed)/loading.tsx',
-    why: "Forward-looking: the navigation-pending grammar (MOTIR-3431) is the DESIGN for the group's loading boundary, and the boundary itself is MOTIR-3433's deliverable. ⚠️ DELETE THIS ROW IN THAT CARD — once the file exists this row stops applying, and the tightness assertion below turns red until it is removed.",
+    why: 'NOT BUILT, and deliberately. The navigation-pending grammar (MOTIR-3431) designs a group-level pending frame; MOTIR-3492 records the A/B that established that a `loading.tsx` there flushes a 200 response head before the page runs, destroying the `notFound()` 404 on all 11 authed routes that decide existence — including a no-existence-leak contract. Hoisting the gate into a layout was built and measured and does not recover it. The asset stands as the design of record for a frame that must be re-shaped as an in-page <Suspense> below each gate; see CLAUDE.md § *A `loading.tsx` may NOT sit above a route that decides existence*.',
   },
   {
     file: 'design/shell/navigation-pending.mock.html',
     path: 'app/(authed)/loading.tsx',
-    why: 'The same forward reference in the mock beside those notes — Panel D names the file the group frame will live in. Same card removes it.',
+    why: 'The same reference in the mock beside those notes — Panel D names the file the group frame was to live in. Same reason it does not exist: a boundary at the group root cannot coexist with the 404 contracts beneath it.',
   },
   {
     file: 'design/ai-usage/usage.mock.html',

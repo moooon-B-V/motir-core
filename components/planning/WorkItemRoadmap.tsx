@@ -7,7 +7,13 @@ import {
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
-import { buildWorkItemLevel, ORIGIN_ID } from '@/components/planning/workItemLevel';
+import {
+  buildWorkItemLevel,
+  isNotInEpicRow,
+  LEVEL_MORE_ID,
+  NOT_IN_EPIC_ID,
+  ORIGIN_ID,
+} from '@/components/planning/workItemLevel';
 import { buildPreplanStationLevel } from '@/components/planning/preplanStationLevel';
 import { TierDocModal } from '@/components/planning/TierDocModal';
 import { isDirectionDocKind, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
@@ -171,6 +177,15 @@ export function WorkItemRoadmap({
   const cacheGenRef = useRef(refreshSignal);
   const settledRef = useRef(refreshSignal);
 
+  // THE LEVELS THE READER ASKED TO SEE WHOLE (MOTIR-3490). The truncation tile
+  // tells them a level is capped; activating it adds that level's cache key here
+  // and drops its cached copy, so the next load re-reads with `all`. A ref, not
+  // state: the canvas re-runs `loadLevel` off `reloadKey`, and the tick below is
+  // what moves — keeping the set in state as well would give the same fact two
+  // homes.
+  const showAllRef = useRef(new Set<string>());
+  const [showAllTick, setShowAllTick] = useState(0);
+
   // The phase card only renders in the WHOLE-PROJECT scope (the sprint slice's road
   // did not start at onboarding), so neither the badge read nor the station level is
   // owed anywhere else — and never on a SUBTREE-rooted mount (MOTIR-2287), whose
@@ -225,6 +240,13 @@ export function WorkItemRoadmap({
     [onViewWorkItem],
   );
 
+  // The cache key of THIS mount's ROOT level — the one the grouped node's drill
+  // reads back from. Kept as one helper so the key can never be spelled two ways.
+  const rootCacheKey = useCallback(
+    () => `${projectKey}:${scope}:${subtreeRootId ?? ROOT_KEY}:${subtreeRootId ?? ROOT_KEY}`,
+    [projectKey, scope, subtreeRootId],
+  );
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // A new refresh generation invalidates every cached level so this load hits the
@@ -242,6 +264,25 @@ export function WorkItemRoadmap({
         if (parentId === ORIGIN_ID) {
           return buildPreplanStationLevel(await readPreplan());
         }
+        // THE GROUPED NODE'S LEVEL (MOTIR-3490) — synthetic, and served from the
+        // ROOT level this canvas has ALREADY fetched: those rows came back in the
+        // root read and grouping only decided where to draw them. So there is no
+        // second request, no endpoint and no wire field — the same shape the
+        // origin card's drill uses, for the same reason (no work item backs the
+        // node, so asking the API for its children asks for the children of an id
+        // it has never heard of).
+        if (parentId === NOT_IN_EPIC_ID) {
+          const root = cacheRef.current.get(rootCacheKey());
+          const rows = (root?.items ?? []).filter(isNotInEpicRow);
+          return buildWorkItemLevel(
+            {
+              items: rows,
+              edges: root?.edges ?? [],
+              offLevelBlockers: root?.offLevelBlockers ?? [],
+            },
+            { markActive: true, scope },
+          );
+        }
         // THE SUBTREE ROOT (MOTIR-2287) — the canvas's own root level (`parentId`
         // null) resolves to the ROOTED item's children instead of the project's
         // roots. Every deeper drill already carries a real id and is untouched.
@@ -255,7 +296,15 @@ export function WorkItemRoadmap({
         const key = `${projectKey}:${scope}:${subtreeRootId ?? ROOT_KEY}:${readParentId ?? ROOT_KEY}`;
         let wi = cacheRef.current.get(key);
         if (!wi) {
-          wi = await fetchRoadmapLevel(projectKey, readParentId, scope);
+          // `all` only for a level the reader explicitly asked to see whole
+          // (MOTIR-3490) — every other level keeps the capped read it has always had.
+          wi = await fetchRoadmapLevel(
+            projectKey,
+            readParentId,
+            scope,
+            undefined,
+            showAllRef.current.has(key),
+          );
           cacheRef.current.set(key, wi);
         }
         registerItems(wi);
@@ -270,12 +319,21 @@ export function WorkItemRoadmap({
         // is noise beside the sprint's own cards.
         // `scope` flips the off-level dependency signal from cross-story (project) to
         // the sprint-validity "not in sprint" signal (MOTIR-1379).
+        const atRoot = parentId === null;
         return buildWorkItemLevel(wi, {
           markActive: true,
-          includeOrigin: parentId === null && originEnabled,
+          includeOrigin: atRoot && originEnabled,
           scope,
           originCrumbLabel: t('origin.crumb'),
           originProduced: produced,
+          // Grouping is a statement about the PROJECT's roots, so it is the root
+          // level's alone — a drilled level's rows are somebody's children and
+          // belong exactly where they are. A SUBTREE-rooted mount (MOTIR-2287) is
+          // excluded for the same reason its origin cluster is: its first level is
+          // one item's children, not the project's roots.
+          groupNonEpicRoots: atRoot && !rooted,
+          groupCrumbLabel: t('group.title'),
+          levelTotal: wi.levelTotal,
         });
       } finally {
         // A refresh-triggered load has completed → let the caller clear its loading
@@ -300,8 +358,28 @@ export function WorkItemRoadmap({
       produced,
       rooted,
       subtreeRootId,
+      rootCacheKey,
       t,
     ],
+  );
+
+  // THE TRUNCATION TILE'S ACTIVATION (MOTIR-3490). The canvas reports an activated
+  // node through `onSelect`; the tile is not a work item, so it is intercepted here
+  // rather than passed on. Drop the level's cached copy, mark it `all`, and bump
+  // the tick — which folds into `reloadKey` and re-runs the load for the level the
+  // reader is standing on. Every other id falls through to the caller unchanged.
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (id !== LEVEL_MORE_ID) {
+        onSelect?.(id);
+        return;
+      }
+      const key = rootCacheKey();
+      showAllRef.current.add(key);
+      cacheRef.current.delete(key);
+      setShowAllTick((n) => n + 1);
+    },
+    [onSelect, rootCacheKey],
   );
 
   return (
@@ -313,11 +391,11 @@ export function WorkItemRoadmap({
         // the resolved produced set (MOTIR-2205) so the phase card's badge UPGRADES
         // in place when the late read lands. That rebuild is served from the level
         // cache — it re-renders the card, it does not re-hit the roadmap API.
-        reloadKey={`${scope}:${subtreeRootId ?? '-'}:${refreshSignal}:${produced ? produced.join(',') : '-'}`}
+        reloadKey={`${scope}:${subtreeRootId ?? '-'}:${refreshSignal}:${showAllTick}:${produced ? produced.join(',') : '-'}`}
         positions={positions}
         onNodeMove={onNodeMove}
         onResetPositions={onResetPositions}
-        onSelect={onSelect}
+        onSelect={handleSelect}
         onView={handleView}
         searchable={searchable}
         fullScreenable={fullScreenable}

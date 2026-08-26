@@ -1,5 +1,5 @@
 // THE EMIT PATH'S MANIFEST LOADER (Story MOTIR-3415 · Subtask MOTIR-3458).
-// Decided in `docs/decisions/job-queue-foundation.md` §11.
+// Decided in `docs/decisions/job-queue-foundation.md` §12.
 //
 // ===========================================================================
 // Why the import below is DYNAMIC, and why that is the whole design
@@ -11,7 +11,7 @@
 // not move anything, and a routed job ran on NEITHER lane, silently.
 //
 // A STATIC `import '@/lib/jobs/registry'` here would fix that and is exactly what
-// ADR §11 measured and rejected: the definitions reach `defineJob`, which imports
+// ADR §12 measured and rejected: the definitions reach `defineJob`, which imports
 // the service bag, which reaches `workItemsService`, which imports `sendEvent`.
 // That closes a cycle, and the cycle is not theoretical — `next build` FAILED
 // with `ReferenceError: Cannot access 'e5' before initialization`, and

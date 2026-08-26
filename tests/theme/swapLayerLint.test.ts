@@ -96,7 +96,7 @@ describe('swap-layer lint — no component reaches past the --el-* layer', () =>
       'app/(authed)/settings/account/_components/PasswordSecurityCard.tsx',
       // Open Graph images are rasterised at the edge by Satori, which never
       // sees the stylesheet — there is no cascade to read a token from.
-      'app/(public)/explore/opengraph-image.tsx',
+      'app/(public)/explore/(square)/opengraph-image.tsx',
       'app/(public)/p/[identifier]/opengraph-image.tsx',
       // The brand mark's BAKED-COLOUR literals (MOTIR-1150). The glyph itself
       // paints `currentColor` and follows the theme everywhere it is inline —

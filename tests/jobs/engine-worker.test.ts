@@ -406,6 +406,122 @@ describe('graceful shutdown', () => {
   });
 });
 
+describe('the SCHEDULER rides this loop (MOTIR-3471)', () => {
+  it('runs at the TOP of a tick, so a fire it enqueues is claimed by the SAME pass', async () => {
+    // This is why the scheduler is a hook on the loop rather than a timer of its
+    // own: the alternative enqueues a due run and then waits out a poll interval
+    // before anything claims it, for no reason but the two cadences not lining up.
+    const fire = new Date(Date.UTC(2026, 7, 25, 3, 30, 0));
+    const executed: string[] = [];
+    const w = new JobWorker({
+      workerId: 'scheduling',
+      logger: silent,
+      execute: async (run) => {
+        executed.push(run.jobId);
+      },
+      onSchedulerTick: async () => {
+        await withSystemContext((tx) =>
+          jobQueueRepository.enqueueScheduled(
+            {
+              jobId: 'system.attachment-gc',
+              scheduledFor: fire,
+              eventName: 'scheduled.system.attachment-gc',
+              runAt: fire,
+              maxAttempts: 5,
+            },
+            tx,
+          ),
+        );
+      },
+    });
+
+    const claimed = await w.tick();
+    expect(claimed).toBe(1);
+    expect(executed).toEqual(['system.attachment-gc']);
+  });
+
+  it('a THROWING scheduler tick does not stop the worker CLAIMING', async () => {
+    // The strictly more important half of the loop is the claim. A scheduling
+    // failure is a latency problem for one job; a claim loop that dies takes the
+    // whole background layer down until the platform restarts it.
+    const ws = await makeWorkspace();
+    await enqueue(ws);
+    const executed: string[] = [];
+    const w = new JobWorker({
+      workerId: 'scheduler-throws',
+      logger: silent,
+      execute: async (run) => {
+        executed.push(run.id);
+      },
+      onSchedulerTick: async () => {
+        throw new Error('the scheduler fell over');
+      },
+    });
+
+    await expect(w.tick()).resolves.toBe(1);
+    expect(executed).toHaveLength(1);
+  });
+
+  it('a DRAINING worker does not tick the scheduler — no half-enqueued tick', async () => {
+    // The reason the scheduler needs no shutdown path of its own: `tick()` returns
+    // before anything else once `draining` is set, so a drain cannot interrupt an
+    // enqueue that has already begun, and no tick begins after one.
+    let ticks = 0;
+    const w = new JobWorker({
+      workerId: 'draining-scheduler',
+      logger: silent,
+      execute: async () => {},
+      onSchedulerTick: async () => {
+        ticks += 1;
+      },
+    });
+
+    await w.tick();
+    expect(ticks).toBe(1);
+
+    await w.shutdown();
+    expect(await w.tick()).toBe(0);
+    // Unchanged: the drained worker neither claimed nor scheduled.
+    expect(ticks).toBe(1);
+  });
+
+  it('SIGTERM still drains cleanly with a scheduler wired in', async () => {
+    // The existing drain assertion, re-run with the hook present — the criterion
+    // is that adding the scheduler changed nothing about it.
+    const ws = await makeWorkspace();
+    const ids = [await enqueue(ws), await enqueue(ws)];
+
+    let release!: () => void;
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    const w = new JobWorker({
+      workerId: 'draining-with-scheduler',
+      logger: silent,
+      timings: { claimBatch: 5, drainTimeoutMs: 3_000 },
+      onSchedulerTick: async () => {},
+      execute: async () => {
+        await held;
+      },
+    });
+
+    const ticking = w.tick();
+    for (let i = 0; i < 100 && w.inFlightCount === 0; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(w.inFlightCount).toBe(2);
+
+    const shutting = w.shutdown();
+    release();
+    await ticking;
+    await shutting;
+
+    const rows = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(rows.filter((r) => r.state === 'running')).toEqual([]);
+    expect(rows.every((r) => r.claimedBy === null)).toBe(true);
+  });
+});
+
 describe('waking up promptly', () => {
   it('notify() cuts an idle sleep short, so a fresh event does not wait out the poll', async () => {
     const ws = await makeWorkspace();

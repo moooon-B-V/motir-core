@@ -166,6 +166,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (MOTIR-3336): adding a lesson and retiring one are both edits to the
   // standing instructions the planner receives.
   add_lesson: 'lesson:manage',
+
+  // `search_lessons` (Story MOTIR-3466 · MOTIR-3480) — the READ key, not the
+  // manage key. `lesson:view` and `lesson:manage` were separated in MOTIR-3336
+  // precisely so a role that may READ the library without editing it is
+  // expressible, and gating a read on the manage key would quietly undo that at
+  // the first call site: an admin holds both, so a manual walk and every E2E
+  // would pass while the distinction failed for the role nobody has created yet.
+  search_lessons: 'lesson:view',
   // Attaching a file to a card is EDITING that card — the same permission both
   // evidence publishers assert, and one CLI_TOKEN_GRANT carries, so a
   // dispatched agent can actually call it (MOTIR-3058; MOTIR-3051 is the
@@ -265,7 +273,41 @@ export function toolPermission(toolName: McpToolName): PermissionKey {
  * in Settings → Account → Tokens and carried by `motir auth login --token`.
  */
 export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
+  // ⚠️ CATALOG ORDER, NOT APPEND ORDER — and this is load-bearing, not tidiness.
+  // The device flow returns the minted token's scope string NORMALIZED to
+  // `lib/permissions/catalog.ts`'s `PERMISSIONS` order, and `cliDeviceService`'s
+  // and the token route's specs compare that wire string to this array joined.
+  // The two agree only while this list is DECLARED in catalog order; appending a
+  // key at the end instead breaks both, far from here and with no type error.
+  // (`lesson:view` sits beside `project:browse` in the catalog because placement
+  // there follows the DOMAIN — MOTIR-3361 records why that is deliberate.)
+  //
+  // ⚠️ It cannot be `sortByCatalogOrder(...)`: that is a VALUE import, and this
+  // module's header pins it as a LEAF whose only imports are types. Hand-order it.
   'project:browse',
+  // ⚠️ `lesson:view` — WIDENED DELIBERATELY for `search_lessons` (Story
+  // MOTIR-3466 · MOTIR-3480), and the argument is made here rather than assumed,
+  // because `docs/decisions/token-permissions.md` §3 and MOTIR-3051's AC 4 both
+  // say this set stays fixed UNLESS a card argues explicitly for widening it.
+  // MOTIR-3051's own option (3) was rejected on exactly that basis.
+  //
+  // The argument: a sandboxed `motir run` agent is THE caller this capability
+  // exists for — the runbook instructs every run to consult the mistakes corpus
+  // before it builds, and until this tool that corpus was reachable only by
+  // grepping a seed FILE, which sees the global half and misses the project's
+  // own entirely. The key being added is a READ over guidance the agent is
+  // already told to read. It grants no write, opens no new scope, spends no
+  // credits beyond the embedding the tool's own rate limit already bounds, and
+  // the approval screen shows it.
+  //
+  // This is the failure that ships GREEN, which is why it is a criterion with a
+  // test and not a line to remember: the tool registers, every suite passes
+  // against a workspace PAT, and the one caller the feature was built for gets a
+  // refusal it will read as an outage. That has happened twice on this same
+  // constant — MOTIR-3058 (the attach tool) and MOTIR-3051 (a CLI token that
+  // could open a plan and never fill it, because this grant held one key of the
+  // pair).
+  'lesson:view',
   'work_item:edit',
   'comment:add',
   'ai:plan',

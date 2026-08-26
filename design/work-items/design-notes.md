@@ -24,7 +24,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`                         | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
 | **The repository SET on the detail page**         | **`repository-set.mock.html`** + `repository-set.png`                       | EVERY repository a work item ships in, ordered, with each one's DELIVERY state — the surface table had no repository row at all, and MOTIR-2725 turns the single pin into a SET the completion gate reads. COMPOSES `FieldCard.tsx` and `components/github/DevelopmentSection.tsx` markup-for-markup (both RENDERED from the real components before this was drawn); the ONE new element is a Development row for a repository with no pull request yet. **REDRAWN against the REFERENCE model (Story MOTIR-2732 · MOTIR-3038):** every repository is now a LINK to the project's `project_repository` row, carrying its ROLE and — when it is not established — its establish STATE. TEN panels: the door · held · delivered · unrecorded branch · **the five delivery states** · **the destination** · one repo · none · **a `proposed` row** · editing. Story MOTIR-2725 · MOTIR-2413 (design), redrawn by MOTIR-3038. Gates MOTIR-2415 / MOTIR-3042; inherited by MOTIR-2414. See below.              |
 | **The repository SET in the QUICK VIEW**          | **`repository-set-quick-view.mock.html`** + `repository-set-quick-view.png` | The COMPRESSION of the row above into the peek modal — a ROW CAP of three plus `+N more`, with the count caption always naming the TOTAL so no size renders as if the card carried fewer. Placement MEASURED at 1280×900 against the modal's `h-[680px]` / 621px rail: SECOND, after Status (y 137–246) — last-in-rail measured y 642–751, below the fold, which is why the two surfaces' field ORDER legitimately differs. The editor is deliberately UNcompressed: compression governs the READ, never the WRITE. **REDRAWN by MOTIR-3038:** the repository is a LINK here too, and the ROLE is DETAIL-ONLY — dropped in the compact row, MEASURED not asserted (see below). Story MOTIR-2725 · MOTIR-2414 (design), redrawn by MOTIR-3038. Gates MOTIR-2416 / MOTIR-3042. See below.                                                                                                                                                                                                                   |
-| **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the ROUTE-SHAPED pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card), and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design). Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                                                                                                                                               |
+| **The item page at ARRIVAL / STREAMING**          | **`detail-arrival.mock.html`** + `detail-arrival.png`                       | What the page shows between the URL and the item: the page's OWN pending frame (the eyebrow row, the wide title, the `1fr / 18rem` split, the rail's card) — mounted as an in-page `<Suspense>` AFTER the gate, never as a `loading.tsx` (MOTIR-3492) — and the THREE-TIER allocation of every region — with the frame · with the first content · after the page. COMPOSES `design/shell/navigation-pending`'s grammar and the section skeletons this folder already draws; neither is redrawn. Decides that **the page settles TWICE**, so the five late sections are ONE boundary rather than five, and that the roll-up badge fills in place inside a reserved slot rather than earning a third. Story MOTIR-3430 · MOTIR-3432 (design), amended by MOTIR-3492. Gates MOTIR-3435 + MOTIR-3436. See below.                                                                                                                                                                                              |
 
 ---
 
@@ -4970,7 +4970,7 @@ The pair is now measured rather than asserted: `tests/design-ink-contrast.test.t
 
 ---
 
-## ⭐ The item page at ARRIVAL, and while it STREAMS (Story MOTIR-3430 · MOTIR-3432 — `detail-arrival.mock.html`)
+## ⭐ The item page at ARRIVAL, and while it STREAMS (Story MOTIR-3430 · MOTIR-3432 — `detail-arrival.mock.html`; the frame's MOUNT POINT corrected by MOTIR-3492)
 
 **What a reader sees between typing an `/items/<KEY>` URL and reading the item.** This folder already
 draws a loading state for many of the page's PARTS — comment rows, attachment tiles, custom-field
@@ -4979,8 +4979,36 @@ whole on arrival**, because until now the page did not exist until every read ha
 nothing to draw.
 
 **Asset ·** `detail-arrival.mock.html` / `detail-arrival.png`. **Cards ·** MOTIR-3432 draws it;
-MOTIR-3435 builds the boundary and makes the blocking reads concurrent; MOTIR-3436 moves the late
-regions behind their `<Suspense>`.
+MOTIR-3435 built the boundary and made the blocking reads concurrent; MOTIR-3436 moved the late
+regions behind their `<Suspense>`. **MOTIR-3436 SHIPPED. MOTIR-3435's boundary was REVERTED and its
+concurrency kept** — see the amendment directly below.
+
+### ⚠️ AMENDMENT (MOTIR-3492) — the frame is UNCHANGED; where it MOUNTS is not
+
+**`app/(authed)/items/[key]/loading.tsx` cannot exist.** A `loading.tsx` fallback renders as soon as
+its ancestor layouts resolve — before the page function runs — which flushes the response head and
+fixes the HTTP status at 200. This page's `notFound()` is a documented _no existence leak_ contract,
+and the cross-workspace assertion in `tests/e2e/issue-detail-flow.spec.ts` received a **200** with the
+boundary in place and a **404** with it removed and nothing else changed. Hoisting the gate into a
+`layout.tsx` does not recover the status and was built and measured. The prose home is
+`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_; the guard
+is `tests/navigation/loading-boundary-guard.test.ts`.
+
+**What that changes here, exactly:**
+
+|                                   |                                                                                                                                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the frame's drawing**           | UNCHANGED. The eyebrow geometry, the wide title, the `1fr / 18rem` split, the rail's card, the whole no-shift correspondence below — all of it stands                            |
+| **the frame's mount point**       | an in-page `<Suspense>` wrapping the page's **tier-2 body**, placed AFTER the gate, so it is released once the status is committed. It is no longer a route file                 |
+| **the three-tier allocation**     | UNCHANGED, and tier 3 has SHIPPED exactly as allocated — two boundaries sharing one promise, `issue-detail-flow.spec.ts` 16/16                                                   |
+| **what the page does TODAY**      | the gate plus one concurrent tier-2 group, and then the whole page at once. **There is no frame at all**: MOTIR-3435's boundary went with the revert and nothing has replaced it |
+| **the shell grammar it composes** | `design/shell/design-notes.md` § _The navigation-pending grammar_, second revision — the three windows, and the rule that every page's frame is its own                          |
+
+**The one thing a reader must not conclude from the drawing:** that the frame covers the wait from
+the click. It covers **window 2** — the page's own non-gate reads. The wait for the gate is window 1,
+and on a typed `/items/<KEY>` URL nothing can cover it, which is why MOTIR-3435's surviving half (the
+twenty-nine serial awaits cut to a gate plus one concurrent group) is the part of that card that
+mattered.
 
 ### It COMPOSES the shell grammar; it does not redraw it
 
@@ -5074,12 +5102,12 @@ reserves one line, and the shift is downward-and-rare rather than upward-and-usu
 
 ### The design-allocation sweep — what this asset GIVES and TAKES
 
-| card                                                                       | GIVES / TAKES | what                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **MOTIR-3435** — `/items/[key]`'s own `loading.tsx` + the concurrent reads | **GIVES**     | the frame's body block by block, and the rule that it composes `PageSkeleton` rather than redrawing the wrapper, header and reveal                                                                                                   |
-| **MOTIR-3436** — the streaming sections                                    | **GIVES**     | the allocation table, the settles-twice decision, the ONE-boundary-not-five argument with its stated future amendment, and the pending state for each late region — with a citation for every skeleton this folder already specifies |
-| **MOTIR-3431** — the shell grammar                                         | **TAKES**     | the pulse vocabulary, the 120 ms reveal and the nearer-boundary rule. Nothing is given back: the shell asset does not draw this page                                                                                                 |
-| **MOTIR-3437** — the story's vitest gate                                   | **GIVES**     | the checkable claim that the late stack is one boundary rather than five                                                                                                                                                             |
+| card                                                           | GIVES / TAKES | what                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-3435** — `/items/[key]`'s frame + the concurrent reads | **GIVES**     | the frame's body block by block, and the rule that it composes `PageSkeleton` rather than redrawing the wrapper, header and reveal. **Its `loading.tsx` half was reverted (MOTIR-3492); the frame is an in-page `<Suspense>` after the gate, and nothing owns building it yet** |
+| **MOTIR-3436** — the streaming sections                        | **GIVES**     | the allocation table, the settles-twice decision, the ONE-boundary-not-five argument with its stated future amendment, and the pending state for each late region — with a citation for every skeleton this folder already specifies                                            |
+| **MOTIR-3431** — the shell grammar                             | **TAKES**     | the pulse vocabulary, the 120 ms reveal and the nearer-boundary rule. Nothing is given back: the shell asset does not draw this page                                                                                                                                            |
+| **MOTIR-3437** — the story's vitest gate                       | **GIVES**     | the checkable claim that the late stack is one boundary rather than five                                                                                                                                                                                                        |
 
 ### What this design overrides
 
@@ -5126,3 +5154,55 @@ check that makes the recipe worth writing down rather than re-derived.
 One board artefact, named so nobody reads it as design: the frames that show the frame REVEALED force
 the animation's end state, because a board is a still and a time-based state has to be frozen at the
 moment it is being drawn.
+
+---
+
+## The streaming allocation at ARRIVAL — `/items/archived` and `/items/[key]/edit` (MOTIR-3442)
+
+Part of [MOTIR-3440](motir:cmt8s085i003li1ph06u469kx)'s sweep of the 24 heavy authed surfaces. The
+rule this applies is `design/shell/design-notes.md` § _The navigation-pending grammar_ →
+_WHICH SURFACES EARN A FRAME_, and the three-tier method is
+`design/work-items/design-notes.md` § _The item page at ARRIVAL_'s. **Neither is restated here.**
+Measured against `origin/main` `9455fc3c`.
+
+### `/items/archived` — the list
+
+|                            |                                                                                                                                                                                                                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **the gate**               | `getSession` → `getTranslations('issueViews')` → `getActiveProject` → `getCapabilities` (`canBrowse`)                                                                                                                                                                                |
+| **with the frame**         | the back-link to `/items` and the `<h1>`                                                                                                                                                                                                                                             |
+| **with the first content** | `searchParams` → `getLocale` → `Promise.all([getWorkflow, listArchivedWorkItems])` — already one wave — then `toArchivedRows`                                                                                                                                                        |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                                            |
+| **settles**                | **once**                                                                                                                                                                                                                                                                             |
+| **verdict**                | **NONE — reuse.** The late region is a table of work-item rows, and `app/(authed)/items/_components/IssueTreeSkeleton.tsx` is the drawn pending state for exactly that, already composed by `/items` behind its own `<Suspense>`. `/items/archived` is the same table one route over |
+
+**This is the one route in the ten where the reader arrives with the shape already in their head** —
+they came from `/items`, whose table they were just looking at. Standing in for it with the same
+skeleton the sibling route uses is what makes the two read as one surface.
+
+### `/items/[key]/edit` — the form
+
+|                            |                                                                                                                                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **the gate**               | `getSession` → `getTranslations` → `getActiveProject` → `params` → `getIssueDetail` (**`notFound()`**, and the `permanentRedirect` onto the canonical key when the alias resolves) → `getCapabilities` (**`redirect`** to the read view when `canEdit` is false) |
+| **with the frame**         | — nothing worth naming. The `<h1>` is `t('editIssue')` and could paint, but see the verdict                                                                                                                                                                      |
+| **with the first content** | — **nothing**                                                                                                                                                                                                                                                    |
+| **after the page**         | — nothing                                                                                                                                                                                                                                                        |
+| **settles**                | **once**                                                                                                                                                                                                                                                         |
+| **verdict**                | **NONE.** Both `notFound()` and the two redirects are decided by gate reads, and the same `detail` that decides them carries every value the form renders — `issue`, `workflow`, and every relationship `RelationshipsPanel` draws                               |
+
+**THE FORM DECISION, stated as the card required it: the FORM WAITS.** It is not a preference and it
+is not a compromise — it falls out of the reads. `EditIssueForm` takes `issue` and `workflow`, both
+from `getIssueDetail`, which is a **gate** read because it decides the 404. So by the time anything
+can be flushed at all, every field's value is already in hand. There is no version of this page
+where a field renders empty and fills in later, and therefore nothing to protect against.
+
+**The one read that is genuinely behind the others is `members`** — the assignee picker's option
+list, currently issued serially after `getCapabilities`. It is **not a field the reader types into**;
+it is a picker's options. The decision is to make it **concurrent with the capabilities read** rather
+than to stream it: one round trip instead of two, and the form still arrives complete. A discarded
+`members` read on the rare `canEdit === false` redirect is cheaper than a second settle on every
+successful edit.
+
+**A route boundary is PROHIBITED here, not declined** — this route calls `notFound()`
+(`motir-core/CLAUDE.md` § _A `loading.tsx` may NOT sit above a route that decides existence_).
