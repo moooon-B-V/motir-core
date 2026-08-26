@@ -409,6 +409,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/v1/projects/[projectKey]/plan-session/submissions` | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/plan-session/turns`       | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/ready`                    | —     | — none —                                           | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/repositories`             | —     | `assertCanBrowse` (via `projectRepoSetService`)    | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/sprints`                  | —     | — none —                                           | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/work-items`               | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
 | `/api/v1/projects/[projectKey]/work-items/count`         | —     | `assertCanBrowse` (via `projectsService.getByKey`) | —          | token-scoped | R1  |
