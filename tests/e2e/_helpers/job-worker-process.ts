@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -26,6 +27,53 @@ import path from 'node:path';
 // standalone tree's module resolution live.
 
 const WORKER_BUNDLE = path.resolve('.worker/worker.mjs');
+/**
+ * ⚠️ THE INDEX-WRITER SEAM'S ENVIRONMENT — WORKER ONLY, and the "only" is the
+ * decision (Story MOTIR-3417 · MOTIR-3564).
+ *
+ * The index supervisor mints a motir-ai run credential and resolves a GitHub
+ * tarball redirect before it provisions anything. Both calls happen HERE: the
+ * supervisor is a job, and the app server's whole part in a refresh is the
+ * webhook writing a `job_queue` row.
+ *
+ * ⚠️ AND THESE MUST NOT REACH THE APP SERVER. `lib/ai/availability.ts` reads
+ * `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` process-wide to decide whether the AI
+ * layer is configured, so setting them on the webServer would flip the whole lane
+ * CLOUD-ON — and `ai-callout-gate`, `cloud-orb-clearance`, `cloud-board-load` and
+ * `top-bar-budget` all assert the OFF state against that server. That is why they
+ * are set in this SPAWN and not in `playwright.config.ts`'s `webServer.env` or on
+ * the runner (a runner variable is inherited by the webServer too).
+ *
+ * `MOTIR_AI_URL` is a deliberately UNRESOLVABLE host, exactly like the acceptance
+ * lane's: a missing intercept then fails loud instead of escaping to the network.
+ * The App key is GENERATED per run — `createAppJwt` has to really sign, even
+ * though nothing verifies the signature behind the intercept.
+ *
+ * The mirror-image failure this repeats nothing of: MOTIR-3498, where
+ * `EMAIL_PROVIDER` was set on the webServer only and every engine-routed send
+ * went to the console provider while every signal stayed green.
+ */
+function indexWriterSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_CODE_GRAPH_SEAM'] !== '1') return {};
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+  return {
+    E2E_TEST_CODE_GRAPH: '1',
+    MOTIR_AI_URL: 'http://motir-ai.index-e2e.local',
+    MOTIR_AI_SERVICE_TOKEN: 'e2e-index-placeholder-token',
+    GITHUB_APP_ID: '990001',
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    // The fake orchestrator's container has to EXIT for a supervised run to
+    // settle, and `completeJob()` is an in-process call the Playwright runner
+    // cannot reach across into this child. `0` makes the first poll observe a
+    // clean exit, which is what a `succeeded` ledger row requires. Set here for
+    // the same reason as everything above it: this is the process that supervises.
+    MOTIR_FAKE_CONTAINER_AUTO_EXIT_CODE: '0',
+  };
+}
 
 let worker: ChildProcess | undefined;
 
@@ -107,6 +155,9 @@ export async function startJobWorker(): Promise<void> {
       ...(process.env['EMAIL_OUTBOX_PATH']
         ? { EMAIL_OUTBOX_PATH: process.env['EMAIL_OUTBOX_PATH'] }
         : {}),
+      // The index-writer seam — see `indexWriterSeamEnv` for why it is here and
+      // nowhere else.
+      ...indexWriterSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -183,6 +234,7 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       E2E_PROD_HARNESS: '1',
       // The private view of the cutover switch — the whole point of this worker.
       MOTIR_POSTGRES_JOB_IDS_FILE: routingFile,
+      ...indexWriterSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

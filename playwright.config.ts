@@ -124,6 +124,17 @@ process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 // executor for the new engine, exactly as it always carries `inngest-cli dev`
 // for the old one; export `E2E_JOB_WORKER=0` to run the suite without it.
 process.env['E2E_JOB_WORKER'] ??= '1';
+// ⚠️ THE INDEX-WRITER SEAM, ON THE WORKER AND NOWHERE ELSE (MOTIR-3564). Its two
+// boundaries — motir-ai's run-credential mint and GitHub's tarball redirect — are
+// crossed only by the index SUPERVISOR, which is a job, so the process that makes
+// both calls is the worker. This flag is what `job-worker-process.ts` reads to
+// decide whether to hand the child `E2E_TEST_CODE_GRAPH` + the two credentials;
+// setting those HERE would leak them to the app webServer (a runner variable is
+// inherited unless `webServer.env` overrides it), and `lib/ai/availability.ts`
+// reads exactly `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN` process-wide — which
+// would flip the whole lane cloud-on and break the four specs that assert the OFF
+// state. `E2E_JOB_WORKER_CODE_GRAPH_SEAM=0` turns it off.
+process.env['E2E_JOB_WORKER_CODE_GRAPH_SEAM'] ??= '1';
 // The routing override's path, for the RUNNER's own helpers. It matches the
 // value handed to the app webServer below — both processes read the same file,
 // which is the whole point of using one.
