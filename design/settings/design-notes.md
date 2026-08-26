@@ -14,6 +14,7 @@ the same primitives — no Pencil→code gap.
 | **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
 | **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
 | **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
+| **Two-factor authentication**  | **`two-factor.mock.html`** (HTML mock)                 | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                        |
 | **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                        |
 
 ## Why the whole area (the corner that was cut, then fixed)
@@ -1291,3 +1292,248 @@ Generated, not hand-drawn, so the asset cannot drift from the app:
 Two board artefacts, named so they are not read as design: the shell stage is held at a fixed
 **820px** (the app's shell is `h-dvh`), and the frames showing a revealed state force the reveal
 animation's end state, because a board is a still.
+
+---
+
+# Two-factor authentication — `two-factor.mock.html`
+
+**Story 8.11 (MOTIR-1213) · Subtask MOTIR-1216.** The account-settings
+`Security › Two-factor authentication` pane: enrol an authenticator app, keep
+email as a labelled lower-security fallback, hold ten single-use recovery codes,
+and revoke the browsers that stopped being asked. **Gates MOTIR-1220** (the pane
+
+- its route). The LOGIN CHALLENGE half of the same subtask is a separate asset in
+  its own area — `design/auth/two-factor-challenge.mock.html` — because it renders
+  in the signed-out `(auth)` frame; the two cite each other and neither
+  re-specifies the other.
+
+## Grounded in shipped reality (rung 2 — what was verified, and where)
+
+| the design assumes                                                                    | verified against                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the area shell, the rail, the identity header, the grouped nav, the Card pane grammar | `account-settings.mock.html` / `profile.mock.html`, copied 1:1 — not redrawn                                                                                                                                                                                                                                                         |
+| the Security group exists and holds `API tokens`                                      | `lib/settings/accountSettingsNav.ts` — `group: 'security'`, one entry (`apiTokens`)                                                                                                                                                                                                                                                  |
+| every control maps to an endpoint that already exists                                 | `lib/auth/index.ts` registers Better-Auth's `twoFactor` plugin (MOTIR-1217); the endpoint list is in the per-control table below                                                                                                                                                                                                     |
+| recovery codes are **encrypted, not hashed**                                          | `BackupCodeOptions.storeBackupCodes` accepts `'plain' \| 'encrypted' \| {encrypt,decrypt}` — there is no hashed arm. The copy is written to match                                                                                                                                                                                    |
+| "don't ask again" needs no new table                                                  | `plugins/two-factor/verify-two-factor.mjs` writes a `trust-device-<random>` row into the EXISTING `verification` table with an expiry                                                                                                                                                                                                |
+| ten codes, six digits, 30-second TOTP step, 30-day trust                              | **MOTIR-1217**, which pins them as named constants beside the plugin registration — the pane RENDERS those values, so the copy reads them rather than restating them. Cited by CARD rather than by path: the file lands with that card, and an asset naming a path that does not exist yet sends the next reader looking for nothing |
+
+## The ACCESS PATH — a new rail entry, first in the Security group
+
+The pane is reached one way and one way only: **`Security › Two-factor
+authentication`** in the account-settings rail, drawn ACTIVE in panels 1, 2 and 6. It is a NEW `accountSettingsNav` entry at `/settings/account/security`,
+declared **before** `apiTokens` — the registry orders by declaration, and a
+second factor is the more consequential of the two things in that group.
+
+```ts
+{ id: 'twoFactor', group: 'security', href: '/settings/account/security',
+  icon: ShieldCheck, labelKey: 'twoFactor' }
+```
+
+Adding it with its route on disk keeps the route↔registry totality test green by
+construction — the same move 7.8.3 made for API tokens and 7.3.58 for Appearance.
+
+## Panels
+
+| #   | what it draws                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------- |
+| 1   | **Off** — the empty state + the "what you'll be asked for" explainer + the access path          |
+| 2   | **On** — four cards: the methods, the recovery counter, the trusted devices, the way out        |
+| 3   | **Enrol** — three steps: the password step-up, QR + manual key, then the confirming code        |
+| 3b  | **Enrol, no password** — the Google-only account: step 1 skipped, and why that is a config fact |
+| 4   | **Recovery codes** — the shown-once set, and the regenerate confirmation                        |
+| 5   | **The states the happy path hides** — 2 left, 0 left, the turn-off step-up, a rejected code     |
+| 6   | **Dark parity** — panel 2 under `data-theme="dark"`                                             |
+
+## Per-control map — primitive, endpoint, tokens
+
+| element                 | primitive                   | endpoint / source                                     | colour                                                                                               | shape                                      |
+| ----------------------- | --------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| pane frame + cards      | `Card`                      | —                                                     | `--el-page-bg` on `--el-border`, `--shadow-subtle`                                                   | `--radius-card`, `--spacing-card-padding`  |
+| page head               | serif `h2`                  | —                                                     | `--el-text`; sub `--el-text-muted` (on the white card — AA 4.54)                                     | —                                          |
+| rail row (active)       | `SidebarNavItem`            | `accountSettingsNav`                                  | `--el-sidebar-item-bg-active`, icon `--el-accent`                                                    | `--radius-control`, `--height-control`     |
+| method row              | `.mrow` (a `.srow` + glyph) | —                                                     | glyph tile `--el-muted` → `--el-tint-mint` when on                                                   | `--radius-control`                         |
+| "Set up" / "Replace"    | `Button` secondary / ghost  | `authClient.twoFactor.enable`                         | `--el-border-strong` / `--el-text-secondary`                                                         | `--radius-btn`, `--height-btn-sm`          |
+| email toggle            | `Switch`                    | `otpOptions` is server-level; the toggle is Motir's   | on: `--el-accent`; off: `--el-muted` on `--el-border-strong`                                         | pill (`rounded-full`, a true circle)       |
+| "Lower security" chip   | `Pill`                      | —                                                     | `--el-tint-peach` + `--el-text-strong`, glyph `--el-warning`                                         | `--radius-badge`, `--spacing-chip-*`       |
+| "Primary" chip          | `Pill`                      | —                                                     | `--el-tint-lavender` + `--el-text-strong`                                                            | `--radius-badge`                           |
+| "On" chip               | `Pill`                      | `user.twoFactorEnabled`                               | `--el-tint-mint` + `--el-text-strong`, glyph `--el-success`                                          | `--radius-badge`                           |
+| recovery counter        | mono numeral                | `twoFactorService.getStatus` → `backupCodesRemaining` | `--el-text` → `--el-warning` at ≤2 → `--el-danger` at 0                                              | —                                          |
+| the code grid           | `.codes`                    | `POST /api/account/two-factor/backup-codes`           | `--el-page-bg` on `--el-border`; a used code `--el-text-faint`                                       | `--radius-input`                           |
+| QR + manual key         | `.qr` / `.keyrow`           | `authClient.twoFactor.enable` → `totpURI`             | modules `--el-text` on `--el-page-bg`                                                                | `--radius-input`                           |
+| six-digit field         | `.otp`                      | `authClient.twoFactor.verifyTotp`                     | `--el-border-strong`; focus `--el-accent`; error `--el-danger`                                       | `--radius-input`                           |
+| enrol / confirm modals  | `Modal`                     | —                                                     | `--el-page-bg`, `--shadow-modal`                                                                     | `--radius-modal`, `--spacing-card-padding` |
+| callouts                | `.callout`                  | —                                                     | info `--el-tint-sky` · warn `--el-tint-peach` · danger `--el-tint-rose`, all with `--el-text-strong` | `--radius-card`                            |
+| "I've saved these" tick | `Checkbox`                  | —                                                     | on: `--el-accent` + `--el-accent-text`                                                               | `--radius-xs`                              |
+| trusted-device row      | `.drow`                     | the `verification` `trust-device-*` rows              | `--el-text` / `--el-text-muted` on the white card                                                    | hairline `--el-border-soft`                |
+| "Revoke" / "Turn off"   | `Button` danger-ghost       | `authClient.twoFactor.disable`                        | `--el-danger`, hover `--el-tint-rose`                                                                | `--radius-btn`, `--height-btn-sm`          |
+
+## ⚠️ THE STEP-UP IS NOT DECORATION — the endpoints refuse without it
+
+Added in review (the question _"can we actually link an authenticator app?"_),
+after checking the drawing against the endpoint contracts rather than against the
+story's prose. The first draft of panel 3 opened on the QR. **It could not have
+been built**, and the reason generalises past this card.
+
+**Three of this pane's actions are password-gated by the plugin, not by us:**
+
+| action           | endpoint                                                   | gate                                                   |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| enrol            | `auth.api.enableTwoFactor` (`authClient.twoFactor.enable`) | `shouldRequirePassword` → `validatePassword`           |
+| regenerate codes | `auth.api.generateBackupCodes`                             | the same, plus `twoFactorEnabled` must already be true |
+| turn off         | `auth.api.disableTwoFactor`                                | the same                                               |
+
+**And for enrol the ORDER is forced, which is the part a drawing gets wrong
+silently.** `enableTwoFactor` is the call that MINTS the secret and returns the
+`totpURI`, so the password comes BEFORE the QR — there is nothing to render until
+that call returns. A design that puts the step-up after the scan is not a
+different taste, it is a screen whose data does not exist yet.
+
+So the enrol rail is **Confirm → Scan → Enter code**, and the step-up is ONE
+shared modal that also fronts regenerate (drawn inline in panel 4, since one
+destructive action does not earn two modals) and turn-off (panel 5). That is the
+story's own _"all 2FA-management actions sit behind a recent-auth/step-up check"_
+made concrete rather than restated.
+
+**The codes come from `enable`, not from a later call.** `enableTwoFactor`
+returns `{ totpURI, backupCodes }` together, at step 2. The pane shows the codes
+after step 3 succeeds, so the client HOLDS them across the confirm — there is no
+second endpoint to fetch them from, and looking for one is the obvious wrong
+turn. (`viewBackupCodes` exists but takes a `userId` and is a server-side
+administrative read, not this flow.)
+
+**An abandoned enrolment is a real state and panel 1 draws it.** Step 2 has
+already written the `two_factor` row with `verified: false` while
+`twoFactorEnabled` stays false, so a reader who closes the modal leaves a stale
+row behind. `verifyTOTP` is what flips both.
+
+## ⚠️ AND THE STEP-UP IS SKIPPED FOR AN ACCOUNT WITH NO PASSWORD — panel 3b
+
+The second half of the same finding, and the more serious one, because its
+failure mode is total and silent:
+
+```js
+// shouldRequirePassword
+if (!allowPasswordless) return true; // the DEFAULT — every user
+return Boolean(credentialAccount); // with the flag — the real question
+
+// validatePassword
+if (!credentialAccount || !currentPassword) return false; // a Google-only user
+```
+
+On the default, a Google-only account — ordinary in Motir, since
+`trustedProviders: ['google']` ships and this file's own Profile section already
+branches on credential-vs-OAuth-only — is answered `INVALID_PASSWORD` for a
+password it was never asked to set. **It could not turn 2FA on at all**, and no
+copy on this pane could explain why.
+
+`lib/auth/index.ts` now sets `allowPasswordless: true` (MOTIR-1217), which keeps
+the password mandatory for every account that HAS one and stops excluding every
+account that does not. Panel 3b draws what that reader sees: a two-step rail, and
+a callout saying their Google account is what protects the change.
+
+## The QR is a DRAWING, not an encoding — panel 3
+
+Stated because it is exactly the kind of thing a reader assumes either way. The
+`<svg>` in panel 3 is a deterministic module grid with real finder patterns,
+timing rows and an alignment block: it reads as a QR code at a glance, which is
+what a layout board needs, and it **encodes nothing**. Scanning it yields no
+`otpauth://` URI.
+
+The real one comes from `enable`'s `totpURI`, built by
+`createOTP(secret, { digits, period }).url(issuer, user.email)` — so the string
+the implementer renders is
+`otpauth://totp/Motir:zhuyue@motir.co?secret=…&issuer=Motir&digits=6&period=30`,
+with `issuer` and the two numbers coming from the constants MOTIR-1217 pins. The
+mock's manual key (`JBSW Y3DP EHPK 3PXP`) is likewise a plausible Base32 sample,
+not a secret.
+
+## The copy, and the four places it is load-bearing
+
+Every string on the pane is in the mock verbatim. Four of them are decisions:
+
+1. **"Motir stores them encrypted, so we can't display them again"** — NOT "we
+   can't read them". The plugin encrypts rather than hashes, so the second
+   sentence would be false, and a design that overstates a security property
+   teaches the implementer to overstate it in a UI a customer will quote back.
+2. **"Lower security"** on email, in the SAME words on the pane and at the
+   challenge. One caveat, worded once, wherever the method appears (NIST
+   800-63B: an inbox is not a strong possession factor).
+3. **The zero-codes callout names the consequence, not the count.** "You've used
+   every recovery code. If you lose your authenticator now, only an emailed code
+   can get you back in." A quiet `0` is a state a reader does not read.
+4. **Turn-off says what is deleted.** "Your authenticator enrolment and all
+   remaining recovery codes are deleted. Turning it back on starts from
+   scratch." The plugin's disable does exactly that; the copy is the behaviour.
+
+**i18n keys** — one namespace, `settings.account.twoFactor.*`:
+`nav` · `title` · `subtitle` · `off.title` · `off.body` · `off.cta` ·
+`methods.title` · `methods.subtitle` · `methods.totp.{name,desc,setUp,replace}` ·
+`methods.email.{name,desc,lowerSecurity}` · `methods.primary` ·
+`recovery.{title,subtitle,remaining,generate,generateDesc}` ·
+`recovery.{low,exhausted}` · `enrol.{step1,step2,scan,cantScan,confirm,confirmDesc,next}` ·
+`codes.{title,subtitle,copyAll,download,acknowledge,warning,done}` ·
+`regenerate.{title,body,warning,confirm}` ·
+`devices.{title,subtitle,revoke,revokeAll,trustedOn,expires}` ·
+`disable.{title,subtitle,cta,confirmTitle,confirmBody,warning}` ·
+`errors.{wrongCode,clockDrift}`. Every `en` key needs its `zh` twin
+(`tests/i18n-catalog.test.ts`).
+
+## States drawn, and the one that is NOT
+
+Drawn: **off** (panel 1) · **enrolled** (2) · **enrolling, both steps** (3) ·
+**codes shown once** (4) · **regenerate confirm** (4) · **low / exhausted
+codes** (5) · **turn-off step-up** (5) · **a rejected confirming code** (5) ·
+**dark** (6).
+
+**Not drawn, deliberately: a passkey row.** Story 8.12 (MOTIR-1214) adds
+WebAuthn as a third method, and the methods card is built as a LIST so that row
+lands beside the other two without a re-layout. Drawing it here would specify a
+surface this story does not build — the mistake `account-settings.mock.html`'s
+own scope guard records about Appearance.
+
+## The workflow spec this design is grounded in (the design-content dependency)
+
+This asset invents no behaviour. Each flow it draws is defined by a sibling
+card, and the design cites them rather than deciding them:
+
+- **MOTIR-1217** — which methods exist, the ten codes, the six digits, the
+  30-second step, the 30-day trust, and the fact that trust is a `verification`
+  row rather than a table.
+- **MOTIR-1218** — the status DTO the pane renders (`enabled`, `methods`,
+  `primaryMethod`, `backupCodesRemaining` / `Total`), the regenerate endpoint,
+  and the typed refusals the error states show.
+- **MOTIR-1220** — the card that BUILDS this pane.
+- **MOTIR-1221** — the challenge, in the other asset.
+
+## The nested-theme re-emit (a board artefact, named so it is not read as design)
+
+`--el-*` is declared on `:root` as `var(--color-*)`, and a custom property's
+`var()` is substituted where it is DECLARED — so a nested
+`[data-theme='dark']` flips the Tier-0 palette under it while every `--el-*`
+keeps the light value it computed at `:root`. This board puts `data-theme` on a
+nested `.panel`, so it re-emits the Tier-3 block scoped to the attribute (the
+same fix `appearance.mock.html` carries for its sidebar tokens). In the app
+`data-theme` sits on `<html>` and none of it is needed.
+
+**⚠️ MEASURED, and it is a finding about a NEIGHBOUR asset:**
+`profile.mock.html`'s Panel 5, labelled _"Dark parity — the resting pane renders
+correctly on `data-theme="dark"`"_, **does not render dark**.
+`getComputedStyle` on its dark `.stage` returns `--el-page-bg: #ffffff`. The
+panel is a light panel with a dark label, so the parity it claims to verify has
+never been looked at. Filed rather than fixed in passing — it is another card's
+asset (MOTIR-1205's).
+
+## Self-review
+
+- Every icon is a lucide path at `viewBox="0 0 24 24"`, sized by CSS.
+- No nested interactive elements: the method rows are rows, not buttons, with the
+  control as the only focusable thing in them.
+- Ink/surface pairs: `--el-text-muted` appears only on the white card
+  (4.54:1); every caption on `--el-surface` / `--el-muted` /
+  `--el-surface-soft` uses `--el-text-secondary` (6.18–6.80:1).
+- The two `--el-text-faint` uses are both decorative and say so: the empty
+  code cell's placeholder dash is `aria-hidden`, and the struck-through
+  spent-code rule is disabled text (1.4.3 exempts it).
+- No Tier-0 `--color-*` outside the token block; no raw `rounded-*` / `p-*` /
+  `h-9` on any control's own box.
