@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { resolveBaseUrl } from '@/lib/baseUrl';
@@ -16,6 +17,15 @@ import {
   DEVICE_CODE_POLL_INTERVAL,
   DEVICE_VERIFICATION_PATH,
 } from '@/lib/cliDevice/constants';
+import {
+  TWO_FACTOR_BACKUP_CODE_COUNT,
+  TWO_FACTOR_ISSUER,
+  TWO_FACTOR_OTP_ALLOWED_ATTEMPTS,
+  TWO_FACTOR_OTP_DIGITS,
+  TWO_FACTOR_OTP_PERIOD_MINUTES,
+  TWO_FACTOR_TOTP_PERIOD_SECONDS,
+  TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
+} from './twoFactorConfig';
 import { hash, verify } from './passwords';
 
 // Better-Auth instance. Persistence is Postgres via Prisma; password hashing
@@ -309,6 +319,102 @@ export const auth = betterAuth({
       // An empty object means "no model/field renames" — which is what we want, since
       // Motir's DeviceCode model already uses the plugin's field names verbatim.
       schema: {},
+    }),
+    // twoFactor (Story MOTIR-1213 · Subtask MOTIR-1217) is Better-Auth's own
+    // 2FA plugin. It mounts /two-factor/enable, /two-factor/disable,
+    // /two-factor/verify-totp, /two-factor/send-otp, /two-factor/verify-otp,
+    // /two-factor/generate-backup-codes and /two-factor/verify-backup-code
+    // under the existing /api/auth/* handler, adds `user.twoFactorEnabled`, and
+    // persists the enrolment in the `two_factor` model.
+    //
+    // WHY THE PLUGIN AND NOT OUR OWN. TOTP, emailed OTP and recovery codes are
+    // one mechanism with one enrolment record, and every part of it — the
+    // RFC-6238 step window, the constant-time compare, the interception of the
+    // password step, the short-lived two-factor cookie — is cryptographic code
+    // that is wrong in ways nothing in this repo would catch. So this subtask is
+    // wiring, not crypto.
+    //
+    // ⚠️ RECOVERY CODES ARE ENCRYPTED, NOT HASHED — and that is FORCED, not
+    // chosen. The card asks for "backup codes = 10, hashed at rest".
+    // `BackupCodeOptions.storeBackupCodes` offers exactly
+    // `'plain' | 'encrypted' | { encrypt, decrypt }` — there is no hashed arm,
+    // because the whole code SET lives in one column and verifying a code means
+    // decoding that column and searching it, then rewriting it without the code
+    // just spent. A hash cannot be searched that way. `'encrypted'` is the
+    // strongest thing the plugin has (AES via BETTER_AUTH_SECRET), and it is
+    // also the plugin's default; pinned explicitly so the deviation is visible
+    // in review rather than inferred from silence. The EMAILED OTP does support
+    // hashing, and takes it below.
+    //
+    // ⚠️ NO TRUSTED-DEVICE TABLE. The card asks us to decide whether "remember
+    // this device" needs storage of its own; it does not. The plugin writes a
+    // `trust-device-<random>` row into the EXISTING `verification` table with an
+    // expiry and hands the browser a signed `trust_device` cookie
+    // (plugins/two-factor/verify-two-factor.mjs), so revoking a device is
+    // deleting a verification row — a table that already exists, with a sweep
+    // that already expires it. The decision is recorded on the `TwoFactor` model
+    // in schema.prisma too, since that is where a reader looks for it.
+    //
+    // Every option below is either the plugin's default pinned for review
+    // visibility or a value the story's own acceptance recipe names; the numbers
+    // live in ./twoFactorConfig so the UI can state them without a second copy.
+    twoFactor({
+      issuer: TWO_FACTOR_ISSUER,
+      totpOptions: {
+        digits: TWO_FACTOR_OTP_DIGITS,
+        period: TWO_FACTOR_TOTP_PERIOD_SECONDS,
+      },
+      backupCodeOptions: {
+        amount: TWO_FACTOR_BACKUP_CODE_COUNT,
+        storeBackupCodes: 'encrypted',
+      },
+      otpOptions: {
+        digits: TWO_FACTOR_OTP_DIGITS,
+        period: TWO_FACTOR_OTP_PERIOD_MINUTES,
+        allowedAttempts: TWO_FACTOR_OTP_ALLOWED_ATTEMPTS,
+        // Unlike the recovery codes above, the emailed code IS hashed at rest:
+        // it is a single value compared once, so nothing needs to read it back.
+        storeOTP: 'hashed',
+        // ENQUEUE the send, exactly as sendResetPassword does above — the
+        // provider call belongs in the durable `email.send` job, not on the
+        // request the user is waiting on at the challenge screen. The body is
+        // lib/emailTemplates/twoFactorOtp.tsx (MOTIR-1219); no email strings
+        // live in this wiring layer, per CLAUDE.md.
+        //
+        //   - workspaceId: null — signing in is identity-scoped, and the user
+        //     has not chosen a workspace yet (the challenge runs BEFORE the
+        //     session exists), so there is no workspace to attribute it to.
+        //     Same call as the password-reset send above.
+        //   - idempotencyKey: the issuance itself. A double-submitted "email me
+        //     a code" that re-fires the SAME code collapses to one delivery;
+        //     asking for a genuinely NEW code produces a new key and a second
+        //     mail, which is what a user pressing "resend" expects.
+        sendOTP: async ({ user, otp }) => {
+          await sendEvent('email.send', {
+            workspaceId: null,
+            idempotencyKey: `two-factor-otp:${user.id}:${otp}`,
+            to: user.email,
+            template: 'two-factor-otp',
+            data: {
+              recipientName: user.name || 'there',
+              code: otp,
+              expiresInMinutes: TWO_FACTOR_OTP_PERIOD_MINUTES,
+              locale: await currentLocale(),
+            },
+          });
+        },
+      },
+      // FALSE, deliberately (and it is the default): enabling 2FA hands back a
+      // TOTP URI and the recovery codes but leaves `twoFactorEnabled` off until
+      // a code generated from that secret is accepted. That is the
+      // confirm-before-enabling step the story's recipe describes, and it is
+      // what stops a mis-scanned QR from locking a user out of their own
+      // account.
+      skipVerificationOnEnable: false,
+      // 30 days — the number the story's acceptance recipe names for "don't ask
+      // again on this device". Also the plugin's default; pinned so the copy and
+      // the cookie cannot drift apart.
+      trustDeviceMaxAge: TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
     }),
   ],
 });
