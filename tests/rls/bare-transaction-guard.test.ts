@@ -107,6 +107,38 @@ const BARE_TRANSACTION_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'raw-not-gated',
     'userRepository.lockById -> user: relrowsecurity=f, 0 policies',
   ],
+
+  // Two-factor (Story MOTIR-1213 · Subtask MOTIR-1218). Each of the three
+  // reaches `twoFactorRepository.findByUserIdForUpdate`, a `SELECT … FOR UPDATE`
+  // in raw SQL — the shape the parser cannot name a target for, so the scan
+  // reports it rather than guessing. Adjudicated by reading the statement and
+  // then MEASURING its table, with the query in the block comment above, on the
+  // schema this branch migrates:
+  //
+  //   relname    | relrowsecurity | policies
+  //   two_factor | f              |        0
+  //   user       | f              |        0
+  //
+  // `two_factor` is identity-scoped and ships with NO RLS deliberately — there
+  // is no tenant discriminator to gate by, and it is read PRE-SESSION on the
+  // login challenge, so a policy on `app.workspace_id` would hide the row from
+  // its only legitimate reader. It is registered in
+  // `tenant-root-creation-rls`'s `DELIBERATELY_UNGUARDED` map, which is the
+  // authority the totality guard reads. `#disable` also writes `user`, measured
+  // alongside and equally ungated — the same verdict `usersService`'s three
+  // entries already carry.
+  'lib/services/twoFactorService.ts#consumeBackupCode': [
+    'raw-not-gated',
+    'twoFactorRepository.findByUserIdForUpdate -> two_factor: relrowsecurity=f, 0 policies',
+  ],
+  'lib/services/twoFactorService.ts#regenerateBackupCodes': [
+    'raw-not-gated',
+    'twoFactorRepository.findByUserIdForUpdate -> two_factor: relrowsecurity=f, 0 policies',
+  ],
+  'lib/services/twoFactorService.ts#disable': [
+    'raw-not-gated',
+    'twoFactorRepository.findByUserIdForUpdate -> two_factor, userRepository.setTwoFactorEnabled -> user: both relrowsecurity=f, 0 policies',
+  ],
 };
 
 /**
@@ -118,11 +150,27 @@ const BARE_TRANSACTION_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * statement, so there is no legitimate reason for it to rise: a new bare
  * transaction over non-gated tables does not move it at all.
  *
- * 8 = 3 `no-policy` (cliDeviceService) + 5 `raw-not-gated` (rateLimit ×2,
- * usersService ×3). Every one is adjudicated above, and there are no
- * `unbound-transaction` verdicts left — MOTIR-2874 bound the last three.
+ * 11 = 3 `no-policy` (cliDeviceService) + 8 `raw-not-gated` (rateLimit ×2,
+ * usersService ×3, twoFactorService ×3). Every one is adjudicated above, and
+ * there are no `unbound-transaction` verdicts left — MOTIR-2874 bound the last
+ * three.
+ *
+ * ⚠️ 8 → 11 (MOTIR-1218), and the "may only ever go DOWN" rule above is not
+ * being waived — read what it actually forbids. It says *"If this ROSE, a new
+ * one was written — bind it rather than adding an entry"*, which is the right
+ * instruction for a site that IS gated. These three are not: their raw
+ * `SELECT … FOR UPDATE` reaches `two_factor`, measured at `relrowsecurity=f`
+ * with zero policies, so there is no GUC a binding could supply and
+ * `withWorkspaceContext` would be theatre around a table with no tenant column.
+ * The `raw-not-gated` verdict exists for exactly this, and five of the previous
+ * eight already carry it.
+ *
+ * What the ratchet still buys, unchanged: an `unbound-transaction` verdict — a
+ * site that is genuinely broken under `motir_app` — cannot be added without
+ * moving this number, and a site nobody has adjudicated fails the sibling
+ * assertion before it ever reaches this one.
  */
-const GATED_BARE_TRANSACTION_CEILING = 8;
+const GATED_BARE_TRANSACTION_CEILING = 11;
 
 describe('bare `db.$transaction`s enclosing policy-gated statements are all accounted for', () => {
   // WARM THE SCAN ONCE, in a hook with its own budget — the reason

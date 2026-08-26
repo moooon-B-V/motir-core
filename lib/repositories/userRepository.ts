@@ -180,4 +180,25 @@ export const userRepository = {
   ): Promise<User> {
     return tx.user.update({ where: { id }, data: { lastActiveProjectId: projectId } });
   },
+
+  /**
+   * Flip the two-factor flag (Story MOTIR-1213 · Subtask MOTIR-1218) — the
+   * column Better-Auth's `twoFactor` plugin owns, written here only on the ONE
+   * path Motir owns end-to-end: `twoFactorService.disable`, which must drop the
+   * enrolment row and clear the flag in the SAME transaction or leave an account
+   * demanding a second factor it no longer holds.
+   *
+   * A single-row UPDATE keyed by the user's own id, so no `FOR UPDATE`: the
+   * value is not derived from a prior read (`disable` writes a constant
+   * `false`), and the enrolment row the operation actually races on is locked by
+   * `twoFactorRepository.findByUserIdForUpdate` in the same transaction.
+   * Required `tx` per CLAUDE.md (write method).
+   */
+  async setTwoFactorEnabled(
+    id: string,
+    enabled: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<User> {
+    return tx.user.update({ where: { id }, data: { twoFactorEnabled: enabled } });
+  },
 };
