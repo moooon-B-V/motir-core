@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Job runs — the DELIVERY state (Bug MOTIR-3507 · MOTIR-3514)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the OPERATOR JOB-RUNS surface at
+      /settings/workspace/jobs — the FIRST design asset this surface has ever
+      had. It ships today and design/ held nothing for it: the only asset that
+      named it was design/platform-admin/design-notes.md, telling the estate
+      console NOT to fork it. A door is evidence the room is required, not
+      evidence it is drawn, so the design gate fired and this is its answer.
+
+      Built FROM the real design system AND from the SHIPPED component's own
+      markup — app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx
+      (TableShell / Th / Td / the status filter / the tab strip) and the Pill
+      primitive's actual recipe (hue in the tint, --el-text-strong ink). Colour
+      via --el-* only; shape via the element shape tokens; AA-safe in both
+      themes. The pre-design render of the live surface is _shipped-today.png,
+      taken from the running app before anything here was drawn.
+
+      Covers (multi-panel — review EACH):
+        (1) TODAY — the shipped table, every send reading `succeeded`
+        (2) THE CHANGE — the Delivery column, right of Status
+        (3) THE ENUM — all five values + the no-row case, with tones
+        (4) ROW DETAIL — the provider message id an operator can act on
+        (5) ACCESS PATH — Settings → Workspace → Job runs, drawn
+      Toggle data-theme="dark" to confirm token parity. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied 1:1 from app/globals.css ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── Board chrome (annotation only — never product UI) ───────────────── */
+      .board {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      .boardTitle {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 0 0 4px;
+      }
+      .boardLead {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        margin: 0 0 28px;
+        max-width: 76ch;
+        line-height: 1.6;
+      }
+      .panel {
+        margin-top: 36px;
+      }
+      .panelTitle {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 6px;
+      }
+      /* --el-text-secondary, not -muted: an annotation owes AA on every surface
+         it may land on, and muted clears it only on the white page. */
+      .panelNote {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin: 0 0 14px;
+        max-width: 84ch;
+        line-height: 1.6;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+      }
+
+      /* ── Shipped chrome, mirroring the real component's classes ──────────── */
+      .h1 {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .lead {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        margin: 0 0 20px;
+        max-width: 72ch;
+        line-height: 1.55;
+      }
+      .tabstrip {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 16px;
+      }
+      .tab {
+        padding: 8px 12px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .tab[aria-current='page'] {
+        color: var(--el-text);
+        font-weight: 600;
+        border-bottom-color: var(--el-accent);
+      }
+      .filterRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .filters {
+        display: flex;
+        gap: 8px;
+      }
+      .filter {
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .filter[aria-pressed='true'] {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        border-color: transparent;
+        font-weight: 500;
+      }
+      .ghostBtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+      }
+      .tableShell {
+        overflow-x: auto;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead {
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      /* --el-text-secondary, NOT the shipped Th's --el-text-muted: the header
+         row sits on --el-surface, where muted measures 4.12:1 and fails AA.
+         The asset draws the TARGET, so it takes the ink that clears — and the
+         shipped component's own pairing is filed as its own defect. */
+      th {
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      td {
+        padding: 8px 12px;
+        vertical-align: middle;
+        font-size: 14px;
+        color: var(--el-text);
+        border-bottom: 1px solid var(--el-border);
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+      .dim {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Pill — the real primitive's recipe: hue in the TINT, charcoal ink ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-info {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── The access path (Panel 4) ───────────────────────────────────────── */
+      .shell {
+        display: grid;
+        grid-template-columns: 232px 1fr;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        min-height: 260px;
+      }
+      .sidebar {
+        background: var(--el-surface-soft);
+        border-right: 1px solid var(--el-border);
+        padding: 16px 12px;
+      }
+      .navItem {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        margin-bottom: 2px;
+      }
+      .navItem[aria-current='page'] {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-weight: 600;
+        border: 1px solid var(--el-border);
+      }
+      .navGlyph {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-tertiary);
+      }
+      .doorNote {
+        margin: 10px 0 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .canvasPad {
+        padding: 20px;
+      }
+
+      /* ── The state matrix (Panel 3) ──────────────────────────────────────── */
+      .matrix {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .matrix td:first-child {
+        width: 148px;
+      }
+      .matrix td:nth-child(2) {
+        width: 210px;
+      }
+
+      /* ── The detail panel (Panel 5) ──────────────────────────────────────── */
+      .detailCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        max-width: 560px;
+      }
+      .detailTitle {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 14px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 156px 1fr;
+        gap: 8px 16px;
+        font-size: 13px;
+      }
+      .kvKey {
+        color: var(--el-text-secondary);
+      }
+      .kvVal {
+        color: var(--el-text);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <h1 class="boardTitle">Job runs — the DELIVERY state</h1>
+      <p class="boardLead">
+        The operator surface at <code class="mono">/settings/workspace/jobs</code> ships today and
+        has never had a design asset. This is the first one, and it exists because a sibling card
+        needs to add one column to it: the job ledger says whether the provider ACCEPTED a message,
+        and nothing anywhere says what became of it. Panel&nbsp;1 is the surface as it stands; every
+        panel after it is the change.
+      </p>
+
+      <!-- ══ PANEL 1 ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <h2 class="panelTitle">Panel 1 · Today — every send reads <em>succeeded</em></h2>
+        <p class="panelNote">
+          Rendered from the running app before anything was drawn (see
+          <code class="mono">_shipped-today.png</code>). Four
+          <code class="mono">email.send</code> runs, all green. Three of them may have bounced, been
+          spam-foldered or been refused outright — this surface cannot tell you, and cannot tell
+          them apart from the one that arrived. That is the defect, and it is invisible precisely
+          because everything looks fine.
+        </p>
+        <div class="stage">
+          <h1 class="h1">Job runs</h1>
+          <p class="lead">
+            Background jobs for this workspace — delivery of invites &amp; password resets, and any
+            scheduled work. Failed jobs land in the dead-letter queue, where an owner can replay
+            them.
+          </p>
+          <nav class="tabstrip">
+            <span class="tab" aria-current="page">Recent runs</span>
+            <span class="tab">Dead letter</span>
+          </nav>
+          <div class="filterRow">
+            <div class="filters">
+              <span class="filter" aria-pressed="true">All</span>
+              <span class="filter">Succeeded</span>
+              <span class="filter">Failed</span>
+              <span class="filter">Running</span>
+            </div>
+            <span class="ghostBtn">
+              <svg
+                class="navGlyph"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+              Refresh
+            </span>
+          </div>
+          <div class="tableShell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Function</th>
+                  <th>Event</th>
+                  <th class="num">Attempts</th>
+                  <th>Started</th>
+                  <th class="num">Duration</th>
+                  <th>Failure</th>
+                  <th class="num">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:53 AM UTC</td>
+                  <td class="num">1.4s</td>
+                  <td class="dim">—</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:52 AM UTC</td>
+                  <td class="num">1.5s</td>
+                  <td class="dim">—</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:51 AM UTC</td>
+                  <td class="num">1.6s</td>
+                  <td class="dim">—</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-danger">failed</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:50 AM UTC</td>
+                  <td class="num">1.7s</td>
+                  <td class="dim">Resend send failed permanently…</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PANEL 2 ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <h2 class="panelTitle">Panel 2 · The change — one column, after Status</h2>
+        <p class="panelNote">
+          <strong
+            >Delivery is its own column, immediately right of Status, and never a second pill inside
+            it.</strong
+          >
+          They answer different questions — Status is <em>did our job run</em>, Delivery is
+          <em>did the message arrive</em> — and a run can succeed while its message bounces, which
+          is the entire point. Two pills in one cell would read as one fact with two moods.
+          Non-<code class="mono">email.send</code> rows show <code class="mono">—</code>, the same
+          em-dash this table already uses in Failure and Duration, so the column costs a reader
+          nothing on the rows it does not apply to.
+        </p>
+        <div class="stage">
+          <div class="tableShell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Delivery</th>
+                  <th>Function</th>
+                  <th>Event</th>
+                  <th class="num">Attempts</th>
+                  <th>Started</th>
+                  <th class="num">Duration</th>
+                  <th class="num">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td><span class="pill pill-success">delivered</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:53 AM UTC</td>
+                  <td class="num">1.4s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td><span class="pill pill-danger">bounced</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:52 AM UTC</td>
+                  <td class="num">1.5s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td><span class="pill pill-warning">complained</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:51 AM UTC</td>
+                  <td class="num">1.6s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td><span class="pill pill-neutral">accepted</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:50 AM UTC</td>
+                  <td class="num">1.4s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td><span class="pill pill-info">delayed</span></td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">2</td>
+                  <td class="nowrap">Aug 26, 12:49 AM UTC</td>
+                  <td class="num">2.1s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-danger">failed</span></td>
+                  <td class="dim">—</td>
+                  <td class="mono">email.send</td>
+                  <td class="mono">email.send</td>
+                  <td class="num">3</td>
+                  <td class="nowrap">Aug 26, 12:48 AM UTC</td>
+                  <td class="num">1.7s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">succeeded</span></td>
+                  <td class="dim">—</td>
+                  <td class="mono">work-item.reindex</td>
+                  <td class="mono">work-item/created</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:47 AM UTC</td>
+                  <td class="num">1.8s</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-info">running</span></td>
+                  <td class="dim">—</td>
+                  <td class="mono">system.daily-health-check</td>
+                  <td class="mono">scheduled.system</td>
+                  <td class="num">1</td>
+                  <td class="nowrap">Aug 26, 12:45 AM UTC</td>
+                  <td class="num">—</td>
+                  <td class="num"><span class="ghostBtn">View</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PANEL 3 ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <h2 class="panelTitle">Panel 3 · Every value, and what it means</h2>
+        <p class="panelNote">
+          The enum is the checklist: five values plus the no-row case, each drawn, each with the
+          tone it takes. All five are the <code class="mono">Pill</code> primitive — no new
+          component — and every coloured one carries its hue in the TINT with
+          <code class="mono">--el-text-strong</code> ink, which is the recipe that clears AA in both
+          themes. <strong>Only <code class="mono">accepted</code> is neutral</strong>, and
+          deliberately: it is the absence of news, not good news, and colouring it green would
+          restate the lie this column exists to end.
+        </p>
+        <div class="stage">
+          <div class="matrix">
+            <table>
+              <thead>
+                <tr>
+                  <th>Value</th>
+                  <th>Tone</th>
+                  <th>What it tells the operator</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="pill pill-neutral">accepted</span></td>
+                  <td class="mono dim">tone=neutral</td>
+                  <td>
+                    The provider took the message and has said nothing since. The starting state of
+                    every row — and, for a message sent before this shipped, the permanent one.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-info">delayed</span></td>
+                  <td class="mono dim">severity=info</td>
+                  <td>
+                    Deferred and still being retried by the provider. Not a failure; not yet an
+                    arrival.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-success">delivered</span></td>
+                  <td class="mono dim">severity=success</td>
+                  <td>
+                    The receiving server accepted it. <strong>Not</strong> "read", and
+                    <strong>not</strong> "in the inbox" — a spam-foldered message is delivered.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-danger">bounced</span></td>
+                  <td class="mono dim">severity=danger</td>
+                  <td>
+                    Refused. Nobody received it, and re-sending to that address will not help.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="pill pill-warning">complained</span></td>
+                  <td class="mono dim">severity=warning</td>
+                  <td>
+                    A person marked it as spam. Peach, not rose: it arrived and was read — the
+                    damage is to sender reputation, not to this message.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="dim">—</td>
+                  <td class="mono dim">(no chip)</td>
+                  <td>
+                    No delivery row: a job that is not <code class="mono">email.send</code>, a send
+                    that predates the record, or a send the provider refused outright (its Status is
+                    already <code class="mono">failed</code>).
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PANEL 4 ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <h2 class="panelTitle">Panel 4 · The row detail gains the provider's handle</h2>
+        <p class="panelNote">
+          The <code class="mono">View</code> action already opens a modal over the run's JSON. It
+          gains a named block above that dump, because the one thing an operator needs from this
+          surface is something they can paste into the provider's own dashboard: the message id.
+          Without it the column tells you a message bounced and leaves you no way to ask why.
+        </p>
+        <div class="stage">
+          <div class="detailCard">
+            <h3 class="detailTitle">Run detail</h3>
+            <div class="kv">
+              <span class="kvKey">Delivery</span>
+              <span class="kvVal"><span class="pill pill-danger">bounced</span></span>
+              <span class="kvKey">Message id</span>
+              <span class="kvVal mono">a3f1c2d4-0000-4000-8000-000000000001</span>
+              <span class="kvKey">Recipient</span>
+              <span class="kvVal mono">alice@example.com</span>
+              <span class="kvKey">Template</span>
+              <span class="kvVal mono">workspace-invite</span>
+              <span class="kvKey">Last event</span>
+              <span class="kvVal">Aug 26, 12:52 AM UTC</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ PANEL 5 ═══════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <h2 class="panelTitle">Panel 5 · The access path — how anyone reaches this</h2>
+        <p class="panelNote">
+          Settings → Workspace → <strong>Job runs</strong>. The door is an existing sidebar entry
+          and this change adds no new one; it is drawn here because a design that does not show its
+          own entrance leaves the reader to trust a route string.
+        </p>
+        <div class="stage">
+          <div class="shell">
+            <nav class="sidebar">
+              <span class="navItem">
+                <svg
+                  class="navGlyph"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66Z"
+                  />
+                </svg>
+                Settings
+              </span>
+              <span class="navItem" aria-current="page">
+                <svg
+                  class="navGlyph"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="m7 15 3-3 3 3 5-5" />
+                </svg>
+                Job runs
+              </span>
+              <span class="navItem">
+                <svg
+                  class="navGlyph"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="18" r="3" />
+                  <circle cx="6" cy="6" r="3" />
+                  <path d="M6 21V9a9 9 0 0 0 9 9" />
+                </svg>
+                Git
+              </span>
+            </nav>
+            <div class="canvasPad">
+              <h1 class="h1">Job runs</h1>
+              <p class="lead">
+                Background jobs for this workspace — delivery of invites &amp; password resets, and
+                any scheduled work.
+              </p>
+              <div class="filters">
+                <span class="filter" aria-pressed="true">All</span>
+                <span class="filter">Succeeded</span>
+                <span class="filter">Failed</span>
+                <span class="filter">Running</span>
+              </div>
+              <p class="doorNote">
+                The filter row is unchanged. Delivery is deliberately NOT a filter in this revision
+                — see design-notes.md § “What this asset decides against”.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
